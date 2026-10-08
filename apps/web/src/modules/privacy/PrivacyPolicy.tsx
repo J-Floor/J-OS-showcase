@@ -4,8 +4,10 @@ import { PRIVACY_META, PRIVACY_SECTIONS } from "./content.ts";
 import styles from "./PrivacyPolicy.module.scss";
 
 /**
- * Public, full-screen `/privacy` page (no app shell, no auth gate) — linked from
- * the onboarding document step (opened in a new tab so onboarding isn't lost).
+ * Public, full-screen `/privacy` page (no app shell, no auth gate): anyone who
+ * gives us data must be able to read it first (nDSG art. 19). Linked under the
+ * public forms, in the emails they trigger, from the onboarding document step
+ * and from the landing-page footer.
  */
 export function PrivacyPolicy() {
 	return (

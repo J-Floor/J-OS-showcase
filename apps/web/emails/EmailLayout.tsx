@@ -23,6 +23,10 @@ export type LayoutProps = {
 	/** Absolute "Manage notifications" link. Notification emails only:
 	 *  transactional mail has nothing to opt out of. */
 	manageUrl?: string;
+	/** Absolute link to the privacy notice. Emails that answer a public form
+	 *  (application, visitor, event invite) carry it: the sender may not have
+	 *  seen the notice yet (nDSG art. 19). */
+	privacyUrl?: string;
 	children: React.ReactNode;
 };
 
@@ -35,6 +39,7 @@ export function EmailLayout({
 	preview,
 	logoUrl,
 	manageUrl,
+	privacyUrl,
 	children,
 }: LayoutProps) {
 	return (
@@ -69,6 +74,17 @@ export function EmailLayout({
 							</>
 						) : null}
 					</Text>
+					{privacyUrl ? (
+						<Text style={styles.footer}>
+							How we handle your data:{" "}
+							<Link
+								href={privacyUrl}
+								style={{ color: palette.fgMuted }}
+							>
+								Privacy notice
+							</Link>
+						</Text>
+					) : null}
 				</Container>
 			</Body>
 		</Html>

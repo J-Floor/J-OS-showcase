@@ -7,11 +7,21 @@ export type Props = {
 	eventName: string;
 	confirmUrl: string;
 	logoUrl: string;
+	privacyUrl: string;
 };
 
-export function Template({ eventName, confirmUrl, logoUrl }: Props) {
+export function Template({
+	eventName,
+	confirmUrl,
+	logoUrl,
+	privacyUrl,
+}: Props) {
 	return (
-		<EmailLayout preview={`You're set for ${eventName}`} logoUrl={logoUrl}>
+		<EmailLayout
+			preview={`You're set for ${eventName}`}
+			logoUrl={logoUrl}
+			privacyUrl={privacyUrl}
+		>
 			<Heading style={styles.heading}>You're set for {eventName}</Heading>
 			<Text style={styles.text}>
 				Confirm to record your attendance and get the J floor Wi-Fi.

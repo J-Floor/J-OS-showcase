@@ -1,11 +1,15 @@
 // apps/web/convex/emails/generated.test.ts
 import { describe, expect, it } from "vitest";
 
+import { alreadyActive } from "./generated/alreadyActive.ts";
+import { alreadyUnderReview } from "./generated/alreadyUnderReview.ts";
 import { applicationReceived } from "./generated/applicationReceived.ts";
 import { approvalGuest } from "./generated/approvalGuest.ts";
 import { boardNewApplication } from "./generated/boardNewApplication.ts";
+import { eventInvite } from "./generated/eventInvite.ts";
 import { magicLink } from "./generated/magicLink.ts";
 import { notice } from "./generated/notice.ts";
+import { reapplyAfter } from "./generated/reapplyAfter.ts";
 import { taskAssigned } from "./generated/taskAssigned.ts";
 import { verifyApplication } from "./generated/verifyApplication.ts";
 import { verifyVisitor } from "./generated/verifyVisitor.ts";
@@ -15,6 +19,7 @@ describe("generated email joiners", () => {
 		const { html, text } = applicationReceived({
 			name: "Ada",
 			logoUrl: "https://app.example.com/email/logo.png",
+			privacyUrl: "https://app.example.com/privacy",
 		});
 		expect(html).toContain("Ada");
 		expect(html).toContain("https://app.example.com/email/logo.png");
@@ -25,6 +30,7 @@ describe("generated email joiners", () => {
 		const { html, text } = applicationReceived({
 			name: "<script>alert(1)</script> A & B",
 			logoUrl: "https://app.example.com/email/logo.png",
+			privacyUrl: "https://app.example.com/privacy",
 		});
 		expect(html).toContain("&lt;script&gt;");
 		expect(html).not.toContain("<script>alert(1)</script>");
@@ -62,6 +68,7 @@ describe("more generated joiners", () => {
 		const { html, text } = verifyApplication({
 			confirmUrl: "https://app.example.com/apply/confirm?token=abc",
 			logoUrl: "https://app.example.com/email/logo.png",
+			privacyUrl: "https://app.example.com/privacy",
 		});
 		expect(html).toContain(
 			"https://app.example.com/apply/confirm?token=abc"
@@ -94,6 +101,7 @@ describe("more generated joiners", () => {
 		const { html, text } = verifyVisitor({
 			confirmUrl: "https://app.example.com/visitor/confirm?token=abc",
 			logoUrl: "https://app.example.com/email/logo.png",
+			privacyUrl: "https://app.example.com/privacy",
 		});
 		expect(html).toContain(
 			"https://app.example.com/visitor/confirm?token=abc"
@@ -131,5 +139,64 @@ describe("notification emails", () => {
 		});
 		expect(html).toContain("Manage notifications");
 		expect(html).toContain("https://x.co/?notifications=open");
+	});
+});
+
+describe("emails answering a public form", () => {
+	const privacyUrl = "https://app.example.com/privacy";
+	const logoUrl = "https://app.example.com/email/logo.png";
+	const confirmUrl = "https://app.example.com/confirm?token=abc";
+	const sent = {
+		verifyApplication: verifyApplication({
+			confirmUrl,
+			logoUrl,
+			privacyUrl,
+		}),
+		applicationReceived: applicationReceived({
+			name: "Ada",
+			logoUrl,
+			privacyUrl,
+		}),
+		alreadyActive: alreadyActive({
+			greeting: "Hi Ada,",
+			signinUrl: "https://app.example.com/signin",
+			logoUrl,
+			privacyUrl,
+		}),
+		reapplyAfter: reapplyAfter({
+			until: "1 January 2027",
+			logoUrl,
+			privacyUrl,
+		}),
+		alreadyUnderReview: alreadyUnderReview({ logoUrl, privacyUrl }),
+		verifyVisitor: verifyVisitor({ confirmUrl, logoUrl, privacyUrl }),
+		eventInvite: eventInvite({
+			eventName: "Demo Night",
+			confirmUrl,
+			logoUrl,
+			privacyUrl,
+		}),
+	};
+
+	it.each(Object.entries(sent))(
+		"%s links the privacy notice in its footer",
+		(_, { html, text }) => {
+			expect(html).toContain(`href="${privacyUrl}"`);
+			expect(html).toContain("How we handle your data:");
+			expect(text).toContain("How we handle your data: Privacy notice");
+			expect(text).toContain(privacyUrl);
+		}
+	);
+
+	it("leaves the privacy line off emails that do not answer a public form", () => {
+		const { html } = notice({
+			heading: "h",
+			body: "b",
+			ctaLabel: "c",
+			ctaUrl: "https://x.co/c",
+			manageUrl: "https://x.co/m",
+			logoUrl,
+		});
+		expect(html).not.toContain("How we handle your data");
 	});
 });

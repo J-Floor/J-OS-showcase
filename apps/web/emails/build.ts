@@ -36,22 +36,22 @@ const TEMPLATES: Entry[] = [
 	{
 		name: "applicationReceived",
 		file: "templates/applicationReceived.tsx",
-		fields: ["name", "logoUrl"],
+		fields: ["name", "logoUrl", "privacyUrl"],
 	},
 	{
 		name: "alreadyActive",
 		file: "templates/alreadyActive.tsx",
-		fields: ["greeting", "signinUrl", "logoUrl"],
+		fields: ["greeting", "signinUrl", "logoUrl", "privacyUrl"],
 	},
 	{
 		name: "reapplyAfter",
 		file: "templates/reapplyAfter.tsx",
-		fields: ["until", "logoUrl"],
+		fields: ["until", "logoUrl", "privacyUrl"],
 	},
 	{
 		name: "alreadyUnderReview",
 		file: "templates/alreadyUnderReview.tsx",
-		fields: ["logoUrl"],
+		fields: ["logoUrl", "privacyUrl"],
 	},
 	{
 		name: "approvalMember",
@@ -91,12 +91,12 @@ const TEMPLATES: Entry[] = [
 	{
 		name: "verifyApplication",
 		file: "templates/verifyApplication.tsx",
-		fields: ["confirmUrl", "logoUrl"],
+		fields: ["confirmUrl", "logoUrl", "privacyUrl"],
 	},
 	{
 		name: "verifyVisitor",
 		file: "templates/verifyVisitor.tsx",
-		fields: ["confirmUrl", "logoUrl"],
+		fields: ["confirmUrl", "logoUrl", "privacyUrl"],
 	},
 	{
 		name: "confirmEmailChange",
@@ -111,7 +111,7 @@ const TEMPLATES: Entry[] = [
 	{
 		name: "eventInvite",
 		file: "templates/eventInvite.tsx",
-		fields: ["eventName", "confirmUrl", "logoUrl"],
+		fields: ["eventName", "confirmUrl", "logoUrl", "privacyUrl"],
 	},
 	{
 		name: "boardNewApplication",

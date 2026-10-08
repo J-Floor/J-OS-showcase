@@ -4,13 +4,19 @@ import { Link, Heading, Text } from "jsx-email";
 import { EmailLayout } from "../EmailLayout.tsx";
 import { styles } from "../theme.ts";
 
-export type Props = { greeting: string; signinUrl: string; logoUrl: string };
+export type Props = {
+	greeting: string;
+	signinUrl: string;
+	logoUrl: string;
+	privacyUrl: string;
+};
 
-export function Template({ greeting, signinUrl, logoUrl }: Props) {
+export function Template({ greeting, signinUrl, logoUrl, privacyUrl }: Props) {
 	return (
 		<EmailLayout
 			preview="This email already has J floor access"
 			logoUrl={logoUrl}
+			privacyUrl={privacyUrl}
 		>
 			<Heading style={styles.heading}>You're already in</Heading>
 			<Text style={styles.text}>

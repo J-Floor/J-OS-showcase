@@ -413,6 +413,7 @@ export const submitApplication = action({
 					greeting,
 					signinUrl: urls.signinUrl,
 					logoUrl: urls.logoUrl,
+					privacyUrl: urls.privacyUrl,
 				});
 				await sendEmailLimited(ctx, {
 					to: fields.email,
@@ -425,6 +426,7 @@ export const submitApplication = action({
 				const { html, text } = reapplyAfter({
 					until: formatEmailDate(decision.until ?? Date.now()),
 					logoUrl: urls.logoUrl,
+					privacyUrl: urls.privacyUrl,
 				});
 				await sendEmailLimited(ctx, {
 					to: fields.email,
@@ -436,6 +438,7 @@ export const submitApplication = action({
 			} else {
 				const { html, text } = alreadyUnderReview({
 					logoUrl: urls.logoUrl,
+					privacyUrl: urls.privacyUrl,
 				});
 				await sendEmailLimited(ctx, {
 					to: fields.email,
@@ -466,6 +469,7 @@ export const submitApplication = action({
 		const { html, text } = verifyApplication({
 			confirmUrl: confirmUrl("application", confirmToken),
 			logoUrl: urls.logoUrl,
+			privacyUrl: urls.privacyUrl,
 		});
 		await sendEmail({
 			to: fields.email,

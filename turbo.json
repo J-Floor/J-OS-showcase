@@ -31,6 +31,17 @@
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/config-stylelint/**"]
     },
     "typecheck": { "outputs": [] },
+    "icons:check": {
+      "outputs": [],
+      "inputs": [
+        "package.json",
+        "scripts/**",
+        "src/styles/icons.txt",
+        "src/styles/*.woff2",
+        "$TURBO_ROOT$/apps/*/src/**",
+        "$TURBO_ROOT$/apps/web/convex/**"
+      ]
+    },
     "test": { "outputs": [] },
     "format": { "outputs": [] },
     "email:check": {

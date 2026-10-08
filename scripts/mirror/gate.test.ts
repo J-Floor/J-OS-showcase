@@ -354,6 +354,16 @@ describe("scan layers", () => {
     ]);
   });
 
+  test("CSS unicode-range values are not phone numbers", async () => {
+    const dir = tree({
+      "fonts.scss": `unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC;\n`,
+      "b.md": `call ${PLANTED.phone}\n`,
+    });
+    expect(await scan(dir, options)).toEqual([
+      { layer: "phone", file: "b.md", line: 1 },
+    ]);
+  });
+
   test("N.0.0.0 version strings are safe, other public quads are not", async () => {
     const dir = tree({
       "a.txt": [

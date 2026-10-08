@@ -148,6 +148,7 @@ export const sendApplicationReceivedEmail = internalAction({
 		const { html, text } = applicationReceived({
 			name: person.firstName,
 			logoUrl: urls.logoUrl,
+			privacyUrl: urls.privacyUrl,
 		});
 		await sendEmail({
 			to: email,

@@ -1,3 +1,5 @@
+import { SITE_PRIVACY_URL } from "../../../site.ts";
+
 import styles from "./SiteFooter.module.scss";
 
 const DESIGNER_LINKEDIN = "https://www.linkedin.com/in/kaitlynn-a-hawranke/";
@@ -7,7 +9,7 @@ const WORDMARK = "/assets/logos/j-floor-wordmark.svg";
 
 /** The last block of the live thejfloor.com footer: the full-width "J floor"
  * wordmark (the site's own SVG), then the "Designed by" credit and the nemu &
- * co. studio button. */
+ * co. studio button, and the link to the privacy notice. */
 export function SiteFooter() {
 	return (
 		<footer class={styles.footer}>
@@ -41,6 +43,12 @@ export function SiteFooter() {
 					/>
 				</a>
 			</div>
+			<p class={styles.privacy}>
+				How we handle your data:{" "}
+				<a class={styles.privacyLink} href={SITE_PRIVACY_URL}>
+					Privacy notice
+				</a>
+			</p>
 		</footer>
 	);
 }

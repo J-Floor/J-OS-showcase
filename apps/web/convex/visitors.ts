@@ -114,6 +114,7 @@ export const registerVisitor = action({
 			const { html, text } = verifyVisitor({
 				confirmUrl: confirmUrl("visitor", token),
 				logoUrl: urls.logoUrl,
+				privacyUrl: urls.privacyUrl,
 			});
 			await sendEmail({
 				to: args.email,
@@ -127,6 +128,7 @@ export const registerVisitor = action({
 				eventName: event.name,
 				confirmUrl: confirmUrl("eventInvite", token),
 				logoUrl: urls.logoUrl,
+				privacyUrl: urls.privacyUrl,
 			});
 			await sendEmail({
 				to: args.email,

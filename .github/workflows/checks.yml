@@ -108,7 +108,7 @@ jobs:
       # One turbo run so Stylelint, tsc and the generated-file checks execute
       # concurrently. ESLint runs in its own job.
       - name: Stylelint, typecheck and generated-file checks
-        run: bunx --bun turbo run lint:style:ci typecheck email:check agreements:check${{ github.event_name == 'pull_request' && ' --affected' || '' }} --continue
+        run: bunx --bun turbo run lint:style:ci typecheck email:check agreements:check icons:check${{ github.event_name == 'pull_request' && ' --affected' || '' }} --continue
 
   # Separate job: on 2-vCPU runners type-aware ESLint and tsc contend for CPU
   # when run together, so each gets its own runner.

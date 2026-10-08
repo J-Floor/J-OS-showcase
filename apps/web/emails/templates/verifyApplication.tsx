@@ -6,13 +6,15 @@ import { styles } from "../theme.ts";
 export type Props = {
 	confirmUrl: string;
 	logoUrl: string;
+	privacyUrl: string;
 };
 
-export function Template({ confirmUrl, logoUrl }: Props) {
+export function Template({ confirmUrl, logoUrl, privacyUrl }: Props) {
 	return (
 		<EmailLayout
 			preview="Confirm your J floor application"
 			logoUrl={logoUrl}
+			privacyUrl={privacyUrl}
 		>
 			<Heading style={styles.heading}>Confirm your application</Heading>
 			<Text style={styles.text}>

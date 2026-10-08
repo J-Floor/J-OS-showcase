@@ -6,3 +6,5 @@ export const SITE_LINKEDIN = "https://www.linkedin.com/company/j-floor/";
 /** Where "Apply to join" and "Apply to Community" send people (the J floor app
  * sign-up), verified against the live site. */
 export const SITE_APPLY_URL = "https://app.thejfloor.com/sign-up";
+/** The J floor privacy notice, public on the app (nDSG art. 19). */
+export const SITE_PRIVACY_URL = "https://app.thejfloor.com/privacy";

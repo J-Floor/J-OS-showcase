@@ -142,3 +142,13 @@ test('shows an ended state after registerVisitor returns status "ended"', async 
 		await screen.findByText(/this event has ended/i)
 	).toBeInTheDocument();
 });
+
+test("links the privacy notice under the register button", () => {
+	renderAtPath("/visitor?event=ev1");
+
+	const link = screen.getByRole("link", { name: "Privacy notice" });
+	expect(link).toHaveAttribute("href", "/privacy");
+	expect(link.closest("p")).toHaveTextContent(
+		"How we handle your data: Privacy notice"
+	);
+});

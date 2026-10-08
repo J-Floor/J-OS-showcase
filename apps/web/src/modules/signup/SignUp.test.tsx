@@ -101,3 +101,15 @@ test("after submit, the pending screen says the email explains what to do for so
 	expect(mutateAsync).toHaveBeenCalledOnce();
 	delete window.grecaptcha;
 });
+
+test("links the privacy notice under the submit button", () => {
+	locationState = null;
+
+	render(() => <SignUp />);
+
+	const link = screen.getByRole("link", { name: "Privacy notice" });
+	expect(link).toHaveAttribute("href", "/privacy");
+	expect(link.closest("p")).toHaveTextContent(
+		"How we handle your data: Privacy notice"
+	);
+});

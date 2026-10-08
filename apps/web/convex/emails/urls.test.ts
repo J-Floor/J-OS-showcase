@@ -18,12 +18,13 @@ afterEach(() => {
 	vi.unstubAllEnvs();
 });
 
-test("emailUrls derives the logo and sign-in URLs from SITE_URL", () => {
+test("emailUrls derives the logo, sign-in and privacy URLs from SITE_URL", () => {
 	vi.stubEnv("SITE_URL", "https://j.floor");
 	expect(emailUrls()).toEqual({
 		siteUrl: "https://j.floor",
 		logoUrl: "https://j.floor/email/logo.png",
 		signinUrl: "https://j.floor/signin",
+		privacyUrl: "https://j.floor/privacy",
 	});
 });
 

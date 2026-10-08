@@ -9,7 +9,7 @@ import {
 export const PRIVACY_META = {
 	org: `${ORG_LEGAL_NAME} · ${ORG_LOCATION}`,
 	governingLaw: "Swiss Federal Act on Data Protection (nDSG)",
-	updated: "February 2026",
+	updated: "October 2026",
 };
 
 export type PrivacyBlock =
@@ -58,8 +58,38 @@ export const PRIVACY_SECTIONS: readonly {
 		],
 	},
 	{
+		id: "applicants-visitors",
+		heading: "3. Applicants and event visitors",
+		blocks: [
+			{
+				kind: "p",
+				text: "This section covers you if you apply to join J floor or register as a visitor to one of our events, before you become a member.",
+			},
+			{
+				kind: "p",
+				lead: "What we collect when you apply.",
+				text: "Your name, email address and phone number; your venture or project name, what it does, its product and funding stage, team size and industry; what you have built before and why you want to join; the profile links you give us; and who referred you, if anyone. The Board adds its own assessment notes and score.",
+			},
+			{
+				kind: "p",
+				lead: "What we collect when you register for an event.",
+				text: "Your name, your email address, and which event you registered for and attended.",
+			},
+			{
+				kind: "p",
+				lead: "Why.",
+				text: "To assess your application and reply to you, or to let you into the event and give you Wi-Fi access. Both forms are checked by Google reCAPTCHA to keep out spam, and the profile links in an application are checked against Google Safe Browsing for malware and phishing.",
+			},
+			{
+				kind: "p",
+				lead: "How long.",
+				text: "If you never confirm your email address, we delete your submission after 7 days. A confirmed application is kept until the Board decides on it, and then as described in Section 7. A confirmed event registration is kept for as long as we need it to run our events. You can ask us to delete your data at any time (Section 8).",
+			},
+		],
+	},
+	{
 		id: "why-we-collect",
-		heading: "3. Why we collect it",
+		heading: "4. Why we collect it",
 		blocks: [
 			{
 				kind: "p",
@@ -83,7 +113,7 @@ export const PRIVACY_SECTIONS: readonly {
 			{
 				kind: "p",
 				lead: "Sponsor reporting.",
-				text: "To provide our sponsors with limited, non-sensitive information about the community as described in Section 4. This is disclosed to you at the time of membership and forms part of the basis on which the space is funded.",
+				text: "To provide our sponsors with limited, non-sensitive information about the community as described in Section 5. This is disclosed to you at the time of membership and forms part of the basis on which the space is funded.",
 			},
 			{
 				kind: "p",
@@ -94,7 +124,7 @@ export const PRIVACY_SECTIONS: readonly {
 	},
 	{
 		id: "sponsors",
-		heading: "4. What we share with sponsors",
+		heading: "5. What we share with sponsors",
 		blocks: [
 			{
 				kind: "p",
@@ -126,15 +156,27 @@ export const PRIVACY_SECTIONS: readonly {
 	},
 	{
 		id: "service-providers",
-		heading: "5. Service providers",
+		heading: "6. Service providers",
 		blocks: [
 			{
 				kind: "p",
-				text: "We use third-party service providers to operate the space and manage membership. These include our digital access platform provider and any tools used for communication or administration. These providers process data only on our instructions and are bound by appropriate data protection obligations.",
+				text: "We use these service providers to run the app, the website and the space. Each receives only what it needs for the purpose listed:",
+			},
+			{
+				kind: "list",
+				items: [
+					"Convex, Inc. (USA): our database and backend. Holds all the data described in this policy. Our deployment is hosted in the EU (Ireland).",
+					"Resend, Inc. (USA): sends our emails. Receives your name, email address and the content of each email we send you.",
+					"Cloudflare, Inc. (USA, global network): network, security and DNS for the app and the website. Receives your IP address and request data when you visit.",
+					"Google LLC (USA): reCAPTCHA spam protection on the application and visitor forms (your IP address and browser data); and a Safe Browsing check of the links you add to an application or profile (the links).",
+					"Hetzner Online GmbH (Germany, EU): hosts the files of the web app. Receives your IP address and request data.",
+					"Our door-lock provider (Austria, EU): opens the doors. Receives your name on your door authorisation and the lock and unlock actions.",
+					"Browser push services (Google, Apple or Mozilla, chosen by your browser; USA): only if you turn on notifications. Receive a device address and an encrypted notification.",
+				],
 			},
 			{
 				kind: "p",
-				text: "Personal data may be processed by service providers located in Switzerland or the European Economic Area. If personal data is transferred outside Switzerland, we ensure appropriate safeguards in accordance with the nDSG.",
+				text: "Where a provider processes data outside Switzerland and the EEA, the transfer relies on the provider's contractual safeguards (the EU Standard Contractual Clauses as recognised by the FDPIC) or, where the provider is certified, the Swiss-US Data Privacy Framework.",
 			},
 			{
 				kind: "p",
@@ -144,7 +186,7 @@ export const PRIVACY_SECTIONS: readonly {
 	},
 	{
 		id: "retention",
-		heading: "6. How long we keep your data",
+		heading: "7. How long we keep your data",
 		blocks: [
 			{
 				kind: "p",
@@ -162,7 +204,7 @@ export const PRIVACY_SECTIONS: readonly {
 	},
 	{
 		id: "your-rights",
-		heading: "7. Your rights",
+		heading: "8. Your rights",
 		blocks: [
 			{
 				kind: "p",
@@ -194,7 +236,7 @@ export const PRIVACY_SECTIONS: readonly {
 	},
 	{
 		id: "security",
-		heading: "8. Security",
+		heading: "9. Security",
 		blocks: [
 			{
 				kind: "p",
@@ -208,11 +250,11 @@ export const PRIVACY_SECTIONS: readonly {
 	},
 	{
 		id: "changes",
-		heading: "9. Changes to this policy",
+		heading: "10. Changes to this policy",
 		blocks: [
 			{
 				kind: "p",
-				text: "We may update this Privacy Policy from time to time. When we do, we will notify members by email with reasonable notice before the changes take effect. The current version will always be available on request from the Board.",
+				text: "We may update this Privacy Policy from time to time. When we do, we will notify members by email with reasonable notice before the changes take effect. The current version is always available on this page.",
 			},
 			{
 				kind: "p",
@@ -222,7 +264,7 @@ export const PRIVACY_SECTIONS: readonly {
 	},
 	{
 		id: "contact",
-		heading: "10. Contact",
+		heading: "11. Contact",
 		blocks: [
 			{
 				kind: "p",

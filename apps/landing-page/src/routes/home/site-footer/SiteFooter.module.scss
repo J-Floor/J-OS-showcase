@@ -99,3 +99,21 @@
 .nemuLogo {
 	display: block;
 }
+
+// Privacy line: the credit's mono face at body size, muted like the designer name.
+.privacy {
+	--privacy-size: 1rem;
+	--privacy-line-height: 1.4;
+	--privacy-grey: rgb(134 131 130);
+
+	margin: 0;
+	color: var(--privacy-grey);
+	font-family: var(--jf-typography-mono);
+	font-size: var(--privacy-size);
+	line-height: var(--privacy-line-height);
+}
+
+.privacyLink {
+	color: mkt.$fg;
+	text-decoration: underline;
+}

@@ -14,4 +14,11 @@ describe("SiteFooter", () => {
 			screen.getByRole("link", { name: /nemu/iu })
 		).toBeInTheDocument();
 	});
+
+	it("links the app's public privacy notice", () => {
+		render(() => <SiteFooter />);
+		expect(
+			screen.getByRole("link", { name: "Privacy notice" })
+		).toHaveAttribute("href", "https://app.thejfloor.com/privacy");
+	});
 });

@@ -119,7 +119,7 @@ const IPV4 =
 const IPV6 =
   /(?<![0-9a-f:])[0-9a-f]{1,4}(?:(?::[0-9a-f]{1,4}){2,7}|(?::[0-9a-f]{1,4}){0,6}::(?:[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){0,5})?)(?![0-9a-f:])/gi;
 const PHONE = new RegExp(
-  String.raw`\+\d(?:[ -]{0,2}\d){${MIN_PHONE_DIGITS - 1},${MAX_PHONE_DIGITS - 1}}`,
+  String.raw`(?<![A-Za-z0-9])\+\d(?:[ -]{0,2}\d){${MIN_PHONE_DIGITS - 1},${MAX_PHONE_DIGITS - 1}}`,
   "g",
 );
 const FICTIONAL_NANP = /^155501\d\d$/;

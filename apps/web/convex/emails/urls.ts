@@ -14,12 +14,14 @@ export function emailUrls(): {
 	siteUrl: string;
 	logoUrl: string;
 	signinUrl: string;
+	privacyUrl: string;
 } {
 	const site = siteUrl();
 	return {
 		siteUrl: site,
 		logoUrl: `${site}/email/logo.png`,
 		signinUrl: `${site}/signin`,
+		privacyUrl: `${site}/privacy`,
 	};
 }
 

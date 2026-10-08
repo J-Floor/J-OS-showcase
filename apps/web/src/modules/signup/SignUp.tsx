@@ -22,6 +22,7 @@ import {
 
 import { api } from "../../../convex/_generated/api";
 import { ICONS } from "../../shared/icons.ts";
+import { PrivacyNoticeLine } from "../privacy/PrivacyNoticeLine.tsx";
 
 import { buildLinks, normalizeUrl } from "./links.ts";
 import {
@@ -585,6 +586,7 @@ export function SignUp() {
 						>
 							<Icon>send</Icon>Submit application
 						</Button>
+						<PrivacyNoticeLine />
 					</form>
 				</Show>
 			</div>

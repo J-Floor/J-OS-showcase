@@ -4,13 +4,14 @@ import { Heading, Text } from "jsx-email";
 import { EmailLayout } from "../EmailLayout.tsx";
 import { styles } from "../theme.ts";
 
-export type Props = { logoUrl: string };
+export type Props = { logoUrl: string; privacyUrl: string };
 
-export function Template({ logoUrl }: Props) {
+export function Template({ logoUrl, privacyUrl }: Props) {
 	return (
 		<EmailLayout
 			preview="Your J floor application is with the board"
 			logoUrl={logoUrl}
+			privacyUrl={privacyUrl}
 		>
 			<Heading style={styles.heading}>Already with the board</Heading>
 			<Text style={styles.text}>

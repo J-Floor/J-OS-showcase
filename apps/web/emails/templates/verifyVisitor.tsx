@@ -3,13 +3,14 @@ import { Link, Heading, Text } from "jsx-email";
 import { EmailLayout } from "../EmailLayout.tsx";
 import { styles } from "../theme.ts";
 
-export type Props = { confirmUrl: string; logoUrl: string };
+export type Props = { confirmUrl: string; logoUrl: string; privacyUrl: string };
 
-export function Template({ confirmUrl, logoUrl }: Props) {
+export function Template({ confirmUrl, logoUrl, privacyUrl }: Props) {
 	return (
 		<EmailLayout
 			preview="Confirm your email for J floor Wi-Fi"
 			logoUrl={logoUrl}
+			privacyUrl={privacyUrl}
 		>
 			<Heading style={styles.heading}>You're almost in</Heading>
 			<Text style={styles.text}>

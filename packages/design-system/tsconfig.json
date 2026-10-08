@@ -15,5 +15,5 @@
       "@j-os/design-system": ["./src/index.ts"]
     }
   },
-  "include": ["src", "demo"]
+  "include": ["src", "demo", "scripts"]
 }

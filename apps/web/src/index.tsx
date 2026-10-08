@@ -21,7 +21,7 @@ import { bindConvexAuth, convex } from "./lib/convex.ts";
 import { startPwaUpdateChecks, startReloadOnUpdate } from "./lib/pwaUpdates.ts";
 import { SignIn } from "./modules/auth/SignIn.tsx";
 import { OnboardingRoute } from "./modules/onboarding/OnboardingRoute.tsx";
-import { PrivacyRoute } from "./modules/privacy/PrivacyRoute.tsx";
+import { PrivacyPolicy } from "./modules/privacy/PrivacyPolicy.tsx";
 import { ConfirmApplication } from "./modules/signup/ConfirmApplication.tsx";
 import { SignUp } from "./modules/signup/SignUp.tsx";
 import { EmailChangeConfirm } from "./modules/visitor/EmailChangeConfirm.tsx";
@@ -126,7 +126,7 @@ render(
 			/>
 			<Route
 				path="/privacy"
-				component={PrivacyRoute}
+				component={PrivacyPolicy}
 				info={{ title: "Privacy" }}
 			/>
 			<Route path="/" component={App}>

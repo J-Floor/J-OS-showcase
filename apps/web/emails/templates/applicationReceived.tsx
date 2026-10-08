@@ -7,13 +7,15 @@ import { styles } from "../theme.ts";
 export type Props = {
 	name: string;
 	logoUrl: string;
+	privacyUrl: string;
 };
 
-export function Template({ name, logoUrl }: Props) {
+export function Template({ name, logoUrl, privacyUrl }: Props) {
 	return (
 		<EmailLayout
 			preview="We've received your J floor application"
 			logoUrl={logoUrl}
+			privacyUrl={privacyUrl}
 		>
 			<Heading style={styles.heading}>Application received</Heading>
 			<Text style={styles.text}>

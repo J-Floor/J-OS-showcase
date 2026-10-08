@@ -16,6 +16,7 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { authClient } from "../../lib/auth.ts";
 import { ICONS } from "../../shared/icons.ts";
+import { PrivacyNoticeLine } from "../privacy/PrivacyNoticeLine.tsx";
 
 import styles from "./VisitorRegister.module.scss";
 
@@ -335,6 +336,7 @@ export function VisitorRegister() {
 							>
 								Register
 							</Button>
+							<PrivacyNoticeLine />
 						</form>
 					</Match>
 				</Switch>
