@@ -1,0 +1,13 @@
+@use "../../shared/listShell" as shell;
+
+.tabBar {
+	@include shell.tab-bar;
+}
+
+.console {
+	@include shell.console;
+}
+
+.panel:not([hidden]) {
+	@include shell.panel;
+}

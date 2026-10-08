@@ -1,0 +1,53 @@
+@use "@j-os/design-system/breakpoints" as bp;
+@use "@j-os/design-system/typography" as typo;
+@use "@j-os/design-system/utils" as utils;
+
+/* Page heading rendered as a breadcrumb trail. The heading IS the breadcrumb
+   trail, so it carries the display heading type via the design-system mixin. */
+.breadcrumbs {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+
+	/* The heading yields the header's width, the actions beside it do not: a
+	   long trail must ellipse rather than push the theme and sign-out buttons
+	   onto a second row. `min-inline-size: 0` is what lets a flex item shrink
+	   below its own content at all — without it the ellipsis never engages.
+
+	   Shrink, but do NOT grow. `flex: 1 1 auto` here also made the heading claim
+	   a share of the leftover width, and the search field centres itself with
+	   `margin-inline: auto` against whatever is left — so a growing heading ate
+	   the slack on its side and pushed the field off-centre. */
+	flex: 0 1 auto;
+	min-inline-size: 0;
+	margin: 0;
+
+	@include typo.jf-typo-h1;
+
+	/* Once the bar collapses the search to an icon, the heading SHOULD take the
+	   slack. There is no centred field to protect — it is a glyph sitting with
+	   the actions — and with the heading refusing to grow, the row's
+	   `justify-content: space-between` split the leftover width between the
+	   icons instead, leaving the search glyph adrift 40px from its neighbours
+	   while they sat 8px apart. Keyed to the same container threshold as the
+	   search swap (GlobalSearch.module.scss), so the two cannot disagree. */
+	@include bp.topbar-search-collapsed {
+		flex-grow: 1;
+	}
+}
+
+.crumb {
+	@include utils.ellipsis;
+
+	color: inherit;
+	text-decoration: none;
+
+	/* Same reason as the row above: the crumb is itself a flex item. */
+	min-inline-size: 0;
+}
+
+.separator {
+	flex: 0 0 auto;
+	color: var(--jf-fg-subtle);
+}

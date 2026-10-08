@@ -1,0 +1,11 @@
+@use "@j-os/design-system/input";
+
+/* A touch screen has no keyboard, so neither the chips nor the control that
+   reveals them belong there. Keyed to the input, not the width: a laptop
+   window dragged narrow still has a keyboard. CSS, not a JS media query — a
+   JS query renders the wrong control until the first effect runs. */
+@include input.touch-primary {
+	.button {
+		display: none;
+	}
+}

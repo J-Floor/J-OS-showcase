@@ -1,0 +1,285 @@
+@use "@j-os/design-system/breakpoints" as bp;
+@use "@j-os/design-system/typography" as typo;
+
+.wrap {
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-near);
+}
+
+.empty {
+	padding: var(--jf-spacing-far);
+	color: var(--jf-fg-muted);
+	text-align: center;
+	background: var(--jf-surface-bg-sunken);
+	border: var(--jf-border-width-subtle) solid var(--jf-border-subtle);
+	border-radius: var(--jf-radius-container);
+}
+
+.grid {
+	display: grid;
+	grid-template-columns: var(--label-w) 1fr;
+	overflow: hidden;
+	background: var(--jf-surface-bg-base);
+	border: var(--jf-border-width-subtle) solid var(--jf-border-subtle);
+	border-radius: var(--jf-radius-container);
+
+	/* Phone: cap the label column at a share of the width rather than the flat
+	   248px the component sets in `--label-w`. On a 390px screen that fixed
+	   width left about 130px for the timeline itself — under two day-columns —
+	   so the labels were the chart. A proportion keeps the bars readable, and
+	   nothing overflows: `.labelRow` clips, and ProjectCard already ellipses
+	   its name.
+
+	   The rule is here rather than in the component because `--label-w` is set
+	   inline and the viewport is not the component's business; overriding
+	   `grid-template-columns` in CSS is the one place both facts meet. */
+	@include bp.phone {
+		grid-template-columns: minmax(0, 40%) 1fr;
+	}
+}
+
+.labels {
+	display: flex;
+	flex-flow: column nowrap;
+	border-inline-end: var(--jf-border-width-subtle) solid
+		var(--jf-border-subtle);
+}
+
+.labelHeader {
+	block-size: var(--header-h);
+	background: var(--jf-surface-bg-overlay);
+	border-block-end: var(--jf-border-width-subtle) solid
+		var(--jf-border-subtle);
+}
+
+.labelRow {
+	display: flex;
+	flex-flow: row nowrap;
+	align-items: center;
+	block-size: var(--row-h);
+	padding-inline-end: var(--jf-spacing-close);
+	overflow: hidden;
+	border-block-end: var(--jf-border-width-subtle) solid
+		var(--jf-border-subtle);
+
+	/* ProjectCard takes the row; the jump button keeps its size. */
+	& > :first-child {
+		flex: 1;
+		min-inline-size: 0;
+	}
+
+	@media (hover: hover) {
+		&:hover {
+			background: var(--jf-surface-bg-raised);
+		}
+	}
+}
+
+.scroll {
+	overflow-inline: auto;
+	overscroll-behavior-inline: contain;
+	scrollbar-gutter: stable;
+}
+
+.canvas {
+	position: relative;
+}
+
+.header {
+	position: relative;
+	block-size: var(--header-h);
+	background: var(--jf-surface-bg-overlay);
+}
+
+.band {
+	position: relative;
+	block-size: var(--band-h);
+}
+
+.bandCell {
+	@include typo.jf-typo-body-bold;
+
+	position: absolute;
+	inset-block-start: 0;
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	block-size: var(--band-h);
+	padding: 0 var(--jf-spacing-near);
+	overflow: hidden;
+	color: var(--jf-fg-strong);
+	white-space: nowrap;
+	border-inline-start: var(--jf-border-width-subtle) solid
+		var(--jf-border-subtle);
+}
+
+.tickRow {
+	position: relative;
+	block-size: var(--tick-h);
+	border-block: var(--jf-border-width-subtle) solid var(--jf-border-subtle);
+}
+
+.tickCell {
+	@include typo.jf-typo-body-small;
+
+	position: absolute;
+	inset-block-start: 0;
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	justify-content: center;
+	block-size: var(--tick-h);
+	overflow: hidden;
+	color: var(--jf-fg-muted);
+	white-space: nowrap;
+	border-inline-start: var(--jf-border-width-subtle) solid
+		var(--jf-border-subtle);
+}
+
+.weekendTick {
+	color: var(--jf-fg-subtle);
+}
+
+/* Today's day (day mode) or week (week mode) — a high-contrast pill. */
+.currentTick span {
+	padding-inline: var(--jf-spacing-close);
+	color: var(--jf-surface-bg-base);
+	background: var(--jf-fg-strong);
+	border-radius: var(--jf-radius-full);
+}
+
+.body {
+	position: relative;
+}
+
+.lines {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	background-repeat: repeat;
+	background-image:
+		repeating-linear-gradient(
+			90deg,
+			transparent 0,
+			transparent calc(5 * var(--day-w)),
+			var(--weekend-tint) calc(5 * var(--day-w)),
+			var(--weekend-tint) calc(7 * var(--day-w))
+		),
+		repeating-linear-gradient(
+			90deg,
+			var(--jf-border-subtle) 0,
+			var(--jf-border-subtle) 1px,
+			transparent 1px,
+			transparent var(--col-w)
+		);
+}
+
+.monthLine {
+	position: absolute;
+	inset-block: 0;
+	z-index: 0;
+	inline-size: 0;
+	border-inline-start: var(--jf-border-width-subtle) solid
+		var(--jf-border-strong);
+}
+
+.today {
+	position: absolute;
+	inset-block: 0;
+	z-index: 1;
+	inline-size: 0;
+	border-inline-start: var(--jf-border-width-interactive) solid var(--jf-link);
+}
+
+.row {
+	position: relative;
+	block-size: var(--row-h);
+	border-block-end: var(--jf-border-width-subtle) solid
+		var(--jf-border-subtle);
+}
+
+.bar {
+	@include typo.jf-typo-body-medium;
+
+	position: absolute;
+	inset-block-start: 50%;
+	z-index: 2;
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	block-size: calc(var(--row-h) - var(--jf-spacing-away));
+	overflow: hidden;
+	color: var(--jf-fg-default);
+	white-space: nowrap;
+	cursor: grab;
+	background: var(--jf-surface-bg-raised);
+	border: var(--jf-border-width-subtle) solid var(--jf-border-subtle);
+	border-radius: var(--jf-radius-button);
+	transform: translateY(-50%);
+	touch-action: none;
+	user-select: none;
+
+	&:active {
+		cursor: grabbing;
+	}
+
+	@media (hover: hover) {
+		&:hover {
+			border-color: var(--jf-border-strong);
+		}
+	}
+}
+
+.barLabel {
+	flex: 1;
+	padding-inline: var(--jf-spacing-close);
+	overflow: hidden;
+	color: var(--jf-fg-default);
+	text-overflow: ellipsis;
+}
+
+.handle {
+	flex-shrink: 0;
+	align-self: center;
+	inline-size: var(--jf-spacing-close);
+	block-size: 55%;
+	cursor: ew-resize;
+	background: var(--jf-fg-subtle);
+	border-radius: var(--jf-radius-full);
+
+	@media (hover: hover) {
+		&:hover {
+			background: var(--jf-fg-muted);
+		}
+	}
+}
+
+.labelNew {
+	@include typo.jf-typo-body-medium;
+
+	display: flex;
+	flex-flow: row nowrap;
+	gap: var(--jf-spacing-close);
+	align-items: center;
+	block-size: var(--row-h);
+	padding-inline: var(--jf-spacing-near);
+	color: var(--jf-fg-muted);
+}
+
+.newRow {
+	position: relative;
+	block-size: var(--row-h);
+	cursor: cell;
+}
+
+.newPreview {
+	position: absolute;
+	inset-block-start: 50%;
+	z-index: 2;
+	block-size: calc(var(--row-h) - var(--jf-spacing-away));
+	background: var(--jf-surface-bg-raised);
+	border: var(--jf-border-width-subtle) dashed var(--jf-link);
+	border-radius: var(--jf-radius-button);
+	transform: translateY(-50%);
+}

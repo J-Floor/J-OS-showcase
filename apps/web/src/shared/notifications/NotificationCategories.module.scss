@@ -1,0 +1,43 @@
+@use "@j-os/design-system/typography" as typo;
+@use "../cards" as cards;
+
+.categories {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-far);
+}
+
+.category {
+	@include cards.card-surface(true);
+
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+	padding: var(--jf-spacing-far);
+}
+
+.label {
+	@include typo.jf-typo-body-bold;
+
+	margin: 0;
+}
+
+.copy {
+	@include typo.jf-typo-body-small;
+
+	margin: 0;
+	color: var(--jf-fg-muted);
+}
+
+.channels {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--jf-spacing-away);
+}
+
+.error {
+	@include typo.jf-typo-body-small;
+
+	margin: 0;
+	color: var(--jf-fg-strong);
+}

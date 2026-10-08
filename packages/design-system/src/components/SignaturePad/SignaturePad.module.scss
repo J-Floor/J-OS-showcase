@@ -1,0 +1,55 @@
+.root {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+	inline-size: 20rem;
+	max-inline-size: 100%;
+}
+
+.label {
+	font: inherit;
+	color: var(--jf-fg-muted);
+}
+
+.control {
+	position: relative;
+	min-block-size: 10rem;
+	background-color: var(--jf-surface-bg-raised);
+	border: 1px solid var(--jf-border-strong);
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this radius value */
+	border-radius: 0.5rem;
+}
+
+.segment {
+	inline-size: 100%;
+	block-size: 100%;
+	min-block-size: 10rem;
+	touch-action: none;
+
+	// ark renders each stroke as a filled <path>; default fill is black, which is
+	// invisible-ish on the dark raised surface. Drive it from the fg token so the
+	// ink follows the theme (dark in light mode, near-white in dark mode).
+	path {
+		fill: var(--jf-fg-default);
+	}
+}
+
+.clear {
+	position: absolute;
+	inset-block-start: 0.5rem;
+	inset-inline-end: 0.5rem;
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: inline-flex;
+	color: var(--jf-fg-muted);
+	cursor: pointer;
+	background: transparent;
+	border: none;
+}
+
+.guide {
+	position: absolute;
+	inset-block-end: 1.5rem;
+	inset-inline: 1.5rem;
+	pointer-events: none;
+	border-block-end: 1px dashed var(--jf-border-strong);
+}

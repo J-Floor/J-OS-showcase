@@ -1,0 +1,54 @@
+@use "@j-os/design-system/breakpoints" as bp;
+@use "@j-os/design-system/typography" as typo;
+
+.header {
+	position: sticky;
+	inset-block-start: 0;
+	z-index: 10;
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--jf-spacing-far);
+	padding: var(--jf-spacing-far) var(--jf-spacing-detached);
+	background-color: transparent;
+
+	@include bp.phone {
+		padding: var(--jf-spacing-near) var(--jf-spacing-away);
+	}
+}
+
+.wordmark {
+	font-family: var(--jf-typography-mono);
+	color: var(--jf-fg-default);
+	text-decoration: none;
+
+	@include typo.jf-typo-body-bold;
+
+	@include bp.phone {
+		@include typo.jf-typo-body-medium;
+	}
+}
+
+.applyPill {
+	display: inline-flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	gap: var(--jf-spacing-near);
+	padding: var(--jf-spacing-near) var(--jf-spacing-far);
+	border-radius: var(--jf-radius-full);
+	background-color: var(--core-grey-800);
+	backdrop-filter: blur(12px);
+	color: var(--jf-fg-default);
+	text-decoration: none;
+
+	@include typo.jf-typo-body-small;
+
+	@include bp.phone {
+		padding: var(--jf-spacing-close) var(--jf-spacing-near);
+	}
+}
+
+.arrow {
+	font-size: 1em;
+}

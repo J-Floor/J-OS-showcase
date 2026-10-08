@@ -1,0 +1,91 @@
+.container {
+	position: relative;
+}
+
+.measure {
+	pointer-events: none;
+
+	/* Only hide the real content once we have shimmer blocks to cover it;
+	   without blocks (jsdom / unmeasurable) the children stay visible. */
+	&[data-measured] {
+		* {
+			/* stylelint-disable-next-line declaration-no-important */
+			color: transparent !important;
+		}
+
+		img,
+		svg,
+		video {
+			opacity: 0;
+		}
+	}
+}
+
+.overlay {
+	position: absolute;
+	inset-block: 0;
+	inset-inline: 0;
+	z-index: 1;
+	overflow: hidden;
+}
+
+/* The shimmer itself, shared by both modes: the measured overlay blocks and
+   the manual bar. */
+%shimmer {
+	overflow: hidden;
+	background-color: var(--jf-surface-bg-raised);
+
+	&::after {
+		position: absolute;
+		content: "";
+		inset: 0;
+		background-color: var(--jf-fg-muted);
+		animation: jf-skeleton-fade 2s linear infinite;
+	}
+}
+
+.block {
+	@extend %shimmer;
+
+	position: absolute;
+}
+
+/* Manual mode: one bar whose shape is known up front. Width is a preset (a
+   share of the parent) unless the caller's class sets its own dimensions. */
+.bar {
+	@extend %shimmer;
+
+	display: block;
+	position: relative;
+	block-size: 0.75rem;
+	border-radius: var(--jf-radius-container);
+
+	&[data-width="short"] {
+		inline-size: 30%;
+	}
+
+	&[data-width="medium"] {
+		inline-size: 60%;
+	}
+
+	&[data-width="long"] {
+		inline-size: 85%;
+	}
+
+	&[data-width="full"] {
+		inline-size: 100%;
+	}
+}
+
+@keyframes jf-skeleton-fade {
+	0%,
+	100% {
+		/* stylelint-disable-next-line scale-unlimited/declaration-strict-value */
+		opacity: 0.15;
+	}
+
+	50% {
+		/* stylelint-disable-next-line scale-unlimited/declaration-strict-value */
+		opacity: 0.35;
+	}
+}

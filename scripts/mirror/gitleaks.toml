@@ -1,0 +1,4 @@
+title = "J-OS mirror gate"
+
+[extend]
+useDefault = true

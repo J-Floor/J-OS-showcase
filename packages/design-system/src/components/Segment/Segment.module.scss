@@ -1,0 +1,99 @@
+@use "../../styles/typography" as typo;
+@use "../../styles/utils";
+
+/* Ported from EmboUI's Segment. Token mapping:
+   --embo-colour-surface-bg-light    -> --jf-surface-bg-sunken
+   --embo-colour-primary-light-bg    -> --jf-surface-bg-overlay
+   --embo-colour-surface-fg-medium   -> --jf-fg-muted
+   --embo-colour-primary-light-fg-medium -> --jf-fg-strong
+   --embo-radius-container           -> --jf-radius-container
+   --embo-radius-button              -> --jf-radius-button
+   --embo-radius-full                -> --jf-radius-full
+   --embo-dimension-short-component-height -> --jf-dimension-short-component-height
+   --embo-spacing-near               -> --jf-spacing-near
+   --embo-spacing-away               -> --jf-spacing-away */
+
+.segment {
+	display: inline-flex;
+	flex-wrap: nowrap;
+	block-size: var(--jf-dimension-short-component-height);
+	background-color: var(--jf-surface-bg-sunken);
+	border-radius: var(--jf-radius-container);
+
+	/* Ark's `orientation="vertical"` stacks the options. Worth having where the
+     control sits in a narrow column (a drawer's value slot) and a row of
+     options would either overflow or have to scroll — a scrolling segmented
+     control hides its own options, which is the one thing it exists not to do.
+     The group's height becomes its content's, and the sliding indicator
+     switches to the vertical vars zag sets (`--top`/`--height`). */
+	&[data-orientation="vertical"] {
+		flex-direction: column;
+		align-items: stretch;
+		block-size: auto;
+		inline-size: 100%;
+	}
+}
+
+.indicator {
+	z-index: 1;
+	inline-size: var(--width);
+	block-size: var(--jf-dimension-short-component-height);
+
+	/* NOT `--jf-surface-bg-overlay`: in the light theme that token and the
+     track's `--jf-surface-bg-sunken` are both `--core-grey-100`, so the
+     selected option had no highlight at all — the control read as a plain list
+     of labels with only the bold weight to say which was chosen. `raised`
+     contrasts with `sunken` in both themes without going all the way to
+     `base`, which in light mode matches the page behind the control and makes
+     the chip look like a hole cut in the track. */
+	background-color: var(--jf-surface-bg-raised);
+	border: 1px solid var(--jf-border-subtle);
+	border-radius: var(--jf-radius-button);
+	inset-inline-start: var(--left);
+
+	.segment[data-orientation="vertical"] & {
+		block-size: var(--height);
+		inset-block-start: var(--top);
+		inset-inline-start: 0;
+	}
+}
+
+/* Stacked options fill the track and read left-aligned; centred labels in a
+   column look like a ragged list, and an item sized to its own text leaves the
+   sliding indicator measuring a different width per row. */
+
+.item {
+	z-index: 2;
+	display: inline-flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	justify-content: center;
+
+	/* A two-word option ("Mark as left", "Kick out") otherwise breaks across two
+     lines as soon as the group is narrower than its content, which doubles the
+     control's height and leaves the sliding indicator misaligned. Options stay
+     on one line; a group too wide for its container scrolls instead (the
+     consumer decides that — see ChangeRoleDialog). */
+	white-space: nowrap;
+	padding-block: var(--jf-spacing-near);
+	padding-inline: var(--jf-spacing-away);
+	color: var(--jf-fg-muted);
+	cursor: pointer;
+	border-radius: var(--jf-radius-full);
+
+	@include typo.jf-typo-body-regular;
+	@include utils.focus-outline;
+
+	&[data-state="checked"] {
+		@include typo.jf-typo-body-bold;
+
+		> * {
+			color: var(--jf-fg-strong);
+		}
+	}
+
+	.segment[data-orientation="vertical"] & {
+		justify-content: start;
+		inline-size: 100%;
+	}
+}

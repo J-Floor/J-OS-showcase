@@ -1,0 +1,45 @@
+@use "../../../shared/cards" as cards;
+@use "@j-os/design-system/typography" as typo;
+
+.tile {
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-close);
+	padding: var(--jf-spacing-far);
+
+	@include cards.card-surface;
+}
+
+.label {
+	@include typo.jf-typo-body-small;
+
+	color: var(--jf-fg-muted);
+}
+
+.value {
+	@include typo.jf-typo-h2;
+
+	/* Mono for the figure itself. These tiles are read as a column of numbers,
+	   and the mono family is where the brand puts data — it also makes the
+	   digits the same width by construction, so 11 and 88 occupy the same space
+	   and the eye can scan down rather than re-find each number. */
+	font-family: var(--jf-typography-mono);
+	color: var(--jf-fg-strong);
+	font-variant-numeric: tabular-nums;
+
+	/* Tone paints the number, not the panel: a grid of amber boxes reads as an
+	   outage when most of these are only worth a glance. */
+	[data-tone="warning"] & {
+		color: var(--jf-warning-fg);
+	}
+
+	[data-tone="error"] & {
+		color: var(--jf-error-fg);
+	}
+}
+
+.detail {
+	@include typo.jf-typo-body-small;
+
+	color: var(--jf-fg-muted);
+}

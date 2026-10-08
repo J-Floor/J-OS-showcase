@@ -1,0 +1,29 @@
+/* Dialog footer: right-aligned action row. */
+.footer {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	gap: var(--jf-spacing-near);
+	justify-content: flex-end;
+	margin-block-start: var(--jf-spacing-near);
+}
+
+/* The door choice, stacked like the fields above it. */
+.door {
+	display: flex;
+	flex-flow: column wrap;
+	gap: var(--jf-spacing-close);
+}
+
+.doorHint {
+	color: var(--jf-fg-muted);
+}
+
+/* Matches the label the field components render above their own controls. */
+.doorLabel {
+	color: var(--jf-fg-muted);
+}
+
+/* Hugs its two options instead of stretching the dialog's full width. */
+.doorSegment {
+	align-self: flex-start;
+}

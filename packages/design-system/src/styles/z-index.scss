@@ -1,0 +1,15 @@
+:root {
+	--jf-z-index-background: 0;
+	--jf-z-index-content: 1;
+	--jf-z-index-overlay-base: 1000;
+	--jf-z-index-overlay-backdrop-base: 999;
+
+	/* A tour narrates the page it runs on, INCLUDING whatever overlay is already
+	   open, so it gets its own tier above the overlay bases and below tooltips.
+	   Its own tier rather than a bigger overlay number: an overlay opened during
+	   a tour raises `--layer-index`, and a tour sharing the overlay base would
+	   be overtaken by the very dialog its step just told you to open. */
+	--jf-z-index-tour-backdrop-base: 1049;
+	--jf-z-index-tour-base: 1050;
+	--jf-z-index-tooltip-base: 1100;
+}

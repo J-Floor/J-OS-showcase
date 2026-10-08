@@ -1,0 +1,50 @@
+@use "../../styles/typography" as typo;
+
+// Sized by `font-size`, like Icon: the circle is a multiple of it and the
+// initials are a fraction of it, so setting one property scales the whole
+// avatar. A consumer resizes it from CSS (a typography mixin on a wrapping
+// class) instead of a size prop. The mixin here sets the default size; the
+// `em` units below are relative to it.
+.avatar {
+	@include typo.jf-typo-body-bold;
+
+	display: inline-flex;
+	flex-shrink: 0;
+	flex-wrap: nowrap;
+	align-items: center;
+	justify-content: center;
+	block-size: 1.5em;
+	aspect-ratio: 1;
+	overflow: hidden;
+	user-select: none;
+	background-color: var(--jf-inverted-bg);
+	border-radius: var(--jf-radius-full);
+
+	// Sizing an avatar with a typography class also carries that class's colour,
+	// and both selectors are a single class, so the winner would be decided by
+	// stylesheet source order. Pin the colour through the always-present
+	// `data-surface` attribute (higher specificity) so a size override can only
+	// ever change the size.
+	&[data-surface] {
+		color: var(--jf-inverted-fg);
+	}
+}
+
+.fallback {
+	@include typo.jf-typo-body-bold;
+
+	// After the mixin, which hard-sets a px font-size: the initials scale with
+	// the circle instead, so one `font-size` on `.avatar` drives both. A
+	// relative `em`, not a token, is the whole point — the avatar has no fixed
+	// size — and there are no font-size tokens to reference anyway.
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional em-relative sizing */
+	font-size: 0.75em;
+	line-height: 1;
+	text-transform: uppercase;
+}
+
+.image {
+	inline-size: 100%;
+	block-size: 100%;
+	object-fit: cover;
+}

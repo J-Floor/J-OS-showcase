@@ -1,0 +1,99 @@
+@use "@j-os/design-system/breakpoints" as bp;
+@use "../styles/marketing-type" as mkt;
+
+// Full-viewport block with its content pinned to the bottom (live: 120px top,
+// 32px sides, 24px bottom padding; 62px between heading and each row).
+.page {
+	--page-pad-top: 120px;
+	--stack-gap: 62px;
+
+	display: flex;
+	flex-flow: column nowrap;
+	justify-content: flex-end;
+	min-block-size: 100vb;
+	min-block-size: 100svb;
+	padding: var(--page-pad-top) var(--jf-spacing-distant)
+		var(--jf-spacing-away);
+	background-color: var(--core-grey-900);
+
+	@include bp.phone {
+		--page-pad-top: var(--jf-spacing-detached);
+
+		padding-inline: var(--jf-spacing-far);
+	}
+}
+
+.stack {
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--stack-gap);
+
+	@include bp.phone {
+		--stack-gap: var(--jf-spacing-distant);
+	}
+}
+
+.heading {
+	--heading-size: 3rem;
+	--heading-weight: 500;
+	--heading-line-height: 1.2;
+
+	margin: 0;
+	color: mkt.$fg;
+	font-family: var(--jf-typography-mono);
+	font-size: var(--heading-size);
+	font-weight: var(--heading-weight);
+	line-height: var(--heading-line-height);
+
+	@include bp.phone {
+		--heading-size: 2rem;
+	}
+}
+
+// A full-width link row: label on the left half, value right-aligned on the
+// right half, a grey-700 hairline along the bottom (inset, so it adds no height,
+// as on the live site). Hover lifts the text to warm white.
+.row {
+	--row-gap: 10px;
+	--row-divider: inset 0 -1px 0 var(--core-grey-700);
+
+	@include mkt.inter-body;
+
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	column-gap: var(--row-gap);
+	padding-block: var(--jf-spacing-far);
+	box-shadow: var(--row-divider);
+	text-decoration: none;
+	/* stylelint-disable-next-line plugin/no-low-performance-animation-properties -- colour-only hover fade on a text link, as on the live site */
+	transition: color var(--jf-animation-duration-default) ease;
+
+	@media (hover: hover) {
+		&:hover {
+			color: var(--core-warm-white);
+		}
+	}
+
+	&:focus-visible {
+		color: var(--core-warm-white);
+	}
+
+	// Global base styles pin span to the design-system sans; rows use Inter.
+	span {
+		font-family: inherit;
+	}
+
+	@include bp.phone {
+		grid-template-columns: minmax(0, 1fr);
+		row-gap: var(--jf-spacing-near);
+	}
+}
+
+.value {
+	overflow-wrap: anywhere;
+	text-align: end;
+
+	@include bp.phone {
+		text-align: start;
+	}
+}

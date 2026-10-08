@@ -1,0 +1,40 @@
+.row {
+	display: grid;
+	grid-template-columns: 140px 1fr;
+	gap: var(--jf-spacing-near);
+
+	/* Top-align so the label (icon + text) sits against the first line of the
+     value rather than the vertical centre of a multiline answer. */
+	align-items: start;
+	padding: var(--jf-spacing-close) 0;
+
+	/* On a phone the 140px label column leaves the value too narrow (an input
+     was squeezed to ~200px). Stack the label above the value so the field
+     takes the full width. */
+	@media (width <= 40rem) {
+		grid-template-columns: 1fr;
+		gap: var(--jf-spacing-near);
+	}
+}
+
+.key {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+	color: var(--jf-fg-muted);
+}
+
+.value {
+	min-inline-size: 0;
+
+	/* `anywhere`, not `break-word`: a value is often a single unbroken token —
+     a venture name run together, a referral handle, a bare URL — and
+     `break-word` only breaks a word that would overflow ITS OWN line, which
+     leaves the track sized to the unbroken word and the tail clipped by the
+     drawer. On a phone the value track is ~190px, so a 260px name lost its
+     last 70px with nothing to tell you it had. `anywhere` also lets the
+     min-content contribution be the narrowest character, so the track itself
+     stops being held open by the longest word. */
+	overflow-wrap: anywhere;
+}

@@ -1,0 +1,9 @@
+/* Flags are rare and short (usually zero or one), so they wrap rather than
+   truncate — a clipped "Agreement not signe…" would be worse than a two-line
+   row. */
+.flags {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--jf-spacing-close);
+	align-items: center;
+}

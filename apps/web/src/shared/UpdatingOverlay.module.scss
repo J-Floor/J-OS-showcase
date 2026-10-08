@@ -1,0 +1,26 @@
+@use "@j-os/design-system/typography" as typo;
+
+/* Covers the whole viewport above every app layer, including overlays,
+   tours and tooltips, and swallows input until the reload replaces the page. */
+.overlay {
+	position: fixed;
+	inset: 0;
+	z-index: var(--jf-z-index-tooltip-base);
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-far);
+	align-items: center;
+	justify-content: center;
+	padding: var(--jf-spacing-far);
+	background: var(--jf-surface-bg-base);
+
+	.logo {
+		font-size: var(--jf-dimension-logo-md);
+	}
+}
+
+.label {
+	@include typo.jf-typo-body-regular;
+
+	margin: 0;
+}

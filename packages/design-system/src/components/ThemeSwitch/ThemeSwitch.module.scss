@@ -1,0 +1,48 @@
+.switch {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: var(--jf-spacing-close);
+	color: var(--jf-fg-default);
+	cursor: pointer;
+	background: transparent;
+	border: none;
+	border-radius: var(--jf-radius-full);
+	/* stylelint-disable-next-line plugin/no-low-performance-animation-properties -- intentional transition on background-color */
+	transition: background-color var(--jf-animation-duration-default);
+
+	/* stylelint-disable-next-line defensive-css/no-accidental-hover -- pointer-capable control; mobile accidental-hover not a concern */
+	&:hover {
+		color: var(--jf-fg-strong);
+		background-color: var(--jf-surface-bg-overlay);
+	}
+
+	&:focus-visible {
+		outline: solid 2px var(--jf-fg-default);
+		outline-offset: 2px;
+	}
+}
+
+.icon {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: inline-flex;
+}
+
+/* Added only after the first mount (see ThemeSwitch.tsx), so the glyph rotates +
+   fades in on a real toggle but a fresh mount (e.g. on navigation) stays still. */
+.animate {
+	animation: theme-rotate-in 250ms ease-out;
+}
+
+@keyframes theme-rotate-in {
+	from {
+		opacity: 0;
+		transform: rotate(-90deg);
+	}
+
+	to {
+		opacity: 1;
+		transform: rotate(0deg);
+	}
+}

@@ -1,0 +1,32 @@
+.wrap {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-away);
+}
+
+.address {
+	margin: 0;
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
+	font-size: 1.25rem;
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
+	font-weight: 600;
+}
+
+.actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--jf-spacing-near);
+	direction: column;
+}
+
+/* Tel link styled to match a secondary Button for visual consistency. */
+.callLink {
+	display: inline-flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	padding: var(--jf-spacing-close) var(--jf-spacing-far);
+	color: var(--jf-color-fg-default);
+	text-decoration: none;
+	border: 1px solid var(--jf-color-border-strong);
+	border-radius: var(--jf-radius-base);
+}

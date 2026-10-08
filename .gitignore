@@ -1,0 +1,16 @@
+node_modules
+dist
+.turbo
+*.log
+.env
+.env.local
+apps/web/.convex-tmp
+
+# Lint caches
+.eslintcache
+.stylelintcache
+
+apps/web/agreements/*.pdf
+
+# Claude Code per-user settings (may hold local secrets, e.g. CLOUDFLARE_API_TOKEN)
+.claude/settings.local.json

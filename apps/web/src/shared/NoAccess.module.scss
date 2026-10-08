@@ -1,0 +1,5 @@
+/* Full-viewport box so the wrapped ExceptionDisplay fills the screen. */
+.fill {
+	display: grid;
+	min-block-size: 100dvb;
+}

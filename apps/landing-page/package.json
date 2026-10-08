@@ -1,0 +1,43 @@
+{
+	"name": "@j-os/landing-page",
+	"private": true,
+	"version": "0.0.1",
+	"type": "module",
+	"scripts": {
+		"dev": "vite",
+		"build": "tsc -b && vite build && vite build --ssr src/entry-server.tsx --outDir dist-ssr && bun scripts/prerender.mjs",
+		"preview": "vite preview",
+		"typecheck": "tsc -b --noEmit",
+		"test": "vitest run",
+		"lint": "bun run lint:logic && bun run lint:style",
+		"lint:logic": "eslint \"src/**/*.{ts,tsx}\" --cache --max-warnings 0",
+		"lint:style": "stylelint \"src/**/*.scss\" --cache --allow-empty-input --max-warnings 0",
+		"lint:style:ci": "bun run lint:style --custom-formatter @csstools/stylelint-formatter-github",
+		"format": "prettier --write \"src/**/*.{ts,tsx,css,scss}\" --ignore-path ../../.prettierignore",
+		"optimize:assets": "bun scripts/optimize-assets.mjs"
+	},
+	"prettier": "@j-os/config-prettier",
+	"dependencies": {
+		"@j-os/design-system": "workspace:*",
+		"@solidjs/router": "catalog:",
+		"solid-js": "catalog:"
+	},
+	"devDependencies": {
+		"@csstools/stylelint-formatter-github": "^2.0.0",
+		"@j-os/config-eslint": "workspace:*",
+		"@j-os/config-prettier": "workspace:*",
+		"@j-os/config-stylelint": "workspace:*",
+		"@solidjs/testing-library": "catalog:",
+		"@testing-library/jest-dom": "catalog:",
+		"@types/node": "^25.9.1",
+		"eslint": "catalog:",
+		"jsdom": "catalog:",
+		"sass": "catalog:",
+		"sharp": "^0.35.1",
+		"stylelint": "catalog:",
+		"typescript": "catalog:",
+		"vite": "catalog:",
+		"vite-plugin-solid": "catalog:",
+		"vitest": "catalog:"
+	}
+}

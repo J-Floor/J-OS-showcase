@@ -1,0 +1,37 @@
+@use "../../styles/typography" as typo;
+
+.chip {
+	--base-padding: var(--jf-spacing-near);
+
+	display: inline-flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value */
+	gap: calc(var(--base-padding) / 2);
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value */
+	padding-block: calc(var(--base-padding) / 2);
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value */
+	padding-inline: calc(var(--base-padding) * 2);
+	color: var(--jf-fg-default);
+	border: var(--jf-border-width-decorative) solid currentcolor;
+	border-radius: var(--jf-radius-full);
+
+	// Tighten the side that carries an icon so it sits closer to the edge than
+	// the label does.
+	&[data-prefix="true"] {
+		padding-inline-start: var(--base-padding);
+	}
+
+	&[data-suffix="true"] {
+		padding-inline-end: var(--base-padding);
+	}
+
+	[data-icon] {
+		transform: translateY(-0.02em); // Optical alignment
+	}
+
+	// Body-small so a Chip matches the compact text it sits beside (e.g. a
+	// combobox's selected-item row). The mixin also sizes any leading/trailing
+	// <Icon> child.
+	@include typo.jf-typo-body-small;
+}

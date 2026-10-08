@@ -1,0 +1,29 @@
+{
+	"name": "@j-os/config-stylelint",
+	"version": "0.1.0",
+	"private": true,
+	"main": "stylelint.config.js",
+	"type": "module",
+	"scripts": {
+		"format": "prettier --write \"*.{js,ts,tsx}\" --ignore-path ../../.prettierignore"
+	},
+	"files": [
+		"stylelint.config.js"
+	],
+	"dependencies": {
+		"stylelint-config-recess-order": "catalog:",
+		"stylelint-config-standard": "catalog:",
+		"stylelint-config-standard-scss": "catalog:",
+		"stylelint-declaration-block-no-ignored-properties": "catalog:",
+		"stylelint-declaration-strict-value": "catalog:",
+		"stylelint-high-performance-animation": "catalog:",
+		"stylelint-plugin-defensive-css": "catalog:",
+		"stylelint-plugin-logical-css": "catalog:",
+		"stylelint-scss": "catalog:",
+		"stylelint-use-nesting": "catalog:"
+	},
+	"devDependencies": {
+		"@j-os/config-eslint": "workspace:*",
+		"stylelint": "catalog:"
+	}
+}

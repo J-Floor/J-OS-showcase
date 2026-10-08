@@ -1,0 +1,32 @@
+@use "@j-os/design-system/breakpoints" as bp;
+
+.tabBar {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+
+	/* Phone: the triggers and the controls take a line each. Left as one row
+	   they do not merely crowd — the tab list has no min-width, so the assignee
+	   Select and the "New task" button push straight over "Projects" and it
+	   stops being clickable. */
+	@include bp.phone {
+		flex-wrap: wrap;
+		gap: var(--jf-spacing-near);
+	}
+}
+
+.projectControls,
+.taskControls {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+
+	/* Once wrapped onto their own line, the controls span it rather than
+	   hugging the leading edge under the tabs. */
+	@include bp.phone {
+		flex: 1 1 100%;
+		justify-content: space-between;
+	}
+}

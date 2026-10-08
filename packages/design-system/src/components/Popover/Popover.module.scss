@@ -1,0 +1,46 @@
+@use "../../styles/animation" as anim;
+@use "../../styles/typography" as typo;
+
+.positioner {
+	pointer-events: none;
+}
+
+.content {
+	position: relative;
+
+	/* Layer via zag's `--layer-index` so it ranks above a parent overlay. */
+	z-index: calc(var(--jf-z-index-overlay-base) + var(--layer-index, 0));
+	gap: var(--jf-spacing-near);
+	inline-size: fit-content;
+	max-block-size: var(--available-height);
+	padding: var(--jf-spacing-far);
+	overscroll-behavior-block: contain;
+	color: var(--jf-fg-default);
+	background-color: var(--jf-surface-bg-base);
+	border-radius: var(--jf-radius-container);
+	box-shadow: var(--jf-shadow-surface-elevation);
+
+	@include typo.jf-typo-body-regular;
+	@include anim.popover-animation;
+
+	&[data-state="open"] {
+		display: flex;
+		flex-flow: column nowrap;
+	}
+
+	&[inert] {
+		pointer-events: none;
+
+		& * {
+			pointer-events: none;
+		}
+	}
+}
+
+.title {
+	margin-inline-end: var(--jf-spacing-far);
+	color: var(--jf-fg-strong);
+	text-align: start;
+
+	@include typo.jf-typo-h5;
+}

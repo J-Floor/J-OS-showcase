@@ -1,0 +1,28 @@
+@use "@j-os/design-system/typography" as typo;
+
+.video {
+	display: block;
+	inline-size: 100%;
+	aspect-ratio: 4 / 3;
+	object-fit: cover;
+	background-color: var(--jf-surface-bg-sunken);
+	border-radius: var(--jf-radius-container);
+}
+
+.status {
+	@include typo.jf-typo-body-small;
+
+	color: var(--jf-fg-muted);
+
+	&[data-status="error"] {
+		color: var(--jf-error-fg);
+	}
+}
+
+.actions {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+	justify-content: flex-end;
+}

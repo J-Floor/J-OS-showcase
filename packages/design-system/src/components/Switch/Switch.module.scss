@@ -1,0 +1,77 @@
+@use "../../styles/typography" as typo;
+
+.switch {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: var(--jf-spacing-far);
+	align-items: center;
+	justify-content: space-between;
+	cursor: pointer;
+
+	&[data-disabled] {
+		cursor: not-allowed;
+	}
+}
+
+.text {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-close);
+	min-inline-size: 0;
+}
+
+.label {
+	@include typo.jf-typo-body-bold;
+
+	user-select: none;
+}
+
+.description {
+	@include typo.jf-typo-body-small;
+
+	color: var(--jf-fg-muted);
+}
+
+.control {
+	--thumb-size: 1rem;
+
+	position: relative;
+	box-sizing: content-box;
+	display: flex;
+	flex: 0 0 auto;
+	flex-wrap: nowrap;
+	align-items: center;
+	inline-size: calc(2 * var(--thumb-size));
+	block-size: var(--thumb-size);
+	padding: var(--jf-spacing-close);
+	background-color: var(--jf-surface-bg-overlay);
+	border: var(--jf-border-width-decorative) solid var(--jf-border-strong);
+	border-radius: var(--jf-radius-full);
+	/* stylelint-disable-next-line plugin/no-low-performance-animation-properties -- intentional transition on background-color */
+	transition: background-color var(--jf-animation-duration-default);
+
+	&[data-state="checked"] {
+		background-color: var(--jf-fg-strong);
+	}
+
+	&[data-focus-visible] {
+		outline: var(--jf-border-width-accessibility) solid var(--jf-fg-strong);
+		outline-offset: var(--jf-border-width-accessibility);
+	}
+
+	&[data-disabled] {
+		opacity: var(--jf-opacity-disabled);
+	}
+}
+
+.thumb {
+	inline-size: var(--thumb-size);
+	block-size: var(--thumb-size);
+	background-color: var(--jf-surface-bg-base);
+	border-radius: var(--jf-radius-full);
+	transition: transform var(--jf-animation-duration-default);
+
+	&[data-state="checked"] {
+		transform: translateX(var(--thumb-size));
+	}
+}

@@ -1,0 +1,14 @@
+:root {
+	/* Shared control height — Button, Input, NumberInput, Select trigger. */
+	--jf-dimension-short-component-height: 32px;
+
+	/* Brand-logo sizing (applied as font-size on the Logo glyph). sm = inline /
+	   sidebar, md = auth pages, lg = splash. */
+	--jf-dimension-logo-sm: 2rem;
+	--jf-dimension-logo-md: 4rem;
+	--jf-dimension-logo-lg: 5.5rem;
+
+	/* Plot height for `Chart`. A token rather than a prop so a dense dashboard
+	   can shrink every chart at once by re-declaring it on the grid. */
+	--jf-dimension-chart-height: 180px;
+}

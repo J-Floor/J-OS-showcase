@@ -1,0 +1,96 @@
+name: Tests
+
+on:
+  workflow_dispatch:
+  # Only main — `pull_request` already covers a branch with an open PR, and
+  # listening to both ran the suite twice for every commit.
+  push:
+    branches: [main]
+    paths:
+      - "**.ts"
+      - "**.tsx"
+      - "**.js"
+      - "**.jsx"
+      - "**.scss"
+      - "**.json"
+      - "**.mjs"
+      - "**.cjs"
+      - "**.mts"
+      - "**.html"
+      - "**.pdf"
+      - "**.png"
+      - "bun.lock"
+      - "bunfig.toml"
+      - "**/bunfig.toml"
+      - "turbo.json"
+      - ".github/workflows/tests.yml"
+  pull_request:
+    paths:
+      - "**.ts"
+      - "**.tsx"
+      - "**.js"
+      - "**.jsx"
+      - "**.scss"
+      - "**.json"
+      - "**.mjs"
+      - "**.cjs"
+      - "**.mts"
+      - "**.html"
+      - "**.pdf"
+      - "**.png"
+      - "bun.lock"
+      - "bunfig.toml"
+      - "**/bunfig.toml"
+      - "turbo.json"
+      - ".github/workflows/tests.yml"
+
+concurrency:
+  group: test-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Shard ${{ matrix.shard }}/${{ strategy.job-total }}
+    runs-on: ubuntu-latest
+    strategy:
+      # One red shard must not cancel the others and hide their failures.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Cache Bun downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Turborepo remote cache backed by the GitHub Actions cache: one cache
+      # shared by every job, workflow and branch, keyed by turbo's task hash.
+      - name: Turborepo remote cache
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        with:
+          # A fixed port fails the job when the runner already holds it (EADDRINUSE).
+          server-port: 0
+
+      # The agent-guard tests take under a second; one shard is enough.
+      - name: Agent-guard tests
+        if: matrix.shard == 1
+        run: bun test scripts
+
+      - name: Run tests
+        run: bunx --bun turbo run test${{ github.event_name == 'pull_request' && ' --affected' || '' }} --continue -- --shard=${{ matrix.shard }}/${{ strategy.job-total }}

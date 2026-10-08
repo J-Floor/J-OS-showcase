@@ -1,0 +1,159 @@
+@mixin primitives {
+	:root {
+		--jf-typography-sans: manrope, inter, sans-serif;
+		--jf-typography-mono: "Azeret Mono", monospace;
+		--jf-typography-line-height-body: 1.5;
+		--jf-typography-letter-spacing-header: 0em;
+		--jf-typography-letter-spacing-body: 0em;
+	}
+}
+
+@mixin typography-base(
+	$family,
+	$size,
+	$line-height,
+	$letter-spacing,
+	$weight,
+	$icon-size
+) {
+	font-family: $family;
+	font-size: $size;
+	font-style: normal;
+	font-weight: $weight;
+	line-height: $line-height;
+	letter-spacing: $letter-spacing;
+
+	[data-icon] {
+		font-size: $icon-size;
+	}
+
+	&[data-icon] {
+		font-size: $icon-size;
+	}
+}
+
+@mixin body-typography(
+	$size,
+	$weight,
+	$line-height: var(--jf-typography-line-height-body),
+	$letter-spacing: var(--jf-typography-letter-spacing-body),
+	$icon-size: 1.3125rem,
+	$tech: false
+) {
+	$family: var(--jf-typography-sans);
+
+	@if $tech {
+		$family: var(--jf-typography-mono);
+	}
+
+	@include typography-base(
+		$family,
+		$size,
+		$line-height,
+		$letter-spacing,
+		$weight,
+		$icon-size
+	);
+}
+
+@mixin header-typography(
+	$size,
+	$weight,
+	$line-height: 1.2,
+	$letter-spacing: var(--jf-typography-letter-spacing-header),
+	$icon-size: 1.5rem
+) {
+	@include typography-base(
+		var(--jf-typography-sans),
+		$size,
+		$line-height,
+		$letter-spacing,
+		$weight,
+		$icon-size
+	);
+
+	color: var(--jf-fg-strong);
+}
+
+/* Icon size = 1.5x the text size at every level (matching the body ratio:
+   0.875rem text -> 1.3125rem icon), so headings always carry an icon at least
+   as large as body text and the scale stays monotonic. */
+@mixin jf-typo-h1 {
+	@include header-typography(
+		2rem,
+		700,
+		$line-height: 1.15,
+		$letter-spacing: -0.015em,
+		$icon-size: 3rem
+	);
+
+	/* Display heading is set in the mono family (brand choice; overrides the
+	   sans family that header-typography applies). Icons keep their own family. */
+	font-family: var(--jf-typography-mono);
+}
+
+@mixin jf-typo-h2 {
+	@include header-typography(
+		1.5rem,
+		700,
+		$line-height: 1.2,
+		$letter-spacing: -0.01em,
+		$icon-size: 2.25rem
+	);
+}
+
+@mixin jf-typo-h3 {
+	@include header-typography(
+		1.25rem,
+		600,
+		$line-height: 1.25,
+		$icon-size: 1.875rem
+	);
+}
+
+@mixin jf-typo-h4 {
+	@include header-typography(
+		1.125rem,
+		600,
+		$line-height: 1.3,
+		$icon-size: 1.6875rem
+	);
+}
+
+@mixin jf-typo-h5 {
+	@include header-typography(
+		1rem,
+		600,
+		$line-height: 1.4,
+		$icon-size: 1.5rem
+	);
+}
+
+@mixin jf-typo-h6 {
+	@include header-typography(
+		0.875rem,
+		600,
+		$line-height: 1.4,
+		$icon-size: 1.3125rem
+	);
+}
+
+@mixin jf-typo-body-bold {
+	@include body-typography(0.875rem, 600);
+}
+
+@mixin jf-typo-body-medium {
+	@include body-typography(0.875rem, 500);
+}
+
+@mixin jf-typo-body-regular {
+	@include body-typography(0.875rem, 400);
+}
+
+@mixin jf-typo-body-small {
+	@include body-typography(0.75rem, 400, $line-height: 1.5);
+}
+
+@mixin jf-typo-body-tech {
+	@include body-typography(0.8125rem, 500, $tech: true, $line-height: 1.5);
+}

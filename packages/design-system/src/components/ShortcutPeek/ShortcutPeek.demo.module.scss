@@ -1,0 +1,12 @@
+/* Demo layout only. Inline styles would bypass the spacing tokens, which is the
+   one thing a design-system demo must not model. */
+.column {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--jf-spacing-near);
+}
+
+.hint {
+	color: var(--jf-fg-muted);
+}

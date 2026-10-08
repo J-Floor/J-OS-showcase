@@ -1,0 +1,94 @@
+@use "@j-os/design-system/breakpoints" as bp;
+
+.hero {
+	// Type matched to the live thejfloor.com hero: Azeret Mono, light weight
+	// (300) for the headline/body, medium for the wordmark, warm off-white. Kept
+	// as local custom properties because the design system's type mixins render
+	// heavier and larger than this section needs.
+	--hero-fg: rgb(227 222 219);
+	--hero-wordmark-size: 2.75rem;
+	--hero-wordmark-weight: 500;
+	--hero-headline-size: 1.5rem;
+	--hero-body-size: 1.125rem;
+	--hero-text-weight: 300;
+	--hero-line-height: 1.2;
+	--hero-bg-opacity: 0.1;
+
+	position: relative;
+	display: grid;
+	place-items: center;
+	min-block-size: 100vb;
+	min-block-size: 100svb;
+	overflow: hidden;
+	background-color: var(--core-grey-900);
+}
+
+// The cityscape sits at 0.1 opacity over the near-black background — the same
+// value as the live Framer hero — so it reads as a faint line-art backdrop and
+// the light text needs no extra scrim.
+.background {
+	position: absolute;
+	inset: 0;
+	inline-size: 100%;
+	block-size: 100%;
+	object-fit: cover;
+	object-position: center;
+	opacity: var(--hero-bg-opacity);
+}
+
+.content {
+	position: relative;
+	z-index: 1;
+	display: flex;
+	flex-flow: column wrap;
+	align-items: center;
+	gap: var(--jf-spacing-away);
+	max-inline-size: 40rem;
+	padding: var(--jf-spacing-detached);
+	color: var(--hero-fg);
+	text-align: center;
+}
+
+.wordmark {
+	margin: 0;
+	font-family: var(--jf-typography-mono);
+	font-size: var(--hero-wordmark-size);
+	font-weight: var(--hero-wordmark-weight);
+	line-height: var(--hero-line-height);
+}
+
+.headline {
+	margin: 0;
+	font-family: var(--jf-typography-mono);
+	font-size: var(--hero-headline-size);
+	font-weight: var(--hero-text-weight);
+	line-height: var(--hero-line-height);
+}
+
+.body {
+	max-inline-size: 32rem;
+	margin: 0;
+	color: var(--hero-fg);
+	font-family: var(--jf-typography-mono);
+	font-size: var(--hero-body-size);
+	font-weight: var(--hero-text-weight);
+	line-height: var(--hero-line-height);
+}
+
+@include bp.phone {
+	.hero {
+		--hero-wordmark-size: 2rem;
+		--hero-headline-size: 1.25rem;
+		--hero-body-size: 1rem;
+	}
+
+	.content {
+		gap: var(--jf-spacing-far);
+		padding: var(--jf-spacing-away);
+	}
+}
+
+.pillArrow {
+	inline-size: 24px;
+	block-size: 24px;
+}

@@ -1,0 +1,41 @@
+{
+	"name": "J-OS",
+	"image": "mcr.microsoft.com/devcontainers/base:bookworm",
+	"remoteUser": "vscode",
+	"features": {
+		"ghcr.io/devcontainers/features/github-cli:1": {}
+	},
+	"forwardPorts": [5173, 5174, 4173],
+	"portsAttributes": {
+		"5173": {
+			"label": "@j-os/web Vite",
+			"onAutoForward": "notify"
+		},
+		"5174": {
+			"label": "landing-page / design-system demo",
+			"onAutoForward": "silent"
+		},
+		"4173": {
+			"label": "vite preview",
+			"onAutoForward": "silent"
+		}
+	},
+	"remoteEnv": {
+		"PATH": "/home/vscode/.bun/bin:${containerEnv:PATH}",
+		"CONVEX_TMPDIR": "${containerWorkspaceFolder}/apps/web/.convex-tmp"
+	},
+	"mounts": [
+		"source=j-os-bun-cache,target=/home/vscode/.bun/install/cache,type=volume",
+		"source=j-os-convex,target=/home/vscode/.convex,type=volume"
+	],
+	"postCreateCommand": "bash .devcontainer/post-create.sh",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"dbaeumer.vscode-eslint",
+				"esbenp.prettier-vscode",
+				"stylelint.vscode-stylelint"
+			]
+		}
+	}
+}

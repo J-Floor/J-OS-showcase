@@ -1,0 +1,254 @@
+@use "../../styles/typography" as typo;
+
+.field {
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-close);
+}
+
+.label {
+	color: var(--jf-fg-strong);
+
+	@include typo.jf-typo-body-bold;
+}
+
+/* DateInput.Control + DatePicker.RootProvider are transparent wrappers. */
+.control,
+.pickerRoot {
+	display: contents;
+}
+
+/* Bordered box holding the segmented input + the calendar trigger. */
+.pickerControl {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+	padding-inline-end: var(--jf-spacing-near);
+	background-color: var(--jf-surface-bg-base);
+	border: 1px solid var(--jf-border-strong);
+	border-radius: var(--jf-radius-button);
+
+	&:focus-within {
+		border-color: var(--jf-fg-strong);
+	}
+}
+
+.segmentGroup {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	flex: 1 1 auto;
+	align-items: center;
+	padding-block: var(--jf-spacing-near);
+	padding-inline: var(--jf-spacing-near);
+	color: var(--jf-fg-default);
+
+	@include typo.jf-typo-body-regular;
+}
+
+.segment {
+	padding-inline: 2px;
+	color: var(--jf-fg-default);
+	border-radius: var(--jf-radius-button);
+
+	&[data-placeholder] {
+		color: var(--jf-fg-muted);
+	}
+
+	&:focus,
+	&[data-focus] {
+		color: var(--jf-inverted-fg);
+		outline: none;
+		background-color: var(--jf-fg-strong);
+	}
+}
+
+.trigger {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: var(--jf-spacing-close);
+	color: var(--jf-fg-muted);
+	cursor: pointer;
+	background: transparent;
+	border: none;
+	border-radius: var(--jf-radius-full);
+
+	/* stylelint-disable-next-line defensive-css/no-accidental-hover -- pointer-capable control; mobile accidental-hover not a concern */
+	&:hover {
+		color: var(--jf-fg-strong);
+		background-color: var(--jf-surface-bg-overlay);
+	}
+}
+
+/* Calendar popover */
+.content {
+	position: relative;
+
+	/* Rank above any parent overlay (e.g. when opened inside a dialog) via the
+	   layer index zag sets on this content node. */
+	z-index: calc(var(--jf-z-index-overlay-base) + var(--layer-index, 0));
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-near);
+	min-inline-size: 17.5rem;
+	padding: var(--jf-spacing-near);
+	color: var(--jf-fg-default);
+	background-color: var(--jf-surface-bg-base);
+	border-radius: var(--jf-radius-container);
+	box-shadow: var(--jf-shadow-surface-elevation);
+
+	@include typo.jf-typo-body-regular;
+
+	/* zag sets `hidden` + data-state="closed" when closed; the `display: flex`
+     above would otherwise override the [hidden] UA style and keep the calendar
+     on screen (so it never appeared to close). */
+	&[hidden] {
+		display: none;
+	}
+
+	&[data-state="open"] {
+		animation: datepicker-in 0.15s ease-out;
+	}
+
+	&[data-state="closed"] {
+		animation: datepicker-out 0.1s ease-in;
+	}
+}
+
+.view {
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-near);
+
+	&[hidden] {
+		display: none;
+	}
+}
+
+.viewControl {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+	justify-content: space-between;
+}
+
+.viewTrigger {
+	flex: 1 1 auto;
+	padding-block: var(--jf-spacing-close);
+	color: var(--jf-fg-strong);
+	cursor: pointer;
+	background: transparent;
+	border: none;
+	border-radius: var(--jf-radius-button);
+
+	@include typo.jf-typo-body-bold;
+
+	/* stylelint-disable-next-line defensive-css/no-accidental-hover -- pointer-capable control; mobile accidental-hover not a concern */
+	&:hover {
+		background-color: var(--jf-surface-bg-overlay);
+	}
+}
+
+.navTrigger {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: var(--jf-spacing-close);
+	color: var(--jf-fg-default);
+	cursor: pointer;
+	background: transparent;
+	border: none;
+	border-radius: var(--jf-radius-button);
+
+	/* stylelint-disable-next-line defensive-css/no-accidental-hover -- pointer-capable control; mobile accidental-hover not a concern */
+	&:hover {
+		background-color: var(--jf-surface-bg-overlay);
+	}
+
+	&[data-disabled] {
+		color: var(--jf-fg-subtle);
+		cursor: not-allowed;
+	}
+}
+
+.table {
+	inline-size: 100%;
+	border-spacing: 0;
+	border-collapse: separate;
+}
+
+.weekday {
+	padding-block: var(--jf-spacing-close);
+	color: var(--jf-fg-muted);
+	text-align: center;
+
+	@include typo.jf-typo-body-small;
+}
+
+.cell {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	inline-size: 100%;
+	min-inline-size: 2.25rem;
+	block-size: 2.25rem;
+	color: var(--jf-fg-default);
+	cursor: pointer;
+	background: transparent;
+	border: none;
+	border-radius: var(--jf-radius-button);
+
+	/* stylelint-disable-next-line defensive-css/no-accidental-hover -- pointer-capable control; mobile accidental-hover not a concern */
+	&:hover:not([data-selected], [data-disabled]) {
+		background-color: var(--jf-surface-bg-overlay);
+	}
+
+	&[data-today] {
+		/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this weight */
+		font-weight: 700;
+		color: var(--jf-fg-strong);
+	}
+
+	&[data-selected] {
+		color: var(--jf-inverted-fg);
+		background-color: var(--jf-fg-strong);
+	}
+
+	&[data-outside-range] {
+		color: var(--jf-fg-subtle);
+	}
+
+	&[data-disabled] {
+		color: var(--jf-fg-subtle);
+		cursor: not-allowed;
+	}
+}
+
+@keyframes datepicker-in {
+	from {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes datepicker-out {
+	from {
+		opacity: 1;
+		transform: translateY(0);
+	}
+
+	to {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+}

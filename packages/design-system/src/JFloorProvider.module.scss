@@ -1,0 +1,4 @@
+/* Layout-transparent wrapper: the theme provider must not introduce a box. */
+.passthrough {
+	display: contents;
+}

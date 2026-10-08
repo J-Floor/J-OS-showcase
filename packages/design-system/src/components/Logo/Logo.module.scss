@@ -1,0 +1,78 @@
+.root {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: inline-flex;
+
+	/* Sized via font-size so `block-size: 1em` is definite (no circular height
+	   resolution); default to the small logo size, override per call site. */
+	font-size: var(--jf-dimension-logo-sm);
+	line-height: 0;
+
+	/* Default brand colour; consumers override `color` (e.g. on a darker
+	   surface) and the SVG `currentColor` fills follow. */
+	color: var(--jf-fg-strong);
+}
+
+.svg {
+	display: block;
+	inline-size: auto;
+	block-size: 1em;
+}
+
+/* Reveal: a rectangle mask grows up from the bottom (animating the clip rect's
+   `y` + `height`), uncovering the fixed, undistorted mark. `.topEdge` is a
+   full-width bar that rises with it so the growing box has a visible top edge.
+   Reduced motion skips the animation: the clip rect keeps its static full size
+   (mark fully visible) and the bar rests at the top (over the frame border). */
+.topEdge {
+	fill: currentcolor;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.clip {
+		animation: logo-grow-tall 700ms ease-out both;
+	}
+
+	.clipSquare {
+		animation: logo-grow-square 700ms ease-out both;
+	}
+
+	.topEdge {
+		animation: logo-edge-rise 700ms ease-out both;
+	}
+}
+
+/* stylelint-disable plugin/no-low-performance-animation-properties -- the logo reveal animates the SVG clip-rect geometry (`y`, `block-size`); these have no compositor-friendly equivalent and run once on mount */
+@keyframes logo-grow-tall {
+	from {
+		y: 296px;
+		block-size: 0;
+	}
+
+	to {
+		y: 0;
+		block-size: 296px;
+	}
+}
+
+@keyframes logo-grow-square {
+	from {
+		y: 60px;
+		block-size: 0;
+	}
+
+	to {
+		y: 0;
+		block-size: 60px;
+	}
+}
+
+@keyframes logo-edge-rise {
+	from {
+		y: 286px;
+	}
+
+	to {
+		y: 0;
+	}
+}
+/* stylelint-enable plugin/no-low-performance-animation-properties */

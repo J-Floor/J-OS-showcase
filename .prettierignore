@@ -1,0 +1,13 @@
+# Generated code — formatting is owned by the generator, not Prettier.
+# Reformatting these makes the Format and Test workflows fight: Prettier
+# rewrites them, then email:check / agreements:check see them as stale.
+
+# emails/build.ts output
+**/convex/emails/generated/
+# agreements/build.ts output
+**/convex/agreements/generated/
+# Convex codegen
+**/convex/_generated/
+
+# Build artifacts
+**/dist/

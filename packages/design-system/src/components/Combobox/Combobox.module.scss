@@ -1,0 +1,198 @@
+/*
+ * Ported from EmboUI Combobox.module.scss. Token mapping applied:
+ *   --embo-spacing-*            -> --jf-spacing-* (same suffix)
+ *   --embo-colour-surface-bg-*  -> --jf-surface-bg-{base,raised,overlay}
+ *   --embo-colour-surface-fg-*  -> --jf-fg-{strong,default,muted}
+ *   --embo-colour-status-fg     -> --jf-status-fg
+ *   --embo-radius-*             -> --jf-radius-*
+ *   --embo-shadow-*             -> --jf-shadow-*
+ * The field shell/skeleton/selected-items row are the shared mixins from
+ * `field.mixins.scss` (Task 3) rather than redeclared here. `.selected*` was
+ * the Task 5 stub; the rest below is this task's addition.
+ */
+
+@use "../../styles/animation" as anim;
+@use "../../styles/typography" as typo;
+@use "../MakeField/field.mixins" as field;
+
+.skeleton {
+	@include field.skeleton;
+}
+
+.positioner {
+	inline-size: min-content;
+	pointer-events: none;
+}
+
+.content {
+	position: relative;
+
+	/* Layer via zag's `--layer-index`, same reasoning as Select's `.content`:
+	   the list has to rank above whatever overlay opened it, and content is
+	   the element zag's layer stack actually writes `--layer-index` onto. */
+	z-index: calc(var(--jf-z-index-overlay-base) + var(--layer-index, 0));
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+	min-inline-size: var(--reference-width);
+	max-block-size: var(--available-height, 300px);
+	/* stylelint-disable-next-line defensive-css/require-scrollbar-gutter -- intentional; gutter not needed here */
+	overflow-block: auto;
+	overscroll-behavior-block: contain;
+	pointer-events: auto;
+	outline: none;
+	background-color: transparent;
+	box-shadow: var(--jf-shadow-surface-elevation);
+
+	@include anim.popover-animation;
+}
+
+.group {
+	box-shadow: var(--jf-shadow-surface-elevation);
+}
+
+.groupLabel {
+	@include typo.jf-typo-body-small;
+
+	max-inline-size: 100%;
+	padding-inline-start: var(--jf-spacing-near);
+	color: var(--jf-fg-muted);
+	text-transform: uppercase;
+	user-select: none;
+}
+
+.item {
+	inline-size: 100%;
+	cursor: pointer;
+
+	&[data-highlighted] {
+		background-color: var(--jf-surface-bg-overlay);
+	}
+
+	& > * {
+		outline: none;
+	}
+}
+
+.optionLabel {
+	@include typo.jf-typo-body-bold;
+
+	max-inline-size: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	line-height: 1rem;
+	color: var(--jf-fg-strong);
+	white-space: nowrap;
+}
+
+.itemIndicator {
+	margin-inline-start: auto;
+	color: var(--jf-fg-strong);
+}
+
+.inputWrapper {
+	@include field.shell;
+
+	inline-size: 100%;
+	cursor: text;
+	justify-content: space-between;
+	color: var(--jf-status-fg);
+
+	/* With chips on the line the input drops to a caret's width so the chips
+	   container (which grows — see `field.selected-items`) takes the room. That
+	   both keeps the clear/expand controls pinned at the end (no dead gap from
+	   `justify-content: space-between` spreading a few narrow children across a
+	   wide field) AND gives the chips row its full width to measure against, so
+	   every chip that fits is shown instead of collapsing into the +N badge. */
+	&:has(.selectedItems) .input {
+		flex: 0 1 var(--jf-spacing-near);
+	}
+
+	/* Typing takes the line back, so the filter stays readable. The chips
+	   give up their minimum and collapse into the badge until the input is
+	   empty again. Declared last so it outranks the rule above at equal
+	   specificity. */
+	&[data-typing="true"] {
+		.selectedItems {
+			min-inline-size: 0;
+		}
+
+		.input {
+			flex: 1 1 0;
+		}
+	}
+}
+
+@include field.selected-items;
+
+.input {
+	flex: 1 1 auto;
+	min-inline-size: 0;
+	padding: 0;
+	color: var(--jf-status-fg);
+	background-color: transparent;
+	border: none;
+	outline: none;
+
+	&::placeholder {
+		color: var(--jf-fg-muted);
+	}
+
+	[data-status="neutral"] & {
+		color: var(--jf-fg-strong);
+	}
+}
+
+/* Ark renders Trigger/ClearTrigger as real `<button>`s (EmboUI rendered them as
+   spans via `asChild`, so it never had to). Kill the UA button chrome — the grey
+   `buttonface` background, the border and the default padding — so only the icon
+   shows and the two controls sit tight together at the field's end. */
+.trigger {
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	padding: 0;
+	color: inherit;
+	cursor: pointer;
+	background: none;
+	border: none;
+}
+
+/* Tight boxes so each Tooltip anchors exactly over the ark trigger it wraps
+   (two separate trigger elements, not one asChild stacked on another — see
+   the `ark-solid-composition` skill: sharing one node loses one machine's id). */
+.clearTriggerWrap,
+.triggerWrap {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: inline-flex;
+}
+
+.clearTrigger {
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	padding: 0;
+	cursor: pointer;
+	background: none;
+	border: none;
+
+	[data-icon] {
+		color: var(--jf-status-fg);
+	}
+}
+
+.empty {
+	@include typo.jf-typo-body-regular;
+
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	justify-content: center;
+	min-block-size: var(--jf-dimension-short-component-height);
+	padding: var(--jf-spacing-close);
+	color: var(--jf-fg-muted);
+	text-align: center;
+	background: var(--jf-surface-bg-raised);
+	border-radius: var(--jf-radius-container);
+	box-shadow: var(--jf-shadow-surface-elevation);
+}

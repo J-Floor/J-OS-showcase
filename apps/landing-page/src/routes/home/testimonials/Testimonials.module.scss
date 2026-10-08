@@ -1,0 +1,26 @@
+@use "@j-os/design-system/typography" as typo;
+@use "@j-os/design-system/breakpoints" as bp;
+
+.section {
+	padding: var(--jf-spacing-detached);
+	background-color: var(--core-grey-950);
+	color: var(--jf-fg-default);
+
+	@include bp.phone {
+		padding: var(--jf-spacing-away);
+	}
+}
+
+.heading {
+	margin: 0;
+	font-family: var(--jf-typography-mono);
+
+	@include typo.jf-typo-h2;
+}
+
+.placeholder {
+	margin: var(--jf-spacing-distant) 0 0;
+	color: var(--core-grey-400);
+
+	@include typo.jf-typo-body-regular;
+}

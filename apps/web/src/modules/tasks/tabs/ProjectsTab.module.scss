@@ -1,0 +1,31 @@
+.undated {
+	display: flex;
+	flex-flow: column wrap;
+	gap: var(--jf-spacing-near);
+	margin-block-start: var(--jf-spacing-far);
+	padding: var(--jf-spacing-near);
+	background: var(--jf-surface-bg-sunken);
+	border: var(--jf-border-width-subtle) solid var(--jf-border-subtle);
+	border-radius: var(--jf-radius-container);
+
+	& ul {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+		gap: var(--jf-spacing-near);
+		padding: 0;
+		margin: 0;
+		list-style: none;
+	}
+}
+
+.undatedItem {
+	background: var(--jf-surface-bg-base);
+	border: var(--jf-border-width-subtle) solid var(--jf-border-subtle);
+	border-radius: var(--jf-radius-container);
+
+	@media (hover: hover) {
+		&:hover {
+			border-color: var(--jf-border-strong);
+		}
+	}
+}

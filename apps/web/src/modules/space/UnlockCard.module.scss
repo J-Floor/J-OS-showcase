@@ -1,0 +1,90 @@
+@use "@j-os/design-system/typography" as typo;
+
+/* SpaceCard's `.body` is a centring flex row. The doors column takes all of
+   it: `flex: 1` for the full width, `align-self: stretch` for the full
+   height, so the door buttons below can grow into the card. */
+.doors {
+	display: flex;
+	flex-flow: column nowrap;
+	flex: 1;
+	gap: var(--jf-spacing-near);
+	align-self: stretch;
+	min-inline-size: 0;
+}
+
+/* One door, Upstairs on top. A slot rather than the button itself so the
+   status text and the buttons share one footprint that grows to fill. */
+.slot {
+	display: flex;
+	flex-flow: column nowrap;
+	flex: 1;
+}
+
+/* Two classes, so this beats Button's own fixed `block-size` and
+   `fit-content` width regardless of stylesheet order. */
+.slot .door {
+	flex: 1;
+	inline-size: 100%;
+	block-size: auto;
+	min-block-size: calc(var(--jf-dimension-short-component-height) * 2);
+}
+
+/* "[stairs] or [elevator]": muted, centred. Nested in the doors column, so
+   SpaceCard's 48px `.body > [data-icon]` rule never reaches these icons; the
+   typography mixin sizes them via its `[data-icon]` rule. */
+.route {
+	display: flex;
+	flex-flow: row nowrap;
+	gap: var(--jf-spacing-close);
+	align-items: center;
+	justify-content: center;
+	color: var(--jf-fg-muted);
+
+	@include typo.jf-typo-body-regular;
+}
+
+/* Text standing where a door's buttons would be: a door's status line, or its
+   bolt's state. Same footprint as the button, centred muted text. */
+.slotText {
+	display: flex;
+	flex-wrap: wrap;
+	flex: 1;
+	align-items: center;
+	justify-content: center;
+	min-block-size: calc(var(--jf-dimension-short-component-height) * 2);
+	margin: 0;
+	color: var(--jf-fg-muted);
+	text-align: center;
+
+	@include typo.jf-typo-body-regular;
+}
+
+.statusWarning {
+	color: var(--jf-warning-fg);
+}
+
+.statusError {
+	color: var(--jf-error-fg);
+}
+
+/* The door's name over Unlock and Lock, shown when the bolt's position is
+   unknown. */
+.slotHeading {
+	margin: 0 0 var(--jf-spacing-close);
+	color: var(--jf-fg-muted);
+	text-align: center;
+
+	@include typo.jf-typo-body-regular;
+}
+
+/* Unlock and Lock side by side, sharing the slot's width. */
+.both {
+	display: flex;
+	flex-flow: row nowrap;
+	flex: 1;
+	gap: var(--jf-spacing-near);
+
+	> * {
+		flex: 1;
+	}
+}

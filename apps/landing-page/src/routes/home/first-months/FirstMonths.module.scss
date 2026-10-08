@@ -1,0 +1,167 @@
+@use "@j-os/design-system/breakpoints" as bp;
+@use "@j-os/design-system/typography" as typo;
+@use "../../../styles/marketing-type" as mkt;
+
+.section {
+	--first-months-block-padding: 4.375rem; // 70px, matched to the live section
+
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-detached);
+	padding-block: var(--first-months-block-padding);
+	padding-inline: var(--jf-spacing-distant);
+	background-color: var(--core-grey-900);
+	color: var(--jf-fg-default);
+
+	@include bp.phone {
+		padding-block: var(--first-months-block-padding) var(--jf-spacing-away);
+		padding-inline: var(--jf-spacing-away);
+	}
+}
+
+.intro {
+	--first-months-intro-gap: 3.875rem; // 62px, the live heading row's column gap
+
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--first-months-intro-gap);
+
+	@include bp.narrow {
+		flex-direction: column;
+		gap: var(--jf-spacing-distant);
+	}
+}
+
+.label {
+	--first-months-label-size: 2.25rem; // 36px on the live site
+
+	@include mkt.display-label;
+
+	flex: 0 0 22%;
+	margin: 0;
+	font-size: var(--first-months-label-size);
+
+	@include bp.narrow {
+		flex-basis: auto;
+	}
+}
+
+.copy {
+	display: flex;
+	flex: 1 1 20rem;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-detached);
+
+	@include bp.narrow {
+		flex-basis: auto;
+	}
+}
+
+.paragraph {
+	@include mkt.body-copy;
+
+	max-inline-size: 43.75rem; // 700px, the live copy column's rendered width
+	margin: 0;
+}
+
+.stats {
+	display: flex;
+	flex-wrap: wrap;
+	border-block-start: 1px solid var(--core-grey-800);
+
+	@include bp.phone {
+		flex-direction: column;
+	}
+}
+
+.statCell {
+	display: flex;
+	flex: 1 1 0;
+	flex-flow: column wrap;
+	gap: var(--jf-spacing-near);
+	padding: var(--jf-spacing-distant);
+	border-inline-start: 1px solid var(--core-grey-800);
+
+	&:first-child {
+		padding-inline-start: 0;
+		border-inline-start: none;
+	}
+
+	@include bp.phone {
+		padding-inline: 0;
+		border-inline-start: none;
+		border-block-start: 1px solid var(--core-grey-800);
+
+		&:first-child {
+			border-block-start: none;
+		}
+	}
+}
+
+.statLabel {
+	--first-months-stat-label-size: 0.9375rem; // 15px on the live site
+	--first-months-stat-label-tracking: -0.03em;
+
+	@include typo.jf-typo-body-tech;
+
+	margin: 0;
+	color: var(--core-grey-400);
+	font-size: var(--first-months-stat-label-size);
+	letter-spacing: var(--first-months-stat-label-tracking);
+	text-transform: uppercase;
+}
+
+.statNumber {
+	// The live site renders the big stat numbers in a system sans stack
+	// (not the mono display face used for headings) — light grey, tight
+	// tracking, ~80px on desktop.
+	--first-months-stat-family:
+		"-apple-system", "BlinkMacSystemFont", var(--jf-typography-sans),
+		sans-serif;
+	--first-months-stat-size: 5rem; // 80px on the live site
+	--first-months-stat-weight: 500;
+	--first-months-stat-leading: 1;
+	--first-months-stat-tracking: -0.04em;
+	--first-months-stat-color: var(--core-grey-300);
+
+	margin: 0;
+	color: var(--first-months-stat-color);
+	font-family: var(--first-months-stat-family);
+	font-size: var(--first-months-stat-size);
+	font-weight: var(--first-months-stat-weight);
+	line-height: var(--first-months-stat-leading);
+	letter-spacing: var(--first-months-stat-tracking);
+
+	@include bp.narrow {
+		--first-months-stat-size: 3.5rem;
+	}
+
+	@include bp.phone {
+		--first-months-stat-size: 2.75rem;
+	}
+}
+
+.photo {
+	--first-months-photo-radius: 0.375rem; // 6px on the live site
+
+	margin: 0;
+}
+
+.photoImage {
+	display: block;
+	inline-size: 100%;
+	block-size: auto;
+	aspect-ratio: 1841 / 456; // matches the live wide photo's rendered ratio
+	object-fit: cover;
+	border-radius: var(--first-months-photo-radius);
+
+	@include bp.phone {
+		aspect-ratio: 4 / 3;
+	}
+}
+
+.caption {
+	@include mkt.body-copy;
+
+	margin-block-start: var(--jf-spacing-far);
+}

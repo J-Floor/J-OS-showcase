@@ -1,0 +1,19 @@
+@use "../../styles/typography" as typo;
+
+.badge {
+	/* A badge renders at its own scale wherever it is placed, rather than
+	   inheriting the ancestor's size. Typography comes from the mixin — there
+	   are no --jf-font-size-* tokens in this design system. */
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: inline-flex;
+	gap: var(--jf-spacing-close);
+	align-items: center;
+	padding: var(--jf-spacing-close) var(--jf-spacing-near);
+	border: var(--jf-border-width-decorative) solid var(--jf-status-fg);
+	border-radius: var(--jf-radius-full);
+	color: var(--jf-status-fg);
+	background-color: var(--jf-status-bg);
+	white-space: nowrap;
+
+	@include typo.jf-typo-body-small;
+}

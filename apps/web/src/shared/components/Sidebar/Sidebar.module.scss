@@ -1,0 +1,206 @@
+@use "@j-os/design-system/breakpoints" as bp;
+@use "@j-os/design-system/typography" as typo;
+
+.sidebar {
+	--sidebar-collapsed: 72px;
+	--sidebar-expanded: 240px;
+
+	/* Collapsed rail inner width: rail minus its 2 borders and 2 paddings. The
+	   icon lane is fixed to this so the glyph stays put when the rail expands. */
+	--sidebar-rail-inset: calc(
+		2 * var(--jf-border-width-interactive) + 2 * var(--jf-spacing-near)
+	);
+	--sidebar-icon-lane: calc(
+		var(--sidebar-collapsed) - var(--sidebar-rail-inset)
+	);
+
+	display: flex;
+	flex-shrink: 0;
+	flex-direction: column;
+	gap: var(--jf-spacing-close);
+	inline-size: var(--sidebar-collapsed);
+	block-size: calc(100dvb - 2 * (var(--jf-spacing-near) + 2px));
+	padding: var(--jf-spacing-near);
+	margin-block: calc(var(--jf-spacing-near) + 2px);
+
+	/* Inset the rail from the viewport edges so the border sits fully inside the
+	   screen (it was a single bleeding right edge before). Vertical margin is a
+	   touch larger than horizontal. */
+	margin-inline: var(--jf-spacing-near);
+	overflow: hidden;
+	color: var(--jf-fg-default);
+
+	/* Primary-coloured rail (4px token), now a fully-visible bordered panel. */
+	border: var(--jf-border-width-interactive) solid var(--jf-fg-strong);
+	border-radius: var(--jf-radius-container);
+	/* stylelint-disable-next-line plugin/no-low-performance-animation-properties -- intentional transition on width */
+	transition: width 200ms ease-in-out;
+}
+
+/* Expansion is driven by an explicit JS hover signal (see Sidebar.tsx), NOT
+   CSS :hover/:focus-within — :focus-within kept the rail stuck open after a
+   nav click (focus stays on the link) and fought the route transition. */
+.sidebar.expanded {
+	inline-size: var(--sidebar-expanded);
+}
+
+.brand {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	align-items: center;
+	padding: var(--jf-spacing-near);
+	margin-block-end: var(--jf-spacing-near);
+}
+
+.logo {
+	flex: 0 0 auto;
+	font-size: var(--jf-dimension-logo-sm);
+}
+
+.item {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+
+	/* No gap: the icon lane already carries ~12px of breathing room on its
+	   trailing edge (lane width − glyph, halved), so a gap on top reads as too
+	   far from the label. */
+	gap: 0;
+	align-items: center;
+
+	/* No inline padding: the icon lane (below) spans the full collapsed width so
+	   the glyph centres on the rail without any justify-content toggling. */
+	padding-block: var(--jf-spacing-near);
+	padding-inline: 0;
+
+	/* Size icon + label together at the h5 scale. Set on the parent so the glyph
+	   sizes from the inherited typography per the icon-sizing rule. The mixin
+	   carries the [data-icon] sizing (1.5rem at h5). */
+	@include typo.jf-typo-h5;
+
+	/* h5 defaults to fg-strong; nav items sit at the quieter default weight. */
+	color: var(--jf-fg-default);
+	white-space: nowrap;
+	text-decoration: none;
+	border-radius: var(--jf-radius-button);
+
+	/* stylelint-disable-next-line defensive-css/no-accidental-hover -- pointer-capable control; mobile accidental-hover not a concern */
+	&:hover {
+		background: var(--jf-surface-bg-overlay);
+	}
+}
+
+/* Fixed lane = the collapsed rail's inner width, so the glyph is centred while
+   collapsed AND keeps the exact same position once the rail expands — the label
+   just fades in to its right. Nothing about the icon's box changes on expand, so
+   it never jumps. */
+.icon {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	flex: 0 0 var(--sidebar-icon-lane);
+	align-items: center;
+	justify-content: center;
+}
+
+.label {
+	opacity: 0;
+	transition: opacity 150ms ease-in-out;
+
+	.sidebar.expanded & {
+		opacity: 1;
+	}
+}
+
+/* Active route (router sets aria-current="page"): filled glyph + bold label. */
+.item[aria-current="page"] {
+	color: var(--jf-fg-strong);
+
+	& .icon {
+		/* Override the Icon's default FILL 0 (font-variation-settings is not a
+	   longhand, so the full value is restated). Animates via the Icon's own
+	   font-variation-settings transition. */
+		font-variation-settings:
+			"FILL" 1,
+			"wght" 300;
+	}
+
+	& .label {
+		/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
+		font-weight: 700;
+	}
+}
+
+/* Phone: the rail becomes a bottom bar.
+ *
+ * A vertical rail costs ~90px of a 390px screen — a quarter of the width, for
+ * four icons — and the hover-to-expand affordance it exists for does not exist
+ * on a touch screen. So the whole expand mechanism goes: no width transition,
+ * no expanded state (`.expanded` is only a width, and the width is now the
+ * bar), and the labels stay hidden because there is no room beside the glyph.
+ *
+ * The border goes too. Around a rail it read as a panel; across the foot of the
+ * screen it would read as a box drawn around the navigation, so only the top
+ * edge survives, as a divider from the content above.
+ *
+ * LAST IN THE FILE on purpose. These override the base rules above at the same
+ * specificity, so source order is what decides — written any earlier, the
+ * unconditional `.brand`/`.icon`/`.label` rules win and the bar keeps its rail
+ * styling. */
+@include bp.phone {
+	.sidebar,
+	.sidebar.expanded {
+		/* Last in the stacked shell (`.shell` turns into a column). `order`,
+		   not a reordered JSX tree: the nav belongs before the main content in
+		   the DOM — that is the reading and tab order, and it should not
+		   change with the viewport. */
+		order: 1;
+		flex-direction: row;
+		justify-content: space-around;
+		inline-size: auto;
+		block-size: auto;
+
+		/* The bar's own padding stays minimal — the tap target is grown on the
+		   items instead, so the extra height is touchable rather than dead
+		   margin around them. */
+		padding-block: var(--jf-spacing-close);
+		padding-inline: 0;
+		margin: 0;
+		border: none;
+		border-block-start: var(--jf-border-width-decorative) solid
+			var(--jf-border-subtle);
+		border-radius: 0;
+		transition: none;
+	}
+
+	/* The monogram is a link home — which on a bar is what the first tab
+	   already is. It is also the one item with no label, so it reads as a
+	   stray glyph among four that mean something. */
+	.brand {
+		display: none;
+	}
+
+	/* Icon over label, like a native tab bar — the glyph alone was ambiguous,
+	   so the text names each tab. */
+	.item {
+		flex: 1 1 0;
+		flex-direction: column;
+		gap: var(--jf-spacing-close);
+		justify-content: center;
+		padding-block: var(--jf-spacing-near);
+	}
+
+	/* Undo the fixed icon lane: it is sized off the collapsed RAIL width, so
+	   on a bar it would make every tab 72px wide however many there are. Each
+	   tab is an equal fraction of the bar instead. */
+	.icon {
+		flex: 0 0 auto;
+	}
+
+	/* Show the label under the glyph (the rail hid it for lack of room; the bar
+	   stacks it instead). The rail's opacity/expanded fade doesn't apply here,
+	   so force it visible. */
+	.label {
+		@include typo.jf-typo-body-small;
+
+		opacity: 1;
+	}
+}

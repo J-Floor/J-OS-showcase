@@ -1,0 +1,39 @@
+.screen {
+	display: grid;
+	place-items: start center;
+	min-block-size: 100dvb;
+	padding: var(--jf-spacing-far);
+	background-color: var(--jf-surface-bg-base);
+}
+
+.card {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-detached);
+	align-items: stretch;
+	inline-size: 100%;
+	max-inline-size: 32rem;
+}
+
+.logo {
+	align-self: center;
+	font-size: var(--jf-dimension-logo-md);
+}
+
+.intro {
+	margin: 0;
+	color: var(--jf-fg-muted);
+	text-align: center;
+}
+
+.thanks {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-detached);
+	align-items: center;
+	text-align: center;
+
+	> h1 {
+		margin: 0;
+	}
+}

@@ -1,0 +1,97 @@
+@use "@j-os/design-system/typography" as typo;
+
+.form {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+}
+
+// Aligns an accordion section's body with the community drawer's `.sectionBody`.
+.section {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+	padding-block: var(--jf-spacing-near);
+}
+
+// A date + its time picker side by side; wraps to a column on narrow drawers
+// rather than compressing either field.
+.fieldRow {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--jf-spacing-near);
+
+	> * {
+		flex: 1 1 10rem;
+	}
+}
+
+// QR sits above its two actions, both left-aligned so nothing stretches or
+// leaves a lopsided gap beside the square code.
+.qrBlock {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+	align-items: flex-start;
+	padding-block: var(--jf-spacing-near);
+}
+
+.qr {
+	inline-size: 10rem;
+	block-size: 10rem;
+	fill: var(--jf-fg-default);
+}
+
+.actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+}
+
+.empty {
+	@include typo.jf-typo-body-tech;
+
+	margin: 0;
+	color: var(--jf-fg-muted);
+}
+
+.hint {
+	@include typo.jf-typo-body-tech;
+
+	margin: 0;
+	color: var(--jf-fg-muted);
+}
+
+.attendees {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.attendee {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+}
+
+.who {
+	display: flex;
+	flex-direction: column;
+	min-inline-size: 0;
+}
+
+.attendeeName {
+	@include typo.jf-typo-body-regular;
+}
+
+.attendeeEmail {
+	@include typo.jf-typo-body-tech;
+
+	color: var(--jf-fg-muted);
+	overflow-wrap: anywhere;
+}

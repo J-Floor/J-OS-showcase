@@ -1,0 +1,82 @@
+@use "../../styles/typography" as typo;
+
+.timeline {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+}
+
+.list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.entry {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	gap: var(--jf-spacing-near);
+	align-items: start;
+}
+
+.muted {
+	opacity: var(--jf-opacity-disabled);
+}
+
+.rail {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	color: var(--jf-fg-muted);
+}
+
+.body {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-close);
+	min-inline-size: 0;
+}
+
+.title {
+	color: var(--jf-fg-default);
+
+	@include typo.jf-typo-body-regular;
+}
+
+.detail,
+.meta {
+	color: var(--jf-fg-muted);
+
+	@include typo.jf-typo-body-small;
+}
+
+.empty {
+	margin: 0;
+	color: var(--jf-fg-muted);
+
+	@include typo.jf-typo-body-small;
+}
+
+.filters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--jf-spacing-close);
+}
+
+.toggle {
+	align-self: start;
+	padding: var(--jf-spacing-close) var(--jf-spacing-near);
+	border: var(--jf-border-width-decorative) solid var(--jf-fg-muted);
+	border-radius: var(--jf-radius-full);
+	background: none;
+	color: var(--jf-fg-default);
+	cursor: pointer;
+
+	@include typo.jf-typo-body-small;
+}
+
+.toggleOff {
+	opacity: var(--jf-opacity-disabled);
+}

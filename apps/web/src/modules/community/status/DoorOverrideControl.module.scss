@@ -1,0 +1,17 @@
+/* Control plus its explanation, stacked in the drawer's value column. */
+.control {
+	display: flex;
+	flex-flow: column wrap;
+	gap: var(--jf-spacing-close);
+	inline-size: 100%;
+}
+
+/* The drawer's value column is narrow, so the three options stack rather than
+   scroll — see Segment's vertical orientation. */
+.segment {
+	inline-size: 100%;
+}
+
+.hint {
+	color: var(--jf-fg-muted);
+}

@@ -1,0 +1,151 @@
+@use "@j-os/design-system/breakpoints" as bp;
+
+.shell {
+	/* Pinned to the (dynamic) viewport height so the shell itself never scrolls
+	   — the sidebar and header stay put while only the content region scrolls.
+	   `dvb` tracks the mobile URL bar collapse/expand. */
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	block-size: 100dvb;
+	overflow: hidden;
+
+	/* Phone: stack, so the rail can restyle itself into a bottom bar (see
+	   Sidebar.module.scss, which also carries the `order` that sends it to the
+	   foot of the column). */
+	@include bp.phone {
+		flex-direction: column;
+	}
+}
+
+.main {
+	/* Column: a fixed header above a single scrolling content region. */
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-column flex; wrapping not intended */
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-inline-size: 0;
+	min-block-size: 0;
+	overflow: hidden;
+
+	/* Anchor for the floating prompt stack, which pins to this column's foot
+	   (above the phone bottom bar, which sits outside `.main`). */
+	position: relative;
+}
+
+/* Top bar: breadcrumb heading on the left, search centred, actions right.
+   Fixed (outside the scroll region) so it stays visible while content scrolls. */
+.topbar {
+	/* The bar's own width decides what folds, not the viewport's: first the
+	   search field gives way to its icon, then the actions to one menu (the
+	   `topbar-*` mixins in the design system's breakpoints.scss). The desktop
+	   sidebar takes a share of the window a viewport query cannot see. The
+	   rules themselves sit on the children — GlobalSearch, Breadcrumbs and the
+	   action groups below — because a container query cannot style its own
+	   container. */
+	@include bp.topbar-container;
+
+	/* One row, at every width. With `wrap` the actions dropped to a second row
+	   whenever the window was past the phone breakpoint but the sidebar left
+	   too little beside it (641px to ~870px), costing a whole header's height.
+	   Flex prefers wrapping to shrinking, so `nowrap` is what makes the heading
+	   give way instead, which it can, because it ellipses. */
+	display: flex;
+	flex: 0 0 auto;
+	flex-wrap: nowrap;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+	justify-content: space-between;
+	padding: var(--jf-spacing-away) var(--jf-spacing-away) 0;
+	margin-block-end: var(--jf-spacing-away);
+
+	/* Right-edge alignment with `.content` below. The scroll region reserves a
+	   scrollbar gutter on its inline-end (`scrollbar-gutter: stable`), which
+	   pushes the table/CTAs in by the scrollbar's width; the bar, outside the
+	   scroll region, otherwise sits that much further right. Reserve the same
+	   gutter here so the two right edges line up. `scrollbar-gutter` only
+	   applies to a scroll container, so `overflow: hidden` makes this one; it
+	   clips nothing — the row is one line by construction and its menus and
+	   tooltips portal to <body>. On an overlay-scrollbar platform the reserved
+	   gutter is zero on both, so this is a no-op there. The gutter sits outside
+	   the content box, so the container queries never count it. */
+	overflow: hidden;
+	scrollbar-gutter: stable;
+
+	/* Phone: the gutters come in a little. Only a little: pulled all the way to
+	   8px the title sat against the edge of the glass and the header stopped
+	   reading as a bar. Matches `.content` below, so the heading and the
+	   content beneath it share one margin. Viewport-keyed, like `.content`'s. */
+	@include bp.phone {
+		padding: var(--jf-spacing-far) var(--jf-spacing-far) 0;
+		margin-block-end: var(--jf-spacing-far);
+
+		/* Match `.content`'s phone rule: overlay scrollbars, no reserved band. */
+		scrollbar-gutter: auto;
+	}
+}
+
+/* The only scroll container: page content scrolls here, the shell stays fixed.
+   `overscroll-behavior: contain` stops the scroll from chaining to the body
+   (which on mobile would drag the whole page, sidebar included). */
+.content {
+	flex: 1;
+	min-block-size: 0;
+	padding-inline: var(--jf-spacing-away);
+	padding-block-end: var(--jf-spacing-away);
+	overflow: auto;
+	overscroll-behavior: contain;
+	scrollbar-gutter: stable;
+
+	/* Narrower gutters, and no reserved scrollbar band: a phone's scrollbar is
+	   an overlay that takes no width, so `stable` only ever costs space here. */
+	@include bp.phone {
+		padding-inline: var(--jf-spacing-far);
+		padding-block-end: var(--jf-spacing-far);
+		scrollbar-gutter: auto;
+	}
+}
+
+.topbarActions {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	align-items: center;
+
+	/* Never the thing that gives way. These are small controls of fixed width;
+	   the heading beside them is the elastic one and ellipses instead (see
+	   Breadcrumbs.module.scss). */
+	flex: 0 0 auto;
+}
+
+/* Roomy bar: every action as its own control. Too narrow for the heading, the
+   search icon and the action icons together: one kebab menu instead
+   (TopbarMenu). Both are rendered and the bar's container query picks one —
+   CSS rather than a JS query, like the search swap, because a JS query renders
+   the wrong set until its first effect runs. The shortcut peek hides on touch
+   screens on its own (ShortcutPeekButton.module.scss).
+
+   Once the search field is an icon it sits 8px (the bar's gap) from this
+   group, so the icons close up to the same 8px. Otherwise the row reads as
+   uneven, 8 then 16. */
+.desktopActions {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	gap: var(--jf-spacing-far);
+	align-items: center;
+
+	@include bp.topbar-search-collapsed {
+		gap: var(--jf-spacing-near);
+	}
+
+	@include bp.topbar-actions-folded {
+		display: none;
+	}
+}
+
+.foldedMenu {
+	display: none;
+
+	@include bp.topbar-actions-folded {
+		/* stylelint-disable-next-line defensive-css/require-flex-wrap -- one glyph; there is nothing to wrap */
+		display: inline-flex;
+	}
+}

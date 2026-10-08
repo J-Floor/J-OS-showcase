@@ -1,0 +1,46 @@
+@use "@j-os/design-system/typography" as typo;
+
+.panel {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: var(--jf-spacing-far);
+	min-block-size: 0;
+}
+
+/* The log takes the height left under the health card; the table inside it
+   scrolls in its own box, which is what lets it window the rows and tell
+   when the end is near. */
+.log {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+	min-block-size: 0;
+}
+
+.table {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-block-size: 0;
+}
+
+.heading {
+	@include typo.jf-typo-h3;
+
+	margin: 0;
+}
+
+.empty {
+	@include typo.jf-typo-body-small;
+
+	margin: 0;
+	color: var(--jf-fg-muted);
+}
+
+/* "No response" in the To door column: the door never reacted to an app
+   action. */
+.noResponse {
+	color: var(--jf-warning-fg);
+}

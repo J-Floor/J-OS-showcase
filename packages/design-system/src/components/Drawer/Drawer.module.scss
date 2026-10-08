@@ -1,0 +1,186 @@
+@use "../../styles/animation" as anim;
+@use "../../styles/breakpoints" as bp;
+@use "../../styles/utils" as utils;
+
+.backdrop {
+	position: fixed;
+	inset: 0;
+
+	/* Ark mirrors the Content's stack index onto the Backdrop as `--layer-index`.
+	   Without that term every overlay resolves to the same 999 and the LAST one
+	   opened is not necessarily on top: a Dialog opened from inside a Drawer had
+	   its backdrop painted behind the Drawer, dimming the page but not the thing
+	   it was covering. Ported from EmboUI, which hit exactly this.
+
+	   `* 2` is the stride, and it is load-bearing. Backdrop-base (999) sits ONE
+	   below overlay-base (1000), so with a stride of 1 a layer's backdrop
+	   (999 + N+1) exactly tied the layer below it's content (1000 + N) and DOM
+	   order decided — the drawer, opened first, won and the dialog's backdrop
+	   fell behind it. A stride of 2 gives each layer its own 2-wide band, so a
+	   higher backdrop always clears the lower content. */
+	z-index: calc(
+		var(--jf-z-index-overlay-backdrop-base) + var(--layer-index, 0) * 2
+	);
+	background-color: var(--jf-surface-bg-scrim);
+	transition: opacity var(--jf-animation-duration-default) ease-in-out;
+
+	&[data-state="open"] {
+		opacity: 1;
+
+		/* Mounted lazily, already open: see `.content`. */
+		@starting-style {
+			opacity: 0;
+		}
+	}
+
+	&[data-state="closed"] {
+		pointer-events: none;
+		opacity: 0;
+	}
+}
+
+.positioner {
+	position: fixed;
+	inset: 0 0 0 auto; /* pin to the right edge */
+
+	/* The positioner is `position: fixed`, so it ALWAYS forms its own stacking
+	   context — whatever IT resolves to decides how the whole overlay stacks
+	   against sibling overlays in the portal root, no matter what `.content`
+	   says. Ark/zag mirrors the Content's computed z-index here as `--z-index`
+	   for exactly this purpose, so consume that and keep `.content` the single
+	   source of truth; the calc fallback only covers the first frame. */
+	z-index: var(
+		--z-index,
+		calc(var(--jf-z-index-overlay-base) + var(--layer-index, 0) * 2)
+	);
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	justify-content: flex-end;
+	pointer-events: none;
+}
+
+.content {
+	/* The value the positioner above mirrors as `--z-index`. Without a z-index
+	   here there is nothing to mirror, the positioner falls back to the base,
+	   and the backdrop — which DOES carry a layer index — ties with it and
+	   paints over the drawer. */
+	z-index: calc(var(--jf-z-index-overlay-base) + var(--layer-index, 0) * 2);
+	display: flex;
+	flex-direction: column;
+
+	/* Roomier on a full desktop window, where there is space to read a person's
+	   detail without it feeling like a slot. Capped at `100vi` so it never
+	   overflows a small viewport. */
+	inline-size: min(560px, 100vi);
+	block-size: 100%;
+	pointer-events: auto;
+	background: var(--jf-surface-bg-base);
+	border-inline-start: 1px solid var(--jf-border-subtle);
+	box-shadow: var(--jf-shadow-surface-elevation);
+	transition: transform var(--jf-animation-duration-default) ease-in-out;
+
+	/* On a split-screen or tablet-width window the wider panel would eat too much
+	   of the roster behind it, so hold it at the previous 480px there (and it
+	   still collapses to `100vi` on a phone). */
+	@include bp.narrow {
+		inline-size: min(480px, 100vi);
+	}
+
+	&[data-state="open"] {
+		transform: translateX(0);
+
+		/* The drawer mounts lazily, so it is first inserted already open and
+		   the transition has no closed style to start from. This gives the
+		   first frame one, so the first open slides in like every later one. */
+		@starting-style {
+			transform: translateX(100%);
+		}
+	}
+
+	&[data-state="closed"] {
+		pointer-events: none;
+
+		/* Unfocusable once closed, but painted through the slide-out: see
+		   `unfocusable-after-close`. */
+		transform: translateX(100%);
+
+		@include anim.unfocusable-after-close(
+			transform var(--jf-animation-duration-default) ease-in-out
+		);
+	}
+}
+
+.header {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: var(--jf-spacing-far);
+}
+
+.headerActions {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	gap: var(--jf-spacing-close);
+	align-items: center;
+}
+
+.title {
+	margin: 0;
+}
+
+/* The title shimmer can't use a width preset: those are a share of the
+   parent, and an empty title shrinks to nothing in the header row. */
+.titleSkeleton {
+	inline-size: 12rem;
+	max-inline-size: 100%;
+	block-size: 1.25rem;
+}
+
+/* Present for accessible-name computation, hidden visually — the design
+   system's existing screenreader-only primitive (also used as the global
+   `.jf-util-screenreader` class in styles/base.scss), scoped here as a module
+   class instead of reaching for that global one. */
+.srOnly {
+	@include utils.screenreader;
+}
+
+.body {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+	padding: var(--jf-spacing-far);
+	/* stylelint-disable-next-line defensive-css/require-overscroll-behavior, defensive-css/require-scrollbar-gutter -- intentional for this scroll container */
+	overflow-block: auto;
+}
+
+.bodySkeleton {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-far);
+}
+
+.bodySkeletonRow {
+	display: grid;
+
+	/* Mirrors PropertyRow's label column so the skeleton reads as the same
+	   shape as the rows it stands in for. */
+	grid-template-columns: 140px 1fr;
+	align-items: center;
+	gap: var(--jf-spacing-near);
+
+	/* PropertyRow stacks its label above the value on a phone; so does this. */
+	@include bp.phone {
+		grid-template-columns: 1fr;
+	}
+}
+
+.footer {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	gap: var(--jf-spacing-near);
+	justify-content: flex-end;
+	padding: var(--jf-spacing-far);
+	border-block-start: 1px solid var(--jf-border-subtle);
+}

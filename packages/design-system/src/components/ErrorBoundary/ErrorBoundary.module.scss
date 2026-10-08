@@ -1,0 +1,7 @@
+/* Full-height box so the fallback's ExceptionDisplay fills its container,
+   centered both ways. Applied here (not in ExceptionDisplay) so EmptyState /
+   PermissionDenied keep working inline. */
+.fullHeight {
+	display: grid;
+	min-block-size: 100%;
+}

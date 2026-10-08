@@ -1,0 +1,10 @@
+.flagged {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--jf-spacing-close);
+}
+
+.warning {
+	color: var(--jf-error-fg);
+}

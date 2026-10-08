@@ -1,0 +1,18 @@
+/* Input capability: for affordances that only make sense with a given input.
+ *
+ * Keyboard hints (shortcut chips, the shortcut-peek button) belong to devices
+ * with a keyboard, and a viewport width cannot tell you that: a laptop window
+ * dragged narrow is phone-width and has one; a tablet is laptop-width and
+ * usually has none. Query the input instead.
+ *
+ * `hover: none` with `pointer: coarse` describes a device whose PRIMARY input
+ * is a finger — phones and tablets. A tablet with a keyboard but no trackpad
+ * still reports this and loses the hints; a hybrid with a trackpad reports
+ * `pointer: fine` and keeps them. */
+
+/* Touch is the primary input. Hide keyboard-only affordances here. */
+@mixin touch-primary {
+	@media (hover: none) and (pointer: coarse) {
+		@content;
+	}
+}

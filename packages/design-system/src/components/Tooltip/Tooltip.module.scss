@@ -1,0 +1,39 @@
+/*
+ * Ported from EmboUI Tooltip.module.scss. Token mapping applied:
+ * inverted-bg/fg -> --jf-inverted-bg / --jf-inverted-fg; radius-container,
+ * z-index-tooltip-base and opacity-overlays mapped from their embo equivalents.
+ */
+
+@use "../../styles/animation" as anim;
+@use "../../styles/typography" as typo;
+
+.trigger {
+	background-color: transparent;
+	border: none;
+}
+
+.positioner {
+	pointer-events: none;
+}
+
+.content {
+	/* A flex row so a trailing `Kbd` chip sits a real gap from the label and on
+	   its centre line, not jammed against it by a single collapsed space. Wraps,
+	   so a long label + chip still breaks cleanly. */
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--jf-spacing-close);
+	align-items: center;
+	z-index: var(--jf-z-index-tooltip-base);
+	max-inline-size: 400px;
+	padding-block: var(--jf-spacing-close);
+	padding-inline: var(--jf-spacing-near);
+	color: var(--jf-inverted-fg);
+	background-color: var(--jf-inverted-bg);
+	border-radius: var(--jf-radius-container);
+	text-wrap: wrap;
+	opacity: var(--jf-opacity-overlays);
+
+	@include typo.jf-typo-body-regular;
+	@include anim.popover-animation;
+}

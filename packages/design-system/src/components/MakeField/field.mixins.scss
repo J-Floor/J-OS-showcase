@@ -1,0 +1,142 @@
+/* Internal to the library. Not forwarded from an index/barrel and not part of
+   any public Sass surface, so nothing here is a consumer API. Import it
+   directly:
+
+	 @use "../MakeField/field.mixins" as field;
+
+   The shared shell of the field controls (Input, Select, Combobox, ...).
+   Only the declarations that are identical across those fields live here;
+   per-field differences (cursor, overflow, gap, inline sizing, the
+   descendant colour rules) stay in the component's own module.
+
+   Ported from EmboUI `components/MakeField/field.mixins.scss`. Token mapping
+   applied: --embo-spacing-* becomes --jf-spacing-* (same suffix),
+   --embo-colour-* becomes --jf-fg-* or --jf-surface-*, --embo-radius-*
+   becomes --jf-radius-*, --embo-border-width-* becomes --jf-border-width-*
+   (same suffix). */
+
+@use "../../styles/typography" as typo;
+
+/* The visible box of a field: the element that paints the background and the
+   focus/invalid outline. Lifted from Select.module.scss's `.inputWrapper`
+   (the same box, ported here so Combobox and future fields share it instead
+   of redeclaring it). */
+@mixin shell {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: var(--jf-spacing-close);
+	align-items: center;
+	block-size: var(--jf-dimension-short-component-height);
+	padding-inline: var(--jf-spacing-near);
+	background-color: var(--jf-status-bg);
+	border: none;
+	border-radius: var(--jf-radius-button);
+
+	&:focus-within,
+	&[data-invalid="true"] {
+		outline-style: solid;
+		outline-color: var(--jf-status-fg);
+	}
+}
+
+/* A field's loading placeholder. Keeps the shell's own height so the layout
+   doesn't shift when the real field mounts in its place. */
+@mixin skeleton {
+	block-size: var(--jf-dimension-short-component-height);
+}
+
+/* The current selection shown inside the shell of a field that picks from a
+   list (Select, Combobox). Emits the whole row at the root of the including
+   module: `.selectedItems`, `.selectedMeasure`, `.selectedChip`,
+   `.selectedChipLabel` and `.selectedOverflow`, which CSS modules then scopes
+   to that module. Those are the class names `SelectedItemsRow.tsx` reads off
+   its `styles` import.
+
+   The row takes the shell's free space, so a field with something else on the
+   line (Combobox's input) has to stop that other part growing.
+
+   The row never wraps and never scrolls, so the shell keeps its fixed height
+   and the label, helper text and error stay anchored against it. */
+@mixin selected-items {
+	.selectedItems {
+		/* The row grows to take the field's free width so it measures how many
+		   chips fit against the whole line (not just its own content) —
+		   otherwise a caret-width input beside it leaves the row collapsed to a
+		   single chip on a wide field. It still shrinks first (min-inline-size:
+		   0) when the input claims the line for typing. */
+		position: relative;
+		display: flex;
+		flex-wrap: nowrap;
+		align-items: center;
+		gap: var(--jf-spacing-close);
+		flex: 1 1 auto;
+		min-inline-size: 0;
+		overflow: hidden;
+
+		/* Chip is sized for prose. Inside the shell's fixed height it drops its
+		   vertical padding and shrinks its dismiss icon, or the row clips it.
+		   The end padding is tightened unconditionally rather than off Chip's
+		   `data-suffix`: a selected chip always ends with the dismiss
+		   IconButton, but that flag needs the trailing child detected as an
+		   affix, which a composed IconButton (a Tooltip-wrapped button) does not
+		   reliably satisfy — without this the dismiss button floats far from the
+		   label. The `.selectedItems` ancestor puts these ahead of Chip's own
+		   rules whatever order the two modules land in. */
+		.selectedChip {
+			padding-block: 0;
+			padding-inline: var(--jf-spacing-near) var(--jf-spacing-close);
+
+			[data-icon] {
+				font-size: 1rem;
+			}
+		}
+	}
+
+	/* The full row, laid out at its natural width and hidden. Every chip
+	   width is read from here, so an item the row currently collapses still
+	   has a width to fit with once the shell grows. `visibility: hidden` also
+	   takes it out of the accessibility tree and the tab order. */
+	.selectedMeasure {
+		position: absolute;
+		inset-block-start: 0;
+		inset-inline-start: 0;
+		display: flex;
+		flex-wrap: nowrap;
+		align-items: center;
+		gap: inherit;
+		inline-size: max-content;
+		visibility: hidden;
+		pointer-events: none;
+	}
+
+	.selectedChip {
+		flex: 0 1 auto;
+		min-inline-size: 0;
+	}
+
+	/* The floor: a single chip too wide for the shell truncates rather than
+	   overflowing it. */
+	.selectedChipLabel {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		min-inline-size: 0;
+	}
+
+	/* How many earlier selections the row collapsed. */
+	.selectedOverflow {
+		@include typo.jf-typo-body-small;
+
+		display: inline-flex;
+		flex-wrap: nowrap;
+		flex: 0 0 auto;
+		align-items: center;
+		justify-content: center;
+		block-size: var(--jf-spacing-away);
+		aspect-ratio: 1;
+		padding-inline: var(--jf-spacing-close);
+		border: var(--jf-border-width-decorative) solid currentcolor;
+		border-radius: var(--jf-radius-full);
+		user-select: none;
+	}
+}

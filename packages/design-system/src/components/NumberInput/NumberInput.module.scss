@@ -1,0 +1,92 @@
+/*
+ * Ported from EmboUI NumberInput.module.scss (SCSS nesting -> native CSS
+ * nesting). Token mapping applied: status/surface bg -> --jf-surface-bg-base;
+ * border/focus/invalid -> --jf-border-subtle / --jf-border-strong /
+ * --jf-error-fg; text -> --jf-fg-default; placeholder -> --jf-fg-muted; gaps ->
+ * --jf-spacing-* (same suffix). No hardcoded colours.
+ */
+
+.scrubber {
+	position: absolute;
+	inset-block-start: 0;
+	inset-inline: var(--jf-spacing-near) 0;
+	block-size: var(--jf-spacing-near);
+	background-color: transparent;
+
+	&[data-scrubbing] {
+		cursor: ew-resize;
+	}
+}
+
+.inputWrapper {
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	justify-content: space-between;
+	inline-size: 100%;
+	padding-inline: var(--jf-spacing-near);
+	overflow: visible;
+	cursor: text;
+	background-color: var(--jf-status-bg);
+	border-radius: var(--jf-radius-button);
+
+	* {
+		color: var(--jf-status-fg);
+	}
+
+	&:focus-within {
+		outline-style: solid;
+		outline-color: var(--jf-status-fg);
+	}
+
+	&[data-invalid="true"] {
+		outline-style: solid;
+		outline-color: var(--jf-status-fg);
+	}
+
+	&[data-scrubbing] {
+		cursor: ew-resize;
+	}
+
+	& input {
+		inline-size: 100%;
+		min-block-size: var(--jf-dimension-short-component-height);
+		background-color: transparent;
+		border: none;
+
+		&:focus {
+			outline: none;
+		}
+
+		&::placeholder {
+			color: var(--jf-fg-muted);
+		}
+	}
+}
+
+[data-status="neutral"] .inputWrapper * {
+	color: var(--jf-fg-strong);
+}
+
+.icon {
+	margin-inline-end: var(--jf-spacing-near);
+	pointer-events: none;
+	user-select: none;
+}
+
+.clearTrigger {
+	/* IconButton styles itself; pin it to the trailing edge and keep it from
+	 * shrinking so the stepper control (when present) stays grouped after it. */
+	flex: 0 0 auto;
+	margin-inline-start: auto;
+
+	& ~ .control {
+		margin-inline-start: var(--jf-spacing-close);
+	}
+}
+
+.control {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: var(--jf-spacing-close);
+}

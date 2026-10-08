@@ -1,0 +1,22 @@
+.hint {
+	margin: 0;
+	color: var(--jf-fg-muted);
+	text-align: center;
+}
+
+/* SpaceCard's `.body` is a centring flex row; the form takes all of its
+   width so the inputs don't shrink to their content. */
+.editForm {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	gap: var(--jf-spacing-near);
+	min-inline-size: 0;
+}
+
+.editActions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--jf-spacing-near);
+	justify-content: flex-end;
+}

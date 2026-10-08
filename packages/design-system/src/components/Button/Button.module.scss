@@ -1,0 +1,283 @@
+/* Button — ported from embo-ui Button.module.scss + BaseButton.module.scss.
+ * SCSS nesting -> native CSS nesting; --embo-* -> --jf-* (grayscale, no brand hue). */
+
+@use "../../styles/typography" as typo;
+
+/* --- BaseButton parts --- */
+
+.singleChildWrapper {
+	display: contents;
+}
+
+.loading {
+	cursor: wait;
+
+	* {
+		pointer-events: none;
+	}
+}
+
+.button {
+	position: relative;
+	display: inline-flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	justify-content: center;
+	inline-size: fit-content;
+
+	/* Sized to its content, but never wider than what it is given. Without this a
+     button in any constrained container — a grid track, a narrow drawer footer —
+     overflows it outright, because `fit-content` ignores the space available and
+     `.content` below refuses to wrap. A caller that wants it to FILL sets
+     `inline-size: 100%`, which overrides the line above. */
+	max-inline-size: 100%;
+	block-size: var(--jf-dimension-short-component-height);
+	border: 0;
+	border-radius: var(--jf-radius-button);
+	box-shadow: none;
+
+	/* Rendered `as="a"`, the button would otherwise keep the UA link underline. */
+	text-decoration: none;
+	transition-duration: var(--jf-animation-duration-default);
+	transition-property:
+    /* stylelint-disable-next-line plugin/no-low-performance-animation-properties -- intentional transition on color/background-color/border-color/padding */
+		color, background-color, border-color, padding, text-decoration-color,
+		fill, stroke;
+
+	@include typo.jf-typo-body-bold;
+
+	&::first-letter {
+		text-transform: uppercase;
+	}
+
+	&:focus-visible {
+		outline: solid 2px var(--jf-border-strong);
+	}
+
+	&[data-loading="true"] {
+		.content {
+			opacity: 0;
+		}
+
+		.loadingSpinner {
+			display: block;
+		}
+	}
+
+	&:not([data-loading="true"], [disabled]) {
+		.content {
+			opacity: 1;
+		}
+
+		.loadingSpinner {
+			display: none;
+		}
+	}
+
+	&[disabled] {
+		cursor: not-allowed;
+
+		* {
+			pointer-events: none;
+		}
+	}
+
+	&[data-prefix="true"] .content {
+		padding-inline-start: var(--jf-spacing-far);
+	}
+
+	&[data-suffix="true"] .content {
+		padding-inline-end: var(--jf-spacing-far);
+	}
+}
+
+.content {
+	display: inline-flex;
+	flex-flow: row nowrap;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+	justify-content: center;
+	padding-block: 0;
+	padding-inline: var(--jf-spacing-away);
+	text-wrap: nowrap;
+
+	/* A flex item will not shrink below its content unless told to, and the label
+     must not spill past the button's edge once that edge is capped above. */
+	min-inline-size: 0;
+	overflow: hidden;
+}
+
+.loadingSpinner {
+	position: absolute;
+	inset-block-start: 50%;
+	inset-inline-start: 50%;
+	display: none;
+	transform: translate(-50%, -50%);
+}
+
+/* --- Variants (grayscale: primary -> strong fg / overlay surface) --- */
+
+.primary.button {
+	background-color: var(--jf-fg-strong);
+
+	* {
+		color: var(--jf-inverted-fg);
+	}
+
+	&:not([data-loading="true"], [disabled]) {
+		@media (hover: hover) {
+			&:hover {
+				/* fg-default (grey-900) is a hair off near-black, so the hover
+				   barely reads. Step to a clearly lighter shade in light mode
+				   (and correspondingly darker in dark mode) for a visible change. */
+				/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this hover shade */
+				background-color: light-dark(
+					var(--core-grey-700),
+					var(--core-grey-300)
+				);
+			}
+		}
+
+		&:active {
+			background-color: var(--jf-fg-muted);
+		}
+	}
+}
+
+/* Irradiation illusion counter */
+[data-theme="dark"] .primary.button {
+	block-size: calc(var(--jf-dimension-short-component-height) * 0.855);
+}
+
+.secondary.button {
+	background-color: var(--jf-surface-bg-overlay);
+
+	* {
+		color: var(--jf-fg-default);
+	}
+
+	&:not([data-loading="true"], [disabled]) {
+		@media (hover: hover) {
+			&:hover {
+				background-color: var(--jf-surface-bg-raised);
+
+				* {
+					color: var(--jf-fg-strong);
+				}
+			}
+		}
+
+		&:active {
+			background-color: var(--jf-surface-bg-sunken);
+		}
+	}
+}
+
+/* Marketing pills (thejfloor.com). Both are sampled from the live site, which
+ * uses colours no semantic token models, so they live in local custom
+ * properties consumed through `var()`. The font goes through
+ * `--button-pill-font` so a consuming app can supply its marketing face
+ * (the landing page sets Inter) without the design system shipping it. */
+.pill.button,
+.pill-light.button {
+	--pill-font-size: 1rem;
+	--pill-line-height: 1.625;
+
+	block-size: auto;
+	font-family: var(--button-pill-font, var(--jf-typography-sans));
+	font-size: var(--pill-font-size);
+	line-height: var(--pill-line-height);
+
+	&::first-letter {
+		text-transform: none;
+	}
+
+	.content {
+		padding-inline: 0;
+	}
+
+	/* The global base styles pin span/p/div to the design-system sans; the pill
+	   label must inherit the pill's own face instead. */
+	* {
+		font-family: inherit;
+	}
+}
+
+/* "Apply to join": solid grey capsule, white regular label + trailing arrow. */
+.pill.button {
+	--pill-bg: rgb(134 131 130);
+	--pill-fg: var(--core-grey-0);
+	--pill-radius: 19px;
+	--pill-padding: 12px 12px 12px 16px;
+	--pill-gap: 12px;
+	--pill-weight: 400;
+
+	padding: var(--pill-padding);
+	border-radius: var(--pill-radius);
+	background-color: var(--pill-bg);
+	font-weight: var(--pill-weight);
+
+	.content {
+		gap: var(--pill-gap);
+	}
+
+	* {
+		color: var(--pill-fg);
+	}
+
+	/* The live trailing arrow is warm white, a hair off the label's white. */
+	svg {
+		color: var(--core-warm-white);
+	}
+}
+
+/* "Contact": light off-white capsule with a dark regular label. */
+.pill-light.button {
+	--pill-bg: rgb(227 222 219);
+	--pill-fg: var(--core-grey-900);
+	--pill-radius: 18px;
+	--pill-weight: 400;
+
+	padding: var(--jf-spacing-near) var(--jf-spacing-far);
+	border-radius: var(--pill-radius);
+	background-color: var(--pill-bg);
+	font-weight: var(--pill-weight);
+
+	* {
+		color: var(--pill-fg);
+	}
+}
+
+.tertiary.button {
+	background-color: transparent;
+
+	* {
+		color: var(--jf-fg-default);
+	}
+
+	.content {
+		padding-inline: 0;
+	}
+
+	&:not([data-loading="true"], [disabled]) {
+		@media (hover: hover) {
+			&:hover {
+				/* Match secondary's resting fill so tertiary gains a visible
+				   hover surface (was transparent → no feedback). */
+				background-color: var(--jf-surface-bg-overlay);
+
+				* {
+					color: var(--jf-fg-strong);
+				}
+			}
+		}
+
+		&:active {
+			background-color: var(--jf-surface-bg-raised);
+
+			* {
+				color: var(--jf-fg-strong);
+			}
+		}
+	}
+}

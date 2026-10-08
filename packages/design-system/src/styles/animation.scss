@@ -1,0 +1,103 @@
+/* A closed panel must be unfocusable, but stays painted through its close
+   transition. Ark's `hidden` cannot do this job: zag presence waits only on
+   keyframe animations, not transitions, so `hidden` (and any `display:
+   none` hung on it) lands about a frame into the close and would cut the
+   transition. Instead `visibility: hidden` is applied with a delay of one
+   full duration: the panel stays visible for the whole close, then flips,
+   and a `visibility: hidden` element cannot take focus. Only the closed
+   state carries the `visibility` transition (a transition uses its
+   destination state's list), so on open there is none and the panel is
+   visible on the same frame, which Ark's initial focus needs. */
+@mixin unfocusable-after-close($transitions...) {
+	visibility: hidden;
+
+	/* stylelint-disable plugin/no-low-performance-animation-properties -- a zero-length, delayed flip; it is what makes the closed panel unfocusable */
+	transition:
+		$transitions,
+		visibility 0s linear var(--jf-animation-duration-default);
+	/* stylelint-enable plugin/no-low-performance-animation-properties */
+}
+
+@mixin popover-animation {
+	--transform-origin-x: center;
+	--transform-origin-y: center;
+
+	transform-origin: var(--transform-origin-x) var(--transform-origin-y);
+	transition:
+		opacity var(--jf-animation-duration-default) ease-in-out,
+		transform var(--jf-animation-duration-default) ease-in-out;
+
+	&[data-state="closed"] {
+		display: block;
+		opacity: 0;
+		transform: scale(0);
+
+		@include unfocusable-after-close(
+			opacity var(--jf-animation-duration-default) ease-in-out,
+			transform var(--jf-animation-duration-default) ease-in-out
+		);
+	}
+
+	&[data-state="open"] {
+		display: flex;
+		flex-wrap: nowrap;
+
+		/* Overlays mount lazily, so the content is first inserted already open
+		   and a transition has no closed style to start from. This gives the
+		   first frame one, so the first open animates like every later one. */
+		@starting-style {
+			opacity: 0;
+			transform: scale(0);
+		}
+	}
+
+	&[data-placement="bottom"] {
+		--transform-origin-y: top;
+	}
+
+	&[data-placement="top"] {
+		--transform-origin-y: bottom;
+	}
+
+	&[data-placement="right"] {
+		--transform-origin-x: left;
+	}
+
+	&[data-placement="left"] {
+		--transform-origin-x: right;
+	}
+
+	&[data-placement^="top-"] {
+		--transform-origin-y: bottom;
+	}
+
+	&[data-placement^="bottom-"] {
+		--transform-origin-y: top;
+	}
+
+	&[data-placement^="left-"] {
+		--transform-origin-x: right;
+	}
+
+	&[data-placement^="right-"] {
+		--transform-origin-x: left;
+	}
+
+	&[data-placement$="start"] {
+		--transform-origin-x: left;
+	}
+
+	&[data-placement$="end"] {
+		--transform-origin-x: right;
+	}
+
+	&[data-placement="left-start"],
+	&[data-placement="right-start"] {
+		--transform-origin-y: top;
+	}
+
+	&[data-placement="left-end"],
+	&[data-placement="right-end"] {
+		--transform-origin-y: bottom;
+	}
+}

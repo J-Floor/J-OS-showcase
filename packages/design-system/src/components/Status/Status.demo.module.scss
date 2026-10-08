@@ -1,0 +1,12 @@
+/* Reads the status CSS vars (--jf-status-bg / --jf-status-fg) so the demo shows
+   the bg/fg colour change driven by [data-status]. */
+.pill {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: inline-flex;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+	padding: var(--jf-spacing-close) var(--jf-spacing-near);
+	color: var(--jf-status-fg);
+	background: var(--jf-status-bg);
+	border-radius: var(--jf-radius-container);
+}

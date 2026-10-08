@@ -1,0 +1,115 @@
+@use "typography" as typo;
+@use "utils" as util;
+@include typo.primitives;
+
+:root {
+	--jf-animation-duration-default: 200ms;
+}
+
+body {
+	@include typo.jf-typo-body-regular;
+
+	color: var(--jf-fg-default);
+}
+
+p,
+span,
+div {
+	font-family: var(--jf-typography-sans);
+}
+
+p {
+	@include typo.jf-typo-body-regular;
+}
+
+h1 {
+	@include typo.jf-typo-h1;
+}
+
+h2 {
+	@include typo.jf-typo-h2;
+}
+
+h3 {
+	@include typo.jf-typo-h3;
+}
+
+h4 {
+	@include typo.jf-typo-h4;
+}
+
+h5 {
+	@include typo.jf-typo-h5;
+}
+
+h6 {
+	@include typo.jf-typo-h6;
+}
+
+.jf-typo-h1 {
+	@include typo.jf-typo-h1;
+}
+
+.jf-typo-h2 {
+	@include typo.jf-typo-h2;
+}
+
+.jf-typo-h3 {
+	@include typo.jf-typo-h3;
+}
+
+.jf-typo-h4 {
+	@include typo.jf-typo-h4;
+}
+
+.jf-typo-h5 {
+	@include typo.jf-typo-h5;
+}
+
+.jf-typo-h6 {
+	@include typo.jf-typo-h6;
+}
+
+.jf-typo-body-bold {
+	@include typo.jf-typo-body-bold;
+}
+
+.jf-typo-body-medium {
+	@include typo.jf-typo-body-medium;
+}
+
+.jf-typo-body-regular {
+	@include typo.jf-typo-body-regular;
+}
+
+.jf-typo-body-small {
+	@include typo.jf-typo-body-small;
+}
+
+.jf-typo-body-tech {
+	@include typo.jf-typo-body-tech;
+}
+
+.jf-util-ellipsis {
+	@include util.ellipsis;
+}
+
+.jf-util-capitalise {
+	@include util.capitalise;
+}
+
+.jf-util-screenreader {
+	@include util.screenreader;
+}
+
+.jf-util-absolutely-center {
+	@include util.absolutely-center;
+}
+
+.jf-util-relatively-center {
+	@include util.relatively-center;
+}
+
+.jf-util-focus-outline {
+	@include util.focus-outline;
+}

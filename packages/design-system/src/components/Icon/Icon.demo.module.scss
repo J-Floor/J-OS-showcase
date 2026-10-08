@@ -1,0 +1,60 @@
+@use "../../styles/typography" as typo;
+
+/* Lays the icon beside sample text so both sit in the same typography context —
+   text follows the wrapper's font-size, icon follows its `[data-icon]` size. */
+.sample {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: inline-flex;
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this em-relative gap */
+	gap: 0.5em;
+	align-items: center;
+}
+
+/*
+ * Mirrors EmboUI's Icon fixture: size the glyph by applying a typography style
+ * to an ANCESTOR. Each class is just a `jf-typo-*` mixin; the icon picks up its
+ * size from the mixin's `[data-icon] { font-size }` rule — font-family untouched.
+ */
+.h1 {
+	@include typo.jf-typo-h1;
+}
+
+.h2 {
+	@include typo.jf-typo-h2;
+}
+
+.h3 {
+	@include typo.jf-typo-h3;
+}
+
+.h4 {
+	@include typo.jf-typo-h4;
+}
+
+.h5 {
+	@include typo.jf-typo-h5;
+}
+
+.h6 {
+	@include typo.jf-typo-h6;
+}
+
+.bodyBold {
+	@include typo.jf-typo-body-bold;
+}
+
+.bodyMedium {
+	@include typo.jf-typo-body-medium;
+}
+
+.bodyRegular {
+	@include typo.jf-typo-body-regular;
+}
+
+.bodySmall {
+	@include typo.jf-typo-body-small;
+}
+
+.bodyTech {
+	@include typo.jf-typo-body-tech;
+}

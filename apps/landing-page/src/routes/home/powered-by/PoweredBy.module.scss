@@ -1,0 +1,120 @@
+@use "@j-os/design-system/breakpoints" as bp;
+@use "../../../styles/marketing-type" as mkt;
+
+// Second block of the live footer: 120px below the closing grid, 32px page
+// inset, heading 38px above the ticker.
+.section {
+	--block-gap: 120px;
+	--section-gap: 38px;
+
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--section-gap);
+	padding: var(--block-gap) var(--jf-spacing-distant) 0;
+
+	@include bp.phone {
+		padding-inline: var(--jf-spacing-far);
+	}
+}
+
+.heading {
+	@include mkt.display-label;
+
+	margin: 0;
+}
+
+// Logos fade in and out at the row's edges instead of clipping abruptly. Live
+// box: 10px padding around a 60px row (80px tall), drawn at 80% opacity in
+// luminosity blend so every logo reads as the same muted grey.
+.viewport {
+	--viewport-padding: 10px;
+	--row-height: 60px;
+	--row-opacity: 0.8;
+
+	box-sizing: content-box;
+	block-size: var(--row-height);
+	padding: var(--viewport-padding);
+	overflow: hidden;
+	opacity: var(--row-opacity);
+	mix-blend-mode: luminosity;
+	mask-image: linear-gradient(
+		to right,
+		transparent 0%,
+		black 12.5%,
+		black 87.5%,
+		transparent 100%
+	);
+	mask-repeat: no-repeat;
+
+	@media (prefers-reduced-motion: reduce) {
+		block-size: auto;
+		overflow: visible;
+		mask-image: none;
+	}
+}
+
+// Two identical sets back to back; each set carries its own trailing gap, so
+// translating the track by exactly -50% moves one full set and the loop never
+// jumps. Live speed is 35px/s: one set (1406px of logos + 8 × 100px gaps =
+// 2206px) takes ~63s.
+.track {
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	inline-size: max-content;
+	block-size: 100%;
+	animation: scroll 63s linear infinite;
+
+	@media (prefers-reduced-motion: reduce) {
+		inline-size: 100%;
+		block-size: auto;
+		animation: none;
+	}
+}
+
+@keyframes scroll {
+	from {
+		transform: translateX(0);
+	}
+
+	to {
+		transform: translateX(-50%);
+	}
+}
+
+.set {
+	--logo-gap: 100px;
+
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	gap: var(--logo-gap);
+	margin: 0;
+	padding: 0 var(--logo-gap) 0 0;
+	list-style: none;
+
+	@media (prefers-reduced-motion: reduce) {
+		inline-size: 100%;
+		flex-wrap: wrap;
+		gap: var(--jf-spacing-distant);
+		justify-content: center;
+		padding: 0;
+
+		&[aria-hidden="true"] {
+			display: none;
+		}
+	}
+}
+
+.item {
+	display: flex;
+	flex-wrap: nowrap;
+	flex-shrink: 0;
+	align-items: center;
+}
+
+// Each logo keeps the box it has on the live site (its width/height
+// attributes); the image is contained within that box.
+.logo {
+	object-fit: contain;
+}

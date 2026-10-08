@@ -1,0 +1,43 @@
+@use "@j-os/design-system/breakpoints" as bp;
+@use "../../shared/cards" as cards;
+@use "../../shared/listShell" as shell;
+
+/* Width of the rules search; the header search (GlobalSearch.module.scss) is 22rem. */
+$rules-search-width: 18rem;
+
+/* Tab row mirrors MembersPage: triggers on the left, tab actions (the rules search) on the right. */
+.tabBar {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+	justify-content: space-between;
+	margin-block-end: var(--jf-spacing-far);
+
+	@include bp.phone {
+		flex-wrap: wrap;
+	}
+}
+
+.search {
+	inline-size: $rules-search-width;
+
+	@include bp.phone {
+		inline-size: 100%;
+	}
+}
+
+/* e.g. Doors next to Wi-Fi share one row height. */
+.grid {
+	@include cards.card-grid;
+}
+
+/* A bounded column, so the Diagnostics door log scrolls (and virtualises)
+   inside its own table rather than growing the page. */
+.console {
+	@include shell.console;
+}
+
+.panel:not([hidden]) {
+	@include shell.panel;
+}

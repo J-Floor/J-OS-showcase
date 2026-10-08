@@ -1,0 +1,123 @@
+/*
+ * Ported from EmboUI IconButton.module.scss. SCSS nesting -> native CSS nesting;
+ * --embo-* -> --jf-* per the plan's token map (grayscale, no brand hue).
+ * No radius token exists in the scale yet, so the full-round literal is used
+ * (matching the Tooltip/Spinner precedent of small literals).
+ */
+
+.iconButton {
+	position: relative;
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	justify-content: center;
+	justify-self: center;
+	inline-size: fit-content;
+	block-size: fit-content;
+	aspect-ratio: 1;
+	padding: var(--jf-spacing-close);
+	line-height: 1;
+	color: var(--jf-fg-default);
+	background-color: transparent;
+	border: none;
+	border-radius: var(--jf-radius-full);
+	scale: 1;
+	transition: scale var(--jf-animation-duration-default);
+
+	/* Hover background */
+	&::before {
+		position: absolute;
+		inset-block-start: 50%;
+		inset-inline-start: 50%;
+		z-index: -1;
+		inline-size: 100%;
+		block-size: 100%;
+		content: "";
+		background-color: var(--jf-surface-bg-overlay);
+		border-radius: inherit;
+		transform: translate(-50%, -50%) scale(0);
+		transition: transform var(--jf-animation-duration-default);
+	}
+
+	&:focus-visible {
+		outline: solid 2px var(--jf-fg-default);
+	}
+
+	&:active {
+		scale: 0.9;
+	}
+
+	&:not([data-loading="true"], [disabled]) {
+		@media (hover: hover) {
+			&:hover {
+				&::before {
+					transform: translate(-50%, -50%) scale(1);
+				}
+			}
+		}
+	}
+
+	&[disabled] {
+		color: var(--jf-fg-muted);
+		cursor: not-allowed;
+	}
+}
+
+/* Peek badge — the shortcut chip shown in the button's corner while peeking (see
+   IconButton.tsx). The icon stays; the chip sits in the bottom-trailing corner,
+   overhanging slightly. Non-interactive, so a click still lands on the button;
+   above the hover `::before` (which sits at z-index -1).
+
+   Shown wherever the shortcut can fire — a topbar control, an open drawer, the
+   focused table row — and hidden only on the roster rows that are NOT focused (a
+   bare-letter decision acts on the focused row, so a chip on every row would
+   claim each one is the target). It follows the ring as the arrows move it, since
+   the hide rule below keys off each row's own `data-focused`. */
+.peekBadge {
+	position: absolute;
+	inset-block-end: calc(-1 * var(--jf-spacing-close));
+	inset-inline-end: calc(-1 * var(--jf-spacing-close));
+	z-index: 1;
+	pointer-events: none;
+
+	/* Compact the chip's keys: the default sits ~24px wide, nearly the whole
+	   32px button. On a corner badge a single letter needs far less. */
+	& kbd {
+		min-inline-size: var(--jf-spacing-far);
+		padding-inline: 0;
+	}
+}
+
+/* Hide the chip on non-focused rows. `tr` is a stable element and `data-focused`
+   a stable attribute Table sets, so referencing this component's own class
+   beneath them is safe; the higher specificity (element + attribute + class)
+   beats the base rule without `!important`. Everything not in a row — the topbar
+   export/peek buttons, the drawer's nav/lock/close — keeps its chip. */
+tr:not([data-focused="true"]) .peekBadge {
+	visibility: hidden;
+}
+
+/* The tooltip's own trigger when the button is another machine's trigger (see
+   IconButton.tsx). Shrink-wrapped so the tooltip anchors over the button. */
+.tooltipTrigger {
+	display: inline-flex;
+	flex-wrap: nowrap;
+}
+
+/* Corner badge (e.g. an unread count): pinned to the top-trailing corner,
+   overhanging slightly, above the hover `::before`, and click-through like the
+   peek badge so a click still lands on the button. */
+.badge {
+	position: absolute;
+	inset-block-start: calc(-1 * var(--jf-spacing-close));
+	inset-inline-end: calc(-1 * var(--jf-spacing-close));
+	z-index: 1;
+	pointer-events: none;
+}
+
+/* Compact pill: the default Badge padding is sized for inline text, not a
+   32px button's corner. Nested to outrank Badge's own rule. */
+.badge .badgePill {
+	padding-block: 0;
+	padding-inline: var(--jf-spacing-close);
+}

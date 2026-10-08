@@ -1,0 +1,62 @@
+/* Breakpoints: viewport widths, and the container widths of the app's top bar.
+ *
+ * Viewport breakpoints (`phone`, `narrow`) are maximums: the layouts here are
+ * written for the desktop case and then narrowed, so every query reads "at
+ * this width or less". Anything wider is the default and needs no query.
+ *
+ * Container breakpoints (`topbar-*`) measure the space a component actually
+ * has rather than the window. The top bar needs them because the desktop
+ * sidebar takes a share of the window that a viewport query cannot see: keyed
+ * to `phone`, the bar still wrapped to a second row between 641px and ~870px.
+ *
+ * The widths are in `rem` on purpose. A `px` query ignores the user's font
+ * size, so someone browsing at 24px root font gets the desktop layout crushed
+ * into what is, to them, a phone-sized screen.
+ *
+ * Before these existed the two media queries in the app were written at 600px
+ * and 32rem — two different numbers for the same intent, neither of them
+ * findable from the other. Add a breakpoint here rather than inline. Input
+ * capability (touch vs keyboard) is not a width; it lives in `input.scss`. */
+
+/* Phones, portrait. 40rem = 640px at the default root size. */
+@mixin phone {
+	@media (width <= 40rem) {
+		@content;
+	}
+}
+
+/* Phones and small tablets, and any desktop window narrowed to about half a
+   screen. 64rem = 1024px. */
+@mixin narrow {
+	@media (width <= 64rem) {
+		@content;
+	}
+}
+
+/* Makes the app's top bar the `topbar` size container the two mixins below
+   query. A container query measures the bar's content box (padding and any
+   scrollbar gutter excluded), so their widths are what is left for the
+   heading, the search and the actions. Both are sized for the longest module
+   heading, "community" / "inventory" (183px in the h1 type). A longer trail
+   ellipses rather than moving a threshold. */
+@mixin topbar-container {
+	container: topbar / inline-size;
+}
+
+/* The search field gives way to its icon. Sized so the heading, the search
+   icon and the bell/theme/sign-out icons fit; re-measure if the topbar's
+   actions or module names change. */
+@mixin topbar-search-collapsed {
+	@container topbar (width <= 35rem) {
+		@content;
+	}
+}
+
+/* The actions fold into one menu. Sized so the heading, the search icon and
+   the bell/theme/sign-out icons fit; re-measure if the topbar's actions or
+   module names change. */
+@mixin topbar-actions-folded {
+	@container topbar (width <= 21rem) {
+		@content;
+	}
+}

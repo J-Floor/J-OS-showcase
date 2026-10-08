@@ -1,0 +1,69 @@
+/*
+ * Ported from EmboUI Input.module.scss. embo colours every descendant via
+ * `* { color: status-fg }` so the <Status> wrapper turns text + icons to the
+ * error/warning colour on invalid; neutral fields use the strong fg. Radius is
+ * --jf-radius-button (not embo's pill radius-input) by design choice.
+ */
+
+.inputWrapper {
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	justify-content: space-between;
+	padding-inline: var(--jf-spacing-near);
+	overflow: hidden;
+	cursor: text;
+	background-color: var(--jf-status-bg);
+	border-radius: var(--jf-radius-button);
+
+	* {
+		color: var(--jf-status-fg);
+	}
+
+	&:focus-within {
+		outline-style: solid;
+		outline-color: var(--jf-status-fg);
+	}
+
+	&[data-invalid="true"] {
+		outline-style: solid;
+		outline-color: var(--jf-status-fg);
+	}
+
+	& input {
+		inline-size: 100%;
+		min-block-size: var(--jf-dimension-short-component-height);
+		background-color: transparent;
+		border: none;
+
+		&:focus {
+			outline: none;
+		}
+
+		&::placeholder {
+			color: var(--jf-fg-muted);
+		}
+	}
+}
+
+[data-status="neutral"] .inputWrapper * {
+	color: var(--jf-fg-strong);
+}
+
+.icon {
+	margin-inline-end: var(--jf-spacing-near);
+	pointer-events: none;
+	user-select: none;
+}
+
+/* Trailing slot: shrink-proof, so a long value scrolls under the hint rather
+   than squashing it. */
+.trailing {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row slot; wrapping not intended */
+	display: flex;
+	flex: 0 0 auto;
+	gap: var(--jf-spacing-close);
+	align-items: center;
+	margin-inline-start: var(--jf-spacing-near);
+	user-select: none;
+}

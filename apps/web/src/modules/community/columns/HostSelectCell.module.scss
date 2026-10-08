@@ -1,0 +1,29 @@
+@use "@j-os/design-system/typography" as typo;
+
+/* Stand-in for the Select before it is mounted. Sized and aligned like the real
+   trigger so swapping the control in does not shift the row. */
+.placeholder {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- one child; wrapping is not meaningful */
+	display: flex;
+	align-items: center;
+	inline-size: 100%;
+	min-block-size: 40px;
+	padding-inline: var(--jf-spacing-near);
+	color: var(--jf-fg-default);
+	text-align: start;
+	cursor: pointer;
+	background: none;
+	border: none;
+	border-radius: var(--jf-radius-input);
+
+	@include typo.jf-typo-body-regular;
+
+	/* stylelint-disable-next-line defensive-css/no-accidental-hover -- board console is pointer-driven; the hint is what tells you the cell is editable */
+	&:hover {
+		background-color: var(--jf-surface-bg-raised);
+	}
+}
+
+.empty {
+	color: var(--jf-fg-muted);
+}

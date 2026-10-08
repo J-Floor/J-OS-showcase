@@ -1,0 +1,65 @@
+@use "@j-os/design-system/breakpoints" as bp;
+
+/* Equal columns filling the drawer's footer, dropping to fewer when a column
+   stops being wide enough for a label.
+
+   `minmax(min(100%, 9rem), 1fr)`, not `1fr`: a `1fr` track still refuses to go
+   below its content's min-content width, so the buttons pushed the bar past the
+   drawer's edge instead of sharing the space. `min(100%, …)` guards the floor
+   itself, for a container narrower than the floor.
+
+   Above the phone breakpoint this is three across; below it, one per row (see
+   the query inside). */
+.bar {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+	gap: var(--jf-spacing-close);
+	inline-size: 100%;
+	min-inline-size: 0;
+
+	/* Phone: one per row, full width.
+	   The drawer is `min(480px, 100vi)`, so below this breakpoint it IS the
+	   screen and a third of it is ~116px — narrower than the tightest of these
+	   buttons even with the padding squeezed. Left to `auto-fit` that becomes
+	   two columns and a third button alone on the next row, which reads as a
+	   mistake; stacked, every decision is the same size and a full thumb wide. */
+	@include bp.phone {
+		grid-template-columns: 1fr;
+	}
+
+	/* Fill the column: `Button` is `fit-content` by default, so without this
+	   each hugs its label and the equal columns are invisible. The `Confetti`
+	   wrapper around "Make member" is itself a grid item, hence both. */
+	> *,
+	> * > button {
+		inline-size: 100%;
+		min-inline-size: 0;
+	}
+}
+
+/* The icon side needs its own rule. The design system adds breathing room where
+   a glyph sits — `.button[data-prefix="true"] .content { padding-inline-start:
+   16px }` — and that selector (class + attribute + class) outranks a bare
+   `.tight`, so the flexible padding below won on the trailing edge and lost on
+   the leading one: 16px in, 4px out, and "Make member" still clipped. Matching
+   its specificity is what makes the value below actually apply. */
+.bar button[data-prefix="true"] .tight {
+	padding-inline-start: max(var(--jf-spacing-close), 3%);
+}
+
+.bar button[data-suffix="true"] .tight {
+	padding-inline-end: max(var(--jf-spacing-close), 3%);
+}
+
+/* The button's own inline padding, made to flex.
+   A `Button` spends 24px a side by default — 48px before a glyph or a letter.
+   Three of those plus a 24px icon need 175px each, and a third of this drawer
+   is 146px on a laptop and 116px on a phone, so the labels were being clipped
+   by up to 14px.
+   A PERCENTAGE resolves against the button's own inline size, so the padding
+   shrinks exactly as the column does, and `max()` stops it collapsing to
+   nothing on the narrowest column. Roomy where there is room, tight where
+   there is not — rather than one fixed value that is wrong at one end. */
+.tight {
+	padding-inline: max(var(--jf-spacing-close), 3%);
+}

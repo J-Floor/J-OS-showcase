@@ -1,0 +1,35 @@
+// QR sits above its two actions, both left-aligned so nothing stretches or
+// leaves a lopsided gap beside the square code. Ported from
+// EventDrawer.module.scss's "QR & link" accordion body.
+.qrBlock {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+	align-items: flex-start;
+	padding-block: var(--jf-spacing-near);
+}
+
+.qr {
+	inline-size: 10rem;
+	block-size: 10rem;
+	fill: var(--jf-fg-default);
+}
+
+.actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+}
+
+// Row actions show no QR, but the download trigger rasterises the frame SVG
+// and sizes its canvas from the frame's box, so the frame must lay out at a
+// real size. Park it off-screen instead of hiding it.
+.offscreenQr {
+	position: fixed;
+	inset-block-start: 0;
+	inset-inline-start: -100vi;
+	inline-size: 10rem;
+	block-size: 10rem;
+	pointer-events: none;
+}

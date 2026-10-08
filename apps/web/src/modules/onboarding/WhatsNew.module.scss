@@ -1,0 +1,38 @@
+@use "@j-os/design-system/typography" as typo;
+
+.body {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+	margin-block-start: var(--jf-spacing-near);
+}
+
+.entry {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-close);
+}
+
+.entryTitle {
+	@include typo.jf-typo-body-bold;
+
+	margin: 0;
+}
+
+.items {
+	@include typo.jf-typo-body-regular;
+
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-close);
+	margin: 0;
+	padding-inline-start: var(--jf-spacing-far);
+	color: var(--jf-fg-default);
+}
+
+.footer {
+	display: flex;
+	flex-wrap: nowrap;
+	justify-content: flex-end;
+	margin-block-start: var(--jf-spacing-far);
+}

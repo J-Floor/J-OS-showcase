@@ -1,0 +1,40 @@
+@use "@j-os/design-system/typography" as typo;
+
+.card {
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-close);
+	justify-content: center;
+	inline-size: 100%;
+	padding: var(--jf-spacing-near);
+	overflow: hidden;
+	text-align: start;
+	cursor: pointer;
+	background: none;
+	border: none;
+}
+
+.name {
+	@include typo.jf-typo-body-bold;
+
+	overflow: hidden;
+	color: var(--jf-fg-strong);
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.meta {
+	display: flex;
+	flex-flow: row wrap;
+	gap: var(--jf-spacing-near);
+	color: var(--jf-fg-muted);
+}
+
+.item {
+	@include typo.jf-typo-body-small;
+
+	display: inline-flex;
+	flex-wrap: nowrap;
+	gap: var(--jf-spacing-close);
+	align-items: center;
+}

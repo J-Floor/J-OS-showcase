@@ -1,0 +1,52 @@
+@use "../../styles/input";
+@use "../../styles/typography" as typo;
+
+/* The outer <kbd> is the chord; each inner one is a key you press. Gapped so
+   "Ctrl" and "K" read as two keys rather than one run-together word. */
+.kbd {
+	display: inline-flex;
+	flex-wrap: nowrap;
+	gap: var(--jf-spacing-close);
+	align-items: center;
+}
+
+/* A chip with its description: one unit, so the words never outlive the chip. */
+.hint {
+	display: inline-flex;
+	flex-wrap: nowrap;
+	gap: var(--jf-spacing-close);
+	align-items: center;
+}
+
+.key {
+	display: inline-flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	justify-content: center;
+	min-inline-size: var(--jf-spacing-away);
+	padding-inline: var(--jf-spacing-close);
+
+	/* `default`, not `muted`: on the sunken key background `muted` fell below a
+	   comfortable contrast in dark mode. */
+	color: var(--jf-fg-default);
+	white-space: nowrap;
+	background-color: var(--jf-surface-bg-sunken);
+	border: 1px solid var(--jf-border-subtle);
+	border-radius: var(--jf-radius-button);
+
+	@include typo.jf-typo-body-small;
+}
+
+/* A touch screen has no keyboard, so a shortcut hint on one is decoration —
+   and it costs width where there is least of it: on a phone the person drawer
+   IS the screen, and its three decision buttons already shrink their own
+   padding to fit their labels. Keyed to the input, not the width: a laptop
+   window dragged narrow still has a keyboard, and its chips stay. CSS rather
+   than a JS media query, matching the header's control swap: a JS query
+   renders the wrong thing until the first effect. */
+@include input.touch-primary {
+	.kbd,
+	.hint {
+		display: none;
+	}
+}

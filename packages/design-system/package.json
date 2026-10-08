@@ -1,0 +1,62 @@
+{
+	"name": "@j-os/design-system",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"prettier": "@j-os/config-prettier",
+	"exports": {
+		".": "./src/index.ts",
+		"./icons": "./src/icons.ts",
+		"./input": "./src/styles/input.scss",
+		"./input.scss": "./src/styles/input.scss",
+		"./breakpoints": "./src/styles/breakpoints.scss",
+		"./breakpoints.scss": "./src/styles/breakpoints.scss",
+		"./styles.scss": "./src/styles/index.scss",
+		"./typography": "./src/styles/typography.scss",
+		"./typography.scss": "./src/styles/typography.scss",
+		"./utils": "./src/styles/utils.scss",
+		"./utils.scss": "./src/styles/utils.scss"
+	},
+	"scripts": {
+		"test": "vitest run",
+		"format": "prettier --write \"src/**/*.{ts,tsx,scss}\" --ignore-path ../../.prettierignore",
+		"lint": "bun run lint:logic && bun run lint:style",
+		"lint:logic": "eslint \"src/**/*.{ts,tsx}\" --cache --max-warnings 0",
+		"lint:style": "stylelint \"src/**/*.scss\" --cache --allow-empty-input --max-warnings 0",
+		"lint:style:ci": "bun run lint:style --custom-formatter @csstools/stylelint-formatter-github",
+		"typecheck": "tsc --noEmit",
+		"demo": "vite --config demo/vite.config.ts",
+		"build:demo": "vite build --config demo/vite.config.ts"
+	},
+	"peerDependencies": {
+		"solid-js": "catalog:"
+	},
+	"dependencies": {
+		"@ark-ui/solid": "catalog:",
+		"@internationalized/date": "^3.12.0",
+		"@tanstack/solid-hotkeys": "catalog:",
+		"@tanstack/solid-table": "catalog:",
+		"@tanstack/solid-virtual": "catalog:",
+		"canvas-confetti": "^1.9.4",
+		"clsx": "catalog:"
+	},
+	"devDependencies": {
+		"@csstools/stylelint-formatter-github": "^2.0.0",
+		"@j-os/config-eslint": "workspace:*",
+		"@j-os/config-prettier": "workspace:*",
+		"@j-os/config-stylelint": "workspace:*",
+		"@solidjs/testing-library": "catalog:",
+		"@testing-library/jest-dom": "catalog:",
+		"@types/canvas-confetti": "^1.9.0",
+		"eslint": "catalog:",
+		"jsdom": "catalog:",
+		"sass": "catalog:",
+		"solid-js": "catalog:",
+		"stylelint": "catalog:",
+		"typescript": "catalog:",
+		"typescript-eslint": "catalog:",
+		"vite": "catalog:",
+		"vite-plugin-solid": "catalog:",
+		"vitest": "catalog:"
+	}
+}

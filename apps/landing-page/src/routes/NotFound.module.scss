@@ -1,0 +1,58 @@
+@use "@j-os/design-system/breakpoints" as bp;
+@use "@j-os/design-system/typography" as typo;
+
+.page {
+	position: relative;
+	display: flex;
+	flex-flow: column nowrap;
+	align-items: center;
+	justify-content: center;
+	gap: var(--jf-spacing-away);
+	min-block-size: 100vb;
+	padding: var(--jf-spacing-detached);
+	overflow: hidden;
+	background-color: var(--core-grey-950);
+	color: var(--jf-fg-default);
+	text-align: center;
+
+	@include bp.phone {
+		padding: var(--jf-spacing-away);
+	}
+}
+
+.backdrop {
+	position: absolute;
+	inset: 0;
+	background-image: url("/assets/gR3L2z4YQvhXAuZ2fzOicMdBq0.webp");
+	background-position: center;
+	background-repeat: no-repeat;
+	background-size: cover;
+	filter: brightness(0.35) grayscale(1);
+}
+
+.content {
+	position: relative;
+	display: flex;
+	flex-flow: column nowrap;
+	align-items: center;
+	gap: var(--jf-spacing-away);
+}
+
+.code {
+	margin: 0;
+
+	@include typo.jf-typo-h1;
+}
+
+.message {
+	max-inline-size: 40ch;
+	margin: 0;
+	color: var(--core-grey-300);
+
+	@include typo.jf-typo-body-regular;
+}
+
+.pillArrow {
+	inline-size: 24px;
+	block-size: 24px;
+}

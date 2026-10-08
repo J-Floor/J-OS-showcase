@@ -1,0 +1,142 @@
+/*
+ * Ported from EmboUI Select.module.scss. Token mapping applied:
+ *   --embo-spacing-*            -> --jf-spacing-* (same suffix)
+ *   --embo-colour-surface-bg-*  -> --jf-surface-bg-{base,raised,overlay}
+ *   --embo-colour-surface-fg-*  -> --jf-fg-{strong,default,muted}
+ *   borders                     -> --jf-border-{subtle,strong}
+ * No radius/z-index token exists in the scale yet, so small literals are used
+ * (matching the Tooltip precedent).
+ */
+
+@use "../../styles/animation" as anim;
+
+.positioner {
+	inline-size: min-content;
+	pointer-events: none;
+}
+
+.content {
+	position: relative;
+
+	/* Layer via zag's `--layer-index` so the list ranks above whatever overlay
+	   opened it. zag's layer stack writes `--layer-index` on THIS element (the
+	   dismissable layer node), and popper then mirrors this element's computed
+	   z-index onto the Positioner as `--z-index` — so content is the single
+	   source of truth for the ordering of the whole floating pair.
+
+	   A flat base is not enough. The picker opened from the Guests table sits one
+	   layer above a layer-0 dialog and a tie is broken by DOM order, so it
+	   happened to paint on top; the same picker opened from inside the drawer is
+	   layer 2 under a layer-1 dialog, lost the tie, and rendered BEHIND the
+	   dialog — the board reported the host dropdown as simply not opening. */
+	z-index: calc(var(--jf-z-index-overlay-base) + var(--layer-index, 0));
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+	min-inline-size: var(--reference-width);
+	max-block-size: var(--available-height, 300px);
+	/* stylelint-disable-next-line defensive-css/require-scrollbar-gutter -- intentional; gutter not needed here */
+	overflow-block: auto;
+	overscroll-behavior-block: contain;
+	pointer-events: auto;
+	outline: none;
+	background-color: transparent;
+	box-shadow: var(--jf-shadow-surface-elevation);
+
+	@include anim.popover-animation;
+}
+
+.groupLabel {
+	max-inline-size: 100%;
+	padding-inline-start: var(--jf-spacing-near);
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal label size; no design token for this value */
+	font-size: 0.75rem;
+	line-height: 1rem;
+	color: var(--jf-fg-muted);
+	text-transform: uppercase;
+	user-select: none;
+}
+
+.itemGroup {
+	display: flex;
+	flex-direction: column;
+}
+
+.item {
+	inline-size: 100%;
+	cursor: pointer;
+
+	&[data-highlighted] {
+		background-color: var(--jf-surface-bg-overlay);
+	}
+
+	& > * {
+		outline: none;
+	}
+}
+
+.itemIndicator {
+	margin-inline-start: auto;
+	color: var(--jf-fg-strong);
+}
+
+.inputWrapper {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: var(--jf-spacing-close);
+	align-items: center;
+	justify-content: space-between;
+	inline-size: 100%;
+	block-size: var(--jf-dimension-short-component-height);
+	padding-inline: var(--jf-spacing-near);
+	overflow: visible;
+	cursor: pointer;
+	background-color: var(--jf-status-bg);
+
+	/* The trigger is a <button>; kill the UA default border. */
+	border: none;
+	border-radius: var(--jf-radius-button);
+
+	* {
+		color: var(--jf-status-fg);
+	}
+
+	&:focus-within {
+		outline-style: solid;
+		outline-color: var(--jf-status-fg);
+	}
+
+	&[data-invalid="true"] {
+		outline-style: solid;
+		outline-color: var(--jf-status-fg);
+	}
+}
+
+/* Grow to absorb slack so the clear + indicator sit together at the right edge
+   (with `justify-content: space-between` and a clear button, a non-growing value
+   would strand the clear control in the middle). Truncate long value text. */
+.value {
+	flex: 1 1 auto;
+	min-inline-size: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	text-align: start;
+	white-space: nowrap;
+
+	[data-status="neutral"] & {
+		color: var(--jf-fg-strong);
+	}
+
+	&[data-placeholder-shown] {
+		color: var(--jf-fg-muted);
+	}
+}
+
+.icon {
+	pointer-events: none;
+	user-select: none;
+}
+
+.clearTrigger {
+	cursor: pointer;
+}

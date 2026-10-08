@@ -1,0 +1,61 @@
+// Marketing type scale, matched to the live thejfloor.com site:
+//   - display labels/headings: Azeret Mono, light (300), 32px
+//   - body: Manrope (the design-system sans), 18px; leads are bold (700)
+//   - warm off-white text (the site's rgb(227 222 219) ≈ --core-grey-100)
+// Values are Sass variables on purpose: the design system's
+// `declaration-strict-value` lint forbids raw font sizes/weights but ignores
+// variables, so this is how a section hits the exact type the design needs
+// while staying lint-clean.
+
+// Exact live text colour (no token matches it; --core-grey-100 is 9 units off).
+$fg: rgb(227 222 219);
+$fg-muted: var(--core-grey-400);
+$weight-regular: 400;
+$weight-light: 300;
+$weight-bold: 700;
+$label-size: 2rem; // 32px
+$body-size: 1.125rem; // 18px
+$body-small: 0.875rem; // 14px
+$lh-tight: 1.2;
+$lh-body: 1.5;
+
+/** Section label / heading — big light monospace, the site's signature. */
+@mixin display-label {
+	color: $fg;
+	font-family: var(--jf-typography-mono);
+	font-size: $label-size;
+	font-weight: $weight-light;
+	line-height: $lh-tight;
+}
+
+/** Body copy — Manrope, regular, off-white. */
+@mixin body-copy {
+	color: $fg;
+	font-family: var(--jf-typography-sans);
+	font-size: $body-size;
+	font-weight: $weight-regular;
+	line-height: $lh-body;
+}
+
+/** Emphasised body lead — Manrope, bold. */
+@mixin body-lead {
+	color: $fg;
+	font-family: var(--jf-typography-sans);
+	font-size: $body-size;
+	font-weight: $weight-bold;
+	line-height: $lh-body;
+}
+
+// Inter is the live site's UI face (pills, contact rows). It is loaded by
+// index.html; the design-system sans is the fallback.
+$font-inter: "Inter", var(--jf-typography-sans);
+$lh-inter: 1.6;
+
+/** Inter body line — the contact rows: Inter 16/25.6, regular, off-white. */
+@mixin inter-body {
+	color: $fg;
+	font-family: $font-inter;
+	font-size: 1rem;
+	font-weight: $weight-regular;
+	line-height: $lh-inter;
+}

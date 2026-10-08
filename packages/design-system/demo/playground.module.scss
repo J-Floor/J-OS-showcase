@@ -1,0 +1,90 @@
+.app {
+	display: flex;
+	flex-direction: column;
+	width: 100vw;
+	height: 100vh;
+	overflow: hidden;
+	color: var(--jf-fg-default);
+	background: var(--jf-surface-bg-base);
+}
+
+.topbar {
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: space-between;
+	padding: var(--jf-spacing-near) var(--jf-spacing-far);
+	border-bottom: 1px solid var(--jf-border-subtle);
+}
+
+.brand {
+	font-weight: 600;
+}
+
+.body {
+	display: flex;
+	flex: 1;
+	min-height: 0;
+}
+
+.rail {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-close);
+	flex-shrink: 0;
+	width: 220px;
+	padding: var(--jf-spacing-near);
+	overflow-y: auto;
+	border-right: 1px solid var(--jf-border-subtle);
+}
+
+.railItem {
+	padding: var(--jf-spacing-near);
+	font: inherit;
+	color: var(--jf-fg-default);
+	text-align: left;
+	cursor: pointer;
+	background: none;
+	border: none;
+	border-radius: var(--jf-radius-button);
+
+	&:hover {
+		background: var(--jf-surface-bg-overlay);
+	}
+}
+
+.active {
+	background: var(--jf-surface-bg-overlay);
+}
+
+.canvas {
+	display: flex;
+	flex: 1;
+	align-items: center;
+	justify-content: center;
+	min-width: 0;
+	padding: var(--jf-spacing-away);
+	overflow: auto;
+}
+
+.drawer {
+	display: flex;
+	flex-direction: column;
+	flex-shrink: 0;
+	width: 300px;
+	padding: var(--jf-spacing-far);
+	overflow-y: auto;
+	border-left: 1px solid var(--jf-border-subtle);
+}
+
+.controls {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-far);
+}
+
+.controlList {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+}

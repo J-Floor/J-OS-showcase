@@ -1,0 +1,30 @@
+.wrap {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-away);
+}
+
+.pdfActions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--jf-spacing-near);
+}
+
+.doc {
+	inline-size: 100%;
+	block-size: 60vb;
+	border: 1px solid var(--jf-border-subtle);
+}
+
+.fields {
+	display: grid;
+	grid-template-columns: max-content 1fr;
+
+	/* row gap / column gap — wider columns so a long value (company name) never
+	   butts up against its label. */
+	gap: var(--jf-spacing-near) var(--jf-spacing-away);
+}
+
+.error {
+	color: var(--jf-error-fg);
+}

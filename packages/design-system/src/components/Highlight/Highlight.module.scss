@@ -1,0 +1,8 @@
+/* A tint is a pair, and painting only the background leaves the text on the
+   browser's own `mark` colour — black, whatever `color-scheme` says. That is
+   right by luck in the light theme and unreadable in the dark one. Reading the
+   matching foreground is what every other status surface here does. */
+.highlight {
+	color: var(--jf-warning-fg);
+	background-color: var(--jf-warning-bg);
+}

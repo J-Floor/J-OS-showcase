@@ -1,0 +1,178 @@
+name: Checks
+
+on:
+  workflow_dispatch:
+  # Only main. A branch with an open PR is already covered by `pull_request`,
+  # and listening to both fired two concurrent runs per commit — which raced to
+  # push the formatting commit, so the loser failed on a non-fast-forward and
+  # reported a red cross on a green PR.
+  push:
+    branches: [main]
+    paths:
+      - "**.ts"
+      - "**.tsx"
+      - "**.js"
+      - "**.jsx"
+      - "**.css"
+      - "package.json"
+      - "bun.lock"
+      - "bunfig.toml"
+      - "**/bunfig.toml"
+      - "turbo.json"
+      - ".github/workflows/checks.yml"
+  pull_request:
+
+# Supersede an in-flight run when the branch moves again.
+concurrency:
+  group: checks-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  format-and-static:
+    name: Format, styles, types
+    runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]'
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Cache Bun downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # agreements:check recompiles the committed PDFs; Typst versions differ byte for byte, so pin 0.15.0.
+      - name: Install Typst
+        run: |
+          dir="$RUNNER_TEMP/typst"
+          mkdir -p "$dir"
+          curl -fsSL -o "$RUNNER_TEMP/typst.tar.xz" https://github.com/typst/typst/releases/download/v0.15.0/typst-x86_64-unknown-linux-musl.tar.xz
+          echo "59b207df01be2dab9f13e80f73d04d7ff8273ffd46b3dd1b9eef5c60f3eeabea  $RUNNER_TEMP/typst.tar.xz" | sha256sum -c -
+          tar -xJ --strip-components=1 -C "$dir" -f "$RUNNER_TEMP/typst.tar.xz"
+          echo "$dir" >> "$GITHUB_PATH"
+
+      # Turborepo remote cache backed by the GitHub Actions cache: one cache
+      # shared by every job, workflow and branch, keyed by turbo's task hash.
+      - name: Turborepo remote cache
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        with:
+          # A fixed port fails the job when the runner already holds it (EADDRINUSE).
+          server-port: 0
+
+      - name: Run Prettier (auto-fix)
+        run: bun run format
+
+      - name: Check for formatting changes
+        id: check-changes
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit formatting changes
+        if: steps.check-changes.outputs.changes == 'true'
+        run: |
+          git config --local user.name "GitHub Actions"
+          git config --local user.email "actions@github.com"
+          # The marker below stops this push starting another run of this
+          # workflow. It is safe only because the repository squashes with the
+          # PR title as the commit message: when it squashed with the
+          # concatenated branch messages instead, the marker travelled to main
+          # and GitHub skipped every workflow there, Deploy included — so a PR
+          # merged green and silently never reached production. If that setting
+          # is ever changed back, remove this marker in the same breath.
+          git commit -am "style: formatting by GitHub Actions [skip ci]"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git push origin HEAD:${{ github.head_ref }}
+          else
+            git push origin HEAD:${{ github.ref_name }}
+          fi
+
+      # One turbo run so Stylelint, tsc and the generated-file checks execute
+      # concurrently. ESLint runs in its own job.
+      - name: Stylelint, typecheck and generated-file checks
+        run: bunx --bun turbo run lint:style:ci typecheck email:check agreements:check${{ github.event_name == 'pull_request' && ' --affected' || '' }} --continue
+
+  # Separate job: on 2-vCPU runners type-aware ESLint and tsc contend for CPU
+  # when run together, so each gets its own runner.
+  eslint:
+    name: ESLint, audit, secret scan
+    runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]'
+    permissions:
+      contents: read
+    env:
+      GITLEAKS_VERSION: "8.30.1"
+      GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # The whole private tree, docs/ included, on every run. Same pinned
+      # release and checksum as mirror.yml. A step here, not its own job, so it
+      # adds seconds rather than a billed runner minute.
+      - name: Install gitleaks
+        run: |
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/$archive" | sha256sum --check --strict -
+          mkdir -p "$RUNNER_TEMP/gitleaks-bin"
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP/gitleaks-bin" gitleaks
+          echo "$RUNNER_TEMP/gitleaks-bin" >> "$GITHUB_PATH"
+
+      - name: Scan for secrets
+        run: gitleaks dir . --config scripts/mirror/gitleaks.toml --ignore-gitleaks-allow --redact --no-banner
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Cache Bun downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Ratchet: critical only until the high list is empty, then raise to high.
+      # GHSA-rg76-677x-56q9, GHSA-xwcq-pm8m-c4vf: crypto-js via pdfkit (@signpdf), no fix reachable (pdfkit pins crypto-js 3.3.0).
+      # GHSA-p6vx-979v-rg4c: seroval via solid-js (latest 1.9.15 still pins seroval ~1.5.4).
+      # GHSA-w7jw-789q-3m8p: shell-quote via concurrently (dev dep; concurrently 10 only moves to another shell-quote critical).
+      - name: Dependency audit
+        run: bun audit --audit-level=critical --ignore GHSA-rg76-677x-56q9 --ignore GHSA-xwcq-pm8m-c4vf --ignore GHSA-p6vx-979v-rg4c --ignore GHSA-w7jw-789q-3m8p
+
+      # Turborepo remote cache backed by the GitHub Actions cache: one cache
+      # shared by every job, workflow and branch, keyed by turbo's task hash.
+      - name: Turborepo remote cache
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        with:
+          # A fixed port fails the job when the runner already holds it (EADDRINUSE).
+          server-port: 0
+
+      - name: ESLint
+        run: bunx --bun turbo run lint:logic${{ github.event_name == 'pull_request' && ' --affected' || '' }} --continue

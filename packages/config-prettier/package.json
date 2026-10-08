@@ -1,0 +1,9 @@
+{
+  "name": "@j-os/config-prettier",
+  "version": "0.0.1",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "format": "prettier --write \"*.{js,ts,tsx}\" --ignore-path ../../.prettierignore"
+  }
+}

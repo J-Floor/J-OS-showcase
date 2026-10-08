@@ -1,0 +1,35 @@
+.zone {
+	position: relative;
+}
+
+// Hide the OS cursor only while the custom pill is showing.
+.zone.active {
+	cursor: none;
+}
+
+.cursor {
+	--cursor-size: 0.875rem;
+	--cursor-weight: 500;
+
+	position: fixed;
+	inset-block-start: 0;
+	inset-inline-start: 0;
+	z-index: 50;
+	display: inline-flex;
+	flex-wrap: nowrap;
+	gap: var(--jf-spacing-close);
+	align-items: center;
+	padding: var(--jf-spacing-close) var(--jf-spacing-far);
+	border-radius: var(--jf-radius-full);
+	background-color: var(--core-grey-100);
+	color: var(--core-grey-1000);
+	font-family: var(--jf-typography-sans);
+	font-size: var(--cursor-size);
+	font-weight: var(--cursor-weight);
+	white-space: nowrap;
+	pointer-events: none;
+}
+
+.arrow {
+	font-size: 1em;
+}

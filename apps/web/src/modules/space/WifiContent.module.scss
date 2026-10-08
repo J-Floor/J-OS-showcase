@@ -1,0 +1,42 @@
+@use "@j-os/design-system/typography" as typo;
+
+.codes {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--jf-spacing-away);
+	justify-content: center;
+}
+
+.code {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+	margin: 0;
+}
+
+.frame {
+	inline-size: 10rem;
+	block-size: 10rem;
+	fill: var(--jf-fg-default);
+}
+
+.ssid {
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
+	font-weight: 600;
+}
+
+.password {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: var(--jf-spacing-close);
+	align-items: center;
+}
+
+/* The masked stand-in for the password — bullets, muted; the real characters
+   never render. */
+.dots {
+	@include typo.jf-typo-body-tech;
+
+	color: var(--jf-fg-muted);
+}

@@ -1,0 +1,100 @@
+name: Deploy app
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+# Never run two production deploys at once; let an in-flight deploy finish.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Convex, web app and design playground
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Cache Bun downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Turborepo remote cache backed by the GitHub Actions cache: one cache
+      # shared by every job, workflow and branch, keyed by turbo's task hash.
+      - name: Turborepo remote cache
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        with:
+          # A fixed port fails the job when the runner already holds it (EADDRINUSE).
+          server-port: 0
+
+      # Deploy the Convex backend (cloud-to-cloud) and, via --cmd, build the SPA
+      # with the deployed prod URL injected as VITE_CONVEX_URL. The build inherits
+      # VITE_CONVEX_SITE_URL, VITE_RECAPTCHA_SITE_KEY and VITE_VAPID_PUBLIC_KEY
+      # from this step's env.
+      - name: Deploy Convex backend and build SPA
+        working-directory: apps/web
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+          VITE_RECAPTCHA_SITE_KEY: ${{ secrets.VITE_RECAPTCHA_SITE_KEY }}
+          VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
+          VITE_CONVEX_SITE_URL: ${{ secrets.VITE_CONVEX_SITE_URL }}
+        run: |
+          bunx --bun convex deploy -y \
+            --cmd-url-env-var-name VITE_CONVEX_URL \
+            --cmd 'bunx --bun turbo build --filter=@j-os/web'
+
+      # Ship the built static SPA to the VPS, where Caddy serves it from
+      # /srv/jfloor/apps/web/dist. The deploy key is locked (rrsync, write-only,
+      # no shell) to that directory, so the rsync target "." maps to it.
+      - name: Ship SPA build to VPS
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          rsync -az --delete --delay-updates \
+            -e "ssh -i $HOME/.ssh/deploy_key -o IdentitiesOnly=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts" \
+            apps/web/dist/ "jos@${DEPLOY_HOST}:."
+
+      # --- Design playground (design.thejfloor.com) ---
+      # Turbo caches this build (outputs: demo/dist/**). When design-system is
+      # unchanged it's a FULL TURBO cache hit that restores demo/dist without
+      # rebuilding — so Turbo IS the change detection; no git diff needed.
+      - name: Build design playground
+        run: bunx --bun turbo build:demo --filter=@j-os/design-system
+
+      # Uses a SEPARATE deploy key locked (rrsync, write-only) to the playground
+      # dist dir — it cannot touch apps/web/dist or anything else on the box.
+      # rsync only transfers changed files, so an unchanged playground is a no-op.
+      - name: Ship design playground to VPS
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY_DEMO }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/demo_key
+          chmod 600 ~/.ssh/demo_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          rsync -az --delete --delay-updates \
+            -e "ssh -i $HOME/.ssh/demo_key -o IdentitiesOnly=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts" \
+            packages/design-system/demo/dist/ "jos@${DEPLOY_HOST}:."

@@ -1,0 +1,48 @@
+@use "../../styles/typography" as typo;
+
+.exceptionDisplay {
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-detached);
+	align-items: center;
+	justify-content: center;
+	min-block-size: 100%;
+	padding: var(--jf-spacing-away);
+	background-color: var(--jf-surface-bg-base);
+}
+
+.message {
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-away);
+	align-items: center;
+
+	/* Icon (color: inherit) + description inherit the status colour. */
+	color: var(--jf-status-fg);
+	text-align: center;
+
+	/* Size the glyph by font-size only (never font-family). The descendant
+	   selector (0,2,0) beats Icon's own `.icon` rule (0,1,0). */
+	[data-icon] {
+		/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this glyph size */
+		font-size: 3rem;
+	}
+}
+
+.title {
+	@include typo.jf-typo-h3;
+
+	/* Override the heading mixin's fg-strong with the status colour. */
+	color: var(--jf-status-fg);
+}
+
+.description {
+	max-inline-size: 40ch;
+}
+
+.actions {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: var(--jf-spacing-away);
+	align-items: center;
+}

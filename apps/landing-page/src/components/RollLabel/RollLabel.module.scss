@@ -1,0 +1,77 @@
+// Measured on the live pill: both copies travel one line (25px) up, the
+// outgoing copy shrinks to 0.7 and the incoming one grows from 0.7 to 1. The
+// easing is the live spring sampled frame by frame (starts from rest, reaches
+// the target at ~48%, overshoots 1.5%, settles by 412ms) as a linear() curve.
+.roll {
+	--roll-distance: 25px;
+	--roll-scale: 0.7;
+	--roll-duration: 0.41s;
+	--roll-ease: linear(
+		0,
+		0.006 2.7%,
+		0.06 7%,
+		0.202 11.7%,
+		0.372 15%,
+		0.51 19.7%,
+		0.662 23%,
+		0.754 27.2%,
+		0.843 31.3%,
+		0.905 35.2%,
+		0.951 39.3%,
+		0.981 43.7%,
+		1 47.8%,
+		1.011 51.9%,
+		1.015 59.5%,
+		1.012 67.7%,
+		1.007 75.5%,
+		1.004 83.7%,
+		1.001 91.7%,
+		1
+	);
+
+	position: relative;
+	display: inline-block;
+	overflow: hidden;
+	vertical-align: top;
+
+	&::after {
+		position: absolute;
+		inset: 0;
+		content: attr(data-label) / "";
+		transform: translateY(var(--roll-distance)) scale(var(--roll-scale));
+		transition: transform var(--roll-duration) var(--roll-ease);
+	}
+}
+
+.text {
+	display: inline-block;
+	transition: transform var(--roll-duration) var(--roll-ease);
+}
+
+@mixin rolled {
+	.text {
+		transform: translateY(calc(var(--roll-distance) * -1))
+			scale(var(--roll-scale));
+	}
+
+	&::after {
+		transform: none;
+	}
+}
+
+@media (hover: hover) {
+	:is(a, button):hover .roll {
+		@include rolled;
+	}
+}
+
+:is(a, button):focus-visible .roll {
+	@include rolled;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.roll::after,
+	.text {
+		transition: none;
+	}
+}

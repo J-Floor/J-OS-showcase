@@ -1,0 +1,93 @@
+.backdrop {
+	/* Ark sets `position` (fixed for a dialog step, absolute otherwise) and the
+	   clip path that cuts the spotlight hole, both inline. */
+	z-index: calc(var(--jf-z-index-tour-backdrop-base) + var(--layer-index, 0));
+	background-color: var(--jf-surface-bg-scrim);
+}
+
+.spotlight {
+	/* The lit area is the hole the backdrop's clip path cuts; this box only
+	   reserves the same tier so the highlight cannot fall behind the scrim. */
+	z-index: calc(var(--jf-z-index-tour-backdrop-base) + var(--layer-index, 0));
+	border-radius: var(--jf-radius-button);
+}
+
+.positioner {
+	position: fixed;
+
+	/* The positioner always forms its own stacking context — `position: fixed`
+	   here for a dialog step, Ark's own inline `isolation: isolate` for an
+	   anchored one — so `.content`'s z-index is trapped inside it and THIS
+	   element is what stacks against other overlays.
+
+	   Ark mirrors the content's COMPUTED z-index back out as `--z-index` and
+	   writes `z-index: var(--z-index)` inline. An inline declaration outranks
+	   any class, so seeding the custom property here (rather than setting
+	   `z-index`) is what holds the tour up in the frames before that mirror
+	   lands, and Ark then overwrites the same property — leaving `.content` as
+	   the single source of truth either way.
+
+	   This used to be `z-index: 1002 !important`, on the reasoning that beating
+	   an inline rule is the only option. It is not, and the `!important` hid the
+	   actual defect: a positioner that ends up at `z-index: auto` means its
+	   CONTENT has no z-index for Ark to mirror. Give content one and there is
+	   nothing to fight. */
+	--z-index: calc(var(--jf-z-index-tour-base) + var(--layer-index, 0));
+
+	z-index: var(--z-index);
+
+	&[data-type="dialog"] {
+		inset: 0;
+		/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		margin: auto;
+	}
+}
+
+.content {
+	position: relative;
+
+	/* The single source of truth for the tour's stacking: Ark reads THIS
+	   element's computed z-index and mirrors it onto the positioner above. */
+	z-index: calc(var(--jf-z-index-tour-base) + var(--layer-index, 0));
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+	inline-size: 320px;
+	padding: var(--jf-spacing-far);
+	background-color: var(--jf-surface-bg-base);
+	border: 1px solid var(--jf-border-subtle);
+	border-radius: var(--jf-radius-button);
+}
+
+.close {
+	position: absolute;
+	inset-block-start: var(--jf-spacing-near);
+	inset-inline-end: var(--jf-spacing-near);
+	color: var(--jf-fg-muted);
+	cursor: pointer;
+	background: transparent;
+	border: none;
+}
+
+.title {
+	margin: 0;
+}
+
+.description {
+	margin: 0;
+	color: var(--jf-fg-muted);
+}
+
+.progress {
+	color: var(--jf-fg-muted);
+}
+
+.control {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	gap: var(--jf-spacing-near);
+	margin-block-start: var(--jf-spacing-near);
+}

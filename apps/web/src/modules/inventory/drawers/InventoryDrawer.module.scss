@@ -1,0 +1,43 @@
+@use "@j-os/design-system/typography" as typo;
+
+.error {
+	@include typo.jf-typo-body-small;
+
+	color: var(--jf-error-fg);
+}
+
+.description {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-close);
+	margin-block-start: var(--jf-spacing-near);
+}
+
+// Aligns an accordion section's body with the events drawer's attendees
+// section.
+.section {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+	padding-block: var(--jf-spacing-near);
+}
+
+.empty {
+	@include typo.jf-typo-body-tech;
+
+	margin: 0;
+	color: var(--jf-fg-muted);
+}
+
+.list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.listRow {
+	@include typo.jf-typo-body-regular;
+}

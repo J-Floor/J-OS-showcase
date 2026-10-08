@@ -1,0 +1,31 @@
+@use "@j-os/design-system/breakpoints" as bp;
+
+/* Floats at the foot of the content column (`.main` is `position: relative`).
+   On a phone `.main` sits above the bottom bar, so the stack clears it without
+   needing the bar's height. */
+.stack {
+	position: absolute;
+	inset-inline: 0;
+	inset-block-end: var(--jf-spacing-away);
+	z-index: 10;
+
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single column; nothing to wrap */
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-close);
+	align-items: center;
+	inline-size: fit-content;
+	max-inline-size: calc(100% - 2 * var(--jf-spacing-away));
+	margin-inline: auto;
+	pointer-events: none;
+
+	@include bp.phone {
+		inset-block-end: var(--jf-spacing-far);
+	}
+}
+
+/* The stack ignores the pointer so it never blocks the page beneath, but its
+   children are the pills, so they take it back. */
+.stack > * {
+	pointer-events: auto;
+}

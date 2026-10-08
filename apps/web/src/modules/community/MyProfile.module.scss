@@ -1,0 +1,18 @@
+/* The profile is a single reading column, not a full-bleed form. Left
+   unconstrained, every field input stretched the whole page width (the board
+   drawer constrains these same editors to ~360px; at page width they looked
+   comical). Cap it at a comfortable form width. */
+.form {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+	max-inline-size: 40rem;
+}
+
+/* The link slots stack with no gap by default — give the progressive-reveal
+   inputs breathing room between rows. */
+.links {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-close);
+}

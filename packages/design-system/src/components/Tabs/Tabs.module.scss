@@ -1,0 +1,53 @@
+.list {
+	position: relative;
+	display: inline-flex;
+	flex-flow: row nowrap;
+	gap: var(--jf-spacing-away);
+	border-block-end: 1px solid var(--jf-border-subtle);
+}
+
+.indicator {
+	position: absolute;
+	inset-block-end: -1px;
+	inset-inline-start: var(--left);
+	z-index: 1;
+	inline-size: var(--width);
+	block-size: 2px;
+	background-color: var(--jf-border-strong);
+	transition-duration: var(--jf-animation-duration-default);
+	/* stylelint-disable-next-line plugin/no-low-performance-animation-properties */
+	transition-property: width, left, inline-size, inset-inline-start;
+}
+
+.trigger {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding-block: var(--jf-spacing-near);
+	padding-inline: var(--jf-spacing-close);
+	color: var(--jf-fg-muted);
+	text-wrap: nowrap;
+	white-space: nowrap;
+	cursor: pointer;
+	background-color: transparent;
+	border: none;
+
+	&[data-selected] {
+		color: var(--jf-fg-strong);
+	}
+
+	&[data-disabled] {
+		cursor: not-allowed;
+		/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this opacity value */
+		opacity: 0.5;
+	}
+}
+
+.content {
+	padding-block-start: var(--jf-spacing-far);
+
+	&:focus-visible {
+		outline: 1px solid var(--jf-border-strong);
+	}
+}

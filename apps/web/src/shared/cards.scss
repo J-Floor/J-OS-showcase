@@ -1,0 +1,28 @@
+@use "@j-os/design-system/breakpoints" as bp;
+
+/* Intrinsic responsive card grid, shared by the Space access cards and the
+   house-rule cards — collapses to one column on narrow viewports with no
+   media queries. The column track is capped (not 1fr) so cards stay a
+   sensible width and don't stretch apart on wide screens. Rows keep the
+   default `align-items: stretch`, so cards side by side share one height. */
+@mixin card-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(16rem, 24rem));
+	gap: var(--jf-spacing-far);
+
+	/* On a phone there is only ever one column, so the 24rem cap just leaves a
+	   gap beside it — let the cards take the full width. */
+	@include bp.phone {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* Raised card surface shared by the Space, rules and insights cards. */
+@mixin card-surface($bordered: false) {
+	background-color: var(--jf-surface-bg-raised);
+	border-radius: var(--jf-radius-container);
+
+	@if $bordered {
+		border: 1px solid var(--jf-border-subtle);
+	}
+}

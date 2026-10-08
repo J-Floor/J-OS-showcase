@@ -1,0 +1,39 @@
+/*
+ * Status remaps two semantic CSS vars (--jf-status-bg / --jf-status-fg) based on
+ * [data-status]. Consumers read those vars; they never branch on the status
+ * value themselves. `display: contents` keeps the wrapper layout-transparent.
+ *
+ * These live in the global stylesheet (not Status.module.scss) on purpose: as
+ * bare attribute-selector rules with no hashed class, the CSS-modules pruning in
+ * the production build would drop them, leaving --jf-status-bg undefined and
+ * field backgrounds transparent. Global CSS is never pruned.
+ */
+
+[data-status] {
+	display: contents;
+}
+
+[data-status="neutral"] {
+	--jf-status-bg: var(--jf-surface-bg-overlay);
+	--jf-status-fg: var(--jf-fg-default);
+}
+
+[data-status="success"] {
+	--jf-status-bg: var(--jf-success-bg);
+	--jf-status-fg: var(--jf-success-fg);
+}
+
+[data-status="warning"] {
+	--jf-status-bg: var(--jf-warning-bg);
+	--jf-status-fg: var(--jf-warning-fg);
+}
+
+[data-status="error"] {
+	--jf-status-bg: var(--jf-error-bg);
+	--jf-status-fg: var(--jf-error-fg);
+}
+
+[data-status="info"] {
+	--jf-status-bg: var(--jf-info-bg);
+	--jf-status-fg: var(--jf-info-fg);
+}

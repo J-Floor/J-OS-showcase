@@ -1,0 +1,38 @@
+@use "../../styles/typography" as typo;
+
+.row {
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	gap: var(--jf-spacing-near);
+}
+
+.avatar {
+	inline-size: var(--jf-spacing-detached);
+	block-size: var(--jf-spacing-detached);
+	border-radius: var(--jf-radius-full);
+	background-color: var(--jf-surface-bg-raised);
+}
+
+.name {
+	@include typo.jf-typo-body-bold;
+
+	margin: 0;
+}
+
+.line {
+	@include typo.jf-typo-body-regular;
+
+	margin: 0;
+}
+
+.stack {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+}
+
+.caption {
+	margin: 0;
+	color: var(--jf-fg-muted);
+}

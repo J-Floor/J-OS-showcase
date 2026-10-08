@@ -1,0 +1,15 @@
+.section {
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-near);
+}
+
+/* The confirm sits under the options rather than beside them: the chooser is a
+   vertical stack, and a button on its trailing edge would be level with
+   whichever option happened to be first. */
+.actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--jf-spacing-near);
+	justify-content: flex-end;
+}

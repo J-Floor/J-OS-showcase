@@ -1,0 +1,64 @@
+@use "@j-os/design-system/breakpoints" as bp;
+
+/* Shared list-page shell (Events/Community/Inventory): a full-height flex
+   column so the table's sticky header works, a tab/action bar, and a
+   growing panel.
+
+   The console fills the shell's scroll region so the table inside it has a
+   height to work against. That height is the whole condition for a sticky
+   header: the table's own scroll box carries the horizontal overflow, which
+   makes it a scroll container in both axes, and a sticky `thead` sticks to
+   THAT box rather than the page. While the box grew with its content it had
+   no scroll range, so the header scrolled away. Bounded, the rows scroll
+   inside it and the header stays. The tab/action bar stops scrolling away
+   with them, which is the other half of the same win.
+
+   This is a plain Sass partial (not a CSS Module) so each page's
+   *.module.scss `@use`s it and `@include`s the mixins below into its own
+   class names — CSS Modules' `composes` mechanism has no stylelint support
+   in this repo and is not used here. */
+
+@mixin console {
+	display: flex;
+	flex-flow: column nowrap;
+	block-size: 100%;
+	min-block-size: 0;
+}
+
+/* Tab row: tab triggers on one side, page actions on the other. */
+@mixin tab-bar {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+	justify-content: space-between;
+
+	@include bp.phone {
+		flex-wrap: wrap;
+	}
+}
+
+/* The panel is the height the table inherits. `min-block-size: 0` because a
+   flex item's floor is its content, and without it the panel refuses to be
+   shorter than the whole table — which is exactly the unbounded height the
+   header could not stick through.
+
+   `:not([hidden])` is load-bearing for tabbed pages. Panels stay mounted
+   once visited (Tabs is `lazyMount`, not `unmountOnExit`) and Ark hides the
+   inactive ones with the `hidden` ATTRIBUTE, whose `display: none` comes
+   from a UA rule — which any class here outranks. A bare `display: flex`
+   therefore un-hid every panel the board had visited: two tables stacked on
+   top of each other, and the page grown tall enough to hold both with a dead
+   band beneath. The selector is a no-op on a non-tabbed page (the panel
+   never carries `hidden`), so it covers Events too.
+
+   This mixin holds only the declarations — each consuming page writes its
+   own `.panel:not([hidden]) { @include shell.panel; }` so the selector (and
+   its `:not([hidden])` qualifier) lives at the call site, identically to how
+   the pre-existing rule read. */
+@mixin panel {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-block-size: 0;
+}

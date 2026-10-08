@@ -1,0 +1,19 @@
+.count {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--jf-spacing-close);
+}
+
+.num {
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
+	font-size: 64px;
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
+	font-weight: 700;
+	line-height: 1;
+	color: var(--jf-fg-strong);
+}
+
+.label {
+	color: var(--jf-fg-muted);
+}

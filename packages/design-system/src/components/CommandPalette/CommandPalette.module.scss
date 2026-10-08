@@ -1,0 +1,154 @@
+@use "../../styles/typography" as typo;
+
+/* Wider than a normal dialog and pinned near the top: a palette you type into
+   should not move down the screen as its result list grows. */
+.dialog {
+	max-inline-size: 40rem;
+	padding: 0;
+
+	/* The dialog itself must NOT scroll. It inherits `overflow-block: auto` from
+	   Dialog, which swallowed the wheel before the result list ever saw it — the
+	   whole palette moved instead of the rows. Only the list scrolls. */
+	overflow: hidden;
+}
+
+/* The dialog's close affordance is suppressed — see the note in the component. */
+.hiddenClose {
+	display: none;
+}
+
+.combobox {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single column; wrapping not intended */
+	display: flex;
+	flex-direction: column;
+	min-block-size: 0;
+}
+
+.control {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single row; wrapping not intended */
+	display: flex;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+	padding: var(--jf-spacing-near);
+	border-block-end: 1px solid var(--jf-border-subtle);
+}
+
+.searchIcon {
+	color: var(--jf-fg-muted);
+}
+
+.input {
+	flex: 1;
+	min-inline-size: 0;
+	color: var(--jf-fg-strong);
+	background: none;
+	border: none;
+
+	@include typo.jf-typo-body-regular;
+
+	&:focus {
+		outline: none;
+	}
+
+	&::placeholder {
+		color: var(--jf-fg-muted);
+	}
+}
+
+/* The list scrolls, the field and the footer do not — so the thing you are
+   typing into never leaves the screen. */
+.content {
+	min-block-size: 0;
+	max-block-size: 24rem;
+	padding: var(--jf-spacing-close);
+	/* stylelint-disable-next-line defensive-css/require-scrollbar-gutter -- a reserved gutter leaves a visible empty band on short lists */
+	overflow-block: auto;
+	overscroll-behavior: contain;
+
+	&:focus {
+		outline: none;
+	}
+}
+
+.group {
+	&:not(:first-child) {
+		margin-block-start: var(--jf-spacing-near);
+	}
+}
+
+.groupLabel {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single row; wrapping not intended */
+	display: flex;
+	gap: var(--jf-spacing-near);
+	align-items: baseline;
+	justify-content: space-between;
+	padding-inline: var(--jf-spacing-near);
+	padding-block: var(--jf-spacing-close);
+	color: var(--jf-fg-muted);
+
+	@include typo.jf-typo-body-small;
+}
+
+/* The "8 of 63" counter. Quieter than the heading it sits beside — it is a
+   footnote about the list, not a second heading. */
+.groupCount {
+	flex: 0 0 auto;
+	opacity: var(--jf-opacity-disabled);
+}
+
+.item {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single row; wrapping not intended */
+	display: flex;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+	padding: var(--jf-spacing-near);
+	cursor: pointer;
+	border-radius: var(--jf-radius-button);
+
+	/* Ark marks the keyboard-highlighted row; hover must paint the same way or
+	   the arrow keys and the pointer appear to disagree about what is selected. */
+	&[data-highlighted] {
+		background-color: var(--jf-surface-bg-raised);
+	}
+
+	/* stylelint-disable-next-line defensive-css/no-accidental-hover -- pointer-driven surface; the palette is not a touch target */
+	&:hover {
+		background-color: var(--jf-surface-bg-raised);
+	}
+}
+
+.itemIcon {
+	color: var(--jf-fg-muted);
+}
+
+.itemText {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single column; wrapping not intended */
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-inline-size: 0;
+}
+
+.itemDetail {
+	color: var(--jf-fg-muted);
+
+	@include typo.jf-typo-body-small;
+}
+
+.empty {
+	padding: var(--jf-spacing-far);
+	color: var(--jf-fg-muted);
+	text-align: center;
+}
+
+.footer {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+	padding: var(--jf-spacing-near);
+	color: var(--jf-fg-muted);
+	border-block-start: 1px solid var(--jf-border-subtle);
+
+	@include typo.jf-typo-body-small;
+}

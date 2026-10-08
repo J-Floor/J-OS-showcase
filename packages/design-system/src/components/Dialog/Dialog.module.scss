@@ -1,0 +1,98 @@
+@use "../../styles/animation" as anim;
+@use "../../styles/typography" as typo;
+
+.backdrop {
+	position: fixed;
+	inset: 0;
+
+	/* Ark mirrors the Content's stack index onto the Backdrop as `--layer-index`.
+	   Without that term every overlay resolves to the same 999 and the LAST one
+	   opened is not necessarily on top: a Dialog opened from inside a Drawer had
+	   its backdrop painted behind the Drawer, dimming the page but not the thing
+	   it was covering. Ported from EmboUI, which hit exactly this.
+
+	   `* 2` is the stride, and it is load-bearing. Backdrop-base (999) sits ONE
+	   below overlay-base (1000), so with a stride of 1 a layer's backdrop
+	   (999 + N+1) exactly tied the layer below it's content (1000 + N) and DOM
+	   order decided — the drawer, opened first, won and the dialog's backdrop
+	   fell behind it. A stride of 2 gives each layer its own 2-wide band, so a
+	   higher backdrop always clears the lower content. */
+	z-index: calc(
+		var(--jf-z-index-overlay-backdrop-base) + var(--layer-index, 0) * 2
+	);
+	background-color: var(--jf-surface-bg-scrim);
+	transition: opacity var(--jf-animation-duration-default) ease-in-out;
+
+	&[data-state="open"] {
+		opacity: 1;
+	}
+
+	&[data-state="closed"] {
+		opacity: 0;
+	}
+}
+
+.positioner {
+	position: fixed;
+	inset: 0;
+
+	/* The positioner is `position: fixed`, so it ALWAYS forms its own stacking
+	   context — whatever IT resolves to decides how the whole overlay stacks
+	   against sibling overlays in the portal root, no matter what `.content`
+	   says. Ark/zag mirrors the Content's computed z-index here as `--z-index`
+	   for exactly this purpose, so consume that and keep `.content` the single
+	   source of truth; the calc fallback only covers the first frame. */
+	z-index: var(
+		--z-index,
+		calc(var(--jf-z-index-overlay-base) + var(--layer-index, 0) * 2)
+	);
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row centering flex; wrapping not intended */
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: var(--jf-spacing-far);
+}
+
+.content {
+	position: relative;
+	z-index: calc(var(--jf-z-index-overlay-base) + var(--layer-index, 0) * 2);
+	gap: var(--jf-spacing-far);
+	inline-size: 100%;
+	max-inline-size: 32rem;
+	max-block-size: calc(100dvb - 2 * var(--jf-spacing-far));
+	padding: var(--jf-spacing-far);
+	/* stylelint-disable-next-line defensive-css/require-scrollbar-gutter -- intentional; gutter not needed here */
+	overflow-block: auto;
+	overscroll-behavior-block: contain;
+	color: var(--jf-fg-default);
+	background-color: var(--jf-surface-bg-base);
+	border-radius: var(--jf-radius-container);
+	box-shadow: var(--jf-shadow-surface-elevation);
+
+	@include typo.jf-typo-body-regular;
+	@include anim.popover-animation;
+
+	&[data-state="open"] {
+		flex-direction: column;
+	}
+}
+
+/* Pin the close IconButton to the top-trailing corner — it brings its own round
+   shape, hover and padding. */
+.close {
+	position: absolute;
+	inset-block-start: var(--jf-spacing-near);
+	inset-inline-end: var(--jf-spacing-near);
+}
+
+.title {
+	/* Keep the title clear of the close button. */
+	margin-inline-end: var(--jf-spacing-detached);
+	color: var(--jf-fg-strong);
+
+	@include typo.jf-typo-h5;
+}
+
+.description {
+	color: var(--jf-fg-muted);
+}

@@ -1,0 +1,55 @@
+.card {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-close);
+	padding: var(--jf-spacing-near);
+	cursor: grab;
+	background: var(--jf-surface-bg-base);
+	border: 1px solid var(--jf-border-subtle);
+	border-radius: var(--jf-radius-container);
+
+	/* stylelint-disable-next-line defensive-css/no-accidental-hover -- pointer-capable control; mobile accidental-hover not a concern */
+	&:hover {
+		border-color: var(--jf-border-strong);
+	}
+
+	&:active {
+		cursor: grabbing;
+	}
+}
+
+.pointer,
+.pointer:active {
+	cursor: pointer;
+}
+
+.title {
+	margin: 0;
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
+	font-size: 0.875rem;
+}
+
+.project,
+.assignees,
+.due {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: inline-flex;
+	gap: var(--jf-spacing-close);
+	align-items: center;
+	color: var(--jf-fg-muted);
+}
+
+.assignees {
+	flex-wrap: wrap;
+
+	> span {
+		gap: 0;
+	}
+}
+
+.meta {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+	margin-block-start: var(--jf-spacing-near);
+}

@@ -1,0 +1,6 @@
+.wrap {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-far);
+	align-items: flex-start;
+}

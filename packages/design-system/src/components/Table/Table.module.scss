@@ -1,0 +1,496 @@
+@use "../../styles/typography" as typo;
+@use "../../styles/utils" as utils;
+
+/* One table row's height: skeleton rows use it so the swap to real rows does
+   not shift the page. Mirrored by ESTIMATED_ROW_HEIGHT in Table.tsx (the
+   virtualiser's estimate) — change both together. */
+$row-height: 53px;
+
+/* The non-scrolling positioning context. Carries NO overflow of its own: only
+   one of this and `.scrollBox` may be a scroll container, and a scroll box
+   with nothing to scroll still ends a scroll chain once `overscroll-behavior`
+   tells it to contain one — a wheel over the table would move nothing and never
+   reach the page.
+
+   `block-size: 100%` passes a height the caller gives DOWN to `.scrollBox`,
+   and nothing else. A percentage against an auto-height parent resolves to
+   auto, so this is inert everywhere until some container actually has a
+   height — which is the condition a sticky header needs (see `.scrollBox`). */
+.tableWrapper {
+	position: relative;
+	display: block;
+	block-size: 100%;
+	max-block-size: 100%;
+
+	/* `clip`, NOT `auto`/`hidden`. Those make this a scroll container, and a
+	   scroll box with nothing to scroll still ends a scroll chain once
+	   `overscroll-behavior: contain` tells it to — a wheel over the table would
+	   move nothing and never reach the page. `clip` clips without creating a
+	   scrollport, so `.scrollBox` inside stays the only scroll container.
+	   Needed because this box still reports the table's full height as its own
+	   overflow even though the box inside it clips, which pushed 272px of empty
+	   space onto the page below the console. */
+	overflow: clip;
+	overscroll-behavior: contain;
+}
+
+.table {
+	inline-size: 100%;
+	table-layout: auto;
+	border-spacing: 0;
+	border-collapse: separate;
+
+	/* A focusable table (`role="grid"`) shows focus through its row ring, so
+	   the table box itself draws no outline. */
+	&:focus {
+		outline: none;
+	}
+
+	/* A focused grid with no ringed row (no `autofocusFirstRow`, nothing
+	   arrowed to yet) would otherwise show no focus at all. */
+	&:focus-visible:not(:has(tr[data-focused="true"])) {
+		outline: var(--jf-border-width-accessibility) solid
+			var(--jf-border-strong);
+		outline-offset: calc(-1 * var(--jf-border-width-accessibility));
+	}
+
+	& tr {
+		border-style: none;
+	}
+
+	& th,
+	& td {
+		padding: var(--jf-spacing-near);
+		text-align: start;
+	}
+
+	& thead {
+		block-size: 48px;
+		background-color: var(--jf-surface-bg-overlay);
+
+		& th {
+			vertical-align: middle;
+			color: var(--jf-fg-strong);
+			background-color: var(--jf-surface-bg-overlay);
+			border-block-end: 1px solid var(--jf-border-subtle);
+
+			@include typo.jf-typo-body-bold;
+		}
+	}
+
+	/* Above EVERY body cell, including the sticky actions column, which is
+	   itself stacked above the columns scrolling under it. The two used to be
+	   the other way round — the header at 1, the actions column at 2 — which
+	   never showed while the header was not really sticky. Once it stayed put,
+	   every row's triage buttons slid up and painted over it. */
+	&[data-sticky-header="true"] thead tr th {
+		position: sticky;
+		inset-block-start: 0;
+		z-index: 2;
+	}
+
+	& tbody {
+		& tr.clickable {
+			cursor: pointer;
+
+			@media (hover: hover) {
+				&:hover {
+					background-color: var(--jf-surface-bg-raised);
+				}
+			}
+		}
+
+		& tr[data-state="selected"] {
+			background-color: var(--jf-surface-bg-sunken);
+		}
+
+		/* The focus ring. An inset box-shadow rather than a border: a border
+		   changes the row's height and every row below it shifts by a pixel as
+		   the ring moves, which reads as the table twitching. */
+		& tr[data-focused="true"] {
+			/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- literal box-shadow offsets (0 0 0), no design token for shadow geometry; only the width and colour are tokens */
+			box-shadow: inset 0 0 0 var(--jf-border-width-accessibility)
+				var(--jf-border-strong);
+
+			& td {
+				color: var(--jf-fg-strong);
+
+				@include typo.jf-typo-body-bold;
+			}
+
+			/* Windows High Contrast drops box-shadow, and the table itself draws no
+			   outline, so the ring would vanish. A system-colour outline survives;
+			   the negative offset keeps it inside the row so nothing shifts. */
+			@media (forced-colors: active) {
+				outline: var(--jf-border-width-accessibility) solid CanvasText;
+				outline-offset: calc(-1 * var(--jf-border-width-accessibility));
+			}
+		}
+
+		& td {
+			color: var(--jf-fg-default);
+			border-block-end: 1px solid var(--jf-border-subtle);
+
+			@include typo.jf-typo-body-regular;
+		}
+	}
+}
+
+.th {
+	white-space: nowrap;
+}
+
+.headerCell {
+	display: flex;
+	flex-flow: row nowrap;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+	justify-content: space-between;
+	color: var(--jf-fg-strong);
+}
+
+.headerLabel {
+	flex: 1 1 auto;
+}
+
+.headerActions {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: var(--jf-spacing-close);
+	align-items: center;
+	justify-content: end;
+}
+
+.selectCell {
+	align-items: center;
+	justify-content: center;
+	inline-size: 48px;
+	min-inline-size: 48px;
+	max-inline-size: 48px;
+	text-align: center;
+	user-select: none;
+}
+
+/* Zero the select column's horizontal cell padding so its content centres on
+   the column's true centre (24px). Otherwise the header's 48px select span
+   starts after the th's left padding and the header checkbox drifts right of
+   the row checkboxes and the group expand indicator. */
+.table th:has(.selectCell),
+.table td.selectCell {
+	padding-inline: 0;
+}
+
+/* Body select checkbox: the Checkbox root is a flex block, so `text-align` on
+   the cell won't centre it (the header centres via its flex `.headerCell` span).
+   Auto inline margins centre it in the cell to line up with the header one. */
+.selectCheckbox {
+	margin-inline: auto;
+}
+
+.empty {
+	padding: var(--jf-spacing-far);
+	color: var(--jf-fg-muted);
+	text-align: center;
+}
+
+/* Trailing per-row action column — pinned to the inline-end edge so the buttons
+   stay visible while the rest of the columns scroll under it (in `.scrollBox`,
+   or any horizontally-overflowing wrapper). On a table that fits its container
+   there's no scroll, so this is a harmless no-op that just sits at the edge.
+   An opaque background + a leading divider keep the scrolling cells from
+   bleeding through underneath. */
+.actionsCell {
+	position: sticky;
+	inset-inline-end: 0;
+
+	/* Above the columns that scroll beneath it, below the sticky header that
+	   the whole row scrolls beneath. */
+	z-index: 1;
+	background-color: var(--jf-surface-bg-base);
+	border-inline-start: 1px solid var(--jf-border-subtle);
+
+	/* Lift the pinned column above the columns scrolling beneath it. */
+	@include utils.shadow-inline-start;
+}
+
+/* Header actions cell stacks above both sticky axes (top + end).
+   Carries the `[data-sticky-header]` attribute too, so it outranks the rule
+   that stickies the header row: without it that rule (class + attribute + three
+   elements) wins over this one and the corner cell falls back to the header's
+   own level, left to DOM order to save it. */
+.table[data-sticky-header="true"] thead th.actionsCell,
+.table thead th.actionsCell {
+	z-index: 3;
+	background-color: var(--jf-surface-bg-overlay);
+}
+
+/* Match the pinned cell's fill to the row's hover/selected tint so it doesn't
+   read as a detached strip. */
+/* stylelint-disable-next-line defensive-css/no-accidental-hover -- pointer-capable control; mobile accidental-hover not a concern */
+.table tbody tr.clickable:hover .actionsCell {
+	background-color: var(--jf-surface-bg-raised);
+}
+
+.table tbody tr[data-state="selected"] .actionsCell {
+	background-color: var(--jf-surface-bg-sunken);
+}
+
+/* Grouping — ONE table. The header, the group-header rows and the data rows
+   share a single `<colgroup>` (`.grouped` = `table-layout: fixed`), so columns
+   line up inherently and the trailing actions column can be sticky (no
+   intermediate `overflow:hidden` to trap it). The table keeps its definite px
+   width (`groupedStyle()`); no `min-width:100%` floor, so columns hold their
+   exact widths instead of stretching (which used to widen the 48px select
+   column and break checkbox alignment when the table was narrower than the
+   wrapper). A narrow table simply leaves slack to its right. */
+
+/* The scrolling box, and so the box a sticky header sticks to. Used by BOTH the
+   grouped and the ungrouped (flat) table branches — every table needs one.
+   Scrolling in the inline axis makes this a scroll container in BOTH axes —
+   there is no way to have `overflow-x: auto` with a visible block axis — which
+   is what moves the sticky header's reference from the page to here. That was
+   the bug: the header was `position: sticky` and correct, but stuck to a box
+   whose block size grew with its content, so it had no scroll range to stick
+   through and simply scrolled away with the page.
+   `block-size: 100%` is the other half. Inert while the ancestors are
+   auto-height; once a caller bounds them the table scrolls inside this box and
+   the header stays put. */
+.scrollBox {
+	max-inline-size: 100%;
+	block-size: 100%;
+	/* stylelint-disable-next-line defensive-css/require-overscroll-behavior, defensive-css/require-scrollbar-gutter -- intentional for this scroll container */
+	overflow-inline: auto;
+}
+
+.grouped {
+	/* Definite width so `table-layout: fixed` engages and the table fills the
+	   wrapper; the spacer `<col>` (width:auto) soaks up any slack. */
+	inline-size: 100%;
+	table-layout: fixed;
+}
+
+/* `table-layout: fixed` gives columns a definite width; a long unbreakable
+   string (email, URL) would otherwise spill past its cell. Let it wrap. */
+.grouped th,
+.grouped td {
+	overflow-wrap: anywhere;
+}
+
+/* Flexible spacer `<col>` placed just before the trailing actions column;
+   `inline-size: auto` lets it absorb slack when the table is narrower than its
+   wrapper and collapse to 0 on overflow (see ColGroup in Table.tsx). */
+.spacerCol {
+	inline-size: auto;
+}
+
+/* Flexible gap column before the sticky actions column — no content, just
+   carries the row's bottom border so the divider line stays continuous. */
+.spacerCell {
+	padding: 0;
+	border-block-end: 1px solid var(--jf-border-subtle);
+}
+
+.groupCount {
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this font-weight value */
+	font-weight: 400;
+	color: var(--jf-fg-muted);
+}
+
+/* Group-header row: spans every column, reads like a sub-header. A 16px
+   transparent top border opens a gap above each group; `background-clip:
+   padding-box` keeps the overlay fill out of that border so the real page
+   background shows through (correct in light AND dark — the page uses the UA
+   `color-scheme` canvas, not a surface token). */
+.groupRow td.groupCell {
+	padding: 0;
+	background-color: var(--jf-surface-bg-overlay);
+	background-clip: padding-box;
+	border-block-start: 16px solid transparent;
+	border-block-end: 1px solid var(--jf-border-subtle);
+}
+
+.groupToggle {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+	inline-size: 100%;
+	padding-block: var(--jf-spacing-near);
+	padding-inline: var(--jf-spacing-near);
+	color: var(--jf-fg-strong);
+	text-align: start;
+	cursor: pointer;
+	background: transparent;
+	border: none;
+
+	@include typo.jf-typo-body-bold;
+}
+
+/* When selection is on, centre the expand indicator in a 48px lane so it shares
+   the vertical line of the header + row checkboxes (which sit in the 48px select
+   column with zeroed horizontal padding). */
+.groupToggleSelectable {
+	padding-inline-start: 0;
+}
+
+.groupIndicator {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: inline-flex;
+	align-items: center;
+	color: var(--jf-fg-muted);
+
+	.groupToggleSelectable & {
+		flex: 0 0 48px;
+		justify-content: center;
+	}
+}
+
+/* Batch actions bar — floating centred pill that scale-animates in.
+   Anchored to the viewport (not the table wrapper) so it stays visible when the
+   table overflows below the fold. Embo anchors it `absolute` to the wrapper,
+   which hides the bar once the table is taller than the viewport; `fixed` keeps
+   it pinned to the bottom-centre of the screen instead. Safe here: no ancestor
+   establishes a transform/filter containing block. */
+.batchActions {
+	position: fixed;
+	inset-block-end: var(--jf-spacing-away);
+	inset-inline-start: 50%;
+	z-index: 10;
+	display: inline-flex;
+	flex-wrap: nowrap;
+	gap: var(--jf-spacing-far);
+	align-items: center;
+	padding: var(--jf-spacing-near);
+	color: var(--jf-fg-strong);
+	background: var(--jf-surface-bg-base);
+	border-radius: var(--jf-radius-container);
+	box-shadow: var(--jf-shadow-surface-elevation);
+	transform: translateX(-50%) scale(0);
+	transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+	@include typo.jf-typo-body-bold;
+
+	&.visible {
+		transform: translateX(-50%) scale(1);
+	}
+}
+
+.selectedCount {
+	white-space: nowrap;
+}
+
+/* Sorting/filtering buttons */
+.filterButton {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: var(--jf-spacing-close);
+	color: var(--jf-fg-muted);
+	cursor: pointer;
+	background: transparent;
+	border: none;
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this radius value */
+	border-radius: 6px;
+
+	/* stylelint-disable-next-line defensive-css/no-accidental-hover -- pointer-capable control; mobile accidental-hover not a concern */
+	&:hover {
+		background-color: var(--jf-surface-bg-raised);
+	}
+}
+
+/* Tooltip-trigger wrapper around the filter button — tight box so the tooltip
+   anchors exactly over the button (separate element from the popover trigger). */
+.filterTrigger {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: inline-flex;
+}
+
+/* Sort button + multi-sort order badge tucked into its bottom-right corner. */
+.sortWrap {
+	position: relative;
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: inline-flex;
+}
+
+.sortOrder {
+	position: absolute;
+
+	/* Negative inset: the Material glyph isn't flush to its em-box edges, so
+	   nudge it into the true corner of the button background. */
+	inset-block-end: -2px;
+	inset-inline-end: -2px;
+	display: block;
+	line-height: 0;
+	color: var(--jf-fg-strong);
+	pointer-events: none;
+}
+
+/* Override the header cell's typography `[data-icon]` size (which otherwise
+   makes the badge full-size). Extra class raises specificity above it. */
+.sortWrap .sortOrder [data-icon] {
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this font-size value */
+	font-size: 12px;
+}
+
+/* Active filter/sort — white pill stands out against the grey header fill */
+.active,
+.sortActive {
+	color: var(--jf-fg-strong);
+	background-color: var(--jf-surface-bg-base);
+	border-radius: var(--jf-radius-container);
+}
+
+/* Filter popover body */
+.filterBody {
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-near);
+	min-inline-size: 200px;
+}
+
+.filterTitle {
+	margin: 0;
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this font-weight value */
+	font-weight: 700;
+	color: var(--jf-fg-strong);
+	text-align: start;
+}
+
+.enumOptions {
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-near);
+}
+
+/* Loading placeholders — `<tr>`s inside a real `<tbody>`, sized to match the
+   real rows they stand in for ($row-height) so the swap from skeleton to
+   content does not shift the page. */
+.skeletonRow {
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value */
+	block-size: $row-height;
+
+	td {
+		padding-inline: var(--jf-spacing-near);
+		vertical-align: middle;
+	}
+}
+
+/* Standalone table-shaped skeleton (TableSkeleton) for places with no <table>
+   element to hang real <tr>s off yet. */
+.skeletonTable {
+	display: flex;
+	flex-direction: column;
+}
+
+.skeletonTableRow {
+	display: grid;
+	grid-auto-flow: column;
+	grid-auto-columns: 1fr;
+	align-items: center;
+	gap: var(--jf-spacing-far);
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value */
+	block-size: $row-height;
+	padding-inline: var(--jf-spacing-near);
+	border-block-end: 1px solid var(--jf-border-subtle);
+}

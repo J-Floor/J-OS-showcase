@@ -1,0 +1,52 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "agentGuidance": false,
+  "globalDependencies": ["bunfig.toml", "**/bunfig.toml"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"],
+      "env": ["VITE_CONVEX_URL", "VITE_CONVEX_SITE_URL", "VITE_RECAPTCHA_SITE_KEY", "VITE_VAPID_PUBLIC_KEY"]
+    },
+    "build:demo": { "outputs": ["demo/dist/**"] },
+    "dev": { "cache": false, "persistent": true },
+    "lint": {
+      "outputs": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/config-eslint/**",
+        "$TURBO_ROOT$/packages/config-stylelint/**"
+      ]
+    },
+    "lint:logic": {
+      "outputs": [],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/config-eslint/**"]
+    },
+    "lint:style": {
+      "outputs": [],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/config-stylelint/**"]
+    },
+    "lint:style:ci": {
+      "outputs": [],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/config-stylelint/**"]
+    },
+    "typecheck": { "outputs": [] },
+    "test": { "outputs": [] },
+    "format": { "outputs": [] },
+    "email:check": {
+      "outputs": [],
+      "inputs": ["package.json", "emails/**", "convex/emails/generated/**"]
+    },
+    "agreements:check": {
+      "outputs": [],
+      "inputs": [
+        "package.json",
+        "agreements/build.ts",
+        "agreements/**",
+        "src/modules/inventory/print/letterhead.*",
+        "public/agreements/**",
+        "convex/agreements/generated/**"
+      ]
+    }
+  }
+}

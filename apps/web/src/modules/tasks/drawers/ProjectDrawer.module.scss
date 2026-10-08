@@ -1,0 +1,39 @@
+.nameInput {
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
+	font-weight: 600;
+}
+
+.dateRow {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+}
+
+.currentDate {
+	color: var(--jf-fg-muted);
+}
+
+.description {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-close);
+	margin-block-start: var(--jf-spacing-near);
+}
+
+.tasks {
+	margin-block-start: var(--jf-spacing-far);
+
+	& ul {
+		display: flex;
+		flex-flow: column nowrap;
+		gap: var(--jf-spacing-near);
+		padding: 0;
+		margin-block-start: var(--jf-spacing-near);
+		list-style: none;
+	}
+}
+
+.empty {
+	color: var(--jf-fg-muted);
+}

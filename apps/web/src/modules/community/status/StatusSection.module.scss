@@ -1,0 +1,50 @@
+/* Values are plain text on the same baseline as their label — a row of pills
+   gave every line a different height and pushed the values off that baseline.
+   Colour comes from the `Status` wrapper's var, so there is no status list
+   duplicated here; "neutral" resolves to the default foreground. */
+.value {
+	color: var(--jf-status-fg);
+}
+
+/* Task label and its Done button share the row's value slot. A long label wraps
+   above the button rather than squeezing it. */
+.task {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+	justify-content: space-between;
+	inline-size: 100%;
+}
+
+/* The "Signed" value, as a control. Styled to read as a link rather than a
+   button: it sits inline in a column of plain values, and a button chrome there
+   would make one line taller than the rest — the exact thing `.value` above
+   exists to avoid. Keeps the status colour, so a signed agreement stays green.
+
+   It is a <button>, not an <a>: there is no href to give it. The URL is a signed
+   storage link minted on demand, so the destination does not exist until the
+   click has already happened. */
+.link {
+	padding: 0;
+	color: var(--jf-status-fg);
+	text-decoration: underline;
+	cursor: pointer;
+	background: none;
+	border: none;
+
+	&:disabled {
+		cursor: default;
+		opacity: var(--jf-opacity-disabled);
+	}
+
+	/* stylelint-disable-next-line defensive-css/no-accidental-hover -- pointer-capable control; the underline is already the affordance on touch */
+	&:hover:not(:disabled) {
+		text-decoration-thickness: var(--jf-border-width-interactive);
+	}
+
+	&:focus-visible {
+		outline: var(--jf-border-strong) solid 2px;
+		outline-offset: 2px;
+	}
+}

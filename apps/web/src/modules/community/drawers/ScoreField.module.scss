@@ -1,0 +1,14 @@
+/* Holds the score field so its "0–9" peek chip can sit in the top corner —
+   clear of the +/- steppers on the input's trailing edge below. */
+.field {
+	position: relative;
+}
+
+/* The score field's "0–9" peek chip (a Kbd label), parked by the label. The
+   inline Kbd renders only while peeking (Alt), matching the roster's cell. */
+.kbd {
+	position: absolute;
+	inset-block-start: 0;
+	inset-inline-end: 0;
+	pointer-events: none;
+}

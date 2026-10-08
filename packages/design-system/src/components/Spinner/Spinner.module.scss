@@ -1,0 +1,22 @@
+.spinner {
+	--jf-spinner-size: var(--jf-spacing-far);
+
+	display: inline-block;
+	inline-size: var(--jf-spinner-size);
+	block-size: var(--jf-spinner-size);
+	vertical-align: middle;
+	border: 2px solid var(--jf-border-subtle);
+	border-block-start-color: var(--jf-fg-muted);
+	border-radius: 50%;
+	animation: jf-spinner-spin 0.8s linear infinite;
+}
+
+@keyframes jf-spinner-spin {
+	from {
+		transform: rotate(0deg);
+	}
+
+	to {
+		transform: rotate(360deg);
+	}
+}

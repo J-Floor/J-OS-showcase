@@ -1,0 +1,84 @@
+.screen {
+	display: grid;
+	place-items: start center;
+	min-block-size: 100dvb;
+	padding: var(--jf-spacing-far);
+	background-color: var(--jf-surface-bg-base);
+}
+
+.card {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-detached);
+	align-items: stretch;
+	inline-size: 100%;
+	max-inline-size: 32rem;
+}
+
+.logo {
+	align-self: center;
+	font-size: var(--jf-dimension-logo-md);
+}
+
+/* Heading sits between the centred logo and intro, so centre it too. */
+.card > h1 {
+	margin: 0;
+	text-align: center;
+}
+
+.intro {
+	margin: 0;
+	color: var(--jf-fg-muted);
+	text-align: center;
+}
+
+.form {
+	display: flex;
+	flex-direction: column;
+
+	/* Between `close` and `detached`: roomier than close, less than the section
+	   gaps. */
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
+	gap: calc((var(--jf-spacing-close) + var(--jf-spacing-detached)) / 2);
+}
+
+/* Two-up rows that collapse to one column on narrow screens. Same gap as the
+   form so stacked fields (on phones) match the spacing of every other field. */
+.row {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
+	gap: calc((var(--jf-spacing-close) + var(--jf-spacing-detached)) / 2);
+
+	@media (width <= 32rem) {
+		grid-template-columns: 1fr;
+	}
+}
+
+.banner {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+	padding: var(--jf-spacing-near);
+	color: var(--jf-error-fg);
+	background-color: var(--jf-error-bg);
+	border-radius: var(--jf-radius-button);
+}
+
+.submit {
+	inline-size: 100%;
+}
+
+.thanks {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-detached);
+	align-items: center;
+	text-align: center;
+}
+
+.celebration[data-icon] {
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
+	font-size: 3rem;
+}

@@ -1,0 +1,101 @@
+@use "@j-os/design-system/breakpoints" as bp;
+@use "../../../styles/marketing-type" as mkt;
+
+// Last block of the live footer: 120px below the ticker, 120px between the
+// wordmark and the credits, 32px page inset.
+.footer {
+	--block-gap: 120px;
+
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--block-gap);
+	padding: var(--block-gap) var(--jf-spacing-distant)
+		var(--jf-spacing-distant);
+
+	@include bp.phone {
+		padding-inline: var(--jf-spacing-far);
+	}
+}
+
+// The live wordmark is an SVG contained in a 1376×306 box at full width.
+.wordmark {
+	inline-size: 100%;
+	block-size: auto;
+	aspect-ratio: 1376 / 306;
+	object-fit: contain;
+}
+
+.credits {
+	--credits-gap: 4px;
+
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--credits-gap);
+	align-items: flex-start;
+}
+
+// Azeret Mono 20/28: the label in off-white, the name in the pill grey.
+.designedBy {
+	--credit-size: 1.25rem;
+	--credit-weight: 400;
+	--credit-line-height: 1.4;
+	--credit-gap: 12px;
+
+	display: inline-flex;
+	flex-wrap: wrap;
+	gap: var(--credit-gap);
+	align-items: center;
+	margin: 0;
+	color: mkt.$fg;
+	font-family: var(--jf-typography-mono);
+	font-size: var(--credit-size);
+	font-weight: var(--credit-weight);
+	line-height: var(--credit-line-height);
+
+	span {
+		font-family: inherit;
+	}
+}
+
+.designerLink {
+	--designer-grey: rgb(134 131 130);
+	--designer-line-height: 1.2;
+
+	color: var(--designer-grey);
+	line-height: var(--designer-line-height);
+	text-decoration: none;
+}
+
+// nemu & co. button: a 188×88 box (23/24 padding) whose grey-700 fill fades in
+// on hover — the live resting state is that fill at zero alpha.
+.nemu {
+	--nemu-radius: 12px;
+	--nemu-width: 188px;
+	--nemu-height: 88px;
+	--nemu-rest: rgb(60 59 59 / 0%);
+
+	display: inline-flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	justify-content: center;
+	inline-size: var(--nemu-width);
+	block-size: var(--nemu-height);
+	border-radius: var(--nemu-radius);
+	background-color: var(--nemu-rest);
+	/* stylelint-disable-next-line plugin/no-low-performance-animation-properties -- small hover fill on one button, as on the live site */
+	transition: background-color var(--jf-animation-duration-default) ease;
+
+	@media (hover: hover) {
+		&:hover {
+			background-color: var(--core-grey-700);
+		}
+	}
+
+	&:focus-visible {
+		background-color: var(--core-grey-700);
+	}
+}
+
+.nemuLogo {
+	display: block;
+}

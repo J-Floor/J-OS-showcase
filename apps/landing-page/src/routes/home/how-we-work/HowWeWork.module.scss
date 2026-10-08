@@ -1,0 +1,77 @@
+@use "@j-os/design-system/typography" as typo;
+@use "@j-os/design-system/breakpoints" as bp;
+
+.section {
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-detached);
+	padding: var(--jf-spacing-detached);
+	background-color: var(--core-grey-950);
+	color: var(--jf-fg-default);
+
+	@include bp.phone {
+		padding: var(--jf-spacing-away);
+	}
+}
+
+.header {
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-near);
+}
+
+.heading {
+	margin: 0;
+	font-family: var(--jf-typography-mono);
+
+	@include typo.jf-typo-h2;
+}
+
+.subheading {
+	margin: 0;
+	color: var(--core-grey-400);
+
+	@include typo.jf-typo-body-regular;
+}
+
+.cards {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--jf-spacing-away);
+
+	@include bp.phone {
+		flex-direction: column;
+	}
+}
+
+.card {
+	display: flex;
+	flex: 1 1 16rem;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-near);
+	padding: var(--jf-spacing-distant);
+	background-color: var(--core-grey-900);
+	border: 1px solid var(--core-grey-800);
+	border-radius: var(--jf-radius-floating-container);
+}
+
+.eyebrow {
+	color: var(--core-grey-500);
+	font-family: var(--jf-typography-mono);
+	text-transform: uppercase;
+
+	@include typo.jf-typo-body-small;
+}
+
+.title {
+	margin: 0;
+
+	@include typo.jf-typo-h4;
+}
+
+.body {
+	margin: 0;
+	color: var(--core-grey-300);
+
+	@include typo.jf-typo-body-regular;
+}

@@ -1,0 +1,65 @@
+@use "../../../shared/cards" as cards;
+@use "@j-os/design-system/typography" as typo;
+
+/* The tab owns the scrolling, not the shell: the other three panels are tables
+   that scroll internally, so the panel they share is a fixed-height flex item
+   with no scroll range of its own. */
+.tab {
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-away);
+	flex: 1;
+	min-block-size: 0;
+	padding-block: var(--jf-spacing-far);
+
+	/* stylelint-disable-next-line defensive-css/require-scrollbar-gutter -- the shell's own gutter applies; a second one double-insets the grid */
+	overflow-block: auto;
+	overscroll-behavior-block: contain;
+}
+
+.tiles {
+	display: grid;
+	gap: var(--jf-spacing-near);
+
+	/* Tiles pack themselves: one column on a phone, as many as fit after that.
+	   No breakpoint list to keep in step with a tile count that changes every
+	   time a metric is added. */
+	grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+}
+
+.charts {
+	display: grid;
+	gap: var(--jf-spacing-far);
+
+	/* Wide enough that a twelve-category axis is legible; below that, one per
+	   row rather than two cramped ones. */
+	grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+}
+
+.card {
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-near);
+	margin: 0;
+	padding: var(--jf-spacing-far);
+
+	@include cards.card-surface;
+}
+
+.cardTitle {
+	@include typo.jf-typo-body-bold;
+
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-close);
+	color: var(--jf-fg-strong);
+}
+
+/* The sentence that stops a chart being misread. Every one of these earns its
+   place — "arrivals, not net growth" is the difference between a true reading
+   and a false one. */
+.cardHint {
+	@include typo.jf-typo-body-small;
+
+	color: var(--jf-fg-muted);
+}

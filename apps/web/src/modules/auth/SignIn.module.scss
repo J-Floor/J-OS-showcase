@@ -1,0 +1,50 @@
+.screen {
+	display: grid;
+	place-items: center;
+	min-block-size: 100dvb;
+	padding: var(--jf-spacing-far);
+	background-color: var(--jf-surface-bg-base);
+}
+
+.card {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-detached);
+	align-items: stretch;
+	inline-size: 100%;
+	max-inline-size: 22rem;
+	text-align: center;
+}
+
+.logo {
+	align-self: center;
+	font-size: var(--jf-dimension-logo-md);
+}
+
+.subtitle {
+	margin: 0;
+	color: var(--jf-fg-muted);
+}
+
+.form {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-close);
+	text-align: start;
+}
+
+.submit {
+	inline-size: 100%;
+}
+
+.apply {
+	inline-size: 100%;
+	margin-block-start: var(--jf-spacing-far);
+}
+
+.confirmation {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-detached);
+	align-items: center;
+}

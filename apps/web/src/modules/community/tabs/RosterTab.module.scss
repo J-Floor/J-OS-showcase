@@ -1,0 +1,16 @@
+/* The drawer footer stacks a lead slot (the Applications score field) above the
+   decision buttons. `flex: 1` so it fills the footer's width — Drawer.Footer is a
+   right-aligned flex row, and without this the column would hug the right edge. */
+.footer {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+}
+
+.footerActions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--jf-spacing-near);
+	justify-content: flex-end;
+}

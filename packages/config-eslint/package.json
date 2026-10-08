@@ -1,0 +1,21 @@
+{
+  "name": "@j-os/config-eslint",
+  "version": "0.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "format": "prettier --write \"*.{js,ts,tsx}\" --ignore-path ../../.prettierignore"
+  },
+  "devDependencies": {
+    "@eslint-community/eslint-plugin-eslint-comments": "catalog:",
+    "@eslint/js": "catalog:",
+    "eslint": "catalog:",
+    "eslint-config-prettier": "catalog:",
+    "eslint-import-resolver-typescript": "catalog:",
+    "eslint-plugin-import-x": "catalog:",
+    "eslint-plugin-solid": "catalog:",
+    "eslint-plugin-unused-imports": "catalog:",
+    "typescript-eslint": "catalog:"
+  }
+}

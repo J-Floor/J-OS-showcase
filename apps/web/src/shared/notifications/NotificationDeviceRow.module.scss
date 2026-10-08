@@ -1,0 +1,15 @@
+@use "@j-os/design-system/typography" as typo;
+
+.row {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-close);
+	padding-block-end: var(--jf-spacing-far);
+}
+
+.error {
+	@include typo.jf-typo-body-small;
+
+	margin: 0;
+	color: var(--jf-fg-strong);
+}

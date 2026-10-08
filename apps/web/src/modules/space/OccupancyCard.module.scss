@@ -1,0 +1,49 @@
+@use "@j-os/design-system/typography" as typo;
+
+.gauge {
+	position: relative;
+	inline-size: max-content;
+}
+
+.row {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: var(--jf-spacing-near);
+
+	[data-icon] {
+		/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
+		font-size: 40px;
+	}
+}
+
+/* Base layer (muted) is the first .row child of the gauge. */
+.gauge > .row {
+	color: var(--jf-fg-subtle);
+}
+
+/* Fill layer: same icons, colored, clipped to a left-anchored width. */
+.fill {
+	position: absolute;
+	inset-block-start: 0;
+	inset-inline-start: 0;
+	overflow: hidden;
+	color: var(--jf-fg-strong);
+
+	.row {
+		inline-size: max-content;
+	}
+}
+
+/* Gauge + its Low/Medium/High label, stacked and centered. */
+.readout {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--jf-spacing-near);
+}
+
+.level {
+	@include typo.jf-typo-body-small;
+
+	color: var(--jf-fg-muted);
+}

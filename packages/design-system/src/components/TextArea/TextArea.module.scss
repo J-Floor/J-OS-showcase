@@ -1,0 +1,25 @@
+.textarea {
+	inline-size: 100%;
+	min-block-size: 6rem;
+	padding: var(--jf-spacing-near);
+	font: inherit;
+	color: var(--jf-fg-strong);
+	resize: block;
+	background-color: var(--jf-status-bg);
+	border: none;
+	border-radius: var(--jf-radius-button);
+
+	&:focus {
+		outline-style: solid;
+		outline-color: var(--jf-fg-strong);
+	}
+
+	&[data-invalid] {
+		outline-style: solid;
+		outline-color: var(--jf-error-fg);
+	}
+
+	&::placeholder {
+		color: var(--jf-fg-muted);
+	}
+}

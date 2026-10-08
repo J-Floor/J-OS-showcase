@@ -1,0 +1,86 @@
+@use "@j-os/design-system/typography" as typo;
+
+.notes {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+}
+
+.empty {
+	@include typo.jf-typo-body-small;
+
+	margin: 0;
+	color: var(--jf-fg-muted);
+}
+
+.thread {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.entry {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: var(--jf-spacing-close);
+	align-items: flex-start;
+}
+
+.avatar {
+	margin-block-start: var(--jf-spacing-close);
+}
+
+.entryBody {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: var(--jf-spacing-close);
+	min-inline-size: 0;
+}
+
+.meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--jf-spacing-close);
+	align-items: baseline;
+}
+
+.author {
+	@include typo.jf-typo-body-bold;
+}
+
+.time {
+	@include typo.jf-typo-body-small;
+
+	color: var(--jf-fg-muted);
+}
+
+.text {
+	@include typo.jf-typo-body-regular;
+
+	margin: 0;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.composer {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-close);
+	align-items: stretch;
+}
+
+// Its own row so the button stays put. Aligning the button directly
+// (`align-self`) broke when it toggled disabled↔enabled: the disabled Button
+// wraps itself in a tooltip span for its reason, so the flex child alternated
+// between the span (stretched full width, button left) and the bare button
+// (right) — the button appeared to jump side to side on every keystroke. A row
+// that right-aligns whatever child it holds is stable across both.
+.composerActions {
+	display: flex;
+	flex-wrap: nowrap;
+	justify-content: flex-end;
+}

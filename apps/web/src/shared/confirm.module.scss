@@ -1,0 +1,8 @@
+/* Dialog footer: right-aligned action row. */
+.footer {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	gap: var(--jf-spacing-near);
+	justify-content: flex-end;
+	margin-block-start: var(--jf-spacing-near);
+}

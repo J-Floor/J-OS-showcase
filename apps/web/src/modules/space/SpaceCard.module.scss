@@ -1,0 +1,76 @@
+@use "../../shared/cards" as cards;
+@use "@j-os/design-system/typography" as typo;
+
+.card {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-far);
+	padding: var(--jf-spacing-away);
+
+	@include cards.card-surface($bordered: true);
+}
+
+/* The header is one block (title row + optional subtitle), so the subtitle
+   sits `near` the title while the card's larger `gap` separates the whole
+   header from the body. */
+.header {
+	display: block;
+}
+
+.titleRow {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: var(--jf-spacing-near);
+	align-items: flex-start;
+	justify-content: space-between;
+}
+
+.title {
+	margin: 0;
+	font: inherit;
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
+	font-weight: 600;
+}
+
+/* Help icon + header action, kept together at the row's end. */
+.trailing {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+}
+
+.help {
+	color: var(--jf-fg-muted);
+	cursor: help;
+}
+
+.subtitle {
+	margin: 0;
+	margin-block-start: var(--jf-spacing-near);
+	color: var(--jf-fg-muted);
+
+	@include typo.jf-typo-body-small;
+}
+
+.body {
+	display: flex;
+	flex-wrap: nowrap;
+	flex: 1;
+	align-items: center;
+	justify-content: center;
+	min-block-size: 6rem;
+	color: var(--jf-fg-strong);
+
+	/* Size only the default centered icon (a direct child). A descendant
+	   selector here also caught icons inside custom children — e.g. the
+	   door icon in UnlockCard's buttons rendered at 48px. */
+	> [data-icon] {
+		/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
+		font-size: 48px;
+	}
+}
+
+.action {
+	inline-size: 100%;
+}

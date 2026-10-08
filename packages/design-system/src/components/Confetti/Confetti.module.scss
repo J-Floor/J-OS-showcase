@@ -1,0 +1,6 @@
+/* Wrapper must have a box (not display:contents) so its rect can anchor the
+   burst; inline-flex shrink-wraps to the wrapped control. */
+.origin {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: inline-flex;
+}

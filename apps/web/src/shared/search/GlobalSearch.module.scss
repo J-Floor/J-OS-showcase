@@ -1,0 +1,63 @@
+@use "@j-os/design-system/breakpoints" as bp;
+
+/* Centred in the header, and capped so it does not crowd the breadcrumb or the
+   actions on a narrow window.
+
+   Basis 0, not `auto`: the field takes only what the heading and the actions
+   leave, up to 22rem, so as the bar narrows it is the FIELD that gives way.
+   With an `auto` basis the 22rem field and the heading shrank in proportion,
+   and "community" ellipsed beside a field with room to spare. The auto margins
+   still centre it once it has reached its cap. */
+.field {
+	flex: 1 1 0;
+	max-inline-size: 22rem;
+	margin-inline: auto;
+}
+
+/* One of these two is on screen at a time — the full field, or the icon that
+   opens the same palette. They swap when the bar itself gets too narrow for
+   the field (`topbar-search-collapsed`), whatever the window's width. */
+.compact {
+	display: none;
+}
+
+@include bp.topbar-search-collapsed {
+	.field {
+		display: none;
+	}
+
+	.compact {
+		/* No auto margin to push it right: the heading beside it grows
+		   (Breadcrumbs.module.scss) and already eats the slack. An auto margin
+		   here ADDED to the header's own gap, so the space before the search
+		   glyph was wider than the gaps between the icons. */
+		/* stylelint-disable-next-line defensive-css/require-flex-wrap -- one glyph; there is nothing to wrap */
+		display: inline-flex;
+	}
+}
+
+/* One name, moved between the header control (closed) and the palette (open)
+   so the View Transition morphs one into the other. */
+.morph {
+	view-transition-name: global-search;
+}
+
+/* The header control while the palette is open. `visibility`, not `display`:
+   the header keeps its layout, so nothing beside the field shifts. */
+.hiddenWhileOpen {
+	visibility: hidden;
+}
+
+/* While a View Transition is doing the animating, the dialog's own pop-in
+   would play inside the morph and double it. Keep it only where the morph
+   does not run. The DS `popover-animation` mixin animates with TRANSITIONS
+   (opacity + transform), not keyframes, so that is what is nulled. The class
+   is doubled so the selector (0,3,0) out-ranks the mixin's
+   `.content[data-state="closed"]` (0,2,0) regardless of CSS order. */
+@supports (view-transition-name: none) {
+	@media (prefers-reduced-motion: no-preference) {
+		.palette.palette[data-state] {
+			transition: none;
+		}
+	}
+}

@@ -1,0 +1,116 @@
+@use "@j-os/design-system/breakpoints" as bp;
+
+.board {
+	position: relative;
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: var(--jf-spacing-far);
+	align-items: start;
+
+	/* Fill the area so there's empty board space (below/around the columns) to
+	   start a marquee selection from. */
+	min-block-size: 70vb;
+	user-select: none;
+
+	/* Phone: one column above the next. Three lanes across 390px leaves ~110px
+	   each, which is narrower than a task card's own padding plus two words —
+	   every title broke one word per line and a three-word task was as tall as
+	   the screen.
+	   Stacking loses the side-by-side comparison, but a lane you cannot read
+	   was not affording that either, and the status is written on each group's
+	   own heading. */
+	@include bp.phone {
+		grid-template-columns: minmax(0, 1fr);
+		gap: var(--jf-spacing-near);
+		min-block-size: 0;
+	}
+}
+
+/* Rubber-band selection rectangle drawn over the board. */
+.marquee {
+	position: absolute;
+	z-index: 2;
+	pointer-events: none;
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
+	background-color: rgb(128 128 128 / 12%);
+	border: 1px solid var(--jf-fg-strong);
+	border-radius: var(--jf-radius-button);
+}
+
+.cardWrap[data-selected] {
+	outline: 2px solid var(--jf-fg-strong);
+	outline-offset: 2px;
+	border-radius: var(--jf-radius-container);
+}
+
+.confirmActions {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	gap: var(--jf-spacing-near);
+	justify-content: flex-end;
+	margin-block-start: var(--jf-spacing-far);
+}
+
+/* The dragged card tracks the cursor 1:1 and sits above everything. */
+.dragActive {
+	z-index: 1000;
+}
+
+/* Other selected cards slide on top of the dragged card and ride along. */
+.grouping {
+	z-index: 999;
+	transition: transform 150ms ease;
+}
+
+.column {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+	min-block-size: 120px;
+	padding: var(--jf-spacing-near);
+	outline: 2px dashed transparent;
+	outline-offset: -2px;
+	background: var(--jf-surface-bg-sunken);
+	border-radius: var(--jf-radius-container);
+	/* stylelint-disable plugin/no-low-performance-animation-properties -- intentional transition on background and outline-color */
+	transition:
+		background var(--jf-animation-duration-default) ease-in-out,
+		outline-color var(--jf-animation-duration-default) ease-in-out;
+	/* stylelint-enable plugin/no-low-performance-animation-properties */
+}
+
+/* Highlighted while a card is dragged over this column. */
+.over {
+	outline-color: var(--jf-fg-strong);
+	background: var(--jf-surface-bg-base);
+}
+
+.columnHead {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
+	font-weight: 600;
+}
+
+.headRight {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	gap: var(--jf-spacing-close);
+	align-items: center;
+}
+
+.count {
+	color: var(--jf-fg-muted);
+}
+
+.cards {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+}
+
+.cardWrap {
+	touch-action: none;
+}

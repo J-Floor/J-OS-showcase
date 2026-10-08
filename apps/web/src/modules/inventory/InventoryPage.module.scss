@@ -1,0 +1,20 @@
+@use "../../shared/listShell" as shell;
+
+.tabBar {
+	@include shell.tab-bar;
+}
+
+.actions {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+}
+
+.console {
+	@include shell.console;
+}
+
+.panel:not([hidden]) {
+	@include shell.panel;
+}

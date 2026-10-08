@@ -1,0 +1,129 @@
+/*
+ * Ported from EmboUI Checkbox.module.scss. SCSS nesting -> native CSS nesting.
+ * Token mapping applied:
+ *   --embo-spacing-near                 -> --jf-spacing-near
+ *   --embo-colour-surface-fg-medium     -> --jf-fg-default
+ *   --embo-colour-surface-bg-light      -> --jf-surface-bg-raised
+ *   --embo-colour-primary-medium-fg     -> --jf-fg-strong (grayscale, no brand hue)
+ * Border colour uses --jf-border-strong. Small radius/border literals kept
+ * (no radius/border-width token in the scale yet, matching Tooltip/Spinner).
+ */
+
+.checkbox {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+	inline-size: fit-content;
+	cursor: pointer;
+}
+
+.label {
+	user-select: none;
+}
+
+.control {
+	--size: 1em;
+	--border-size: calc(1em - 4px);
+
+	position: relative;
+	display: flex;
+
+	/* Square in both states: as a flex child of `.checkbox`, the control's min
+	   size is its content (0 when unchecked, the check glyph when checked), so
+	   without this it shrinks when empty next to a long label and the hover
+	   circle (160% of the control) shrinks with it. */
+	flex: 0 0 auto;
+	flex-wrap: nowrap;
+	align-items: center;
+	justify-content: center;
+	inline-size: var(--size);
+	block-size: var(--size);
+
+	/*
+	 * Embo sizes the control via `embo-typo-body-small`, whose `&[data-icon]`
+	 * rule sets font-size to the body-small icon size (1.25rem). That makes the
+	 * control's `--size: 1em` resolve to 20px and sizes the indicator glyph to
+	 * match. Set it directly here instead of carrying a typography class.
+	 */
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for the body-small icon size */
+	font-size: 1.25rem;
+	color: var(--jf-fg-default);
+	/* stylelint-disable-next-line plugin/no-low-performance-animation-properties -- intentional transition on color */
+	transition: color 200ms ease;
+
+	/* Indicator glyph fills the control: 1em of the control's font-size.
+	   Descendant selector (0,2,0) beats Icon's own `.icon` rule (0,1,0). */
+	[data-icon] {
+		font-size: 1em;
+	}
+
+	/* Checkbox border — same colour checked/unchecked (matches embo) */
+	&::before {
+		position: absolute;
+		inset-block-start: 50%;
+		inset-inline-start: 50%;
+		box-sizing: border-box;
+		inline-size: var(--border-size);
+		block-size: var(--border-size);
+		content: "";
+		border: 2px solid;
+		/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this small radius */
+		border-radius: 2px;
+		transform: translate(-50%, -50%);
+		/* stylelint-disable-next-line plugin/no-low-performance-animation-properties -- intentional transition on border-color */
+		transition: border-color 200ms ease;
+	}
+
+	/* Hover background circle */
+	&::after {
+		position: absolute;
+		inset-block-start: 50%;
+		inset-inline-start: 50%;
+		z-index: -1;
+		inline-size: 160%;
+		block-size: 160%;
+		content: "";
+		background-color: var(--jf-surface-bg-overlay);
+		border-radius: var(--jf-radius-full);
+		transform: translate(-50%, -50%) scale(0);
+		transition: transform var(--jf-animation-duration-default);
+	}
+
+	&[data-hover]::after {
+		transform: translate(-50%, -50%) scale(1);
+	}
+
+	&[data-focus-visible]::before {
+		outline: 2px solid var(--jf-fg-strong);
+		outline-offset: 2px;
+	}
+}
+
+/* ark sets [data-hover] on the Root, not the Control, so trigger the hover
+   circle from the label's :hover too. */
+/* stylelint-disable-next-line defensive-css/no-accidental-hover -- pointer-capable control; mobile accidental-hover not a concern */
+.checkbox:hover .control::after {
+	transform: translate(-50%, -50%) scale(1);
+}
+
+.indicator {
+	&:not([hidden]) {
+		display: flex;
+		flex-wrap: nowrap;
+		align-items: center;
+		justify-content: center;
+	}
+
+	&[data-state="unchecked"] {
+		display: none;
+	}
+}
+
+.disabledWrap {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: inline-flex;
+	cursor: not-allowed;
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this opacity */
+	opacity: 0.5;
+}

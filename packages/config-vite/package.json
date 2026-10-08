@@ -1,0 +1,19 @@
+{
+  "name": "@j-os/config-vite",
+  "version": "0.0.1",
+  "private": true,
+  "license": "MIT",
+  "main": "baseConfig.js",
+  "scripts": {
+    "format": "prettier --write \"*.{js,ts,tsx}\" --ignore-path ../../.prettierignore"
+  },
+  "exports": {
+    ".": "./baseConfig.js"
+  },
+  "type": "module",
+  "types": "baseConfig.d.ts",
+  "devDependencies": {
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:"
+  }
+}

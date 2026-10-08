@@ -1,0 +1,69 @@
+.main {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	justify-content: center;
+	min-block-size: 100dvb;
+	padding-block: var(--jf-spacing-away);
+	padding-inline: var(--jf-spacing-far);
+}
+
+.doc {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-away);
+	inline-size: min(680px, 100%);
+}
+
+.head {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+}
+
+.title {
+	margin: 0;
+}
+
+.meta {
+	display: grid;
+	grid-template-columns: max-content 1fr;
+	gap: var(--jf-spacing-close) var(--jf-spacing-away);
+	margin: 0;
+	color: var(--jf-fg-muted);
+
+	dt {
+		/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
+		font-weight: 600;
+	}
+
+	dd {
+		margin: 0;
+	}
+}
+
+.section {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+}
+
+.heading {
+	margin: 0;
+}
+
+.para {
+	margin: 0;
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
+	line-height: 1.6;
+}
+
+.list {
+	padding-inline-start: var(--jf-spacing-away);
+	margin: 0;
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
+	line-height: 1.6;
+
+	li {
+		margin-block: var(--jf-spacing-close);
+	}
+}

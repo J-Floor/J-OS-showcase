@@ -1,0 +1,60 @@
+@use "@j-os/design-system/typography" as typo;
+
+.stack {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--jf-spacing-near);
+}
+
+.value {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--jf-spacing-close);
+}
+
+.num {
+	@include typo.jf-typo-h1;
+
+	line-height: 1;
+	color: var(--jf-fg-strong);
+
+	.value[data-tone="error"] & {
+		color: var(--jf-error-fg);
+	}
+}
+
+.label {
+	@include typo.jf-typo-body-small;
+
+	color: var(--jf-fg-muted);
+}
+
+.note {
+	@include typo.jf-typo-body-small;
+
+	text-align: center;
+	color: var(--jf-fg-muted);
+
+	&[data-tone="error"] {
+		color: var(--jf-error-fg);
+	}
+}
+
+.locks {
+	@include typo.jf-typo-body-small;
+
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-close);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	color: var(--jf-fg-muted);
+	text-align: center;
+}
+
+.lock[data-online="false"] {
+	color: var(--jf-error-fg);
+}

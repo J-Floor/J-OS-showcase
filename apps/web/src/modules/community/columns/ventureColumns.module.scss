@@ -1,0 +1,31 @@
+@use "@j-os/design-system/utils.scss" as utils;
+
+/* One link and, when there are more, a count — on a single line. The link
+   takes the slack and ellipses; the count never shrinks, so it stays readable
+   however long the URL is. */
+.links {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping here is the bug being fixed */
+	display: flex;
+	gap: var(--jf-spacing-close);
+	align-items: baseline;
+	min-inline-size: 0;
+}
+
+.link {
+	@include utils.ellipsis;
+
+	/* Without this a flex item refuses to shrink below its content, so the
+	   ellipsis never engages and the URL pushes the cell wide instead. */
+	min-inline-size: 0;
+}
+
+.more {
+	flex: 0 0 auto;
+	color: var(--jf-fg-muted);
+}
+
+/* Clamp long applicant free-text (description, why-join, past-built) to a few
+   lines with an ellipsis; the full text is shown in the detail drawer. */
+.clamp {
+	@include utils.line-clamp(3);
+}

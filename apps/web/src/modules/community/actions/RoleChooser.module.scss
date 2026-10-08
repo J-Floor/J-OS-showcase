@@ -1,0 +1,22 @@
+@use "@j-os/design-system/breakpoints" as bp;
+
+/* The group hugs its options rather than spanning the container: it sits in a
+   stretch flex column, both in the dialog and in the drawer's status list, and
+   a full-width track puts the last option a long way from the first.
+
+   zag's segment group defaults to `orientation="vertical"`, so these stack —
+   every option is on screen, nothing scrolls sideways, and the count of legal
+   destinations can grow without the control hiding any of them. */
+.segment {
+	align-self: start;
+	max-inline-size: 100%;
+}
+
+/* Phone: span the dialog instead of hugging the longest label — sized to
+   content on a narrow screen the stack reads as a ragged list floating off the
+   leading edge, and each option is a tap target. */
+@include bp.phone {
+	.segment {
+		align-self: stretch;
+	}
+}

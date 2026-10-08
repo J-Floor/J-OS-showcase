@@ -1,0 +1,111 @@
+@use "../../styles/typography" as typo;
+
+.list {
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-close);
+	align-items: flex-start;
+	padding: var(--jf-spacing-close);
+	margin: 0;
+	list-style: none;
+	background: var(--jf-surface-bg-base);
+	border-radius: var(--jf-radius-container);
+	box-shadow: var(--jf-shadow-surface-elevation);
+}
+
+.listItem {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: var(--jf-spacing-far);
+	align-items: center;
+	inline-size: 100%;
+	padding: var(--jf-spacing-near);
+	border-radius: var(--jf-radius-container);
+
+	@media (hover: hover) {
+		&:hover {
+			background-color: var(--jf-surface-bg-overlay);
+		}
+	}
+}
+
+.itemText {
+	display: flex;
+	flex-grow: 1;
+	flex-flow: column nowrap;
+	align-items: flex-start;
+	align-self: stretch;
+	justify-content: center;
+	min-inline-size: 0;
+}
+
+.title {
+	@include typo.jf-typo-body-bold;
+
+	max-inline-size: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	line-height: 1rem;
+	color: var(--jf-fg-strong);
+	white-space: nowrap;
+}
+
+.description {
+	@include typo.jf-typo-body-regular;
+
+	max-inline-size: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	line-height: 1rem;
+	color: var(--jf-fg-muted);
+	white-space: nowrap;
+}
+
+.iconLeft {
+	/* Size only — must NOT set font-family or the Material Symbols glyph breaks. */
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal icon size; no design token for this value */
+	font-size: 1.5rem;
+	color: var(--jf-fg-default);
+}
+
+.rightItems {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+	justify-content: flex-end;
+
+	[data-icon] {
+		color: var(--jf-fg-default);
+	}
+}
+
+/* A clickable item hands its padding to the button inside it, so the whole
+   row is the hit target. */
+.listItem[data-clickable] {
+	padding: 0;
+}
+
+.itemButton {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: var(--jf-spacing-far);
+	align-items: center;
+	inline-size: 100%;
+	padding: var(--jf-spacing-near);
+	color: inherit;
+	text-align: start;
+	cursor: pointer;
+	background: none;
+	border: none;
+	border-radius: inherit;
+
+	&:focus-visible {
+		outline: solid 2px var(--jf-fg-default);
+	}
+}
+
+.description[data-wrap] {
+	overflow-wrap: anywhere;
+	white-space: normal;
+}

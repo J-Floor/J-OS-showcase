@@ -1,0 +1,142 @@
+/* stylelint-disable declaration-property-value-disallowed-list -- this file IS the source-of-truth colour palette; raw HEX literals are the token definitions */
+:root {
+	// Grey
+	--core-grey-0: #fff;
+	--core-grey-50: #f7f4f1;
+	--core-grey-100: #ece8e4;
+	--core-grey-200: #d8d3ce;
+	--core-grey-300: #bdb8b3;
+	--core-grey-400: #948f8b;
+	--core-grey-500: #767372;
+	--core-grey-600: #4f4d4c;
+	--core-grey-700: #3c3b3b;
+	--core-grey-800: #2b2b2b;
+	--core-grey-900: #232323;
+	--core-grey-950: #161616;
+	--core-grey-1000: #000;
+	--core-warm-white: #fffaf7;
+
+	// Red (error)
+	--core-red-50: #f9c0c5;
+	--core-red-100: #f7abb1;
+	--core-red-400: #ec3847;
+	--core-red-500: #c91322;
+	--core-red-700: #910e19;
+	--core-red-900: #4a0009;
+
+	// Green (success)
+	--core-green-50: #bbefc6;
+	--core-green-100: #a4e9b3;
+	--core-green-400: #2fc550;
+	--core-green-500: #1e7d32;
+	--core-green-700: #165a25;
+	--core-green-900: #0a2e12;
+
+	// Amber (warning)
+	--core-amber-50: #f4e6c8;
+	--core-amber-100: #edd9b2;
+	--core-amber-400: #d3a548;
+	--core-amber-500: #a87d28;
+	--core-amber-700: #795b1d;
+	--core-amber-900: #3a2b0d;
+
+	// Blue (links, info)
+	--core-blue-50: #cfe0fd;
+	--core-blue-300: #9ab9fc;
+	--core-blue-700: #084de2;
+
+	// Chart series hues. Their own steps rather than the status ramps above,
+	// because a categorical set has to be validated AS A SET — every pair
+	// distinguishable under protanopia and deuteranopia, inside the mode's
+	// lightness band, above the chroma floor and above 3:1 on the chart surface.
+	// These four clear all of it (worst pair ΔE 15.4 light / 9.3 dark, CVD;
+	// 20.7 / 18.8 normal vision). Do NOT swap a step for a "closer" one from
+	// the ramps above without re-validating the whole set — the checks are
+	// pairwise, so one substitution can break a pair it isn't even part of.
+	--core-teal-400: #0aa2b8;
+	--core-teal-500: #1596a4;
+	--core-purple-400: #9455c9;
+	--core-purple-500: #6b3fa0;
+	--core-amber-450: #b78a1a;
+	--core-red-450: #cf3f4e;
+	--core-red-550: #b81e3a;
+
+	// Semantic — light-dark(light, dark). Default to light so portaled overlays
+	// (Tooltip/Select/Popover render to document.body, outside [data-theme])
+	// resolve light-dark() correctly; [data-theme] overrides per subtree.
+	color-scheme: light;
+
+	--jf-surface-bg-base: light-dark(var(--core-grey-0), var(--core-grey-900));
+	--jf-surface-bg-raised: light-dark(
+		var(--core-grey-50),
+		var(--core-grey-800)
+	);
+	--jf-surface-bg-overlay: light-dark(
+		var(--core-grey-100),
+		var(--core-grey-700)
+	);
+	--jf-surface-bg-sunken: light-dark(
+		var(--core-grey-100),
+		var(--core-grey-950)
+	);
+
+	// Modal/overlay scrim — flat black, theme-independent (sits over content in
+	// both themes). Shared by Dialog, Tour and the mobile Drawer backdrop.
+	--jf-surface-bg-scrim: rgb(0 0 0 / 50%);
+	--jf-fg-strong: light-dark(var(--core-grey-1000), var(--core-grey-50));
+	--jf-fg-default: light-dark(var(--core-grey-900), var(--core-grey-100));
+	--jf-fg-muted: light-dark(var(--core-grey-500), var(--core-grey-400));
+	--jf-fg-subtle: light-dark(var(--core-grey-400), var(--core-grey-500));
+	--jf-border-subtle: light-dark(var(--core-grey-200), var(--core-grey-700));
+	--jf-border-strong: light-dark(var(--core-grey-300), var(--core-grey-600));
+	--jf-inverted-bg: light-dark(var(--core-grey-900), var(--core-grey-50));
+	--jf-inverted-fg: light-dark(var(--core-grey-50), var(--core-grey-900));
+	--jf-link: light-dark(var(--core-blue-700), var(--core-blue-300));
+	--jf-success-bg: light-dark(var(--core-green-50), var(--core-green-900));
+	--jf-success-fg: light-dark(var(--core-green-700), var(--core-green-100));
+	--jf-warning-bg: light-dark(var(--core-amber-50), var(--core-amber-900));
+	--jf-warning-fg: light-dark(var(--core-amber-700), var(--core-amber-100));
+	--jf-error-bg: light-dark(var(--core-red-50), var(--core-red-900));
+	--jf-error-fg: light-dark(var(--core-red-700), var(--core-red-100));
+	--jf-info-bg: light-dark(var(--core-blue-50), var(--core-blue-700));
+	--jf-info-fg: light-dark(var(--core-blue-700), var(--core-blue-50));
+
+	// Chart. Four categorical slots, handed out in this order and never cycled:
+	// a fifth series folds into "Other" or becomes a second chart. The dark
+	// steps are CHOSEN, not a flip — each was validated against the dark chart
+	// surface on its own.
+	--jf-chart-series-1: light-dark(var(--core-teal-500), var(--core-teal-400));
+	--jf-chart-series-2: light-dark(
+		var(--core-amber-450),
+		var(--core-amber-450)
+	);
+	--jf-chart-series-3: light-dark(
+		var(--core-purple-500),
+		var(--core-purple-400)
+	);
+
+	// Last on purpose: it is the slot that reads as alarm, so it should be the
+	// last identity handed out rather than the fourth thing anyone reaches for.
+	--jf-chart-series-4: light-dark(var(--core-red-550), var(--core-red-450));
+
+	// Polarity, for series whose VALUE carries meaning (up is good, down is
+	// bad). A different job from identity — never use these as "series 5".
+	--jf-chart-positive: light-dark(
+		var(--core-green-500),
+		var(--core-green-400)
+	);
+	--jf-chart-negative: light-dark(var(--core-red-500), var(--core-red-400));
+	--jf-chart-neutral: light-dark(var(--core-grey-500), var(--core-grey-400));
+
+	// Chart furniture: recessive by design — the data is the ink.
+	--jf-chart-grid: var(--jf-border-subtle);
+	--jf-chart-axis: var(--jf-fg-subtle);
+}
+
+[data-theme="light"] {
+	color-scheme: light;
+}
+
+[data-theme="dark"] {
+	color-scheme: dark;
+}

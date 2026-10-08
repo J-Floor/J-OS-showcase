@@ -1,0 +1,84 @@
+@use "@j-os/design-system/breakpoints" as bp;
+@use "../../../styles/marketing-type" as mkt;
+
+.section {
+	padding: var(--jf-spacing-detached);
+	background-color: var(--core-grey-900);
+
+	@include bp.phone {
+		padding: var(--jf-spacing-away);
+	}
+}
+
+// Four equal columns: label (1) · copy (spans 2) · pill (1) — the live layout.
+.top {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	column-gap: var(--jf-spacing-detached);
+	align-items: start;
+
+	@include bp.narrow {
+		display: flex;
+		flex-flow: column nowrap;
+		gap: var(--jf-spacing-distant);
+	}
+}
+
+.label {
+	@include mkt.display-label;
+
+	grid-column: 1;
+}
+
+.copy {
+	display: flex;
+	flex-flow: column nowrap;
+	grid-column: 2 / span 2;
+	gap: var(--jf-spacing-away);
+	margin: 0;
+}
+
+.lead {
+	@include mkt.body-lead;
+
+	margin: 0;
+}
+
+.body {
+	@include mkt.body-copy;
+
+	margin: 0;
+}
+
+.contactCell {
+	grid-column: 4;
+	justify-self: end;
+
+	@include bp.narrow {
+		justify-self: start;
+	}
+}
+
+// Two photos, 2:1 (the wide group shot beside the taller interior).
+.photos {
+	display: grid;
+	grid-template-columns: 2fr 1fr;
+	gap: var(--jf-spacing-away);
+	margin-block-start: var(--jf-spacing-detached);
+
+	@include bp.phone {
+		grid-template-columns: 1fr;
+	}
+}
+
+.photo {
+	display: block;
+	inline-size: 100%;
+	block-size: 24rem;
+	object-fit: cover;
+	border-radius: var(--jf-radius-container);
+
+	@include bp.phone {
+		block-size: 16rem;
+	}
+}

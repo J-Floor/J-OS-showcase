@@ -1,0 +1,52 @@
+/* Accordion spacing is the consumer's job here, exactly as in EmboUI — the
+   component styles the trigger and leaves the body and the gaps to whoever
+   fills them (its own docs sidebar adds `margin-block-end` on the item and
+   pads the content itself). Without this the sections stack flush and their
+   contents start hard against the drawer edge, left of the trigger's own text. */
+.section {
+	margin-block-end: var(--jf-spacing-near);
+}
+
+/* Inline padding matches the trigger's, so a value lines up under the title
+   rather than sitting outside it. */
+.sectionBody {
+	padding-block: var(--jf-spacing-near);
+	padding-inline: var(--jf-spacing-near);
+}
+
+/* Free-text answers keep the founder's own line breaks. */
+.multiline {
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+}
+
+/* Stack multiple links vertically instead of running them together inline. */
+.links {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- vertical stack; wrapping is not meaningful */
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-close);
+
+	& a {
+		overflow-wrap: break-word;
+	}
+}
+
+.fieldError {
+	margin: 0;
+	color: var(--jf-error-fg);
+}
+
+.fieldNote {
+	margin: 0;
+	color: var(--jf-fg-muted);
+	overflow-wrap: anywhere;
+}
+
+.pendingEmail {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--jf-spacing-close);
+}

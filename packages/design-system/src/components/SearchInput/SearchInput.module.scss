@@ -1,0 +1,28 @@
+/* The browser's own cancel glyph would sit next to ours. `class` on Input lands
+   on the field root (MakeField), so reach the <input> inside it. */
+.field input::-webkit-search-cancel-button {
+	display: none;
+}
+
+/* A bare <button> keeps the browser's own chrome — a grey rectangle sitting in
+   the middle of the search field. Reset it to an icon that only paints when you
+   are on it. */
+.clear {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single glyph; wrapping not intended */
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
+	padding: var(--jf-spacing-close);
+	color: var(--jf-fg-muted);
+	cursor: pointer;
+	background: none;
+	border: none;
+	border-radius: var(--jf-radius-full);
+
+	/* stylelint-disable-next-line defensive-css/no-accidental-hover -- pointer-driven affordance inside a keyboard surface */
+	&:hover {
+		color: var(--jf-fg-strong);
+		background-color: var(--jf-surface-bg-raised);
+	}
+}

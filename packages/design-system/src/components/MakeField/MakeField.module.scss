@@ -1,0 +1,41 @@
+@use "../../styles/typography" as typo;
+
+.field {
+	position: relative;
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-near);
+
+	input {
+		@include typo.jf-typo-body-regular;
+	}
+}
+
+.label,
+.requiredIndicator,
+.helperText,
+.errorText {
+	@include typo.jf-typo-body-small;
+
+	line-height: 1;
+}
+
+.label {
+	color: var(--jf-fg-default);
+	cursor: text;
+}
+
+.requiredIndicator {
+	position: absolute;
+	inset-inline-end: 0;
+	color: var(--jf-fg-muted);
+	pointer-events: none;
+}
+
+.helperText {
+	color: var(--jf-fg-muted);
+}
+
+.errorText {
+	color: var(--jf-status-fg);
+}

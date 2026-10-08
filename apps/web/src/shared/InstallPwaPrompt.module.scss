@@ -1,0 +1,22 @@
+/* Pill surface shared by the install and notifications prompts. Placement
+   (floating, bottom-center, stacked) belongs to `PromptStack`, whose
+   `.stack > *` rule makes the pill clickable. */
+.pill {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- two controls; nothing to wrap */
+	display: flex;
+	gap: var(--jf-spacing-close);
+	align-items: center;
+	inline-size: fit-content;
+	max-inline-size: 100%;
+	padding-inline: var(--jf-spacing-close);
+	padding-block: var(--jf-spacing-close);
+	background: var(--jf-surface-bg-raised);
+	border: var(--jf-border-width-decorative) solid var(--jf-border-subtle);
+	border-radius: var(--jf-radius-full);
+	box-shadow: var(--jf-shadow-surface-elevation);
+}
+
+/* The label button is transparent — the pill itself is the surface. */
+.install {
+	white-space: nowrap;
+}

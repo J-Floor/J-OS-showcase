@@ -1,0 +1,21 @@
+.actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--jf-spacing-near);
+	justify-content: flex-end;
+	margin-block-start: var(--jf-spacing-away);
+
+	@media (width <= 600px) {
+		position: sticky;
+		inset-block-end: 0;
+		flex-direction: column;
+		align-items: stretch;
+		padding-block: var(--jf-spacing-far);
+		background: var(--jf-surface-bg-base);
+
+		/* DS buttons hug their label by default; stretch them full-width. */
+		button {
+			inline-size: 100%;
+		}
+	}
+}

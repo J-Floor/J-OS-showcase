@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+	<head>
+		<meta charset="UTF-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+		<!-- Shared social tags, as on the live Framer site. Per-route description,
+		     canonical, og:url and robots are injected at the route-head marker
+		     below by scripts/prerender.mjs. -->
+		<meta property="og:type" content="website" />
+		<meta property="og:title" content="J floor: Build the builders." />
+		<meta
+			property="og:image"
+			content="https://thejfloor.com/og-image.png"
+		/>
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content="J floor: Build the builders." />
+		<meta
+			name="twitter:image"
+			content="https://thejfloor.com/og-image.png"
+		/>
+		<!--route-head-->
+		<!-- data-theme="dark" above applies the design-system dark palette before
+		     first paint; JFloorProvider (theme="dark") then owns it at runtime.
+		     Manrope + Azeret Mono are injected by JFloorProvider; Inter (the live
+		     site's UI face for pills and contact rows) is loaded here. -->
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			rel="stylesheet"
+			href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Manrope:wght@700&display=swap"
+		/>
+		<title>J floor</title>
+		<style>
+			/* Intro splash: a white overlay split into two halves. "Zurich Builds"
+			   sits on the centre seam inside the top half, then the halves open
+			   outward from that line (the words ride up with the top half) to reveal
+			   the app underneath. Pure CSS, self-contained, and guaranteed to stop
+			   trapping scroll/clicks once the animation ends (fill-mode forwards
+			   drives it to visibility:hidden + pointer-events:none). */
+			/* Always show the vertical scrollbar so the page width never shifts
+			   when content taller than the viewport appears after the splash. */
+			html {
+				overflow-y: scroll;
+			}
+
+			/* Font for the design-system marketing pills (Button variant="pill"). */
+			:root {
+				--button-pill-font: "Inter", sans-serif;
+			}
+
+			#splash {
+				position: fixed;
+				inset: 0;
+				z-index: 2147483647;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				background: transparent;
+				animation: splash-teardown 0.01ms forwards;
+				animation-delay: 2.5s;
+			}
+
+			#splash .splash-panel {
+				position: absolute;
+				left: 0;
+				right: 0;
+				/* +2px so the two halves overlap generously at the centre — no dark
+				   seam shows through before the panels split, even at fractional
+				   device-pixel ratios / zoom. */
+				height: calc(50% + 2px);
+				background: #ffffff;
+				animation-duration: 0.7s;
+				animation-timing-function: cubic-bezier(0.7, 0.2, 0.2, 1);
+				animation-fill-mode: forwards;
+				animation-delay: 1.8s;
+			}
+
+			#splash .splash-panel-top {
+				top: 0;
+				overflow: hidden;
+				animation-name: splash-panel-up;
+			}
+
+			#splash .splash-panel-bottom {
+				bottom: 0;
+				animation-name: splash-panel-down;
+			}
+
+			/* Live: Manrope 18px bold, line-height 1.6, rgb(35 35 35), bottom edge on
+			   the seam. The top half clips it, so words enter from below the seam. */
+			#splash .splash-words {
+				position: absolute;
+				bottom: 2px;
+				left: 50%;
+				transform: translateX(-50%);
+				white-space: nowrap;
+				font-family: "Manrope", sans-serif;
+				font-size: 18px;
+				font-weight: 700;
+				line-height: 1.6;
+				color: rgb(35 35 35);
+			}
+
+			#splash .splash-word {
+				display: inline-block;
+				opacity: 0;
+				transform: translateY(16px);
+				animation-duration: 0.7s;
+				animation-timing-function: cubic-bezier(0.7, 0.2, 0.2, 1);
+				animation-fill-mode: forwards;
+				animation-name: splash-word-in;
+			}
+
+			#splash .splash-word-1 {
+				animation-delay: 0s;
+			}
+
+			#splash .splash-word-2 {
+				animation-delay: 0.22s;
+			}
+
+			@keyframes splash-word-in {
+				to {
+					opacity: 1;
+					transform: translateY(0);
+				}
+			}
+
+			@keyframes splash-panel-up {
+				to {
+					transform: translateY(-100%);
+				}
+			}
+
+			@keyframes splash-panel-down {
+				to {
+					transform: translateY(100%);
+				}
+			}
+
+			@keyframes splash-teardown {
+				to {
+					opacity: 0;
+					visibility: hidden;
+					pointer-events: none;
+				}
+			}
+
+			@media (prefers-reduced-motion: reduce) {
+				#splash {
+					opacity: 0;
+					visibility: hidden;
+					pointer-events: none;
+					animation: none;
+				}
+
+				#splash .splash-panel,
+				#splash .splash-words,
+				#splash .splash-word {
+					animation: none;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<div id="splash" aria-hidden="true">
+			<div class="splash-panel splash-panel-top">
+				<span class="splash-words">
+					<span class="splash-word splash-word-1">Zurich</span>
+					<span class="splash-word splash-word-2">Builds</span>
+				</span>
+			</div>
+			<div class="splash-panel splash-panel-bottom"></div>
+		</div>
+		<div id="root"><!--app-html--></div>
+		<script type="module" src="/src/index.tsx"></script>
+	</body>
+</html>

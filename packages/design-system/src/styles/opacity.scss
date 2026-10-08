@@ -1,0 +1,11 @@
+:root {
+	--jf-opacity-disabled: 0.4;
+	--jf-opacity-overlays: 0.9;
+	--jf-opacity-backdrops: 0.4;
+}
+
+[disabled],
+[data-disabled="true"],
+[aria-disabled="true"] {
+	cursor: not-allowed;
+}

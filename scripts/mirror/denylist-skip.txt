@@ -1,0 +1,10 @@
+# build-denylist.ts emits no name variant whose name key (lower case, no
+# diacritics, punctuation as spaces) equals a line here: ordinary words and
+# demo names found as surnames, and whole names of accounts that are not people.
+brand
+j floor dev
+johnson
+member
+prior
+reusing
+testing

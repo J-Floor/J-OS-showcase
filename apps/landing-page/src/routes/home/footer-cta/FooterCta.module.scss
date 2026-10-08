@@ -1,0 +1,107 @@
+@use "@j-os/design-system/breakpoints" as bp;
+@use "../../../styles/marketing-type" as mkt;
+
+// Live footer wrapper: 32px page inset, 120px between its blocks. This section
+// is the first block; PoweredBy and SiteFooter continue the same rhythm.
+.section {
+	--footer-block-gap: 120px;
+
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--footer-block-gap);
+	padding: var(--jf-spacing-distant) var(--jf-spacing-distant) 0;
+
+	@include bp.phone {
+		padding-inline: var(--jf-spacing-far);
+	}
+}
+
+.ctaRow {
+	display: flex;
+	flex-wrap: nowrap;
+	justify-content: center;
+}
+
+.pillArrow {
+	inline-size: 24px;
+	block-size: 24px;
+}
+
+// Five equal columns, 62px apart: heading in 1–2, link groups in 4 and 5.
+.grid {
+	--grid-gap: 62px;
+
+	display: grid;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	column-gap: var(--grid-gap);
+	align-items: start;
+
+	@include bp.narrow {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		row-gap: var(--jf-spacing-detached);
+	}
+}
+
+.heading {
+	@include mkt.display-label;
+
+	grid-column: 1 / span 2;
+	margin: 0;
+}
+
+.siteLinks,
+.elsewhereLinks {
+	--link-gap: 12px;
+
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--link-gap);
+	align-items: flex-start;
+}
+
+.siteLinks {
+	grid-column: 4;
+
+	@include bp.narrow {
+		grid-column: 1;
+	}
+}
+
+.elsewhereLinks {
+	grid-column: 5;
+
+	@include bp.narrow {
+		grid-column: 2;
+	}
+}
+
+// Inter 16/25.6 in the live off-white, dimming to the pill grey on hover.
+.link {
+	--link-hover: rgb(134 131 130);
+	--link-arrow-gap: 9px;
+
+	@include mkt.inter-body;
+
+	display: inline-flex;
+	flex-wrap: nowrap;
+	gap: var(--link-arrow-gap);
+	align-items: center;
+	text-decoration: none;
+	/* stylelint-disable-next-line plugin/no-low-performance-animation-properties -- colour-only hover fade on a text link, as on the live site */
+	transition: color var(--jf-animation-duration-default) ease;
+
+	@media (hover: hover) {
+		&:hover {
+			color: var(--link-hover);
+		}
+	}
+
+	&:focus-visible {
+		color: var(--link-hover);
+	}
+}
+
+.linkArrow {
+	inline-size: 14px;
+	block-size: 14px;
+}

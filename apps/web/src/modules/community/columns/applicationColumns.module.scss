@@ -1,0 +1,53 @@
+@use "@j-os/design-system/typography" as typo;
+
+.noteCell {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-close);
+	min-inline-size: 0;
+}
+
+/* The most recent note, shown above the composer: author avatar + one clamped
+   line of text (the whole note is in the drawer's thread). */
+.latest {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: var(--jf-spacing-close);
+	align-items: center;
+	min-inline-size: 0;
+}
+
+.noteAvatar {
+	@include typo.jf-typo-body-small;
+}
+
+.latestText {
+	@include typo.jf-typo-body-small;
+
+	overflow: hidden;
+	color: var(--jf-fg-muted);
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+/* Holds the score field so its peek chip can sit in the corner without shifting
+   layout. */
+.scoreCell {
+	position: relative;
+}
+
+/* The score field's "0–9" peek chip (a Kbd label), parked in the corner. */
+.scoreKbd {
+	position: absolute;
+	inset-block-start: var(--jf-spacing-close);
+	inset-inline-end: var(--jf-spacing-close);
+	pointer-events: none;
+}
+
+/* Both chips are row-scoped shortcuts (they act on the ringed row), so show them
+   only on the focused row — the same rule IconButton's peek badge uses. The
+   inline Kbd already renders only while peeking; this narrows it to the row. */
+tr:not([data-focused="true"]) .scoreKbd,
+tr:not([data-focused="true"]) .noteKbd {
+	visibility: hidden;
+}

@@ -1,0 +1,73 @@
+@use "../../styles/animation" as anim;
+@use "../../styles/typography" as typo;
+
+.content {
+	position: relative;
+
+	/* Layer via the content's zag `--layer-index` so it ranks above a parent
+	   overlay (e.g. opened inside a dialog). */
+	z-index: calc(var(--jf-z-index-overlay-base) + var(--layer-index, 0));
+	min-inline-size: 12rem;
+	max-block-size: var(--available-height);
+	padding: var(--jf-spacing-close);
+	/* stylelint-disable-next-line defensive-css/require-scrollbar-gutter -- intentional; gutter not needed here */
+	overflow-block: auto;
+	overscroll-behavior-block: contain;
+	color: var(--jf-fg-default);
+	background-color: var(--jf-surface-bg-base);
+	border-radius: var(--jf-radius-container);
+	box-shadow: var(--jf-shadow-surface-elevation);
+
+	@include typo.jf-typo-body-regular;
+	@include anim.popover-animation;
+
+	&[data-state="open"] {
+		flex-direction: column;
+	}
+
+	&:focus-visible {
+		outline: none;
+	}
+}
+
+.item {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+	padding: var(--jf-spacing-near);
+	color: var(--jf-fg-default);
+	cursor: pointer;
+	user-select: none;
+	border-radius: var(--jf-radius-button);
+
+	/* ark marks the keyboard/pointer-focused item with `data-highlighted`. */
+	&[data-highlighted] {
+		color: var(--jf-fg-strong);
+		background-color: var(--jf-surface-bg-overlay);
+	}
+
+	&[data-disabled] {
+		color: var(--jf-fg-subtle);
+		cursor: not-allowed;
+	}
+}
+
+.group {
+	display: flex;
+	flex-direction: column;
+}
+
+.groupLabel {
+	padding: var(--jf-spacing-near);
+	color: var(--jf-fg-muted);
+
+	@include typo.jf-typo-body-bold;
+}
+
+.separator {
+	block-size: 1px;
+	margin-block: var(--jf-spacing-close);
+	background-color: var(--jf-border-subtle);
+	border: none;
+}

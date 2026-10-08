@@ -1,0 +1,8 @@
+/* Demo layout only. Inline styles would bypass the spacing tokens, which is the
+   one thing a design-system demo must not model. */
+.row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--jf-spacing-away);
+	align-items: center;
+}

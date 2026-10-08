@@ -1,0 +1,85 @@
+// Josh Comeau's custom CSS reset — https://www.joshwcomeau.com/css/custom-css-reset/
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+*:not(dialog) {
+	margin: 0;
+}
+
+html {
+	/* Pin text scaling: without this, mobile Safari/Chrome "text autosizing"
+	   rescales type independently of the layout (Apple's early-iOS
+	   -webkit-text-size-adjust). Safari only honours the prefixed form. */
+	/* stylelint-disable-next-line property-no-vendor-prefix -- Safari only supports the -webkit- form of text-size-adjust */
+	-webkit-text-size-adjust: 100%;
+	text-size-adjust: 100%;
+
+	@media (prefers-reduced-motion: no-preference) {
+		interpolate-size: allow-keywords;
+	}
+}
+
+body {
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- foundational reset primitive; literal base line-height, not a tokenable value */
+	line-height: 1.5;
+	color: var(--jf-fg-default);
+
+	/* The page surface. `data-theme` lives on <html>, so this token resolves
+	   per-theme. Previously unset, the page fell back to the UA `color-scheme`
+	   canvas — which diverged from the tokens in dark mode. */
+	background-color: var(--jf-surface-bg-base);
+	-webkit-font-smoothing: antialiased;
+}
+
+img,
+picture,
+video,
+canvas,
+svg {
+	display: block;
+	max-inline-size: 100%;
+}
+
+input,
+button,
+textarea,
+select {
+	font: inherit;
+}
+
+button {
+	cursor: pointer;
+}
+
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	overflow-wrap: break-word;
+}
+
+p {
+	text-wrap: pretty;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	text-wrap: balance;
+}
+
+#root,
+/* stylelint-disable-next-line selector-id-pattern -- framework-defined root id */
+#__next {
+	isolation: isolate;
+}
