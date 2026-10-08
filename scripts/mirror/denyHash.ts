@@ -92,3 +92,23 @@ export function rawEntryHashes(entry: string): string[] {
   if (name !== undefined) hashes.push(name);
   return hashes;
 }
+
+/** Every form of a person's name that the builder hashes: as typed, first-last, last-first and surname alone. */
+export function nameForms(name: string): string[] {
+  const words = name.split(/\s+/);
+  const first = words[0];
+  const last = words[words.length - 1];
+  return [name, `${first} ${last}`, `${last} ${first}`, last];
+}
+
+/** Hashes of every form of each name, as the builder emits them. */
+export function nameFormHashes(names: readonly string[]): Set<string> {
+  const hashes = new Set<string>();
+  for (const name of names) {
+    for (const form of nameForms(name)) {
+      const hash = nameHash(form);
+      if (hash !== undefined) hashes.add(hash);
+    }
+  }
+  return hashes;
+}

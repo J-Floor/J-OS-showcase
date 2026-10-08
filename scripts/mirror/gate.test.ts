@@ -739,6 +739,54 @@ printf 'not json ${PLANTED.phone}' > "$out"`);
   );
 });
 
+describe("allowed names", () => {
+  const CREDIT =
+    "Designed and built by [Stanislas Laurent](https://stanlrt.tech) ([@stanlrt](https://github.com/stanlrt)) for J floor.\n";
+
+  function builtDenylist(...names: string[]): Set<string> {
+    const people = join(root, "allowed-people.jsonl");
+    writeFileSync(
+      people,
+      names.map((name) => JSON.stringify({ name })).join("\n") + "\n",
+    );
+    return new Set(buildDenylist([people], new Set()).list);
+  }
+
+  test("the credit line is flagged without the allowlist, clean with it", async () => {
+    const denylist = builtDenylist("Stanislas Laurent");
+    const dir = tree({ "README.md": CREDIT });
+    const without = await scan(dir, { ...options, denylist, allowedNames: [] });
+    expect(without.map((f) => f.layer)).toEqual(["denylist"]);
+    const withList = await scan(dir, {
+      ...options,
+      denylist,
+      allowedNames: ["Stanislas Laurent"],
+    });
+    expect(withList).toEqual([]);
+  });
+
+  test("the repo allowlist covers every built form of the credited name", async () => {
+    const denylist = builtDenylist("Stanislas Laurent");
+    const dir = tree({
+      "a.txt":
+        "Laurent, Stanislas\nLaurent Stanislas\nLaurent\nstanislas-laurent\n",
+    });
+    expect(await scan(dir, { ...options, denylist })).toEqual([]);
+  });
+
+  test("another person still flags", async () => {
+    const denylist = builtDenylist("Stanislas Laurent", "Ann Example");
+    const dir = tree({ "a.txt": `${CREDIT}Thanks to Ann Example\n` });
+    const findings = await scan(dir, { ...options, denylist });
+    expect(findings.map((f) => f.line)).toEqual([2]);
+  });
+
+  test("the credit URLs trip no shape layer", async () => {
+    const dir = tree({ "README.md": CREDIT });
+    expect(await scan(dir, options)).toEqual([]);
+  });
+});
+
 describe("real tree", () => {
   test(
     "the working tree minus design docs passes the scan",

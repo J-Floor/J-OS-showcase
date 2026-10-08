@@ -38,6 +38,9 @@ export const DENIED_URL_HOSTS: readonly DeniedUrlHost[] = [
   { host: "*.zoom.us", path: /^\/j\// },
 ];
 
+/** People deliberately credited in public; the gate ignores every denylist hash their name forms produce. */
+export const ALLOWED_NAMES: readonly string[] = ["Stanislas Laurent"];
+
 export const ALLOWED_URLS: readonly string[] = [
   "https://chat.whatsapp.com/EXAMPLEINVITE",
 ];

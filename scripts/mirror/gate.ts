@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import {
   ALLOWED_IPV4,
+  ALLOWED_NAMES,
   ALLOWED_IPV6,
   ALLOWED_URLS,
   BINARIES,
@@ -34,6 +35,7 @@ import {
   MAX_RAW_SPAN,
   MIN_NAME_KEY_LENGTH,
   MIN_RAW_KEY_LENGTH,
+  nameFormHashes,
   nameHash,
   nameKey,
   RAW_DELIMITERS,
@@ -57,6 +59,7 @@ type Layer =
 export type Finding = { layer: Layer; file: string; line: number };
 export type GateOptions = {
   denylist: Set<string>;
+  allowedNames?: readonly string[];
   gitleaks: (dir: string) => Promise<Finding[]>;
 };
 
@@ -497,7 +500,9 @@ function scanFile(entry: Entry, isDenied: DenyCheck): Finding[] {
 
 export async function scan(dir: string, opts: GateOptions): Promise<Finding[]> {
   if (opts.denylist.size === 0) throw new Error("The denylist is empty.");
-  const isDenied = denyCheck(opts.denylist);
+  const allowed = nameFormHashes(opts.allowedNames ?? ALLOWED_NAMES);
+  const denylist = new Set([...opts.denylist].filter((h) => !allowed.has(h)));
+  const isDenied = denyCheck(denylist);
   const findings = walk(dir).flatMap((entry) => scanFile(entry, isDenied));
   for (const leak of await opts.gitleaks(dir)) {
     findings.push({ layer: "gitleaks", file: leak.file, line: leak.line });

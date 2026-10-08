@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   MAX_RAW_SPAN,
+  nameForms,
   nameHash,
   nameKey,
   RAW_DELIMITERS,
@@ -40,13 +41,6 @@ export function readSkipList(path = SKIP_FILE): Set<string> {
       .filter((line) => line !== "" && !line.startsWith("#"))
       .map(nameKey),
   );
-}
-
-function nameForms(name: string): string[] {
-  const words = name.split(/\s+/);
-  const first = words[0];
-  const last = words[words.length - 1];
-  return [name, `${first} ${last}`, `${last} ${first}`, last];
 }
 
 function delimiterCount(line: string): number {

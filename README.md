@@ -64,6 +64,10 @@ Open the login URL on the host if the container cannot launch a browser. Then
 follow seeding, `SITE_URL`, and magic links in
 [`apps/web/README.md`](apps/web/README.md).
 
+## Credits
+
+Designed and built by [Stanislas Laurent](https://stanlrt.tech) ([@stanlrt](https://github.com/stanlrt)) for J floor.
+
 ## License
 
 All rights reserved; no licence is granted. The public `J-Floor/J-OS-showcase`
