@@ -58,7 +58,29 @@ describe("crons", () => {
 		// Each test above looks a job up by name, so a stray registration
 		// (e.g. the retired door-key sweep) would pass every one
 		// without this.
-		expect(Object.keys(crons.crons)).toHaveLength(5);
+		expect(Object.keys(crons.crons)).toHaveLength(7);
+	});
+
+	it("purges access logs older than 12 months nightly", () => {
+		const doorLog = crons.crons["purge door log older than 12 months"];
+		expect(doorLog.schedule).toEqual({
+			type: "daily",
+			hourUTC: 2,
+			minuteUTC: 15,
+		});
+		expect(doorLog.name).toBe(
+			getFunctionName(internal.accessLogRetention.purgeDoorLog)
+		);
+		const wifi =
+			crons.crons["purge Wi-Fi open events older than 12 months"];
+		expect(wifi.schedule).toEqual({
+			type: "daily",
+			hourUTC: 2,
+			minuteUTC: 30,
+		});
+		expect(wifi.name).toBe(
+			getFunctionName(internal.accessLogRetention.purgeWifiEvents)
+		);
 	});
 
 	it("polls door lock status every 10 minutes", () => {

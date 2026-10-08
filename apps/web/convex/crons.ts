@@ -44,6 +44,22 @@ crons.daily(
 	{}
 );
 
+// Access logs are kept 12 months (privacy notice). Two jobs, each deleting in
+// batches and rescheduling itself while a batch comes back full.
+crons.daily(
+	"purge door log older than 12 months",
+	{ hourUTC: 2, minuteUTC: 15 },
+	internal.accessLogRetention.purgeDoorLog,
+	{}
+);
+
+crons.daily(
+	"purge Wi-Fi open events older than 12 months",
+	{ hourUTC: 2, minuteUTC: 30 },
+	internal.accessLogRetention.purgeWifiEvents,
+	{}
+);
+
 // Lock reachability, every 10 minutes: one door-provider list call. The board hears
 // only when the set of offline locks changes (opsAlerts dedupes), not every
 // tick. No-ops on deployments without a configured door provider.

@@ -403,7 +403,9 @@ export default defineSchema({
 		before: v.optional(v.any()),
 		after: v.optional(v.any()),
 		meta: v.optional(v.any()),
-	}).index("by_person", ["personId"]),
+	})
+		.index("by_person", ["personId"])
+		.index("by_kind_and_at", ["kind", "at"]),
 	purgeLog: defineTable({ at: v.number(), count: v.number() }),
 	signatures: defineTable({
 		personId: v.id("people"),

@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as accessLogRetention from "../accessLogRetention.js";
 import type * as agreements from "../agreements.js";
 import type * as agreements_coords from "../agreements/coords.js";
 import type * as agreements_generated_fonts from "../agreements/generated/fonts.js";
@@ -153,6 +154,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  accessLogRetention: typeof accessLogRetention;
   agreements: typeof agreements;
   "agreements/coords": typeof agreements_coords;
   "agreements/generated/fonts": typeof agreements_generated_fonts;
