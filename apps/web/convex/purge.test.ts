@@ -1,13 +1,23 @@
+import betterAuthTest from "@convex-dev/better-auth/test";
+import rateLimiterTest from "@convex-dev/rate-limiter/test";
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 
-import { internal } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import { issueToken } from "./lib/confirmToken.ts";
 import { BATCH_SIZE } from "./purge.ts";
 import schema from "./schema.ts";
 
 const modules = import.meta.glob("./**/*.*s");
 const DAY = 86_400_000;
+
+/** A test deployment with the auth and rate-limit components erasure reaches. */
+function setup() {
+	const t = convexTest(schema, modules);
+	betterAuthTest.register(t);
+	rateLimiterTest.register(t);
+	return t;
+}
 
 describe("purgeUnverified", () => {
 	it("deletes an unverified prospect whose token expired, with its audit rows, and logs the count", async () => {
@@ -256,7 +266,7 @@ describe("purgeUnverified", () => {
 
 describe("purgeEmail", () => {
 	it("deletes the person, their signatures, events and confirm tokens, and leaves others", async () => {
-		const t = convexTest(schema, modules);
+		const t = setup();
 		await t.run(async (ctx) => {
 			const personId = await ctx.db.insert("people", {
 				email: "gone@example.com",
@@ -313,7 +323,7 @@ describe("purgeEmail", () => {
 	});
 
 	it("keeps an email change the purged person requested but drops their actorId", async () => {
-		const t = convexTest(schema, modules);
+		const t = setup();
 		const otherId = await t.run(async (ctx) => {
 			const boardId = await ctx.db.insert("people", {
 				email: "gone@example.com",
@@ -355,7 +365,7 @@ describe("purgeEmail", () => {
 	});
 
 	it("deletes the person's notification history and leaves other people's", async () => {
-		const t = convexTest(schema, modules);
+		const t = setup();
 		const createdAt = Date.now();
 		const stayId = await t.run(async (ctx) => {
 			const goneId = await ctx.db.insert("people", {
@@ -396,5 +406,508 @@ describe("purgeEmail", () => {
 			ctx.db.query("notifications").collect()
 		);
 		expect(left.map((r) => r.personId)).toEqual([stayId]);
+	});
+});
+
+const GONE = {
+	email: "zeb.quixley@example.com",
+	firstName: "Zebulon",
+	lastName: "Quixley",
+};
+
+/** A person named in every way the schema allows, beside a person who stays. */
+async function seedEverywhere(t: ReturnType<typeof setup>) {
+	const at = Date.now();
+	const name = `${GONE.firstName} ${GONE.lastName}`;
+	const seeded = await t.run(async (ctx) => {
+		const goneId = await ctx.db.insert("people", {
+			...GONE,
+			tier: "board",
+			stage: "active",
+			stageSince: at,
+		});
+		const stayId = await ctx.db.insert("people", {
+			email: "stay@example.com",
+			firstName: "Stay",
+			lastName: "Person",
+			tier: "guest",
+			stage: "active",
+			stageSince: at,
+			hostedById: goneId,
+			door: { override: "force_on", byId: goneId, at },
+			onboarding: {
+				steps: {},
+				boardSteps: { whatsapp: { completedAt: at, byId: goneId } },
+			},
+			board: { noteLog: [{ authorId: goneId, text: "fine", at }] },
+		});
+		// An imported guest whose host only resolved to a display name.
+		await ctx.db.insert("people", {
+			email: "legacy@example.com",
+			firstName: "Legacy",
+			lastName: "Guest",
+			tier: "guest",
+			stage: "active",
+			stageSince: at,
+			hostedBy: name,
+		});
+		const fileId = await ctx.storage.store(new Blob(["%PDF agreement"]));
+		const signatureId = await ctx.db.insert("signatures", {
+			personId: goneId,
+			email: GONE.email,
+			variant: "member",
+			signedName: name,
+			agreementVersion: "v1",
+			agreementHash: "h",
+			signedAt: at,
+			fileId,
+		});
+		const projectId = await ctx.db.insert("projects", {
+			name: "Roof",
+			leaderId: goneId,
+			createdBy: goneId,
+		});
+		const taskId = await ctx.db.insert("tasks", {
+			title: "Fix it",
+			status: "backlog",
+			assigneeIds: [goneId, stayId],
+			projectId,
+			createdBy: goneId,
+		});
+		const eventId = await ctx.db.insert("events", {
+			name: "Demo night",
+			startsAt: at,
+			endsAt: at + DAY,
+			startsAtLocal: "2026-10-08T18:00:00+02:00[Europe/Zurich]",
+			endsAtLocal: "2026-10-09T18:00:00+02:00[Europe/Zurich]",
+			createdBy: goneId,
+			createdAt: at,
+		});
+		await ctx.db.insert("eventAttendance", {
+			personId: goneId,
+			eventId,
+			confirmedAt: at,
+		});
+		await ctx.db.insert("personEvents", {
+			personId: goneId,
+			at,
+			kind: "field_edit",
+			field: "email",
+			before: "old@example.com",
+			after: GONE.email,
+		});
+		await ctx.db.insert("personEvents", {
+			personId: stayId,
+			at,
+			actorId: goneId,
+			kind: "field_edit",
+			field: "hostedById",
+			after: goneId,
+			meta: { reviewers: [goneId] },
+		});
+		const doorRow = {
+			operation: "unlock" as const,
+			trigger: "app" as const,
+			lockNames: ["Downstairs"],
+			outcome: "ok" as const,
+		};
+		await ctx.db.insert("doorLog", {
+			...doorRow,
+			at,
+			personId: goneId,
+			actorId: goneId,
+			email: GONE.email,
+			name,
+		});
+		// Written before `personId` was stored: only the address finds it.
+		await ctx.db.insert("doorLog", {
+			...doorRow,
+			at,
+			email: GONE.email,
+			name,
+		});
+		await ctx.db.insert("doorLog", {
+			...doorRow,
+			operation: "revoke",
+			trigger: "override",
+			at,
+			personId: stayId,
+			actorId: goneId,
+			email: "stay@example.com",
+			name: "Stay Person",
+		});
+		await issueToken(ctx, {
+			token: "gone-own",
+			purpose: "application",
+			personId: goneId,
+			ttlMs: DAY,
+		});
+		await issueToken(ctx, {
+			token: "stay-change",
+			purpose: "emailChange",
+			personId: stayId,
+			ttlMs: DAY,
+			newEmail: "stay2@example.com",
+			actorId: goneId,
+		});
+		await ctx.db.insert("pushSubscriptions", {
+			personId: goneId,
+			endpoint: "https://push.example/gone",
+			p256dh: "k",
+			auth: "a",
+			userAgent: "UA",
+			createdAt: at,
+		});
+		for (const personId of [goneId, stayId])
+			await ctx.db.insert("notifications", {
+				personId,
+				kind: "taskAssigned",
+				title: "New task",
+				body: "Fix it",
+				url: "/tasks",
+				createdAt: at,
+			});
+		return { goneId, stayId, fileId, signatureId, taskId, projectId };
+	});
+	const user = (await t.mutation(components.betterAuth.adapter.create, {
+		input: {
+			model: "user",
+			data: {
+				email: GONE.email,
+				name,
+				emailVerified: true,
+				createdAt: at,
+				updatedAt: at,
+			},
+		},
+	})) as { _id: string };
+	await t.mutation(components.betterAuth.adapter.create, {
+		input: {
+			model: "session",
+			data: {
+				token: "session-secret",
+				userId: user._id,
+				expiresAt: at + DAY,
+				createdAt: at,
+				updatedAt: at,
+				userAgent: "UA",
+			},
+		},
+	});
+	await t.mutation(components.betterAuth.adapter.create, {
+		input: {
+			model: "account",
+			data: {
+				accountId: user._id,
+				providerId: "magic-link",
+				userId: user._id,
+				createdAt: at,
+				updatedAt: at,
+			},
+		},
+	});
+	await t.mutation(components.betterAuth.adapter.create, {
+		input: {
+			model: "verification",
+			data: {
+				identifier: "hashed-link",
+				value: JSON.stringify({ email: GONE.email }),
+				expiresAt: at + DAY,
+				createdAt: at,
+				updatedAt: at,
+			},
+		},
+	});
+	return seeded;
+}
+
+describe("purgeEmail erases the person everywhere", () => {
+	it("leaves no row naming them, no stored file, and no sign-in records", async () => {
+		const t = setup();
+		const { goneId, stayId, fileId, taskId, projectId } =
+			await seedEverywhere(t);
+
+		await t.mutation(internal.purge.purgeEmail, { email: GONE.email });
+
+		const traces = [GONE.email, GONE.firstName, GONE.lastName, goneId];
+		const leaks = await t.run(async (ctx) => {
+			const found: string[] = [];
+			for (const table of Object.keys(schema.tables))
+				for (const row of await ctx.db
+					.query(table as "people")
+					.collect()) {
+					const json = JSON.stringify(row);
+					for (const trace of traces)
+						if (json.includes(trace))
+							found.push(`${table}: ${trace}`);
+				}
+			return found;
+		});
+		expect(leaks).toEqual([]);
+		expect(await t.run((ctx) => ctx.storage.get(fileId))).toBeNull();
+
+		// References on what stays are stripped; the rows themselves are kept.
+		const kept = await t.run(async (ctx) => ({
+			stay: await ctx.db.get(stayId),
+			task: await ctx.db.get(taskId),
+			project: await ctx.db.get(projectId),
+			doorLog: await ctx.db.query("doorLog").collect(),
+		}));
+		expect(kept.task?.assigneeIds).toEqual([stayId]);
+		expect(kept.project?.name).toBe("Roof");
+		expect(kept.stay?.board?.noteLog?.[0].text).toBe("fine");
+		expect(kept.doorLog.map((r) => r.email)).toEqual(["stay@example.com"]);
+
+		const after = await t.query(internal.people.exportPerson, {
+			email: GONE.email,
+		});
+		expect(after.people).toEqual([]);
+		expect(after.auth).toEqual([]);
+		for (const model of ["session", "account", "verification"] as const) {
+			const rows = (await t.query(
+				components.betterAuth.adapter.findMany,
+				{
+					model,
+					paginationOpts: { cursor: null, numItems: 10 },
+				}
+			)) as { page: unknown[] };
+			expect(rows.page, model).toEqual([]);
+		}
+	});
+});
+
+describe("exportPerson", () => {
+	it("returns what is held about the person, without sign-in secrets or other people's rows", async () => {
+		const t = setup();
+		const { goneId, stayId, signatureId, taskId, projectId } =
+			await seedEverywhere(t);
+
+		const out = await t.query(internal.people.exportPerson, {
+			email: GONE.email,
+		});
+
+		expect(out.people).toHaveLength(1);
+		const [{ person, records, references, agreementPdfs }] = out.people;
+		expect(person._id).toBe(goneId);
+		expect(agreementPdfs.map((pdf) => pdf.signatureId)).toEqual([
+			signatureId,
+		]);
+		expect(agreementPdfs[0].url).toMatch(/^https?:\/\//);
+		// Only their own records come back whole: one of each, plus their
+		// own door row (the legacy one is listed below, by address).
+		expect(Object.keys(records).sort()).toEqual([
+			"confirmTokens",
+			"doorLog",
+			"eventAttendance",
+			"notifications",
+			"personEvents",
+			"pushSubscriptions",
+			"signatures",
+		]);
+		for (const rows of Object.values(records)) expect(rows).toHaveLength(1);
+		// Everything else that names them is only pointed at.
+		expect(references).toEqual(
+			expect.arrayContaining([
+				{ table: "people", id: stayId, field: "hostedById" },
+				{ table: "people", id: stayId, field: "door.byId" },
+				{
+					table: "people",
+					id: stayId,
+					field: "board.noteLog.0.authorId",
+				},
+				{ table: "tasks", id: taskId, field: "assigneeIds.0" },
+				{ table: "tasks", id: taskId, field: "createdBy" },
+				{ table: "projects", id: projectId, field: "leaderId" },
+			])
+		);
+		expect(
+			new Set(references.map((r) => r.table)).has("confirmTokens")
+		).toBe(true);
+		// Nothing of the people they are linked to is disclosed.
+		const json = JSON.stringify(out);
+		for (const other of [
+			"stay@example.com",
+			"stay2@example.com",
+			"Stay Person",
+			"legacy@example.com",
+			"Roof",
+			"Demo night",
+		])
+			expect(json).not.toContain(other);
+		// Their earlier address is included; the legacy door row under the
+		// current one comes back, the person who stays's row does not.
+		expect(out.addresses.sort()).toEqual(["old@example.com", GONE.email]);
+		expect(out.legacyDoorLog).toHaveLength(1);
+		expect(out.legacyDoorLog[0].personId).toBeUndefined();
+		const current = out.auth.find((a) => a.address === GONE.email);
+		expect(current?.user?.email).toBe(GONE.email);
+		expect(current?.sessions).toHaveLength(1);
+		expect(JSON.stringify(out.auth)).not.toContain("session-secret");
+	});
+});
+
+describe("purgeEmail never reaches another person's records", () => {
+	it("keeps the door history of whoever holds an address the person used, and door rows naming someone else", async () => {
+		const t = setup();
+		const { stayId } = await seedEverywhere(t);
+		const doorRow = {
+			operation: "unlock" as const,
+			trigger: "app" as const,
+			lockNames: ["Downstairs"],
+			outcome: "ok" as const,
+			at: Date.now(),
+		};
+		const kept = await t.run(async (ctx) => {
+			// Someone else took over the address the person changed away from.
+			const takerId = await ctx.db.insert("people", {
+				email: "old@example.com",
+				firstName: "Taker",
+				lastName: "Over",
+				tier: "member",
+				stage: "active",
+				stageSince: Date.now(),
+			});
+			return [
+				await ctx.db.insert("doorLog", {
+					...doorRow,
+					personId: takerId,
+					email: "old@example.com",
+					name: "Taker Over",
+				}),
+				// No personId, under an address someone else holds now.
+				await ctx.db.insert("doorLog", {
+					...doorRow,
+					email: "old@example.com",
+					name: "Taker Over",
+				}),
+				// Someone else's row stored under the person's current address.
+				await ctx.db.insert("doorLog", {
+					...doorRow,
+					personId: stayId,
+					email: GONE.email,
+					name: "Stay Person",
+				}),
+			];
+		});
+
+		await t.mutation(internal.purge.purgeEmail, { email: GONE.email });
+
+		const left = await t.run(async (ctx) =>
+			Promise.all(kept.map((id) => ctx.db.get(id)))
+		);
+		expect(left.map((r) => r?._id)).toEqual(kept);
+	});
+
+	it("keeps a legacy host name when the guest's host id is someone else's", async () => {
+		const t = setup();
+		const { stayId } = await seedEverywhere(t);
+		const guestId = await t.run((ctx) =>
+			ctx.db.insert("people", {
+				email: "other-guest@example.com",
+				firstName: "Other",
+				lastName: "Guest",
+				tier: "guest",
+				stage: "active",
+				stageSince: Date.now(),
+				hostedById: stayId,
+				hostedBy: `${GONE.firstName} ${GONE.lastName}`,
+			})
+		);
+
+		await t.mutation(internal.purge.purgeEmail, { email: GONE.email });
+
+		const guest = await t.run((ctx) => ctx.db.get(guestId));
+		expect(guest?.hostedBy).toBe(`${GONE.firstName} ${GONE.lastName}`);
+	});
+
+	it("leaves a live magic link for an address that merely contains theirs", async () => {
+		const t = setup();
+		await seedEverywhere(t);
+		const at = Date.now();
+		const other = `x${GONE.email}`;
+		await t.mutation(components.betterAuth.adapter.create, {
+			input: {
+				model: "verification",
+				data: {
+					identifier: "other-link",
+					value: JSON.stringify({ email: other }),
+					expiresAt: at + DAY,
+					createdAt: at,
+					updatedAt: at,
+				},
+			},
+		});
+
+		await t.mutation(internal.purge.purgeEmail, { email: GONE.email });
+
+		const { page } = (await t.query(
+			components.betterAuth.adapter.findMany,
+			{
+				model: "verification",
+				paginationOpts: { cursor: null, numItems: 10 },
+			}
+		)) as { page: { identifier: string }[] };
+		expect(page.map((r) => r.identifier)).toEqual(["other-link"]);
+	});
+});
+
+describe("purgeEmail erases every address the person used", () => {
+	it("removes the sign-in records and legacy door rows under an address they changed away from", async () => {
+		const t = setup();
+		await seedEverywhere(t);
+		const at = Date.now();
+		// `seedEverywhere` records an email change from old@example.com.
+		const oldUser = (await t.mutation(
+			components.betterAuth.adapter.create,
+			{
+				input: {
+					model: "user",
+					data: {
+						email: "old@example.com",
+						name: "Zebulon Quixley",
+						emailVerified: true,
+						createdAt: at,
+						updatedAt: at,
+					},
+				},
+			}
+		)) as { _id: string };
+		await t.mutation(components.betterAuth.adapter.create, {
+			input: {
+				model: "session",
+				data: {
+					token: "old-session",
+					userId: oldUser._id,
+					expiresAt: at + DAY,
+					createdAt: at,
+					updatedAt: at,
+				},
+			},
+		});
+		const legacyId = await t.run((ctx) =>
+			ctx.db.insert("doorLog", {
+				operation: "unlock",
+				trigger: "app",
+				lockNames: ["Downstairs"],
+				outcome: "ok",
+				at,
+				email: "old@example.com",
+				name: "Zebulon Quixley",
+			})
+		);
+
+		const res = await t.mutation(internal.purge.purgeEmail, {
+			email: GONE.email,
+		});
+
+		expect(res.addresses.sort()).toEqual(["old@example.com", GONE.email]);
+		expect(await t.run((ctx) => ctx.db.get(legacyId))).toBeNull();
+		for (const model of ["user", "session"] as const) {
+			const { page } = (await t.query(
+				components.betterAuth.adapter.findMany,
+				{ model, paginationOpts: { cursor: null, numItems: 10 } }
+			)) as { page: unknown[] };
+			expect(page, model).toEqual([]);
+		}
 	});
 });

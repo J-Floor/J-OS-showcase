@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	pathsNaming,
 	peopleRefPlans,
 	peopleRefTables,
 	replacePersonId,
+	stripPersonId,
 } from "./peopleRefs.ts";
 
 describe("peopleRefTables", () => {
@@ -103,5 +105,48 @@ describe("replacePersonId", () => {
 		expect(replacePersonId({ a: "other" }, "drop", "keep").changed).toBe(
 			false
 		);
+	});
+});
+
+describe("stripPersonId", () => {
+	it("drops the key that held the id and the array entry naming it", () => {
+		const { value, changed } = stripPersonId(
+			{
+				hostedById: "gone",
+				assigneeIds: ["x", "gone"],
+				noteLog: [{ authorId: "gone", text: "hi", at: 1 }],
+				onboarding: { boardSteps: { whatsapp: { byId: "gone" } } },
+				n: 3,
+			},
+			"gone"
+		);
+		expect(changed).toBe(true);
+		expect(value).toEqual({
+			assigneeIds: ["x"],
+			noteLog: [{ text: "hi", at: 1 }],
+			onboarding: { boardSteps: { whatsapp: {} } },
+			n: 3,
+		});
+	});
+	it("leaves a document that does not name the person alone", () => {
+		expect(stripPersonId({ a: ["other"], b: "x" }, "gone").changed).toBe(
+			false
+		);
+	});
+});
+
+describe("pathsNaming", () => {
+	it("lists every dotted path that holds the id, and nothing else", () => {
+		expect(
+			pathsNaming(
+				{
+					hostedById: "gone",
+					assigneeIds: ["x", "gone"],
+					board: { noteLog: [{ authorId: "gone", text: "gone!" }] },
+					n: 3,
+				},
+				"gone"
+			)
+		).toEqual(["hostedById", "assigneeIds.1", "board.noteLog.0.authorId"]);
 	});
 });

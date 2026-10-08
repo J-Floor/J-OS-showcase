@@ -199,7 +199,31 @@ bunx convex run remindUnsigned:preview --prod
 bunx convex run remindUnsigned:run --prod
 ```
 
-Remove one person and their signatures by email:
+Answer an access request (nDSG art. 25): print everything held about one
+person as JSON. That covers their person row, the rows they own, signed
+agreement PDF links, every address they have used, door-log rows and sign-in
+records (session tokens left out). Rows that belong to someone else and only
+name them (a guest they host, a task they are on) appear as references
+(table, id, field), never as the row, so the JSON can go to them as is. Reply
+within 30 days.
+
+```bash
+bunx convex run people:exportPerson '{"email":"x@example.org"}' --prod
+```
+
+Erase one person by email (a deletion request, or a test or duplicate account).
+This deletes:
+
+- their person row and every row they own: signatures and their stored PDFs,
+  audit events, door log, attendance, push subscriptions, notifications and
+  confirm tokens
+- their sign-in user, sessions and accounts, under their current address and
+  any earlier one from an email change, unless someone else holds it now
+
+Door-log rows that name someone else are never touched. Rows they only appear on lose their id and are kept. A task keeps its other
+assignees, for example. Free-text mentions of their name, such as a board note
+on someone else, are not found; search for those by hand. Run the export first
+if the person also asked for a copy.
 
 ```bash
 bunx convex run purge:purgeEmail '{"email":"x@example.org"}' --prod

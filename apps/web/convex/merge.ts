@@ -1,7 +1,7 @@
 import { ConvexError, v } from "convex/values";
 
 import { internal } from "./_generated/api";
-import type { Doc, Id, TableNames } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import {
 	internalAction,
 	internalMutation,
@@ -18,8 +18,8 @@ import {
 } from "./lib/emailAddress.ts";
 import { violations } from "./lib/invariants.ts";
 import {
-	MAX_SCANNED_DOCS,
-	peopleRefPlans,
+	documentsNaming,
+	type Naming,
 	replacePersonId,
 } from "./lib/peopleRefs.ts";
 
@@ -128,57 +128,6 @@ function patchOf(raw: unknown): Partial<Doc<"people">> | null {
 }
 
 const NOT_AN_OBJECT = "The patch must be an object.";
-
-/** A table queried by name and index name, which the typed API cannot express. */
-type NamedIndexQuery = {
-	withIndex(
-		name: string,
-		range: (q: { eq(field: string, value: unknown): unknown }) => unknown
-	): { collect(): Promise<Doc<"people">[]> };
-};
-
-/** A document that may name the dropped person, with the table it lives in. */
-type Naming = { table: TableNames; doc: Doc<"people"> };
-
-/**
- * Every document that may name `dropId`: index lookups where the schema plan
- * allows them, a capped full read elsewhere. One transaction cannot read more
- * than {@link MAX_SCANNED_DOCS} scanned documents, so a bigger scan is refused
- * here, before anything is written, rather than failing midway.
- * Typed as people documents only to share one walk; each is written back
- * through its own id, so the table is never lost.
- */
-async function documentsNaming(
-	ctx: QueryCtx,
-	dropId: Id<"people">
-): Promise<{ problem: string } | { docs: Naming[] }> {
-	const docs = new Map<string, Naming>();
-	let budget = MAX_SCANNED_DOCS;
-	for (const [name, plan] of Object.entries(peopleRefPlans())) {
-		const table = name as TableNames;
-		if (plan.mode === "index") {
-			for (const { index, field } of plan.lookups) {
-				const found = await (
-					ctx.db.query(
-						table as "people"
-					) as unknown as NamedIndexQuery
-				)
-					.withIndex(index, (q) => q.eq(field, dropId))
-					.collect();
-				for (const doc of found) docs.set(doc._id, { table, doc });
-			}
-			continue;
-		}
-		const rows = await ctx.db.query(table as "people").take(budget + 1);
-		if (rows.length > budget)
-			return {
-				problem: `Too many documents to scan in one transaction (more than ${MAX_SCANNED_DOCS}, reached in ${table}).`,
-			};
-		budget -= rows.length;
-		for (const doc of rows) docs.set(doc._id, { table, doc });
-	}
-	return { docs: [...docs.values()] };
-}
 
 /**
  * Attendance is one row per person and event. When the kept person already

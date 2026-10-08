@@ -434,7 +434,8 @@ export default defineSchema({
 		leaderId: v.optional(v.id("people")),
 		startDate: v.optional(v.number()),
 		endDate: v.optional(v.number()),
-		createdBy: v.id("people"),
+		// Optional so erasing the creator (`purge.purgeEmail`) keeps the row.
+		createdBy: v.optional(v.id("people")),
 	}),
 	tasks: defineTable({
 		title: v.string(),
@@ -443,7 +444,8 @@ export default defineSchema({
 		assigneeIds: v.array(v.id("people")),
 		projectId: v.optional(v.id("projects")),
 		dueDate: v.optional(v.number()),
-		createdBy: v.id("people"),
+		// Optional so erasing the creator (`purge.purgeEmail`) keeps the row.
+		createdBy: v.optional(v.id("people")),
 	})
 		.index("by_status", ["status"])
 		.index("by_project", ["projectId"]),
@@ -514,6 +516,8 @@ export default defineSchema({
 		.index("by_at", ["at"])
 		.index("by_personId_and_at", ["personId", "at"])
 		.index("by_actor", ["actorId"])
+		// Erasure finds rows written before `personId` was stored by address.
+		.index("by_email", ["email"])
 		// Exact lookup for the per-door app-action debounce: personId + slot +
 		// outcome "ok", newest first. Replaces a 20-row recency scan matched on
 		// free-text `detail` — see `doorInternal.doorActionContext`.
@@ -541,7 +545,8 @@ export default defineSchema({
 		// `createEvent` always writes both, so no event lacks them.
 		startsAtLocal: v.string(),
 		endsAtLocal: v.string(),
-		createdBy: v.id("people"),
+		// Optional so erasing the creator (`purge.purgeEmail`) keeps the row.
+		createdBy: v.optional(v.id("people")),
 		createdAt: v.number(),
 		// The two reminder jobs `notify/eventReminders` scheduled for this
 		// event, so a later edit or delete can cancel them. Absent when the

@@ -14,6 +14,7 @@ import { confirmEmailChange as confirmEmailChangeEmail } from "./emails/generate
 import { emailChanged } from "./emails/generated/emailChanged.ts";
 import { confirmUrl, emailUrls } from "./emails/urls.ts";
 import { requireRole } from "./lib/authGuard.ts";
+import { authRecordsFor } from "./lib/authRecords.ts";
 import {
 	issueToken,
 	liveTokens,
@@ -30,12 +31,26 @@ import {
 	EMAIL_IN_USE,
 	EMAIL_INVALID,
 	normalizeEmail,
+	peopleByEmail,
 	personByEmail,
 	validEmail,
 } from "./lib/emailAddress.ts";
+import {
+	addressesHeldBy,
+	addressesOf,
+	legacyDoorRows,
+	ownedBy,
+} from "./lib/erasure.ts";
 import { IllegalTransitionError } from "./lib/lifecycleTypes.ts";
 import { displayName } from "./lib/names.ts";
 import { BOARD_STEPS } from "./lib/onboardingSteps.ts";
+import {
+	documentsNaming,
+	overBudget,
+	pathsNaming,
+	readBudget,
+	takeCharged,
+} from "./lib/peopleRefs.ts";
 import { boardLevelView, selfView } from "./lib/personViews.ts";
 import {
 	ACCESS_TIERS,
@@ -68,6 +83,73 @@ import { fundingStage, productStage, vertical } from "./schema.ts";
 export const getPersonByEmail = internalQuery({
 	args: { email: v.string() },
 	handler: async (ctx, { email }) => personByEmail(ctx, email),
+});
+
+/**
+ * Everything held about one person, for an access request (nDSG art. 25).
+ * For each person row on the address: the row, their own records in full
+ * (`personId` is theirs), a download URL for each signed agreement PDF, and
+ * for every other document that names them (found from the schema,
+ * `lib/peopleRefs#documentsNaming`) only where it does — `{ table, id,
+ * field }` — never that document, which is someone else's data. Then every
+ * address they have used that no one else holds now, the door-log rows
+ * stored under those addresses before `personId` was, and the sign-in records
+ * under each, session and account secrets left out. Internal, so only an
+ * operator holding the deploy key can run it.
+ * Run: bunx convex run people:exportPerson '{"email":"x@example.org"}' --prod
+ */
+export const exportPerson = internalQuery({
+	args: { email: v.string() },
+	handler: async (ctx, { email }) => {
+		const budget = readBudget();
+		const rows = await takeCharged(peopleByEmail(ctx, email), budget);
+		if (!rows) throw new Error(overBudget("people"));
+		const used = new Set<string>();
+		const people = [];
+		for (const person of rows) {
+			const scan = await documentsNaming(ctx, person._id, budget);
+			if ("problem" in scan) throw new Error(scan.problem);
+			for (const address of addressesOf(person, scan.docs))
+				used.add(address);
+			const records: Record<string, unknown[]> = {};
+			const references = [];
+			const agreementPdfs = [];
+			for (const { table, doc } of scan.docs) {
+				if (doc._id === person._id) continue;
+				if (!ownedBy(doc, person._id)) {
+					for (const field of pathsNaming(doc, person._id))
+						references.push({ table, id: doc._id, field });
+					continue;
+				}
+				(records[table] ??= []).push(doc);
+				const { fileId } = doc as unknown as Partial<Doc<"signatures">>;
+				if (table === "signatures" && fileId)
+					agreementPdfs.push({
+						signatureId: doc._id,
+						url: await ctx.storage.getUrl(fileId),
+					});
+			}
+			people.push({ person, records, references, agreementPdfs });
+		}
+		const own = await addressesHeldBy(
+			ctx,
+			[...used],
+			new Set(rows.map((p) => p._id)),
+			budget
+		);
+		if ("problem" in own) throw new Error(own.problem);
+		const door = await legacyDoorRows(ctx, own.addresses, budget);
+		if ("problem" in door) throw new Error(door.problem);
+		const auth = [];
+		for (const address of own.addresses)
+			auth.push({ address, ...(await authRecordsFor(ctx, address)) });
+		return {
+			people,
+			addresses: own.addresses,
+			legacyDoorLog: door.rows,
+			auth,
+		};
+	},
 });
 
 export const getCurrentRole = query({
