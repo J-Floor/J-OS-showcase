@@ -3,6 +3,14 @@
  * Intl.RelativeTimeFormat plumbing).
  */
 
+const mediumDate = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+
+const shortDate = new Intl.DateTimeFormat(undefined, {
+	year: "numeric",
+	month: "short",
+	day: "numeric",
+});
+
 function startOfDay(ms: number): Date {
 	const date = new Date(ms);
 	date.setHours(0, 0, 0, 0);
@@ -17,7 +25,7 @@ export function dayLabel(at: number, now: number): string {
 	const yesterday = new Date(today);
 	yesterday.setDate(today.getDate() - 1);
 	if (day.getTime() === yesterday.getTime()) return "Yesterday";
-	return day.toLocaleDateString(undefined, { dateStyle: "medium" });
+	return mediumDate.format(day);
 }
 
 /**
@@ -40,11 +48,7 @@ export function formatAgo(ms: number, nowMs = Date.now()): string {
 
 /** Format an absolute timestamp (ms since epoch) as a short local date. */
 export function formatDate(ms: number): string {
-	return new Date(ms).toLocaleDateString(undefined, {
-		year: "numeric",
-		month: "short",
-		day: "numeric",
-	});
+	return shortDate.format(new Date(ms));
 }
 
 /**

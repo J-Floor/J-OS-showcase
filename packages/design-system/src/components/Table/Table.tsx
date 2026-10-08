@@ -1,6 +1,7 @@
 import {
 	flexRender,
 	type Cell as TanCell,
+	type Column,
 	type Header,
 	type Row as TanRow,
 	type SortingState,
@@ -19,20 +20,25 @@ import {
 	onMount,
 	untrack,
 } from "solid-js";
+import { Dynamic } from "solid-js/web";
 
 import { ICONS } from "../../icons.ts";
+import { afterPaint } from "../../utils/afterPaint.ts";
 import { Checkbox } from "../Checkbox/Checkbox.tsx";
 import { Deferred } from "../Deferred/Deferred.tsx";
 import { Icon } from "../Icon/Icon.tsx";
 
 import { BatchActions } from "./BatchActions.tsx";
+import { createColumnLayout } from "./columnLayout.ts";
+import { ACTIONS_COLUMN_ID, SELECT_COLUMN_ID } from "./columnTracks.ts";
+import { enumOptionLabel, enumOptionValues } from "./filter.ts";
 import { FilteringButton } from "./FilteringButton.tsx";
 import { createGridFocus } from "./gridFocus.ts";
-import { createTable } from "./hooks.ts";
+import { columnMeta, createTable } from "./hooks.ts";
 import { SkeletonRows } from "./SkeletonRows.tsx";
 import { SortingButton } from "./SortingButton.tsx";
 import styles from "./Table.module.scss";
-import type { JfColumnDef } from "./types.ts";
+import type { EnumOption, EnumValue, JfColumnDef } from "./types.ts";
 
 export type TableRootProps<Data extends Record<string, unknown>> = {
 	columns: JfColumnDef<Data>[];
@@ -47,8 +53,22 @@ export type TableRootProps<Data extends Record<string, unknown>> = {
 	groupBy?: string;
 	/** Enable a leading selection column + tri-state select-all. */
 	enableRowSelection?: boolean;
+	/**
+	 * A row's stable id, keying its selection and its column measurement.
+	 * Defaults to the row's `_id` when it is a string (every Convex
+	 * document), else its index. Give one for other data whose rows can be
+	 * inserted or removed. Ids must be unique: two rows sharing one share
+	 * their selection, their focus and their measured width. The same id
+	 * keys focus and `activeRowId`.
+	 */
+	getRowId?: (row: Data, index: number) => string;
 	/** Make the header stick to the top on scroll. @default true */
 	stickyHeader?: boolean;
+	/**
+	 * Mark each row's first visible column (after the selection column) as its
+	 * row header, so screen readers name the row by it. @default false
+	 */
+	headerColumn?: boolean;
 	/**
 	 * Render only the rows near the viewport, with spacer rows standing in for
 	 * the rest. Off by default — it costs a scroll listener and per-row
@@ -146,20 +166,32 @@ const ESTIMATED_ROW_HEIGHT = 53;
 
 const END_REACHED_THRESHOLD_ROWS = 10;
 
-const SELECT_COLUMN_ID = "select";
-/** A column with this id renders pinned to the trailing edge (sticky), so the
- * per-row action buttons stay visible while the other columns scroll under it. */
-const ACTIONS_COLUMN_ID = "actions";
+/** `aria-sort` for a header: its sort state, or nothing when it cannot sort. */
+function ariaSort<Data extends Record<string, unknown>>(
+	column: Column<Data>
+): "ascending" | "descending" | "none" | undefined {
+	if (!column.getCanSort()) return undefined;
+	const sorted = column.getIsSorted();
+	if (sorted === "asc") return "ascending";
+	if (sorted === "desc") return "descending";
+	return "none";
+}
 
 /**
  * Data table built on `@tanstack/solid-table`. Renders header (sorting +
- * filtering), body (leaf rows, native group header rows when `groupBy` is set),
+ * filtering), body (leaf rows, group header rows when `groupBy` is set),
  * optional selection column and a `Table.BatchActions` bar.
  *
- * Ported from EmboUI's `Table` with the legacy machinery removed: no
- * ResizeObserver/MutationObserver, no column-width measurement, no scroll
- * detection, no nested tables — native grouping renders group header rows in a
- * single table.
+ * Layout: the table, its head and its body are blocks, and every row is its
+ * own CSS grid over ONE shared track list (`--jf-table-tracks`), so header,
+ * group header and body rows line up on the same tracks. Rows keep their
+ * boxes, which the virtualiser measures, the focus ring paints and the pad
+ * rows size. Column widths come from each column's `size` (see
+ * `ColumnSize`); content-sized ones are measured (see `columnLayout.ts`).
+ *
+ * Ported from EmboUI's `Table`, which puts every cell in one grid on the
+ * `<table>` with `display: contents` rows. Not ported: a row with no box
+ * cannot be measured, windowed or ringed.
  */
 export function Root<Data extends Record<string, unknown>>(
 	props: TableRootProps<Data>
@@ -181,21 +213,20 @@ export function Root<Data extends Record<string, unknown>>(
 		enableRowSelection: props.enableRowSelection,
 		// eslint-disable-next-line solid/reactivity -- static table config, read once at setup
 		groupBy: props.groupBy,
+		// eslint-disable-next-line solid/reactivity -- static table config, read once at setup
+		getRowId: props.getRowId,
 	});
 
+	/**
+	 * The id focus and `activeRowId` match a row by: the same `row.id` that
+	 * keys its selection (see `getRowId`). Without a `getRowId`, a row with
+	 * no string `_id` has only its index, which a push can hand to another
+	 * row, so it gets no id and is never focused (see `isRowFocused` in
+	 * gridFocus.ts).
+	 */
 	function rowId(row: TanRow<Data>): string | undefined {
-		// `Data` is a generic bound to `Record<string, unknown>`, not to a shape
-		// that carries `_id` — from `tsc`'s view a plain `Data -> { _id: string }`
-		// cast doesn't sufficiently overlap, even though every real caller's row
-		// type does have one. The `unknown` hop is exactly that: telling the
-		// compiler this is an intentional, unchecked narrowing, not a mistake.
-		// The field itself is optional in the cast (not `_id: string`) because a
-		// consumer can turn on `focusableRows` with data that has no `_id` at
-		// all — this then genuinely returns `undefined` at runtime, and callers
-		// must treat "no id" as never matching the focus state (see
-		// `isRowFocused` in gridFocus.ts), not as interchangeable with "nothing
-		// is focused".
-		return (row.original as unknown as { _id?: string })._id;
+		if (props.getRowId !== undefined) return row.id;
+		return typeof row.original._id === "string" ? row.id : undefined;
 	}
 
 	// Collapsed group keys. Groups start expanded (empty set); toggling a group
@@ -239,6 +270,30 @@ export function Root<Data extends Record<string, unknown>>(
 		selectionActive,
 	});
 
+	/** A focusable table is an ARIA grid, whose cells are `gridcell`s. */
+	function cellRole(): "gridcell" | "cell" {
+		return props.focusableRows === true ? "gridcell" : "cell";
+	}
+
+	function columnCount(): number {
+		return table.getVisibleLeafColumns().length;
+	}
+
+	function hasActions(): boolean {
+		return table
+			.getVisibleLeafColumns()
+			.some((column) => column.id === ACTIONS_COLUMN_ID);
+	}
+
+	/** The column whose cells are row headers: the first visible one after the
+	 *  selection column, when `headerColumn` is on. */
+	function rowHeaderColumnId(): string | undefined {
+		if (props.headerColumn !== true) return undefined;
+		return table
+			.getVisibleLeafColumns()
+			.find((column) => column.id !== SELECT_COLUMN_ID)?.id;
+	}
+
 	// Id of the last toggled leaf row, anchor for shift-click range selection.
 	// Tracked by id (not `row.index`, which is the original data index): the
 	// range must follow the *rendered* order so it stays contiguous under
@@ -277,52 +332,57 @@ export function Root<Data extends Record<string, unknown>>(
 		const isSelect = column.id === SELECT_COLUMN_ID;
 		const isActions = column.id === ACTIONS_COLUMN_ID;
 		return (
-			<th class={clsx(styles.th, isActions && styles.actionsCell)}>
+			<th
+				class={clsx(styles.th, isActions && styles.actionsCell)}
+				role="columnheader"
+				scope="col"
+				aria-sort={ariaSort(column)}
+				data-column-id={column.id}
+			>
 				<Show
-					when={!header.isPlaceholder}
-					fallback={<span class={styles.headerCell} />}
-				>
-					<Show
-						when={isSelect}
-						fallback={
-							<span class={styles.headerCell}>
-								<span class={styles.headerLabel}>
-									{flexRender(
-										column.columnDef.header,
-										header.getContext()
-									)}
-								</span>
-								<span class={styles.headerActions}>
-									<Show when={column.getCanSort()}>
-										<SortingButton
-											column={column}
-											table={table}
-										/>
-									</Show>
-									<Show when={column.getCanFilter()}>
-										<FilteringButton column={column} />
-									</Show>
-								</span>
+					when={isSelect}
+					fallback={
+						<span class={styles.headerCell} data-header-cell="">
+							<span
+								class={styles.headerLabel}
+								data-header-label=""
+							>
+								{flexRender(
+									column.columnDef.header,
+									header.getContext()
+								)}
 							</span>
-						}
-					>
-						<span
-							class={clsx(styles.headerCell, styles.selectCell)}
-						>
-							<Checkbox
-								checked={
-									table.getIsAllRowsSelected()
-										? true
-										: table.getIsSomeRowsSelected()
-											? "indeterminate"
-											: false
-								}
-								onCheckedChange={() => {
-									table.toggleAllRowsSelected();
-								}}
-							/>
+							<span
+								class={styles.headerActions}
+								data-header-actions=""
+							>
+								<Show when={column.getCanSort()}>
+									<SortingButton
+										column={column}
+										table={table}
+									/>
+								</Show>
+								<Show when={column.getCanFilter()}>
+									<FilteringButton column={column} />
+								</Show>
+							</span>
 						</span>
-					</Show>
+					}
+				>
+					<span class={clsx(styles.headerCell, styles.selectCell)}>
+						<Checkbox
+							checked={
+								table.getIsAllRowsSelected()
+									? true
+									: table.getIsSomeRowsSelected()
+										? "indeterminate"
+										: false
+							}
+							onCheckedChange={() => {
+								table.toggleAllRowsSelected();
+							}}
+						/>
+					</span>
 				</Show>
 			</th>
 		);
@@ -336,28 +396,27 @@ export function Root<Data extends Record<string, unknown>>(
 		const def = column.columnDef as JfColumnDef<Data>;
 		const isSelect = column.id === SELECT_COLUMN_ID;
 		const isActions = column.id === ACTIONS_COLUMN_ID;
+		const isRowHeader = column.id === rowHeaderColumnId();
 		// In a grouped table the grouping column's value is shown in the group
 		// header row, so the leaf cell for that column is left blank to avoid a
 		// redundant repeat.
 		const isGroupedColumn = props.groupBy === column.id;
 		return (
-			<td
+			<Dynamic
+				component={isRowHeader ? "th" : "td"}
+				role={isRowHeader ? "rowheader" : cellRole()}
 				class={clsx(
 					isSelect && styles.selectCell,
 					isActions && styles.actionsCell
 				)}
+				data-column-id={column.id}
+				data-text-cell={isSelect || isActions ? undefined : ""}
 				data-disable-row-click={
-					def.disableRowClick ? "true" : undefined
+					isSelect || def.disableRowClick ? "true" : undefined
 				}
-				onClick={(event) => {
-					if (def.disableRowClick) {
+				onClick={(event: MouseEvent) => {
+					if (def.disableRowClick || isSelect)
 						event.stopPropagation();
-						return;
-					}
-					if (isSelect) {
-						event.stopPropagation();
-						return;
-					}
 				}}
 			>
 				<Show
@@ -375,6 +434,7 @@ export function Root<Data extends Record<string, unknown>>(
 						class={styles.selectCheckbox}
 						checked={row.getIsSelected()}
 						disabled={!row.getCanSelect()}
+						disabledReason="This row can't be selected"
 						onClick={(event) => {
 							if (
 								(event as MouseEvent).shiftKey &&
@@ -391,7 +451,7 @@ export function Root<Data extends Record<string, unknown>>(
 						}}
 					/>
 				</Show>
-			</td>
+			</Dynamic>
 		);
 	}
 
@@ -405,6 +465,7 @@ export function Root<Data extends Record<string, unknown>>(
 			<tr
 				ref={measured?.ref}
 				id={rowDomId(row)}
+				role="row"
 				data-index={measured?.index}
 				class={clsx(props.onRowClick && styles.clickable)}
 				data-state={row.getIsSelected() ? "selected" : undefined}
@@ -414,22 +475,7 @@ export function Root<Data extends Record<string, unknown>>(
 				}}
 			>
 				<For each={row.getVisibleCells()}>
-					{(cell) => (
-						<>
-							<Show
-								when={
-									props.groupBy &&
-									cell.column.id === ACTIONS_COLUMN_ID
-								}
-							>
-								<td
-									class={styles.spacerCell}
-									aria-hidden="true"
-								/>
-							</Show>
-							{renderCell(cell, row)}
-						</>
-					)}
+					{(cell) => renderCell(cell, row)}
 				</For>
 			</tr>
 		);
@@ -437,44 +483,12 @@ export function Root<Data extends Record<string, unknown>>(
 
 	function HeadRow(): JSX.Element {
 		return (
-			<thead>
+			<thead role="rowgroup">
 				<For each={table.getHeaderGroups()}>
 					{(headerGroup) => (
-						<tr>
+						<tr role="row">
 							<For each={headerGroup.headers}>
-								{(header) => (
-									<>
-										{/* The grouped table's colgroup injects
-										    a flexible spacer column before the
-										    sticky actions column, and its body
-										    rows render a cell for it — but this
-										    header did not, so the header row
-										    came out one cell short: every
-										    heading sat one column to the left
-										    of what it labelled, and the actions
-										    column had no header above it, which
-										    read as the row's buttons hanging off
-										    the end of the table.
-
-										    Gated on `groupBy` because that is
-										    what the colgroup is gated on: the
-										    plain table has no colgroup and no
-										    spacer anywhere. */}
-										<Show
-											when={
-												props.groupBy &&
-												header.column.id ===
-													ACTIONS_COLUMN_ID
-											}
-										>
-											<th
-												class={styles.spacerCell}
-												aria-hidden="true"
-											/>
-										</Show>
-										{renderHeaderCell(header)}
-									</>
-								)}
+								{(header) => renderHeaderCell(header)}
 							</For>
 						</tr>
 					)}
@@ -483,58 +497,19 @@ export function Root<Data extends Record<string, unknown>>(
 		);
 	}
 
-	// --- grouping: single table, fixed colgroup ---------------------------
-	// `table-layout: fixed` + this colgroup pin each column to its `size`
-	// (TanStack `getSize()`, default 150) in px — no JS width measurement
-	// (EmboUI's ResizeObserver column-width sync is the legacy we skip). The
-	// table is `inline-size: 100%`, and a flexible spacer `<col>` (width:auto)
-	// sits just before the trailing actions column to absorb any slack when the
-	// table is narrower than the wrapper. That keeps the real columns at their
-	// exact widths (so the 48px select column stays aligned with the group
-	// indicator) while still filling the viewport; when columns overflow, the
-	// spacer collapses to 0 and the table scrolls.
-	function ColGroup(): JSX.Element {
-		return (
-			<colgroup>
-				<For each={table.getVisibleLeafColumns()}>
-					{(col) => (
-						<>
-							<Show when={col.id === ACTIONS_COLUMN_ID}>
-								<col class={styles.spacerCol} />
-							</Show>
-							{/* inline style: per-column pixel width comes from TanStack's continuous getSize() — an arbitrary numeric value with no fixed class set (select column is the lone fixed 48px case) */}
-							<col
-								style={{
-									width:
-										col.id === SELECT_COLUMN_ID
-											? "48px"
-											: `${String(col.getSize())}px`,
-								}}
-							/>
-						</>
-					)}
-				</For>
-			</colgroup>
-		);
-	}
-
 	type RowGroup = { key: string; value: unknown; rows: TanRow<Data>[] };
 
-	function groupedColumn(): JfColumnDef<Data> | undefined {
-		return props.columns.find(
-			(c) =>
-				c.id === props.groupBy ||
-				(c as { accessorKey?: string }).accessorKey === props.groupBy
-		);
+	/** The grouped column's enum options, which name and order the groups. */
+	function groupOptions(): readonly EnumOption<EnumValue>[] | undefined {
+		if (!props.groupBy) return undefined;
+		const column = table.getColumn(props.groupBy);
+		if (!column) return undefined;
+		const meta = columnMeta(column);
+		return meta.dataType === "enum" ? meta.enumOptions : undefined;
 	}
 
 	function groupLabel(value: unknown): string {
-		const col = groupedColumn();
-		const options = col?.dataType === "enum" ? col.enumOptions : undefined;
-		return (
-			options?.find((o) => o.value === String(value))?.label ??
-			String(value)
-		);
+		return enumOptionLabel(groupOptions() ?? [], String(value));
 	}
 
 	// Bucket the flat, sorted+filtered rows by the grouped column's value. Group
@@ -556,10 +531,13 @@ export function Root<Data extends Record<string, unknown>>(
 			}
 			group.rows.push(row);
 		}
-		const col = groupedColumn();
-		const options = col?.dataType === "enum" ? col.enumOptions : undefined;
+		const options = groupOptions();
 		if (options) {
-			const rank = new Map(options.map((o, i) => [o.value, i]));
+			const rank = new Map(
+				options.flatMap((option, i) =>
+					enumOptionValues(option).map((value) => [value, i] as const)
+				)
+			);
 			order.sort(
 				(a, b) =>
 					(rank.get(a) ?? Number.POSITIVE_INFINITY) -
@@ -569,11 +547,9 @@ export function Root<Data extends Record<string, unknown>>(
 		return order.map((k) => byKey.get(k)!);
 	}
 
-	// Grouped rows render as ONE table (header, group-header rows and data rows
-	// share a single colgroup), so the leading select column and the group
+	// Grouped rows render in ONE table (header, group-header rows and data rows
+	// share one track list), so the leading select column and the group
 	// indicator line up inherently and the trailing actions column can be sticky.
-	// Neither was possible with the old accordion of subtables, each of which sat
-	// inside an `overflow: hidden` content box that trapped sticky.
 	function isGroupExpanded(key: string): boolean {
 		return !collapsedGroups().has(key);
 	}
@@ -635,9 +611,13 @@ export function Root<Data extends Record<string, unknown>>(
 	});
 
 	let scrollRef: HTMLDivElement | undefined = undefined;
+	let tableRef: HTMLTableElement | undefined = undefined;
 	let bodyRef: HTMLTableSectionElement | undefined = undefined;
 	function captureScrollRef(el: HTMLDivElement): void {
 		scrollRef = el;
+	}
+	function captureTableRef(el: HTMLTableElement): void {
+		tableRef = el;
 	}
 	function captureBodyRef(el: HTMLTableSectionElement): void {
 		bodyRef = el;
@@ -685,7 +665,8 @@ export function Root<Data extends Record<string, unknown>>(
 	 * here, a table mounted while hidden stays in the un-virtualised fallback
 	 * forever, and a table mounted while visible has no way to re-measure
 	 * after a hide/show cycle (the blank-after-tab-switch state a previous
-	 * `needsRemeasure` heuristic tried to patch after the fact).
+	 * `needsRemeasure` heuristic tried to patch after the fact). The column
+	 * layout re-measures its headers off the same signal.
 	 */
 	const [scrollParentHeight, setScrollParentHeight] = createSignal(0);
 
@@ -718,6 +699,24 @@ export function Root<Data extends Record<string, unknown>>(
 		onCleanup(() => {
 			observer.disconnect();
 		});
+	});
+
+	const layout = createColumnLayout({
+		table,
+		tableEl: () => tableRef,
+		focusableRows: () => props.focusableRows === true,
+		scrollParentHeight,
+	});
+
+	/**
+	 * Track changes animate (`[data-animate-tracks]` in the stylesheet) only
+	 * once the first layout with data has painted, so a table never animates
+	 * in, not even one mounted in a hidden tab and shown later.
+	 */
+	const [tracksSettled, setTracksSettled] = createSignal(false);
+	createEffect(() => {
+		if (tracksSettled() || loading() || hidden()) return;
+		onCleanup(afterPaint(() => setTracksSettled(true)));
 	});
 
 	function scrollParent(): HTMLElement | null {
@@ -819,33 +818,28 @@ export function Root<Data extends Record<string, unknown>>(
 		untrack(() => props.onEndReached?.());
 	});
 
-	// Column count including the injected spacer (present whenever an actions
-	// column exists) — for the group-header / empty-state cell `colSpan`.
-	function leafColCount(): number {
-		const cols = table.getVisibleLeafColumns();
-		return (
-			cols.length + (cols.some((c) => c.id === ACTIONS_COLUMN_ID) ? 1 : 0)
-		);
-	}
-
 	function loading(): boolean {
 		return props.loading === true || props.data === undefined;
 	}
-	/** Column count for skeleton cells, matching each branch's own empty-state
-	 *  `colSpan`: the grouped table's actions spacer only exists when
-	 *  `groupBy` is set (see `renderRow`/`HeadRow`), so only that branch adds
-	 *  it via `leafColCount`; the ungrouped branch has no spacer cell. */
-	function skeletonCols(): number {
-		return props.groupBy
-			? leafColCount()
-			: table.getVisibleLeafColumns().length;
+
+	/** A row standing in for rows that are not rendered: no cells, just
+	 *  height. The height is a custom property so the size stays in SCSS. */
+	function PadRow(rowProps: { height: number }): JSX.Element {
+		return (
+			<tr
+				aria-hidden="true"
+				class={styles.padRow}
+				style={{ "--jf-table-pad": `${String(rowProps.height)}px` }}
+			/>
+		);
 	}
 
 	/**
-	 * The virtual window, with one spacer row above and one below standing in
-	 * for everything not rendered. Spacers are `<tr>`s rather than a positioned
-	 * container because the rows must stay real table rows — the colgroup, the
-	 * sticky actions column and the group-header `colSpan` all depend on it.
+	 * The virtual window, with one pad row above and one below standing in
+	 * for everything not rendered. Pads are `<tr>`s rather than a positioned
+	 * container because the rows must stay real table rows — the shared track
+	 * list, the sticky actions column and the group-header span all depend on
+	 * it.
 	 */
 	function VirtualBody(): JSX.Element {
 		// Frozen while `hidden()`: with the scroll parent at 0 height there is
@@ -915,10 +909,7 @@ export function Root<Data extends Record<string, unknown>>(
 		return (
 			<>
 				<Show when={padTop() > 0}>
-					<tr
-						aria-hidden="true"
-						style={{ height: `${String(padTop())}px` }}
-					/>
+					<PadRow height={padTop()} />
 				</Show>
 				<For each={items()}>
 					{(virtualRow) => {
@@ -1000,10 +991,7 @@ export function Root<Data extends Record<string, unknown>>(
 					}}
 				</For>
 				<Show when={padBottom() > 0}>
-					<tr
-						aria-hidden="true"
-						style={{ height: `${String(padBottom())}px` }}
-					/>
+					<PadRow height={padBottom()} />
 				</Show>
 			</>
 		);
@@ -1020,10 +1008,15 @@ export function Root<Data extends Record<string, unknown>>(
 		return (
 			<tr
 				ref={rowProps.ref}
+				role="row"
 				data-index={rowProps.index}
 				class={styles.groupRow}
 			>
-				<td class={styles.groupCell} colSpan={leafColCount()}>
+				<td
+					class={styles.groupCell}
+					role={cellRole()}
+					colSpan={columnCount()}
+				>
 					<button
 						type="button"
 						class={clsx(
@@ -1055,167 +1048,132 @@ export function Root<Data extends Record<string, unknown>>(
 		);
 	}
 
-	return (
-		<div class={styles.tableWrapper}>
+	function EmptyRow(): JSX.Element {
+		return (
+			<tr role="row">
+				<td
+					class={styles.empty}
+					role={cellRole()}
+					colSpan={columnCount()}
+				>
+					No results.
+				</td>
+			</tr>
+		);
+	}
+
+	function FlatBody(): JSX.Element {
+		return (
 			<Show
-				when={props.groupBy}
-				fallback={
-					/* Same scroll box as the grouped branch: an ungrouped table
-					   also needs its own both-axis scrollport, or it clips inside
-					   `.tableWrapper` (overflow: clip) and cannot scroll — rows
-					   past the fold and columns past the viewport are simply cut
-					   off (phone especially). The box is what the sticky header
-					   sticks to. */
-					<div class={styles.scrollBox}>
-						<table
-							class={clsx(styles.table, props.class)}
-							{...gridAttributes()}
-							data-sticky-header={
-								stickyHeader() ? "true" : "false"
+				when={table.getRowModel().rows.length > 0}
+				fallback={<EmptyRow />}
+			>
+				<For each={table.getRowModel().rows}>
+					{(row) => renderRow(row)}
+				</For>
+			</Show>
+		);
+	}
+
+	function GroupedBody(): JSX.Element {
+		return (
+			<Show when={rowGroups().length > 0} fallback={<EmptyRow />}>
+				{/* A virtualising table renders nothing until it has found its
+				    scroll container, which cannot happen before this element is
+				    in the document. `onMount` runs before the browser paints, so
+				    that first empty pass is skipped rather than shown — without
+				    this guard the table would render every row once and then
+				    immediately throw all but a screenful away, which is the
+				    exact cost being avoided. */}
+				<Show when={!props.virtualize || mounted()}>
+					{/* A scroll parent that has NEVER been measured with a
+					    height has nothing to window against — show skeleton rows
+					    rather than render every row, which is what made a hidden
+					    tab expensive. Once it has been visible, `virtualizing()`
+					    stays true and `VirtualBody` freezes its window instead. */}
+					<Show
+						when={
+							!(
+								props.virtualize &&
+								scrollEl() !== null &&
+								!everVisible()
+							)
+						}
+						fallback={
+							<SkeletonRows
+								columns={columnCount()}
+								hasActions={hasActions()}
+							/>
+						}
+					>
+						<Show
+							when={virtualizing()}
+							fallback={
+								<For each={rowGroups()}>
+									{(group) => (
+										<>
+											<GroupHeaderRow group={group} />
+											<Show
+												when={isGroupExpanded(
+													group.key
+												)}
+											>
+												<For each={group.rows}>
+													{(row) => renderRow(row)}
+												</For>
+											</Show>
+										</>
+									)}
+								</For>
 							}
 						>
-							<HeadRow />
-							<tbody>
-								<Deferred
-									hold={loading()}
-									fallback={
-										<SkeletonRows
-											columns={skeletonCols()}
-										/>
-									}
-								>
-									<Show
-										when={
-											table.getRowModel().rows.length > 0
-										}
-										fallback={
-											<tr>
-												<td
-													colSpan={
-														table.getVisibleLeafColumns()
-															.length
-													}
-													class={styles.empty}
-												>
-													No results.
-												</td>
-											</tr>
-										}
-									>
-										<For each={table.getRowModel().rows}>
-											{(row) => renderRow(row)}
-										</For>
-									</Show>
-								</Deferred>
-							</tbody>
-						</table>
-					</div>
-				}
-			>
-				<div class={styles.scrollBox} ref={captureScrollRef}>
-					<table
-						class={clsx(styles.table, styles.grouped, props.class)}
-						{...gridAttributes()}
-						data-sticky-header={stickyHeader() ? "true" : "false"}
-					>
-						<ColGroup />
-						<HeadRow />
-						<tbody ref={captureBodyRef}>
-							<Deferred
-								hold={loading()}
-								fallback={
-									<SkeletonRows columns={skeletonCols()} />
-								}
-							>
-								<Show
-									when={rowGroups().length > 0}
-									fallback={
-										<tr>
-											<td
-												colSpan={leafColCount()}
-												class={styles.empty}
-											>
-												No results.
-											</td>
-										</tr>
-									}
-								>
-									{/* A virtualising table renders nothing until it
-										    has found its scroll container, which cannot
-										    happen before this element is in the
-										    document. `onMount` runs before the browser
-										    paints, so that first empty pass is skipped
-										    rather than shown — without this guard the
-										    table would render every row once and then
-										    immediately throw all but a screenful away,
-										    which is the exact cost being avoided. */}
-									<Show when={!props.virtualize || mounted()}>
-										{/* A scroll parent that has NEVER been measured
-											    with a height has nothing to window against —
-											    show skeleton rows rather than render every
-											    row, which is what made a hidden tab expensive.
-											    Once it has been visible, `virtualizing()` stays
-											    true and `VirtualBody` freezes its window
-											    instead. */}
-										<Show
-											when={
-												!(
-													props.virtualize &&
-													scrollEl() !== null &&
-													!everVisible()
-												)
-											}
-											fallback={
-												<SkeletonRows
-													columns={skeletonCols()}
-												/>
-											}
-										>
-											<Show
-												when={virtualizing()}
-												fallback={
-													<For each={rowGroups()}>
-														{(group) => (
-															<>
-																<GroupHeaderRow
-																	group={
-																		group
-																	}
-																/>
-																<Show
-																	when={isGroupExpanded(
-																		group.key
-																	)}
-																>
-																	<For
-																		each={
-																			group.rows
-																		}
-																	>
-																		{(
-																			row
-																		) =>
-																			renderRow(
-																				row
-																			)
-																		}
-																	</For>
-																</Show>
-															</>
-														)}
-													</For>
-												}
-											>
-												<VirtualBody />
-											</Show>
-										</Show>
-									</Show>
-								</Show>
-							</Deferred>
-						</tbody>
-					</table>
-				</div>
+							<VirtualBody />
+						</Show>
+					</Show>
+				</Show>
 			</Show>
+		);
+	}
+
+	return (
+		<div class={styles.tableWrapper}>
+			{/* The scroll box: every table needs one, grouped or not, or it
+			    clips inside `.tableWrapper` (overflow: clip) and cannot
+			    scroll — rows past the fold and columns past the viewport are
+			    simply cut off (phone especially). The box is what the sticky
+			    header sticks to. */}
+			<div class={styles.scrollBox} ref={captureScrollRef}>
+				<table
+					ref={captureTableRef}
+					class={clsx(styles.table, props.class)}
+					role={props.focusableRows === true ? "grid" : "table"}
+					{...gridAttributes()}
+					data-sticky-header={stickyHeader() ? "true" : "false"}
+					data-animate-tracks={tracksSettled() ? "true" : undefined}
+					style={{
+						"--jf-table-tracks": layout().tracks,
+						"--jf-table-floor": `${String(layout().floor)}px`,
+						...layout().widths,
+					}}
+				>
+					<HeadRow />
+					<tbody role="rowgroup" ref={captureBodyRef}>
+						<Deferred
+							hold={loading()}
+							fallback={
+								<SkeletonRows
+									columns={columnCount()}
+									hasActions={hasActions()}
+								/>
+							}
+						>
+							<Show when={props.groupBy} fallback={<FlatBody />}>
+								<GroupedBody />
+							</Show>
+						</Deferred>
+					</tbody>
+				</table>
+			</div>
 			<BatchActions.Provider table={table} rowSelection={rowSelection}>
 				{props.children}
 			</BatchActions.Provider>

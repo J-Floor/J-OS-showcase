@@ -2,6 +2,7 @@ import { type JfColumnDef } from "@j-os/design-system";
 
 import type { ItemType } from "../data/inventoryData.ts";
 
+import { DESCRIPTION_SIZE } from "./columnSizes.ts";
 import { uniqueEnum } from "./uniqueEnum.ts";
 
 export function itemTypeColumns(rows: ItemType[]): JfColumnDef<ItemType>[] {
@@ -21,6 +22,8 @@ export function itemTypeColumns(rows: ItemType[]): JfColumnDef<ItemType>[] {
 			id: "description",
 			header: "Description",
 			dataType: "string",
+			size: DESCRIPTION_SIZE,
+			measureText: false,
 			accessorFn: (r) => r.description ?? "",
 			cell: (info) => {
 				const value = info.getValue() as string;

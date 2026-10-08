@@ -23,7 +23,12 @@ import {
 import { api } from "../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import type { PersonStatus } from "../../../../convex/lib/derive.ts";
+import {
+	FREE_TEXT_SIZE,
+	SHORT_TEXT_SIZE,
+} from "../../../shared/columnSizes.ts";
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
+import { formatDate } from "../../../shared/time.ts";
 import { useApplicationDecisions } from "../actions/applicationDecisions.ts";
 
 import styles from "./applicationColumns.module.scss";
@@ -305,6 +310,13 @@ export function triageGroupOf(row: ApplicationRow): string {
 	return row.board?.score != null ? "queue" : "toScore";
 }
 
+/** The submission date as the Date column shows it: the explicit
+ *  `submittedAt` when present (the seed varies it), else Convex's automatic
+ *  `_creationTime`. */
+export function submissionDateText(row: ApplicationRow): string {
+	return formatDate(row.submittedAt ?? row._creationTime);
+}
+
 export function applicationColumns(): JfColumnDef<ApplicationRow>[] {
 	return [
 		{
@@ -329,34 +341,22 @@ export function applicationColumns(): JfColumnDef<ApplicationRow>[] {
 			cell: (info) => <ScoreCell row={info.row.original} />,
 		},
 		{
-			// Submission date: explicit `submittedAt` when present (the seed varies
-			// it), else Convex's automatic `_creationTime`.
 			id: "createdAt",
 			header: "Date",
 			dataType: "date",
-			size: 130,
+			size: "content",
 			accessorFn: (r) => r.submittedAt ?? r._creationTime,
-			cell: (info) =>
-				new Date(info.getValue<number>()).toLocaleDateString(
-					undefined,
-					{
-						year: "numeric",
-						month: "short",
-						day: "numeric",
-					}
-				),
+			cell: (info) => submissionDateText(info.row.original),
+			measureText: submissionDateText,
 		},
-		{
-			accessorKey: "email",
-			header: "Email",
-			dataType: "string",
-			size: 220,
-		},
+		{ accessorKey: "email", header: "Email", dataType: "string" },
 		{ accessorKey: "phone", header: "Phone", dataType: "string" },
 		{
 			id: "ventureName",
 			header: "Venture",
 			dataType: "string",
+			size: SHORT_TEXT_SIZE,
+			measureText: false,
 			accessorFn: (r) => r.venture?.name ?? "",
 		},
 		{
@@ -364,7 +364,8 @@ export function applicationColumns(): JfColumnDef<ApplicationRow>[] {
 			header: "Notes",
 			dataType: "string",
 			disableRowClick: true,
-			size: 260,
+			size: FREE_TEXT_SIZE,
+			measureText: false,
 			// Sort/filter on the latest note's text — what the cell shows.
 			accessorFn: (r) => {
 				const log = r.board?.noteLog ?? [];
@@ -376,9 +377,6 @@ export function applicationColumns(): JfColumnDef<ApplicationRow>[] {
 		{
 			id: "actions",
 			header: "",
-			dataType: "string",
-			enableSorting: false,
-			enableColumnFilter: false,
 			disableRowClick: true,
 			// Make guest, make member, turn down, undo deny.
 			size: actionsColumnSize(4),

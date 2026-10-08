@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from "@solidjs/testing-library";
+import { createSignal } from "solid-js";
 
 import { Table } from "./Table.tsx";
 
@@ -60,4 +61,113 @@ test("the render-prop count stays reactive across multiple selections", async ()
 	await waitFor(() => {
 		expect(screen.getByText("sel:2")).toBeInTheDocument();
 	});
+});
+
+type Doc = { _id: string; name: string };
+
+test("selection follows the row by _id when a push inserts a row above it", async () => {
+	const docs: Doc[] = [
+		{ _id: "a", name: "A" },
+		{ _id: "b", name: "B" },
+	];
+	const [rows, setRows] = createSignal<Doc[]>(docs);
+	render(() => (
+		<Table.Root columns={columns as never} data={rows()} enableRowSelection>
+			<Table.BatchActions>
+				{(p) => (
+					<span>{`sel:${p.selectedRows.map((r) => r.name).join(",")}`}</span>
+				)}
+			</Table.BatchActions>
+		</Table.Root>
+	));
+	fireEvent.click(screen.getAllByRole("checkbox")[1]);
+	await waitFor(() => {
+		expect(screen.getByText("sel:A")).toBeInTheDocument();
+	});
+	setRows([{ _id: "z", name: "Z" }, ...docs]);
+	await waitFor(() => {
+		expect(screen.getByText("sel:A")).toBeInTheDocument();
+	});
+});
+
+test("the count drops when a push removes a selected row", async () => {
+	const [rows, setRows] = createSignal<Doc[]>([
+		{ _id: "a", name: "A" },
+		{ _id: "b", name: "B" },
+	]);
+	render(() => (
+		<Table.Root columns={columns as never} data={rows()} enableRowSelection>
+			<Table.BatchActions>
+				{(p) => <span>{`sel:${String(p.selectedCount)}`}</span>}
+			</Table.BatchActions>
+		</Table.Root>
+	));
+	fireEvent.click(screen.getAllByRole("checkbox")[1]);
+	await waitFor(() => {
+		expect(screen.getByText("sel:1")).toBeInTheDocument();
+	});
+	setRows([{ _id: "b", name: "B" }]);
+	await waitFor(() => {
+		expect(screen.queryByText("sel:1")).toBeNull();
+	});
+});
+
+test("a getRowId keys selection for data with no _id", async () => {
+	const named = [{ name: "A" }, { name: "B" }];
+	const [rows, setRows] = createSignal(named);
+	render(() => (
+		<Table.Root
+			columns={columns as never}
+			data={rows()}
+			enableRowSelection
+			getRowId={(row) => row.name}
+		>
+			<Table.BatchActions>
+				{(p) => (
+					<span>{`sel:${p.selectedRows.map((r) => r.name).join(",")}`}</span>
+				)}
+			</Table.BatchActions>
+		</Table.Root>
+	));
+	fireEvent.click(screen.getAllByRole("checkbox")[1]);
+	await waitFor(() => {
+		expect(screen.getByText("sel:A")).toBeInTheDocument();
+	});
+	setRows([{ name: "Z" }, ...named]);
+	await waitFor(() => {
+		expect(screen.getByText("sel:A")).toBeInTheDocument();
+	});
+});
+
+test("a row that leaves and comes back is not selected", async () => {
+	const docs: Doc[] = [
+		{ _id: "a", name: "A" },
+		{ _id: "b", name: "B" },
+	];
+	const [rows, setRows] = createSignal<Doc[]>(docs);
+	render(() => (
+		<Table.Root columns={columns as never} data={rows()} enableRowSelection>
+			<Table.BatchActions>
+				{(p) => <span>{`sel:${String(p.selectedCount)}`}</span>}
+			</Table.BatchActions>
+		</Table.Root>
+	));
+	fireEvent.click(screen.getAllByRole("checkbox")[1]);
+	await waitFor(() => {
+		expect(screen.getByText("sel:1")).toBeInTheDocument();
+	});
+	setRows([docs[1]]);
+	// The select-all box is not indeterminate over a row that is gone.
+	expect(
+		document
+			.querySelector('thead [data-part="root"]')
+			?.getAttribute("data-state")
+	).toBe("unchecked");
+	setRows(docs);
+	expect(screen.queryByText("sel:1")).toBeNull();
+	expect(
+		screen
+			.getAllByRole("checkbox")
+			.map((box) => (box as HTMLInputElement).checked)
+	).toEqual([false, false, false]);
 });

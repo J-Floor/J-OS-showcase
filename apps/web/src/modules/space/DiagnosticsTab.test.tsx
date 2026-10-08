@@ -71,9 +71,11 @@ const state = vi.hoisted(
 	})
 );
 
-/** The `onEndReached` the tab handed the Table, so a test can fire it. */
+/** The `onEndReached` and `columns` the tab handed the Table, so a test can
+ *  fire the one and read the other. */
 const table = vi.hoisted(() => ({
 	onEndReached: undefined as (() => void) | undefined,
+	columns: [] as unknown[],
 }));
 
 vi.mock("@j-os/design-system", async (importOriginal) => {
@@ -86,6 +88,8 @@ vi.mock("@j-os/design-system", async (importOriginal) => {
 			Root: (props: RootProps) => {
 				// eslint-disable-next-line solid/reactivity -- test double: hands the live prop to the test, which calls it
 				table.onEndReached = () => props.onEndReached?.();
+				// eslint-disable-next-line solid/reactivity -- test double: the columns are static config, read once
+				table.columns = props.columns;
 				return actual.Table.Root(props);
 			},
 		},
@@ -194,7 +198,7 @@ test("renders per-lock health and log rows", async () => {
 	render(() => <DiagnosticsTab />);
 	expect(await screen.findByText("Downstairs online")).toBeInTheDocument();
 	expect(screen.getByText("Ada Lovelace")).toBeInTheDocument();
-	expect(screen.getByText("grant")).toBeInTheDocument();
+	expect(screen.getByText("Grant")).toBeInTheDocument();
 	expect(screen.getByText("Downstairs, Upstairs")).toBeInTheDocument();
 });
 
@@ -298,8 +302,8 @@ test("labels a log-only GC row as a dry run, not as a revoke that happened", asy
 	];
 	render(() => <DiagnosticsTab />);
 	expect(await screen.findByText("Ghost G")).toBeInTheDocument();
-	expect(screen.getByText("dry-run")).toBeInTheDocument();
-	expect(screen.queryByText("ok")).not.toBeInTheDocument();
+	expect(screen.getByText("Dry run")).toBeInTheDocument();
+	expect(screen.queryByText("Ok")).not.toBeInTheDocument();
 });
 
 test("renders an app lock row with its lock operation", async () => {
@@ -312,7 +316,7 @@ test("renders an app lock row with its lock operation", async () => {
 	];
 	render(() => <DiagnosticsTab />);
 	expect(await screen.findByText("Bo Ard")).toBeInTheDocument();
-	expect(screen.getByText("lock")).toBeInTheDocument();
+	expect(screen.getByText("Lock")).toBeInTheDocument();
 });
 
 test("reaching the end loads the first older chunk after the head, from the floor", async () => {
@@ -473,4 +477,37 @@ test("nothing loads after the tab unmounts", async () => {
 	await new Promise((r) => setTimeout(r, 0));
 	endReached();
 	expect(state.listBefore).not.toHaveBeenCalled();
+});
+
+type LogColumn = {
+	id?: string;
+	accessorKey?: string;
+	size?: unknown;
+	measureText?: (row: Record<string, unknown>) => string;
+};
+
+test("the log's columns fit their content and leave the rest to Person and Locks", async () => {
+	await mounted();
+	const columns = new Map(
+		(table.columns as LogColumn[]).map((c) => [c.id ?? c.accessorKey, c])
+	);
+	expect(
+		Object.fromEntries([...columns].map(([id, c]) => [id, c.size]))
+	).toEqual({
+		day: undefined,
+		at: "content",
+		person: undefined,
+		operation: "content",
+		trigger: "content",
+		locks: { min: "content", weight: 2 },
+		outcome: "content",
+		toDoor: "content",
+	});
+	const when = at(0);
+	expect(columns.get("at")?.measureText?.({ at: when })).toBe(
+		new Date(when).toLocaleTimeString(undefined, { timeStyle: "short" })
+	);
+	// No override: the default measures the accessor value, the same string the
+	// cell shows.
+	expect(columns.get("toDoor")?.measureText).toBeUndefined();
 });

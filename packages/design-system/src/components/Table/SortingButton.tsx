@@ -3,11 +3,14 @@ import type {
 	SortDirection,
 	Table as TanTable,
 } from "@tanstack/solid-table";
+import clsx from "clsx";
 import { type JSX, Show } from "solid-js";
 
 import { Icon } from "../Icon/Icon.tsx";
-import { IconButton } from "../IconButton/IconButton.tsx";
+import iconButtonStyles from "../IconButton/IconButton.module.scss";
+import { Tooltip } from "../Tooltip/Tooltip.tsx";
 
+import { columnLabel } from "./columnLabel.ts";
 import styles from "./Table.module.scss";
 
 type SortKey = SortDirection | "false";
@@ -23,8 +26,13 @@ const sortingConfig: Record<
 
 /**
  * Toggles a column's sort state. Ported from EmboUI's `SortingButton`
- * (`@tanstack/react-table` → `@tanstack/solid-table`); rendered as an
- * {@link IconButton} whose ligature reflects the current sort direction.
+ * (`@tanstack/react-table` → `@tanstack/solid-table`).
+ *
+ * Its accessible name says which column it sorts ("Sort by Name"), since
+ * every header carries the same icon; the tooltip shows the current state,
+ * and the header cell's `aria-sort` tells assistive tech the same. A plain
+ * button inside the Tooltip trigger rather than an `IconButton`, whose
+ * accessible name is always its tooltip label.
  *
  * When MORE than one column is sorted (shift-click adds to the multi-sort), a
  * small `counter_N` badge shows this column's 1-based position in the sort
@@ -51,15 +59,25 @@ export function SortingButton<Data extends Record<string, unknown>>(props: {
 
 	return (
 		<span class={styles.sortWrap}>
-			<IconButton
-				tooltipLabel={config().tooltip}
-				class={config().active ? styles.sortActive : undefined}
-				onClick={(event) =>
-					props.column.getToggleSortingHandler()?.(event)
-				}
-			>
-				{config().icon}
-			</IconButton>
+			<Tooltip
+				tooltipContent={config().tooltip}
+				asChild={(tooltipProps) => (
+					<button
+						type="button"
+						{...(tooltipProps() as object)}
+						aria-label={`Sort by ${columnLabel(props.column)}`}
+						class={clsx(
+							iconButtonStyles.iconButton,
+							config().active && styles.sortActive
+						)}
+						onClick={(event) =>
+							props.column.getToggleSortingHandler()?.(event)
+						}
+					>
+						<Icon>{config().icon}</Icon>
+					</button>
+				)}
+			/>
 			<Show when={sortOrder()}>
 				{(order) => (
 					<span class={styles.sortOrder} aria-hidden="true">

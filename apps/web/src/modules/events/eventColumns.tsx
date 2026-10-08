@@ -14,6 +14,11 @@ const dateFormat = new Intl.DateTimeFormat(undefined, {
 	timeZone: SITE_TIMEZONE,
 });
 
+/** An event date as the table shows it. */
+export function formatEventDate(ms: number): string {
+	return dateFormat.format(new Date(ms));
+}
+
 /** The three accordion buckets, in display order. Compared against the cached
  *  UTC epochs (`startsAt`/`endsAt`), which are zone-independent instants — so
  *  "current" means the event is physically happening now regardless of the
@@ -52,34 +57,28 @@ export function eventColumns(): JfColumnDef<Doc<"events">>[] {
 			enumOptions: phaseOptions,
 			accessorFn: (row) => eventPhase(row, now),
 		},
-		// Explicit sizes: `groupBy` puts the table in `table-layout: fixed`,
-		// which pins each column to its `size` (the shared Table's
-		// `defaultColumn` is 160px) instead of growing to fit content — without
-		// these the name/date columns collapse and wrap. Mirrors the community
-		// grouped tables.
-		{ accessorKey: "name", header: "Name", dataType: "string", size: 280 },
+		// The name takes what the dates leave; the dates are exactly as wide
+		// as the longest date they show.
+		{ accessorKey: "name", header: "Name", dataType: "string" },
 		{
 			accessorKey: "startsAt",
 			header: "Starts",
 			dataType: "date",
-			size: 170,
-			cell: (info) =>
-				dateFormat.format(new Date(info.row.original.startsAt)),
+			size: "content",
+			cell: (info) => formatEventDate(info.row.original.startsAt),
+			measureText: (r) => formatEventDate(r.startsAt),
 		},
 		{
 			accessorKey: "endsAt",
 			header: "Ends",
 			dataType: "date",
-			size: 170,
-			cell: (info) =>
-				dateFormat.format(new Date(info.row.original.endsAt)),
+			size: "content",
+			cell: (info) => formatEventDate(info.row.original.endsAt),
+			measureText: (r) => formatEventDate(r.endsAt),
 		},
 		{
 			id: "actions",
 			header: "",
-			dataType: "string",
-			enableSorting: false,
-			enableColumnFilter: false,
 			disableRowClick: true,
 			size: actionsColumnSize(2),
 			cell: (info) => <EventRowActions row={info.row.original} />,

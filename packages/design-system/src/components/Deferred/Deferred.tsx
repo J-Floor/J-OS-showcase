@@ -1,5 +1,7 @@
 import { createSignal, onCleanup, onMount, Show, type JSX } from "solid-js";
 
+import { afterPaint } from "../../utils/afterPaint.ts";
+
 let immediate = false;
 
 /** Test hook: when true, every `Deferred` created afterwards renders its
@@ -19,9 +21,7 @@ export function setDeferredImmediate(value: boolean): void {
  * whole content, never a half-built body.
  *
  * Why a paint and not a microtask: a microtask runs before the browser
- * paints, so the fallback would never reach the screen. `requestAnimationFrame`
- * fires just before the next paint, and a `setTimeout(0)` inside it lands
- * just AFTER that paint.
+ * paints, so the fallback would never reach the screen (see `afterPaint`).
  *
  * `hold`: an extra gate on top of the paint wait, for a caller that already
  * has its own "not ready yet" signal (e.g. a table waiting on its data query).
@@ -41,14 +41,7 @@ export function Deferred(props: {
 	const [ready, setReady] = createSignal(immediate);
 	onMount(() => {
 		if (ready()) return;
-		let timer: ReturnType<typeof setTimeout> | undefined;
-		const frame = requestAnimationFrame(() => {
-			timer = setTimeout(() => setReady(true), 0);
-		});
-		onCleanup(() => {
-			cancelAnimationFrame(frame);
-			if (timer !== undefined) clearTimeout(timer);
-		});
+		onCleanup(afterPaint(() => setReady(true)));
 	});
 	return (
 		<Show when={ready() && !props.hold} fallback={props.fallback}>

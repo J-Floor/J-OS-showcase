@@ -135,10 +135,11 @@ export {
 	type SignaturePadProps,
 } from "./components/SignaturePad/SignaturePad.tsx";
 export type {
+	ColumnSize,
 	JfColumnDef,
 	DataType,
 	EnumOption,
-	GroupConfig,
+	EnumValue,
 } from "./components/Table/types.ts";
 export type {
 	BatchActionsProps,
@@ -167,3 +168,4 @@ export {
 	type ComboboxRootProps,
 } from "./components/Combobox/Combobox.tsx";
 export { ICONS } from "./icons.ts";
+export type { RangeFilterValue } from "./components/Table/filter.ts";

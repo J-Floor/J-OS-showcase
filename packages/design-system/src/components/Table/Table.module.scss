@@ -1,3 +1,5 @@
+@use "sass:list";
+@use "sass:string";
 @use "../../styles/typography" as typo;
 @use "../../styles/utils" as utils;
 
@@ -34,11 +36,49 @@ $row-height: 53px;
 	overscroll-behavior: contain;
 }
 
+/* Content column widths animate through registered properties: a
+   registered `<length>` interpolates, so the table transitions
+   `--jf-col-<i>` and `--jf-table-floor` and every row (old, newly mounted,
+   header) inherits the same in-between value each frame. Tracks are built
+   from `var(--jf-col-<i>)` (columnLayout.ts). Mirrored by ANIMATED_COLUMNS
+   in columnLayout.ts — change both together. */
+$animated-columns: 32;
+$track-properties: ();
+
+@for $i from 0 to $animated-columns {
+	@property --jf-col-#{$i} {
+		syntax: "<length>";
+		inherits: true;
+		initial-value: 0;
+	}
+
+	$track-properties: list.append(
+		$track-properties,
+		string.unquote("--jf-col-#{$i}"),
+		$separator: comma
+	);
+}
+
+@property --jf-table-floor {
+	syntax: "<length>";
+	inherits: true;
+	initial-value: 0;
+}
+
+/* The table, its head and its body are plain blocks, and every row is its own
+   grid over ONE shared track list: `--jf-table-tracks`, set on the table from
+   Table.tsx and inherited. Rows keep their boxes, which the virtualiser
+   measures, the focus ring paints and the pad rows size. Every track that is
+   not content-sized resolves the same way in every row, so header, group
+   header and body rows line up on the same tracks.
+
+   `--jf-table-floor` is the sum of every track's minimum. Past it the table
+   grows wider than the scroll box and `.scrollBox` scrolls; below it the
+   `fr` tracks share the leftover. */
 .table {
+	display: block;
 	inline-size: 100%;
-	table-layout: auto;
-	border-spacing: 0;
-	border-collapse: separate;
+	min-inline-size: max(100%, var(--jf-table-floor));
 
 	/* A focusable table (`role="grid"`) shows focus through its row ring, so
 	   the table box itself draws no outline. */
@@ -54,36 +94,68 @@ $row-height: 53px;
 		outline-offset: calc(-1 * var(--jf-border-width-accessibility));
 	}
 
-	& tr {
-		border-style: none;
+	& thead,
+	& tbody {
+		display: block;
 	}
 
+	/* Row borders and fills sit on the row, not its cells, so a filler track
+	   with no cell in it still reads as part of the row. */
+	& tr {
+		display: grid;
+		grid-template-columns: var(--jf-table-tracks);
+		min-inline-size: max(100%, var(--jf-table-floor));
+		border-block-end: 1px solid var(--jf-border-subtle);
+	}
+
+	/* A content column that widens (a wider row arrives, a font loads)
+	   slides to its new width instead of jumping. On the table only, never
+	   per row: a row mounted mid-slide (virtualiser, load more) would jump
+	   to the end tracks while the others slide. Not on the first layout:
+	   Table.tsx sets the attribute once that has painted. */
+	&[data-animate-tracks="true"] {
+		@media (prefers-reduced-motion: no-preference) {
+			transition-duration: var(--jf-animation-duration-default);
+			transition-property: list.join(
+				$track-properties,
+				(--jf-table-floor),
+				$separator: comma
+			);
+			transition-timing-function: ease-in-out;
+		}
+	}
+
+	/* A grid item is a block, so `align-content` centres its text the way a
+	   table cell's `vertical-align: middle` did. `min-inline-size: 0` lets a
+	   cell sit in a track narrower than its content instead of widening it. */
 	& th,
 	& td {
+		align-content: center;
+		min-inline-size: 0;
 		padding: var(--jf-spacing-near);
 		text-align: start;
 	}
 
 	& thead {
-		block-size: 48px;
 		background-color: var(--jf-surface-bg-overlay);
 
+		& tr {
+			min-block-size: 48px;
+		}
+
 		& th {
-			vertical-align: middle;
 			color: var(--jf-fg-strong);
 			background-color: var(--jf-surface-bg-overlay);
-			border-block-end: 1px solid var(--jf-border-subtle);
 
 			@include typo.jf-typo-body-bold;
 		}
 	}
 
-	/* Above EVERY body cell, including the sticky actions column, which is
-	   itself stacked above the columns scrolling under it. The two used to be
-	   the other way round — the header at 1, the actions column at 2 — which
-	   never showed while the header was not really sticky. Once it stayed put,
-	   every row's triage buttons slid up and painted over it. */
-	&[data-sticky-header="true"] thead tr th {
+	/* The whole head sticks, not each `th`: a sticky grid item is confined to
+	   its own row box, which is exactly as tall as itself, so it would never
+	   move. Above every body cell, including the sticky actions column, which
+	   is itself stacked above the columns scrolling under it. */
+	&[data-sticky-header="true"] thead {
 		position: sticky;
 		inset-block-start: 0;
 		z-index: 2;
@@ -97,6 +169,10 @@ $row-height: 53px;
 				&:hover {
 					background-color: var(--jf-surface-bg-raised);
 				}
+			}
+
+			& [data-disable-row-click] {
+				cursor: default;
 			}
 		}
 
@@ -112,7 +188,8 @@ $row-height: 53px;
 			box-shadow: inset 0 0 0 var(--jf-border-width-accessibility)
 				var(--jf-border-strong);
 
-			& td {
+			& td,
+			& th {
 				color: var(--jf-fg-strong);
 
 				@include typo.jf-typo-body-bold;
@@ -127,34 +204,60 @@ $row-height: 53px;
 			}
 		}
 
-		& td {
+		/* A row header (`headerColumn`) reads like the cells beside it. A long
+		   unbreakable string (email, URL) wraps rather than spilling past its
+		   track. */
+		& td,
+		& th {
+			overflow-wrap: anywhere;
 			color: var(--jf-fg-default);
-			border-block-end: 1px solid var(--jf-border-subtle);
 
 			@include typo.jf-typo-body-regular;
+		}
+
+		/* Stands in for rows that are not rendered: no cells, just height. */
+		& tr.padRow {
+			block-size: var(--jf-table-pad);
+			border-block-end: none;
 		}
 	}
 }
 
+/* The header cell holds one flex row: label, gap, sort and filter buttons. */
 .th {
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
 	white-space: nowrap;
 }
 
+/* Fills the cell, so `space-between` pushes the buttons to the far end, and
+   may shrink below its content (`min-inline-size: 0`) so a column narrower
+   than its header shrinks the label instead of spilling over the next one. */
 .headerCell {
 	display: flex;
+	flex: 1;
 	flex-flow: row nowrap;
 	gap: var(--jf-spacing-near);
 	align-items: center;
 	justify-content: space-between;
+	min-inline-size: 0;
 	color: var(--jf-fg-strong);
 }
 
+/* Never grows past its text, so its `scrollWidth` is the text's width and the
+   column measurer reads the label, not the column. In a column narrower than
+   its header the label truncates and the buttons stay whole. */
 .headerLabel {
-	flex: 1 1 auto;
+	flex: 0 1 auto;
+	min-inline-size: 0;
+
+	@include utils.ellipsis;
 }
 
 .headerActions {
 	display: flex;
+	flex: none;
 	flex-wrap: nowrap;
 	gap: var(--jf-spacing-close);
 	align-items: center;
@@ -164,17 +267,12 @@ $row-height: 53px;
 .selectCell {
 	align-items: center;
 	justify-content: center;
-	inline-size: 48px;
-	min-inline-size: 48px;
-	max-inline-size: 48px;
 	text-align: center;
 	user-select: none;
 }
 
 /* Zero the select column's horizontal cell padding so its content centres on
-   the column's true centre (24px). Otherwise the header's 48px select span
-   starts after the th's left padding and the header checkbox drifts right of
-   the row checkboxes and the group expand indicator. */
+   the column's true centre (24px), in line with the group expand indicator. */
 .table th:has(.selectCell),
 .table td.selectCell {
 	padding-inline: 0;
@@ -188,17 +286,18 @@ $row-height: 53px;
 }
 
 .empty {
+	grid-column: 1 / -1;
 	padding: var(--jf-spacing-far);
 	color: var(--jf-fg-muted);
 	text-align: center;
 }
 
-/* Trailing per-row action column — pinned to the inline-end edge so the buttons
-   stay visible while the rest of the columns scroll under it (in `.scrollBox`,
-   or any horizontally-overflowing wrapper). On a table that fits its container
-   there's no scroll, so this is a harmless no-op that just sits at the edge.
-   An opaque background + a leading divider keep the scrolling cells from
-   bleeding through underneath. */
+/* Trailing per-row action column — always the last track (after the filler
+   track when there is one), and pinned to the inline-end edge so the buttons
+   stay visible while the rest of the columns scroll under it. Each row is as
+   wide as the table, so the cell sticks to the scroll box's edge. On a table
+   that fits its container this is a harmless no-op. An opaque background + a
+   leading divider keep the scrolling cells from bleeding through. */
 .actionsCell {
 	position: sticky;
 	inset-inline-end: 0;
@@ -206,6 +305,7 @@ $row-height: 53px;
 	/* Above the columns that scroll beneath it, below the sticky header that
 	   the whole row scrolls beneath. */
 	z-index: 1;
+	grid-column: -2 / -1;
 	background-color: var(--jf-surface-bg-base);
 	border-inline-start: 1px solid var(--jf-border-subtle);
 
@@ -213,14 +313,8 @@ $row-height: 53px;
 	@include utils.shadow-inline-start;
 }
 
-/* Header actions cell stacks above both sticky axes (top + end).
-   Carries the `[data-sticky-header]` attribute too, so it outranks the rule
-   that stickies the header row: without it that rule (class + attribute + three
-   elements) wins over this one and the corner cell falls back to the header's
-   own level, left to DOM order to save it. */
-.table[data-sticky-header="true"] thead th.actionsCell,
+/* The header's actions cell takes the header fill. */
 .table thead th.actionsCell {
-	z-index: 3;
 	background-color: var(--jf-surface-bg-overlay);
 }
 
@@ -235,17 +329,8 @@ $row-height: 53px;
 	background-color: var(--jf-surface-bg-sunken);
 }
 
-/* Grouping — ONE table. The header, the group-header rows and the data rows
-   share a single `<colgroup>` (`.grouped` = `table-layout: fixed`), so columns
-   line up inherently and the trailing actions column can be sticky (no
-   intermediate `overflow:hidden` to trap it). The table keeps its definite px
-   width (`groupedStyle()`); no `min-width:100%` floor, so columns hold their
-   exact widths instead of stretching (which used to widen the 48px select
-   column and break checkbox alignment when the table was narrower than the
-   wrapper). A narrow table simply leaves slack to its right. */
-
-/* The scrolling box, and so the box a sticky header sticks to. Used by BOTH the
-   grouped and the ungrouped (flat) table branches — every table needs one.
+/* The scrolling box, and so the box a sticky header sticks to. Every table
+   has one.
    Scrolling in the inline axis makes this a scroll container in BOTH axes —
    there is no way to have `overflow-x: auto` with a visible block axis — which
    is what moves the sticky header's reference from the page to here. That was
@@ -262,51 +347,24 @@ $row-height: 53px;
 	overflow-inline: auto;
 }
 
-.grouped {
-	/* Definite width so `table-layout: fixed` engages and the table fills the
-	   wrapper; the spacer `<col>` (width:auto) soaks up any slack. */
-	inline-size: 100%;
-	table-layout: fixed;
-}
-
-/* `table-layout: fixed` gives columns a definite width; a long unbreakable
-   string (email, URL) would otherwise spill past its cell. Let it wrap. */
-.grouped th,
-.grouped td {
-	overflow-wrap: anywhere;
-}
-
-/* Flexible spacer `<col>` placed just before the trailing actions column;
-   `inline-size: auto` lets it absorb slack when the table is narrower than its
-   wrapper and collapse to 0 on overflow (see ColGroup in Table.tsx). */
-.spacerCol {
-	inline-size: auto;
-}
-
-/* Flexible gap column before the sticky actions column — no content, just
-   carries the row's bottom border so the divider line stays continuous. */
-.spacerCell {
-	padding: 0;
-	border-block-end: 1px solid var(--jf-border-subtle);
-}
-
 .groupCount {
 	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this font-weight value */
 	font-weight: 400;
 	color: var(--jf-fg-muted);
 }
 
-/* Group-header row: spans every column, reads like a sub-header. A 16px
+/* Group-header row: spans every track, reads like a sub-header. A 16px
    transparent top border opens a gap above each group; `background-clip:
    padding-box` keeps the overlay fill out of that border so the real page
    background shows through (correct in light AND dark — the page uses the UA
-   `color-scheme` canvas, not a surface token). */
+   `color-scheme` canvas, not a surface token). The row draws the bottom
+   border. */
 .groupRow td.groupCell {
+	grid-column: 1 / -1;
 	padding: 0;
 	background-color: var(--jf-surface-bg-overlay);
 	background-clip: padding-box;
 	border-block-start: 16px solid transparent;
-	border-block-end: 1px solid var(--jf-border-subtle);
 }
 
 .groupToggle {
@@ -472,7 +530,6 @@ $row-height: 53px;
 
 	td {
 		padding-inline: var(--jf-spacing-near);
-		vertical-align: middle;
 	}
 }
 

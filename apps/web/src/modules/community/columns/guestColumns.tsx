@@ -3,6 +3,7 @@ import { For } from "solid-js";
 
 import type { Doc } from "../../../../convex/_generated/dataModel";
 import type { PersonStatus } from "../../../../convex/lib/derive.ts";
+import { SHORT_TEXT_SIZE } from "../../../shared/columnSizes.ts";
 import { formatDate, formatDistance } from "../../../shared/time.ts";
 import { useGuestActions } from "../actions/guestActions.ts";
 import { FLAG_FILTER_OPTIONS, flagFilterValue } from "../status/copy.ts";
@@ -83,6 +84,12 @@ function GuestActions(props: { row: GuestRow }) {
 	);
 }
 
+/** What the "Time remaining" cell shows: the time left on the guest's
+ *  access, or a dash when it has no end. */
+function timeRemainingText(row: GuestRow): string {
+	return row.accessUntil ? formatDistance(row.accessUntil) : "—";
+}
+
 /**
  * Guest table columns.
  *
@@ -127,6 +134,8 @@ export function guestColumns(
 			id: "ventureName",
 			header: "Venture",
 			dataType: "string",
+			size: SHORT_TEXT_SIZE,
+			measureText: false,
 			accessorFn: (r) => r.venture?.name ?? "",
 		},
 		{
@@ -155,7 +164,8 @@ export function guestColumns(
 			header: "Notes",
 			dataType: "string",
 			disableRowClick: true,
-			size: 240,
+			size: { min: 240, weight: 2 },
+			measureText: false,
 			// Sort/filter on the latest note's text — what the cell shows.
 			accessorFn: (r) => r.board?.noteLog?.at(-1)?.text ?? "",
 			cell: (info) => (
@@ -167,27 +177,26 @@ export function guestColumns(
 			id: "joinedAt",
 			header: "Joined",
 			dataType: "date",
+			size: "content",
 			accessorFn: (r) => r._creationTime,
 			cell: (info) => formatDate(info.row.original._creationTime),
+			measureText: (r) => formatDate(r._creationTime),
 		},
 		{
 			id: "timeRemaining",
 			header: "Time remaining",
 			dataType: "number",
+			size: "content",
 			// Coalesce to 0 so the accessor's value type is `number` (keeps the
 			// JfColumnDef generics happy); the cell branches on the raw field.
 			accessorFn: (r) => r.accessUntil ?? 0,
-			cell: (info) => {
-				const accessUntil = info.row.original.accessUntil;
-				return accessUntil ? formatDistance(accessUntil) : "—";
-			},
+			cell: (info) => timeRemainingText(info.row.original),
+			measureText: timeRemainingText,
+			measureVolatile: true,
 		},
 		{
 			id: "actions",
 			header: "",
-			dataType: "string",
-			enableSorting: false,
-			enableColumnFilter: false,
 			disableRowClick: true,
 			// The agreement, upgrade to member, and kick out.
 			size: actionsColumnSize(3),

@@ -843,3 +843,49 @@ test("with two live visible tables, a stray Enter focuses only the first", async
 	expect(document.activeElement).toBe(first);
 	expect(document.activeElement).not.toBe(second);
 });
+
+test("a getRowId keys focus for data with no _id", () => {
+	type Plain = { name: string };
+	render(() => (
+		<Table.Root
+			columns={[
+				{ accessorKey: "name", header: "Name", dataType: "string" },
+			]}
+			data={[{ name: "Ada" }, { name: "Grace" }] satisfies Plain[]}
+			getRowId={(row) => row.name}
+			focusableRows
+			activeRowId={() => "Grace"}
+		/>
+	));
+	grid().focus();
+	expect(focused()).toBe("Grace");
+});
+
+test("arrows focus rows a getRowId keys", () => {
+	render(() => (
+		<Table.Root
+			columns={[
+				{ accessorKey: "name", header: "Name", dataType: "string" },
+			]}
+			data={[{ name: "Ada" }, { name: "Grace" }]}
+			getRowId={(row) => row.name}
+			focusableRows
+		/>
+	));
+	press("ArrowDown");
+	expect(focused()).toBe("Ada");
+});
+
+test("rows with neither an _id nor a getRowId are never focused", () => {
+	render(() => (
+		<Table.Root
+			columns={[
+				{ accessorKey: "name", header: "Name", dataType: "string" },
+			]}
+			data={[{ name: "Ada" }, { name: "Grace" }]}
+			focusableRows
+		/>
+	));
+	press("ArrowDown");
+	expect(focused()).toBeNull();
+});

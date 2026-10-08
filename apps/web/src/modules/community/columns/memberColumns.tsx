@@ -3,6 +3,7 @@ import { For, createSignal } from "solid-js";
 
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import type { PersonStatus } from "../../../../convex/lib/derive.ts";
+import { SHORT_TEXT_SIZE } from "../../../shared/columnSizes.ts";
 import { formatDate } from "../../../shared/time.ts";
 import { ChangeRoleDialog } from "../actions/ChangeRoleDialog.tsx";
 import type { RoleMove } from "../actions/ChangeRoleDialog.tsx";
@@ -211,6 +212,8 @@ export function memberColumns(): JfColumnDef<MemberRow>[] {
 			id: "ventureName",
 			header: "Venture",
 			dataType: "string",
+			size: SHORT_TEXT_SIZE,
+			measureText: false,
 			accessorFn: (r) => r.venture?.name ?? "",
 		},
 		...ventureColumns<MemberRow>(),
@@ -218,15 +221,14 @@ export function memberColumns(): JfColumnDef<MemberRow>[] {
 			id: "joinedAt",
 			header: "Joined",
 			dataType: "date",
+			size: "content",
 			accessorFn: (r) => r._creationTime,
 			cell: (info) => formatDate(info.row.original._creationTime),
+			measureText: (r) => formatDate(r._creationTime),
 		},
 		{
 			id: "actions",
 			header: "",
-			dataType: "string",
-			enableSorting: false,
-			enableColumnFilter: false,
 			disableRowClick: true,
 			// The agreement, change role, and kick out.
 			size: actionsColumnSize(3),

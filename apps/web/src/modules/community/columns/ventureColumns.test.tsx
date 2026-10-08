@@ -3,7 +3,17 @@ import { cleanup, render, screen } from "@solidjs/testing-library";
 import type { JSX } from "solid-js";
 import { afterEach, expect, test } from "vitest";
 
-import type { ApplicationRow } from "./applicationColumns.tsx";
+import {
+	FREE_TEXT_SIZE,
+	SHORT_TEXT_SIZE,
+} from "../../../shared/columnSizes.ts";
+import { formatDate } from "../../../shared/time.ts";
+
+import {
+	applicationColumns,
+	submissionDateText,
+	type ApplicationRow,
+} from "./applicationColumns.tsx";
 import { guestColumns } from "./guestColumns.tsx";
 import { memberColumns } from "./memberColumns.tsx";
 import { ventureColumns } from "./ventureColumns.tsx";
@@ -118,4 +128,117 @@ test("hosted-by filters on an enum of the board, not free text", () => {
 	);
 	expect(column?.dataType).toBe("enum");
 	expect(column?.enumOptions).toEqual([{ value: "b1", label: "Sara" }]);
+});
+
+test("time remaining is measured again on every push, as it reads the clock", () => {
+	const column = guestColumns([]).find((c) => c.id === "timeRemaining");
+	expect(column?.measureVolatile).toBe(true);
+});
+
+type SizedColumn = {
+	id?: string;
+	size?: unknown;
+	measureText?: unknown;
+	dataType?: unknown;
+};
+
+function byId(columns: readonly SizedColumn[], id: string): SizedColumn {
+	const column = columns.find((c) => c.id === id);
+	if (!column) throw new Error(`no ${id} column`);
+	return column;
+}
+
+function measured(column: SizedColumn, row: unknown): string {
+	if (typeof column.measureText !== "function")
+		throw new Error(`${String(column.id)} must measure its text`);
+	return (column.measureText as (row: unknown) => string)(row);
+}
+
+test("the venture columns leave the vertical to the default enum cell and free text to wrap", () => {
+	const columns = ventureColumns<ApplicationRow>();
+	const vertical = byId(columns, "vertical");
+	expect(vertical.size).toBe("content");
+	expect(vertical.dataType).toBe("enum");
+	expect(vertical).not.toHaveProperty("cell");
+	expect(vertical).not.toHaveProperty("measureText");
+	for (const id of ["description", "pastBuilt", "whyJoin"]) {
+		expect(byId(columns, id)).toMatchObject({
+			size: FREE_TEXT_SIZE,
+			measureText: false,
+		});
+	}
+	for (const id of ["referral"]) {
+		expect(byId(columns, id)).toMatchObject({
+			size: SHORT_TEXT_SIZE,
+			measureText: false,
+		});
+	}
+	const teamSize = byId(columns, "teamSize");
+	expect(measured(teamSize, { venture: { teamSize: 3 } })).toBe("3");
+	expect(measured(teamSize, { venture: {} })).toBe("—");
+	for (const columns of [
+		applicationColumns(),
+		memberColumns(),
+		guestColumns([]),
+	]) {
+		expect(byId(columns, "ventureName")).toMatchObject({
+			size: SHORT_TEXT_SIZE,
+			measureText: false,
+		});
+	}
+	const links = byId(columns, "links");
+	expect(typeof links.size).toBe("number");
+	expect(links.measureText).toBe(false);
+});
+
+test("member and guest dates measure the date they show", () => {
+	const row = { _creationTime: Date.UTC(2026, 9, 8) };
+	for (const columns of [memberColumns(), guestColumns([])]) {
+		const joined = byId(columns, "joinedAt");
+		expect(joined.size).toBe("content");
+		expect(measured(joined, row)).toBe(formatDate(row._creationTime));
+	}
+	const remaining = byId(guestColumns([]), "timeRemaining");
+	expect(remaining.size).toBe("content");
+	expect(measured(remaining, { accessUntil: undefined })).toBe("—");
+});
+
+test("notes wrap in a weighted share, and the date fits its text", () => {
+	const guests = guestColumns([]);
+	expect(byId(guests, "notes")).toMatchObject({
+		size: { min: 240, weight: 2 },
+		measureText: false,
+	});
+	const applications = applicationColumns();
+	expect(byId(applications, "notes")).toMatchObject({
+		size: FREE_TEXT_SIZE,
+		measureText: false,
+	});
+	expect(byId(applications, "score").size).toBe(124);
+	const date = byId(applications, "createdAt");
+	expect(date.size).toBe("content");
+	const row = { submittedAt: Date.UTC(2026, 9, 1), _creationTime: 0 };
+	expect(measured(date, row)).toBe(submissionDateText(row as ApplicationRow));
+	expect(submissionDateText(row as ApplicationRow)).toBe(
+		formatDate(row.submittedAt)
+	);
+	expect(
+		applications.find(
+			(c) => (c as { accessorKey?: string }).accessorKey === "email"
+		)?.size
+	).toBeUndefined();
+});
+
+test("the roster actions columns are display columns with fixed widths", () => {
+	for (const columns of [
+		memberColumns(),
+		guestColumns([]),
+		applicationColumns(),
+	]) {
+		const actions = byId(columns, "actions");
+		expect(typeof actions.size).toBe("number");
+		expect(actions).not.toHaveProperty("dataType");
+		expect(actions).not.toHaveProperty("enableSorting");
+		expect(actions).not.toHaveProperty("enableColumnFilter");
+	}
 });

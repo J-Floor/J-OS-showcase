@@ -60,7 +60,7 @@ export function createGridFocus<Data extends Record<string, unknown>>(opts: {
 	>;
 	/** The rows the ring can land on, in render order. */
 	rows: () => TanRow<Data>[];
-	/** The row's `_id`, or `undefined` when it has none. */
+	/** The row's id (see `rowId` in Table.tsx), or `undefined` when it has none. */
 	rowId: (row: TanRow<Data>) => string | undefined;
 	/** Whether a checkbox selection owns the keys. */
 	selectionActive: () => boolean;
@@ -361,7 +361,6 @@ export function createGridFocus<Data extends Record<string, unknown>>(opts: {
 			ref: (el: HTMLTableElement) => {
 				gridRef = el;
 			},
-			role: "grid",
 			[TABLE_GRID_ATTR]: "",
 			tabIndex: 0,
 			"aria-activedescendant":

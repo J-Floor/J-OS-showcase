@@ -7,9 +7,11 @@ import styles from "./Table.module.scss";
 const WIDTHS = ["long", "medium", "short", "medium"] as const;
 
 /** `<tr>` placeholders inside a real `<tbody>`: one cell per visible column, so
- *  the skeleton lines up with the header that is already on screen. */
+ *  the skeleton lines up with the header that is already on screen. The last
+ *  cell takes the actions column's place when there is one. */
 export function SkeletonRows(props: {
 	columns: number;
+	hasActions: boolean;
 	rows?: number;
 }): JSX.Element {
 	return (
@@ -22,7 +24,14 @@ export function SkeletonRows(props: {
 				>
 					<Index each={Array.from({ length: props.columns })}>
 						{(_, c) => (
-							<td>
+							<td
+								data-text-cell=""
+								class={
+									props.hasActions && c === props.columns - 1
+										? styles.actionsCell
+										: undefined
+								}
+							>
 								<Skeleton
 									width={WIDTHS[(r + c) % WIDTHS.length]}
 								/>

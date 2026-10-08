@@ -47,16 +47,17 @@ const columns: JfColumnDef<AuthLogRow>[] = [
 		id: "at",
 		header: "Time",
 		dataType: "date",
-		size: 110,
+		size: "content",
 		accessorFn: (r) => r.at,
 		cell: (info) => formatTime(info.row.original.at),
+		measureText: (r) => formatTime(r.at),
 	},
-	{ accessorKey: "person", header: "Person", dataType: "string", size: 200 },
+	{ accessorKey: "person", header: "Person", dataType: "string" },
 	{
 		accessorKey: "operation",
 		header: "Operation",
 		dataType: "enum",
-		size: 120,
+		size: "content",
 		enumOptions: [
 			{ value: "grant", label: "Grant" },
 			{ value: "revoke", label: "Revoke" },
@@ -68,15 +69,20 @@ const columns: JfColumnDef<AuthLogRow>[] = [
 		accessorKey: "trigger",
 		header: "Trigger",
 		dataType: "enum",
-		size: 130,
+		size: "content",
 		enumOptions: [...triggerOptions],
 	},
-	{ accessorKey: "locks", header: "Locks", dataType: "string", size: 280 },
+	{
+		accessorKey: "locks",
+		header: "Locks",
+		dataType: "string",
+		size: { min: "content", weight: 2 },
+	},
 	{
 		accessorKey: "outcome",
 		header: "Outcome",
 		dataType: "enum",
-		size: 120,
+		size: "content",
 		enumOptions: [
 			{ value: "ok", label: "Ok" },
 			{ value: "partial", label: "Partial" },
@@ -89,7 +95,7 @@ const columns: JfColumnDef<AuthLogRow>[] = [
 		accessorKey: "toDoor",
 		header: "To door",
 		dataType: "string",
-		size: 110,
+		size: "content",
 		cell: (info) => (
 			<span
 				class={
@@ -102,8 +108,10 @@ const columns: JfColumnDef<AuthLogRow>[] = [
 	},
 ];
 
+const timeFormat = new Intl.DateTimeFormat(undefined, { timeStyle: "short" });
+
 function formatTime(ms: number): string {
-	return new Date(ms).toLocaleTimeString(undefined, { timeStyle: "short" });
+	return timeFormat.format(new Date(ms));
 }
 
 function toRow(row: LogRow, now: number): AuthLogRow {

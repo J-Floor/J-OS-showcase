@@ -2,7 +2,12 @@
 import { type JfColumnDef } from "@j-os/design-system";
 import { expect, test } from "vitest";
 
+import { actionsColumnSize } from "../../community/columns/RowActions.tsx";
+
+import { categoryColumns } from "./categoryColumns.tsx";
+import { DESCRIPTION_SIZE } from "./columnSizes.ts";
 import { itemColumns } from "./itemColumns.tsx";
+import { itemTypeColumns } from "./itemTypeColumns.tsx";
 
 const rows = [
 	{
@@ -46,4 +51,26 @@ test("item columns expose type and category as enum filters", () => {
 		{ label: "Furniture", value: "Furniture" },
 		{ label: "Kitchen", value: "Kitchen" },
 	]);
+});
+
+test("free-text descriptions share the leftover width instead of growing to fit", () => {
+	const items = itemColumns([...rows] as unknown as Parameters<
+		typeof itemColumns
+	>[0]);
+	const types = itemTypeColumns([]);
+	const categories = categoryColumns();
+	for (const columns of [items, types, categories]) {
+		expect(columns.find((c) => c.id === "description")).toMatchObject({
+			size: DESCRIPTION_SIZE,
+			measureText: false,
+		});
+	}
+});
+
+test("the item actions column is a display column with a fixed width", () => {
+	const actions = itemColumns([]).find((c) => c.id === "actions");
+	expect(actions?.size).toBe(actionsColumnSize(2));
+	expect(actions).not.toHaveProperty("dataType");
+	expect(actions).not.toHaveProperty("enableSorting");
+	expect(actions).not.toHaveProperty("enableColumnFilter");
 });

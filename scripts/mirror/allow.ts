@@ -60,7 +60,7 @@ export const ALLOWED_IPV6: readonly string[] = ["2001:db8::/32"];
 export const BINARIES: readonly { path: string; sha256: string }[] = [
   {
     path: "packages/design-system/src/styles/material-symbols-sharp-subset.woff2",
-    sha256: "52625878cb039798a267b0f654864d9db37c1ce2e6f3b1d1027e2d731d97c79d",
+    sha256: "b054a2fdbfe1584e65417e60c6e76bd343ea1b086c2eb89fac70c1e1ef596a07",
   },
   {
     path: "apps/landing-page/public/apple-touch-icon.png",

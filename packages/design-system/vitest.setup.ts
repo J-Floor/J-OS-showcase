@@ -14,3 +14,13 @@ globalThis.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObse
 // assert synchronously on content, so render it at once here. Deferred's own
 // test turns this off locally.
 setDeferredImmediate(true);
+
+// jsdom has no canvas, and its `getContext` prints "Not implemented" on every
+// call. Answer the way a canvas-less browser would, quietly: the table then
+// sizes content columns from their headers, as designed.
+HTMLCanvasElement.prototype.getContext = (() =>
+	null) as typeof HTMLCanvasElement.prototype.getContext;
+if (typeof OffscreenCanvas !== "undefined") {
+	OffscreenCanvas.prototype.getContext = (() =>
+		null) as typeof OffscreenCanvas.prototype.getContext;
+}

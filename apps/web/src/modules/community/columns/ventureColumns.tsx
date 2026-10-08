@@ -3,14 +3,19 @@ import { Show } from "solid-js";
 
 import type { Doc } from "../../../../convex/_generated/dataModel";
 import {
+	FREE_TEXT_SIZE,
+	SHORT_TEXT_SIZE,
+} from "../../../shared/columnSizes.ts";
+import {
 	fundingStageOptions,
 	productStageOptions,
 	verticalOptions,
 } from "../../signup/options.ts";
-import { verticalsLabel } from "../drawers/labels.ts";
 import { VentureLink } from "../VentureLink.tsx";
 
 import styles from "./ventureColumns.module.scss";
+
+const LINKS_COLUMN_WIDTH = 200;
 
 /** Anything the three rosters render. All three read one table and one query
  *  shape, so the venture columns below are the same columns everywhere. */
@@ -39,15 +44,16 @@ export function ventureColumns<Row extends PersonLike>(): JfColumnDef<Row>[] {
 			header: "Vertical",
 			dataType: "enum",
 			enumOptions: verticalOptions,
+			size: "content",
 			// The raw values, so the filter matches a person carrying several.
 			accessorFn: (r) => r.vertical ?? [],
-			cell: (info) => verticalsLabel(info.row.original.vertical),
 		},
 		{
 			id: "description",
 			header: "Description",
 			dataType: "string",
-			size: 260,
+			size: FREE_TEXT_SIZE,
+			measureText: false,
 			accessorFn: (r) => r.venture?.description ?? "",
 			cell: (info) => clampCell(info.row.original.venture?.description),
 		},
@@ -55,7 +61,8 @@ export function ventureColumns<Row extends PersonLike>(): JfColumnDef<Row>[] {
 			id: "pastBuilt",
 			header: "Past built",
 			dataType: "string",
-			size: 260,
+			size: FREE_TEXT_SIZE,
+			measureText: false,
 			accessorFn: (r) => r.venture?.pastBuilt ?? "",
 			cell: (info) => clampCell(info.row.original.venture?.pastBuilt),
 		},
@@ -63,7 +70,8 @@ export function ventureColumns<Row extends PersonLike>(): JfColumnDef<Row>[] {
 			id: "whyJoin",
 			header: "Why join",
 			dataType: "string",
-			size: 260,
+			size: FREE_TEXT_SIZE,
+			measureText: false,
 			accessorFn: (r) => r.venture?.whyJoin ?? "",
 			cell: (info) => clampCell(info.row.original.venture?.whyJoin),
 		},
@@ -88,12 +96,15 @@ export function ventureColumns<Row extends PersonLike>(): JfColumnDef<Row>[] {
 			// Not `?? 0`: a founder who left the field blank would otherwise be
 			// indistinguishable from one who told us they work alone.
 			accessorFn: (r) => r.venture?.teamSize,
-			cell: (info) => info.getValue<number | undefined>() ?? "—",
+			cell: (info) => teamSizeText(info.row.original),
+			measureText: teamSizeText,
 		},
 		{
 			id: "referral",
 			header: "Referral",
 			dataType: "string",
+			size: SHORT_TEXT_SIZE,
+			measureText: false,
 			accessorFn: (r) => r.venture?.referral ?? "",
 		},
 		{
@@ -101,10 +112,16 @@ export function ventureColumns<Row extends PersonLike>(): JfColumnDef<Row>[] {
 			header: "Links",
 			dataType: "string",
 			disableRowClick: true,
+			size: LINKS_COLUMN_WIDTH,
+			measureText: false,
 			accessorFn: (r) => (r.venture?.links ?? []).length,
 			cell: (info) => <LinksCell venture={info.row.original.venture} />,
 		},
 	];
+}
+
+function teamSizeText(row: PersonLike): string {
+	return String(row.venture?.teamSize ?? "—");
 }
 
 /** Long free text, clamped to a few lines; the drawer has all of it. */
