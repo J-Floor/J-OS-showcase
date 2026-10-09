@@ -4,6 +4,9 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    # A Markdown-only merge changes nothing that ships.
+    # Same rule as .github/actions/docs-only.
+    paths-ignore: ["**.md"]
 
 # Never run two production deploys at once; let an in-flight deploy finish.
 concurrency:

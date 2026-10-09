@@ -8,18 +8,7 @@ on:
   # reported a red cross on a green PR.
   push:
     branches: [main]
-    paths:
-      - "**.ts"
-      - "**.tsx"
-      - "**.js"
-      - "**.jsx"
-      - "**.css"
-      - "package.json"
-      - "bun.lock"
-      - "bunfig.toml"
-      - "**/bunfig.toml"
-      - "turbo.json"
-      - ".github/workflows/checks.yml"
+    paths-ignore: ["**.md"]
   pull_request:
 
 # Supersede an in-flight run when the branch moves again.
@@ -40,12 +29,23 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Non-PR runs skip this step; its empty output leaves every step on.
+      - name: Detect Markdown-only change
+        id: scope
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/docs-only
+        with:
+          base-sha: ${{ github.event.pull_request.base.sha }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
+
       - name: Set up Bun
+        if: steps.scope.outputs.docs-only != 'true'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: "package.json"
 
       - name: Cache Bun downloads
+        if: steps.scope.outputs.docs-only != 'true'
         uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
@@ -54,10 +54,12 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
+        if: steps.scope.outputs.docs-only != 'true'
         run: bun install --frozen-lockfile
 
       # agreements:check recompiles the committed PDFs; Typst versions differ byte for byte, so pin 0.15.0.
       - name: Install Typst
+        if: steps.scope.outputs.docs-only != 'true'
         run: |
           dir="$RUNNER_TEMP/typst"
           mkdir -p "$dir"
@@ -69,15 +71,18 @@ jobs:
       # Turborepo remote cache backed by the GitHub Actions cache: one cache
       # shared by every job, workflow and branch, keyed by turbo's task hash.
       - name: Turborepo remote cache
+        if: steps.scope.outputs.docs-only != 'true'
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
         with:
           # A fixed port fails the job when the runner already holds it (EADDRINUSE).
           server-port: 0
 
       - name: Run Prettier (auto-fix)
+        if: steps.scope.outputs.docs-only != 'true'
         run: bun run format
 
       - name: Check for formatting changes
+        if: steps.scope.outputs.docs-only != 'true'
         id: check-changes
         run: |
           if [[ -n $(git status --porcelain) ]]; then
@@ -108,6 +113,7 @@ jobs:
       # One turbo run so Stylelint, tsc and the generated-file checks execute
       # concurrently. ESLint runs in its own job.
       - name: Stylelint, typecheck and generated-file checks
+        if: steps.scope.outputs.docs-only != 'true'
         run: bunx --bun turbo run lint:style:ci typecheck email:check agreements:check icons:check${{ github.event_name == 'pull_request' && ' --affected' || '' }} --continue
 
   # Separate job: on 2-vCPU runners type-aware ESLint and tsc contend for CPU
@@ -127,6 +133,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Non-PR runs skip this step; its empty output leaves every step on.
+      - name: Detect Markdown-only change
+        id: scope
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/docs-only
+        with:
+          base-sha: ${{ github.event.pull_request.base.sha }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
+
       # The whole private tree, docs/ included, on every run. Same pinned
       # release and checksum as mirror.yml. A step here, not its own job, so it
       # adds seconds rather than a billed runner minute.
@@ -144,11 +159,13 @@ jobs:
         run: gitleaks dir . --config scripts/mirror/gitleaks.toml --ignore-gitleaks-allow --redact --no-banner
 
       - name: Set up Bun
+        if: steps.scope.outputs.docs-only != 'true'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: "package.json"
 
       - name: Cache Bun downloads
+        if: steps.scope.outputs.docs-only != 'true'
         uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
@@ -157,6 +174,7 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
+        if: steps.scope.outputs.docs-only != 'true'
         run: bun install --frozen-lockfile
 
       # Ratchet: critical only until the high list is empty, then raise to high.
@@ -164,15 +182,18 @@ jobs:
       # GHSA-p6vx-979v-rg4c: seroval via solid-js (latest 1.9.15 still pins seroval ~1.5.4).
       # GHSA-w7jw-789q-3m8p: shell-quote via concurrently (dev dep; concurrently 10 only moves to another shell-quote critical).
       - name: Dependency audit
+        if: steps.scope.outputs.docs-only != 'true'
         run: bun audit --audit-level=critical --ignore GHSA-rg76-677x-56q9 --ignore GHSA-xwcq-pm8m-c4vf --ignore GHSA-p6vx-979v-rg4c --ignore GHSA-w7jw-789q-3m8p
 
       # Turborepo remote cache backed by the GitHub Actions cache: one cache
       # shared by every job, workflow and branch, keyed by turbo's task hash.
       - name: Turborepo remote cache
+        if: steps.scope.outputs.docs-only != 'true'
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
         with:
           # A fixed port fails the job when the runner already holds it (EADDRINUSE).
           server-port: 0
 
       - name: ESLint
+        if: steps.scope.outputs.docs-only != 'true'
         run: bunx --bun turbo run lint:logic${{ github.event_name == 'pull_request' && ' --affected' || '' }} --continue

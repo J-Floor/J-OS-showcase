@@ -1,0 +1,38 @@
+# Prettier does not format Markdown here, so a Markdown-only PR needs only the
+# secret scan; the workflows gate every other step on this output.
+# The push triggers of checks.yml and deploy.yml apply the same rule as
+# paths-ignore: ["**.md"] and must change with it.
+name: "Detect Markdown-only change"
+description: "Outputs docs-only=true when every file changed between two commits is a Markdown file."
+
+inputs:
+  base-sha:
+    description: "Base commit of the change."
+    required: true
+  head-sha:
+    description: "Head commit of the change."
+    required: true
+
+outputs:
+  docs-only:
+    description: "true when every changed path ends in .md, otherwise false."
+    value: ${{ steps.detect.outputs.docs_only }}
+
+runs:
+  using: composite
+  steps:
+    - name: Detect Markdown-only change
+      id: detect
+      shell: bash
+      env:
+        BASE_SHA: ${{ inputs.base-sha }}
+        HEAD_SHA: ${{ inputs.head-sha }}
+      run: |
+        set -euo pipefail
+        files=$(git diff --no-renames --name-only "$BASE_SHA"..."$HEAD_SHA")
+        if grep -qv '\.md$' <<<"$files"; then
+          docs_only=false
+        else
+          docs_only=true
+        fi
+        echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
