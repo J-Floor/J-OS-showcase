@@ -57,6 +57,12 @@ export const ALLOWED_IPV4: readonly string[] = [
 
 export const ALLOWED_IPV6: readonly string[] = ["2001:db8::/32"];
 
+export const ALLOWED_MAC_PREFIXES: readonly string[] = [
+  "00:00:5e:00:53",
+  "02:00:5e:00:53",
+  "01:00:5e:90:10",
+];
+
 export const BINARIES: readonly { path: string; sha256: string }[] = [
   {
     path: "packages/design-system/src/styles/material-symbols-sharp-subset.woff2",

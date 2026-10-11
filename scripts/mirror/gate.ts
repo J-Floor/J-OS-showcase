@@ -15,6 +15,7 @@ import {
   ALLOWED_IPV4,
   ALLOWED_NAMES,
   ALLOWED_IPV6,
+  ALLOWED_MAC_PREFIXES,
   ALLOWED_URLS,
   BINARIES,
   DENIED_URL_HOSTS,
@@ -48,6 +49,7 @@ type Layer =
   | "email"
   | "ipv4"
   | "ipv6"
+  | "mac"
   | "phone"
   | "convex-id"
   | "deployment"
@@ -118,6 +120,18 @@ const IPV4 =
   /(?<!\d)(?<!\d\.)(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?!\d)(?!\.\d)/g;
 const IPV6 =
   /(?<![0-9a-f:])[0-9a-f]{1,4}(?:(?::[0-9a-f]{1,4}){2,7}|(?::[0-9a-f]{1,4}){0,6}::(?:[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){0,5})?)(?![0-9a-f:])/gi;
+const NOT_AFTER_HEX = String.raw`(?<!(?<!%[0-9a-f])[0-9a-f])`;
+const MAC_SEPARATED = new RegExp(
+  String.raw`(?<!%)(?<!::)(?<!(?<![0-9a-z])[0-9a-f]{1,4}(?::|-|%3A|%253A))${NOT_AFTER_HEX}[0-9a-f]{2}(:|-|%3A|%253A)(?:[0-9a-f]{2}\1){4}[0-9a-f]{2}(?![0-9a-f])(?!\1[0-9a-f]{2}(?![0-9a-z]))`,
+  "gi",
+);
+const MAC_DOTTED = new RegExp(
+  String.raw`${NOT_AFTER_HEX}(?<![0-9a-f]\.)[0-9a-f]{4}\.[0-9a-f]{4}\.[0-9a-f]{4}(?!\.?[0-9a-f])`,
+  "gi",
+);
+const MAC_SEPARATORS = /%253a|%3a|[:.-]/g;
+const ZERO_MAC = "00:00:00:00:00:00";
+const BROADCAST_MAC = "ff:ff:ff:ff:ff:ff";
 const PHONE = new RegExp(
   String.raw`(?<![A-Za-z0-9])\+\d(?:[ -]{0,2}\d){${MIN_PHONE_DIGITS - 1},${MAX_PHONE_DIGITS - 1}}`,
   "g",
@@ -365,6 +379,22 @@ function hasGlobalIpv6(line: string): boolean {
   return [...line.matchAll(IPV6)].some((m) => isGlobalIpv6(m[0]));
 }
 
+function normalizeMac(text: string): string {
+  const hex = text.toLowerCase().replace(MAC_SEPARATORS, "");
+  return hex.match(/../g)!.join(":");
+}
+
+function isAllowedMac(mac: string): boolean {
+  if (mac === ZERO_MAC || mac === BROADCAST_MAC) return true;
+  return ALLOWED_MAC_PREFIXES.some((prefix) => mac.startsWith(`${prefix}:`));
+}
+
+function hasRealMac(line: string): boolean {
+  return [...line.matchAll(MAC_SEPARATED), ...line.matchAll(MAC_DOTTED)].some(
+    (m) => !isAllowedMac(normalizeMac(m[0])),
+  );
+}
+
 function isPlaceholderPhone(digits: string): boolean {
   if (FICTIONAL_NANP.test(digits)) return true;
   return /^0+$/.test(digits.slice(-PLACEHOLDER_ZERO_DIGITS));
@@ -458,6 +488,7 @@ function shapeLayers(text: string, ignored = false): Layer[] {
   if (hasEmail(text)) layers.push("email");
   if (hasPublicIpv4(text)) layers.push("ipv4");
   if (hasGlobalIpv6(text)) layers.push("ipv6");
+  if (hasRealMac(text)) layers.push("mac");
   if (hasPhone(text)) layers.push("phone");
   if (!ignored && hasConvexId(text)) layers.push("convex-id");
   if (!ignored && hasDeployment(text)) layers.push("deployment");
@@ -518,6 +549,7 @@ export const PLANTED = {
   email: ["someone", "gmail.com"].join("@"),
   ipv4: [8, 8, 4, 4].join("."),
   ipv6: `${["2a01", "4f8", "1", "2"].join(":")}::1`,
+  mac: ["3c", "5a", "b4", "01", "02", "03"].join(":"),
   phone: ["+41", "79", "555", "12", "34"].join(" "),
   convexId: `k57${"x9".repeat(14)}q`,
   deployment: ["happy", "otter", "123"].join("-"),
@@ -560,6 +592,7 @@ const SAMPLE_TREE: Planted[] = [
   { layer: "email", file: "email.txt", content: `${PLANTED.email}\n` },
   { layer: "ipv4", file: "ipv4.txt", content: `${PLANTED.ipv4}\n` },
   { layer: "ipv6", file: "ipv6.txt", content: `${PLANTED.ipv6}\n` },
+  { layer: "mac", file: "mac.txt", content: `${PLANTED.mac}\n` },
   { layer: "phone", file: "phone.txt", content: `${PLANTED.phone}\n` },
   {
     layer: "convex-id",

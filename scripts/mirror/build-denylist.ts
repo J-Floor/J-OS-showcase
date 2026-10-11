@@ -55,7 +55,7 @@ export type RawResult = { hashes: string[]; skipped: number };
 
 /**
  * Hashes of hand-typed secrets, one per line. A line a shape layer already
- * catches (IP, phone, ID, email, deployment or capability URL) is skipped, so
+ * catches (IP, MAC, phone, ID, email, deployment or capability URL) is skipped, so
  * the secret holds only what nothing else can find. Throws, naming the line
  * number only, on a line the gate could not match whole.
  */

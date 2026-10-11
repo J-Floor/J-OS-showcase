@@ -310,6 +310,64 @@ describe("scan layers", () => {
     ]);
   });
 
+  test("real MAC addresses in every form", async () => {
+    const mac = PLANTED.mac;
+    const groups = mac.split(":");
+    const local = ["da", "a1", "19", "00", "00", "01"].join(":");
+    const dir = tree({
+      "a.txt": [
+        `phone ${mac}`,
+        `phone ${mac.toUpperCase()}`,
+        `phone ${groups.join("-")}`,
+        `?mac=${groups.join("%3A")}`,
+        `?returnTo=${groups.join("%253A")}`,
+        `cisco ${groups[0]}${groups[1]}.${groups[2]}${groups[3]}.${groups[4]}${groups[5]}`,
+        `private wifi ${local}`,
+        `/signin?returnTo=%2Fportal%3Fid%3D${groups.join("%253A")}`,
+        `/portal?id%3D${groups.join("%3A")}%26ap=1`,
+        `mac:${mac}`,
+        `bssid:${mac}`,
+        `client_mac:${mac}`,
+        `ap-${mac}`,
+        `mac-${groups.join("-")}`,
+        `${mac}:8080`,
+        `${mac}:`,
+        `${groups.join("-")}-x`,
+      ].join("\n"),
+    });
+    expect(await scan(dir, options)).toEqual(
+      Array.from({ length: 17 }, (_, i) => i + 1).map((line) => ({
+        layer: "mac",
+        file: "a.txt",
+        line,
+      })),
+    );
+  });
+
+  test("documentation, zero and broadcast MACs are clean", async () => {
+    const dir = tree({
+      "a.txt": [
+        "00:00:5e:00:53:01",
+        "02:00:5E:00:53:02",
+        "01-00-5e-90-10-ff",
+        "02%3A00%3A5e%3A00%3A53%3A01",
+        "0200.5e00.5301",
+        "00:00:00:00:00:00",
+        "ff:ff:ff:ff:ff:ff",
+        "at 12:30:45, css ff:ff:ff:ff",
+        "ipv6 2001:db8:1:2:3:4:5:6",
+        "seven groups 1a:2b:3c:4d:5e:6f:70",
+        "seven groups encoded 1a%3A2b%3A3c%3A4d%3A5e%3A6f%3A70",
+        "eight groups 1a:2b:3c:4d:5e:6f:70:8a",
+        `fingerprint ${"ab:cd:".repeat(15)}ab:cd`,
+        "ipv6 tail fe80::3c:5a:b4:01:02:03",
+        "ipv6 tail ::3c:5a:b4:01:02:03",
+        "time 12:30:45",
+      ].join("\n"),
+    });
+    expect(await scan(dir, options)).toEqual([]);
+  });
+
   test("documentation, local and IPv6-looking non-addresses are clean", async () => {
     const dir = tree({
       "a.ts": [
@@ -317,11 +375,11 @@ describe("scan layers", () => {
         "loopback ::1, unspecified ::, link-local fe80::1%eth0",
         "unique-local fd00::1 and fc00:1:2::7, mapped ::ffff:10.0.0.5",
         "multicast ff02::1, all ::/0",
-        "at 12:30:45 or 23:59:59; MAC 3c:5a:b4:01:02:03",
+        "at 12:30:45 or 23:59:59; MAC 00:00:5e:00:53:03",
         "too many groups 1:2:3:4:5:6:7:8:9",
         "a::before, dd::after, std::vector, sha256:2a01abcd",
         "doc prefix 2001:db8:1:2, ula fd12:3456:789a:1, link fe80:1:2:3",
-        "at 12:34:56:78, MAC aa:bb:cc:dd:ee:ff, css ff:ff:ff:ff",
+        "at 12:34:56:78, MAC 02:00:5e:00:53:ff, css ff:ff:ff:ff",
         "three groups 2a01:4f8:c17 only",
       ].join("\n"),
     });
