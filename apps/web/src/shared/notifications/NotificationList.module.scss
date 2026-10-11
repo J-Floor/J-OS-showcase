@@ -1,4 +1,8 @@
 @use "@j-os/design-system/typography" as typo;
+@use "@j-os/design-system/utils" as utils;
+@use "../cards" as cards;
+
+$unread-dot-size: 0.5rem;
 
 .list {
 	display: flex;
@@ -19,9 +23,29 @@
 	color: var(--jf-fg-muted);
 }
 
-/* Unread rows: a tinted background. */
-.unread {
-	background-color: var(--jf-info-bg);
+/* A day's rows sit in one card, like the house rules and Space cards.
+   Nested so it outranks the design-system list's own surface whatever the
+   bundle order. */
+.day .group {
+	box-shadow: none;
+
+	@include cards.card-surface($bordered: true);
+}
+
+/* Unread rows: a dot before the title. */
+.unread .title::before {
+	display: inline-block;
+	inline-size: $unread-dot-size;
+	block-size: $unread-dot-size;
+	margin-inline-end: var(--jf-spacing-near);
+	vertical-align: middle;
+	content: "";
+	background-color: var(--jf-link);
+	border-radius: var(--jf-radius-full);
+}
+
+.srOnly {
+	@include utils.screenreader;
 }
 
 /* Read rows step their title down from the list's strong colour, so an

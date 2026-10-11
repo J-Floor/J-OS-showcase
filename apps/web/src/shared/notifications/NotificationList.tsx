@@ -87,7 +87,7 @@ export function NotificationList(props: {
 							{(day) => (
 								<section class={styles.day}>
 									<h3 class={styles.dayHeading}>{day}</h3>
-									<List.Root>
+									<List.Root class={styles.group}>
 										<For each={groups().get(day)}>
 											{(row) => (
 												<List.Item
@@ -109,6 +109,15 @@ export function NotificationList(props: {
 															row.createdAt
 														)}
 													</span>
+													<Show when={!row.read}>
+														<span
+															class={
+																styles.srOnly
+															}
+														>
+															Unread
+														</span>
+													</Show>
 												</List.Item>
 											)}
 										</For>

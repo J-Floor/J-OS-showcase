@@ -134,6 +134,18 @@ test("unread rows carry the unread class, read rows do not", () => {
 	expect(rowOf("Demo Night starts soon")).not.toHaveClass(styles.unread);
 });
 
+test("an unread row announces it is unread, a read row does not", () => {
+	head.data = [TASK, EVENT];
+	serve({ since: null });
+	renderList();
+	expect(
+		screen.getByRole("button", { name: /New task assigned.*Unread/ })
+	).toBeInTheDocument();
+	expect(
+		screen.queryByRole("button", { name: /Demo Night starts soon.*Unread/ })
+	).toBeNull();
+});
+
 test("clicking a row closes the drawer, opens its page and marks it read", () => {
 	head.data = [TASK];
 	serve({ since: null });
