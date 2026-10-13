@@ -298,9 +298,6 @@ export default defineSchema({
 		// into `board.noteLog` and dropped in a past migration — see git history.)
 		hostedById: v.optional(v.id("people")),
 		hostedBy: v.optional(v.string()),
-		// Unused: moved to personState. Dropped from the schema once
-		// migrations:moveLastPath has run on prod.
-		lastPath: v.optional(v.string()),
 		// Onboarding progress (members/guests between approval and confirmation).
 		// `steps` maps a step id to its completion record; step-specific payload
 		// is added by each step's own spec later. `tourSeen` gates the post-gate

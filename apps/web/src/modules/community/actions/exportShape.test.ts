@@ -41,7 +41,6 @@ describe("toExportRow", () => {
 			venture: { name: "Acme" },
 			hostedBy: "Legacy",
 			board: { score: 4, noteLog: [{ at: 5, text: "hi" }] },
-			lastPath: "/x",
 			door: {},
 			onboarding: {},
 			provenance: {},

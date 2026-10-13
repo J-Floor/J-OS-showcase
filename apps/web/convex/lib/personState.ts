@@ -3,8 +3,7 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
 
 /**
  * The person's `personState` row. One row per person is the invariant: a
- * person merge dedupes, `setPersonLastPath` upserts, and
- * `migrations:moveLastPath` only inserts when the person has no row.
+ * person merge dedupes and `setPersonLastPath` upserts.
  */
 export function personStateOf(ctx: QueryCtx, personId: Id<"people">) {
 	return ctx.db
