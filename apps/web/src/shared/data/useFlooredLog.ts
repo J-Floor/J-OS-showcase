@@ -3,7 +3,7 @@ import type {
 	PaginationOptions,
 	PaginationResult,
 } from "convex/server";
-import { useConvexClient, useQuery } from "convex-solidjs";
+import { useConvexClient } from "convex-solidjs";
 import {
 	type Accessor,
 	createEffect,
@@ -11,6 +11,8 @@ import {
 	createSignal,
 	onCleanup,
 } from "solid-js";
+
+import { useQuery } from "./useQuery.ts";
 
 type Floor = { since: number | null };
 
@@ -96,7 +98,7 @@ export function useFlooredLog<Row extends { _id: string }>(options: {
 	const head = useQuery(
 		options.queries.listSince,
 		() => ({ since: floor()?.since ?? null }),
-		() => ({ enabled: floor() !== undefined, keepPreviousData: true })
+		() => ({ enabled: floor() !== undefined })
 	);
 
 	createEffect(() => {

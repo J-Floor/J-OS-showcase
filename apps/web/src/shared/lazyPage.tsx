@@ -15,10 +15,12 @@ import { PageSkeleton } from "./PageSkeleton.tsx";
  * The loaded component and its in-flight promise are cached at module scope
  * (one `lazyPage(...)` call = one cache), so `preload()` is idempotent and a
  * second mount after a successful load renders synchronously, with no
- * skeleton flash. `preload` itself is internal — nothing outside this module
- * calls it ahead of mount; it just kicks the import off on first render.
+ * skeleton flash. `preload` is public: prefetch (sidebar hover, palette
+ * highlight, idle warm-up) calls it ahead of mount so the chunk is ready.
  */
-export function lazyPage(load: () => Promise<Component>): Component {
+export type LazyPage = Component & { preload: () => Promise<Component> };
+
+export function lazyPage(load: () => Promise<Component>): LazyPage {
 	let cached: Component | undefined;
 	let inflight: Promise<Component> | undefined;
 
@@ -79,5 +81,5 @@ export function lazyPage(load: () => Promise<Component>): Component {
 		);
 	}
 
-	return LazyPage;
+	return Object.assign(LazyPage, { preload });
 }

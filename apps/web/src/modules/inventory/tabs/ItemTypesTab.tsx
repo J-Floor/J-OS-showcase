@@ -5,6 +5,7 @@ import { itemTypeColumns } from "../columns/itemTypeColumns.tsx";
 import type { ItemType } from "../data/inventoryData.ts";
 import { useCategories, useItemTypes } from "../data/inventoryData.ts";
 import { ItemTypeDrawer } from "../drawers/ItemTypeDrawer.tsx";
+import { itemTypeEntity } from "../entity.ts";
 
 import { InventoryTab } from "./InventoryTab.tsx";
 
@@ -18,6 +19,7 @@ export function ItemTypesTab(props: {
 			data={() => types.data()}
 			columns={() => itemTypeColumns(types.data() ?? [])}
 			selection={props.selection}
+			descriptor={itemTypeEntity}
 			renderDrawer={(d) => (
 				<ItemTypeDrawer
 					open={d.open()}

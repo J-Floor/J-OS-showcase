@@ -1,26 +1,22 @@
-import { useQuery } from "convex-solidjs";
 import type { Accessor } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
 import type { Doc } from "../../../convex/_generated/dataModel";
+import { useQuery } from "../../shared/data/useQuery.ts";
 import type { EntityDescriptor } from "../../shared/entity/entityDescriptor.ts";
 import { ICONS } from "../../shared/icons.ts";
 
 /** `useRows` factory for the task descriptor — wraps `tasks.list`. Must be
  *  called inside a component (never at module scope). */
 function useTaskRows(): Accessor<Doc<"tasks">[] | undefined> {
-	const tasks = useQuery(api.tasks.list, {}, { keepPreviousData: true });
+	const tasks = useQuery(api.tasks.list, {});
 	return tasks.data;
 }
 
 /** `useRows` factory for the project descriptor — wraps `projects.list`. Must
  *  be called inside a component (never at module scope). */
 function useProjectRows(): Accessor<Doc<"projects">[] | undefined> {
-	const projects = useQuery(
-		api.projects.list,
-		{},
-		{ keepPreviousData: true }
-	);
+	const projects = useQuery(api.projects.list, {});
 	return projects.data;
 }
 

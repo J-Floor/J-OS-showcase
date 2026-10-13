@@ -1,11 +1,11 @@
 import { Button, Icon, PermissionDenied } from "@j-os/design-system";
-import { useNavigate } from "@solidjs/router";
 
 import { authClient } from "../lib/auth.ts";
 import { APP_NAME } from "../lib/constants.ts";
 
 import { ICONS } from "./icons.ts";
 import styles from "./NoAccess.module.scss";
+import { useSignOut } from "./useSignOut.ts";
 
 const HINT =
 	"If you're a member, you may have applied with a different email: sign out and use that one.";
@@ -19,12 +19,8 @@ const HINT =
  * full-viewport box so ExceptionDisplay fills the screen.
  */
 export function NoAccess() {
-	const navigate = useNavigate();
 	const session = authClient.useSession();
-	async function signOut() {
-		await authClient.signOut();
-		navigate("/signin", { replace: true });
-	}
+	const signOut = useSignOut();
 	function description(): string {
 		const email = session().data?.user.email;
 		return email

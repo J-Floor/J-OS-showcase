@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { setDeferredImmediate } from "@j-os/design-system";
 import {
 	cleanup,
 	fireEvent,
@@ -143,8 +144,12 @@ if (!("ResizeObserver" in globalThis)) {
 	};
 }
 
-afterEach(cleanup);
+afterEach(() => {
+	cleanup();
+	setDeferredImmediate(false);
+});
 beforeEach(() => {
+	setDeferredImmediate(true);
 	mutateAsync.mockReset();
 	lockAsync.mockReset();
 	positionAsync.mockReset();
@@ -189,10 +194,13 @@ test("is hidden from someone the board has shut out (force_off)", () => {
 	expect(screen.queryByRole("button")).not.toBeInTheDocument();
 });
 
-test("is hidden while the person is still loading", () => {
+test("shows a loading card, not the doors, while the person is still loading", () => {
 	currentPerson.value = undefined;
 	renderCard();
-	expect(screen.queryByText("Doors")).not.toBeInTheDocument();
+	expect(screen.getByText("Doors")).toBeInTheDocument();
+	expect(screen.getByRole("status")).toBeInTheDocument();
+	expect(screen.queryByRole("button")).not.toBeInTheDocument();
+	expect(positionAsync).not.toHaveBeenCalled();
 });
 
 test("is shown to a guest inside their access window", () => {
@@ -636,60 +644,92 @@ function pendingPosition() {
 	return pending;
 }
 
+/** Lets the mount's fresh read age past `FRESH_MIN_AGE_MS`, so a refresh
+ *  goes out at once. Needs fake timers. */
+async function pastFirstFresh() {
+	await vi.advanceTimersByTimeAsync(FRESH_MIN_AGE_MS + 1);
+}
+
 test("the refresh button re-checks fresh, shows loading, and the Unlock button returns when it reads locked", async () => {
-	positionAsync.mockResolvedValue("unlocked");
-	renderCard();
-	await screen.findByRole("button", { name: "Lock Upstairs (4th floor)" });
-	const pending = pendingPosition();
-	fireEvent.click(screen.getByRole("button", { name: REFRESH }));
-	expect(positionAsync).toHaveBeenLastCalledWith({
-		lock: "upstairs",
-		fresh: true,
-	});
-	await waitFor(() => {
-		expect(screen.getByRole("button", { name: REFRESH })).toHaveClass(
+	vi.useFakeTimers({ shouldAdvanceTime: true });
+	try {
+		positionAsync.mockResolvedValue("unlocked");
+		renderCard();
+		await screen.findByRole("button", {
+			name: "Lock Upstairs (4th floor)",
+		});
+		await pastFirstFresh();
+		const pending = pendingPosition();
+		fireEvent.click(screen.getByRole("button", { name: REFRESH }));
+		expect(positionAsync).toHaveBeenLastCalledWith({
+			lock: "upstairs",
+			fresh: true,
+		});
+		await waitFor(() => {
+			expect(screen.getByRole("button", { name: REFRESH })).toHaveClass(
+				/loading/
+			);
+		});
+		expect(
+			screen.getByRole("button", { name: REFRESH })
+		).not.toBeDisabled();
+		pending.resolve("locked");
+		expect(
+			await screen.findByRole("button", {
+				name: "Unlock Upstairs (4th floor)",
+			})
+		).toBeInTheDocument();
+		expect(
+			screen.queryByRole("button", { name: "Lock Upstairs (4th floor)" })
+		).not.toBeInTheDocument();
+		expect(screen.getByRole("button", { name: REFRESH })).not.toHaveClass(
 			/loading/
 		);
-	});
-	expect(screen.getByRole("button", { name: REFRESH })).not.toBeDisabled();
-	pending.resolve("locked");
-	expect(
-		await screen.findByRole("button", {
-			name: "Unlock Upstairs (4th floor)",
-		})
-	).toBeInTheDocument();
-	expect(
-		screen.queryByRole("button", { name: "Lock Upstairs (4th floor)" })
-	).not.toBeInTheDocument();
-	expect(screen.getByRole("button", { name: REFRESH })).not.toHaveClass(
-		/loading/
-	);
+	} finally {
+		vi.useRealTimers();
+	}
 });
 
 test("a refresh that still reads unlocked keeps the Lock button", async () => {
-	positionAsync.mockResolvedValue("unlocked");
-	renderCard();
-	await screen.findByRole("button", { name: "Lock Upstairs (4th floor)" });
-	fireEvent.click(screen.getByRole("button", { name: REFRESH }));
-	await settle();
-	expect(
-		screen.getByRole("button", { name: "Lock Upstairs (4th floor)" })
-	).toBeInTheDocument();
-	expect(screen.getByRole("button", { name: REFRESH })).not.toHaveClass(
-		/loading/
-	);
+	vi.useFakeTimers({ shouldAdvanceTime: true });
+	try {
+		positionAsync.mockResolvedValue("unlocked");
+		renderCard();
+		await screen.findByRole("button", {
+			name: "Lock Upstairs (4th floor)",
+		});
+		await pastFirstFresh();
+		fireEvent.click(screen.getByRole("button", { name: REFRESH }));
+		await vi.advanceTimersByTimeAsync(0);
+		expect(
+			screen.getByRole("button", { name: "Lock Upstairs (4th floor)" })
+		).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: REFRESH })).not.toHaveClass(
+			/loading/
+		);
+	} finally {
+		vi.useRealTimers();
+	}
 });
 
 test("two refresh clicks while the first is in flight send one request", async () => {
-	renderCard();
-	await screen.findByRole("button", { name: "Unlock Upstairs (4th floor)" });
-	const refresh = screen.getByRole("button", { name: REFRESH });
-	positionAsync.mockClear();
-	pendingPosition();
-	fireEvent.click(refresh);
-	fireEvent.click(refresh);
-	await settle();
-	expect(positionAsync).toHaveBeenCalledTimes(1);
+	vi.useFakeTimers({ shouldAdvanceTime: true });
+	try {
+		renderCard();
+		await screen.findByRole("button", {
+			name: "Unlock Upstairs (4th floor)",
+		});
+		await pastFirstFresh();
+		const refresh = screen.getByRole("button", { name: REFRESH });
+		positionAsync.mockClear();
+		pendingPosition();
+		fireEvent.click(refresh);
+		fireEvent.click(refresh);
+		await vi.advanceTimersByTimeAsync(0);
+		expect(positionAsync).toHaveBeenCalledTimes(1);
+	} finally {
+		vi.useRealTimers();
+	}
 });
 
 function freshCalls() {
@@ -786,7 +826,7 @@ test("a refresh more than 5s after the last fresh request sends at once", async 
 	try {
 		renderCard();
 		await vi.advanceTimersByTimeAsync(0);
-		fireEvent.click(screen.getByRole("button", { name: REFRESH }));
+		expect(freshCalls()).toHaveLength(1);
 		await vi.advanceTimersByTimeAsync(5001);
 		expect(freshCalls()).toHaveLength(1);
 		fireEvent.click(screen.getByRole("button", { name: REFRESH }));
@@ -932,15 +972,17 @@ test("stops polling once the card is unmounted", async () => {
 });
 
 test("an older read that resolves after a newer one is discarded", async () => {
-	const older = pendingPosition();
 	renderCard();
+	await screen.findByRole("button", { name: "Unlock Upstairs (4th floor)" });
+	const older = pendingPosition();
+	document.dispatchEvent(new Event("visibilitychange"));
 	await waitFor(() => {
-		expect(positionAsync).toHaveBeenCalledTimes(1);
+		expect(positionAsync).toHaveBeenCalledTimes(2);
 	});
 	positionAsync.mockResolvedValueOnce("locked");
 	document.dispatchEvent(new Event("visibilitychange"));
 	await waitFor(() => {
-		expect(positionAsync).toHaveBeenCalledTimes(2);
+		expect(positionAsync).toHaveBeenCalledTimes(3);
 	});
 	await settle();
 	older.resolve("unlocked");
@@ -954,34 +996,42 @@ test("an older read that resolves after a newer one is discarded", async () => {
 });
 
 test("a routine read issued before a re-check cannot overwrite the re-check's result", async () => {
-	positionAsync.mockResolvedValue("unlocked");
-	renderCard();
-	await screen.findByRole("button", { name: "Lock Upstairs (4th floor)" });
-	const refresh = screen.getByRole("button", { name: REFRESH });
-	const routine = pendingPosition();
-	document.dispatchEvent(new Event("visibilitychange"));
-	await waitFor(() => {
-		expect(positionAsync).toHaveBeenCalledTimes(2);
-	});
-	const recheck = pendingPosition();
-	fireEvent.click(refresh);
-	await waitFor(() => {
-		expect(positionAsync).toHaveBeenCalledTimes(3);
-	});
-	recheck.resolve("locked");
-	expect(
+	vi.useFakeTimers({ shouldAdvanceTime: true });
+	try {
+		positionAsync.mockResolvedValue("unlocked");
+		renderCard();
 		await screen.findByRole("button", {
-			name: "Unlock Upstairs (4th floor)",
-		})
-	).toBeInTheDocument();
-	routine.resolve("unlocked");
-	await settle();
-	expect(
-		screen.queryByRole("button", { name: "Lock Upstairs (4th floor)" })
-	).not.toBeInTheDocument();
-	expect(
-		screen.getByRole("button", { name: "Unlock Upstairs (4th floor)" })
-	).toBeInTheDocument();
+			name: "Lock Upstairs (4th floor)",
+		});
+		await pastFirstFresh();
+		const refresh = screen.getByRole("button", { name: REFRESH });
+		const routine = pendingPosition();
+		document.dispatchEvent(new Event("visibilitychange"));
+		await waitFor(() => {
+			expect(positionAsync).toHaveBeenCalledTimes(2);
+		});
+		const recheck = pendingPosition();
+		fireEvent.click(refresh);
+		await waitFor(() => {
+			expect(positionAsync).toHaveBeenCalledTimes(3);
+		});
+		recheck.resolve("locked");
+		expect(
+			await screen.findByRole("button", {
+				name: "Unlock Upstairs (4th floor)",
+			})
+		).toBeInTheDocument();
+		routine.resolve("unlocked");
+		await vi.advanceTimersByTimeAsync(0);
+		expect(
+			screen.queryByRole("button", { name: "Lock Upstairs (4th floor)" })
+		).not.toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: "Unlock Upstairs (4th floor)" })
+		).toBeInTheDocument();
+	} finally {
+		vi.useRealTimers();
+	}
 });
 
 test("no tabs: Upstairs on top, the route row, then Downstairs, each button naming its action and door", async () => {
@@ -1063,21 +1113,27 @@ test.each([
 );
 
 test("an offline reading shows the offline text, not the buttons, until the lock is back", async () => {
-	positionAsync.mockResolvedValue("offline");
-	renderCard();
-	expect(
-		await screen.findByText(
-			"Upstairs lock is offline — try again in a moment."
-		)
-	).toBeInTheDocument();
-	expect(
-		screen.queryByRole("button", { name: /Upstairs/ })
-	).not.toBeInTheDocument();
-	positionAsync.mockResolvedValue("locked");
-	fireEvent.click(screen.getByRole("button", { name: REFRESH }));
-	expect(
-		await screen.findByRole("button", { name: /Unlock Upstairs/ })
-	).toBeInTheDocument();
+	vi.useFakeTimers({ shouldAdvanceTime: true });
+	try {
+		positionAsync.mockResolvedValue("offline");
+		renderCard();
+		expect(
+			await screen.findByText(
+				"Upstairs lock is offline — try again in a moment."
+			)
+		).toBeInTheDocument();
+		expect(
+			screen.queryByRole("button", { name: /Upstairs/ })
+		).not.toBeInTheDocument();
+		await pastFirstFresh();
+		positionAsync.mockResolvedValue("locked");
+		fireEvent.click(screen.getByRole("button", { name: REFRESH }));
+		expect(
+			await screen.findByRole("button", { name: /Unlock Upstairs/ })
+		).toBeInTheDocument();
+	} finally {
+		vi.useRealTimers();
+	}
 });
 
 test("tapping one of the two side-by-side buttons replaces both with that action's status", async () => {
@@ -1113,16 +1169,10 @@ test.each([
 			await vi.advanceTimersByTimeAsync(
 				FRESH_MIN_AGE_MS - EARLY_MARGIN_MS
 			);
-			expect(positionAsync).not.toHaveBeenCalledWith({
-				lock: "upstairs",
-				fresh: true,
-			});
+			expect(freshCalls()).toHaveLength(1);
 			await vi.advanceTimersByTimeAsync(EARLY_MARGIN_MS);
 			await waitFor(() => {
-				expect(positionAsync).toHaveBeenCalledWith({
-					lock: "upstairs",
-					fresh: true,
-				});
+				expect(freshCalls()).toHaveLength(2);
 			});
 			expect(
 				await screen.findByRole("button", {
@@ -1135,10 +1185,14 @@ test.each([
 	}
 );
 
-test("before the first read lands upstairs reads 'Checking door…'", async () => {
+test("before the first read lands, upstairs is a button-shaped skeleton: no text, no buttons", async () => {
 	const pending = pendingPosition();
-	renderCard();
-	expect(await screen.findByText("Checking door…")).toBeInTheDocument();
+	const { container } = renderCard();
+	await waitFor(() => {
+		expect(container.querySelector("[data-door-skeleton]")).not.toBeNull();
+	});
+	expect(screen.getByText("Doors")).toBeInTheDocument();
+	expect(screen.queryByText("Checking door…")).not.toBeInTheDocument();
 	expect(
 		screen.queryByRole("button", { name: /Upstairs/ })
 	).not.toBeInTheDocument();
@@ -1147,6 +1201,48 @@ test("before the first read lands upstairs reads 'Checking door…'", async () =
 		await screen.findByRole("button", {
 			name: "Unlock Upstairs (4th floor)",
 		})
+	).toBeInTheDocument();
+	expect(container.querySelector("[data-door-skeleton]")).toBeNull();
+});
+
+test("the first read after mount is fresh, a later poll tick is routine", async () => {
+	vi.useFakeTimers({ shouldAdvanceTime: true });
+	try {
+		renderCard();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(positionAsync).toHaveBeenCalledTimes(1);
+		expect(positionAsync).toHaveBeenNthCalledWith(1, {
+			lock: "upstairs",
+			fresh: true,
+		});
+		document.dispatchEvent(new Event("visibilitychange"));
+		await vi.advanceTimersByTimeAsync(0);
+		expect(positionAsync).toHaveBeenCalledTimes(2);
+		expect(positionAsync).toHaveBeenNthCalledWith(2, {
+			lock: "upstairs",
+		});
+		await vi.advanceTimersByTimeAsync(POSITION_POLL_MS);
+		expect(positionAsync).toHaveBeenLastCalledWith({ lock: "upstairs" });
+	} finally {
+		vi.useRealTimers();
+	}
+});
+
+// The skeleton shows without waiting for a paint (it is not behind Deferred), so
+// it is there the moment the card mounts.
+test("a second mount after a resolved read starts with the skeleton again", async () => {
+	const first = renderCard();
+	await screen.findByRole("button", { name: "Unlock Upstairs (4th floor)" });
+	first.unmount();
+	const pending = pendingPosition();
+	const { container } = renderCard();
+	expect(container.querySelector("[data-door-skeleton]")).not.toBeNull();
+	expect(
+		screen.queryByRole("button", { name: /Upstairs/ })
+	).not.toBeInTheDocument();
+	pending.resolve("unlocked");
+	expect(
+		await screen.findByRole("button", { name: "Lock Upstairs (4th floor)" })
 	).toBeInTheDocument();
 });
 
@@ -1483,4 +1579,15 @@ test("unmounting while waking the door closes its attempt: a later reaction star
 	} finally {
 		vi.useRealTimers();
 	}
+});
+
+test("a visibility change during the in-flight first fresh read sends no routine read", async () => {
+	pendingPosition();
+	renderCard();
+	await waitFor(() => {
+		expect(positionAsync).toHaveBeenCalledTimes(1);
+	});
+	document.dispatchEvent(new Event("visibilitychange"));
+	await settle();
+	expect(positionAsync).toHaveBeenCalledTimes(1);
 });

@@ -1017,3 +1017,53 @@ describe("track animation stylesheet", () => {
 		expect(scss).not.toMatch(/transition:\s*grid-template-columns/);
 	});
 });
+
+describe("onRowHoverIntent", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+	});
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	function renderTable(spy: (row: unknown) => void, rows = data()) {
+		render(() => (
+			<Table.Root
+				columns={columns as never}
+				data={rows}
+				onRowHoverIntent={spy}
+			/>
+		));
+		return screen.getAllByRole("row")[2];
+	}
+
+	test("fires with the row's original data after 150 ms of rest", () => {
+		const spy = vi.fn();
+		const rows = data();
+		const row = renderTable(spy, rows);
+		fireEvent.pointerEnter(row);
+		vi.advanceTimersByTime(149);
+		expect(spy).not.toHaveBeenCalled();
+		vi.advanceTimersByTime(1);
+		expect(spy).toHaveBeenCalledTimes(1);
+		expect(spy).toHaveBeenCalledWith(rows[1]);
+	});
+
+	test("leaving before 150 ms never fires", () => {
+		const spy = vi.fn();
+		const row = renderTable(spy);
+		fireEvent.pointerEnter(row);
+		vi.advanceTimersByTime(149);
+		fireEvent.pointerLeave(row);
+		vi.advanceTimersByTime(1000);
+		expect(spy).not.toHaveBeenCalled();
+	});
+
+	test("a touch never fires", () => {
+		const spy = vi.fn();
+		const row = renderTable(spy);
+		fireEvent.pointerEnter(row, { pointerType: "touch" });
+		vi.advanceTimersByTime(1000);
+		expect(spy).not.toHaveBeenCalled();
+	});
+});

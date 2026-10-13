@@ -47,3 +47,9 @@
 
 	color: var(--jf-fg-muted);
 }
+
+/* Stands in for the gauge (three person icons) while the first answer is out. */
+.gaugeSkeleton {
+	inline-size: 7.5rem;
+	block-size: 2.5rem;
+}

@@ -1,5 +1,5 @@
-import { Button, Icon, IconButton } from "@j-os/design-system";
-import { useAction, useQuery } from "convex-solidjs";
+import { Button, Icon, IconButton, Skeleton } from "@j-os/design-system";
+import { useAction } from "convex-solidjs";
 import {
 	For,
 	Match,
@@ -23,6 +23,7 @@ import {
 	type LockSlot,
 } from "../../../convex/lib/doorLocks.ts";
 import { type DoorAction } from "../../../convex/lib/doorProvider.ts";
+import { useQuery } from "../../shared/data/useQuery.ts";
 import { ICONS } from "../../shared/icons.ts";
 import { userErrorMessage } from "../../shared/userErrorMessage.ts";
 
@@ -42,7 +43,6 @@ type DoorStatus = {
 	text: string;
 };
 
-const CHECKING_TEXT = "Checking door…";
 const SENDING_TEXT = "Sending…";
 const WAKING_TEXT = "Waking the door…";
 /** The copy and icon of each action, so nothing else branches on which. */
@@ -83,6 +83,7 @@ const DOOR_ACTIONS = [
  *  bolt's own state), one button, or both actions side by side when the
  *  bolt's position is unknown. */
 type SlotView =
+	| { kind: "pending" }
 	| { kind: "text"; status: DoorStatus }
 	| { kind: "button"; action: DoorAction }
 	| { kind: "both" };
@@ -129,7 +130,9 @@ function resultText(
  * `doorOpensFor` check) decides whether an action goes through. Hiding the
  * card only spares someone a button the server would refuse; it gates
  * nothing by itself.
- * Hidden while the person is still loading.
+ * While the person is still loading the card shows as a loading card. A
+ * door's position is never remembered across mounts: its slot shows a
+ * button-shaped skeleton until this mount's own first fresh read lands.
  *
  * One panel, no tabs: each door shows the action its bolt calls for — Unlock
  * when locked, Lock when unlocked, both side by side when the position is
@@ -325,7 +328,7 @@ export function UnlockCard(): JSX.Element {
 		}
 	}
 
-	/** Shown while the person's door access is granted; hidden while
+	/** Whether the person's door access is granted right now; false while
 	 *  loading. */
 	function canSeeDoors(): boolean {
 		const me = person.data();
@@ -339,10 +342,7 @@ export function UnlockCard(): JSX.Element {
 		const reading = doors.position(slot);
 		switch (reading) {
 			case undefined:
-				return {
-					kind: "text",
-					status: { tone: "muted", text: CHECKING_TEXT },
-				};
+				return { kind: "pending" };
 			case "locked":
 				return { kind: "button", action: "unlock" };
 			case "unlocked":
@@ -387,9 +387,10 @@ export function UnlockCard(): JSX.Element {
 	}
 
 	return (
-		<Show when={canSeeDoors()}>
+		<Show when={person.data() === undefined || canSeeDoors()}>
 			<SpaceCard
 				title="Doors"
+				loading={person.data() === undefined}
 				subtitle="An internet connection is required."
 				headerAction={
 					<IconButton
@@ -454,7 +455,8 @@ function DoorSlot(props: {
 		on(
 			kind,
 			(current) => {
-				if (current === "text" || !ownsFocus) return;
+				if (current === "text" || current === "pending" || !ownsFocus)
+					return;
 				const active = document.activeElement;
 				if (active && active !== document.body) return;
 				slotEl?.querySelector("button")?.focus();
@@ -474,6 +476,16 @@ function DoorSlot(props: {
 			}}
 		>
 			<Switch>
+				<Match when={kind() === "pending"}>
+					<div
+						class={styles.pending}
+						role="status"
+						aria-label="Loading"
+						data-door-skeleton=""
+					>
+						<Skeleton class={styles.doorSkeleton} />
+					</div>
+				</Match>
 				<Match when={status()}>
 					{(current) => (
 						<p

@@ -7,6 +7,7 @@ import {
 	createEffect,
 	createMemo,
 	createSignal,
+	onCleanup,
 	type JSX,
 } from "solid-js";
 
@@ -53,6 +54,13 @@ export type CommandPaletteItem = {
 	 */
 	searchOnly?: boolean;
 	onSelect: () => void;
+	/**
+	 * Called once this row has stayed highlighted for a beat: the user's
+	 * intent to open it, before they do. Lets a caller warm the data behind
+	 * the row. Not called while the search is blank, so opening the palette
+	 * does not prefetch for its auto-highlighted first row.
+	 */
+	onHighlight?: () => void;
 };
 
 export type CommandPaletteProps = {
@@ -83,6 +91,7 @@ export type CommandPaletteProps = {
 };
 
 const DEFAULT_SHORTCUT: Hotkey = "Mod+K";
+const HIGHLIGHT_INTENT_MS = 120;
 
 const RECENT_GROUP = "Recent";
 
@@ -248,6 +257,19 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
 	const [highlighted, setHighlighted] = createSignal<string | null>(null);
 	createEffect(() => {
 		setHighlighted(visible().at(0)?.value ?? null);
+	});
+
+	createEffect(() => {
+		const value = highlighted();
+		if (value === null || search() === "") return;
+		const item = visible().find((each) => each.value === value);
+		if (!item?.onHighlight) return;
+		const timer = setTimeout(() => {
+			item.onHighlight?.();
+		}, HIGHLIGHT_INTENT_MS);
+		onCleanup(() => {
+			clearTimeout(timer);
+		});
 	});
 
 	/**

@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
+import { setDeferredImmediate } from "@j-os/design-system";
 import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
-import { afterEach, expect, test, vi } from "vitest";
+import { createSignal } from "solid-js";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { SpaceCard } from "./SpaceCard.tsx";
 
@@ -77,4 +79,64 @@ test("renders a header action next to the title when given", () => {
 	const action = screen.getByRole("button", { name: /^Edit/ });
 	// In the header block, not the body.
 	expect(action.closest("header")).toContainElement(screen.getByText("T"));
+});
+
+describe("loading", () => {
+	beforeEach(() => {
+		setDeferredImmediate(true);
+	});
+	afterEach(() => {
+		setDeferredImmediate(false);
+	});
+
+	test("keeps the title, hides children, note and action, shows a status", () => {
+		render(() => (
+			<SpaceCard
+				title="T"
+				loading
+				headerAction={<button>Edit</button>}
+				note={<p>a-note</p>}
+				actionLabel="Go"
+			>
+				<span>custom-body</span>
+			</SpaceCard>
+		));
+		expect(screen.getByText("T")).toBeInTheDocument();
+		expect(screen.queryByText("custom-body")).not.toBeInTheDocument();
+		expect(screen.queryByText("a-note")).not.toBeInTheDocument();
+		expect(screen.queryByRole("button")).not.toBeInTheDocument();
+		expect(screen.getByRole("status")).toBeInTheDocument();
+	});
+
+	test("renders the given skeleton instead of the default", () => {
+		render(() => (
+			<SpaceCard
+				title="T"
+				loading
+				skeleton={<div data-testid="mine" />}
+			/>
+		));
+		const status = screen.getByRole("status", { name: "Loading" });
+		expect(status).toContainElement(screen.getByTestId("mine"));
+		expect(status).not.toHaveAttribute("data-skeleton-list");
+	});
+
+	test("paints nothing in the body until the first paint", () => {
+		setDeferredImmediate(false);
+		render(() => <SpaceCard title="T" loading />);
+		expect(screen.queryByRole("status")).not.toBeInTheDocument();
+	});
+
+	test("shows the children once loading is false", () => {
+		const [loading, setLoading] = createSignal(true);
+		render(() => (
+			<SpaceCard title="T" loading={loading()}>
+				<span>custom-body</span>
+			</SpaceCard>
+		));
+		expect(screen.queryByText("custom-body")).not.toBeInTheDocument();
+		setLoading(false);
+		expect(screen.getByText("custom-body")).toBeInTheDocument();
+		expect(screen.queryByRole("status")).not.toBeInTheDocument();
+	});
 });

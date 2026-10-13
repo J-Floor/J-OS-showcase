@@ -1,3 +1,5 @@
+@use "./wifiFrame";
+
 .hint {
 	margin: 0;
 	color: var(--jf-fg-muted);
@@ -19,4 +21,22 @@
 	flex-wrap: wrap;
 	gap: var(--jf-spacing-near);
 	justify-content: flex-end;
+}
+
+/* Stands in for the QR code and the network name while the credentials load. */
+.skeleton {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+}
+
+.qrSkeleton {
+	inline-size: wifiFrame.$size;
+	block-size: wifiFrame.$size;
+}
+
+.ssidSkeleton {
+	inline-size: 6rem;
+	block-size: var(--jf-spacing-far);
 }

@@ -1,5 +1,5 @@
-import { Select } from "@j-os/design-system";
-import { For, createMemo } from "solid-js";
+import { Select, Skeleton } from "@j-os/design-system";
+import { For, Show, createMemo } from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
@@ -33,25 +33,32 @@ export function HostSelect(props: {
 	);
 
 	return (
-		<Select.Root
-			label={props.label}
-			placeholder={props.placeholder ?? "Pick a board member"}
-			defaultOpen={props.defaultOpen}
-			autofocus={props.autoFocus}
-			allowClearing
-			options={options()}
-			value={props.value ? [props.value] : []}
-			onValueChange={(d) => {
-				props.onCommit(
-					(d.value[0] as Id<"people"> | undefined) ?? null
-				);
-			}}
+		<Show
+			when={boardLevel.data() !== undefined}
+			fallback={<Skeleton width="medium" />}
 		>
-			<Select.Content>
-				<For each={options()}>
-					{(o) => <Select.Option value={o.value} title={o.title} />}
-				</For>
-			</Select.Content>
-		</Select.Root>
+			<Select.Root
+				label={props.label}
+				placeholder={props.placeholder ?? "Pick a board member"}
+				defaultOpen={props.defaultOpen}
+				autofocus={props.autoFocus}
+				allowClearing
+				options={options()}
+				value={props.value ? [props.value] : []}
+				onValueChange={(d) => {
+					props.onCommit(
+						(d.value[0] as Id<"people"> | undefined) ?? null
+					);
+				}}
+			>
+				<Select.Content>
+					<For each={options()}>
+						{(o) => (
+							<Select.Option value={o.value} title={o.title} />
+						)}
+					</For>
+				</Select.Content>
+			</Select.Root>
+		</Show>
 	);
 }

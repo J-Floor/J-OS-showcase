@@ -24,6 +24,7 @@ import { Dynamic } from "solid-js/web";
 
 import { ICONS } from "../../icons.ts";
 import { afterPaint } from "../../utils/afterPaint.ts";
+import { createHoverIntent } from "../../utils/hoverIntent.ts";
 import { Checkbox } from "../Checkbox/Checkbox.tsx";
 import { Deferred } from "../Deferred/Deferred.tsx";
 import { Icon } from "../Icon/Icon.tsx";
@@ -96,6 +97,11 @@ export type TableRootProps<Data extends Record<string, unknown>> = {
 	 */
 	onEndReached?: () => void;
 	onRowClick?: (row: Data, event: MouseEvent) => void;
+	/** Called when a mouse or pen pointer has rested on a row for `HOVER_INTENT_MS`; a
+	 * hover-intent hook for warming the data behind it. Leaving sooner cancels
+	 * it, so sweeping across rows fires none. A touch is a tap, not intent, so
+	 * it is ignored. Passes the row's original data object. */
+	onRowHoverIntent?: (row: Data) => void;
 	/** Called whenever the set of on-screen (displayed) rows changes, in render order.
 	 * Passes the original data objects so consumers can navigate the visible list. */
 	onDisplayedRowsChange?: (rows: Data[]) => void;
@@ -461,6 +467,9 @@ export function Root<Data extends Record<string, unknown>>(
 		row: TanRow<Data>,
 		measured?: { index: number; ref: (el: HTMLTableRowElement) => void }
 	): JSX.Element {
+		const hoverIntent = createHoverIntent(() => {
+			props.onRowHoverIntent?.(row.original);
+		});
 		return (
 			<tr
 				ref={measured?.ref}
@@ -470,6 +479,8 @@ export function Root<Data extends Record<string, unknown>>(
 				class={clsx(props.onRowClick && styles.clickable)}
 				data-state={row.getIsSelected() ? "selected" : undefined}
 				data-focused={isRowFocused(row) ? "true" : undefined}
+				onPointerEnter={hoverIntent.onPointerEnter}
+				onPointerLeave={hoverIntent.onPointerLeave}
 				onClick={(event) => {
 					handleRowClick(row, event);
 				}}

@@ -99,9 +99,11 @@ const expiredGuestRow = {
 	},
 } as unknown as GuestRow;
 
+let guestsData: GuestRow[] | undefined = [guestRow, guestRow2, expiredGuestRow];
+
 vi.mock("../data/communityData.tsx", () => ({
 	useGuests: () => ({
-		data: () => [guestRow, guestRow2, expiredGuestRow],
+		data: () => guestsData,
 		isLoading: () => false,
 		error: () => undefined,
 		isStale: () => false,
@@ -388,4 +390,28 @@ test("dismissing the drawer clears the person from the URL", async () => {
 	await waitFor(() => {
 		expect(url()).not.toContain("person=");
 	});
+});
+
+test("guests still loading: skeleton rows, not 'No results.'", () => {
+	guestsData = undefined;
+	try {
+		renderWithSelection((selection) => <GuestsTab selection={selection} />);
+		expect(
+			document.querySelectorAll("[data-skeleton-row]").length
+		).toBeGreaterThan(0);
+		expect(screen.queryByText("No results.")).toBeNull();
+	} finally {
+		guestsData = [guestRow, guestRow2, expiredGuestRow];
+	}
+});
+
+test("guests loaded empty: shows 'No results.'", () => {
+	guestsData = [];
+	try {
+		renderWithSelection((selection) => <GuestsTab selection={selection} />);
+		expect(screen.getByText("No results.")).toBeInTheDocument();
+		expect(document.querySelectorAll("[data-skeleton-row]").length).toBe(0);
+	} finally {
+		guestsData = [guestRow, guestRow2, expiredGuestRow];
+	}
 });

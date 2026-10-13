@@ -33,6 +33,18 @@
 	margin-block-start: var(--jf-spacing-close);
 }
 
+/* Sized like the design system's Avatar: a circle 1.5em across at its
+   body-bold font size, set as low as the avatar it stands in for. */
+.avatarSkeleton {
+	@include typo.jf-typo-body-bold;
+
+	flex-shrink: 0;
+	block-size: 1.5em;
+	aspect-ratio: 1;
+	margin-block-start: var(--jf-spacing-close);
+	border-radius: var(--jf-radius-full);
+}
+
 .entryBody {
 	display: flex;
 	flex: 1;

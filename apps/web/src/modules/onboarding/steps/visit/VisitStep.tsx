@@ -1,8 +1,8 @@
-import { Button, Icon } from "@j-os/design-system";
-import { useQuery } from "convex-solidjs";
+import { Button, Icon, Skeleton } from "@j-os/design-system";
 import { Show } from "solid-js";
 
 import { api } from "../../../../../convex/_generated/api";
+import { useQuery } from "../../../../shared/data/useQuery.ts";
 import { StepActions } from "../../StepActions.tsx";
 import type { OnboardingStepProps } from "../../types.ts";
 
@@ -27,12 +27,17 @@ export function VisitStep(props: OnboardingStepProps) {
 			<p>
 				Come by to build.{" "}
 				<Show
-					when={host.data()}
-					fallback="If you've never been to the space, for a smooth start reach out to one of our board members via WhatsApp. They will welcome you to the space and answer any questions you may have."
+					when={host.data() !== undefined}
+					fallback={<Skeleton width="long" />}
 				>
-					{(h) =>
-						`If you've never been to the space, for a smooth start reach out to your host ${h().name} via WhatsApp the first time you come. They will welcome you to the space and answer any questions you may have.`
-					}
+					<Show
+						when={host.data()}
+						fallback="If you've never been to the space, for a smooth start reach out to one of our board members via WhatsApp. They will welcome you to the space and answer any questions you may have."
+					>
+						{(h) =>
+							`If you've never been to the space, for a smooth start reach out to your host ${h().name} via WhatsApp the first time you come. They will welcome you to the space and answer any questions you may have.`
+						}
+					</Show>
 				</Show>
 			</p>
 			<div class={styles.actions}>
@@ -45,43 +50,56 @@ export function VisitStep(props: OnboardingStepProps) {
 					View on Maps
 				</Button>
 				<Show
-					when={host.data()?.phone}
+					when={host.data() !== undefined}
 					fallback={
-						<Show when={invite.data()}>
-							{(url) => (
-								<Button
-									variant="secondary"
-									onClick={() => {
-										window.open(
-											url(),
-											"_blank",
-											"noopener,noreferrer"
-										);
-									}}
-								>
-									Message us on WhatsApp
-								</Button>
-							)}
-						</Show>
+						<div
+							role="status"
+							aria-label="Loading"
+							data-invite-skeleton=""
+						>
+							<Skeleton class={styles.buttonSkeleton} />
+						</div>
 					}
 				>
-					{(phone) => (
-						<Button
-							variant="secondary"
-							onClick={() => {
-								// wa.me wants the international number with no
-								// "+", spaces or punctuation. Opens a WhatsApp
-								// chat with the host — no spam phone calls.
-								window.open(
-									`https://wa.me/${phone().replace(/\D/g, "")}`,
-									"_blank",
-									"noopener,noreferrer"
-								);
-							}}
-						>
-							Message {host.data()?.name} on WhatsApp
-						</Button>
-					)}
+					<Show
+						when={host.data()?.phone}
+						fallback={
+							<Show when={invite.data()}>
+								{(url) => (
+									<Button
+										variant="secondary"
+										onClick={() => {
+											window.open(
+												url(),
+												"_blank",
+												"noopener,noreferrer"
+											);
+										}}
+									>
+										Message us on WhatsApp
+									</Button>
+								)}
+							</Show>
+						}
+					>
+						{(phone) => (
+							<Button
+								variant="secondary"
+								onClick={() => {
+									// wa.me wants the international number with no
+									// "+", spaces or punctuation. Opens a WhatsApp
+									// chat with the host — no spam phone calls.
+									window.open(
+										`https://wa.me/${phone().replace(/\D/g, "")}`,
+										"_blank",
+										"noopener,noreferrer"
+									);
+								}}
+							>
+								Message {host.data()?.name} on WhatsApp
+							</Button>
+						)}
+					</Show>
 				</Show>
 			</div>
 			<StepActions>

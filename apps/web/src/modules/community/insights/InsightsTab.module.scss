@@ -63,3 +63,8 @@
 
 	color: var(--jf-fg-muted);
 }
+
+.card .chartSkeleton {
+	inline-size: 100%;
+	block-size: var(--jf-dimension-chart-height);
+}

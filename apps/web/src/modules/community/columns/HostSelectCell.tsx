@@ -1,9 +1,11 @@
+import { Skeleton } from "@j-os/design-system";
 import { useMutation } from "convex-solidjs";
 import { Show, createSignal, type JSX } from "solid-js";
 
 import { api } from "../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
+import { hostDisplay } from "../hostDisplay.ts";
 
 import { HostSelect } from "./HostSelect.tsx";
 import styles from "./HostSelectCell.module.scss";
@@ -31,13 +33,8 @@ export function HostSelectCell(props: { row: Doc<"people"> }): JSX.Element {
 	const boardLevel = useBoardLevel();
 	const [engaged, setEngaged] = createSignal(false);
 
-	function hostName(): string | undefined {
-		const id = props.row.hostedById;
-		if (id) {
-			const found = (boardLevel.data() ?? []).find((s) => s._id === id);
-			if (found) return `${found.firstName} ${found.lastName}`.trim();
-		}
-		return props.row.hostedBy;
+	function host() {
+		return hostDisplay(boardLevel.data(), props.row);
 	}
 
 	return (
@@ -57,14 +54,19 @@ export function HostSelectCell(props: { row: Doc<"people"> }): JSX.Element {
 					}}
 				>
 					<Show
-						when={hostName()}
-						fallback={
-							<span class={styles.empty}>
-								Pick a board member
-							</span>
-						}
+						when={!host().loading}
+						fallback={<Skeleton width="medium" />}
 					>
-						{(name) => <span>{name()}</span>}
+						<Show
+							when={host().name}
+							fallback={
+								<span class={styles.empty}>
+									Pick a board member
+								</span>
+							}
+						>
+							{(name) => <span>{name()}</span>}
+						</Show>
 					</Show>
 				</button>
 			}

@@ -94,3 +94,35 @@ test("no project, not loading: shows the create form and 'New project' title", (
 		screen.getByRole("button", { name: /Create project/ })
 	).toBeInTheDocument();
 });
+
+test("tasks undefined: shows a skeleton list, not 'No tasks yet.'", () => {
+	render(() => (
+		<ProjectDrawer
+			open
+			onOpenChange={() => {}}
+			project={project}
+			people={[]}
+			projects={[]}
+			tasks={undefined}
+			onTaskClick={() => {}}
+		/>
+	));
+	expect(document.querySelector("[data-skeleton-list]")).toBeInTheDocument();
+	expect(screen.queryByText("No tasks yet.")).toBeNull();
+});
+
+test("tasks empty: shows 'No tasks yet.'", () => {
+	render(() => (
+		<ProjectDrawer
+			open
+			onOpenChange={() => {}}
+			project={project}
+			people={[]}
+			projects={[]}
+			tasks={[]}
+			onTaskClick={() => {}}
+		/>
+	));
+	expect(screen.getByText("No tasks yet.")).toBeInTheDocument();
+	expect(document.querySelector("[data-skeleton-list]")).toBeNull();
+});

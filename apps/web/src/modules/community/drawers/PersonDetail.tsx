@@ -4,19 +4,22 @@ import {
 	EditableText,
 	isTypingTarget,
 	PropertyRow,
+	Skeleton,
 } from "@j-os/design-system";
 import { createHotkey, type Hotkey } from "@tanstack/solid-hotkeys";
-import { useMutation, useQuery } from "convex-solidjs";
+import { useMutation } from "convex-solidjs";
 import { createEffect, createSignal, For, on, onMount, Show } from "solid-js";
 
 import { api } from "../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import type { PersonStatus } from "../../../../convex/lib/derive.ts";
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
+import { useQuery } from "../../../shared/data/useQuery.ts";
 import { ICONS } from "../../../shared/icons.ts";
 import { formatDate } from "../../../shared/time.ts";
 import { userErrorMessage } from "../../../shared/userErrorMessage.ts";
 import { HostSelect } from "../columns/HostSelect.tsx";
+import { hostDisplay } from "../hostDisplay.ts";
 import {
 	CompanyField,
 	DescriptionField,
@@ -28,6 +31,7 @@ import {
 	VerticalField,
 	WhyJoinField,
 } from "../ProfileFields.tsx";
+import { attendedEventsQuery } from "../queries.ts";
 import { headline } from "../status/copy.ts";
 import { PersonTimeline } from "../status/PersonTimeline.tsx";
 import { StatusSection } from "../status/StatusSection.tsx";
@@ -55,15 +59,14 @@ const ACCORDION_SECTIONS: { value: string; key: Hotkey }[] = [
  * name via `hostedById`, falling back to the legacy `hostedBy` string. */
 function HostName(props: { person: Doc<"people"> }) {
 	const boardLevel = useBoardLevel();
-	function name(): string | undefined {
-		const id = props.person.hostedById;
-		if (id) {
-			const s = (boardLevel.data() ?? []).find((p) => p._id === id);
-			if (s) return `${s.firstName} ${s.lastName}`.trim();
-		}
-		return props.person.hostedBy;
+	function host() {
+		return hostDisplay(boardLevel.data(), props.person);
 	}
-	return <span>{name() ?? "—"}</span>;
+	return (
+		<Show when={!host().loading} fallback={<Skeleton width="medium" />}>
+			<span>{host().name ?? "—"}</span>
+		</Show>
+	);
 }
 
 /**
@@ -228,9 +231,11 @@ function EditableDetail(props: { person: Doc<"people"> }) {
 	const cancelEmailChange = useMutation(api.people.cancelEmailChange);
 	// The stored email stays until the new address confirms
 	// (`people.confirmEmailChange`); until then the change is pending here.
-	const pendingEmail = useQuery(api.people.pendingEmailChange, () => ({
-		personId: p()._id,
-	}));
+	const pendingEmail = useQuery(
+		api.people.pendingEmailChange,
+		() => ({ personId: p()._id }),
+		{ keepPreviousData: false }
+	);
 	const [emailError, setEmailError] = createSignal<string | null>(null);
 	// The drawer is re-used as the board steps through rows, so a clash error
 	// for one person must not linger on the next.
@@ -452,19 +457,22 @@ function ReadOnly(props: { person: Doc<"people"> }) {
  */
 function AttendedEvents(props: { personId: Id<"people"> }) {
 	const events = useQuery(
-		api.people.attendedEvents,
-		() => ({
-			personId: props.personId,
-		}),
-		{ keepPreviousData: true }
+		attendedEventsQuery.query,
+		() => attendedEventsQuery.args(props.personId),
+		{ keepPreviousData: false }
 	);
 	function names(): string {
 		return (events.data() ?? []).map((e) => e.name).join(", ");
 	}
 	return (
-		<Show when={names()}>
+		<Show when={events.data() === undefined || names()}>
 			<PropertyRow icon={ICONS.events} label="Came from">
-				<span>{names()}</span>
+				<Show
+					when={events.data() !== undefined}
+					fallback={<Skeleton width="medium" />}
+				>
+					<span>{names()}</span>
+				</Show>
 			</PropertyRow>
 		</Show>
 	);

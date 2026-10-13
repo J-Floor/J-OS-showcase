@@ -1,5 +1,6 @@
 import type { Accessor } from "solid-js";
 
+import { prefetchSpec } from "../../shared/data/queryKeeper.ts";
 import {
 	entityUrl,
 	type EntityDescriptor,
@@ -8,6 +9,7 @@ import { ICONS } from "../../shared/icons.ts";
 
 import type { Category, Item, ItemType } from "./data/inventoryData.ts";
 import { useCategories, useItems, useItemTypes } from "./data/inventoryData.ts";
+import { itemsByTypeQuery, itemTypesByCategoryQuery } from "./queries.ts";
 
 /** `useRows` factories — each wraps the module's existing live query. Must be
  *  called inside a component (never at module scope). */
@@ -61,6 +63,9 @@ export const itemTypeEntity: EntityDescriptor<ItemType> = {
 	detail: (row) => row.categoryName,
 	ability: { action: "view", subject: "Inventory" },
 	tab: "types",
+	prefetch: (row) => {
+		prefetchSpec(itemsByTypeQuery, row._id);
+	},
 };
 
 /** Category descriptor: `slug` defaults to `_id`, same reasoning as types. */
@@ -74,4 +79,7 @@ export const categoryEntity: EntityDescriptor<Category> = {
 	label: (row) => row.name,
 	ability: { action: "view", subject: "Inventory" },
 	tab: "categories",
+	prefetch: (row) => {
+		prefetchSpec(itemTypesByCategoryQuery, row._id);
+	},
 };

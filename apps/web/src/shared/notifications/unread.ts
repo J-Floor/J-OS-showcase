@@ -1,7 +1,6 @@
-import { useQuery } from "convex-solidjs";
-
 import { api } from "../../../convex/_generated/api";
 import { UNREAD_COUNT_CAP } from "../../../convex/lib/constants.ts";
+import { useQuery } from "../data/useQuery.ts";
 
 /** Badge text for an unread count: nothing at zero, `99+` past the cap. */
 export function unreadBadge(count: number | undefined): string | undefined {

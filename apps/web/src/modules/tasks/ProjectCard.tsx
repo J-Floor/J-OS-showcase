@@ -1,4 +1,4 @@
-import { Icon } from "@j-os/design-system";
+import { Icon, Skeleton } from "@j-os/design-system";
 import { Show, type JSX } from "solid-js";
 
 import { ICONS } from "../../shared/icons.ts";
@@ -10,7 +10,7 @@ import styles from "./ProjectCard.module.scss";
 export function ProjectCard(props: {
 	name: string;
 	leaderName?: string;
-	taskCount: number;
+	taskCount: number | undefined;
 	onClick: () => void;
 }): JSX.Element {
 	return (
@@ -33,7 +33,13 @@ export function ProjectCard(props: {
 				</Show>
 				<span class={styles.item}>
 					<Icon>{ICONS.task}</Icon>
-					{props.taskCount} tasks
+					<Show
+						when={props.taskCount !== undefined}
+						fallback={<Skeleton width="short" />}
+					>
+						{props.taskCount}
+					</Show>{" "}
+					tasks
 				</span>
 			</span>
 		</button>

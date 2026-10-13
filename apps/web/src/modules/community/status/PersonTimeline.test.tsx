@@ -193,6 +193,13 @@ describe("PersonTimeline", () => {
 		).toBeInTheDocument();
 	});
 
+	it("shows a skeleton list, not Loading text, while events load", () => {
+		queryDataRef.current = undefined;
+		render(() => <PersonTimeline personId={"p1" as Id<"people">} />);
+		expect(screen.getByRole("status")).toBeInTheDocument();
+		expect(screen.queryByText(/loading…/i)).toBeNull();
+	});
+
 	it("shows something sensible, not an empty box, for a person with no events", () => {
 		queryDataRef.current = [];
 		render(() => <PersonTimeline personId={"p1" as Id<"people">} />);

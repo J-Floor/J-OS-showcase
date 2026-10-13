@@ -1,11 +1,15 @@
 // @vitest-environment happy-dom
+import { setDeferredImmediate } from "@j-os/design-system";
 import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
 import { getFunctionName } from "convex/server";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
-const { logWifiOpenMutate, updateWifiMutate } = vi.hoisted(() => ({
+const { logWifiOpenMutate, updateWifiMutate, creds } = vi.hoisted(() => ({
 	logWifiOpenMutate: vi.fn(() => Promise.resolve(null)),
 	updateWifiMutate: vi.fn(() => Promise.resolve(null)),
+	creds: {
+		value: undefined as { ssid: string; password: string } | undefined,
+	},
 }));
 
 // convex-solidjs's useQuery/useMutation throw "must be used within
@@ -15,7 +19,7 @@ const { logWifiOpenMutate, updateWifiMutate } = vi.hoisted(() => ({
 // function's stable string name rather than by reference.
 vi.mock("convex-solidjs", () => ({
 	useQuery: () => ({
-		data: () => ({ ssid: "J floor", password: "test-wifi-password" }),
+		data: () => creds.value,
 		error: () => undefined,
 		isLoading: () => false,
 	}),
@@ -43,8 +47,13 @@ import { WifiCard } from "./WifiCard.tsx";
 const PHONE_HINT =
 	"Viewing on phone? Use Circle to Search (long-press your home button/pill)";
 
+beforeEach(() => {
+	creds.value = { ssid: "J floor", password: "test-wifi-password" };
+});
+
 afterEach(() => {
 	cleanup();
+	setDeferredImmediate(false);
 	logWifiOpenMutate.mockClear();
 	updateWifiMutate.mockClear();
 });
@@ -111,4 +120,22 @@ test("cancelling the edit brings the code back without saving", () => {
 	fireEvent.click(screen.getByRole("button", { name: /^Cancel/ }));
 	expect(screen.getByText("J floor")).toBeInTheDocument();
 	expect(updateWifiMutate).not.toHaveBeenCalled();
+});
+
+test("shows a skeleton and no QR code while the credentials load", () => {
+	creds.value = undefined;
+	setDeferredImmediate(true);
+	const { container } = renderAs("member");
+	expect(container.querySelector("[data-wifi-skeleton]")).not.toBeNull();
+	expect(screen.getByRole("status", { name: "Loading" })).toBeInTheDocument();
+	expect(screen.queryByText("J floor")).not.toBeInTheDocument();
+	expect(
+		screen.queryByRole("button", { name: "Copy password" })
+	).not.toBeInTheDocument();
+});
+
+test("shows no skeleton once the credentials are here", () => {
+	const { container } = renderAs("member");
+	expect(container.querySelector("[data-wifi-skeleton]")).toBeNull();
+	expect(screen.getByText("J floor")).toBeInTheDocument();
 });

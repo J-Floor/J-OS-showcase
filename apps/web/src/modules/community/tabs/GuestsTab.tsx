@@ -39,9 +39,7 @@ export function GuestsTab(props: TabProps): JSX.Element {
 	return (
 		<RosterTab<GuestRow>
 			tab={props}
-			data={() =>
-				guests.isLoading() ? undefined : (guests.data() ?? [])
-			}
+			data={() => guests.data()}
 			columns={columns}
 			groupBy="guestStatus"
 			initialColumnSorting={[{ id: "joinedAt", desc: true }]}

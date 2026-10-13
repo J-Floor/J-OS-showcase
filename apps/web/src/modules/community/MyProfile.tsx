@@ -1,8 +1,9 @@
-import { Input, PropertyRow } from "@j-os/design-system";
-import { useMutation, useQuery } from "convex-solidjs";
-import { createSignal, For, Show, Suspense } from "solid-js";
+import { Input, PropertyRow, SkeletonList } from "@j-os/design-system";
+import { useMutation } from "convex-solidjs";
+import { createSignal, For, Show } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
+import { useQuery } from "../../shared/data/useQuery.ts";
 import { ICONS } from "../../shared/icons.ts";
 import { buildLinks } from "../signup/links.ts";
 
@@ -16,6 +17,8 @@ import {
 	TeamSizeField,
 	VerticalField,
 } from "./ProfileFields.tsx";
+
+const PROFILE_SKELETON_ROWS = 6;
 
 /**
  * A non-board member's own editable profile. Reads the caller's live row from
@@ -39,7 +42,10 @@ export function MyProfile() {
 		return value.replace(/[^\d+()\s-]/g, "");
 	}
 	return (
-		<Suspense fallback={<p>Loading your profile…</p>}>
+		<Show
+			when={me.data() !== undefined}
+			fallback={<SkeletonList rows={PROFILE_SKELETON_ROWS} />}
+		>
 			<Show when={me.data()} fallback={<p>No profile found.</p>}>
 				{(p) => (
 					<div class={styles.form}>
@@ -105,7 +111,7 @@ export function MyProfile() {
 					</div>
 				)}
 			</Show>
-		</Suspense>
+		</Show>
 	);
 }
 

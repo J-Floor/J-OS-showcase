@@ -1,6 +1,7 @@
 import { useAction } from "convex-solidjs";
 import {
 	createEffect,
+	createMemo,
 	createSignal,
 	on,
 	onCleanup,
@@ -26,7 +27,8 @@ export const LOCKABLE_SLOTS = LOCK_SLOTS.filter(({ slot }) =>
 
 /**
  * Where each lockable door's bolt is, read from the server: once when
- * `enabled` turns true, every 30s and on a tab becoming visible while it
+ * `enabled` turns true (a fresh read, so the first state shown is never
+ * older than `FRESH_MIN_AGE_MS`), every 30s and on a tab becoming visible while it
  * stays true, and fresh on demand.
  *
  * `hasStatus` says whether an action's status holds a door. A routine read is
@@ -127,17 +129,39 @@ export function createDoorPositions(options: {
 		);
 	}
 
+	/** The first read after `enabled` turns true: fresh, since the server's
+	 *  routine cache is older than a state shown for the first time may be. */
+	function readFirst() {
+		for (const slot of LOCKABLE_SLOTS)
+			if (!options.hasStatus(slot)) void readPosition(slot, true);
+	}
+
 	function readAll() {
 		for (const slot of LOCKABLE_SLOTS) void readPosition(slot, false);
 	}
 
+	/** `enabled` may be a plain function over a document that updates often;
+	 *  the memo lets the effect run only on a real true/false change. */
+	const enabledChanged = createMemo(() => options.enabled());
+
 	createEffect(
-		on(options.enabled, (enabled) => {
-			if (!enabled) return;
+		on(enabledChanged, (enabled) => {
+			if (!enabled) {
+				// A reading never outlives the card that showed it: drop reads
+				// in flight or waiting, then the readings.
+				for (const slot of LOCKABLE_SLOTS) {
+					reads.set(slot, (reads.get(slot) ?? 0) + 1);
+					clearTimeout(freshTimers.get(slot));
+					freshTimers.delete(slot);
+				}
+				setChecking(new Set<LockSlot>());
+				setPositions({});
+				return;
+			}
 			function onVisibilityChange() {
 				if (document.visibilityState === "visible") readAll();
 			}
-			readAll();
+			readFirst();
 			const timer = setInterval(onVisibilityChange, POSITION_POLL_MS);
 			document.addEventListener("visibilitychange", onVisibilityChange);
 			onCleanup(() => {

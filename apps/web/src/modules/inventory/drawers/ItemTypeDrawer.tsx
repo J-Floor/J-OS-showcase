@@ -7,6 +7,8 @@ import {
 	Input,
 	PropertyRow,
 	Select,
+	Skeleton,
+	SkeletonList,
 	TextArea,
 } from "@j-os/design-system";
 import { For, Show, createSignal, type JSX } from "solid-js";
@@ -271,29 +273,49 @@ export function ItemTypeDrawer(props: {
 					>
 						<Accordion.Item value="items">
 							<Accordion.ItemTitle>
-								{`Items (${(itemsQuery.data() ?? []).length})`}
+								<Show
+									when={itemsQuery.data()}
+									fallback={
+										<>
+											Items (<Skeleton width="short" />)
+										</>
+									}
+								>
+									{(rows) =>
+										`Items (${String(rows().length)})`
+									}
+								</Show>
 							</Accordion.ItemTitle>
 							<Accordion.ItemContent>
 								<div class={styles.section}>
 									<Show
-										when={
-											(itemsQuery.data() ?? []).length > 0
-										}
-										fallback={
-											<p class={styles.empty}>
-												No items yet
-											</p>
-										}
+										when={itemsQuery.data()}
+										fallback={<SkeletonList />}
 									>
-										<ul class={styles.list}>
-											<For each={itemsQuery.data() ?? []}>
-												{(item) => (
-													<li class={styles.listRow}>
-														{item.assetTag}
-													</li>
-												)}
-											</For>
-										</ul>
+										{(rows) => (
+											<Show
+												when={rows().length > 0}
+												fallback={
+													<p class={styles.empty}>
+														No items yet
+													</p>
+												}
+											>
+												<ul class={styles.list}>
+													<For each={rows()}>
+														{(row) => (
+															<li
+																class={
+																	styles.listRow
+																}
+															>
+																{row.assetTag}
+															</li>
+														)}
+													</For>
+												</ul>
+											</Show>
+										)}
 									</Show>
 								</div>
 							</Accordion.ItemContent>

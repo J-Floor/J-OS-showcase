@@ -1,6 +1,6 @@
 import { createSignal, onCleanup } from "solid-js";
 
-import { Skeleton } from "@j-os/design-system";
+import { Skeleton, SkeletonList } from "@j-os/design-system";
 
 import type { Demo } from "../../../demo/types.ts";
 
@@ -29,6 +29,8 @@ function SkeletonDemo() {
 			<Skeleton width="short" />
 			<Skeleton width="long" />
 			<Skeleton width="medium" />
+			<p class={styles.caption}>SkeletonList — a stack of bars</p>
+			<SkeletonList rows={4} />
 		</div>
 	);
 }

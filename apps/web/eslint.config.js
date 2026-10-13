@@ -24,4 +24,23 @@ export default [
       },
     },
   },
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/shared/data/useQuery.ts", "src/**/*.test.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "convex-solidjs",
+              importNames: ["useQuery"],
+              message:
+                "Use useQuery from src/shared/data/useQuery.ts: it keeps the query warm after unmount.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ];

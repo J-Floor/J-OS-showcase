@@ -4,12 +4,13 @@ import {
 	createHotkeys,
 	type Hotkey,
 } from "@tanstack/solid-hotkeys";
-import { useMutation, useQuery } from "convex-solidjs";
+import { useMutation } from "convex-solidjs";
 import { type JSX, Show } from "solid-js";
 
 import { api } from "../../../../convex/_generated/api";
 import { legalEvents } from "../../../../convex/lib/lifecycle.ts";
 import { useConfirm } from "../../../shared/confirm.tsx";
+import { useQuery } from "../../../shared/data/useQuery.ts";
 import { ICONS } from "../../../shared/icons.ts";
 import { useApplicationDecisions } from "../actions/applicationDecisions.ts";
 import {
@@ -64,11 +65,7 @@ export function ApplicationsTab(props: TabProps): JSX.Element {
 
 function ApplicationsRoster(props: TabProps): JSX.Element {
 	const applications = useApplications();
-	const currentPerson = useQuery(
-		api.people.getCurrentPerson,
-		{},
-		{ keepPreviousData: true }
-	);
+	const currentPerson = useQuery(api.people.getCurrentPerson, {});
 	const triage = useTriage();
 	const requestGuestExpiry = useGuestExpiry();
 	const confirm = useConfirm();

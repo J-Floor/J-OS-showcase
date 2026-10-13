@@ -3,12 +3,15 @@ import { createEffect, createSignal, For, type JSX } from "solid-js";
 
 import { useAbility } from "../../lib/ability.tsx";
 import { personEntity } from "../../modules/community/entity.ts";
+import { communityModule } from "../../modules/community/index.ts";
 import { eventsEntity } from "../../modules/events/entity.ts";
 import {
 	categoryEntity,
 	itemEntity,
 	itemTypeEntity,
 } from "../../modules/inventory/entity.ts";
+import { inventoryModule } from "../../modules/inventory/index.ts";
+import { prefetchModule } from "../../modules/prefetchModule.ts";
 import { modules } from "../../modules/registry.ts";
 import { projectEntity, taskEntity } from "../../modules/tasks/entity.ts";
 import type { EntityDescriptor } from "../entity/entityDescriptor.ts";
@@ -40,6 +43,9 @@ export function pageItems(
 			detail: module.path,
 			onSelect: () => {
 				navigate(module.path);
+			},
+			onHighlight: () => {
+				prefetchModule(module);
 			},
 		}));
 }
@@ -75,6 +81,9 @@ export function tabItems(
 		onSelect: () => {
 			navigate(`/community?tab=${entry.tab}`);
 		},
+		onHighlight: () => {
+			prefetchModule(communityModule);
+		},
 	}));
 	if (!ability().can("view", "Inventory")) return community;
 	return [
@@ -87,6 +96,9 @@ export function tabItems(
 			detail: `/inventory?tab=${entry.tab}`,
 			onSelect: () => {
 				navigate(`/inventory?tab=${entry.tab}`);
+			},
+			onHighlight: () => {
+				prefetchModule(inventoryModule);
 			},
 		})),
 	];

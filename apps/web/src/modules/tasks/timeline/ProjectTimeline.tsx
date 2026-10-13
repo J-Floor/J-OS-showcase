@@ -1,4 +1,4 @@
-import { Icon, IconButton } from "@j-os/design-system";
+import { Icon, IconButton, SkeletonList } from "@j-os/design-system";
 import {
 	For,
 	Show,
@@ -30,7 +30,6 @@ import {
 	type TimelineBar,
 	type ViewMode,
 } from "./timeline.ts";
-
 const DAY = 86_400_000;
 const EDGE = 240; // px from a scroll edge that triggers range growth
 const CLICK_SLOP = 4; // px of pointer travel still treated as a click
@@ -45,9 +44,9 @@ function px(value: number): string {
 }
 
 export function ProjectTimeline(props: {
-	projects: Project[];
+	projects: Project[] | undefined;
 	people: Person[];
-	tasks: Task[];
+	tasks: Task[] | undefined;
 	mode: ViewMode;
 	/** Bumped by the toolbar "Today" button to recentre on today. */
 	jumpToday: Accessor<number>;
@@ -80,9 +79,10 @@ export function ProjectTimeline(props: {
 		dx: number;
 	} | null>(null);
 
-	function effective(): Project[] {
+	function effective(): Project[] | undefined {
 		const ov = overrides();
-		if (Object.keys(ov).length === 0) return props.projects;
+		if (!props.projects || Object.keys(ov).length === 0)
+			return props.projects;
 		return props.projects.map((p) =>
 			p._id in ov
 				? {
@@ -96,7 +96,7 @@ export function ProjectTimeline(props: {
 
 	const timeline = createMemo<Timeline | null>(() =>
 		buildTimeline(
-			effective(),
+			effective() ?? [],
 			props.mode,
 			Date.now(),
 			padBefore(),
@@ -109,14 +109,14 @@ export function ProjectTimeline(props: {
 			? personName(bar.leaderId, props.people)
 			: undefined;
 	}
-	function taskCount(bar: TimelineBar): number {
-		return props.tasks.filter((t) => t.projectId === bar.id).length;
+	function taskCount(bar: TimelineBar): number | undefined {
+		return props.tasks?.filter((t) => t.projectId === bar.id).length;
 	}
 
 	// Drop optimistic overrides once the real Convex data matches them.
 	createEffect(() => {
 		const ov = overrides();
-		const projects = props.projects;
+		const projects = props.projects ?? [];
 		const next = Object.fromEntries(
 			Object.entries(ov).filter(([id, val]) => {
 				const p = projects.find((x) => x._id === id);
@@ -340,11 +340,13 @@ export function ProjectTimeline(props: {
 	return (
 		<div class={styles.wrap}>
 			<Show
-				when={timeline()}
+				when={props.projects && timeline()}
 				fallback={
-					<p class={styles.empty}>
-						No projects with a start and end date yet.
-					</p>
+					<Show when={props.projects} fallback={<SkeletonList />}>
+						<p class={styles.empty}>
+							No projects with a start and end date yet.
+						</p>
+					</Show>
 				}
 			>
 				{(t) => (

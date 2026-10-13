@@ -5,6 +5,7 @@ import {
 	Input,
 	Kbd,
 	NumberInput,
+	Skeleton,
 	type JfColumnDef,
 } from "@j-os/design-system";
 import { useMutation } from "convex-solidjs";
@@ -21,7 +22,7 @@ import {
 } from "solid-js";
 
 import { api } from "../../../../convex/_generated/api";
-import type { Doc, Id } from "../../../../convex/_generated/dataModel";
+import type { Doc } from "../../../../convex/_generated/dataModel";
 import type { PersonStatus } from "../../../../convex/lib/derive.ts";
 import {
 	FREE_TEXT_SIZE,
@@ -30,6 +31,7 @@ import {
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
 import { formatDate } from "../../../shared/time.ts";
 import { useApplicationDecisions } from "../actions/applicationDecisions.ts";
+import { noteAuthor } from "../noteAuthor.ts";
 
 import styles from "./applicationColumns.module.scss";
 import { actionsColumnSize, RowActions } from "./RowActions.tsx";
@@ -241,11 +243,6 @@ export function NotesCell(props: {
 		const log = props.row.board?.noteLog ?? [];
 		return log.length > 0 ? log[log.length - 1] : undefined;
 	}
-	function authorName(id: Id<"people"> | undefined): string {
-		if (!id) return "Board";
-		const s = (boardLevel.data() ?? []).find((p) => p._id === id);
-		return s ? `${s.firstName} ${s.lastName}`.trim() : "Board";
-	}
 	function submit(): void {
 		const text = draft().trim();
 		if (!text) return;
@@ -258,10 +255,20 @@ export function NotesCell(props: {
 			<Show when={latest()}>
 				{(entry) => (
 					<div class={styles.latest} title={entry().text}>
-						<Avatar
-							name={authorName(entry().authorId)}
-							class={styles.noteAvatar}
-						/>
+						<Show
+							when={noteAuthor(
+								boardLevel.data(),
+								entry().authorId
+							)}
+							fallback={<Skeleton width="short" />}
+						>
+							{(name) => (
+								<Avatar
+									name={name()}
+									class={styles.noteAvatar}
+								/>
+							)}
+						</Show>
 						<span class={styles.latestText}>{entry().text}</span>
 					</div>
 				)}

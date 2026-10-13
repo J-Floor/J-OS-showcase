@@ -1,4 +1,4 @@
-import { Chart } from "@j-os/design-system";
+import { Chart, Skeleton } from "@j-os/design-system";
 import { For, Show, createMemo, type JSX } from "solid-js";
 
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
@@ -19,6 +19,21 @@ import {
 	type PersonRow,
 } from "./metrics.ts";
 import { MetricTile } from "./MetricTile.tsx";
+
+/** A chart's area: a chart-sized skeleton until its data is in. */
+function ChartSlot(props: {
+	loading: boolean;
+	children: JSX.Element;
+}): JSX.Element {
+	return (
+		<Show
+			when={!props.loading}
+			fallback={<Skeleton class={styles.chartSkeleton} />}
+		>
+			{props.children}
+		</Show>
+	);
+}
 
 /**
  * The board's read-only view of the community as a whole.
@@ -67,6 +82,17 @@ export function InsightsTab(): JSX.Element {
 		return Date.now();
 	});
 
+	function rostersLoading(): boolean {
+		return (
+			members.data() === undefined ||
+			guests.data() === undefined ||
+			applications.data() === undefined
+		);
+	}
+	function hostsLoading(): boolean {
+		return guests.data() === undefined || boardLevel.data() === undefined;
+	}
+
 	const tiles = createMemo(() =>
 		headlines(memberRows(), guestRows(), applicationRows(), now())
 	);
@@ -89,7 +115,13 @@ export function InsightsTab(): JSX.Element {
 					{(tile) => (
 						<MetricTile
 							label={tile.label}
-							value={tile.value}
+							value={
+								rostersLoading() ? (
+									<Skeleton width="short" />
+								) : (
+									tile.value
+								)
+							}
 							detail={tile.detail}
 							tone={tile.tone}
 						/>
@@ -106,15 +138,21 @@ export function InsightsTab(): JSX.Element {
 							people lose the door at once.
 						</span>
 					</figcaption>
-					<Chart
-						data={runway()}
-						xKey="week"
-						series={[
-							{ key: "expiring", label: "Guests", kind: "bar" },
-						]}
-						label="Guest windows closing over the next twelve weeks"
-						emptyMessage="No guest windows are set to close."
-					/>
+					<ChartSlot loading={rostersLoading()}>
+						<Chart
+							data={runway()}
+							xKey="week"
+							series={[
+								{
+									key: "expiring",
+									label: "Guests",
+									kind: "bar",
+								},
+							]}
+							label="Guest windows closing over the next twelve weeks"
+							emptyMessage="No guest windows are set to close."
+						/>
+					</ChartSlot>
 				</figure>
 
 				<figure class={styles.card}>
@@ -125,18 +163,20 @@ export function InsightsTab(): JSX.Element {
 							including the ones since approved.
 						</span>
 					</figcaption>
-					<Chart
-						data={inbound()}
-						xKey="month"
-						series={[
-							{
-								key: "applications",
-								label: "Applications",
-								kind: "bar",
-							},
-						]}
-						label="Applications received per month"
-					/>
+					<ChartSlot loading={rostersLoading()}>
+						<Chart
+							data={inbound()}
+							xKey="month"
+							series={[
+								{
+									key: "applications",
+									label: "Applications",
+									kind: "bar",
+								},
+							]}
+							label="Applications received per month"
+						/>
+					</ChartSlot>
 				</figure>
 
 				<figure class={styles.card}>
@@ -147,25 +187,27 @@ export function InsightsTab(): JSX.Element {
 							are not in this — it is arrivals, not net growth.
 						</span>
 					</figcaption>
-					<Chart
-						data={joins()}
-						xKey="month"
-						series={[
-							{
-								key: "members",
-								label: "Members",
-								kind: "bar",
-								stack: "joins",
-							},
-							{
-								key: "guests",
-								label: "Guests",
-								kind: "bar",
-								stack: "joins",
-							},
-						]}
-						label="People granted access per month, members and guests"
-					/>
+					<ChartSlot loading={rostersLoading()}>
+						<Chart
+							data={joins()}
+							xKey="month"
+							series={[
+								{
+									key: "members",
+									label: "Members",
+									kind: "bar",
+									stack: "joins",
+								},
+								{
+									key: "guests",
+									label: "Guests",
+									kind: "bar",
+									stack: "joins",
+								},
+							]}
+							label="People granted access per month, members and guests"
+						/>
+					</ChartSlot>
 				</figure>
 
 				<figure class={styles.card}>
@@ -176,36 +218,43 @@ export function InsightsTab(): JSX.Element {
 							one obligation the board takes on personally.
 						</span>
 					</figcaption>
-					<Chart
-						data={hosts()}
-						xKey="host"
-						series={[
-							{ key: "guests", label: "Guests", kind: "bar" },
-						]}
-						label="Guests per host"
-						emptyMessage="No guests are hosted yet."
-					/>
+					<ChartSlot loading={hostsLoading()}>
+						<Chart
+							data={hosts()}
+							xKey="host"
+							series={[
+								{ key: "guests", label: "Guests", kind: "bar" },
+							]}
+							label="Guests per host"
+							emptyMessage="No guests are hosted yet."
+						/>
+					</ChartSlot>
 				</figure>
 
-				<Show when={verticals().length > 0}>
-					<figure class={styles.card}>
-						<figcaption class={styles.cardTitle}>
-							What the floor is building
-							<span class={styles.cardHint}>
-								People count once per vertical they picked, so
-								the total is larger than the head count.
-							</span>
-						</figcaption>
+				<figure class={styles.card}>
+					<figcaption class={styles.cardTitle}>
+						What the floor is building
+						<span class={styles.cardHint}>
+							People count once per vertical they picked, so the
+							total is larger than the head count.
+						</span>
+					</figcaption>
+					<ChartSlot loading={rostersLoading()}>
 						<Chart
 							data={verticals()}
 							xKey="vertical"
 							series={[
-								{ key: "people", label: "People", kind: "bar" },
+								{
+									key: "people",
+									label: "People",
+									kind: "bar",
+								},
 							]}
 							label="People per vertical"
+							emptyMessage="No one has picked a vertical yet."
 						/>
-					</figure>
-				</Show>
+					</ChartSlot>
+				</figure>
 			</section>
 		</div>
 	);

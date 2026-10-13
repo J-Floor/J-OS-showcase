@@ -78,10 +78,11 @@ test("shows exactly the categories the server returns for this role, with their 
 	).toBeInTheDocument();
 });
 
-test("keeps the previous prefs while a saved checkbox refetches", () => {
+test("subscribes to prefs with keepPreviousData on", () => {
 	rows.value = [TASKS];
 	renderCategories();
-	expect(queryCalls).toContainEqual(["mine", {}, { keepPreviousData: true }]);
+	const options = queryCalls[0]?.[2] as () => { keepPreviousData: boolean };
+	expect(options().keepPreviousData).toBe(true);
 });
 
 test("each category's checkboxes are grouped under its name; push-only has no Email", () => {

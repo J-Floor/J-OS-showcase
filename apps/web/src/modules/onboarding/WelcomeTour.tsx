@@ -1,8 +1,9 @@
 import { Tour, useTour, type TourStep } from "@j-os/design-system";
-import { useMutation, useQuery } from "convex-solidjs";
+import { useMutation } from "convex-solidjs";
 import { createEffect } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
+import { useQuery } from "../../shared/data/useQuery.ts";
 
 import { doorsIntroPending, type DoorsIntroPerson } from "./doorIntroState.ts";
 

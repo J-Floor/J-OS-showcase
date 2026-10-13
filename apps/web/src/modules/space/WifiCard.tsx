@@ -1,10 +1,11 @@
-import { Button, Input, Status } from "@j-os/design-system";
-import { useMutation, useQuery } from "convex-solidjs";
+import { Button, Input, Skeleton, Status } from "@j-os/design-system";
+import { useMutation } from "convex-solidjs";
 import { Show, createSignal, onMount } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
 import { SSID_MAX, WIFI_PASSWORD_MAX } from "../../../convex/lib/validate.ts";
 import { useAbility } from "../../lib/ability.tsx";
+import { useQuery } from "../../shared/data/useQuery.ts";
 
 import { SpaceCard } from "./SpaceCard.tsx";
 import styles from "./WifiCard.module.scss";
@@ -71,6 +72,13 @@ export function WifiCard() {
 		<SpaceCard
 			title="Wi-Fi network"
 			helpText="Scan to join the space Wi-Fi network."
+			loading={creds.data() === undefined}
+			skeleton={
+				<div class={styles.skeleton} data-wifi-skeleton="">
+					<Skeleton class={styles.qrSkeleton} />
+					<Skeleton class={styles.ssidSkeleton} />
+				</div>
+			}
 			headerAction={
 				<Show when={canEditWifi() && !editing()}>
 					<Button variant="tertiary" onClick={startEditing}>

@@ -1,25 +1,22 @@
-import { useMutation, useQuery } from "convex-solidjs";
+import { useMutation } from "convex-solidjs";
 
 import { api } from "../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import type { BoardLevelPerson } from "../../../../convex/lib/personViews.ts";
+import { useQuery } from "../../../shared/data/useQuery.ts";
 
 export type Task = Doc<"tasks">;
 export type Project = Doc<"projects">;
 export type Person = BoardLevelPerson;
 
 export function useTasks() {
-	return useQuery(api.tasks.list, {}, { keepPreviousData: true });
+	return useQuery(api.tasks.list, {});
 }
 export function useProjects() {
-	return useQuery(api.projects.list, {}, { keepPreviousData: true });
+	return useQuery(api.projects.list, {});
 }
 export function useCurrentPerson() {
-	return useQuery(
-		api.people.getCurrentPerson,
-		{},
-		{ keepPreviousData: true }
-	);
+	return useQuery(api.people.getCurrentPerson, {});
 }
 
 export function useTaskActions() {

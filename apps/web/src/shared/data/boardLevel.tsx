@@ -1,10 +1,12 @@
-import { useQuery } from "convex-solidjs";
 import { type JSX, createContext, useContext } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
+
+import { useQuery } from "./useQuery.ts";
 
 function boardLevelQuery() {
-	return useQuery(api.people.listBoardLevel, {}, { keepPreviousData: true });
+	return useQuery(api.people.listBoardLevel, {});
 }
 
 const BoardLevelContext = createContext<ReturnType<typeof boardLevelQuery>>();
@@ -30,4 +32,22 @@ export function BoardLevelProvider(props: {
 export function useBoardLevel() {
 	const ctx = useContext(BoardLevelContext);
 	return ctx ?? boardLevelQuery();
+}
+
+export type StaffMember = {
+	_id: Id<"people">;
+	firstName: string;
+	lastName: string;
+};
+
+/** A board-level person's display name from `useBoardLevel().data()`:
+ *  `undefined` while the list loads, `null` when no one has that id (left the
+ *  board, or never on it). Callers pick their own fallback for `null`. */
+export function staffName(
+	staff: StaffMember[] | undefined,
+	id: Id<"people">
+): string | null | undefined {
+	if (staff === undefined) return undefined;
+	const found = staff.find((s) => s._id === id);
+	return found ? `${found.firstName} ${found.lastName}`.trim() : null;
 }

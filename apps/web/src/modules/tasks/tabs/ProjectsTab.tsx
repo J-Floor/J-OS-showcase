@@ -88,7 +88,7 @@ export function ProjectsTab(props: {
 			: undefined;
 	}
 	function taskCount(p: Project) {
-		return (tasks.data() ?? []).filter((t) => t.projectId === p._id).length;
+		return tasks.data()?.filter((t) => t.projectId === p._id).length;
 	}
 	function editingTask() {
 		const id = editingTaskId();
@@ -126,14 +126,15 @@ export function ProjectsTab(props: {
 	return (
 		<div class={styles.tab}>
 			<ProjectTimeline
-				projects={all()}
+				projects={projects.data()}
 				people={boardLevel.data() ?? []}
-				tasks={tasks.data() ?? []}
+				tasks={tasks.data()}
 				mode={props.mode()}
 				jumpToday={props.jumpToday}
 				onSelect={openProject}
 				onCreateRange={openNewRange}
 			/>
+			{/* While projects load, the timeline shows the skeleton. */}
 			<Show when={undated().length}>
 				<section class={local.undated}>
 					<h4>No dates set</h4>
@@ -166,7 +167,7 @@ export function ProjectsTab(props: {
 				initialEnd={createEnd()}
 				people={boardLevel.data() ?? []}
 				projects={all()}
-				tasks={tasks.data() ?? []}
+				tasks={tasks.data()}
 				onTaskClick={(t) => {
 					// Transitioning to the nested task drawer, not returning to
 					// the list — clear in place, don't pop history.

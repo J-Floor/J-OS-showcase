@@ -1,6 +1,5 @@
-import type { Component } from "solid-js";
-
 import type { Subject } from "../lib/ability.tsx";
+import type { LazyPage } from "../shared/lazyPage.tsx";
 
 /** Shape every module manifest follows; the registry renders one route + sidebar
  * entry per manifest. */
@@ -12,5 +11,7 @@ export type ModuleManifest = {
 	path: string;
 	/** Ability subject; the sidebar shows the module when the user can "view" it. */
 	subject: Subject;
-	view: Component;
+	view: LazyPage;
+	/** Warms the page's list queries ahead of a visit. List queries only. */
+	prefetch?: () => void;
 };

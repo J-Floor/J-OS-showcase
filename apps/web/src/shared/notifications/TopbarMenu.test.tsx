@@ -30,7 +30,9 @@ vi.mock("../../../convex/_generated/api", () => ({
 	api: { notify: { inbox: { unreadCount: "unreadCount" } } },
 }));
 vi.mock("../../lib/push.ts", () => ({ disablePush }));
-vi.mock("../../lib/auth.ts", () => ({ authClient: { signOut } }));
+vi.mock("../../lib/auth.ts", () => ({
+	authClient: { signOut, useSession: () => () => ({ data: null }) },
+}));
 vi.mock("@solidjs/router", () => ({ useNavigate: () => navigate }));
 
 import { AbilityProvider } from "../../lib/ability.tsx";

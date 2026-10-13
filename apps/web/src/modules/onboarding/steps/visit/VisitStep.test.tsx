@@ -8,7 +8,7 @@ afterEach(cleanup);
 // Default: no host and no invite link configured.
 const { hostMock, inviteMock } = vi.hoisted(() => ({
 	hostMock: vi.fn(() => ({
-		data: () => null as { name: string; phone?: string } | null,
+		data: () => null as { name: string; phone?: string } | null | undefined,
 	})),
 	inviteMock: vi.fn(() => ({ data: () => null as string | null })),
 }));
@@ -103,4 +103,57 @@ test("opens a maps search for the street address shown on the step", () => {
 		"noopener,noreferrer"
 	);
 	openSpy.mockRestore();
+});
+
+test("shows a skeleton, not the generic board-member copy, while the host loads", () => {
+	hostMock.mockReturnValueOnce({ data: () => undefined });
+	const { container } = render(() => (
+		<VisitStep person={person} onComplete={() => Promise.resolve()} />
+	));
+	expect(container.querySelector("[data-width]")).not.toBeNull();
+	expect(
+		screen.queryByText(/reach out to one of our board members/)
+	).toBeNull();
+	expect(screen.queryByText(/reach out to your host/)).toBeNull();
+});
+
+test("names the host once loaded, and falls back to generic copy for none", () => {
+	hostMock.mockReturnValueOnce({ data: () => ({ name: "Ada Host" }) });
+	const first = render(() => (
+		<VisitStep person={person} onComplete={() => Promise.resolve()} />
+	));
+	expect(screen.getByText(/your host Ada Host/)).toBeInTheDocument();
+	first.unmount();
+	render(() => (
+		<VisitStep person={person} onComplete={() => Promise.resolve()} />
+	));
+	expect(
+		screen.getByText(/reach out to one of our board members/)
+	).toBeInTheDocument();
+});
+
+test("shows a button skeleton, not the invite button, while the host loads", () => {
+	hostMock.mockReturnValueOnce({ data: () => undefined });
+	inviteMock.mockReturnValueOnce({
+		data: () => "https://chat.whatsapp.com/EXAMPLEINVITE",
+	});
+	const { container } = render(() => (
+		<VisitStep person={person} onComplete={() => Promise.resolve()} />
+	));
+	expect(
+		screen.queryByRole("button", { name: /message us on whatsapp/i })
+	).toBeNull();
+	expect(container.querySelector("[data-invite-skeleton]")).not.toBeNull();
+});
+
+test("shows the generic invite button when the host is null", () => {
+	inviteMock.mockReturnValueOnce({
+		data: () => "https://chat.whatsapp.com/EXAMPLEINVITE",
+	});
+	render(() => (
+		<VisitStep person={person} onComplete={() => Promise.resolve()} />
+	));
+	expect(
+		screen.getByRole("button", { name: /message us on whatsapp/i })
+	).toBeInTheDocument();
 });

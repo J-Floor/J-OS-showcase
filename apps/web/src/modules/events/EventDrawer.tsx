@@ -8,9 +8,11 @@ import {
 	Icon,
 	Input,
 	PropertyRow,
+	Skeleton,
+	SkeletonList,
 	TimePicker,
 } from "@j-os/design-system";
-import { useMutation, useQuery } from "convex-solidjs";
+import { useMutation } from "convex-solidjs";
 import { For, Show, createEffect, createSignal, on } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
@@ -26,12 +28,14 @@ import {
 import { NAME_MAX } from "../../../convex/lib/validate.ts";
 import { Can, useAbility } from "../../lib/ability.tsx";
 import { useConfirm } from "../../shared/confirm.tsx";
+import { useQuery } from "../../shared/data/useQuery.ts";
 import { EntityQrBlock } from "../../shared/entity/EntityQr.tsx";
 import { ICONS } from "../../shared/icons.ts";
 import { EditToggle } from "../community/drawers/EditToggle.tsx";
 
 import { eventsEntity } from "./entity.ts";
 import styles from "./EventDrawer.module.scss";
+import { eventAttendeesQuery } from "./queries.ts";
 
 /** The zoned IXDTF source for an event's start/end. Required on the schema (the
  *  prod backfill populated every row and `createEvent` always writes both), so
@@ -109,9 +113,12 @@ export function EventDrawer(props: {
 	const confirm = useConfirm();
 
 	const attendees = useQuery(
-		api.events.listEventAttendees,
-		() => ({ eventId: props.event?._id as Id<"events"> }),
-		() => ({ enabled: props.event !== undefined && canManage() })
+		eventAttendeesQuery.query,
+		() => eventAttendeesQuery.args(props.event?._id as Id<"events">),
+		() => ({
+			enabled: props.event !== undefined && canManage(),
+			keepPreviousData: false,
+		})
 	);
 
 	const [editing, setEditing] = createSignal(false);
@@ -535,68 +542,88 @@ export function EventDrawer(props: {
 
 								<Accordion.Item value="attendees">
 									<Accordion.ItemTitle
-										subtitle={`${(attendees.data() ?? []).length}`}
+										subtitle={
+											<Show
+												when={attendees.data()}
+												fallback={
+													<Skeleton width="short" />
+												}
+											>
+												{(rows) =>
+													String(rows().length)
+												}
+											</Show>
+										}
 									>
 										Attendees
 									</Accordion.ItemTitle>
 									<Accordion.ItemContent>
 										<div class={styles.section}>
 											<Show
-												when={
-													(attendees.data() ?? [])
-														.length > 0
-												}
-												fallback={
-													<p class={styles.empty}>
-														No one has registered
-														yet.
-													</p>
-												}
+												when={attendees.data()}
+												fallback={<SkeletonList />}
 											>
-												<ul class={styles.attendees}>
-													<For
-														each={
-															attendees.data() ??
-															[]
-														}
-													>
-														{(a) => (
-															<li
+												{(rows) => (
+													<Show
+														when={rows().length > 0}
+														fallback={
+															<p
 																class={
-																	styles.attendee
+																	styles.empty
 																}
 															>
-																<Avatar
-																	name={
-																		a.name
-																	}
-																/>
-																<div
-																	class={
-																		styles.who
-																	}
-																>
-																	<span
+																No one has
+																registered yet.
+															</p>
+														}
+													>
+														<ul
+															class={
+																styles.attendees
+															}
+														>
+															<For each={rows()}>
+																{(a) => (
+																	<li
 																		class={
-																			styles.attendeeName
+																			styles.attendee
 																		}
 																	>
-																		{a.name}
-																	</span>
-																	<span
-																		class={
-																			styles.attendeeEmail
-																		}
-																	>
-																		{
-																			a.email
-																		}
-																	</span>
-																</div>
-															</li>
-														)}
-													</For>
-												</ul>
+																		<Avatar
+																			name={
+																				a.name
+																			}
+																		/>
+																		<div
+																			class={
+																				styles.who
+																			}
+																		>
+																			<span
+																				class={
+																					styles.attendeeName
+																				}
+																			>
+																				{
+																					a.name
+																				}
+																			</span>
+																			<span
+																				class={
+																					styles.attendeeEmail
+																				}
+																			>
+																				{
+																					a.email
+																				}
+																			</span>
+																		</div>
+																	</li>
+																)}
+															</For>
+														</ul>
+													</Show>
+												)}
 											</Show>
 										</div>
 									</Accordion.ItemContent>

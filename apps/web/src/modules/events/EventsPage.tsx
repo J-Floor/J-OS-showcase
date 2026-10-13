@@ -1,13 +1,15 @@
 import { Button, EmptyState, Icon, Table } from "@j-os/design-system";
-import { useQuery } from "convex-solidjs";
 import { Show } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
 import type { Doc } from "../../../convex/_generated/dataModel";
 import { Can } from "../../lib/ability.tsx";
+import { useQuery } from "../../shared/data/useQuery.ts";
 import { createEntitySelection } from "../../shared/entity/createEntitySelection.ts";
+import { useRowPrefetch } from "../../shared/entity/useRowPrefetch.ts";
 import { ICONS } from "../../shared/icons.ts";
 
+import { eventsEntity } from "./entity.ts";
 import { eventColumns } from "./eventColumns.tsx";
 import { EventDrawer } from "./EventDrawer.tsx";
 import styles from "./EventsPage.module.scss";
@@ -19,11 +21,8 @@ import styles from "./EventsPage.module.scss";
  * labels it); the top bar holds the primary action on the right.
  */
 export function EventsPage() {
-	const events = useQuery(
-		api.events.listEvents,
-		{},
-		{ keepPreviousData: true }
-	);
+	const events = useQuery(api.events.listEvents, {});
+	const prefetchRow = useRowPrefetch(eventsEntity);
 
 	const { selected, loading, open, openRow, openCreate, close } =
 		createEntitySelection<Doc<"events">>({
@@ -59,6 +58,8 @@ export function EventsPage() {
 						suppressFocus={open()}
 						onRowClick={openRow}
 						onRowActivate={openRow}
+						onRowHoverIntent={prefetchRow}
+						onFocusedRowChange={prefetchRow}
 					/>
 				</Show>
 			</div>

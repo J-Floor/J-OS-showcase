@@ -1,9 +1,13 @@
-import { Timeline, type TimelineEntry } from "@j-os/design-system";
-import { useQuery } from "convex-solidjs";
+import {
+	SkeletonList,
+	Timeline,
+	type TimelineEntry,
+} from "@j-os/design-system";
 import { Show, type JSX } from "solid-js";
 
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
+import { useQuery } from "../../../shared/data/useQuery.ts";
 import { ICONS } from "../../../shared/icons.ts";
 
 import {
@@ -140,10 +144,10 @@ export function PersonTimeline(props: { personId: Id<"people"> }): JSX.Element {
 	const events = useQuery(
 		api.personEvents.listForPerson,
 		() => ({ personId: props.personId }),
-		{ keepPreviousData: true }
+		{ keepPreviousData: false }
 	);
 	return (
-		<Show when={events.data()} fallback={<p>Loading…</p>}>
+		<Show when={events.data()} fallback={<SkeletonList />}>
 			{(rows) => <Timeline entries={rows().map(toEntry)} />}
 		</Show>
 	);

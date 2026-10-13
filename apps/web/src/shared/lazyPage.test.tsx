@@ -117,3 +117,21 @@ test("a resource refetch inside the page does not replace the page's DOM", async
 	expect(input.isConnected).toBe(true);
 	expect(document.activeElement).toBe(input);
 });
+
+test("preload() twice calls load once", async () => {
+	const load = vi.fn(() => Promise.resolve(() => <p>x</p>));
+	const LazyPage = lazyPage(load);
+	await Promise.all([LazyPage.preload(), LazyPage.preload()]);
+	expect(load).toHaveBeenCalledTimes(1);
+});
+
+test("a rejected preload is retried by the next preload()", async () => {
+	const load = vi
+		.fn<() => Promise<Component>>()
+		.mockRejectedValueOnce(new Error("offline"))
+		.mockResolvedValueOnce(() => <p>x</p>);
+	const LazyPage = lazyPage(load);
+	await expect(LazyPage.preload()).rejects.toThrow("offline");
+	await LazyPage.preload();
+	expect(load).toHaveBeenCalledTimes(2);
+});

@@ -30,3 +30,9 @@
 	border: 1px solid var(--jf-color-border-strong);
 	border-radius: var(--jf-radius-base);
 }
+
+.buttonSkeleton {
+	inline-size: 10rem;
+	block-size: var(--jf-dimension-short-component-height);
+	border-radius: var(--jf-radius-button);
+}

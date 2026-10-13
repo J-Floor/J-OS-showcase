@@ -1,8 +1,8 @@
 import { Button, Dialog } from "@j-os/design-system";
-import { useQuery } from "convex-solidjs";
 import { For, Show, createEffect, createSignal } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
+import { useQuery } from "../../shared/data/useQuery.ts";
 
 import {
 	APP_VERSION,

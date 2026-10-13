@@ -1,9 +1,10 @@
 import { Checkbox, Skeleton } from "@j-os/design-system";
-import { useMutation, useQuery } from "convex-solidjs";
+import { useMutation } from "convex-solidjs";
 import { createSignal, For, type JSX, Show } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
 import type { Category } from "../../../convex/notify/categories.ts";
+import { useQuery } from "../data/useQuery.ts";
 import { userErrorMessage } from "../userErrorMessage.ts";
 
 import styles from "./NotificationCategories.module.scss";
@@ -27,11 +28,7 @@ function labelId(category: Category): string {
 export function NotificationCategories(props: {
 	pushOn: boolean;
 }): JSX.Element {
-	const prefs = useQuery(
-		api.notify.prefs.mine,
-		{},
-		{ keepPreviousData: true }
-	);
+	const prefs = useQuery(api.notify.prefs.mine, {});
 	const setPref = useMutation(api.notify.prefs.set);
 	const [pending, setPending] = createSignal<ReadonlySet<Category>>(
 		new Set()

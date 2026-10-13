@@ -37,7 +37,11 @@ vi.mock("../data/inventoryData.ts", () => ({
 		const id = typeId();
 		mockUseItemsByType(id);
 		return {
-			data: () => (id === "itemTypes:chair" ? chairItems : undefined),
+			data: () => {
+				if (id === "itemTypes:chair") return chairItems;
+				if (id === "itemTypes:empty") return [];
+				return undefined;
+			},
 		};
 	},
 }));
@@ -188,4 +192,38 @@ test("no item type, not loading: shows the create form and 'New item type' title
 	expect(
 		screen.getByRole("button", { name: /Create item type/ })
 	).toBeInTheDocument();
+});
+
+test("items still loading: skeleton list and count skeleton, no '(0)' or empty copy", () => {
+	render(() => (
+		<ItemTypeDrawer
+			open
+			onOpenChange={() => {}}
+			itemType={{
+				...chairType,
+				_id: "itemTypes:pending" as ItemType["_id"],
+			}}
+			categories={[furniture]}
+		/>
+	));
+	expect(document.querySelector("[data-skeleton-list]")).toBeInTheDocument();
+	expect(screen.queryByText(/\(0\)/)).toBeNull();
+	expect(screen.queryByText("No items yet")).toBeNull();
+});
+
+test("items loaded empty: shows (0) and the empty copy", () => {
+	render(() => (
+		<ItemTypeDrawer
+			open
+			onOpenChange={() => {}}
+			itemType={{
+				...chairType,
+				_id: "itemTypes:empty" as ItemType["_id"],
+			}}
+			categories={[furniture]}
+		/>
+	));
+	expect(screen.getByText("Items (0)")).toBeInTheDocument();
+	expect(screen.getByText("No items yet")).toBeInTheDocument();
+	expect(document.querySelector("[data-skeleton-list]")).toBeNull();
 });

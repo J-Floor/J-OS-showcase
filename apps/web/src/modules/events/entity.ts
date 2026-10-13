@@ -1,12 +1,14 @@
-import { useQuery } from "convex-solidjs";
 import type { Accessor } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
 import type { Doc } from "../../../convex/_generated/dataModel";
 import { SITE_TIMEZONE } from "../../../convex/lib/time.ts";
+import { prefetchSpec } from "../../shared/data/queryKeeper.ts";
+import { useQuery } from "../../shared/data/useQuery.ts";
 import type { EntityDescriptor } from "../../shared/entity/entityDescriptor.ts";
 import { ICONS } from "../../shared/icons.ts";
 
+import { eventAttendeesQuery } from "./queries.ts";
 import { visitorUrl } from "./visitorUrl.ts";
 
 // Fixed to the site zone, not the browser's — a travelling admin must see the
@@ -19,11 +21,7 @@ const dateFormat = new Intl.DateTimeFormat(undefined, {
 /** `useRows` factory for the events descriptor — wraps `listEvents`. Must be
  *  called inside a component (never at module scope). */
 function useRows(): Accessor<Doc<"events">[] | undefined> {
-	const events = useQuery(
-		api.events.listEvents,
-		{},
-		{ keepPreviousData: true }
-	);
+	const events = useQuery(api.events.listEvents, {});
 	return events.data;
 }
 
@@ -39,6 +37,9 @@ export const eventsEntity: EntityDescriptor<Doc<"events">> = {
 	label: (row) => row.name,
 	detail: (row) => dateFormat.format(new Date(row.startsAt)),
 	ability: { action: "view", subject: "Events" },
+	prefetch: (row, can) => {
+		if (can("manage", "Events")) prefetchSpec(eventAttendeesQuery, row._id);
+	},
 	qr: (row) => ({
 		url: visitorUrl(row._id),
 		fileName: `${row.name}-visitor-qr.png`,

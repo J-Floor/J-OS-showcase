@@ -1,5 +1,6 @@
 import type { Accessor } from "solid-js";
 
+import { prefetchSpec } from "../../shared/data/queryKeeper.ts";
 import type { EntityDescriptor } from "../../shared/entity/entityDescriptor.ts";
 import { ICONS } from "../../shared/icons.ts";
 
@@ -9,6 +10,7 @@ import {
 	useMembers,
 } from "./data/communityData.tsx";
 import type { PersonRow } from "./insights/metrics.ts";
+import { attendedEventsQuery } from "./queries.ts";
 
 /**
  * The community "person" entity: every row across the three board rosters
@@ -47,4 +49,10 @@ export const personEntity: EntityDescriptor<PersonRow> = {
 		[row.email, row.venture?.name ?? ""].filter((k) => k !== ""),
 	detail: (row) => row.venture?.name,
 	ability: { action: "view", subject: "Applications" },
+	// PersonDetail's "Came from" row, which renders for every status.
+	// Board-level on the server, like this descriptor's own ability.
+	prefetch: (row, can) => {
+		if (can("view", "Applications"))
+			prefetchSpec(attendedEventsQuery, row._id);
+	},
 };

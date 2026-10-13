@@ -5,6 +5,7 @@ import {
 	IconButton,
 	Input,
 	PropertyRow,
+	SkeletonList,
 	TextArea,
 } from "@j-os/design-system";
 import { For, Show, type JSX } from "solid-js";
@@ -63,7 +64,7 @@ export function ProjectDrawer(props: {
 	initialEnd?: number;
 	people: Person[];
 	projects: Project[];
-	tasks: Task[];
+	tasks: Task[] | undefined;
 	onTaskClick: (task: Task) => void;
 	/** True when the drawer is open for a real row (`selectedId()` set) whose
 	 *  data hasn't loaded yet — distinct from create, where there is no id at
@@ -157,9 +158,9 @@ export function ProjectDrawer(props: {
 	}
 
 	function projectTasks() {
-		return props.project
-			? props.tasks.filter((t) => t.projectId === props.project!._id)
-			: [];
+		const project = props.project;
+		if (!project) return [];
+		return props.tasks?.filter((t) => t.projectId === project._id);
 	}
 
 	return (
@@ -260,28 +261,40 @@ export function ProjectDrawer(props: {
 				<Show when={isEdit()}>
 					<section class={styles.tasks}>
 						<h4>Tasks</h4>
-						<Show
-							when={projectTasks().length}
-							fallback={<p class={styles.empty}>No tasks yet.</p>}
-						>
-							<ul>
-								<For each={projectTasks()}>
-									{(t) => (
-										<li>
-											<TaskCard
-												task={t}
-												people={props.people}
-												projects={props.projects}
-												hideProject
-												pointer
-												onClick={() => {
-													props.onTaskClick(t);
-												}}
-											/>
-										</li>
-									)}
-								</For>
-							</ul>
+						<Show when={projectTasks()} fallback={<SkeletonList />}>
+							{(rows) => (
+								<Show
+									when={rows().length}
+									fallback={
+										<p class={styles.empty}>
+											No tasks yet.
+										</p>
+									}
+								>
+									<ul>
+										<For each={rows()}>
+											{(t) => (
+												<li>
+													<TaskCard
+														task={t}
+														people={props.people}
+														projects={
+															props.projects
+														}
+														hideProject
+														pointer
+														onClick={() => {
+															props.onTaskClick(
+																t
+															);
+														}}
+													/>
+												</li>
+											)}
+										</For>
+									</ul>
+								</Show>
+							)}
 						</Show>
 					</section>
 				</Show>

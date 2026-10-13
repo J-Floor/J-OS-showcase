@@ -14,6 +14,15 @@ vi.mock("@solidjs/router", () => ({
 	useNavigate: () => navigate,
 }));
 
+const prefetchModule = vi.fn();
+vi.mock("../../modules/prefetchModule.ts", () => ({
+	descriptorModule: (d: { route: string }) =>
+		d.route === "/things" ? { id: "things" } : undefined,
+	prefetchModule: (m: unknown) => {
+		prefetchModule(m);
+	},
+}));
+
 afterEach(() => {
 	cleanup();
 	navigate.mockClear();
@@ -85,4 +94,26 @@ test("a denying ability never subscribes rows and never emits", async () => {
 	// Give any stray effect a tick to fire before asserting the negative.
 	await new Promise((resolve) => setTimeout(resolve, 0));
 	expect(emit).not.toHaveBeenCalled();
+});
+
+test("onHighlight prefetches the descriptor's module and extras with the ability", async () => {
+	const prefetch = vi.fn();
+	const withPrefetch: EntityDescriptor<Row> = { ...descriptor, prefetch };
+	const emit = vi.fn();
+	render(() => (
+		<AbilityProvider role="board">
+			<EntitySource descriptor={withPrefetch} emit={emit} />
+		</AbilityProvider>
+	));
+	await waitFor(() => {
+		expect(emit).toHaveBeenCalled();
+	});
+	const items = emit.mock.calls.at(-1)?.[0] as CommandPaletteItem[];
+	items.find((item) => item.value === "thing:b1")?.onHighlight?.();
+
+	expect(prefetchModule).toHaveBeenCalledWith({ id: "things" });
+	expect(prefetch).toHaveBeenCalledTimes(1);
+	expect(prefetch.mock.calls[0][0]).toEqual(rowB);
+	const can = prefetch.mock.calls[0][1] as (a: string, s: string) => boolean;
+	expect(can("view", "Inventory")).toBe(true);
 });

@@ -5,6 +5,7 @@ import { categoryColumns } from "../columns/categoryColumns.tsx";
 import type { Category } from "../data/inventoryData.ts";
 import { useCategories } from "../data/inventoryData.ts";
 import { CategoryDrawer } from "../drawers/CategoryDrawer.tsx";
+import { categoryEntity } from "../entity.ts";
 
 import { InventoryTab } from "./InventoryTab.tsx";
 
@@ -17,6 +18,7 @@ export function CategoriesTab(props: {
 			data={() => categories.data()}
 			columns={() => categoryColumns()}
 			selection={props.selection}
+			descriptor={categoryEntity}
 			renderDrawer={(d) => (
 				<CategoryDrawer
 					open={d.open()}

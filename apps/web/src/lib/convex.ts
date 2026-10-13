@@ -1,11 +1,15 @@
 import { ConvexClient } from "convex/browser";
 import { createEffect, createSignal, onMount } from "solid-js";
 
+import { bindKeeperToSession } from "../shared/data/bindKeeperToSession.ts";
+import { bindQueryKeeper } from "../shared/data/queryKeeper.ts";
+
 import { authClient } from "./auth.ts";
 
 export const convex = new ConvexClient(
 	import.meta.env.VITE_CONVEX_URL as string
 );
+bindQueryKeeper(convex);
 
 // True while a cross-domain magic-link one-time token is being exchanged for a
 // session. Initialised SYNCHRONOUSLY from the URL so the route gate treats the
@@ -55,8 +59,9 @@ export function bindConvexAuth() {
 		void consumeOneTimeToken();
 	});
 	const session = authClient.useSession();
+	bindKeeperToSession(session);
 	createEffect(() => {
-		// re-run whenever the session identity changes
+		// re-run whenever the session emits
 		void session().data;
 		convex.setAuth(async () => {
 			const { data } = await authClient.convex.token({

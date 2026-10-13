@@ -14,14 +14,29 @@ import {
 	waitFor,
 } from "@solidjs/testing-library";
 import { createSignal, Show, type JSX } from "solid-js";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 
+import { api } from "../../../../convex/_generated/api";
+import { AbilityProvider } from "../../../lib/ability.tsx";
 import {
 	createEntitySelection,
 	type EntitySelection,
 } from "../../../shared/entity/createEntitySelection.ts";
+import type { EntityDescriptor } from "../../../shared/entity/entityDescriptor.ts";
+import { itemTypeEntity } from "../entity.ts";
 
 import { InventoryTab } from "./InventoryTab.tsx";
+
+const prefetch = vi.fn<(...a: unknown[]) => void>();
+vi.mock("../../../shared/data/queryKeeper.ts", async (orig) => ({
+	...(await orig<typeof import("../../../shared/data/queryKeeper.ts")>()),
+	prefetchSpec: (
+		spec: { query: unknown; args: (key: unknown) => unknown },
+		key: unknown
+	) => {
+		prefetch(spec.query, spec.args(key));
+	},
+}));
 
 afterEach(cleanup);
 
@@ -54,6 +69,7 @@ function renderHarness(opts?: {
 	history?: ReturnType<typeof createMemoryHistory>;
 	newItemAssetTag?: () => string | undefined;
 	enableRowSelection?: boolean;
+	descriptor?: EntityDescriptor<Row>;
 	batchActions?: (props: {
 		selectedCount: number;
 		selectedRows: Row[];
@@ -83,6 +99,7 @@ function renderHarness(opts?: {
 				data={rows}
 				columns={() => COLUMNS}
 				selection={sel}
+				descriptor={opts?.descriptor}
 				newItemAssetTag={opts?.newItemAssetTag}
 				enableRowSelection={opts?.enableRowSelection}
 				batchActions={opts?.batchActions}
@@ -103,9 +120,11 @@ function renderHarness(opts?: {
 		);
 	}
 	render(() => (
-		<MemoryRouter history={opts?.history}>
-			<Route path="*" component={Harness} />
-		</MemoryRouter>
+		<AbilityProvider role="board">
+			<MemoryRouter history={opts?.history}>
+				<Route path="*" component={Harness} />
+			</MemoryRouter>
+		</AbilityProvider>
 	));
 	return bag;
 }
@@ -308,4 +327,19 @@ test("shows a table skeleton while data is undefined, real rows once loaded", as
 	setRows([{ _id: "i1", name: "Chair" }]);
 	await waitFor(() => expect(screen.getByText("Chair")).toBeInTheDocument());
 	expect(document.querySelectorAll("[data-skeleton-row]").length).toBe(0);
+});
+
+test("hovering an item-type row prefetches its items with the drawer's args", () => {
+	prefetch.mockClear();
+	renderHarness({
+		rows: () => [{ _id: "t1", name: "Drill" }],
+		descriptor: itemTypeEntity as unknown as EntityDescriptor<Row>,
+	});
+	vi.useFakeTimers();
+	fireEvent.pointerEnter(screen.getAllByRole("row")[1]);
+	vi.advanceTimersByTime(150);
+	vi.useRealTimers();
+	expect(prefetch).toHaveBeenCalledWith(api.inventory.listItemsByType, {
+		typeId: "t1",
+	});
 });

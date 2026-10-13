@@ -15,6 +15,7 @@ import { Breadcrumbs } from "./shared/components/Breadcrumbs/Breadcrumbs.tsx";
 import { Sidebar } from "./shared/components/Sidebar/Sidebar.tsx";
 import { ConfirmProvider } from "./shared/confirm.tsx";
 import { BoardLevelProvider } from "./shared/data/boardLevel.tsx";
+import { ShellWarmup } from "./shared/data/ShellWarmup.tsx";
 import { InstallPwaPrompt } from "./shared/InstallPwaPrompt.tsx";
 import { NotificationsHost } from "./shared/notifications/NotificationsHost.tsx";
 import { NotificationsPrompt } from "./shared/notifications/NotificationsPrompt.tsx";
@@ -88,6 +89,9 @@ function ShellBody(props: ParentProps) {
 function AdminShell(props: ParentProps) {
 	return (
 		<div class={styles.shell}>
+			<AppErrorBoundary>
+				<ShellWarmup />
+			</AppErrorBoundary>
 			{/* First thing a person sees; the tour and What's New wait for it. */}
 			<AppErrorBoundary>
 				<DoorsIntro />

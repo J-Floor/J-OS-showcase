@@ -4,7 +4,7 @@ import {
 	useCurrentMatches,
 	useLocation,
 } from "@solidjs/router";
-import { useMutation, useQuery } from "convex-solidjs";
+import { useMutation } from "convex-solidjs";
 import {
 	type Accessor,
 	createEffect,
@@ -24,6 +24,7 @@ import { APP_NAME } from "../lib/constants.ts";
 import { ottPending } from "../lib/convex.ts";
 import { modules } from "../modules/registry.ts";
 import { AppErrorBoundary } from "../shared/AppErrorBoundary.tsx";
+import { useQuery } from "../shared/data/useQuery.ts";
 import { LoadingScreen } from "../shared/LoadingScreen.tsx";
 import { NoAccess } from "../shared/NoAccess.tsx";
 import { Splash } from "../shared/Splash.tsx";

@@ -1,4 +1,3 @@
-import { useQuery } from "convex-solidjs";
 import {
 	createRoot,
 	createSignal,
@@ -10,6 +9,7 @@ import {
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import type { DoorAttemptView } from "../../../convex/doorLog.ts";
+import { useQuery } from "../../shared/data/useQuery.ts";
 
 export type DoorAttemptWatch = {
 	/** The watched attempt; null when the server has no attempt of the
@@ -27,7 +27,8 @@ export type DoorAttemptWatch = {
  * args change keeps serving the previous args' result until the new one
  * lands, which here would replay the last attempt's outcome as the new one's
  * and start a countdown before the door has done anything. The root is
- * detached, so the owner's disposal stops it explicitly.
+ * detached, so the owner's disposal stops it explicitly. Nobody reads a
+ * finished attempt again, so it does not linger in the keeper.
  */
 export function createDoorAttempt(): DoorAttemptWatch {
 	const owner = getOwner();
@@ -48,7 +49,11 @@ export function createDoorAttempt(): DoorAttemptWatch {
 		if (closed) return;
 		createRoot((disposeRoot) => {
 			dispose = disposeRoot;
-			const attempt = useQuery(api.doorLog.attempt, { id });
+			const attempt = useQuery(
+				api.doorLog.attempt,
+				{ id },
+				{ keepPreviousData: false, linger: false }
+			);
 			setQuery(() => attempt.data);
 		}, owner);
 	}

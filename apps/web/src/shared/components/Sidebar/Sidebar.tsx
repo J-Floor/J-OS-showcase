@@ -1,8 +1,9 @@
-import { Icon, Logo } from "@j-os/design-system";
+import { Icon, Logo, createHoverIntent } from "@j-os/design-system";
 import { A } from "@solidjs/router";
 import { For, createSignal } from "solid-js";
 
 import { Can } from "../../../lib/ability.tsx";
+import { prefetchModule } from "../../../modules/prefetchModule.ts";
 import { modules } from "../../../modules/registry.ts";
 
 import styles from "./Sidebar.module.scss";
@@ -24,18 +25,28 @@ export function Sidebar() {
 				<Logo variant="monogram" class={styles.logo} />
 			</A>
 			<For each={modules}>
-				{(module) => (
-					<Can I="view" the={module.subject}>
-						<A
-							id={`nav-${module.id}`}
-							class={styles.item}
-							href={module.path}
-						>
-							<Icon class={styles.icon}>{module.icon}</Icon>
-							<span class={styles.label}>{module.label}</span>
-						</A>
-					</Can>
-				)}
+				{(module) => {
+					const hoverIntent = createHoverIntent(() => {
+						prefetchModule(module);
+					});
+					return (
+						<Can I="view" the={module.subject}>
+							<A
+								id={`nav-${module.id}`}
+								class={styles.item}
+								href={module.path}
+								onPointerEnter={hoverIntent.onPointerEnter}
+								onPointerLeave={hoverIntent.onPointerLeave}
+								onFocus={() => {
+									prefetchModule(module);
+								}}
+							>
+								<Icon class={styles.icon}>{module.icon}</Icon>
+								<span class={styles.label}>{module.label}</span>
+							</A>
+						</Can>
+					);
+				}}
 			</For>
 		</nav>
 	);

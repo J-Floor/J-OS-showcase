@@ -1,4 +1,5 @@
 @use "@j-os/design-system/typography" as typo;
+@use "./wifiFrame";
 
 .codes {
 	display: flex;
@@ -16,8 +17,8 @@
 }
 
 .frame {
-	inline-size: 10rem;
-	block-size: 10rem;
+	inline-size: wifiFrame.$size;
+	block-size: wifiFrame.$size;
 	fill: var(--jf-fg-default);
 }
 

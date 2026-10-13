@@ -42,9 +42,11 @@ const attendees = [
 	},
 ];
 
+let attendeesData: typeof attendees | undefined = attendees;
+
 vi.mock("convex-solidjs", () => ({
 	useQuery: () => ({
-		data: () => attendees,
+		data: () => attendeesData,
 		error: () => undefined,
 		isLoading: () => false,
 	}),
@@ -74,6 +76,7 @@ const event = {
 } as never;
 
 afterEach(() => {
+	attendeesData = attendees;
 	mutateAsync.mockClear();
 });
 
@@ -384,4 +387,18 @@ test("edit: the start time picker seeds from startsAtLocal (Zurich wall clock, n
 	expect(utcFromLocal(call.startsAtLocal)).toBe(
 		Date.parse("2026-10-01T18:01:00Z")
 	);
+});
+
+test("detail (board): attendees still loading shows a skeleton, not the empty copy", () => {
+	attendeesData = undefined;
+	renderDrawer("board", { event });
+	expect(document.querySelector("[data-skeleton-list]")).toBeInTheDocument();
+	expect(screen.queryByText("No one has registered yet.")).toBeNull();
+});
+
+test("detail (board): no attendees shows the empty copy", () => {
+	attendeesData = [];
+	renderDrawer("board", { event });
+	expect(screen.getByText("No one has registered yet.")).toBeInTheDocument();
+	expect(document.querySelector("[data-skeleton-list]")).toBeNull();
 });

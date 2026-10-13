@@ -1,31 +1,25 @@
-import { useConvexClient, useMutation, useQuery } from "convex-solidjs";
+import { useConvexClient, useMutation } from "convex-solidjs";
 
 import { api } from "../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import type { ItemRow, ItemTypeRow } from "../../../../convex/inventory.ts";
+import { useQuery } from "../../../shared/data/useQuery.ts";
+import { itemsByTypeQuery, itemTypesByCategoryQuery } from "../queries.ts";
 
 export type Category = Doc<"itemCategories">;
 export type ItemType = ItemTypeRow;
 export type Item = ItemRow;
 
 export function useCategories() {
-	return useQuery(
-		api.inventory.listCategories,
-		{},
-		{ keepPreviousData: true }
-	);
+	return useQuery(api.inventory.listCategories, {});
 }
 
 export function useItemTypes() {
-	return useQuery(
-		api.inventory.listItemTypes,
-		{},
-		{ keepPreviousData: true }
-	);
+	return useQuery(api.inventory.listItemTypes, {});
 }
 
 export function useItems() {
-	return useQuery(api.inventory.listItems, {}, { keepPreviousData: true });
+	return useQuery(api.inventory.listItems, {});
 }
 
 /**
@@ -36,9 +30,12 @@ export function useItems() {
  */
 export function useItemsByType(typeId: () => Id<"itemTypes"> | undefined) {
 	return useQuery(
-		api.inventory.listItemsByType,
-		() => ({ typeId: typeId()! }),
-		() => ({ enabled: typeId() !== undefined })
+		itemsByTypeQuery.query,
+		() => itemsByTypeQuery.args(typeId()!),
+		() => ({
+			enabled: typeId() !== undefined,
+			keepPreviousData: false,
+		})
 	);
 }
 
@@ -50,9 +47,12 @@ export function useItemTypesByCategory(
 	categoryId: () => Id<"itemCategories"> | undefined
 ) {
 	return useQuery(
-		api.inventory.listItemTypesByCategory,
-		() => ({ categoryId: categoryId()! }),
-		() => ({ enabled: categoryId() !== undefined })
+		itemTypesByCategoryQuery.query,
+		() => itemTypesByCategoryQuery.args(categoryId()!),
+		() => ({
+			enabled: categoryId() !== undefined,
+			keepPreviousData: false,
+		})
 	);
 }
 

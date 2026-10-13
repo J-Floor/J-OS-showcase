@@ -3,12 +3,17 @@ import { useNavigate } from "@solidjs/router";
 import { Show, createEffect, type JSX } from "solid-js";
 
 import { useAbility } from "../../lib/ability.tsx";
+import {
+	descriptorModule,
+	prefetchModule,
+} from "../../modules/prefetchModule.ts";
 
 import {
 	entityPath,
 	slugOf,
 	type EntityDescriptor,
 } from "./entityDescriptor.ts";
+import { useRowPrefetch } from "./useRowPrefetch.ts";
 
 export type Emit = (items: CommandPaletteItem[]) => void;
 
@@ -31,6 +36,8 @@ function EntitySourceRows<Row extends { _id: string }>(props: {
 	const navigate = useNavigate();
 	// eslint-disable-next-line solid/reactivity -- one-time hook-factory call, not a reactive prop read
 	const rows = props.descriptor.useRows();
+	// eslint-disable-next-line solid/reactivity -- the descriptor is fixed for this instance
+	const prefetchRow = useRowPrefetch(props.descriptor);
 
 	createEffect(() => {
 		const desc = props.descriptor;
@@ -45,6 +52,11 @@ function EntitySourceRows<Row extends { _id: string }>(props: {
 				searchOnly: desc.searchOnly ?? true,
 				onSelect: () => {
 					navigate(entityPath(desc, row));
+				},
+				onHighlight: () => {
+					const module = descriptorModule(desc);
+					if (module) prefetchModule(module);
+					prefetchRow(row);
 				},
 			}))
 		);

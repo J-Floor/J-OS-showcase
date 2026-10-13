@@ -1,7 +1,7 @@
 import { Table, type JfColumnDef } from "@j-os/design-system";
-import { useQuery } from "convex-solidjs";
 
 import { api } from "../../../convex/_generated/api";
+import { useQuery } from "../../shared/data/useQuery.ts";
 
 type Contact = { firstName: string; lastName: string; phone?: string };
 
@@ -20,10 +20,6 @@ const columns: JfColumnDef<Contact>[] = [
  * This is the ONLY community content a non-board member sees — members do not
  * see other members. */
 export function BoardContacts() {
-	const contacts = useQuery(
-		api.people.listBoardContacts,
-		{},
-		{ keepPreviousData: true }
-	);
+	const contacts = useQuery(api.people.listBoardContacts, {});
 	return <Table.Root columns={columns} data={contacts.data()} />;
 }

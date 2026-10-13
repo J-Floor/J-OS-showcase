@@ -1,5 +1,5 @@
 import { Navigate } from "@solidjs/router";
-import { useMutation, useQuery } from "convex-solidjs";
+import { useMutation } from "convex-solidjs";
 import { Show } from "solid-js";
 import { Dynamic } from "solid-js/web";
 
@@ -10,6 +10,7 @@ import {
 	requiredSelfStepIds,
 } from "../../../convex/lib/onboardingSteps.ts";
 import { AppErrorBoundary } from "../../shared/AppErrorBoundary.tsx";
+import { useQuery } from "../../shared/data/useQuery.ts";
 import { LoadingScreen } from "../../shared/LoadingScreen.tsx";
 
 import { FinishOnboarding } from "./FinishOnboarding.tsx";

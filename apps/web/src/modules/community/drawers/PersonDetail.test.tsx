@@ -57,7 +57,7 @@ const {
 		current: [] as Record<string, unknown>[],
 	},
 	attendedEventsRows: {
-		current: [] as Record<string, unknown>[],
+		current: [] as Record<string, unknown>[] | undefined,
 	},
 	timelineQueryCalls: { count: 0 },
 }));
@@ -493,4 +493,13 @@ test("a later successful email commit clears the error", async () => {
 	expect(completeBoardStepMock).toHaveBeenLastCalledWith(
 		expect.objectContaining({ email: "free@example.com" })
 	);
+});
+
+test('renders the "Came from" row with a skeleton value while attended events load', () => {
+	attendedEventsRows.current = undefined;
+	const { container } = render(() => (
+		<PersonDetail person={person({ status: ACTIVE_MEMBER })} />
+	));
+	expect(screen.getByText("Came from")).toBeInTheDocument();
+	expect(container.querySelector("[data-width]")).not.toBeNull();
 });

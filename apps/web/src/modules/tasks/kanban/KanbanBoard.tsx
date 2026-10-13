@@ -1,4 +1,11 @@
-import { Button, Dialog, IconButton, fireConfetti } from "@j-os/design-system";
+import {
+	Button,
+	Dialog,
+	IconButton,
+	Skeleton,
+	SkeletonList,
+	fireConfetti,
+} from "@j-os/design-system";
 import {
 	DragDropProvider,
 	DragDropSensors,
@@ -69,7 +76,7 @@ function DraggableCard(props: {
 function Column(props: {
 	id: TaskStatus;
 	label: string;
-	tasks: Task[];
+	tasks: Task[] | undefined;
 	people: Person[];
 	projects: Project[];
 	isSelected: (id: string) => boolean;
@@ -89,7 +96,14 @@ function Column(props: {
 			<header class={styles.columnHead}>
 				{props.label}
 				<div class={styles.headRight}>
-					<span class={styles.count}>{props.tasks.length}</span>
+					<span class={styles.count} data-column-count="">
+						<Show
+							when={props.tasks}
+							fallback={<Skeleton width="short" />}
+						>
+							{(tasks) => tasks().length}
+						</Show>
+					</span>
 					<IconButton
 						tooltipLabel={`Add task to ${props.label}`}
 						onClick={() => {
@@ -101,28 +115,32 @@ function Column(props: {
 				</div>
 			</header>
 			<div class={styles.cards}>
-				<For each={sortColumn(props.tasks)}>
-					{(task) => (
-						<DraggableCard
-							task={task}
-							people={props.people}
-							projects={props.projects}
-							selected={props.isSelected(task._id)}
-							grouped={props.isGrouped(task._id)}
-							transformFor={props.transformFor}
-							onClick={() => {
-								props.onCardClick(task);
-							}}
-						/>
+				<Show when={props.tasks} fallback={<SkeletonList />}>
+					{(tasks) => (
+						<For each={sortColumn(tasks())}>
+							{(task) => (
+								<DraggableCard
+									task={task}
+									people={props.people}
+									projects={props.projects}
+									selected={props.isSelected(task._id)}
+									grouped={props.isGrouped(task._id)}
+									transformFor={props.transformFor}
+									onClick={() => {
+										props.onCardClick(task);
+									}}
+								/>
+							)}
+						</For>
 					)}
-				</For>
+				</Show>
 			</div>
 		</div>
 	);
 }
 
 function Board(props: {
-	tasks: Task[];
+	tasks: Task[] | undefined;
 	people: Person[];
 	projects: Project[];
 	onCardClick: (t: Task) => void;
@@ -142,7 +160,7 @@ function Board(props: {
 	}
 
 	createEffect(() => {
-		const tasks = props.tasks;
+		const tasks = props.tasks ?? [];
 		setOverride((current) => {
 			const next: Record<string, TaskStatus> = {};
 			let changed = false;
@@ -276,7 +294,7 @@ function Board(props: {
 		// once the optimistic override is written, statusOf() returns the new
 		// status and every card looks unchanged (so nothing would persist).
 		const moved = ids.filter((id) => {
-			const t = props.tasks.find((x) => x._id === id);
+			const t = props.tasks?.find((x) => x._id === id);
 			return t !== undefined && statusOf(t) !== status;
 		});
 		const completed = status === "done" && moved.length > 0;
@@ -341,8 +359,8 @@ function Board(props: {
 		for (const id of ids) void actions.remove(id as Id<"tasks">);
 	}
 
-	function byStatus(s: TaskStatus): Task[] {
-		return props.tasks.filter((t) => statusOf(t) === s);
+	function byStatus(s: TaskStatus): Task[] | undefined {
+		return props.tasks?.filter((t) => statusOf(t) === s);
 	}
 
 	return (
@@ -423,7 +441,7 @@ function Board(props: {
 }
 
 export function KanbanBoard(props: {
-	tasks: Task[];
+	tasks: Task[] | undefined;
 	people: Person[];
 	projects: Project[];
 	onCardClick: (t: Task) => void;

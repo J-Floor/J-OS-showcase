@@ -1,6 +1,6 @@
 import { Button, Icon, Input, Logo } from "@j-os/design-system";
 import { useSearchParams } from "@solidjs/router";
-import { useAction, useMutation, useQuery } from "convex-solidjs";
+import { useAction, useMutation } from "convex-solidjs";
 import {
 	createEffect,
 	createMemo,
@@ -15,6 +15,7 @@ import {
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { authClient } from "../../lib/auth.ts";
+import { useQuery } from "../../shared/data/useQuery.ts";
 import { ICONS } from "../../shared/icons.ts";
 import { PrivacyNoticeLine } from "../privacy/PrivacyNoticeLine.tsx";
 
@@ -73,7 +74,10 @@ export function VisitorRegister() {
 	const event = useQuery(
 		api.events.getEventPublic,
 		() => ({ eventId: (eventIdParam() ?? "") as Id<"events"> }),
-		() => ({ enabled: eventIdParam() !== null })
+		() => ({
+			enabled: eventIdParam() !== null,
+			keepPreviousData: false,
+		})
 	);
 
 	// Tracks the single async check-in attempt for a signed-in visitor: the

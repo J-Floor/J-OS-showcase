@@ -29,6 +29,21 @@
 	min-block-size: calc(var(--jf-dimension-short-component-height) * 2);
 }
 
+/* A door whose first reading is still out: a button-shaped bar in the
+   button's footprint. */
+.pending {
+	display: flex;
+	flex-flow: row nowrap;
+	flex: 1;
+}
+
+.doorSkeleton {
+	display: block;
+	flex: 1;
+	inline-size: 100%;
+	min-block-size: calc(var(--jf-dimension-short-component-height) * 2);
+}
+
 /* "[stairs] or [elevator]": muted, centred. Nested in the doors column, so
    SpaceCard's 48px `.body > [data-icon]` rule never reaches these icons; the
    typography mixin sizes them via its `[data-icon]` rule. */

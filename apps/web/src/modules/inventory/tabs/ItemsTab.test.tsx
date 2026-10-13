@@ -11,6 +11,7 @@ import {
 import { afterEach, expect, test, vi } from "vitest";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
+import { AbilityProvider } from "../../../lib/ability.tsx";
 import { createEntitySelection } from "../../../shared/entity/createEntitySelection.ts";
 import type { Item } from "../data/inventoryData.ts";
 
@@ -106,9 +107,11 @@ function renderTab(): void {
 		return <ItemsTab selection={selection} />;
 	}
 	render(() => (
-		<MemoryRouter>
-			<Route path="*" component={Harness} />
-		</MemoryRouter>
+		<AbilityProvider role="board">
+			<MemoryRouter>
+				<Route path="*" component={Harness} />
+			</MemoryRouter>
+		</AbilityProvider>
 	));
 }
 

@@ -1,10 +1,11 @@
 import { Button, Dialog, Icon } from "@j-os/design-system";
 import { useNavigate } from "@solidjs/router";
-import { useMutation, useQuery } from "convex-solidjs";
+import { useMutation } from "convex-solidjs";
 import { For, Show, createSignal, type JSX } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
 import { type LockSlot } from "../../../convex/lib/doorLocks.ts";
+import { useQuery } from "../../shared/data/useQuery.ts";
 import { LOCK_SLOTS } from "../space/lockSlots.ts";
 
 import { doorsIntroPending } from "./doorIntroState.ts";

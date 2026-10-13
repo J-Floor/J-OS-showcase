@@ -7,22 +7,20 @@ import {
 } from "@j-os/design-system";
 import { type JSX, Show, createEffect, createSignal, on } from "solid-js";
 
-import type { Doc, Id } from "../../../../convex/_generated/dataModel";
-import type { PersonStatus } from "../../../../convex/lib/derive.ts";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { createDrawerNav } from "../../../lib/createDrawerNav.ts";
+import { useRowPrefetch } from "../../../shared/entity/useRowPrefetch.ts";
 import { createActionKeys } from "../actions/createActionKeys.ts";
 import type { ActionDescriptor } from "../actions/shortcuts.ts";
 import { DecisionBar } from "../drawers/DecisionBar.tsx";
 import { EditToggle } from "../drawers/EditToggle.tsx";
 import { PersonDetail } from "../drawers/PersonDetail.tsx";
 import { PersonDetailPlaceholder } from "../drawers/PersonDetailPlaceholder.tsx";
+import { personEntity } from "../entity.ts";
+import type { PersonRow } from "../insights/metrics.ts";
 
 import styles from "./RosterTab.module.scss";
 import type { TabProps } from "./TabProps.ts";
-
-/** Every roster row is a person carrying its derived status — enough for the
- *  drawer's {@link PersonDetail} and the id lookups here. */
-type RosterRow = Doc<"people"> & { status: PersonStatus };
 
 /** Run each row through a per-row mutation (Convex mutations are individually
  *  transactional), then clear the selection. */
@@ -53,7 +51,10 @@ export type RosterBatchProps<Row extends Record<string, unknown>> =
  * the selection-bar buttons, and any extra chrome (a provider, a dialog) passed
  * as `extra`.
  */
-export function RosterTab<Row extends RosterRow>(props: {
+/** Every roster row is a {@link PersonRow}: a person carrying its derived
+ *  status, enough for the drawer's {@link PersonDetail}, the id lookups here
+ *  and the person descriptor's prefetch. */
+export function RosterTab<Row extends PersonRow>(props: {
 	tab: TabProps;
 	/** The loaded rows, or `undefined` while the query is still loading. */
 	data: () => Row[] | undefined;
@@ -115,6 +116,7 @@ export function RosterTab<Row extends RosterRow>(props: {
 	const [editing, setEditing] = createSignal(false);
 	const [displayed, setDisplayed] = createSignal<Row[]>([]);
 	const [focusedRow, setFocusedRow] = createSignal<Row>();
+	const prefetchRow = useRowPrefetch(personEntity);
 	const [checked, setChecked] = createSignal<Row[]>([]);
 	let focusApi: { advance: () => void } | undefined;
 
@@ -195,7 +197,11 @@ export function RosterTab<Row extends RosterRow>(props: {
 				// as you page person to person with the drawer arrows;
 				// closing then leaves you on that row.
 				activeRowId={() => (open() ? selected()?._id : undefined)}
-				onFocusedRowChange={setFocusedRow}
+				onFocusedRowChange={(row) => {
+					setFocusedRow(() => row);
+					prefetchRow(row);
+				}}
+				onRowHoverIntent={prefetchRow}
 				onRowActivate={(row) => {
 					selection.openRow(row);
 				}}

@@ -32,8 +32,10 @@ export function TasksTab(props: {
 	// kanban and the drawer's prev/next nav so navigation stays within the
 	// visible set; the edited task itself still resolves from the full list.
 	function visibleTasks() {
+		const all = tasks.data();
+		if (!all) return undefined;
 		return filterTasksByAssignee(
-			tasks.data() ?? [],
+			all,
 			props.assigneeFilter(),
 			currentPerson.data()?._id
 		);
@@ -72,7 +74,7 @@ export function TasksTab(props: {
 	const [createStatus, setCreateStatus] = createSignal<TaskStatus>("backlog");
 
 	const nav = createDrawerNav({
-		items: visibleTasks,
+		items: () => visibleTasks() ?? [],
 		currentId: selectedId,
 		onSelect: (t) => {
 			openRow(t);

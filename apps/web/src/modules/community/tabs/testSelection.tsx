@@ -7,6 +7,7 @@ import {
 import { render } from "@solidjs/testing-library";
 import type { JSX } from "solid-js";
 
+import { AbilityProvider } from "../../../lib/ability.tsx";
 import { createEntitySelection } from "../../../shared/entity/createEntitySelection.ts";
 
 import type { PersonRef, PersonSelection } from "./TabProps.ts";
@@ -42,9 +43,11 @@ export function renderWithSelection(
 		return ui(selection);
 	}
 	const result = render(() => (
-		<MemoryRouter history={history}>
-			<Route path="*" component={Page} />
-		</MemoryRouter>
+		<AbilityProvider role="board">
+			<MemoryRouter history={history}>
+				<Route path="*" component={Page} />
+			</MemoryRouter>
+		</AbilityProvider>
 	));
 	return { ...result, url: () => location?.search ?? "" };
 }

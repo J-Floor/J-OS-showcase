@@ -7,6 +7,8 @@ import { Show, createSignal, type JSX } from "solid-js";
 
 import { createDrawerNav } from "../../../lib/createDrawerNav.ts";
 import type { EntitySelection } from "../../../shared/entity/createEntitySelection.ts";
+import type { EntityDescriptor } from "../../../shared/entity/entityDescriptor.ts";
+import { useRowPrefetch } from "../../../shared/entity/useRowPrefetch.ts";
 
 export function InventoryTab<
 	Row extends Record<string, unknown> & { _id: string },
@@ -17,6 +19,9 @@ export function InventoryTab<
 	 *  created once per tab in `InventoryPage`. Replaces the old internal
 	 *  open/editingId signals and the `requestNew`/`requestOpenItem` nonces. */
 	selection: EntitySelection<Row>;
+	/** This tab's entity descriptor; its `prefetch` warms the drawer's queries on
+	 *  row hover and keyboard focus. */
+	descriptor?: EntityDescriptor<Row>;
 	/** Asset-tag prefill for a create-mode open (items only). Read only while the
 	 *  drawer is open in create mode. */
 	newItemAssetTag?: () => string | undefined;
@@ -38,6 +43,8 @@ export function InventoryTab<
 	}) => JSX.Element;
 }): JSX.Element {
 	const [displayed, setDisplayed] = createSignal<Row[]>([]);
+	// eslint-disable-next-line solid/reactivity -- the descriptor is fixed for this tab
+	const prefetchRow = useRowPrefetch(props.descriptor);
 
 	// Nav walks the DISPLAYED rows by `_id`. `selection.selectedId()` is the
 	// slug (the asset tag for items), which would never match a row's `_id`, so
@@ -90,6 +97,8 @@ export function InventoryTab<
 				onRowActivate={(row) => {
 					props.selection.openRow(row);
 				}}
+				onRowHoverIntent={prefetchRow}
+				onFocusedRowChange={prefetchRow}
 				enableRowSelection={props.enableRowSelection}
 			>
 				<Show when={props.enableRowSelection}>

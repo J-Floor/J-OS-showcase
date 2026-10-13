@@ -22,6 +22,9 @@ vi.mock("../lib/auth.ts", () => ({
 		signOut: mocks.signOut,
 	},
 }));
+vi.mock("../lib/push.ts", () => ({
+	disablePush: () => Promise.resolve(),
+}));
 vi.mock("@solidjs/router", () => ({ useNavigate: () => mocks.navigate }));
 
 import { NoAccess } from "./NoAccess.tsx";

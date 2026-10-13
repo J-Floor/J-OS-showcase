@@ -20,6 +20,7 @@ export {
 export { Icon, type IconProps } from "./components/Icon/Icon.tsx";
 export { Kbd, type KbdProps } from "./components/Kbd/Kbd.tsx";
 export { isTypingTarget } from "./utils/typingTarget.ts";
+export { createHoverIntent, HOVER_INTENT_MS } from "./utils/hoverIntent.ts";
 export {
 	ShortcutPeekProvider,
 	useShortcutPeek,
@@ -47,6 +48,10 @@ export {
 	Skeleton,
 	type SkeletonProps,
 } from "./components/Skeleton/Skeleton.tsx";
+export {
+	SkeletonList,
+	type SkeletonListProps,
+} from "./components/Skeleton/SkeletonList.tsx";
 export {
 	Deferred,
 	setDeferredImmediate,

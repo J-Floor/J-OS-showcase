@@ -22,7 +22,9 @@ export function MetricTile(props: {
 	return (
 		<div class={styles.tile} data-tone={props.tone ?? "neutral"}>
 			<span class={styles.label}>{props.label}</span>
-			<span class={styles.value}>{props.value}</span>
+			<span class={styles.value} data-metric-value="">
+				{props.value}
+			</span>
 			<span class={styles.detail}>{props.detail}</span>
 		</div>
 	);

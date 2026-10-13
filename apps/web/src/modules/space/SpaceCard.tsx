@@ -1,9 +1,17 @@
-import { Button, Icon, Tooltip } from "@j-os/design-system";
+import {
+	Button,
+	Deferred,
+	Icon,
+	SkeletonList,
+	Tooltip,
+} from "@j-os/design-system";
 import { Show, type JSX } from "solid-js";
 
 import { ICONS } from "../../shared/icons.ts";
 
 import styles from "./SpaceCard.module.scss";
+
+const DEFAULT_SKELETON_ROWS = 2;
 
 export type SpaceCardProps = {
 	title: string;
@@ -20,6 +28,11 @@ export type SpaceCardProps = {
 	actionLabel?: string;
 	onAction?: () => void;
 	actionLoading?: boolean;
+	/** The card's data is not here yet: the title stays, the body shows
+	 *  `skeleton` (else a short list of bars) as a "Loading" status, and the
+	 *  header action, `note` and the action button wait. */
+	loading?: boolean;
+	skeleton?: JSX.Element;
 };
 
 /**
@@ -51,7 +64,7 @@ export function SpaceCard(props: SpaceCardProps): JSX.Element {
 								</Tooltip>
 							)}
 						</Show>
-						{props.headerAction}
+						<Show when={!props.loading}>{props.headerAction}</Show>
 					</div>
 				</div>
 				<Show when={props.subtitle}>
@@ -60,14 +73,36 @@ export function SpaceCard(props: SpaceCardProps): JSX.Element {
 			</header>
 			<div class={styles.body}>
 				<Show
-					when={props.children}
-					fallback={<Icon>{props.icon ?? "widgets"}</Icon>}
+					when={!props.loading}
+					fallback={
+						<Deferred fallback={null}>
+							<Show
+								when={props.skeleton}
+								fallback={
+									<SkeletonList
+										rows={DEFAULT_SKELETON_ROWS}
+									/>
+								}
+							>
+								{(skeleton) => (
+									<div role="status" aria-label="Loading">
+										{skeleton()}
+									</div>
+								)}
+							</Show>
+						</Deferred>
+					}
 				>
-					{props.children}
+					<Show
+						when={props.children}
+						fallback={<Icon>{props.icon ?? "widgets"}</Icon>}
+					>
+						{props.children}
+					</Show>
 				</Show>
 			</div>
-			{props.note}
-			<Show when={props.actionLabel}>
+			<Show when={!props.loading}>{props.note}</Show>
+			<Show when={props.actionLabel && !props.loading}>
 				<Button
 					class={styles.action}
 					isLoading={props.actionLoading}

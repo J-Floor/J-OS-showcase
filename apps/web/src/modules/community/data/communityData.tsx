@@ -1,7 +1,7 @@
-import { useQuery } from "convex-solidjs";
 import { type JSX, createContext, useContext } from "solid-js";
 
 import { api } from "../../../../convex/_generated/api";
+import { useQuery } from "../../../shared/data/useQuery.ts";
 
 // convex-solidjs@0.0.3 `useQuery` returns a QueryReturn { data, error,
 // isLoading, isStale, refetch }; consumers read `.data()`. `keepPreviousData`
@@ -14,13 +14,13 @@ import { api } from "../../../../convex/_generated/api";
 // persistent shell (gated to board); the page-level hooks below read that warm
 // context instead of subscribing per-mount.
 function applicationsQuery() {
-	return useQuery(api.applications.list, {}, { keepPreviousData: true });
+	return useQuery(api.applications.list, {});
 }
 function membersQuery() {
-	return useQuery(api.people.listMembers, {}, { keepPreviousData: true });
+	return useQuery(api.people.listMembers, {});
 }
 function guestsQuery() {
-	return useQuery(api.people.listGuests, {}, { keepPreviousData: true });
+	return useQuery(api.people.listGuests, {});
 }
 
 type CommunityData = {

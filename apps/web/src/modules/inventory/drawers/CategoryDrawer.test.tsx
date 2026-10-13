@@ -36,8 +36,11 @@ vi.mock("../data/inventoryData.ts", () => ({
 		const id = categoryId();
 		mockUseItemTypesByCategory(id);
 		return {
-			data: () =>
-				id === "itemCategories:furniture" ? furnitureTypes : undefined,
+			data: () => {
+				if (id === "itemCategories:furniture") return furnitureTypes;
+				if (id === "itemCategories:empty") return [];
+				return undefined;
+			},
 		};
 	},
 }));
@@ -161,4 +164,36 @@ test("no category, not loading: shows the create form and 'New category' title",
 	expect(
 		screen.getByRole("button", { name: /Create category/ })
 	).toBeInTheDocument();
+});
+
+test("item types still loading: skeleton list and count skeleton, no '(0)' or empty copy", () => {
+	render(() => (
+		<CategoryDrawer
+			open
+			onOpenChange={() => {}}
+			category={{
+				...furniture,
+				_id: "itemCategories:pending" as Category["_id"],
+			}}
+		/>
+	));
+	expect(document.querySelector("[data-skeleton-list]")).toBeInTheDocument();
+	expect(screen.queryByText(/\(0\)/)).toBeNull();
+	expect(screen.queryByText("No item types yet")).toBeNull();
+});
+
+test("item types loaded empty: shows (0) and the empty copy", () => {
+	render(() => (
+		<CategoryDrawer
+			open
+			onOpenChange={() => {}}
+			category={{
+				...furniture,
+				_id: "itemCategories:empty" as Category["_id"],
+			}}
+		/>
+	));
+	expect(screen.getByText("Item types (0)")).toBeInTheDocument();
+	expect(screen.getByText("No item types yet")).toBeInTheDocument();
+	expect(document.querySelector("[data-skeleton-list]")).toBeNull();
 });

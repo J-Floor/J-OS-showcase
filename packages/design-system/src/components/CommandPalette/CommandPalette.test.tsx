@@ -500,3 +500,68 @@ describe("while closed", () => {
  * exercised here. Verified in Chrome: ⌘K (or opening a row's drawer), then
  * `document.activeElement` is the combobox input, and typing filters the list.
  */
+
+describe("onHighlight", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	function withSpies() {
+		const a = vi.fn();
+		const b = vi.fn();
+		const list: CommandPaletteItem[] = [
+			{
+				value: "p:ada",
+				label: "Ada Lovelace",
+				group: "People",
+				onSelect,
+				onHighlight: a,
+			},
+			{
+				value: "p:adam",
+				label: "Adam Smith",
+				group: "People",
+				onSelect,
+				onHighlight: b,
+			},
+		];
+		return { a, b, list };
+	}
+
+	it("fires once per stable highlight after the intent delay", async () => {
+		vi.useFakeTimers();
+		const { a, b, list } = withSpies();
+		render(() => (
+			<CommandPalette open onOpenChange={() => {}} items={list} />
+		));
+		const input = screen.getByRole("combobox");
+		fireEvent.input(input, { target: { value: "ada" } });
+		await vi.advanceTimersByTimeAsync(0);
+		await vi.advanceTimersByTimeAsync(120);
+		expect(a).toHaveBeenCalledTimes(1);
+		expect(b).not.toHaveBeenCalled();
+
+		fireEvent.keyDown(input, { key: "ArrowDown" });
+		await vi.advanceTimersByTimeAsync(119);
+		expect(b).not.toHaveBeenCalled();
+		await vi.advanceTimersByTimeAsync(1);
+		expect(b).toHaveBeenCalledTimes(1);
+		expect(a).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not fire for the auto-highlighted row of a blank palette", async () => {
+		vi.useFakeTimers();
+		const { a, b, list } = withSpies();
+		render(() => (
+			<CommandPalette open onOpenChange={() => {}} items={list} />
+		));
+		await vi.advanceTimersByTimeAsync(500);
+		expect(a).not.toHaveBeenCalled();
+		expect(b).not.toHaveBeenCalled();
+
+		fireEvent.keyDown(screen.getByRole("combobox"), { key: "ArrowDown" });
+		await vi.advanceTimersByTimeAsync(200);
+		expect(a).not.toHaveBeenCalled();
+		expect(b).not.toHaveBeenCalled();
+	});
+});
