@@ -1,4 +1,4 @@
-import { Checkbox, Skeleton } from "@j-os/design-system";
+import { Checkbox, Query, Skeleton } from "@j-os/design-system";
 import { useMutation } from "convex-solidjs";
 import { createSignal, For, type JSX, Show } from "solid-js";
 
@@ -74,68 +74,76 @@ export function NotificationCategories(props: {
 				<Show when={!props.pushOn}>
 					<p class={styles.copy}>{PUSH_OFF_HINT}</p>
 				</Show>
-				<Show
-					when={prefs.data() !== undefined}
-					fallback={<Skeleton width="long" />}
-				>
-					<For each={rows()}>
-						{(row) => (
-							<div
-								class={styles.category}
-								role="group"
-								aria-labelledby={labelId(row.category)}
-							>
-								<p
-									id={labelId(row.category)}
-									class={styles.label}
-								>
-									{row.label}
-								</p>
-								<p class={styles.copy}>{row.description}</p>
-								<div class={styles.channels}>
-									<Checkbox
-										checked={row.push}
-										disabled={
-											!props.pushOn ||
-											pending().has(row.category)
-										}
-										onCheckedChange={(d) => {
-											void toggle(
-												row.category,
-												"push",
-												d.checked === true
-											);
-										}}
+				<Query.Root data={prefs.data()}>
+					<Query.Skeleton>
+						<Skeleton width="long" />
+					</Query.Skeleton>
+					<Query.Content of={prefs.data()}>
+						{(loaded) => (
+							<For each={loaded()}>
+								{(row) => (
+									<div
+										class={styles.category}
+										role="group"
+										aria-labelledby={labelId(row.category)}
 									>
-										Push
-									</Checkbox>
-									<Show when={!row.pushOnly}>
-										<Checkbox
-											checked={row.email}
-											disabled={pending().has(
-												row.category
-											)}
-											onCheckedChange={(d) => {
-												void toggle(
-													row.category,
-													"email",
-													d.checked === true
-												);
-											}}
+										<p
+											id={labelId(row.category)}
+											class={styles.label}
 										>
-											Email
-										</Checkbox>
-									</Show>
-								</div>
-								<Show when={row.note}>
-									{(note) => (
-										<p class={styles.copy}>{note()}</p>
-									)}
-								</Show>
-							</div>
+											{row.label}
+										</p>
+										<p class={styles.copy}>
+											{row.description}
+										</p>
+										<div class={styles.channels}>
+											<Checkbox
+												checked={row.push}
+												disabled={
+													!props.pushOn ||
+													pending().has(row.category)
+												}
+												onCheckedChange={(d) => {
+													void toggle(
+														row.category,
+														"push",
+														d.checked === true
+													);
+												}}
+											>
+												Push
+											</Checkbox>
+											<Show when={!row.pushOnly}>
+												<Checkbox
+													checked={row.email}
+													disabled={pending().has(
+														row.category
+													)}
+													onCheckedChange={(d) => {
+														void toggle(
+															row.category,
+															"email",
+															d.checked === true
+														);
+													}}
+												>
+													Email
+												</Checkbox>
+											</Show>
+										</div>
+										<Show when={row.note}>
+											{(note) => (
+												<p class={styles.copy}>
+													{note()}
+												</p>
+											)}
+										</Show>
+									</div>
+								)}
+							</For>
 						)}
-					</For>
-				</Show>
+					</Query.Content>
+				</Query.Root>
 			</Show>
 			<Show when={error()}>
 				{(message) => <p class={styles.error}>{message()}</p>}

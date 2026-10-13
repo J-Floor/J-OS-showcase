@@ -2,8 +2,7 @@ import {
 	Button,
 	Dialog,
 	IconButton,
-	Skeleton,
-	SkeletonList,
+	Query,
 	fireConfetti,
 } from "@j-os/design-system";
 import {
@@ -93,48 +92,45 @@ function Column(props: {
 			class={styles.column}
 			classList={{ [styles.over]: droppable.isActiveDroppable }}
 		>
-			<header class={styles.columnHead}>
-				{props.label}
-				<div class={styles.headRight}>
-					<span class={styles.count} data-column-count="">
-						<Show
-							when={props.tasks}
-							fallback={<Skeleton width="short" />}
+			<Query.Root data={props.tasks}>
+				<header class={styles.columnHead}>
+					{props.label}
+					<div class={styles.headRight}>
+						<span class={styles.count} data-column-count="">
+							<Query.Count />
+						</span>
+						<IconButton
+							tooltipLabel={`Add task to ${props.label}`}
+							onClick={() => {
+								props.onAdd();
+							}}
 						>
-							{(tasks) => tasks().length}
-						</Show>
-					</span>
-					<IconButton
-						tooltipLabel={`Add task to ${props.label}`}
-						onClick={() => {
-							props.onAdd();
-						}}
-					>
-						{ICONS.add}
-					</IconButton>
+							{ICONS.add}
+						</IconButton>
+					</div>
+				</header>
+				<div class={styles.cards}>
+					<Query.Content of={props.tasks}>
+						{(tasks) => (
+							<For each={sortColumn(tasks())}>
+								{(task) => (
+									<DraggableCard
+										task={task}
+										people={props.people}
+										projects={props.projects}
+										selected={props.isSelected(task._id)}
+										grouped={props.isGrouped(task._id)}
+										transformFor={props.transformFor}
+										onClick={() => {
+											props.onCardClick(task);
+										}}
+									/>
+								)}
+							</For>
+						)}
+					</Query.Content>
 				</div>
-			</header>
-			<div class={styles.cards}>
-				<Show when={props.tasks} fallback={<SkeletonList />}>
-					{(tasks) => (
-						<For each={sortColumn(tasks())}>
-							{(task) => (
-								<DraggableCard
-									task={task}
-									people={props.people}
-									projects={props.projects}
-									selected={props.isSelected(task._id)}
-									grouped={props.isGrouped(task._id)}
-									transformFor={props.transformFor}
-									onClick={() => {
-										props.onCardClick(task);
-									}}
-								/>
-							)}
-						</For>
-					)}
-				</Show>
-			</div>
+			</Query.Root>
 		</div>
 	);
 }

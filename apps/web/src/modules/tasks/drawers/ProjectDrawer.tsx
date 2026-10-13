@@ -5,7 +5,7 @@ import {
 	IconButton,
 	Input,
 	PropertyRow,
-	SkeletonList,
+	Query,
 	TextArea,
 } from "@j-os/design-system";
 import { For, Show, type JSX } from "solid-js";
@@ -261,16 +261,12 @@ export function ProjectDrawer(props: {
 				<Show when={isEdit()}>
 					<section class={styles.tasks}>
 						<h4>Tasks</h4>
-						<Show when={projectTasks()} fallback={<SkeletonList />}>
-							{(rows) => (
-								<Show
-									when={rows().length}
-									fallback={
-										<p class={styles.empty}>
-											No tasks yet.
-										</p>
-									}
-								>
+						<Query.Root data={projectTasks()}>
+							<Query.Empty>
+								<p class={styles.empty}>No tasks yet.</p>
+							</Query.Empty>
+							<Query.Content of={projectTasks()}>
+								{(rows) => (
 									<ul>
 										<For each={rows()}>
 											{(t) => (
@@ -293,9 +289,9 @@ export function ProjectDrawer(props: {
 											)}
 										</For>
 									</ul>
-								</Show>
-							)}
-						</Show>
+								)}
+							</Query.Content>
+						</Query.Root>
 					</section>
 				</Show>
 			</Drawer.Body>

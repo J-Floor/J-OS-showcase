@@ -6,8 +6,7 @@ import {
 	IconButton,
 	Input,
 	PropertyRow,
-	Skeleton,
-	SkeletonList,
+	Query,
 	TextArea,
 } from "@j-os/design-system";
 import { For, Show, createSignal, type JSX } from "solid-js";
@@ -225,37 +224,20 @@ export function CategoryDrawer(props: {
 							setOpenTypesSection(d.value);
 						}}
 					>
-						<Accordion.Item value="types">
-							<Accordion.ItemTitle>
-								<Show
-									when={typesQuery.data()}
-									fallback={
-										<>
-											Item types (
-											<Skeleton width="short" />)
-										</>
-									}
-								>
-									{(rows) =>
-										`Item types (${String(rows().length)})`
-									}
-								</Show>
-							</Accordion.ItemTitle>
-							<Accordion.ItemContent>
-								<div class={styles.section}>
-									<Show
-										when={typesQuery.data()}
-										fallback={<SkeletonList />}
-									>
-										{(rows) => (
-											<Show
-												when={rows().length > 0}
-												fallback={
-													<p class={styles.empty}>
-														No item types yet
-													</p>
-												}
-											>
+						<Query.Root data={typesQuery.data()}>
+							<Accordion.Item value="types">
+								<Accordion.ItemTitle>
+									Item types (<Query.Count />)
+								</Accordion.ItemTitle>
+								<Accordion.ItemContent>
+									<div class={styles.section}>
+										<Query.Empty>
+											<p class={styles.empty}>
+												No item types yet
+											</p>
+										</Query.Empty>
+										<Query.Content of={typesQuery.data()}>
+											{(rows) => (
 												<ul class={styles.list}>
 													<For each={rows()}>
 														{(row) => (
@@ -269,12 +251,12 @@ export function CategoryDrawer(props: {
 														)}
 													</For>
 												</ul>
-											</Show>
-										)}
-									</Show>
-								</div>
-							</Accordion.ItemContent>
-						</Accordion.Item>
+											)}
+										</Query.Content>
+									</div>
+								</Accordion.ItemContent>
+							</Accordion.Item>
+						</Query.Root>
 					</Accordion.Root>
 				</Show>
 			</Drawer.Body>

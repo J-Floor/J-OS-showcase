@@ -1,0 +1,38 @@
+@use "../../styles/typography" as typo;
+
+.stack {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+}
+
+.controls {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--jf-spacing-close);
+}
+
+.heading {
+	@include typo.jf-typo-body-bold;
+
+	margin: 0;
+}
+
+.caption {
+	@include typo.jf-typo-body-small;
+
+	margin: 0;
+	color: var(--jf-fg-muted);
+}
+
+.empty {
+	@include typo.jf-typo-body;
+
+	margin: 0;
+	color: var(--jf-fg-muted);
+}
+
+.list {
+	margin: 0;
+	padding-inline-start: var(--jf-spacing-far);
+}

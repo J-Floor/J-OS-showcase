@@ -1,4 +1,4 @@
-import { Input, PropertyRow, SkeletonList } from "@j-os/design-system";
+import { Input, PropertyRow, Query, SkeletonList } from "@j-os/design-system";
 import { useMutation } from "convex-solidjs";
 import { createSignal, For, Show } from "solid-js";
 
@@ -42,11 +42,14 @@ export function MyProfile() {
 		return value.replace(/[^\d+()\s-]/g, "");
 	}
 	return (
-		<Show
-			when={me.data() !== undefined}
-			fallback={<SkeletonList rows={PROFILE_SKELETON_ROWS} />}
-		>
-			<Show when={me.data()} fallback={<p>No profile found.</p>}>
+		<Query.Root data={me.data()}>
+			<Query.Skeleton>
+				<SkeletonList rows={PROFILE_SKELETON_ROWS} />
+			</Query.Skeleton>
+			<Query.Empty>
+				<p>No profile found.</p>
+			</Query.Empty>
+			<Query.Content of={me.data()}>
 				{(p) => (
 					<div class={styles.form}>
 						<PropertyRow icon={ICONS.email} label="Email">
@@ -110,8 +113,8 @@ export function MyProfile() {
 						</PropertyRow>
 					</div>
 				)}
-			</Show>
-		</Show>
+			</Query.Content>
+		</Query.Root>
 	);
 }
 
@@ -120,10 +123,10 @@ export function MyProfile() {
  * (`SignUp.tsx:551-586`): each optional slot appears once the previous has a
  * value, and only the contiguous filled prefix is saved (via the shared
  * `buildLinks`). Seeded once from the member's current links at mount; on blur
- * it rebuilds the array and calls `onSave`. The parent `<Show>` is non-keyed
- * (see `MyProfile`), so this mounts once and `slots` persists in place across
- * saves — a query push after saving one field no longer remounts this editor
- * and drops whatever the user is mid-typing into another slot.
+ * it rebuilds the array and calls `onSave`. The parent `Query.Content` is
+ * non-keyed (see `MyProfile`), so this mounts once and `slots` persists in
+ * place across saves — a query push after saving one field no longer remounts
+ * this editor and drops whatever the user is mid-typing into another slot.
  */
 function LinksEditor(props: {
 	initial: { label: string; url: string }[];

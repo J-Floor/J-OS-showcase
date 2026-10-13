@@ -8,8 +8,7 @@ import {
 	Icon,
 	Input,
 	PropertyRow,
-	Skeleton,
-	SkeletonList,
+	Query,
 	TimePicker,
 } from "@j-os/design-system";
 import { useMutation } from "convex-solidjs";
@@ -540,43 +539,25 @@ export function EventDrawer(props: {
 									</Accordion.ItemContent>
 								</Accordion.Item>
 
-								<Accordion.Item value="attendees">
-									<Accordion.ItemTitle
-										subtitle={
-											<Show
-												when={attendees.data()}
-												fallback={
-													<Skeleton width="short" />
-												}
-											>
-												{(rows) =>
-													String(rows().length)
-												}
-											</Show>
-										}
-									>
-										Attendees
-									</Accordion.ItemTitle>
-									<Accordion.ItemContent>
-										<div class={styles.section}>
-											<Show
-												when={attendees.data()}
-												fallback={<SkeletonList />}
-											>
-												{(rows) => (
-													<Show
-														when={rows().length > 0}
-														fallback={
-															<p
-																class={
-																	styles.empty
-																}
-															>
-																No one has
-																registered yet.
-															</p>
-														}
-													>
+								<Query.Root data={attendees.data()}>
+									<Accordion.Item value="attendees">
+										<Accordion.ItemTitle
+											subtitle={<Query.Count />}
+										>
+											Attendees
+										</Accordion.ItemTitle>
+										<Accordion.ItemContent>
+											<div class={styles.section}>
+												<Query.Empty>
+													<p class={styles.empty}>
+														No one has registered
+														yet.
+													</p>
+												</Query.Empty>
+												<Query.Content
+													of={attendees.data()}
+												>
+													{(rows) => (
 														<ul
 															class={
 																styles.attendees
@@ -622,12 +603,12 @@ export function EventDrawer(props: {
 																)}
 															</For>
 														</ul>
-													</Show>
-												)}
-											</Show>
-										</div>
-									</Accordion.ItemContent>
-								</Accordion.Item>
+													)}
+												</Query.Content>
+											</div>
+										</Accordion.ItemContent>
+									</Accordion.Item>
+								</Query.Root>
 							</Show>
 						</Accordion.Root>
 					)}

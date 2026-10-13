@@ -1,4 +1,4 @@
-import { Icon, IconButton, SkeletonList } from "@j-os/design-system";
+import { Icon, IconButton, Query } from "@j-os/design-system";
 import {
 	For,
 	Show,
@@ -337,237 +337,224 @@ export function ProjectTimeline(props: {
 		return t.totalDays * t.dayWidth; // month: no minor gridlines
 	}
 
-	return (
-		<div class={styles.wrap}>
-			<Show
-				when={props.projects && timeline()}
-				fallback={
-					<Show when={props.projects} fallback={<SkeletonList />}>
-						<p class={styles.empty}>
-							No projects with a start and end date yet.
-						</p>
-					</Show>
-				}
+	function grid(t: Accessor<Timeline>): JSX.Element {
+		return (
+			<div
+				class={styles.grid}
+				style={{
+					"--label-w": px(LABEL_WIDTH),
+					"--row-h": px(ROW_HEIGHT),
+					"--header-h": px(HEADER_HEIGHT),
+					"--band-h": px(MONTH_BAND_HEIGHT),
+					"--tick-h": px(TICK_ROW_HEIGHT),
+				}}
 			>
-				{(t) => (
+				<div class={styles.labels}>
+					<div class={styles.labelHeader} />
+					<For each={t().bars}>
+						{(bar) => (
+							<div class={styles.labelRow}>
+								<ProjectCard
+									name={bar.name}
+									leaderName={leaderName(bar)}
+									taskCount={taskCount(bar)}
+									onClick={() => {
+										props.onSelect(
+											bar.id as Id<"projects">
+										);
+									}}
+								/>
+								<IconButton
+									tooltipLabel="Jump to project"
+									onClick={() => {
+										scrollToOffset(
+											bar.offset,
+											t().dayWidth
+										);
+									}}
+								>
+									my_location
+								</IconButton>
+							</div>
+						)}
+					</For>
+					<div class={styles.labelNew}>
+						<Icon>{ICONS.add}</Icon> New
+					</div>
+				</div>
+
+				<div class={styles.scroll} ref={scrollEl} onScroll={onScroll}>
 					<div
-						class={styles.grid}
+						class={styles.canvas}
 						style={{
-							"--label-w": px(LABEL_WIDTH),
-							"--row-h": px(ROW_HEIGHT),
-							"--header-h": px(HEADER_HEIGHT),
-							"--band-h": px(MONTH_BAND_HEIGHT),
-							"--tick-h": px(TICK_ROW_HEIGHT),
+							width: px(t().totalDays * t().dayWidth),
+							"--day-w": px(t().dayWidth),
+							"--col-w": px(colWidth(t())),
+							"--weekend-tint":
+								mode() === "day"
+									? "var(--jf-surface-bg-sunken)"
+									: "transparent",
 						}}
 					>
-						<div class={styles.labels}>
-							<div class={styles.labelHeader} />
-							<For each={t().bars}>
-								{(bar) => (
-									<div class={styles.labelRow}>
-										<ProjectCard
-											name={bar.name}
-											leaderName={leaderName(bar)}
-											taskCount={taskCount(bar)}
-											onClick={() => {
-												props.onSelect(
-													bar.id as Id<"projects">
-												);
-											}}
-										/>
-										<IconButton
-											tooltipLabel="Jump to project"
-											onClick={() => {
-												scrollToOffset(
-													bar.offset,
-													t().dayWidth
-												);
+						<div class={styles.header}>
+							<div class={styles.band}>
+								<For each={t().months}>
+									{(m) => (
+										<div
+											class={styles.bandCell}
+											style={{
+												left: px(
+													m.offset * t().dayWidth
+												),
+												width: px(
+													m.span * t().dayWidth
+												),
 											}}
 										>
-											my_location
-										</IconButton>
-									</div>
-								)}
-							</For>
-							<div class={styles.labelNew}>
-								<Icon>{ICONS.add}</Icon> New
+											<span>{m.label}</span>
+										</div>
+									)}
+								</For>
+							</div>
+							<div class={styles.tickRow}>
+								<For each={t().ticks}>
+									{(tk) => (
+										<div
+											classList={{
+												[styles.tickCell]: true,
+												[styles.weekendTick]:
+													tk.weekend === true,
+												[styles.currentTick]:
+													isCurrentTick(
+														t(),
+														tk.offset,
+														tk.span
+													),
+											}}
+											style={{
+												left: px(
+													tk.offset * t().dayWidth
+												),
+												width: px(
+													tk.span * t().dayWidth
+												),
+											}}
+										>
+											<span>{tk.label}</span>
+										</div>
+									)}
+								</For>
 							</div>
 						</div>
 
-						<div
-							class={styles.scroll}
-							ref={scrollEl}
-							onScroll={onScroll}
-						>
-							<div
-								class={styles.canvas}
-								style={{
-									width: px(t().totalDays * t().dayWidth),
-									"--day-w": px(t().dayWidth),
-									"--col-w": px(colWidth(t())),
-									"--weekend-tint":
-										mode() === "day"
-											? "var(--jf-surface-bg-sunken)"
-											: "transparent",
-								}}
-							>
-								<div class={styles.header}>
-									<div class={styles.band}>
-										<For each={t().months}>
-											{(m) => (
-												<div
-													class={styles.bandCell}
-													style={{
-														left: px(
-															m.offset *
-																t().dayWidth
-														),
-														width: px(
-															m.span *
-																t().dayWidth
-														),
-													}}
-												>
-													<span>{m.label}</span>
-												</div>
-											)}
-										</For>
-									</div>
-									<div class={styles.tickRow}>
-										<For each={t().ticks}>
-											{(tk) => (
-												<div
-													classList={{
-														[styles.tickCell]: true,
-														[styles.weekendTick]:
-															tk.weekend === true,
-														[styles.currentTick]:
-															isCurrentTick(
-																t(),
-																tk.offset,
-																tk.span
-															),
-													}}
-													style={{
-														left: px(
-															tk.offset *
-																t().dayWidth
-														),
-														width: px(
-															tk.span *
-																t().dayWidth
-														),
-													}}
-												>
-													<span>{tk.label}</span>
-												</div>
-											)}
-										</For>
-									</div>
-								</div>
-
-								<div class={styles.body}>
-									<div class={styles.lines} />
-									<For each={t().months}>
-										{(m) => (
-											<Show when={m.offset > 0}>
-												<div
-													class={styles.monthLine}
-													style={{
-														left: px(
-															m.offset *
-																t().dayWidth
-														),
-													}}
-												/>
-											</Show>
-										)}
-									</For>
-									<Show when={t().todayOffset !== null}>
+						<div class={styles.body}>
+							<div class={styles.lines} />
+							<For each={t().months}>
+								{(m) => (
+									<Show when={m.offset > 0}>
 										<div
-											class={styles.today}
+											class={styles.monthLine}
 											style={{
 												left: px(
-													(t().todayOffset ?? 0) *
-														t().dayWidth
+													m.offset * t().dayWidth
 												),
 											}}
 										/>
 									</Show>
-									<For each={t().bars}>
-										{(bar) => (
-											<div class={styles.row}>
-												<div
-													class={styles.bar}
-													style={{
-														left: px(
-															barLeft(bar, t())
-														),
-														width: px(
-															barWidth(bar, t())
-														),
-													}}
-													title={bar.name}
-													onPointerDown={(e) => {
-														barPointerDown(e, bar);
-													}}
-													onPointerMove={
-														barPointerMove
-													}
-													onPointerUp={barPointerUp}
-												>
-													<span
-														class={styles.handle}
-														data-handle="start"
-													/>
-													<span
-														class={styles.barLabel}
-													>
-														{bar.name}
-													</span>
-													<span
-														class={styles.handle}
-														data-handle="end"
-													/>
-												</div>
-											</div>
-										)}
-									</For>
-									<div
-										class={styles.newRow}
-										onPointerDown={newPointerDown}
-										onPointerMove={newPointerMove}
-										onPointerUp={newPointerUp}
-									>
-										<Show when={newRange()}>
-											{(r) => (
-												<div
-													class={styles.newPreview}
-													style={{
-														left: px(
-															Math.min(
-																r().a,
-																r().b
-															) * t().dayWidth
-														),
-														width: px(
-															(Math.abs(
-																r().a - r().b
-															) +
-																1) *
-																t().dayWidth
-														),
-													}}
-												/>
-											)}
-										</Show>
+								)}
+							</For>
+							<Show when={t().todayOffset !== null}>
+								<div
+									class={styles.today}
+									style={{
+										left: px(
+											(t().todayOffset ?? 0) *
+												t().dayWidth
+										),
+									}}
+								/>
+							</Show>
+							<For each={t().bars}>
+								{(bar) => (
+									<div class={styles.row}>
+										<div
+											class={styles.bar}
+											style={{
+												left: px(barLeft(bar, t())),
+												width: px(barWidth(bar, t())),
+											}}
+											title={bar.name}
+											onPointerDown={(e) => {
+												barPointerDown(e, bar);
+											}}
+											onPointerMove={barPointerMove}
+											onPointerUp={barPointerUp}
+										>
+											<span
+												class={styles.handle}
+												data-handle="start"
+											/>
+											<span class={styles.barLabel}>
+												{bar.name}
+											</span>
+											<span
+												class={styles.handle}
+												data-handle="end"
+											/>
+										</div>
 									</div>
-								</div>
+								)}
+							</For>
+							<div
+								class={styles.newRow}
+								onPointerDown={newPointerDown}
+								onPointerMove={newPointerMove}
+								onPointerUp={newPointerUp}
+							>
+								<Show when={newRange()}>
+									{(r) => (
+										<div
+											class={styles.newPreview}
+											style={{
+												left: px(
+													Math.min(r().a, r().b) *
+														t().dayWidth
+												),
+												width: px(
+													(Math.abs(r().a - r().b) +
+														1) *
+														t().dayWidth
+												),
+											}}
+										/>
+									)}
+								</Show>
 							</div>
 						</div>
 					</div>
-				)}
-			</Show>
+				</div>
+			</div>
+		);
+	}
+
+	return (
+		<div class={styles.wrap}>
+			<Query.Root data={props.projects}>
+				<Query.Content of={props.projects}>
+					{() => (
+						<Show
+							when={timeline()}
+							fallback={
+								<p class={styles.empty}>
+									No projects with a start and end date yet.
+								</p>
+							}
+						>
+							{grid}
+						</Show>
+					)}
+				</Query.Content>
+			</Query.Root>
 		</div>
 	);
 }

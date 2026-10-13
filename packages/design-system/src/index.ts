@@ -52,6 +52,7 @@ export {
 	SkeletonList,
 	type SkeletonListProps,
 } from "./components/Skeleton/SkeletonList.tsx";
+export { Query } from "./components/Query/Query.tsx";
 export {
 	Deferred,
 	setDeferredImmediate,

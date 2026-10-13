@@ -1,9 +1,5 @@
-import {
-	SkeletonList,
-	Timeline,
-	type TimelineEntry,
-} from "@j-os/design-system";
-import { Show, type JSX } from "solid-js";
+import { Query, Timeline, type TimelineEntry } from "@j-os/design-system";
+import type { JSX } from "solid-js";
 
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -147,8 +143,10 @@ export function PersonTimeline(props: { personId: Id<"people"> }): JSX.Element {
 		{ keepPreviousData: false }
 	);
 	return (
-		<Show when={events.data()} fallback={<SkeletonList />}>
-			{(rows) => <Timeline entries={rows().map(toEntry)} />}
-		</Show>
+		<Query.Root data={events.data()}>
+			<Query.Content of={events.data()}>
+				{(rows) => <Timeline entries={rows().map(toEntry)} />}
+			</Query.Content>
+		</Query.Root>
 	);
 }
