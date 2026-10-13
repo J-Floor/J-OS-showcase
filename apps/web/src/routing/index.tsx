@@ -72,22 +72,23 @@ const MODULE_PATHS = new Set(modules.map((m) => m.path));
 
 /**
  * Index route (`/`): send the user to the last module route they viewed,
- * falling back to the first module. Reads `lastPath` off their person row.
+ * falling back to the first module. Reads it from `people.getLastPath`.
  */
 export function LandingRedirect() {
-	const person = useQuery(api.people.getCurrentPerson, {});
+	const lastPath = useQuery(api.people.getLastPath, {});
 	const fallback = modules[0]?.path ?? "/";
 	const location = useLocation();
 	function target() {
-		const last = person.data()?.lastPath;
+		const last = lastPath.data();
 		return last && MODULE_PATHS.has(last) ? last : fallback;
 	}
 	return (
 		// Gate on data presence, not `!isLoading()`: convex-solidjs returns
 		// undefined with isLoading=false on the first render (before the live
 		// query resolves), so `!isLoading()` would navigate to the fallback
-		// before `lastPath` loads — making last-visited restore never work.
-		<Show when={person.data() !== undefined} fallback={<LoadingScreen />}>
+		// before the path loads — making last-visited restore never work.
+		// The query returns null, never undefined, once it has loaded.
+		<Show when={lastPath.data() !== undefined} fallback={<LoadingScreen />}>
 			{/* Carry the query along: `/?notifications=open` (the email footer
 			    link) must still open the drawer on whichever page this lands. */}
 			<Navigate href={`${target()}${location.search}`} />

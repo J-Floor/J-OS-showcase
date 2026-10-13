@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
 import { internalMutation } from "./_generated/server";
 import { eraseAuthRecords } from "./lib/authRecords.ts";
 import { abandoned, purgeConfirmTokens } from "./lib/confirmToken.ts";
@@ -19,6 +20,7 @@ import {
 	stripPersonId,
 	takeCharged,
 } from "./lib/peopleRefs.ts";
+import { personStateOf } from "./lib/personState.ts";
 
 // Convex mutations are transactions with limits on documents read and
 // written; the application and visitor sign-up forms are both public and
@@ -49,31 +51,21 @@ export const purgeUnverified = internalMutation({
 		const now = Date.now();
 		const prospects = await ctx.db
 			.query("people")
-			.withIndex("by_tier", (q) => q.eq("tier", "prospect"))
+			.withIndex("by_tier_and_formerOf", (q) => q.eq("tier", "prospect"))
 			.take(BATCH_SIZE);
 		let count = 0;
 		for (const person of prospects) {
 			if (!(await abandoned(ctx.db, person, now))) continue;
-			const events = await ctx.db
-				.query("personEvents")
-				.withIndex("by_person", (q) => q.eq("personId", person._id))
-				.collect();
-			for (const event of events) await ctx.db.delete(event._id);
-			await ctx.db.delete(person._id);
+			await deleteAbandoned(ctx, person._id);
 			count++;
 		}
 		const visitors = await ctx.db
 			.query("people")
-			.withIndex("by_tier", (q) => q.eq("tier", "visitor"))
+			.withIndex("by_tier_and_formerOf", (q) => q.eq("tier", "visitor"))
 			.take(BATCH_SIZE);
 		for (const person of visitors) {
 			if (!(await abandoned(ctx.db, person, now))) continue;
-			const events = await ctx.db
-				.query("personEvents")
-				.withIndex("by_person", (q) => q.eq("personId", person._id))
-				.collect();
-			for (const event of events) await ctx.db.delete(event._id);
-			await ctx.db.delete(person._id);
+			await deleteAbandoned(ctx, person._id);
 			count++;
 		}
 		const tokens = await purgeConfirmTokens(ctx, now, BATCH_SIZE);
@@ -81,6 +73,18 @@ export const purgeUnverified = internalMutation({
 		return { count, tokens };
 	},
 });
+
+/** Delete an abandoned person with their events and `personState` row. */
+async function deleteAbandoned(ctx: MutationCtx, personId: Id<"people">) {
+	const events = await ctx.db
+		.query("personEvents")
+		.withIndex("by_person", (q) => q.eq("personId", personId))
+		.collect();
+	for (const event of events) await ctx.db.delete(event._id);
+	const state = await personStateOf(ctx, personId);
+	if (state) await ctx.db.delete(state._id);
+	await ctx.db.delete(personId);
+}
 
 /**
  * Whether `row`'s legacy `hostedBy` names `host`: it holds their display name

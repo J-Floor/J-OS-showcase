@@ -342,3 +342,148 @@ describe("repairGuestWithoutAgreement", () => {
 		).rejects.toThrow();
 	});
 });
+
+describe("moveLastPath", () => {
+	it("copies lastPath into personState, clears it, and is idempotent", async () => {
+		const t = convexTest(schema, modules);
+		const [withPath, without] = await t.run(async (ctx) => [
+			await ctx.db.insert("people", {
+				email: "a@example.com",
+				firstName: "A",
+				lastName: "",
+				tier: "member",
+				stage: "active",
+				stageSince: 0,
+				lastPath: "/tasks",
+			}),
+			await ctx.db.insert("people", {
+				email: "b@example.com",
+				firstName: "B",
+				lastName: "",
+				tier: "member",
+				stage: "active",
+				stageSince: 0,
+			}),
+		]);
+		expect(
+			await t.mutation(internal.migrations.moveLastPath, { dryRun: true })
+		).toEqual({ moved: 1 });
+		expect(
+			await t.run((ctx) => ctx.db.query("personState").collect())
+		).toHaveLength(0);
+		expect((await t.run((ctx) => ctx.db.get(withPath)))?.lastPath).toBe(
+			"/tasks"
+		);
+		expect(await t.mutation(internal.migrations.moveLastPath, {})).toEqual({
+			moved: 1,
+		});
+		const rows = await t.run((ctx) =>
+			ctx.db.query("personState").collect()
+		);
+		expect(rows.map((r) => [r.personId, r.lastPath])).toEqual([
+			[withPath, "/tasks"],
+		]);
+		expect(
+			(await t.run((ctx) => ctx.db.get(withPath)))?.lastPath
+		).toBeUndefined();
+		expect(
+			(await t.run((ctx) => ctx.db.get(without)))?.lastPath
+		).toBeUndefined();
+		expect(await t.mutation(internal.migrations.moveLastPath, {})).toEqual({
+			moved: 0,
+		});
+		expect(
+			await t.run((ctx) => ctx.db.query("personState").collect())
+		).toHaveLength(1);
+	});
+
+	it("keeps an existing personState row (it is newer) and only clears people.lastPath", async () => {
+		const t = convexTest(schema, modules);
+		const id = await t.run(async (ctx) => {
+			const personId = await ctx.db.insert("people", {
+				email: "c@example.com",
+				firstName: "C",
+				lastName: "",
+				tier: "member",
+				stage: "active",
+				stageSince: 0,
+				lastPath: "/tasks",
+			});
+			await ctx.db.insert("personState", {
+				personId,
+				lastPath: "/community",
+			});
+			return personId;
+		});
+		expect(await t.mutation(internal.migrations.moveLastPath, {})).toEqual({
+			moved: 1,
+		});
+		const rows = await t.run((ctx) =>
+			ctx.db.query("personState").collect()
+		);
+		expect(rows.map((r) => [r.personId, r.lastPath])).toEqual([
+			[id, "/community"],
+		]);
+		expect(
+			(await t.run((ctx) => ctx.db.get(id)))?.lastPath
+		).toBeUndefined();
+	});
+});
+
+describe("backfillSignedVariants", () => {
+	it("sets the distinct signed variants and is idempotent", async () => {
+		const t = convexTest(schema, modules);
+		const [signer, none] = await t.run(async (ctx) => {
+			const signer = await ctx.db.insert("people", {
+				email: "s@example.com",
+				firstName: "S",
+				lastName: "",
+				tier: "member",
+				stage: "active",
+				stageSince: 0,
+			});
+			const none = await ctx.db.insert("people", {
+				email: "n@example.com",
+				firstName: "N",
+				lastName: "",
+				tier: "member",
+				stage: "active",
+				stageSince: 0,
+			});
+			for (const variant of ["guest", "member", "member"] as const)
+				await ctx.db.insert("signatures", {
+					personId: signer,
+					email: "s@example.com",
+					variant,
+					signedName: "S",
+					agreementVersion: "1",
+					agreementHash: "h",
+					signedAt: 0,
+					sourceUrl: "https://example.test/a.pdf",
+				});
+			return [signer, none];
+		});
+		expect(
+			await t.mutation(internal.migrations.backfillSignedVariants, {
+				dryRun: true,
+			})
+		).toEqual({ patched: 1 });
+		expect(
+			(await t.run((ctx) => ctx.db.get(signer)))?.signedVariants
+		).toBeUndefined();
+		expect(
+			await t.mutation(internal.migrations.backfillSignedVariants, {})
+		).toEqual({ patched: 1 });
+		expect(
+			(await t.run((ctx) => ctx.db.get(signer)))?.signedVariants
+				?.slice()
+				.sort()
+		).toEqual(["guest", "member"]);
+		expect(
+			(await t.run((ctx) => ctx.db.get(none)))?.signedVariants
+		).toBeUndefined();
+		expect(
+			await t.mutation(internal.migrations.backfillSignedVariants, {})
+		).toEqual({ patched: 0 });
+	});
+});

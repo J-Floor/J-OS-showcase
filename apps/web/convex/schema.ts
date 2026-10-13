@@ -266,6 +266,12 @@ export const confirmPurpose = v.union(
 	v.literal("emailChange")
 );
 
+/** Which agreement a signature is for. */
+export const signatureVariant = v.union(
+	v.literal("member"),
+	v.literal("guest")
+);
+
 export default defineSchema({
 	people: defineTable({
 		// email is the unique identity; the name pair is display-only.
@@ -292,7 +298,8 @@ export default defineSchema({
 		// into `board.noteLog` and dropped in a past migration — see git history.)
 		hostedById: v.optional(v.id("people")),
 		hostedBy: v.optional(v.string()),
-		// last in-app route this person viewed; `/` redirects here on next visit
+		// Unused: moved to personState. Dropped from the schema once
+		// migrations:moveLastPath has run on prod.
 		lastPath: v.optional(v.string()),
 		// Onboarding progress (members/guests between approval and confirmation).
 		// `steps` maps a step id to its completion record; step-specific payload
@@ -340,6 +347,10 @@ export default defineSchema({
 		// First time this person entered an active stage of a membership tier. Stamped by
 		// `applyEvent`; never cleared. Makes a past activation a fact guards can read.
 		activatedAt: v.optional(v.number()),
+		// The agreement variants this person has signed, each once. Kept in
+		// step with `signatures` by `lib/signatures`, so the roster
+		// queries derive status without a signatures read per row.
+		signedVariants: v.optional(v.array(signatureVariant)),
 		door: v.optional(
 			v.object({
 				override: doorOverride,
@@ -390,7 +401,11 @@ export default defineSchema({
 		deniedAt: v.optional(v.number()),
 	})
 		.index("by_email", ["email"])
-		.index("by_tier", ["tier"]),
+		// `tier` alone is the prefix. The second field lets the rosters read
+		// only their own former people and only verified prospects, so a write
+		// to any other row does not re-run them.
+		.index("by_tier_and_formerOf", ["tier", "formerOf"])
+		.index("by_tier_and_verifiedAt", ["tier", "verifiedAt"]),
 	personEvents: defineTable({
 		personId: v.id("people"),
 		at: v.number(),
@@ -406,11 +421,21 @@ export default defineSchema({
 	})
 		.index("by_person", ["personId"])
 		.index("by_kind_and_at", ["kind", "at"]),
+	/**
+	 * Per-person UI state that changes often (the last module route viewed).
+	 * Kept off `people` on purpose: the roster queries are live subscriptions
+	 * over `people`, and every write there re-runs them for every open board
+	 * session.
+	 */
+	personState: defineTable({
+		personId: v.id("people"),
+		lastPath: v.string(),
+	}).index("by_person", ["personId"]),
 	purgeLog: defineTable({ at: v.number(), count: v.number() }),
 	signatures: defineTable({
 		personId: v.id("people"),
 		email: v.string(),
-		variant: v.union(v.literal("member"), v.literal("guest")),
+		variant: signatureVariant,
 		signedName: v.string(),
 		company: v.optional(v.string()),
 		agreementVersion: v.string(),

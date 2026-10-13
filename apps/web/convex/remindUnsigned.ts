@@ -18,8 +18,9 @@ import { internalAction, internalQuery } from "./_generated/server";
 import { agreementVariantFor, compliance } from "./lib/derive.ts";
 import { validEmail } from "./lib/emailAddress.ts";
 
-/** The only tiers that require an agreement (see `agreementVariantFor`), so the
- *  preview queries these by the `by_tier` index instead of scanning every row. */
+/** The only tiers that require an agreement (see `agreementVariantFor`), so
+ *  the preview reads these by tier from the `by_tier_and_formerOf` index
+ *  instead of scanning every row. */
 const AGREEMENT_TIERS = ["guest", "member", "core"] as const;
 
 /** Onboarding people whose required agreement is not yet signed. Read-only, so
@@ -36,7 +37,7 @@ export const preview = internalQuery({
 		for (const tier of AGREEMENT_TIERS) {
 			const people = await ctx.db
 				.query("people")
-				.withIndex("by_tier", (q) => q.eq("tier", tier))
+				.withIndex("by_tier_and_formerOf", (q) => q.eq("tier", tier))
 				.collect();
 			for (const person of people) {
 				const variant = agreementVariantFor(person.tier);

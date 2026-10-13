@@ -22,6 +22,8 @@ import {
 	type Naming,
 	replacePersonId,
 } from "./lib/peopleRefs.ts";
+import { personStateOf } from "./lib/personState.ts";
+import { syncSignedVariants } from "./lib/signatures.ts";
 
 const mergeArgs = {
 	keepId: v.id("people"),
@@ -130,15 +132,18 @@ function patchOf(raw: unknown): Partial<Doc<"people">> | null {
 const NOT_AN_OBJECT = "The patch must be an object.";
 
 /**
- * Attendance is one row per person and event. When the kept person already
- * has the row the dropped one is moving into, the moved one would count
- * twice, so it is deleted instead.
+ * Attendance is one row per person and event, and `personState` one row per
+ * person. When the kept person already has the row the dropped one is moving
+ * into, the moved one would count twice, so it is deleted instead.
  */
 async function keptAlreadyHas(
 	ctx: MutationCtx,
 	{ table, doc }: Naming,
 	keepId: Id<"people">
 ): Promise<boolean> {
+	if (table === "personState") {
+		return (await personStateOf(ctx, keepId)) !== null;
+	}
 	if (table !== "eventAttendance") return false;
 	const { eventId } = doc as unknown as Doc<"eventAttendance">;
 	return hasAttendance(ctx.db, keepId, eventId);
@@ -206,6 +211,9 @@ export const apply = internalMutation({
 			else await ctx.db.replace(_id, value);
 			moved += 1;
 		}
+		// Signature rows moved without going through insertSignature.
+		const keep = await ctx.db.get(keepId);
+		if (keep) await syncSignedVariants(ctx, keep);
 		await ctx.db.insert("personEvents", {
 			personId: keepId,
 			at: Date.now(),

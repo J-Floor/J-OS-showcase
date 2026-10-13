@@ -5,7 +5,7 @@ import type { ParentProps } from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
 
 vi.mock("convex-solidjs", () => ({
-	useQuery: () => ({ data: () => ({ lastPath: "/tasks" }) }),
+	useQuery: () => ({ data: () => "/tasks" }),
 	useMutation: () => ({ mutateAsync: vi.fn() }),
 }));
 vi.mock("../../lib/convex.ts", () => ({

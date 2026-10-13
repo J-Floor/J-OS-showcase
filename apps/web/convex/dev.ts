@@ -6,6 +6,7 @@ import { devAdminEmail } from "./lib/devAdmin.ts";
 import { normalizeEmail, personByEmail } from "./lib/emailAddress.ts";
 import type { Tier } from "./lib/lifecycleTypes.ts";
 import { SELF_STEP_IDS } from "./lib/onboardingSteps.ts";
+import { syncSignedVariants } from "./lib/signatures.ts";
 
 /**
  * Dev-only impersonation. Log in ONCE with the address in `DEV_ADMIN_EMAIL`
@@ -60,6 +61,7 @@ async function apply(
 			.withIndex("by_person", (q) => q.eq("personId", existing._id))
 			.collect();
 		for (const sig of sigs) await ctx.db.delete(sig._id);
+		await syncSignedVariants(ctx, existing);
 	}
 
 	const onboarding =

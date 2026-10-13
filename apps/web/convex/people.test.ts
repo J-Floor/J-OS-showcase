@@ -161,6 +161,40 @@ function asBoard(t: ReturnType<typeof convexTest>) {
 	return t.withIdentity({ email: "boss@example.com" });
 }
 
+describe("listGuests agreement from signedVariants", () => {
+	it("reads hasAgreement and status off the person, not signatures", async () => {
+		const t = convexTest(schema, modules);
+		await seedBoard(t);
+		await t.run(async (ctx) => {
+			for (const [email, signedVariants] of [
+				["signed@example.com", ["guest"] as const],
+				["unsigned@example.com", undefined],
+			] as const)
+				await ctx.db.insert("people", {
+					email,
+					firstName: email,
+					lastName: "",
+					tier: "guest",
+					stage: "onboarding",
+					stageSince: Date.now(),
+					signedVariants: signedVariants
+						? [...signedVariants]
+						: undefined,
+				});
+		});
+		const guests = await asBoard(t).query(api.people.listGuests, {});
+		const signed = guests.find((p) => p.email === "signed@example.com");
+		const unsigned = guests.find((p) => p.email === "unsigned@example.com");
+		expect(signed?.hasAgreement).toBe(true);
+		expect(unsigned?.hasAgreement).toBe(false);
+		function missing(p: typeof signed) {
+			return p?.status.flags.some((f) => f.id === "agreement_missing");
+		}
+		expect(missing(signed)).toBe(false);
+		expect(missing(unsigned)).toBe(true);
+	});
+});
+
 describe("listMembers / listGuests", () => {
 	it("scopes each list and is board-gated", async () => {
 		const t = convexTest(schema, modules);
@@ -211,6 +245,43 @@ describe("listMembers / listGuests", () => {
 				.withIdentity({ email: "m@example.com" })
 				.query(api.people.listMembers, {})
 		).rejects.toThrow();
+	});
+});
+
+describe("roster former split", () => {
+	it("keeps each former person on the tab of the tier they left", async () => {
+		const t = convexTest(schema, modules);
+		await seedBoard(t);
+		const now = Date.now();
+		function former(
+			email: string,
+			formerOf?: "guest" | "member" | "staff"
+		) {
+			return {
+				email,
+				firstName: "F",
+				lastName: "",
+				tier: "former" as const,
+				stage: "expired" as const,
+				stageSince: now,
+				...(formerOf === undefined ? {} : { formerOf }),
+			};
+		}
+		await t.run(async (ctx) => {
+			await ctx.db.insert("people", former("fg@example.com", "guest"));
+			await ctx.db.insert("people", former("fm@example.com", "member"));
+			await ctx.db.insert("people", former("fs@example.com", "staff"));
+			await ctx.db.insert("people", former("fn@example.com"));
+		});
+		const members = await asBoard(t).query(api.people.listMembers, {});
+		const guests = await asBoard(t).query(api.people.listGuests, {});
+		expect(guests.map((p) => p.email)).toEqual(["fg@example.com"]);
+		expect(members.map((p) => p.email).sort()).toEqual([
+			"boss@example.com",
+			"fm@example.com",
+			"fn@example.com",
+			"fs@example.com",
+		]);
 	});
 });
 
@@ -495,6 +566,18 @@ describe("staff access", () => {
 	});
 });
 
+async function storedPath(t: TestConvex<typeof schema>, id: Id<"people">) {
+	return t.run(
+		async (ctx) =>
+			(
+				await ctx.db
+					.query("personState")
+					.withIndex("by_person", (q) => q.eq("personId", id))
+					.first()
+			)?.lastPath ?? null
+	);
+}
+
 describe("setLastPath", () => {
 	async function seedBoardId(t: ReturnType<typeof convexTest>) {
 		return t.run((ctx) =>
@@ -509,20 +592,74 @@ describe("setLastPath", () => {
 		);
 	}
 
-	it("stores a valid module path", async () => {
+	it("stores a valid module path in personState, not on people", async () => {
+		const t = convexTest(schema, modules);
+		const id = await seedBoardId(t);
+		const before = await t.run((ctx) => ctx.db.get(id));
+		await asBoard(t).mutation(api.people.setLastPath, { path: "/tasks" });
+		expect(await storedPath(t, id)).toBe("/tasks");
+		expect(await t.run((ctx) => ctx.db.get(id))).toEqual(before);
+	});
+
+	it("updates the one personState row on a new path", async () => {
 		const t = convexTest(schema, modules);
 		const id = await seedBoardId(t);
 		await asBoard(t).mutation(api.people.setLastPath, { path: "/tasks" });
-		expect((await t.run((ctx) => ctx.db.get(id)))?.lastPath).toBe("/tasks");
+		await asBoard(t).mutation(api.people.setLastPath, {
+			path: "/community",
+		});
+		expect(await storedPath(t, id)).toBe("/community");
+		const rows = await t.run((ctx) =>
+			ctx.db.query("personState").collect()
+		);
+		expect(rows).toHaveLength(1);
+	});
+
+	it("skips the write when the path is unchanged", async () => {
+		const t = convexTest(schema, modules);
+		await seedBoardId(t);
+		await asBoard(t).mutation(api.people.setLastPath, { path: "/tasks" });
+		const [first] = await t.run((ctx) =>
+			ctx.db.query("personState").collect()
+		);
+		await asBoard(t).mutation(api.people.setLastPath, { path: "/tasks" });
+		const [second] = await t.run((ctx) =>
+			ctx.db.query("personState").collect()
+		);
+		expect(second).toEqual(first);
 	});
 
 	it("ignores a path that isn't a module route", async () => {
 		const t = convexTest(schema, modules);
 		const id = await seedBoardId(t);
 		await asBoard(t).mutation(api.people.setLastPath, { path: "/bogus" });
+		expect(await storedPath(t, id)).toBeNull();
+	});
+});
+
+describe("getLastPath", () => {
+	it("returns null with no stored path", async () => {
+		const t = convexTest(schema, modules);
+		await seedBoard(t);
+		expect(await asBoard(t).query(api.people.getLastPath, {})).toBeNull();
+	});
+
+	it("returns null for a caller with no person row", async () => {
+		const t = convexTest(schema, modules);
 		expect(
-			(await t.run((ctx) => ctx.db.get(id)))?.lastPath
-		).toBeUndefined();
+			await t
+				.withIdentity({ email: "nobody@example.com" })
+				.query(api.people.getLastPath, {})
+		).toBeNull();
+	});
+
+	it("returns the stored path", async () => {
+		const t = convexTest(schema, modules);
+		await seedBoard(t);
+		await asBoard(t).mutation(api.people.setLastPath, { path: "/tasks" });
+		expect(await asBoard(t).query(api.people.getLastPath, {})).toBe(
+			"/tasks"
+		);
 	});
 });
 
@@ -544,9 +681,7 @@ describe("setLastPath access", () => {
 				.withIdentity({ email: "gone@example.com" })
 				.mutation(api.people.setLastPath, { path: "/tasks" })
 		).rejects.toThrow(/Access expired or revoked/);
-		expect(
-			(await t.run((ctx) => ctx.db.get(id)))?.lastPath
-		).toBeUndefined();
+		expect(await storedPath(t, id)).toBeNull();
 	});
 
 	it("stores the path for an onboarding-stage guest", async () => {
@@ -564,7 +699,7 @@ describe("setLastPath access", () => {
 		await t
 			.withIdentity({ email: "gia@example.com" })
 			.mutation(api.people.setLastPath, { path: "/tasks" });
-		expect((await t.run((ctx) => ctx.db.get(id)))?.lastPath).toBe("/tasks");
+		expect(await storedPath(t, id)).toBe("/tasks");
 	});
 });
 
@@ -1026,6 +1161,7 @@ describe("the machine owns every member and guest write", () => {
 				tier: "member",
 				stage: "onboarding",
 				stageSince: Date.now(),
+				signedVariants: ["guest"],
 			});
 			await ctx.db.insert("signatures", {
 				personId,
@@ -1088,12 +1224,9 @@ describe("the machine owns every member and guest write", () => {
 
 	it("agrees with getAgreementUrl about whether there is a document to open", async () => {
 		// The roster decides whether the "view agreement" button is live; the
-		// click asks for the URL. They read the same signature through one
-		// helper, so they cannot disagree — and the case that would break a
-		// second implementation is here: a NEWER signature with no document at
-		// all, sitting on top of an older one that has a link. Picking "any
-		// signature with a file" would light the button up and then open
-		// nothing.
+		// click asks for the URL. recordSignature refuses a signature with
+		// neither a file nor a link, so "signed a variant" and "has a document
+		// to open" cannot disagree.
 		const t = convexTest(schema, modules);
 		const asBoard = await board(t);
 		const now = Date.now();
@@ -1105,14 +1238,7 @@ describe("the machine owns every member and guest write", () => {
 				tier: "member",
 				stage: "active",
 				stageSince: now,
-			});
-			const shadowed = await ctx.db.insert("people", {
-				email: "shadow@example.com",
-				firstName: "Sam",
-				lastName: "Shadow",
-				tier: "member",
-				stage: "active",
-				stageSince: now,
+				signedVariants: ["member"],
 			});
 			const base = {
 				variant: "member" as const,
@@ -1127,22 +1253,7 @@ describe("the machine owns every member and guest write", () => {
 				signedAt: now,
 				sourceUrl: "https://drive.example/agreement.pdf",
 			});
-			// Older one HAS a link…
-			await ctx.db.insert("signatures", {
-				...base,
-				personId: shadowed,
-				email: "shadow@example.com",
-				signedAt: now - 1000,
-				sourceUrl: "https://drive.example/old.pdf",
-			});
-			// …but the one that counts does not.
-			await ctx.db.insert("signatures", {
-				...base,
-				personId: shadowed,
-				email: "shadow@example.com",
-				signedAt: now,
-			});
-			return { withDoc, shadowed };
+			return { withDoc };
 		});
 
 		const rows = await asBoard.query(api.people.listMembers, {});
@@ -1150,17 +1261,11 @@ describe("the machine owns every member and guest write", () => {
 			return rows.find((r) => r._id === id);
 		}
 		expect(row(ids.withDoc)?.hasAgreement).toBe(true);
-		expect(row(ids.shadowed)?.hasAgreement).toBe(false);
 		expect(
 			await asBoard.query(api.people.getAgreementUrl, {
 				personId: ids.withDoc,
 			})
 		).toBe("https://drive.example/agreement.pdf");
-		expect(
-			await asBoard.query(api.people.getAgreementUrl, {
-				personId: ids.shadowed,
-			})
-		).toBeNull();
 	});
 
 	it("keeps expired guests in the Guests tab and former members in the Members tab", async () => {

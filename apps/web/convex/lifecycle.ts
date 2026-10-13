@@ -496,7 +496,7 @@ export const sweepExpiredWindows = internalMutation({
 	handler: async (ctx, { cursor }): Promise<{ expired: number }> => {
 		const page = await ctx.db
 			.query("people")
-			.withIndex("by_tier", (q) => q.eq("tier", "guest"))
+			.withIndex("by_tier_and_formerOf", (q) => q.eq("tier", "guest"))
 			.paginate({ numItems: SWEEP_BATCH, cursor: cursor ?? null });
 		let expired = 0;
 		for (const guest of page.page) {

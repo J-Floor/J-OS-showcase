@@ -95,6 +95,10 @@ async function seed(t: T) {
 			eventId: event,
 			confirmedAt: 1,
 		});
+		await ctx.db.insert("personState", {
+			personId: drop,
+			lastPath: "/drop",
+		});
 		await issueToken(ctx, {
 			token: "confirm",
 			purpose: "eventInvite",
@@ -198,6 +202,88 @@ describe("merge", () => {
 				droppedEmail: "drop@example.com",
 			});
 		});
+	});
+
+	it("recomputes the kept person's signedVariants from the moved signatures", async () => {
+		const t = convexTest(schema, modules);
+		const { keep, drop } = await t.run(async (ctx) => {
+			const keep = await ctx.db.insert("people", {
+				email: "keep2@example.com",
+				firstName: "K",
+				lastName: "Keep",
+				tier: "guest",
+				stage: "active",
+				stageSince: 1,
+				activatedAt: 1,
+			});
+			const drop = await ctx.db.insert("people", {
+				email: "drop2@example.com",
+				firstName: "K",
+				lastName: "Keep",
+				tier: "guest",
+				stage: "active",
+				stageSince: 1,
+				activatedAt: 1,
+				signedVariants: ["guest"],
+			});
+			await ctx.db.insert("signatures", {
+				personId: drop,
+				email: "drop2@example.com",
+				variant: "guest",
+				signedName: "K Keep",
+				agreementVersion: "t",
+				agreementHash: "",
+				signedAt: 1,
+				sourceUrl: "https://example.com/guest.pdf",
+			});
+			return { keep, drop };
+		});
+		await t.mutation(internal.merge.apply, {
+			keepId: keep,
+			dropId: drop,
+			patch: {},
+		});
+		const kept = await t.run((ctx) => ctx.db.get(keep));
+		expect(kept?.signedVariants).toEqual(["guest"]);
+	});
+
+	it("keeps both variants when the two people signed different ones", async () => {
+		const t = convexTest(schema, modules);
+		const { keep, drop } = await t.run(async (ctx) => {
+			const keep = await ctx.db.insert("people", {
+				...person("keep3@example.com", undefined, "member"),
+				signedVariants: ["member"],
+			});
+			const drop = await ctx.db.insert("people", {
+				...person("drop3@example.com", undefined, "member"),
+				signedVariants: ["guest"],
+			});
+			for (const [personId, email, variant] of [
+				[keep, "keep3@example.com", "member"],
+				[drop, "drop3@example.com", "guest"],
+			] as const)
+				await ctx.db.insert("signatures", {
+					personId,
+					email,
+					variant,
+					signedName: "P P",
+					agreementVersion: "t",
+					agreementHash: "",
+					signedAt: 1,
+					sourceUrl: `https://example.com/${variant}.pdf`,
+				});
+			return { keep, drop };
+		});
+		await t.mutation(internal.merge.apply, {
+			keepId: keep,
+			dropId: drop,
+			patch: {},
+		});
+		const kept = await t.run((ctx) => ctx.db.get(keep));
+		expect([...(kept?.signedVariants ?? [])].sort()).toEqual([
+			"guest",
+			"member",
+		]);
 	});
 
 	it("moves the dropped person's notification history to the kept person", async () => {
@@ -522,6 +608,27 @@ describe("merge side effects", () => {
 				.collect();
 			expect(attendance.map((a) => [a.personId, a.confirmedAt])).toEqual([
 				[keep, 2],
+			]);
+		});
+	});
+});
+
+describe("merge personState", () => {
+	it("keeps the kept person's row when both people had one", async () => {
+		const t = convexTest(schema, modules);
+		const { keep, drop } = await seed(t);
+		await t.run((ctx) =>
+			ctx.db.insert("personState", { personId: keep, lastPath: "/keep" })
+		);
+		await t.mutation(internal.merge.apply, {
+			keepId: keep,
+			dropId: drop,
+			patch: {},
+		});
+		await t.run(async (ctx) => {
+			const rows = await ctx.db.query("personState").collect();
+			expect(rows.map((r) => [r.personId, r.lastPath])).toEqual([
+				[keep, "/keep"],
 			]);
 		});
 	});

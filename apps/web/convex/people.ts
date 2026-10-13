@@ -51,6 +51,7 @@ import {
 	readBudget,
 	takeCharged,
 } from "./lib/peopleRefs.ts";
+import { personStateOf, setPersonLastPath } from "./lib/personState.ts";
 import { boardLevelView, selfView } from "./lib/personViews.ts";
 import {
 	ACCESS_TIERS,
@@ -228,12 +229,24 @@ export const addDirect = internalMutation({
 // Remember the last route the current user viewed, so `/` can redirect back to
 // it across devices. Needs an entitled access-tier person, and ignores
 // anything that isn't a real module path so only a navigable route is stored.
+// Written to `personState`, never `people`: a `people` write re-runs every
+// roster subscription.
 export const setLastPath = mutation({
 	args: { path: v.string() },
 	handler: async (ctx, { path }) => {
 		if (!isModulePath(path)) return;
 		const person = await requireRole(ctx, ACCESS_TIERS);
-		await ctx.db.patch(person._id, { lastPath: path });
+		await setPersonLastPath(ctx, person._id, path);
+	},
+});
+
+/** The caller's last-viewed module route, or null. Read by `/` only. */
+export const getLastPath = query({
+	args: {},
+	handler: async (ctx) => {
+		const person = await personForCurrentUser(ctx);
+		if (!person) return null;
+		return (await personStateOf(ctx, person._id))?.lastPath ?? null;
 	},
 });
 
@@ -738,10 +751,10 @@ export const setHost = mutation({
 
 /**
  * The signature `getAgreementUrl` would serve for this person: the most recent
- * one. Shared by the roster (which only needs to know whether there is one) and
- * by the URL query itself, so "the button is enabled" and "the click resolves
- * to a document" can never disagree — an older signature with a file behind a
- * newer one with neither must still read as nothing to show.
+ * one. The roster no longer reads signatures (it uses `signedVariants`), so
+ * "the button is enabled" and "the click resolves to a document" agree because
+ * `insertSignature` rejects rows with neither a `fileId` nor a `sourceUrl`, and
+ * this picks the latest signature.
  */
 function latestSignature<
 	S extends { signedAt: number; fileId?: unknown; sourceUrl?: string },
@@ -768,22 +781,21 @@ export type PersonRow = Doc<"people"> & {
  * the row grouping cannot tell three different stories. Resolves `door.byId` to
  * a name where there is one — only rows with an override pay for that read.
  *
- * `hasAgreement` rides along because it falls out of the signature read this
- * function already does. The alternative — every row mounting its own
- * `getAgreementUrl` subscription to decide whether to grey out one button —
- * cost one live query and one signed-URL round trip PER ROW, several hundred
- * of them on first paint. The URL itself is still fetched on click, by the one
- * row the board actually asked about.
+ * `hasAgreement` rides along because it comes from `signedVariants` on the
+ * person, so there is no per-row signature read. The alternative — every row
+ * mounting its own `getAgreementUrl` subscription to decide whether to grey
+ * out one button — cost one live query and one signed-URL round trip PER ROW,
+ * several hundred of them on first paint. The URL itself is still fetched on
+ * click, by the one row the board actually asked about.
  */
 /**
- * Read only the people in the given tiers, via the `by_tier` index, instead of
- * `collect()`-ing the entire table and filtering in memory.
+ * Read only the people in the given tiers, via the `by_tier_and_formerOf`
+ * index, instead of `collect()`-ing the entire table and filtering in memory.
  *
  * The roster lists below are LIVE subscriptions (kept warm at the shell), so they
- * re-run on every write to any `people` row. A full-table `collect()` per run —
- * reading every document in full, venture text and note thread included — was the
- * dominant DB-IO cost (≈1 GB/month). Reading just the relevant tiers cuts each
- * run to a fraction of the table.
+ * re-run when a row they read changes. Rosters read by tier, former people by
+ * `formerOf`, and never touch rows outside their tab, so a write to another
+ * tab's row does not re-run them.
  */
 export async function peopleByTiers(
 	ctx: QueryCtx,
@@ -793,7 +805,26 @@ export async function peopleByTiers(
 		tiers.map((tier) =>
 			ctx.db
 				.query("people")
-				.withIndex("by_tier", (q) => q.eq("tier", tier))
+				.withIndex("by_tier_and_formerOf", (q) => q.eq("tier", tier))
+				.collect()
+		)
+	);
+	return groups.flat();
+}
+
+/** Former people who held one of the given tiers. `undefined` reads former
+ *  rows with no `formerOf`. */
+async function formerPeople(
+	ctx: QueryCtx,
+	formerOf: readonly Doc<"people">["formerOf"][]
+): Promise<Doc<"people">[]> {
+	const groups = await Promise.all(
+		formerOf.map((of) =>
+			ctx.db
+				.query("people")
+				.withIndex("by_tier_and_formerOf", (q) =>
+					q.eq("tier", "former").eq("formerOf", of)
+				)
 				.collect()
 		)
 	);
@@ -807,10 +838,7 @@ export async function withStatus(
 	const now = Date.now();
 	return Promise.all(
 		rows.map(async (person) => {
-			const signatures = await ctx.db
-				.query("signatures")
-				.withIndex("by_person", (q) => q.eq("personId", person._id))
-				.collect();
+			const signedVariants = person.signedVariants ?? [];
 			const actorId = person.door?.byId;
 			const actor =
 				actorId === undefined ? null : await ctx.db.get(actorId);
@@ -818,11 +846,11 @@ export async function withStatus(
 				...person,
 				status: personStatus(
 					person,
-					signatures.map((s) => s.variant),
+					signedVariants,
 					now,
 					actor === null ? undefined : displayName(actor)
 				),
-				hasAgreement: latestSignature(signatures) !== undefined,
+				hasAgreement: signedVariants.length > 0,
 			};
 		})
 	);
@@ -837,9 +865,10 @@ export const listMembers = query({
 	args: {},
 	handler: async (ctx) => {
 		await requireRole(ctx, BOARD_LEVEL);
-		const rows = (
-			await peopleByTiers(ctx, [...ROLE_TIERS, "former"])
-		).filter((p) => p.tier !== "former" || p.formerOf !== "guest");
+		const rows = [
+			...(await peopleByTiers(ctx, ROLE_TIERS)),
+			...(await formerPeople(ctx, [...ROLE_TIERS, undefined])),
+		];
 		return withStatus(ctx, rows);
 	},
 });
@@ -872,11 +901,10 @@ export const listGuests = query({
 	args: {},
 	handler: async (ctx) => {
 		await requireRole(ctx, BOARD_LEVEL);
-		const rows = (await peopleByTiers(ctx, ["guest", "former"])).filter(
-			(p) =>
-				p.tier === "guest" ||
-				(p.tier === "former" && p.formerOf === "guest")
-		);
+		const rows = [
+			...(await peopleByTiers(ctx, ["guest"])),
+			...(await formerPeople(ctx, ["guest"])),
+		];
 		return withStatus(ctx, rows);
 	},
 });

@@ -3,8 +3,11 @@ import { MemoryRouter, Route, createMemoryHistory } from "@solidjs/router";
 import { cleanup, render, screen } from "@solidjs/testing-library";
 import { afterEach, expect, test, vi } from "vitest";
 
+const stored = vi.hoisted((): { lastPath: string | null } => ({
+	lastPath: "/tasks",
+}));
 vi.mock("convex-solidjs", () => ({
-	useQuery: () => ({ data: () => ({ lastPath: "/tasks" }) }),
+	useQuery: () => ({ data: () => stored.lastPath }),
 	useMutation: () => ({ mutateAsync: vi.fn() }),
 }));
 // routing/index imports these; the real lib/convex builds a ConvexClient from
@@ -16,9 +19,29 @@ vi.mock("../lib/convex.ts", () => ({
 }));
 vi.mock("../lib/auth.ts", () => ({ authClient: {} }));
 
+import { modules } from "../modules/registry.ts";
+
 import { LandingRedirect } from "./index.tsx";
 
-afterEach(cleanup);
+afterEach(() => {
+	cleanup();
+	stored.lastPath = "/tasks";
+});
+
+test("sends / to the first module when no path is stored", async () => {
+	stored.lastPath = null;
+	const first = modules[0].path;
+	const history = createMemoryHistory();
+	history.set({ value: "/", replace: true });
+	render(() => (
+		<MemoryRouter history={history}>
+			<Route path="/" component={LandingRedirect} />
+			<Route path={first} component={() => <p>first page</p>} />
+		</MemoryRouter>
+	));
+	expect(await screen.findByText("first page")).toBeInTheDocument();
+	expect(history.get()).toBe(first);
+});
 
 test("keeps the query string (e.g. ?notifications=open) when sending / to the last page", async () => {
 	const history = createMemoryHistory();

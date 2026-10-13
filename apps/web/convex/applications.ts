@@ -97,16 +97,18 @@ export const list = query({
 	args: {},
 	handler: async (ctx) => {
 		await requireRole(ctx, BOARD_LEVEL);
+		// Verified only, by index: an unverified sign-up lies outside the
+		// range, so its insert does not re-run this query for every board
+		// session.
 		const prospects = await ctx.db
 			.query("people")
-			.withIndex("by_tier", (q) => q.eq("tier", "prospect"))
+			.withIndex("by_tier_and_verifiedAt", (q) =>
+				q.eq("tier", "prospect").gte("verifiedAt", 0)
+			)
 			.collect();
 		// Same shape as the Members and Guests rosters: all three tabs read one
 		// table now, so they get one row type and share one detail drawer.
-		return withStatus(
-			ctx,
-			prospects.filter((p) => p.verifiedAt != null)
-		);
+		return withStatus(ctx, prospects);
 	},
 });
 

@@ -10,6 +10,7 @@ import { agreementVariantFor, entitled } from "./lib/derive.ts";
 import { personByEmail } from "./lib/emailAddress.ts";
 import { displayName } from "./lib/names.ts";
 import { BOARD_LEVEL } from "./lib/roles.ts";
+import { insertSignature } from "./lib/signatures.ts";
 import { markStepComplete } from "./onboarding.ts";
 
 /**
@@ -131,7 +132,7 @@ export const recordSignature = internalMutation({
 				await ctx.db.delete(s._id);
 			}
 		}
-		await ctx.db.insert("signatures", {
+		await insertSignature(ctx, {
 			personId: args.personId,
 			email: args.email,
 			variant: args.variant,

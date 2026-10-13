@@ -5,6 +5,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, type MutationCtx } from "./_generated/server";
 import { devAdminEmail } from "./lib/devAdmin.ts";
 import { normalizeEmail, personByEmail } from "./lib/emailAddress.ts";
+import { insertSignature } from "./lib/signatures.ts";
 import type { vertical } from "./schema.ts";
 
 const INVENTORY_TABLES = ["items", "itemTypes", "itemCategories"] as const;
@@ -262,16 +263,19 @@ async function seedHistory(
 		await ctx.db.insert("personEvents", { personId, ...row });
 }
 
+const WIPED_TABLES = [
+	"signatures",
+	"personEvents",
+	"purgeLog",
+	"personState",
+	"people",
+] as const;
+
 export const clearAll = internalMutation({
 	args: {},
 	handler: async (ctx) => {
 		await wipeInventory(ctx);
-		for (const table of [
-			"signatures",
-			"personEvents",
-			"purgeLog",
-			"people",
-		] as const) {
+		for (const table of WIPED_TABLES) {
 			for (const row of await ctx.db.query(table).collect())
 				await ctx.db.delete(row._id);
 		}
@@ -290,12 +294,7 @@ export const run = internalMutation({
 	handler: async (ctx, args) => {
 		// idempotent reseed
 		await wipeInventory(ctx);
-		for (const table of [
-			"signatures",
-			"personEvents",
-			"purgeLog",
-			"people",
-		] as const) {
+		for (const table of WIPED_TABLES) {
 			for (const row of await ctx.db.query(table).collect())
 				await ctx.db.delete(row._id);
 		}
@@ -673,7 +672,7 @@ export const run = internalMutation({
 						? "member"
 						: null;
 			if (e.signed && variant !== null) {
-				await ctx.db.insert("signatures", {
+				await insertSignature(ctx, {
 					personId,
 					email: normalizeEmail(e.email),
 					variant,

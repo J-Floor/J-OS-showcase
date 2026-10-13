@@ -28,7 +28,6 @@ const SELF_FIELDS = [
 	"venture",
 	"hostedById",
 	"hostedBy",
-	"lastPath",
 	"onboarding",
 	"doorsIntroSeenAt",
 	"submittedAt",

@@ -20,6 +20,49 @@ function setup() {
 }
 
 describe("purgeUnverified", () => {
+	it("deletes the purged prospect's personState row and leaves others", async () => {
+		const t = convexTest(schema, modules);
+		const [goneId, stayId] = await t.run(async (ctx) => {
+			const gone = await ctx.db.insert("people", {
+				email: "stale2@example.com",
+				firstName: "Stale",
+				lastName: "Two",
+				tier: "prospect",
+				stage: "unverified",
+				stageSince: Date.now(),
+			});
+			await issueToken(ctx, {
+				token: "stale2",
+				purpose: "application",
+				personId: gone,
+				ttlMs: -DAY,
+			});
+			const stay = await ctx.db.insert("people", {
+				email: "stay2@example.com",
+				firstName: "Stay",
+				lastName: "Two",
+				tier: "member",
+				stage: "active",
+				stageSince: Date.now(),
+			});
+			await ctx.db.insert("personState", {
+				personId: gone,
+				lastPath: "/tasks",
+			});
+			await ctx.db.insert("personState", {
+				personId: stay,
+				lastPath: "/community",
+			});
+			return [gone, stay];
+		});
+		await t.mutation(internal.purge.purgeUnverified, {});
+		expect(await t.run((ctx) => ctx.db.get(goneId))).toBeNull();
+		const rows = await t.run((ctx) =>
+			ctx.db.query("personState").collect()
+		);
+		expect(rows.map((r) => r.personId)).toEqual([stayId]);
+	});
+
 	it("deletes an unverified prospect whose token expired, with its audit rows, and logs the count", async () => {
 		const t = convexTest(schema, modules);
 		const id = await t.run(async (ctx) => {
@@ -320,6 +363,45 @@ describe("purgeEmail", () => {
 			ctx.db.query("confirmTokens").collect()
 		);
 		expect(tokens).toHaveLength(0);
+	});
+
+	it("deletes the person's personState row and leaves others", async () => {
+		const t = setup();
+		await t.run(async (ctx) => {
+			const goneId = await ctx.db.insert("people", {
+				email: "gone@example.com",
+				firstName: "Gone",
+				lastName: "Person",
+				tier: "member",
+				stage: "active",
+				stageSince: Date.now(),
+			});
+			const stayId = await ctx.db.insert("people", {
+				email: "stay@example.com",
+				firstName: "Stay",
+				lastName: "Person",
+				tier: "member",
+				stage: "active",
+				stageSince: Date.now(),
+			});
+			await ctx.db.insert("personState", {
+				personId: goneId,
+				lastPath: "/tasks",
+			});
+			await ctx.db.insert("personState", {
+				personId: stayId,
+				lastPath: "/community",
+			});
+		});
+
+		await t.mutation(internal.purge.purgeEmail, {
+			email: "gone@example.com",
+		});
+
+		const rows = await t.run((ctx) =>
+			ctx.db.query("personState").collect()
+		);
+		expect(rows.map((r) => r.lastPath)).toEqual(["/community"]);
 	});
 
 	it("keeps an email change the purged person requested but drops their actorId", async () => {

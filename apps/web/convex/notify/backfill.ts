@@ -56,7 +56,7 @@ export const scheduleExisting = internalMutation({
 		} else {
 			const page = await ctx.db
 				.query("people")
-				.withIndex("by_tier", (q) => q.eq("tier", "guest"))
+				.withIndex("by_tier_and_formerOf", (q) => q.eq("tier", "guest"))
 				.paginate({ numItems: BACKFILL_BATCH, cursor });
 			for (const guest of page.page) {
 				if (!isLiveStage(guest.stage)) continue;

@@ -19,6 +19,7 @@ describe("peopleRefTables", () => {
 				"notifications",
 				"people",
 				"personEvents",
+				"personState",
 				"projects",
 				"pushSubscriptions",
 				"signatures",
@@ -41,6 +42,7 @@ describe("peopleRefPlans", () => {
 				"eventAttendance",
 				"doorLog",
 				"notifications",
+				"personState",
 				"pushSubscriptions",
 				"signatures",
 			].sort()

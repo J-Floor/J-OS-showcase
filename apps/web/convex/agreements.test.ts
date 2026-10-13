@@ -483,6 +483,79 @@ describe("legacy (drive-url) agreements do not block in-app signing", () => {
 		expect(guest).toHaveLength(1);
 		expect(guest[0].sourceUrl).toBeDefined();
 	});
+
+	it("keeps the signed variant on the person exactly once over a legacy row", async () => {
+		const t = convexTest(schema, modules);
+		const fileId = await t.run((ctx) => ctx.storage.store(new Blob(["x"])));
+		const personId = await t.run((ctx) =>
+			ctx.db.insert("people", {
+				email: "sv@example.com",
+				firstName: "Sv",
+				lastName: "",
+				tier: "guest",
+				stage: "onboarding",
+				stageSince: Date.now(),
+				signedVariants: ["guest"],
+			})
+		);
+		// The legacy row the real data has: a drive link, no stored file.
+		await t.run((ctx) =>
+			ctx.db.insert("signatures", {
+				personId,
+				email: "sv@example.com",
+				variant: "guest",
+				signedName: "Sv",
+				agreementVersion: "legacy",
+				agreementHash: "",
+				signedAt: 1,
+				sourceUrl: "https://example.com/legacy.pdf",
+			})
+		);
+		await t.mutation(internal.agreementsInternal.recordSignature, {
+			personId,
+			email: "sv@example.com",
+			variant: "guest",
+			signedName: "Sv",
+			agreementVersion: "1",
+			agreementHash: "h",
+			signedAt: Date.now(),
+			fileId,
+		});
+		expect(
+			(await t.run((ctx) => ctx.db.get(personId)))?.signedVariants
+		).toEqual(["guest"]);
+	});
+
+	it("sets signedVariants on a person who had none when they sign", async () => {
+		const t = convexTest(schema, modules);
+		const fileId = await t.run((ctx) => ctx.storage.store(new Blob(["x"])));
+		const personId = await t.run((ctx) =>
+			ctx.db.insert("people", {
+				email: "fresh@example.com",
+				firstName: "Fresh",
+				lastName: "",
+				tier: "guest",
+				stage: "onboarding",
+				stageSince: Date.now(),
+			})
+		);
+		expect(
+			(await t.run((ctx) => ctx.db.get(personId)))?.signedVariants
+		).toBeUndefined();
+		await t.mutation(internal.agreementsInternal.recordSignature, {
+			personId,
+			email: "fresh@example.com",
+			variant: "guest",
+			signedName: "Fresh",
+			agreementVersion: "1",
+			agreementHash: "h",
+			signedAt: Date.now(),
+			fileId,
+		});
+		expect(
+			(await t.run((ctx) => ctx.db.get(personId)))?.signedVariants
+		).toEqual(["guest"]);
+	});
 });
 
 describe("board signatures", () => {

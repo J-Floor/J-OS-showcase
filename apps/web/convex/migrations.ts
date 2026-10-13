@@ -14,6 +14,8 @@ import {
 	onboardingWithoutStep,
 	stateOf,
 } from "./lib/lifecycle.ts";
+import { personStateOf } from "./lib/personState.ts";
+import { syncSignedVariants } from "./lib/signatures.ts";
 
 /**
  * One-off data fixes, run via `bunx convex run migrations:<name>` (CLI/dashboard
@@ -249,5 +251,51 @@ export const repairGuestWithoutAgreement = internalMutation({
 			to: "guest.onboarding",
 		});
 		return null;
+	},
+});
+
+/**
+ * Move every `people.lastPath` into `personState`, then unset it on `people`.
+ * A person who already has a `personState` row keeps it: it is newer, written
+ * by `setLastPath` after deploy. Re-runnable: a moved person no longer carries
+ * `lastPath`.
+ */
+export const moveLastPath = internalMutation({
+	args: { dryRun: v.optional(v.boolean()) },
+	handler: async (ctx, { dryRun }) => {
+		let moved = 0;
+		// Prod is ~410 people, well inside one transaction, so the unbounded
+		// collect rule is consciously waived for this one-off.
+		for (const p of await ctx.db.query("people").collect()) {
+			if (p.lastPath === undefined) continue;
+			if (dryRun) {
+				moved++;
+				continue;
+			}
+			if (!(await personStateOf(ctx, p._id)))
+				await ctx.db.insert("personState", {
+					personId: p._id,
+					lastPath: p.lastPath,
+				});
+			await ctx.db.patch(p._id, { lastPath: undefined });
+			moved++;
+		}
+		return { moved };
+	},
+});
+
+/**
+ * Set each person's `signedVariants` from their signatures. Writes only when
+ * the stored set differs, so a re-run is a no-op.
+ */
+export const backfillSignedVariants = internalMutation({
+	args: { dryRun: v.optional(v.boolean()) },
+	handler: async (ctx, { dryRun }) => {
+		let patched = 0;
+		// Prod is ~410 people, well inside one transaction, so the unbounded
+		// collect rule is consciously waived for this one-off.
+		for (const p of await ctx.db.query("people").collect())
+			if (await syncSignedVariants(ctx, p, { dryRun })) patched++;
+		return { patched };
 	},
 });

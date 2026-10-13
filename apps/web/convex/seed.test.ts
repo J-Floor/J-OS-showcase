@@ -16,7 +16,7 @@ describe("seed.run", () => {
 		const board = await t.run((ctx) =>
 			ctx.db
 				.query("people")
-				.withIndex("by_tier", (q) => q.eq("tier", "board"))
+				.withIndex("by_tier_and_formerOf", (q) => q.eq("tier", "board"))
 				.collect()
 		);
 		// 4 fixed board fixtures; no `boardEmail` arg here.
