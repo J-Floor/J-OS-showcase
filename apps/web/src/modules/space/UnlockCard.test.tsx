@@ -375,7 +375,7 @@ test("off the building network Lock never calls lockDoor", async () => {
 	expect(lockAsync).not.toHaveBeenCalled();
 });
 
-test("a downstairs unlock counts down 'Open — push now' only once the door reacts, then the button returns", async () => {
+test("a downstairs unlock counts down 'Open — pull now' only once the door reacts, then the button returns", async () => {
 	vi.useFakeTimers({ shouldAdvanceTime: true });
 	try {
 		setAttempt(UNLOCK_ATTEMPT, attemptRow("accepted", 3000));
@@ -386,17 +386,17 @@ test("a downstairs unlock counts down 'Open — push now' only once the door rea
 		expect(await screen.findByText("Waking the door…")).toBeInTheDocument();
 		await vi.advanceTimersByTimeAsync(10_000);
 		expect(screen.getByText("Waking the door…")).toBeInTheDocument();
-		expect(screen.queryByText(/Open — push now/)).not.toBeInTheDocument();
+		expect(screen.queryByText(/Open — pull now/)).not.toBeInTheDocument();
 		setAttempt(UNLOCK_ATTEMPT, attemptRow("actuated", 3000));
 		expect(
-			await screen.findByText("Open — push now (3s)")
+			await screen.findByText("Open — pull now (3s)")
 		).toBeInTheDocument();
 		expect(
 			screen.queryByRole("button", { name: "Unlock Downstairs" })
 		).not.toBeInTheDocument();
 		vi.advanceTimersByTime(1000);
 		expect(
-			await screen.findByText("Open — push now (2s)")
+			await screen.findByText("Open — pull now (2s)")
 		).toBeInTheDocument();
 		vi.advanceTimersByTime(2000);
 		await waitFor(() => {
@@ -404,7 +404,7 @@ test("a downstairs unlock counts down 'Open — push now' only once the door rea
 				screen.getByRole("button", { name: "Unlock Downstairs" })
 			).toBeInTheDocument();
 		});
-		expect(screen.queryByText(/Open — push now/)).not.toBeInTheDocument();
+		expect(screen.queryByText(/Open — pull now/)).not.toBeInTheDocument();
 	} finally {
 		vi.useRealTimers();
 	}
@@ -1427,7 +1427,7 @@ test("the countdown runs on the phone's clock: a server actuatedAt a minute off 
 	});
 	renderCard();
 	fireEvent.click(screen.getByRole("button", { name: "Unlock Downstairs" }));
-	expect(await screen.findByText("Open — push now (3s)")).toBeInTheDocument();
+	expect(await screen.findByText("Open — pull now (3s)")).toBeInTheDocument();
 });
 
 test("a door that never responds says so as a warning, and the button returns after 5s", async () => {
@@ -1519,7 +1519,7 @@ test("a second tap follows its own attempt, never the last one's outcome", async
 			screen.getByRole("button", { name: "Unlock Downstairs" })
 		);
 		expect(
-			await screen.findByText("Open — push now (3s)")
+			await screen.findByText("Open — pull now (3s)")
 		).toBeInTheDocument();
 		await vi.advanceTimersByTimeAsync(3000);
 		mutateAsync.mockResolvedValue({

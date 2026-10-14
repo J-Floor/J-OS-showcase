@@ -43,7 +43,7 @@ export function offsiteText(action: DoorAction): string {
 }
 
 export function openText(remainingMs: number): string {
-	return `Open — push now (${Math.max(1, Math.ceil(remainingMs / MS_PER_SECOND))}s)`;
+	return `Open — pull now (${Math.max(1, Math.ceil(remainingMs / MS_PER_SECOND))}s)`;
 }
 
 export function noResponseText(label: string): string {

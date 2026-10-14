@@ -36,10 +36,9 @@ first command only.
 pushing, or CI's format job commits on your branch — which carries a skip marker
 and suppresses checks on the new head.
 
-**A bad SCSS import specifier is invisible until `bun run build`.** The design
-system exports `@j-os/design-system/typography`; `.../styles/typography` does
-not resolve. Stylelint passes on the broken one and vitest never compiles CSS,
-so only the build catches it. Run `bun run build` when you touch SCSS.
+**Only a build compiles SCSS** (stylelint and vitest don't). The Checks
+workflow runs the web, landing and playground builds on every PR; run
+`bun run build` locally to reproduce a failure there.
 
 ## Tests
 

@@ -110,11 +110,14 @@ jobs:
             git push origin HEAD:${{ github.ref_name }}
           fi
 
-      # One turbo run so Stylelint, tsc and the generated-file checks execute
-      # concurrently. ESLint runs in its own job.
-      - name: Stylelint, typecheck and generated-file checks
+      # One turbo run so Stylelint, tsc, the generated-file checks and the
+      # deploy builds (web, landing, design playground) execute concurrently.
+      # The builds run here because Deploy only runs after merge: a broken
+      # build would otherwise pass its PR and turn main red. ESLint runs in
+      # its own job.
+      - name: Stylelint, typecheck, generated-file checks, builds
         if: steps.scope.outputs.docs-only != 'true'
-        run: bunx --bun turbo run lint:style:ci typecheck email:check agreements:check icons:check${{ github.event_name == 'pull_request' && ' --affected' || '' }} --continue
+        run: bunx --bun turbo run lint:style:ci typecheck email:check agreements:check icons:check build build:demo${{ github.event_name == 'pull_request' && ' --affected' || '' }} --continue
 
   # Separate job: on 2-vCPU runners type-aware ESLint and tsc contend for CPU
   # when run together, so each gets its own runner.
