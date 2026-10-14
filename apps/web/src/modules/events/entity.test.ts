@@ -4,7 +4,7 @@ import { expect, it, vi } from "vitest";
 import { api } from "../../../convex/_generated/api";
 import type { Doc } from "../../../convex/_generated/dataModel";
 
-const prefetch = vi.fn<(...a: unknown[]) => void>();
+const prefetch = vi.fn<(...args: unknown[]) => void>();
 vi.mock("../../shared/data/queryKeeper.ts", async (orig) => ({
 	...(await orig<typeof import("../../shared/data/queryKeeper.ts")>()),
 	prefetchSpec: (
@@ -21,7 +21,10 @@ const row = { _id: "e1" } as unknown as Doc<"events">;
 
 it("prefetches the attendee list for a manager", () => {
 	prefetch.mockClear();
-	eventsEntity.prefetch?.(row, (a, s) => a === "manage" && s === "Events");
+	eventsEntity.prefetch?.(
+		row,
+		(action, subject) => action === "manage" && subject === "Events"
+	);
 	expect(prefetch).toHaveBeenCalledWith(api.events.listEventAttendees, {
 		eventId: "e1",
 	});
@@ -29,6 +32,6 @@ it("prefetches the attendee list for a manager", () => {
 
 it("prefetches nothing for a viewer who cannot manage events", () => {
 	prefetch.mockClear();
-	eventsEntity.prefetch?.(row, (a) => a === "view");
+	eventsEntity.prefetch?.(row, (action) => action === "view");
 	expect(prefetch).not.toHaveBeenCalled();
 });

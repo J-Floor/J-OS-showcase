@@ -31,6 +31,16 @@ export type SignaturePadProps = Omit<
 	class?: string;
 };
 
+// The Clear button lives INSIDE ark's `control` element, which owns the native
+// pointerdown/up listeners that drive drawing. Without stopping propagation,
+// a click on Clear bubbles to the control and registers as a fresh stroke
+// (a dot) — so `clear()` runs but the pointer interaction immediately re-arms
+// the pad. `on:pointer*` attaches DIRECT (non-delegated) native listeners so
+// they fire at the button, before the control's listener, and stop the bubble.
+function stop(event: PointerEvent): void {
+	event.stopPropagation();
+}
+
 /**
  * Clear button that is always visible (ark hides `ClearTrigger` when the pad
  * is empty; using the raw context lets us control visibility ourselves so the
@@ -41,15 +51,6 @@ function ClearButton(props: { onClear: () => void }): JSX.Element {
 	function handleClick(): void {
 		api().clear();
 		props.onClear();
-	}
-	// The button lives INSIDE ark's `control` element, which owns the native
-	// pointerdown/up listeners that drive drawing. Without stopping propagation,
-	// a click on Clear bubbles to the control and registers as a fresh stroke
-	// (a dot) — so `clear()` runs but the pointer interaction immediately re-arms
-	// the pad. `on:pointer*` attaches DIRECT (non-delegated) native listeners so
-	// they fire at the button, before the control's listener, and stop the bubble.
-	function stop(event: PointerEvent): void {
-		event.stopPropagation();
 	}
 	return (
 		<button

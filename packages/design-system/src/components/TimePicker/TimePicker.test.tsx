@@ -3,9 +3,11 @@ import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
 import { TimePicker } from "./TimePicker.tsx";
 
 function segment(container: HTMLElement, type: "hour" | "minute"): HTMLElement {
-	const el = container.querySelector<HTMLElement>(`[data-type="${type}"]`);
-	if (!el) throw new Error(`segment "${type}" not found`);
-	return el;
+	const element = container.querySelector<HTMLElement>(
+		`[data-type="${type}"]`
+	);
+	if (!element) throw new Error(`segment "${type}" not found`);
+	return element;
 }
 
 /**
@@ -14,9 +16,12 @@ function segment(container: HTMLElement, type: "hour" | "minute"): HTMLElement {
  * synthetic focus event without moving `document.activeElement`) — the
  * date-input machine resolves the active segment off real DOM focus.
  */
-function adjust(el: HTMLElement, key: "ArrowUp" | "ArrowDown" = "ArrowUp") {
-	el.focus();
-	fireEvent.keyDown(el, { key });
+function adjust(
+	element: HTMLElement,
+	key: "ArrowUp" | "ArrowDown" = "ArrowUp"
+) {
+	element.focus();
+	fireEvent.keyDown(element, { key });
 }
 
 test("renders exactly the hour and minute editable segments", () => {
@@ -46,7 +51,7 @@ test("a controlled value renders the matching segment values", () => {
 test("building a time by adjusting both segments fires onValueChange with an HH:MM string", async () => {
 	let value: string | null | undefined;
 	const { container } = render(() => (
-		<TimePicker label="Start" onValueChange={(v) => (value = v)} />
+		<TimePicker label="Start" onValueChange={(next) => (value = next)} />
 	));
 
 	// Neither segment has a value yet — adjusting one alone must not commit.
@@ -71,7 +76,7 @@ test("clearing every segment fires onValueChange with null", async () => {
 		<TimePicker
 			label="Start"
 			value="09:30"
-			onValueChange={(v) => (value = v)}
+			onValueChange={(next) => (value = next)}
 		/>
 	));
 

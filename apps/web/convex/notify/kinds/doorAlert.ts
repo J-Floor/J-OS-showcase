@@ -23,7 +23,7 @@ export const doorAlert = defineKind({
 		consequence: v.string(),
 		tag: v.string(),
 	}),
-	audience: (ctx) => boardIds(ctx),
+	audience: (context) => boardIds(context),
 	push: ({ headline, consequence, tag }) => ({
 		title: headline,
 		body: consequence,

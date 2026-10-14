@@ -2,20 +2,22 @@ import {
 	Accordion,
 	Button,
 	Drawer,
-	DrawerNav,
 	Icon,
-	IconButton,
 	Input,
 	PropertyRow,
-	Select,
-	TextArea,
 } from "@j-os/design-system";
-import { For, Show, createSignal, type JSX } from "solid-js";
+import { Show, createSignal, type Accessor, type JSX } from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { parseAssetTag } from "../../../../convex/lib/assetTag.ts";
 import { createSyncedField } from "../../../lib/createSyncedField.ts";
+import { DescriptionField } from "../../../shared/components/DescriptionField.tsx";
 import { useConfirm } from "../../../shared/confirm.tsx";
+import { EntityCreateFooter } from "../../../shared/entity/EntityCreateFooter.tsx";
+import {
+	EntityDrawerHeader,
+	type DrawerNavState,
+} from "../../../shared/entity/EntityDrawerHeader.tsx";
 import { EntityQrBlock } from "../../../shared/entity/EntityQr.tsx";
 import { ICONS } from "../../../shared/icons.ts";
 import type { Item, ItemType } from "../data/inventoryData.ts";
@@ -25,6 +27,7 @@ import { itemEntity } from "../entity.ts";
 import { detailsFromItem } from "./copyFromItem.ts";
 import { CopyFromItemDialog } from "./CopyFromItemDialog.tsx";
 import styles from "./InventoryDrawer.module.scss";
+import { FormErrorLine, OptionSelect, runAttempt } from "./InventoryForm.tsx";
 
 /**
  * Placeholder field layout passed to `Drawer.Body`'s `skeleton` while
@@ -48,9 +51,9 @@ function ItemFieldsPlaceholder() {
 	);
 }
 
-export function ItemDrawer(props: {
+type ItemDrawerProps = {
 	open: boolean;
-	onOpenChange: (open: boolean) => void;
+	onOpenChange: (isOpen: boolean) => void;
 	item?: Item;
 	itemTypes: ItemType[];
 	items?: Item[];
@@ -59,41 +62,17 @@ export function ItemDrawer(props: {
 	 *  data hasn't loaded yet — distinct from create, where there is no id at
 	 *  all. Wins over `item` (which is undefined in both states). */
 	loading?: boolean;
-	nav?: {
-		hasPrev: () => boolean;
-		hasNext: () => boolean;
-		onPrev: () => void;
-		onNext: () => void;
-	};
-}): JSX.Element {
-	const actions = useItemActions();
-	const confirm = useConfirm();
-	const [copyOpen, setCopyOpen] = createSignal(false);
-	const [formError, setFormError] = createSignal<string>();
-	// Controlled + onValueChange so the section actually collapses (matches
-	// community's PersonDetail). A bare `value` with no setter pins it open.
-	const [openSections, setOpenSections] = createSignal(["qr"]);
+	nav?: DrawerNavState;
+};
 
-	function isEdit() {
-		return props.item !== undefined;
-	}
-
-	let tagEl: HTMLInputElement | undefined;
-
+/** The item's three fields, each saved as it is typed (the asset tag is
+ *  create-only). */
+function createItemFields(
+	props: ItemDrawerProps,
+	patch: (change: Record<string, unknown>) => Promise<void>
+) {
 	function key() {
 		return `${String(props.open)}:${props.item?._id ?? "new"}:${props.initialAssetTag ?? ""}`;
-	}
-
-	async function patch(p: Record<string, unknown>) {
-		if (!props.item) return;
-		try {
-			await actions.update({ id: props.item._id, ...p });
-			setFormError(undefined);
-		} catch (err) {
-			setFormError(
-				err instanceof Error ? err.message : "Could not save."
-			);
-		}
 	}
 
 	const assetTag = createSyncedField({
@@ -108,246 +87,318 @@ export function ItemDrawer(props: {
 	const typeId = createSyncedField<Id<"itemTypes"> | undefined>({
 		remote: () => props.item?.typeId,
 		key,
-		write: (v) => {
-			if (v) void patch({ typeId: v });
+		write: (value) => {
+			if (value) void patch({ typeId: value });
 		},
 		debounceMs: 0,
 	});
 	const description = createSyncedField({
 		remote: () => props.item?.description ?? "",
 		key,
-		write: (v) => {
-			void patch({ description: v.trim() === "" ? null : v });
+		write: (value) => {
+			void patch({ description: value.trim() === "" ? null : value });
 		},
 	});
+	return { assetTag, typeId, description };
+}
 
-	function typeOptions() {
-		return props.itemTypes.map((t) => ({
-			value: t._id,
-			title: `${t.name} · ${t.categoryName}`,
-		}));
+function isAssetTagValid(tag: string): boolean {
+	try {
+		parseAssetTag(tag);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/** The item's fields and the actions that create and delete it. */
+function createItemForm(props: ItemDrawerProps) {
+	const actions = useItemActions();
+	const confirm = useConfirm();
+	const [formError, setFormError] = createSignal<string>();
+
+	async function patch(change: Record<string, unknown>) {
+		const item = props.item;
+		if (!item) return;
+		await runAttempt(setFormError, "Could not save.", () =>
+			actions.update({ id: item._id, ...change })
+		);
 	}
 
-	function selectedType(): string[] {
-		const id = typeId.value();
-		return id === undefined ? [] : [id];
-	}
+	const fields = createItemFields(props, patch);
 
 	function tagLooksValid() {
-		try {
-			parseAssetTag(assetTag.value());
-			return true;
-		} catch {
-			return false;
-		}
+		return isAssetTagValid(fields.assetTag.value());
 	}
 
-	async function createItem() {
-		const selected = typeId.value();
-		if (!tagLooksValid() || selected === undefined) return;
-		try {
-			await actions.create({
-				typeId: selected,
-				assetTag: assetTag.value(),
-				description: description.value().trim() || undefined,
+	return {
+		...fields,
+		formError,
+		setFormError,
+		tagLooksValid,
+		/** Fills the type and description from another item. */
+		copyFrom: (source: Item): void => {
+			const details = detailsFromItem(source);
+			fields.typeId.set(details.typeId);
+			fields.description.set(details.description);
+		},
+		async createItem() {
+			const selected = fields.typeId.value();
+			if (!tagLooksValid() || selected === undefined) return;
+			const isCreated = await runAttempt(
+				setFormError,
+				"Could not create.",
+				() =>
+					actions.create({
+						typeId: selected,
+						assetTag: fields.assetTag.value(),
+						description:
+							fields.description.value().trim() || undefined,
+					})
+			);
+			if (isCreated) props.onOpenChange(false);
+		},
+		async deleteItem() {
+			if (!props.item) return;
+			const isOk = await confirm({
+				title: "Delete this item?",
+				message: "This can't be undone.",
+				confirmLabel: "Delete",
+				tone: "danger",
 			});
-			setFormError(undefined);
-			props.onOpenChange(false);
-		} catch (err) {
-			setFormError(
-				err instanceof Error ? err.message : "Could not create."
+			if (!isOk) return;
+			const item = props.item;
+			const isDeleted = await runAttempt(
+				setFormError,
+				"Could not delete.",
+				() => actions.remove(item._id)
 			);
-		}
+			if (isDeleted) props.onOpenChange(false);
+		},
+	};
+}
+
+type ItemForm = ReturnType<typeof createItemForm>;
+
+/** Opens the copy-from-item dialog; disabled while there is nothing to copy. */
+function CopyFromItemButton(props: {
+	hasNoItems: boolean;
+	onCopy: () => void;
+}) {
+	return (
+		<Button
+			variant="tertiary"
+			disabled={props.hasNoItems}
+			disabledReason="No items to copy from yet"
+			onClick={() => {
+				props.onCopy();
+			}}
+		>
+			<Icon>{ICONS.copy}</Icon>
+			Copy from item
+		</Button>
+	);
+}
+
+/** The asset tag: an input while creating, read-only text for an existing
+ *  item (its tag is its slug). */
+function AssetTagField(props: {
+	item?: Item;
+	assetTag: ItemForm["assetTag"];
+	hasError: boolean;
+	onElement: (element: HTMLInputElement) => void;
+}) {
+	return (
+		<Show
+			when={props.item === undefined}
+			fallback={
+				<PropertyRow icon={ICONS.assetTag} label="Asset tag">
+					<span>{props.item!.assetTag}</span>
+				</PropertyRow>
+			}
+		>
+			<Input
+				label="Asset tag"
+				required
+				helperText="One letter and five digits, e.g. A00000"
+				ref={(element: HTMLInputElement) => {
+					props.onElement(element);
+				}}
+				value={props.assetTag.value()}
+				onInput={(event) => {
+					props.assetTag.set(event.currentTarget.value);
+				}}
+				onBlur={props.assetTag.flush}
+				invalid={props.hasError}
+			/>
+		</Show>
+	);
+}
+
+/** The create button, enabled once there is a valid asset tag and a type. */
+function CreateFooter(props: { form: ItemForm }) {
+	return (
+		<EntityCreateFooter
+			label="Create item"
+			disabledReason="Add a valid asset tag and type first"
+			canCreate={
+				props.form.tagLooksValid() &&
+				props.form.typeId.value() !== undefined
+			}
+			onCreate={() => {
+				void props.form.createItem();
+			}}
+		/>
+	);
+}
+
+/** The item type picker, labelled "name · category". */
+function ItemTypeSelect(props: {
+	itemTypes: ItemType[];
+	typeId: ItemForm["typeId"];
+}) {
+	return (
+		<OptionSelect
+			icon={ICONS.itemType}
+			label="Type"
+			placeholder="Choose a type"
+			options={props.itemTypes.map((itemType) => ({
+				value: itemType._id,
+				title: `${itemType.name} · ${itemType.categoryName}`,
+			}))}
+			field={props.typeId}
+		/>
+	);
+}
+
+/** The item's QR code and link, collapsible. */
+function ItemQrSection(props: {
+	item: Accessor<Item>;
+	openSections: Accessor<string[]>;
+	onOpenSectionsChange: (sections: string[]) => void;
+}) {
+	return (
+		<Accordion.Root
+			multiple
+			value={props.openSections()}
+			onValueChange={(details) => {
+				props.onOpenSectionsChange(details.value);
+			}}
+		>
+			<Accordion.Item value="qr">
+				<Accordion.ItemTitle>QR &amp; link</Accordion.ItemTitle>
+				<Accordion.ItemContent>
+					<EntityQrBlock {...itemEntity.qr!(props.item())} />
+				</Accordion.ItemContent>
+			</Accordion.Item>
+		</Accordion.Root>
+	);
+}
+
+/** The item's own fields: asset tag, type and description, then the last
+ *  action's failure. */
+function ItemFormFields(props: {
+	item?: Item;
+	itemTypes: ItemType[];
+	form: ItemForm;
+	onTagElement: (element: HTMLInputElement) => void;
+}) {
+	return (
+		<>
+			<AssetTagField
+				item={props.item}
+				assetTag={props.form.assetTag}
+				hasError={props.form.formError() !== undefined}
+				onElement={props.onTagElement}
+			/>
+			<ItemTypeSelect
+				itemTypes={props.itemTypes}
+				typeId={props.form.typeId}
+			/>
+			<DescriptionField
+				class={styles.description}
+				description={props.form.description}
+			/>
+			<FormErrorLine error={props.form.formError} />
+		</>
+	);
+}
+
+export function ItemDrawer(props: ItemDrawerProps): JSX.Element {
+	const form = createItemForm(props);
+	const [copyOpen, setCopyOpen] = createSignal(false);
+	// Controlled + onValueChange so the section actually collapses (matches
+	// community's PersonDetail). A bare `value` with no setter pins it open.
+	const [openSections, setOpenSections] = createSignal(["qr"]);
+
+	function isEdit() {
+		return props.item !== undefined;
 	}
 
-	async function deleteItem() {
-		if (!props.item) return;
-		const ok = await confirm({
-			title: "Delete this item?",
-			message: "This can't be undone.",
-			confirmLabel: "Delete",
-			tone: "danger",
-		});
-		if (!ok) return;
-		try {
-			await actions.remove(props.item._id);
-			setFormError(undefined);
-			props.onOpenChange(false);
-		} catch (err) {
-			setFormError(
-				err instanceof Error ? err.message : "Could not delete."
-			);
-		}
-	}
+	let tagElement: HTMLInputElement | undefined;
 
 	return (
 		<>
 			<Drawer.Root
 				open={props.open}
-				onOpenChange={(open) => {
-					if (!open) {
+				onOpenChange={(isOpen) => {
+					if (!isOpen) {
 						setCopyOpen(false);
-						setFormError(undefined);
+						form.setFormError(undefined);
 					}
-					props.onOpenChange(open);
+					props.onOpenChange(isOpen);
 				}}
-				initialFocusEl={() => tagEl ?? null}
+				initialFocusEl={() => tagElement ?? null}
 			>
-				<Drawer.Header>
-					<Drawer.Title loading={props.loading}>
-						{isEdit() ? "Item" : "New item"}
-					</Drawer.Title>
-					<Drawer.HeaderActions>
-						<Show when={props.nav}>
-							{(n) => (
-								<DrawerNav
-									onPrev={n().onPrev}
-									onNext={n().onNext}
-									hasPrev={n().hasPrev()}
-									hasNext={n().hasNext()}
-								/>
-							)}
-						</Show>
-						<Show when={isEdit()}>
-							<IconButton
-								tooltipLabel="Delete item"
-								onClick={() => {
-									void deleteItem();
-								}}
-							>
-								{ICONS.delete}
-							</IconButton>
-						</Show>
-						<Drawer.Close />
-					</Drawer.HeaderActions>
-				</Drawer.Header>
+				<EntityDrawerHeader
+					title={isEdit() ? "Item" : "New item"}
+					loading={props.loading}
+					nav={props.nav}
+					isEdit={isEdit()}
+					deleteLabel="Delete item"
+					onDelete={() => {
+						void form.deleteItem();
+					}}
+				/>
 				<Drawer.Body
 					loading={props.loading}
 					skeleton={<ItemFieldsPlaceholder />}
 				>
 					<Show when={!isEdit()}>
-						<Button
-							variant="tertiary"
-							disabled={(props.items ?? []).length === 0}
-							disabledReason="No items to copy from yet"
-							onClick={() => {
+						<CopyFromItemButton
+							hasNoItems={(props.items ?? []).length === 0}
+							onCopy={() => {
 								setCopyOpen(true);
 							}}
-						>
-							<Icon>{ICONS.copy}</Icon>
-							Copy from item
-						</Button>
-					</Show>
-					<Show
-						when={!isEdit()}
-						fallback={
-							<PropertyRow
-								icon={ICONS.assetTag}
-								label="Asset tag"
-							>
-								<span>{props.item!.assetTag}</span>
-							</PropertyRow>
-						}
-					>
-						<Input
-							label="Asset tag"
-							required
-							helperText="One letter and five digits, e.g. A00000"
-							ref={(el: HTMLInputElement) => {
-								tagEl = el;
-							}}
-							value={assetTag.value()}
-							onInput={(e) => {
-								assetTag.set(e.currentTarget.value);
-							}}
-							onBlur={assetTag.flush}
-							invalid={formError() !== undefined}
 						/>
 					</Show>
-					<PropertyRow icon={ICONS.itemType} label="Type">
-						<Select.Root
-							options={typeOptions()}
-							value={selectedType()}
-							placeholder="Choose a type"
-							sameWidth
-							onValueChange={(d) => {
-								typeId.set(
-									d.value[0] as Id<"itemTypes"> | undefined
-								);
-							}}
-						>
-							<Select.Content>
-								<For each={typeOptions()}>
-									{(o) => (
-										<Select.Option
-											value={o.value}
-											title={o.title}
-										/>
-									)}
-								</For>
-							</Select.Content>
-						</Select.Root>
-					</PropertyRow>
-					<div class={styles.description}>
-						<TextArea
-							label="Description"
-							autoresize
-							value={description.value()}
-							onInput={(value) => {
-								description.set(value);
-							}}
-							onBlur={description.flush}
-						/>
-					</div>
-					<Show when={formError()}>
-						{(message) => <p class={styles.error}>{message()}</p>}
-					</Show>
+					<ItemFormFields
+						item={props.item}
+						itemTypes={props.itemTypes}
+						form={form}
+						onTagElement={(element) => {
+							tagElement = element;
+						}}
+					/>
 					<Show when={props.item}>
-						<Accordion.Root
-							multiple
-							value={openSections()}
-							onValueChange={(details) => {
-								setOpenSections(details.value);
-							}}
-						>
-							<Accordion.Item value="qr">
-								<Accordion.ItemTitle>
-									QR &amp; link
-								</Accordion.ItemTitle>
-								<Accordion.ItemContent>
-									<EntityQrBlock
-										{...itemEntity.qr!(props.item!)}
-									/>
-								</Accordion.ItemContent>
-							</Accordion.Item>
-						</Accordion.Root>
+						{(item) => (
+							<ItemQrSection
+								item={item}
+								openSections={openSections}
+								onOpenSectionsChange={setOpenSections}
+							/>
+						)}
 					</Show>
 				</Drawer.Body>
 				<Show when={!props.loading && !isEdit()}>
-					<Drawer.Footer>
-						<Button
-							disabled={
-								!tagLooksValid() || typeId.value() === undefined
-							}
-							disabledReason="Add a valid asset tag and type first"
-							onClick={() => {
-								void createItem();
-							}}
-						>
-							Create item
-						</Button>
-					</Drawer.Footer>
+					<CreateFooter form={form} />
 				</Show>
 			</Drawer.Root>
 			<CopyFromItemDialog
 				open={copyOpen()}
 				onOpenChange={setCopyOpen}
 				items={props.items ?? []}
-				onSelect={(source) => {
-					const details = detailsFromItem(source);
-					typeId.set(details.typeId);
-					description.set(details.description);
-				}}
+				onSelect={form.copyFrom}
 			/>
 		</>
 	);

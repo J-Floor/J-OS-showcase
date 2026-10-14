@@ -105,7 +105,7 @@ vi.mock("../data/communityData.tsx", () => ({
 	useGuests: () => ({
 		data: () => guestsData,
 		isLoading: () => false,
-		error: () => undefined,
+		error: () => {},
 		isStale: () => false,
 		refetch: () => {},
 	}),
@@ -117,7 +117,7 @@ vi.mock("../../../shared/data/boardLevel.tsx", () => ({
 	useBoardLevel: () => ({
 		data: () => [],
 		isLoading: () => false,
-		error: () => undefined,
+		error: () => {},
 		isStale: () => false,
 		refetch: () => {},
 	}),
@@ -133,7 +133,7 @@ vi.mock("../actions/triage.ts", () => ({
 // table also reads the current person via useQuery. Stub both so the columns
 // render without a ConvexProvider mounted here.
 vi.mock("convex-solidjs", () => ({
-	useQuery: () => ({ data: () => undefined }),
+	useQuery: () => ({ data: () => {} }),
 	useMutation: () => ({ mutateAsync: () => Promise.resolve() }),
 	// `AgreementButton` resolves the document URL on click instead of holding a
 	// per-row subscription, so the rows now need the raw client too.
@@ -195,15 +195,15 @@ test("drawer body contains no inputs or textareas (read-only)", async () => {
 	// Scope the "no inputs" check to the Ark Dialog content panel so we don't
 	// pick up Ark UI internals (like filter inputs) elsewhere in the document.
 	// Ark renders Dialog.Content with data-scope="dialog" data-part="content".
-	const dialogEl = document.querySelector<HTMLElement>(
+	const dialogElement = document.querySelector<HTMLElement>(
 		'[data-scope="dialog"][data-part="content"]'
 	);
-	expect(dialogEl).not.toBeNull();
+	expect(dialogElement).not.toBeNull();
 	// Read-only means the PROFILE is display-only. The one editable control that
 	// remains is the always-available board-notes composer — you can leave a note
 	// without entering edit mode — so assert it is the only one.
 	const editables = [
-		...(dialogEl ?? document.body).querySelectorAll("input, textarea"),
+		...(dialogElement ?? document.body).querySelectorAll("input, textarea"),
 	];
 	expect(editables).toHaveLength(1);
 	expect(editables[0]).toHaveAttribute("placeholder", "Add a note…");
@@ -233,25 +233,31 @@ test("drawer has Prev (disabled) and Next arrows; Next advances to second row", 
 	expect(dialogContent).not.toBeNull();
 
 	// Both arrows render in the drawer header
-	const prevBtn = within(dialogContent ?? document.body).getByRole("button", {
-		name: /previous/i,
-		hidden: true,
-	});
-	const nextBtn = within(dialogContent ?? document.body).getByRole("button", {
-		name: /next/i,
-		hidden: true,
-	});
+	const prevButton = within(dialogContent ?? document.body).getByRole(
+		"button",
+		{
+			name: /previous/i,
+			hidden: true,
+		}
+	);
+	const nextButton = within(dialogContent ?? document.body).getByRole(
+		"button",
+		{
+			name: /next/i,
+			hidden: true,
+		}
+	);
 	// Previous button should be disabled (first row in list)
-	expect(prevBtn).toBeDisabled();
+	expect(prevButton).toBeDisabled();
 
 	// `onDisplayedRowsChange` fires via a reactive effect once the table renders;
 	// wait for it to propagate so the nav has the full list and Next is enabled.
 	await waitFor(() => {
-		expect(nextBtn).not.toBeDisabled();
+		expect(nextButton).not.toBeDisabled();
 	});
 
 	// Click Next → drawer should now show the second row's email
-	fireEvent.click(nextBtn);
+	fireEvent.click(nextButton);
 	await waitFor(() => {
 		expect(screen.getAllByText("alan@example.com")[0]).toBeInTheDocument();
 	});
@@ -410,7 +416,9 @@ test("guests loaded empty: shows 'No results.'", () => {
 	try {
 		renderWithSelection((selection) => <GuestsTab selection={selection} />);
 		expect(screen.getByText("No results.")).toBeInTheDocument();
-		expect(document.querySelectorAll("[data-skeleton-row]").length).toBe(0);
+		expect(document.querySelectorAll("[data-skeleton-row]")).toHaveLength(
+			0
+		);
 	} finally {
 		guestsData = [guestRow, guestRow2, expiredGuestRow];
 	}

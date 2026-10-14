@@ -5,15 +5,19 @@
  * unchanged.
  */
 
+const WORD_START_SCORE = 0.9;
+const MID_WORD_SCORE = 0.5;
+const KEYWORD_SCALE = 0.4;
+
 /** Scores one string. Exact beats word-start beats mid-word. */
 function scoreOne(value: string, search: string): number {
 	// eslint-disable-next-line no-restricted-syntax -- case-insensitive matching, not UI text
-	const v = value.toLowerCase();
-	const idx = v.indexOf(search);
-	if (idx === -1) return 0;
-	if (v === search) return 1;
-	const atWordStart = idx === 0 || v[idx - 1] === " ";
-	return atWordStart ? 0.9 : 0.5;
+	const lowered = value.toLowerCase();
+	const index = lowered.indexOf(search);
+	if (index === -1) return 0;
+	if (lowered === search) return 1;
+	const isAtWordStart = index === 0 || lowered[index - 1] === " ";
+	return isAtWordStart ? WORD_START_SCORE : MID_WORD_SCORE;
 }
 
 /**
@@ -31,16 +35,19 @@ export function scoreMatch(
 	keywords?: string[]
 ): number {
 	// eslint-disable-next-line no-restricted-syntax -- case-insensitive matching, not UI text
-	const s = search.trim().toLowerCase();
-	if (!s) return 1;
+	const needle = search.trim().toLowerCase();
+	if (!needle) return 1;
 
-	const direct = scoreOne(value, s);
+	const direct = scoreOne(value, needle);
 	if (direct > 0) return direct;
 
 	// Scaled below 0.5 — the weakest score a match on the name itself can earn —
 	// so even an exact keyword ranks under a mid-word match on a real name.
-	const keyword = Math.max(0, ...(keywords ?? []).map((k) => scoreOne(k, s)));
-	return keyword * 0.4;
+	const keyword = Math.max(
+		0,
+		...(keywords ?? []).map((term) => scoreOne(term, needle))
+	);
+	return keyword * KEYWORD_SCALE;
 }
 
 /** Move-to-front, dedupe, cap. */
@@ -49,7 +56,7 @@ export function addRecent(
 	value: string,
 	max: number
 ): string[] {
-	return [value, ...list.filter((v) => v !== value)].slice(0, max);
+	return [value, ...list.filter((entry) => entry !== value)].slice(0, max);
 }
 
 /** Reads recents from localStorage. Any unusable payload reads as empty. */
@@ -59,8 +66,11 @@ export function readRecents(key: string): string[] {
 		const raw = localStorage.getItem(key);
 		if (raw === null) return [];
 		const parsed: unknown = JSON.parse(raw);
-		if (!Array.isArray(parsed)) return [];
-		return parsed.filter((v): v is string => typeof v === "string");
+		return Array.isArray(parsed)
+			? parsed.filter(
+					(entry): entry is string => typeof entry === "string"
+				)
+			: [];
 	} catch {
 		return [];
 	}

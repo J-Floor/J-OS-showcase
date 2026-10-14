@@ -18,7 +18,7 @@ describe("sendMagicLink", () => {
 		const auth = createAuth({} as never);
 		const plugin = (
 			auth.options.plugins as unknown as MagicLinkPlugin[]
-		).find((p) => p.id === "magic-link")!;
+		).find((provider) => provider.id === "magic-link")!;
 		await expect(
 			plugin.options.sendMagicLink({
 				email: "a@example.com",

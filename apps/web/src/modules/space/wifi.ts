@@ -8,7 +8,7 @@ export type WifiNetwork = { ssid: string; password: string };
  * contain anything.
  */
 function escapeWifiValue(value: string): string {
-	return value.replace(/([\\;,:"])/g, "\\$1");
+	return value.replaceAll(/([\\;,:"])/g, "\\$1");
 }
 
 /**

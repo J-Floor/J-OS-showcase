@@ -6,6 +6,14 @@ import { IconButton } from "../IconButton/IconButton.tsx";
 
 import styles from "./DrawerNav.module.scss";
 
+function guarded(action: () => void) {
+	return (event: KeyboardEvent) => {
+		if (event.repeat || isTypingTarget(event.target)) return;
+		event.preventDefault();
+		action();
+	};
+}
+
 /**
  * Prev/next arrows for a Drawer header (placed in the `headerAction` slot).
  *
@@ -34,24 +42,16 @@ export function DrawerNav(props: {
 	hasPrev: boolean;
 	hasNext: boolean;
 }): JSX.Element {
-	// eslint-disable-next-line no-unassigned-vars -- assigned by Solid's `ref={anchorRef}` binding below, which the rule can't see
-	let anchorRef: HTMLDivElement | undefined;
-	const [drawerEl, setDrawerEl] = createSignal<HTMLElement>();
+	// eslint-disable-next-line no-unassigned-vars -- assigned by Solid's `ref={anchorReference}` binding below, which the rule can't see
+	let anchorReference: HTMLDivElement | undefined;
+	const [drawerElement, setDrawerElement] = createSignal<HTMLElement>();
 	onMount(() => {
-		setDrawerEl(
-			anchorRef?.closest<HTMLElement>(
+		setDrawerElement(
+			anchorReference?.closest<HTMLElement>(
 				'[data-scope="dialog"][data-part="content"]'
 			) ?? undefined
 		);
 	});
-
-	function guarded(action: () => void) {
-		return (event: KeyboardEvent) => {
-			if (event.repeat || isTypingTarget(event.target)) return;
-			event.preventDefault();
-			action();
-		};
-	}
 
 	// `ignoreInputs: false`: the library's own typing guard compares the
 	// FOCUSED element against the registration's `target` — and that target is
@@ -74,7 +74,7 @@ export function DrawerNav(props: {
 			props.onPrev();
 		}),
 		() => ({
-			target: drawerEl(),
+			target: drawerElement(),
 			enabled: props.hasPrev,
 			ignoreInputs: false,
 			preventDefault: false,
@@ -86,7 +86,7 @@ export function DrawerNav(props: {
 			props.onNext();
 		}),
 		() => ({
-			target: drawerEl(),
+			target: drawerElement(),
 			enabled: props.hasNext,
 			ignoreInputs: false,
 			preventDefault: false,
@@ -94,7 +94,7 @@ export function DrawerNav(props: {
 	);
 
 	return (
-		<div class={styles.nav} ref={anchorRef}>
+		<div class={styles.nav} ref={anchorReference}>
 			<IconButton
 				tooltipLabel="Previous"
 				shortcut="ArrowUp"

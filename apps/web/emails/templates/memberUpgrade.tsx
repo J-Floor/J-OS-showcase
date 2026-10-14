@@ -1,10 +1,10 @@
 // apps/web/emails/templates/memberUpgrade.tsx
 import { Link, Heading, Text } from "jsx-email";
 
-import { EmailLayout } from "../EmailLayout.tsx";
+import { EmailLayout, type SigninEmailProps } from "../EmailLayout.tsx";
 import { styles } from "../theme.ts";
 
-export type Props = { name: string; signinUrl: string; logoUrl: string };
+export type Props = SigninEmailProps;
 
 export function Template({ name, signinUrl, logoUrl }: Props) {
 	return (

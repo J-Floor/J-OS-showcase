@@ -11,7 +11,9 @@ export const tasksModule: ModuleManifest = {
 	path: "/tasks",
 	subject: "Tasks",
 	// Code-split: the page and everything only it imports load on first visit.
-	view: lazyPage(() => import("./TasksPage.tsx").then((m) => m.TasksPage)),
+	view: lazyPage(() =>
+		import("./TasksPage.tsx").then((loaded) => loaded.TasksPage)
+	),
 	prefetch: () => {
 		prefetch(api.tasks.list, {});
 		prefetch(api.projects.list, {});

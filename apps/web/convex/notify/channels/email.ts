@@ -13,12 +13,12 @@ export async function sendNotificationEmail(
 	kind: string,
 	message: EmailMessage
 ): Promise<void> {
-	const sent = await sendEmail({
+	const isSent = await sendEmail({
 		to,
 		subject: message.subject,
 		html: message.html,
 		text: message.text,
 		devLog: `[notify:${kind}] ${to}: ${message.subject}`,
 	});
-	if (!sent) throw new Error(`email to ${to} was rejected by the provider`);
+	if (!isSent) throw new Error(`email to ${to} was rejected by the provider`);
 }

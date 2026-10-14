@@ -9,10 +9,10 @@ const modules = import.meta.glob("../**/*.*s");
 
 describe("hasAttendance", () => {
 	it("is true only for the (person, event) pair that has a row", async () => {
-		const t = convexTest(schema, modules);
-		const result = await t.run(async (ctx) => {
+		const backend = convexTest(schema, modules);
+		const result = await backend.run(async (context) => {
 			function person(email: string) {
-				return ctx.db.insert("people", {
+				return context.db.insert("people", {
 					email,
 					firstName: "A",
 					lastName: "B",
@@ -24,7 +24,7 @@ describe("hasAttendance", () => {
 			const personId = await person("a@example.com");
 			const otherId = await person("b@example.com");
 			function event() {
-				return ctx.db.insert("events", {
+				return context.db.insert("events", {
 					name: "E",
 					startsAt: 0,
 					endsAt: 1,
@@ -36,15 +36,15 @@ describe("hasAttendance", () => {
 			}
 			const eventA = await event();
 			const eventB = await event();
-			await ctx.db.insert("eventAttendance", {
+			await context.db.insert("eventAttendance", {
 				personId,
 				eventId: eventA,
 				confirmedAt: 0,
 			});
 			return {
-				hit: await hasAttendance(ctx.db, personId, eventA),
-				otherEvent: await hasAttendance(ctx.db, personId, eventB),
-				otherPerson: await hasAttendance(ctx.db, otherId, eventA),
+				hit: await hasAttendance(context.db, personId, eventA),
+				otherEvent: await hasAttendance(context.db, personId, eventB),
+				otherPerson: await hasAttendance(context.db, otherId, eventA),
 			};
 		});
 		expect(result).toEqual({

@@ -1,6 +1,6 @@
 import type { Doc } from "../_generated/dataModel";
 
-import { compliance, windowOpen } from "./derive.ts";
+import { compliance, isWindowOpen } from "./derive.ts";
 import {
 	IllegalTransitionError,
 	type Effect,
@@ -42,7 +42,7 @@ export function factsFor(
 	now: number
 ): Facts {
 	return {
-		verified: person.verifiedAt != null,
+		verified: person.verifiedAt !== undefined,
 		complianceMet:
 			compliance({ ...person, tier: targetTier }, signatureVariants) ===
 			"met",
@@ -51,8 +51,8 @@ export function factsFor(
 				targetTier,
 				person.onboarding?.steps ?? {}
 			) === null,
-		everActive: person.activatedAt != null,
-		windowOpen: windowOpen(person, now),
+		everActive: person.activatedAt !== undefined,
+		windowOpen: isWindowOpen(person, now),
 		formerOf: person.formerOf,
 	};
 }
@@ -147,9 +147,10 @@ const LEAVE: Partial<Record<EventType, Rule>> = {
 function activeIfReady(
 	tier: NonNullable<Facts["formerOf"]>
 ): (event: LifecycleEvent, facts: Facts) => StateId {
-	if (isBoardLevel(tier) || tier === "staff") return () => `${tier}.active`;
-	return (_e, f) =>
-		canActivate(f) ? `${tier}.active` : `${tier}.onboarding`;
+	return isBoardLevel(tier) || tier === "staff"
+		? () => `${tier}.active`
+		: (_event, facts) =>
+				canActivate(facts) ? `${tier}.active` : `${tier}.onboarding`;
 }
 
 /**
@@ -161,8 +162,8 @@ function activeIfReady(
 function droppingWindow(rule: Rule): Rule {
 	return {
 		...rule,
-		effects: (e, f) => [
-			...(rule.effects?.(e, f) ?? []),
+		effects: (event, facts) => [
+			...(rule.effects?.(event, facts) ?? []),
 			{ type: "CLEAR_WINDOW" },
 		],
 	};
@@ -189,7 +190,10 @@ const SET_ROLE: Rule = {
 		const { tier } = event as Extract<LifecycleEvent, { type: "SET_ROLE" }>;
 		return activeIfReady(tier)(event, facts);
 	},
-	effects: (_e, f) => [...agreementEffects(f), { type: "RECONCILE_DOOR" }],
+	effects: (_event, facts) => [
+		...agreementEffects(facts),
+		{ type: "RECONCILE_DOOR" },
+	],
 };
 
 /** A role move out of a guest state also drops the guest window. */
@@ -217,9 +221,9 @@ function tierRules(
 const APPROVE: Partial<Record<EventType, Rule>> = {
 	APPROVE_GUEST: {
 		to: activeIfReady("guest"),
-		guard: (f) => f.verified,
-		effects: (e, f) => {
-			const { hostedById } = e as Extract<
+		guard: (facts) => facts.verified,
+		effects: (event, facts) => {
+			const { hostedById } = event as Extract<
 				LifecycleEvent,
 				{ type: "APPROVE_GUEST" }
 			>;
@@ -228,8 +232,8 @@ const APPROVE: Partial<Record<EventType, Rule>> = {
 					? []
 					: [{ type: "SET_HOST", hostedById }];
 			return [
-				...agreementEffects(f),
-				...windowEffects(e),
+				...agreementEffects(facts),
+				...windowEffects(event),
 				{ type: "EMAIL", template: "approval" },
 				...hostEffects,
 			];
@@ -240,9 +244,9 @@ const APPROVE: Partial<Record<EventType, Rule>> = {
 	// prospect tier, not the guest tier.
 	APPROVE_MEMBER: {
 		to: activeIfReady("member"),
-		guard: (f) => f.verified,
-		effects: (_e, f) => [
-			...agreementEffects(f),
+		guard: (facts) => facts.verified,
+		effects: (_event, facts) => [
+			...agreementEffects(facts),
 			{ type: "EMAIL", template: "approval" },
 			{ type: "RECONCILE_DOOR" },
 			{ type: "CLEAR_WINDOW" },
@@ -284,7 +288,7 @@ const REAPPLY_NO_DOOR: Rule = {
 
 const EXPIRE: Rule = {
 	to: "guest.expired",
-	guard: (f) => !f.windowOpen,
+	guard: (facts) => !facts.windowOpen,
 	effects: () => [{ type: "RECONCILE_DOOR" }],
 };
 
@@ -375,9 +379,9 @@ export const TABLE: Partial<Record<StateId, Partial<Record<EventType, Rule>>>> =
 			// `SET_ROLE` and `RE_ADMIT`.
 			EXTEND_WINDOW: {
 				to: activeIfReady("guest"),
-				effects: (e, f) => [
-					...agreementEffects(f),
-					...windowEffects(e),
+				effects: (event, facts) => [
+					...agreementEffects(facts),
+					...windowEffects(event),
 				],
 			},
 			REAPPLY: droppingWindow(REAPPLY),
@@ -391,8 +395,8 @@ export const TABLE: Partial<Record<StateId, Partial<Record<EventType, Rule>>>> =
 			// so it must be reconciled either way.
 			GRANT_CORE: {
 				to: activeIfReady("core"),
-				effects: (_e, f) => [
-					...agreementEffects(f),
+				effects: (_event, facts) => [
+					...agreementEffects(facts),
 					{ type: "RECONCILE_DOOR" },
 				],
 			},
@@ -403,8 +407,8 @@ export const TABLE: Partial<Record<StateId, Partial<Record<EventType, Rule>>>> =
 			...tierRules("core"),
 			REVOKE_CORE: {
 				to: activeIfReady("member"),
-				effects: (_e, f) => [
-					...agreementEffects(f),
+				effects: (_event, facts) => [
+					...agreementEffects(facts),
 					{ type: "RECONCILE_DOOR" },
 				],
 			},
@@ -422,8 +426,8 @@ export const TABLE: Partial<Record<StateId, Partial<Record<EventType, Rule>>>> =
 			RE_ADMIT: {
 				to: (event, facts) =>
 					activeIfReady(facts.formerOf ?? "member")(event, facts),
-				effects: (_e, f) => [
-					...agreementEffects(f),
+				effects: (_event, facts) => [
+					...agreementEffects(facts),
 					{ type: "RECONCILE_DOOR" },
 				],
 			},

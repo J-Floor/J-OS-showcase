@@ -14,9 +14,9 @@ const DAY = 86_400_000;
 
 describe("doorTargetFor", () => {
 	it("reports the per-person target the RECONCILE_DOOR effect acts on", async () => {
-		const t = convexTest(schema, modules);
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const id = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "ada@example.com",
 				firstName: "Ada",
 				lastName: "Lovelace",
@@ -28,7 +28,7 @@ describe("doorTargetFor", () => {
 		);
 
 		expect(
-			await t.query(internal.doorRevoke.doorTargetFor, {
+			await backend.query(internal.doorRevoke.doorTargetFor, {
 				personId: id,
 			})
 		).toEqual({
@@ -40,9 +40,9 @@ describe("doorTargetFor", () => {
 	});
 
 	it("reports not_found for a deleted person", async () => {
-		const t = convexTest(schema, modules);
-		const id = await t.run(async (ctx) => {
-			const inserted = await ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const id = await backend.run(async (context) => {
+			const inserted = await context.db.insert("people", {
 				email: "gone@example.com",
 				firstName: "Gon",
 				lastName: "E",
@@ -50,12 +50,12 @@ describe("doorTargetFor", () => {
 				stage: "active",
 				stageSince: Date.now(),
 			});
-			await ctx.db.delete(inserted);
+			await context.db.delete(inserted);
 			return inserted;
 		});
 
 		expect(
-			await t.query(internal.doorRevoke.doorTargetFor, {
+			await backend.query(internal.doorRevoke.doorTargetFor, {
 				personId: id,
 			})
 		).toEqual({
@@ -63,6 +63,29 @@ describe("doorTargetFor", () => {
 		});
 	});
 });
+
+async function seedEntitledAndDenied(backend: TestConvex<typeof schema>) {
+	return backend.run(async (context) => {
+		const entitled = await context.db.insert("people", {
+			email: "ada@jfloor.test",
+			firstName: "Ada",
+			lastName: "Lovelace",
+			tier: "member",
+			stage: "active",
+			stageSince: Date.now(),
+		});
+		const denied = await context.db.insert("people", {
+			email: "gone@jfloor.test",
+			firstName: "Gone",
+			lastName: "G",
+			tier: "guest",
+			stage: "expired",
+			stageSince: Date.now(),
+			accessUntil: Date.now() - DAY,
+		});
+		return { entitled, denied };
+	});
+}
 
 /**
  * Every deployment holding the provider credentials reaches the same lock
@@ -81,37 +104,14 @@ describe("the door write gate", () => {
 		vi.restoreAllMocks();
 	});
 
-	async function seedEntitledAndDenied(t: TestConvex<typeof schema>) {
-		return t.run(async (ctx) => {
-			const entitled = await ctx.db.insert("people", {
-				email: "ada@jfloor.test",
-				firstName: "Ada",
-				lastName: "Lovelace",
-				tier: "member",
-				stage: "active",
-				stageSince: Date.now(),
-			});
-			const denied = await ctx.db.insert("people", {
-				email: "gone@jfloor.test",
-				firstName: "Gone",
-				lastName: "G",
-				tier: "guest",
-				stage: "expired",
-				stageSince: Date.now(),
-				accessUntil: Date.now() - DAY,
-			});
-			return { entitled, denied };
-		});
-	}
-
 	it("revokeUnlessBreakGlass does not revoke a denied person when door writes are disabled", async () => {
-		const t = convexTest(schema, modules);
-		const { denied } = await seedEntitledAndDenied(t);
+		const backend = convexTest(schema, modules);
+		const { denied } = await seedEntitledAndDenied(backend);
 		const fetchSpy = vi.fn();
 		vi.stubGlobal("fetch", fetchSpy);
-		vi.spyOn(console, "warn").mockImplementation(() => undefined);
+		vi.spyOn(console, "warn").mockImplementation(() => {});
 
-		const result = await t.action(
+		const result = await backend.action(
 			internal.doorRevoke.revokeUnlessBreakGlass,
 			{
 				personId: denied,
@@ -122,18 +122,20 @@ describe("the door write gate", () => {
 		expect(result).toEqual({ outcome: "disabled" });
 		expect(fetchSpy).not.toHaveBeenCalled();
 		expect(
-			await t.run(async (ctx) => ctx.db.query("doorLog").collect())
+			await backend.run(async (context) =>
+				context.db.query("doorLog").collect()
+			)
 		).toEqual([]);
 	});
 
 	it("revokeUnlessBreakGlass does nothing for an entitled person when door writes are disabled", async () => {
-		const t = convexTest(schema, modules);
-		const { entitled } = await seedEntitledAndDenied(t);
+		const backend = convexTest(schema, modules);
+		const { entitled } = await seedEntitledAndDenied(backend);
 		const fetchSpy = vi.fn();
 		vi.stubGlobal("fetch", fetchSpy);
-		vi.spyOn(console, "warn").mockImplementation(() => undefined);
+		vi.spyOn(console, "warn").mockImplementation(() => {});
 
-		const result = await t.action(
+		const result = await backend.action(
 			internal.doorRevoke.revokeUnlessBreakGlass,
 			{
 				personId: entitled,
@@ -145,6 +147,30 @@ describe("the door write gate", () => {
 		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 });
+
+function expiredGuest(
+	backend: TestConvex<typeof schema>,
+	door?: { override: "none" | "force_off"; doorUserId?: string }
+) {
+	return backend.run(async (context) =>
+		context.db.insert("people", {
+			email: "expired@example.com",
+			firstName: "Ex",
+			lastName: "Pired",
+			tier: "guest",
+			stage: "expired",
+			stageSince: Date.now(),
+			accessUntil: Date.now() - DAY,
+			...(door ? { door } : {}),
+		})
+	);
+}
+
+async function logRows(backend: TestConvex<typeof schema>) {
+	return backend.run(async (context) =>
+		context.db.query("doorLog").collect()
+	);
+}
 
 /**
  * Revoke-only: nobody is granted a personal key any more (the app opens the
@@ -192,35 +218,13 @@ describe("revokeUnlessBreakGlass", () => {
 		});
 	}
 
-	function expiredGuest(
-		t: TestConvex<typeof schema>,
-		door?: { override: "none" | "force_off"; doorUserId?: string }
-	) {
-		return t.run(async (ctx) =>
-			ctx.db.insert("people", {
-				email: "expired@example.com",
-				firstName: "Ex",
-				lastName: "Pired",
-				tier: "guest",
-				stage: "expired",
-				stageSince: Date.now(),
-				accessUntil: Date.now() - DAY,
-				...(door ? { door } : {}),
-			})
-		);
-	}
-
-	async function logRows(t: TestConvex<typeof schema>) {
-		return t.run(async (ctx) => ctx.db.query("doorLog").collect());
-	}
-
 	it("revokes a denied person's keys on both doors, and nobody else's", async () => {
-		const t = convexTest(schema, modules);
-		const id = await expiredGuest(t);
+		const backend = convexTest(schema, modules);
+		const id = await expiredGuest(backend);
 		const fake = account("expired@example.com");
 		setDoorProviderForTests(fake);
 
-		const result = await t.action(
+		const result = await backend.action(
 			internal.doorRevoke.revokeUnlessBreakGlass,
 			{
 				personId: id,
@@ -240,17 +244,17 @@ describe("revokeUnlessBreakGlass", () => {
 	});
 
 	it("writes one revoke row naming the locks it cleared", async () => {
-		const t = convexTest(schema, modules);
-		const id = await expiredGuest(t);
+		const backend = convexTest(schema, modules);
+		const id = await expiredGuest(backend);
 		setDoorProviderForTests(account("expired@example.com"));
 
-		await t.action(internal.doorRevoke.revokeUnlessBreakGlass, {
+		await backend.action(internal.doorRevoke.revokeUnlessBreakGlass, {
 			personId: id,
 			trigger: "override",
 			detail: "under review",
 		});
 
-		expect(await logRows(t)).toEqual([
+		expect(await logRows(backend)).toEqual([
 			expect.objectContaining({
 				operation: "revoke",
 				trigger: "override",
@@ -267,15 +271,15 @@ describe("revokeUnlessBreakGlass", () => {
 	});
 
 	it("matches the person by their stored provider id when the provider-side email is stale", async () => {
-		const t = convexTest(schema, modules);
-		const id = await expiredGuest(t, {
+		const backend = convexTest(schema, modules);
+		const id = await expiredGuest(backend, {
 			override: "none",
 			doorUserId: "u9",
 		});
 		const fake = account("old.address@example.com", "u9");
 		setDoorProviderForTests(fake);
 
-		await t.action(internal.doorRevoke.revokeUnlessBreakGlass, {
+		await backend.action(internal.doorRevoke.revokeUnlessBreakGlass, {
 			personId: id,
 			trigger: "lifecycle",
 		});
@@ -284,8 +288,8 @@ describe("revokeUnlessBreakGlass", () => {
 	});
 
 	it("spares an identity carrying spareEmail even when the stored provider id matches it", async () => {
-		const t = convexTest(schema, modules);
-		const id = await expiredGuest(t, {
+		const backend = convexTest(schema, modules);
+		const id = await expiredGuest(backend, {
 			override: "none",
 			doorUserId: "u9",
 		});
@@ -309,7 +313,7 @@ describe("revokeUnlessBreakGlass", () => {
 		});
 		setDoorProviderForTests(fake);
 
-		await t.action(internal.doorRevoke.revokeUnlessBreakGlass, {
+		await backend.action(internal.doorRevoke.revokeUnlessBreakGlass, {
 			personId: id,
 			trigger: "lifecycle",
 			spareEmail: "kept.person@example.com",
@@ -319,12 +323,12 @@ describe("revokeUnlessBreakGlass", () => {
 	});
 
 	it("never matches by name alone — a same-named stranger keeps their key", async () => {
-		const t = convexTest(schema, modules);
-		const id = await expiredGuest(t);
+		const backend = convexTest(schema, modules);
+		const id = await expiredGuest(backend);
 		const fake = account("a.stranger@example.com");
 		setDoorProviderForTests(fake);
 
-		const result = await t.action(
+		const result = await backend.action(
 			internal.doorRevoke.revokeUnlessBreakGlass,
 			{
 				personId: id,
@@ -338,13 +342,13 @@ describe("revokeUnlessBreakGlass", () => {
 			revoked: 0,
 		});
 		expect(fake.calls.revokes).toEqual([]);
-		expect(await logRows(t)).toEqual([]);
+		expect(await logRows(backend)).toEqual([]);
 	});
 
 	it("does nothing for a board member whose access is granted: no provider call, no row", async () => {
-		const t = convexTest(schema, modules);
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const id = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "board@example.com",
 				firstName: "Bo",
 				lastName: "Ard",
@@ -356,7 +360,7 @@ describe("revokeUnlessBreakGlass", () => {
 		const fake = account("board@example.com");
 		setDoorProviderForTests(fake);
 
-		const result = await t.action(
+		const result = await backend.action(
 			internal.doorRevoke.revokeUnlessBreakGlass,
 			{
 				personId: id,
@@ -376,13 +380,13 @@ describe("revokeUnlessBreakGlass", () => {
 			lockStatusReads: 0,
 			positions: [],
 		});
-		expect(await logRows(t)).toEqual([]);
+		expect(await logRows(backend)).toEqual([]);
 	});
 
 	it("revokes a member's key even though their access is granted — only board/admin keep one", async () => {
-		const t = convexTest(schema, modules);
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const id = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "member@example.com",
 				firstName: "Mem",
 				lastName: "Ber",
@@ -394,7 +398,7 @@ describe("revokeUnlessBreakGlass", () => {
 		const fake = account("member@example.com");
 		setDoorProviderForTests(fake);
 
-		const result = await t.action(
+		const result = await backend.action(
 			internal.doorRevoke.revokeUnlessBreakGlass,
 			{
 				personId: id,
@@ -409,13 +413,13 @@ describe("revokeUnlessBreakGlass", () => {
 			revoked: 2,
 		});
 		expect(fake.calls.revokes).toEqual([["a-dn", "a-up"]]);
-		expect(await logRows(t)).toHaveLength(1);
+		expect(await logRows(backend)).toHaveLength(1);
 	});
 
 	it("revokes a board member's key when the board has shut them out (force_off)", async () => {
-		const t = convexTest(schema, modules);
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const id = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "board@example.com",
 				firstName: "Bo",
 				lastName: "Ard",
@@ -428,7 +432,7 @@ describe("revokeUnlessBreakGlass", () => {
 		const fake = account("board@example.com");
 		setDoorProviderForTests(fake);
 
-		const result = await t.action(
+		const result = await backend.action(
 			internal.doorRevoke.revokeUnlessBreakGlass,
 			{
 				personId: id,
@@ -445,8 +449,8 @@ describe("revokeUnlessBreakGlass", () => {
 	});
 
 	it("rejects when the revoke fails, so the scheduled run shows as failed", async () => {
-		const t = convexTest(schema, modules);
-		const id = await expiredGuest(t);
+		const backend = convexTest(schema, modules);
+		const id = await expiredGuest(backend);
 		const fake = account("expired@example.com");
 		vi.spyOn(fake, "revokeAuthIds").mockRejectedValue(
 			new Error("the lock provider is down")
@@ -454,11 +458,11 @@ describe("revokeUnlessBreakGlass", () => {
 		setDoorProviderForTests(fake);
 
 		await expect(
-			t.action(internal.doorRevoke.revokeUnlessBreakGlass, {
+			backend.action(internal.doorRevoke.revokeUnlessBreakGlass, {
 				personId: id,
 				trigger: "lifecycle",
 			})
 		).rejects.toThrow(/the lock provider is down/);
-		expect(await logRows(t)).toEqual([]);
+		expect(await logRows(backend)).toEqual([]);
 	});
 });

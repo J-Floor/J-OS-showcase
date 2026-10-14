@@ -20,26 +20,37 @@ export function ownedBy(doc: object, personId: string): boolean {
  * their own history, and the address each confirmed email-change token moved
  * them to.
  */
-export function addressesOf(person: Doc<"people">, docs: Naming[]): string[] {
+export function addressesOf(
+	person: Doc<"people">,
+	documents: Naming[]
+): string[] {
 	const found: unknown[] = [person.email];
-	for (const { table, doc } of docs) {
+	for (const { table, doc } of documents) {
 		if (!ownedBy(doc, person._id)) continue;
 		if (table === "personEvents") {
-			const e = doc as unknown as Doc<"personEvents">;
-			if (e.kind === "field_edit" && e.field === "email")
-				found.push(e.before, e.after);
+			const personEvent = doc as unknown as Doc<"personEvents">;
+			if (
+				personEvent.kind === "field_edit" &&
+				personEvent.field === "email"
+			)
+				found.push(personEvent.before, personEvent.after);
 		}
 		if (table === "confirmTokens") {
-			const t = doc as unknown as Doc<"confirmTokens">;
-			if (t.purpose === "emailChange" && t.consumedAt !== undefined)
-				found.push(t.newEmail);
+			const token = doc as unknown as Doc<"confirmTokens">;
+			if (
+				token.purpose === "emailChange" &&
+				token.consumedAt !== undefined
+			)
+				found.push(token.newEmail);
 		}
 	}
 	return [
 		...new Set(
 			found
-				.filter((a): a is string => typeof a === "string")
-				.map(normalizeEmail)
+				.filter(
+					(address): address is string => typeof address === "string"
+				)
+				.map((address) => normalizeEmail(address))
 		),
 	];
 }
@@ -50,16 +61,19 @@ export function addressesOf(person: Doc<"people">, docs: Naming[]): string[] {
  * theirs, so they are left alone.
  */
 export async function addressesHeldBy(
-	ctx: QueryCtx,
+	context: QueryCtx,
 	addresses: string[],
 	ids: Set<string>,
 	budget: ReadBudget
 ): Promise<{ problem: string } | { addresses: string[] }> {
 	const own = [];
 	for (const address of addresses) {
-		const holders = await takeCharged(peopleByEmail(ctx, address), budget);
+		const holders = await takeCharged(
+			peopleByEmail(context, address),
+			budget
+		);
 		if (!holders) return { problem: overBudget("people") };
-		if (holders.every((p) => ids.has(p._id))) own.push(address);
+		if (holders.every((holder) => ids.has(holder._id))) own.push(address);
 	}
 	return { addresses: own };
 }
@@ -70,20 +84,20 @@ export async function addressesHeldBy(
  * person's own by id, and one naming anybody else is theirs.
  */
 export async function legacyDoorRows(
-	ctx: QueryCtx,
+	context: QueryCtx,
 	addresses: string[],
 	budget: ReadBudget
 ): Promise<{ problem: string } | { rows: Doc<"doorLog">[] }> {
 	const rows = [];
 	for (const address of addresses) {
 		const found = await takeCharged(
-			ctx.db
+			context.db
 				.query("doorLog")
-				.withIndex("by_email", (q) => q.eq("email", address)),
+				.withIndex("by_email", (range) => range.eq("email", address)),
 			budget
 		);
 		if (!found) return { problem: overBudget("doorLog") };
-		rows.push(...found.filter((r) => r.personId === undefined));
+		rows.push(...found.filter((row) => row.personId === undefined));
 	}
 	return { rows };
 }

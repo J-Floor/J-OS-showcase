@@ -50,7 +50,7 @@ export function DoorsIntro(): JSX.Element {
 	function markSeen(): void {
 		if (dismissed()) return;
 		setDismissed(true);
-		setSeen.mutateAsync({}).catch(() => undefined);
+		setSeen.mutateAsync({}).catch(() => {});
 	}
 
 	function goToDoors(): void {
@@ -72,14 +72,14 @@ export function DoorsIntro(): JSX.Element {
 					<div class={styles.body}>
 						<ul class={styles.doors}>
 							<For each={LOCK_SLOTS}>
-								{(d) => (
+								{(door) => (
 									<li class={styles.door}>
-										<Icon>{d.icon}</Icon>
+										<Icon>{door.icon}</Icon>
 										<span>
 											<strong class={styles.doorName}>
-												{d.buttonLabel}
+												{door.buttonLabel}
 											</strong>{" "}
-											— {DOOR_DESCRIPTIONS[d.slot]}
+											— {DOOR_DESCRIPTIONS[door.slot]}
 										</span>
 									</li>
 								)}

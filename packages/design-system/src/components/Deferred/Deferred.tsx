@@ -2,13 +2,13 @@ import { createSignal, onCleanup, onMount, Show, type JSX } from "solid-js";
 
 import { afterPaint } from "../../utils/afterPaint.ts";
 
-let immediate = false;
+let isImmediate = false;
 
 /** Test hook: when true, every `Deferred` created afterwards renders its
  *  children synchronously, so jsdom tests can assert on content without
  *  awaiting a paint. The test setup files set this; app code never does. */
-export function setDeferredImmediate(value: boolean): void {
-	immediate = value;
+export function setDeferredImmediate(shouldBeImmediate: boolean): void {
+	isImmediate = shouldBeImmediate;
 }
 
 /**
@@ -38,7 +38,7 @@ export function Deferred(props: {
 	children: JSX.Element;
 	hold?: boolean;
 }): JSX.Element {
-	const [ready, setReady] = createSignal(immediate);
+	const [ready, setReady] = createSignal(isImmediate);
 	onMount(() => {
 		if (ready()) return;
 		onCleanup(afterPaint(() => setReady(true)));

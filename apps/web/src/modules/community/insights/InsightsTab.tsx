@@ -1,5 +1,5 @@
-import { Chart, Skeleton } from "@j-os/design-system";
-import { For, Show, createMemo, type JSX } from "solid-js";
+import { Chart, Skeleton, type ChartDatum } from "@j-os/design-system";
+import { For, Show, createMemo, type JSX, type ParentProps } from "solid-js";
 
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
 import {
@@ -20,34 +20,8 @@ import {
 } from "./metrics.ts";
 import { MetricTile } from "./MetricTile.tsx";
 
-/** A chart's area: a chart-sized skeleton until its data is in. */
-function ChartSlot(props: {
-	loading: boolean;
-	children: JSX.Element;
-}): JSX.Element {
-	return (
-		<Show
-			when={!props.loading}
-			fallback={<Skeleton class={styles.chartSkeleton} />}
-		>
-			{props.children}
-		</Show>
-	);
-}
-
-/**
- * The board's read-only view of the community as a whole.
- *
- * Every other tab answers "what about this person"; nothing answered "what
- * about all of them", so questions like how many guest windows close next month
- * or who is carrying the hosting were only answerable by exporting a CSV.
- *
- * It subscribes to nothing new. `CommunityDataProvider` already holds the three
- * rosters plus the board-level list for the whole session, so the tab is one derivation pass
- * over data that is on the client either way — which is also why it stays
- * correct as the board edits rows in the other tabs.
- */
-export function InsightsTab(): JSX.Element {
+/** Every figure the dashboard shows, derived from the three rosters. */
+function useInsightMetrics() {
 	const applications = useApplications();
 	const members = useMembers();
 	const guests = useGuests();
@@ -75,10 +49,11 @@ export function InsightsTab(): JSX.Element {
 	 * closing at the boundary could appear in one and not the other.
 	 */
 	const now = createMemo(() => {
-		// Depend on the rosters so the clock advances whenever the data does.
-		void members.data();
-		void guests.data();
-		void applications.data();
+		// These bare reads are the memo's dependencies, not dead code: the clock
+		// advances whenever a roster's data does.
+		members.data();
+		guests.data();
+		applications.data();
 		return Date.now();
 	});
 
@@ -108,15 +83,214 @@ export function InsightsTab(): JSX.Element {
 		verticalMix([...memberRows(), ...guestRows()])
 	);
 
+	return {
+		tiles,
+		inbound,
+		joins,
+		runway,
+		hosts,
+		verticals,
+		rostersLoading,
+		hostsLoading,
+	};
+}
+
+/** A chart card: its title and hint, then the chart, or a chart-sized
+ *  skeleton until its data is in. */
+function ChartCard(
+	props: ParentProps<{ title: string; hint: string; loading: boolean }>
+) {
+	return (
+		<figure class={styles.card}>
+			<figcaption class={styles.cardTitle}>
+				{props.title}
+				<span class={styles.cardHint}>{props.hint}</span>
+			</figcaption>
+			<Show
+				when={!props.loading}
+				fallback={<Skeleton class={styles.chartSkeleton} />}
+			>
+				{props.children}
+			</Show>
+		</figure>
+	);
+}
+
+function RunwayCard(props: {
+	data: ChartDatum[];
+	loading: boolean;
+}): JSX.Element {
+	return (
+		<ChartCard
+			loading={props.loading}
+			title="Guest windows closing"
+			hint="Next twelve weeks. A spike is a week where several people lose the door at once."
+		>
+			<Chart
+				data={props.data}
+				xKey="week"
+				series={[{ key: "expiring", label: "Guests", kind: "bar" }]}
+				label="Guest windows closing over the next twelve weeks"
+				emptyMessage="No guest windows are set to close."
+			/>
+		</ChartCard>
+	);
+}
+
+function InboundCard(props: {
+	data: ChartDatum[];
+	loading: boolean;
+}): JSX.Element {
+	return (
+		<ChartCard
+			loading={props.loading}
+			title="Applications received"
+			hint="By month submitted, counting everyone who applied — including the ones since approved."
+		>
+			<Chart
+				data={props.data}
+				xKey="month"
+				series={[
+					{
+						key: "applications",
+						label: "Applications",
+						kind: "bar",
+					},
+				]}
+				label="Applications received per month"
+			/>
+		</ChartCard>
+	);
+}
+
+function JoinsCard(props: {
+	data: ChartDatum[];
+	loading: boolean;
+}): JSX.Element {
+	return (
+		<ChartCard
+			loading={props.loading}
+			title="Access granted"
+			hint="When the people here now first got in. Departures are not in this — it is arrivals, not net growth."
+		>
+			<Chart
+				data={props.data}
+				xKey="month"
+				series={[
+					{
+						key: "members",
+						label: "Members",
+						kind: "bar",
+						stack: "joins",
+					},
+					{
+						key: "guests",
+						label: "Guests",
+						kind: "bar",
+						stack: "joins",
+					},
+				]}
+				label="People granted access per month, members and guests"
+			/>
+		</ChartCard>
+	);
+}
+
+function HostsCard(props: {
+	data: ChartDatum[];
+	loading: boolean;
+}): JSX.Element {
+	return (
+		<ChartCard
+			loading={props.loading}
+			title="Who is hosting"
+			hint="Guests vouched for, per board member. Hosting is the one obligation the board takes on personally."
+		>
+			<Chart
+				data={props.data}
+				xKey="host"
+				series={[{ key: "guests", label: "Guests", kind: "bar" }]}
+				label="Guests per host"
+				emptyMessage="No guests are hosted yet."
+			/>
+		</ChartCard>
+	);
+}
+
+function VerticalsCard(props: {
+	data: ChartDatum[];
+	loading: boolean;
+}): JSX.Element {
+	return (
+		<ChartCard
+			loading={props.loading}
+			title="What the floor is building"
+			hint="People count once per vertical they picked, so the total is larger than the head count."
+		>
+			<Chart
+				data={props.data}
+				xKey="vertical"
+				series={[{ key: "people", label: "People", kind: "bar" }]}
+				label="People per vertical"
+				emptyMessage="No one has picked a vertical yet."
+			/>
+		</ChartCard>
+	);
+}
+
+function InsightCharts(props: {
+	metrics: ReturnType<typeof useInsightMetrics>;
+}): JSX.Element {
+	return (
+		<section class={styles.charts}>
+			<RunwayCard
+				data={props.metrics.runway()}
+				loading={props.metrics.rostersLoading()}
+			/>
+			<InboundCard
+				data={props.metrics.inbound()}
+				loading={props.metrics.rostersLoading()}
+			/>
+			<JoinsCard
+				data={props.metrics.joins()}
+				loading={props.metrics.rostersLoading()}
+			/>
+			<HostsCard
+				data={props.metrics.hosts()}
+				loading={props.metrics.hostsLoading()}
+			/>
+			<VerticalsCard
+				data={props.metrics.verticals()}
+				loading={props.metrics.rostersLoading()}
+			/>
+		</section>
+	);
+}
+
+/**
+ * The board's read-only view of the community as a whole.
+ *
+ * Every other tab answers "what about this person"; nothing answered "what
+ * about all of them", so questions like how many guest windows close next month
+ * or who is carrying the hosting were only answerable by exporting a CSV.
+ *
+ * It subscribes to nothing new. `CommunityDataProvider` already holds the three
+ * rosters plus the board-level list for the whole session, so the tab is one derivation pass
+ * over data that is on the client either way — which is also why it stays
+ * correct as the board edits rows in the other tabs.
+ */
+export function InsightsTab(): JSX.Element {
+	const metrics = useInsightMetrics();
+
 	return (
 		<div class={styles.tab}>
 			<section class={styles.tiles}>
-				<For each={tiles()}>
+				<For each={metrics.tiles()}>
 					{(tile) => (
 						<MetricTile
 							label={tile.label}
 							value={
-								rostersLoading() ? (
+								metrics.rostersLoading() ? (
 									<Skeleton width="short" />
 								) : (
 									tile.value
@@ -129,133 +303,7 @@ export function InsightsTab(): JSX.Element {
 				</For>
 			</section>
 
-			<section class={styles.charts}>
-				<figure class={styles.card}>
-					<figcaption class={styles.cardTitle}>
-						Guest windows closing
-						<span class={styles.cardHint}>
-							Next twelve weeks. A spike is a week where several
-							people lose the door at once.
-						</span>
-					</figcaption>
-					<ChartSlot loading={rostersLoading()}>
-						<Chart
-							data={runway()}
-							xKey="week"
-							series={[
-								{
-									key: "expiring",
-									label: "Guests",
-									kind: "bar",
-								},
-							]}
-							label="Guest windows closing over the next twelve weeks"
-							emptyMessage="No guest windows are set to close."
-						/>
-					</ChartSlot>
-				</figure>
-
-				<figure class={styles.card}>
-					<figcaption class={styles.cardTitle}>
-						Applications received
-						<span class={styles.cardHint}>
-							By month submitted, counting everyone who applied —
-							including the ones since approved.
-						</span>
-					</figcaption>
-					<ChartSlot loading={rostersLoading()}>
-						<Chart
-							data={inbound()}
-							xKey="month"
-							series={[
-								{
-									key: "applications",
-									label: "Applications",
-									kind: "bar",
-								},
-							]}
-							label="Applications received per month"
-						/>
-					</ChartSlot>
-				</figure>
-
-				<figure class={styles.card}>
-					<figcaption class={styles.cardTitle}>
-						Access granted
-						<span class={styles.cardHint}>
-							When the people here now first got in. Departures
-							are not in this — it is arrivals, not net growth.
-						</span>
-					</figcaption>
-					<ChartSlot loading={rostersLoading()}>
-						<Chart
-							data={joins()}
-							xKey="month"
-							series={[
-								{
-									key: "members",
-									label: "Members",
-									kind: "bar",
-									stack: "joins",
-								},
-								{
-									key: "guests",
-									label: "Guests",
-									kind: "bar",
-									stack: "joins",
-								},
-							]}
-							label="People granted access per month, members and guests"
-						/>
-					</ChartSlot>
-				</figure>
-
-				<figure class={styles.card}>
-					<figcaption class={styles.cardTitle}>
-						Who is hosting
-						<span class={styles.cardHint}>
-							Guests vouched for, per board member. Hosting is the
-							one obligation the board takes on personally.
-						</span>
-					</figcaption>
-					<ChartSlot loading={hostsLoading()}>
-						<Chart
-							data={hosts()}
-							xKey="host"
-							series={[
-								{ key: "guests", label: "Guests", kind: "bar" },
-							]}
-							label="Guests per host"
-							emptyMessage="No guests are hosted yet."
-						/>
-					</ChartSlot>
-				</figure>
-
-				<figure class={styles.card}>
-					<figcaption class={styles.cardTitle}>
-						What the floor is building
-						<span class={styles.cardHint}>
-							People count once per vertical they picked, so the
-							total is larger than the head count.
-						</span>
-					</figcaption>
-					<ChartSlot loading={rostersLoading()}>
-						<Chart
-							data={verticals()}
-							xKey="vertical"
-							series={[
-								{
-									key: "people",
-									label: "People",
-									kind: "bar",
-								},
-							]}
-							label="People per vertical"
-							emptyMessage="No one has picked a vertical yet."
-						/>
-					</ChartSlot>
-				</figure>
-			</section>
+			<InsightCharts metrics={metrics} />
 		</div>
 	);
 }

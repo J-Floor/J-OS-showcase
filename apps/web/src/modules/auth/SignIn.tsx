@@ -9,17 +9,12 @@ import { LoadingScreen } from "../../shared/LoadingScreen.tsx";
 
 import styles from "./SignIn.module.scss";
 
-/**
- * Magic-link sign-in. Enter an email → a secure link is sent (delivery is
- * stubbed to the Convex logs in dev). Password/passkey are a later increment.
- */
-export function SignIn() {
-	const session = authClient.useSession();
-	const [email, setEmail] = createSignal("");
+/** Requests the magic link for `email()`, tracking whether it was sent, is
+ *  sending, or failed. */
+function createMagicLinkRequest(email: () => string) {
 	const [sent, setSent] = createSignal(false);
 	const [error, setError] = createSignal<string | null>(null);
 	const [sending, setSending] = createSignal(false);
-	const navigate = useNavigate();
 
 	async function submit(event: Event) {
 		event.preventDefault();
@@ -27,13 +22,14 @@ export function SignIn() {
 		setError(null);
 		setSending(true);
 		try {
-			const res = await authClient.signIn.magicLink({
+			const response = await authClient.signIn.magicLink({
 				email: email(),
 				callbackURL: "/",
 			});
-			if (res.error)
+			if (response.error)
 				setError(
-					res.error.message ?? "Couldn’t send the link. Try again."
+					response.error.message ??
+						"Couldn’t send the link. Try again."
 				);
 			else setSent(true);
 		} catch {
@@ -42,6 +38,35 @@ export function SignIn() {
 			setSending(false);
 		}
 	}
+
+	return { sent, setSent, error, setError, sending, submit };
+}
+
+function LinkSentPanel(props: { email: string; onReset: () => void }) {
+	return (
+		<div class={styles.confirmation}>
+			<h1>Check your inbox</h1>
+			<p class={styles.subtitle}>
+				If <strong>{props.email}</strong> has access, a sign-in link is
+				on its way.
+			</p>
+			<Button variant="tertiary" onClick={props.onReset}>
+				<Icon>{ICONS.back}</Icon>Use a different email
+			</Button>
+		</div>
+	);
+}
+
+/**
+ * Magic-link sign-in. Enter an email → a secure link is sent (delivery is
+ * stubbed to the Convex logs in dev). Password/passkey are a later increment.
+ */
+export function SignIn() {
+	const session = authClient.useSession();
+	const [email, setEmail] = createSignal("");
+	const { sent, setSent, error, setError, sending, submit } =
+		createMagicLinkRequest(email);
+	const navigate = useNavigate();
 
 	// /signin lives outside the RoleGate subtree (that gate only pushes signed-OUT
 	// users TO /signin). Mirror its opposite case here: once the session resolves,
@@ -59,29 +84,19 @@ export function SignIn() {
 						<Show
 							when={!sent()}
 							fallback={
-								<div class={styles.confirmation}>
-									<h1>Check your inbox</h1>
-									<p class={styles.subtitle}>
-										If <strong>{email()}</strong> has
-										access, a sign-in link is on its way.
-									</p>
-									<Button
-										variant="tertiary"
-										onClick={() => {
-											setSent(false);
-											setError(null);
-										}}
-									>
-										<Icon>{ICONS.back}</Icon>Use a different
-										email
-									</Button>
-								</div>
+								<LinkSentPanel
+									email={email()}
+									onReset={() => {
+										setSent(false);
+										setError(null);
+									}}
+								/>
 							}
 						>
 							<h1>Sign in to J floor</h1>
 							<form
 								class={styles.form}
-								onSubmit={(e) => void submit(e)}
+								onSubmit={(event) => void submit(event)}
 								noValidate
 							>
 								<Input
@@ -92,8 +107,8 @@ export function SignIn() {
 									autocomplete="email"
 									required
 									value={email()}
-									onValueChange={(e) =>
-										setEmail(e.currentTarget.value)
+									onValueChange={(event) =>
+										setEmail(event.currentTarget.value)
 									}
 									invalid={Boolean(error())}
 									errorText={error() ?? undefined}

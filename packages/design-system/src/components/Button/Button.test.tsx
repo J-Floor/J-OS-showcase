@@ -5,19 +5,37 @@ import { Kbd } from "../Kbd/Kbd.tsx";
 
 import { Button } from "./Button.tsx";
 
+function createPendingClick(): {
+	onClick: () => Promise<void>;
+	resolve: () => void;
+} {
+	let resolvePending!: () => void;
+	function onClick(): Promise<void> {
+		return new Promise<void>((resolve) => {
+			resolvePending = resolve;
+		});
+	}
+	return {
+		onClick,
+		resolve: () => {
+			resolvePending();
+		},
+	};
+}
+
 test("fires onClick; shows spinner while async click resolves", () => {
-	let clicked = false;
+	let isClicked = false;
 	render(() => (
 		<Button
 			onClick={() => {
-				clicked = true;
+				isClicked = true;
 			}}
 		>
 			Go
 		</Button>
 	));
 	fireEvent.click(screen.getByRole("button"));
-	expect(clicked).toBe(true);
+	expect(isClicked).toBe(true);
 });
 
 test("defaults to the primary variant", () => {
@@ -29,12 +47,7 @@ test("defaults to the primary variant", () => {
 });
 
 test("toggles data-loading while an async click is pending and clears it after", async () => {
-	let resolve!: () => void;
-	function onClick(): Promise<void> {
-		return new Promise<void>((r) => {
-			resolve = r;
-		});
-	}
+	const { onClick, resolve } = createPendingClick();
 	render(() => <Button onClick={onClick}>Go</Button>);
 	const button = screen.getByRole("button");
 
@@ -54,19 +67,19 @@ test("respects the controlled isLoading prop", () => {
 });
 
 test("does not fire onClick while loading", () => {
-	let clicked = false;
+	let isClicked = false;
 	render(() => (
 		<Button
 			isLoading
 			onClick={() => {
-				clicked = true;
+				isClicked = true;
 			}}
 		>
 			Go
 		</Button>
 	));
 	fireEvent.click(screen.getByRole("button"));
-	expect(clicked).toBe(false);
+	expect(isClicked).toBe(false);
 });
 
 test("forwards disabled to the underlying button", () => {
@@ -110,12 +123,7 @@ test("still announces loading while loading", () => {
 });
 
 test("exposes the spinner again while an async click is pending", async () => {
-	let resolve!: () => void;
-	function onClick(): Promise<void> {
-		return new Promise<void>((r) => {
-			resolve = r;
-		});
-	}
+	const { onClick, resolve } = createPendingClick();
 	render(() => <Button onClick={onClick}>Got it</Button>);
 	expect(screen.queryByRole("status")).toBeNull();
 	fireEvent.click(screen.getByRole("button", { name: "Got it" }));

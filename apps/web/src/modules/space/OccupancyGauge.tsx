@@ -6,6 +6,7 @@ import { ICONS } from "../../shared/icons.ts";
 import styles from "./OccupancyCard.module.scss";
 
 const SLOTS = [0, 1, 2];
+const PERCENT = 100;
 
 /**
  * A proportional occupancy gauge: three person icons with a colored layer
@@ -21,7 +22,7 @@ export function OccupancyGauge(props: { fill: number }) {
 				class={styles.fill}
 				data-fill-layer
 				aria-hidden="true"
-				style={{ width: `${props.fill * 100}%` }}
+				style={{ width: `${props.fill * PERCENT}%` }}
 			>
 				<div class={styles.row}>
 					<For each={SLOTS}>

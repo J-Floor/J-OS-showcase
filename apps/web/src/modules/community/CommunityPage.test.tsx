@@ -72,19 +72,20 @@ vi.mock("./actions/ExportActions.tsx", () => ({
 	ExportActions: () => <div>export-actions</div>,
 }));
 
+const { roster } = vi.hoisted(() => ({
+	roster: (rows: unknown[]) => () => ({
+		data: () => rows,
+		isLoading: () => false,
+		error: () => {},
+		isStale: () => false,
+		refetch: () => {},
+	}),
+}));
+
 // The page reads the rosters itself now — the tab a `?person=` link belongs to
 // is a fact about that person, not something the link is trusted to carry. Only
 // the ids matter here; the stubbed tabs never render a row.
 vi.mock("./data/communityData.tsx", () => {
-	function roster(rows: unknown[]) {
-		return () => ({
-			data: () => rows,
-			isLoading: () => false,
-			error: () => undefined,
-			isStale: () => false,
-			refetch: () => {},
-		});
-	}
 	return {
 		useMembers: roster([{ _id: "p1" }]),
 		useGuests: roster([{ _id: "g1" }]),
@@ -95,7 +96,7 @@ vi.mock("../../shared/data/boardLevel.tsx", () => ({
 	useBoardLevel: () => ({
 		data: () => [],
 		isLoading: () => false,
-		error: () => undefined,
+		error: () => {},
 		isStale: () => false,
 		refetch: () => {},
 	}),

@@ -15,7 +15,7 @@ export type StartPwaUpdateChecksDeps = {
 	isOnline?: () => boolean;
 };
 
-const CHECK_INTERVAL_MS = 60 * 60 * 1000;
+const CHECK_INTERVAL_MS = 3_600_000;
 
 let checkNow: (() => void) | undefined;
 
@@ -91,8 +91,8 @@ const [updating, setUpdating] = createSignal(false);
 export const isUpdating = updating;
 
 /** Test-only: force the signal, since it is a module-level singleton. */
-export function setUpdatingForTest(value: boolean): void {
-	setUpdating(value);
+export function setUpdatingForTest(isForced: boolean): void {
+	setUpdating(isForced);
 }
 
 /** The slice of `navigator.serviceWorker` this module needs. */
@@ -136,20 +136,21 @@ export function startReloadOnUpdate(
 ): (registration: ServiceWorkerRegistration | undefined) => void {
 	const container =
 		deps.container === undefined ? defaultContainer() : deps.container;
+
+	if (!container?.controller) {
+		return () => {};
+	}
+
 	const reload =
 		deps.reload ??
 		(() => {
 			window.location.reload();
 		});
 
-	if (!container?.controller) {
-		return () => {};
-	}
-
-	let reloaded = false;
+	let isReloaded = false;
 	container.addEventListener("controllerchange", () => {
-		if (reloaded) return;
-		reloaded = true;
+		if (isReloaded) return;
+		isReloaded = true;
 		reload();
 	});
 

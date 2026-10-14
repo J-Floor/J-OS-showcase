@@ -11,7 +11,7 @@ import {
 	setTableTextMeasurer,
 	type MeasuredColumn,
 } from "./columnWidths.ts";
-import type { JfColumnDef } from "./types.ts";
+import type { JfColumnDefinition } from "./types.ts";
 
 type Item = {
 	name: string;
@@ -30,14 +30,18 @@ function rowOf(item: Item, id = String(nextRowId++)): TanRow<Item> {
 		id,
 		original: item,
 		getValue: (id: string) => {
-			if (id === "label") return `${item.name}!`;
-			return item[id as keyof Item];
+			return id === "label" ? `${item.name}!` : item[id as keyof Item];
 		},
 	} as unknown as TanRow<Item>;
 }
 
-function column(def: JfColumnDef<Item>): MeasuredColumn<Item> {
-	return { id: def.id ?? (def as { accessorKey: string }).accessorKey, def };
+function column(definition: JfColumnDefinition<Item>): MeasuredColumn<Item> {
+	return {
+		id:
+			definition.id ??
+			(definition as { accessorKey: string }).accessorKey,
+		def: definition,
+	};
 }
 
 const byKey = column({
@@ -50,11 +54,11 @@ const byNumber = column({
 	header: "Count",
 	dataType: "number",
 });
-const byFn = column({
+const byFunction = column({
 	id: "label",
 	header: "Label",
 	dataType: "string",
-	accessorFn: (r) => `${r.name}!`,
+	accessorFn: (row) => `${row.name}!`,
 });
 const byArray = column({
 	accessorKey: "tags",
@@ -65,7 +69,7 @@ const formatted = column({
 	accessorKey: "at",
 	header: "At",
 	dataType: "date",
-	measureText: (r) => `day ${String(r.at)}`,
+	measureText: (row) => `day ${String(row.at)}`,
 });
 const optedOut = column({
 	id: "free",
@@ -126,7 +130,7 @@ test("an enum shows its option label, joined for an array value", () => {
 test("a string or number value is its own text", () => {
 	expect(cellMeasureText(byKey, ada)).toBe("Ada");
 	expect(cellMeasureText(byNumber, ada)).toBe("7");
-	expect(cellMeasureText(byFn, ada)).toBe("Ada!");
+	expect(cellMeasureText(byFunction, ada)).toBe("Ada!");
 });
 
 test("a value with no text measures as empty", () => {
@@ -151,7 +155,11 @@ function freshBodyNeeds(
 	measure: (text: string) => number,
 	paddingInline: number
 ): Readonly<Record<string, number>> {
-	return createBodyNeeds<Item>()(columns, rows, measure, paddingInline, "");
+	return createBodyNeeds<Item>()(columns, rows, {
+		measure,
+		paddingInline,
+		columnsKey: "",
+	});
 }
 
 test("a fresh createBodyNeeds is the widest cell over every row plus padding and slack", () => {
@@ -228,7 +236,7 @@ test("an injected measurer is used, cached, and reset back to the canvas", () =>
 	expect(measurer?.("abc")).toBe(30);
 	expect(measurer?.("abc")).toBe(30);
 	expect(measure).toHaveBeenCalledTimes(1);
-	setTableTextMeasurer(() => undefined);
+	setTableTextMeasurer(() => {});
 	expect(createTextMeasurer(FONT)).toBeUndefined();
 	setTableTextMeasurer(undefined);
 	expect(createTextMeasurer(FONT)).toBeUndefined();
@@ -261,17 +269,25 @@ test("createBodyNeeds re-measures a row only when its id is new or its fields ch
 		return { name, count: 0, tags: [], state: "ok", at: 0 };
 	}
 	const first = [rowOf(item("Ada"), "a"), rowOf(item("Grace Hopper"), "b")];
-	expect(fold([byKey], first, measure, 0, "k")).toEqual({ name: 121 });
+	expect(
+		fold([byKey], first, { measure, paddingInline: 0, columnsKey: "k" })
+	).toEqual({ name: 121 });
 	measure.mockClear();
 	const copies = first.map((row) => rowOf({ ...row.original }, row.id));
-	expect(fold([byKey], copies, measure, 0, "k")).toEqual({ name: 121 });
+	expect(
+		fold([byKey], copies, { measure, paddingInline: 0, columnsKey: "k" })
+	).toEqual({ name: 121 });
 	expect(measure).not.toHaveBeenCalled();
 	// "b" leaves: its width stays. "a" changes: only it is measured again.
 	const changed = [rowOf(item("Ada L"), "a")];
-	expect(fold([byKey], changed, measure, 0, "k")).toEqual({ name: 121 });
+	expect(
+		fold([byKey], changed, { measure, paddingInline: 0, columnsKey: "k" })
+	).toEqual({ name: 121 });
 	expect(measure.mock.calls).toEqual([["Ada L"]]);
 	// A new columns key starts over, exactly.
-	expect(fold([byKey], changed, measure, 0, "k2")).toEqual({ name: 51 });
+	expect(
+		fold([byKey], changed, { measure, paddingInline: 0, columnsKey: "k2" })
+	).toEqual({ name: 51 });
 });
 
 test("createBodyNeeds treats a fresh array with the same items as unchanged", () => {
@@ -284,10 +300,22 @@ test("createBodyNeeds treats a fresh array with the same items as unchanged", ()
 		state: "ok",
 		at: 0,
 	};
-	fold([byKey], [rowOf(item, "a")], measure, 0, "k");
+	fold([byKey], [rowOf(item, "a")], {
+		measure,
+		paddingInline: 0,
+		columnsKey: "k",
+	});
 	measure.mockClear();
-	fold([byKey], [rowOf({ ...item, tags: ["x"] }, "a")], measure, 0, "k");
+	fold([byKey], [rowOf({ ...item, tags: ["x"] }, "a")], {
+		measure,
+		paddingInline: 0,
+		columnsKey: "k",
+	});
 	expect(measure).not.toHaveBeenCalled();
-	fold([byKey], [rowOf({ ...item, tags: ["y"] }, "a")], measure, 0, "k");
+	fold([byKey], [rowOf({ ...item, tags: ["y"] }, "a")], {
+		measure,
+		paddingInline: 0,
+		columnsKey: "k",
+	});
 	expect(measure).toHaveBeenCalledTimes(1);
 });

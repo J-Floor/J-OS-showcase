@@ -58,16 +58,15 @@ export function WhatsNew() {
 	// Decide once, when the onboarding state first resolves. `handled` guards
 	// against the query pushing later updates (a re-render must not re-open a
 	// dialog the user just dismissed).
-	let handled = false;
+	let isHandled = false;
 	createEffect(() => {
-		if (handled) return;
+		if (isHandled) return;
 		const data = state.data();
-		if (!data) return;
 		// While the doors intro is pending, do nothing — and do NOT mark this
 		// handled — so the effect runs again when the intro is dismissed (the
 		// query pushes the person with `doorsIntroSeenAt` set) and decides then.
-		if (doorsIntroPending(data.person, Date.now())) return;
-		handled = true;
+		if (!data || doorsIntroPending(data.person, Date.now())) return;
+		isHandled = true;
 
 		const seen = readSeen();
 		if (seen === APP_VERSION) return;
@@ -79,13 +78,15 @@ export function WhatsNew() {
 		// as brand-new and hid What's New from its own audience. Record the
 		// version so a first-timer does not get the whole changelog on return.
 		const onboarding = data.person?.onboarding;
-		const tourWillRun = onboarding != null && !onboarding.tourSeen;
-		if (tourWillRun) {
+		const isTourWillRun = onboarding !== undefined && !onboarding.tourSeen;
+		if (isTourWillRun) {
 			writeSeen(APP_VERSION);
 			return;
 		}
 
-		const entries = CHANGELOG.filter((c) => isNewer(c.version, seen));
+		const entries = CHANGELOG.filter((entry) =>
+			isNewer(entry.version, seen)
+		);
 		if (entries.length === 0) {
 			writeSeen(APP_VERSION);
 			return;
@@ -102,8 +103,8 @@ export function WhatsNew() {
 	return (
 		<Dialog.Root
 			open={open()}
-			onOpenChange={(d) => {
-				if (!d.open) dismiss();
+			onOpenChange={(details) => {
+				if (!details.open) dismiss();
 			}}
 		>
 			<Dialog.Content>

@@ -6,7 +6,7 @@ import { reapplyDecision, type ReapplyPerson } from "./reapply.ts";
 const NOW = 1_800_000_000_000;
 const DAY = 86_400_000;
 
-function p(over: Partial<ReapplyPerson>): ReapplyPerson {
+function person(over: Partial<ReapplyPerson>): ReapplyPerson {
 	return { tier: "prospect", stage: "unverified", stageSince: NOW, ...over };
 }
 
@@ -16,15 +16,15 @@ describe("reapplyDecision", () => {
 	});
 
 	it("reuses an unverified prospect row (edit before confirm)", () => {
-		expect(reapplyDecision(p({}), NOW)).toEqual({ kind: "reuse" });
+		expect(reapplyDecision(person({}), NOW)).toEqual({ kind: "reuse" });
 	});
 
 	it("blocks while the board is looking at it", () => {
-		expect(reapplyDecision(p({ stage: "verified" }), NOW)).toEqual({
+		expect(reapplyDecision(person({ stage: "verified" }), NOW)).toEqual({
 			kind: "blocked",
 			reason: "under_review",
 		});
-		expect(reapplyDecision(p({ stage: "queued" }), NOW)).toEqual({
+		expect(reapplyDecision(person({ stage: "queued" }), NOW)).toEqual({
 			kind: "blocked",
 			reason: "under_review",
 		});
@@ -32,7 +32,9 @@ describe("reapplyDecision", () => {
 
 	it("blocks a denial inside the debounce and reports the retry date", () => {
 		const deniedAt = NOW - DAY;
-		expect(reapplyDecision(p({ stage: "denied", deniedAt }), NOW)).toEqual({
+		expect(
+			reapplyDecision(person({ stage: "denied", deniedAt }), NOW)
+		).toEqual({
 			kind: "blocked",
 			reason: "debounce",
 			until: deniedAt + REAPPLY_DEBOUNCE_MS,
@@ -41,20 +43,22 @@ describe("reapplyDecision", () => {
 
 	it("reuses the row once the debounce has passed", () => {
 		const deniedAt = NOW - REAPPLY_DEBOUNCE_MS - DAY;
-		expect(reapplyDecision(p({ stage: "denied", deniedAt }), NOW)).toEqual({
+		expect(
+			reapplyDecision(person({ stage: "denied", deniedAt }), NOW)
+		).toEqual({
 			kind: "reuse",
 		});
 	});
 
 	it("blocks anyone with active access", () => {
 		expect(
-			reapplyDecision(p({ tier: "member", stage: "active" }), NOW)
+			reapplyDecision(person({ tier: "member", stage: "active" }), NOW)
 		).toEqual({
 			kind: "blocked",
 			reason: "active",
 		});
 		expect(
-			reapplyDecision(p({ tier: "board", stage: "active" }), NOW)
+			reapplyDecision(person({ tier: "board", stage: "active" }), NOW)
 		).toEqual({
 			kind: "blocked",
 			reason: "active",
@@ -66,7 +70,7 @@ describe("reapplyDecision", () => {
 		// not re-open the application process.
 		expect(
 			reapplyDecision(
-				p({
+				person({
 					tier: "member",
 					stage: "active",
 					door: { override: "force_off" },
@@ -78,7 +82,7 @@ describe("reapplyDecision", () => {
 
 	it("sends an expired guest back through triage", () => {
 		expect(
-			reapplyDecision(p({ tier: "guest", stage: "expired" }), NOW)
+			reapplyDecision(person({ tier: "guest", stage: "expired" }), NOW)
 		).toEqual({
 			kind: "reuse",
 		});
@@ -86,7 +90,7 @@ describe("reapplyDecision", () => {
 
 	it("sends a former member back through triage", () => {
 		expect(
-			reapplyDecision(p({ tier: "former", stage: "active" }), NOW)
+			reapplyDecision(person({ tier: "former", stage: "active" }), NOW)
 		).toEqual({
 			kind: "reuse",
 		});
@@ -94,10 +98,13 @@ describe("reapplyDecision", () => {
 
 	it("reuses an event visitor so they can apply with the same email", () => {
 		expect(
-			reapplyDecision(p({ tier: "visitor", stage: "unverified" }), NOW)
+			reapplyDecision(
+				person({ tier: "visitor", stage: "unverified" }),
+				NOW
+			)
 		).toEqual({ kind: "reuse" });
 		expect(
-			reapplyDecision(p({ tier: "visitor", stage: "verified" }), NOW)
+			reapplyDecision(person({ tier: "visitor", stage: "verified" }), NOW)
 		).toEqual({ kind: "reuse" });
 	});
 
@@ -107,7 +114,7 @@ describe("reapplyDecision", () => {
 		// guest.onboarding and throw IllegalTransitionError on a public endpoint.
 		expect(
 			reapplyDecision(
-				p({
+				person({
 					tier: "guest",
 					stage: "onboarding",
 					accessUntil: NOW - DAY,

@@ -27,7 +27,7 @@ function fakeClient() {
 	}
 	const client = {
 		disabled: false,
-		client: { localQueryResult: () => undefined },
+		client: { localQueryResult: () => {} },
 		onUpdate(
 			query: Parameters<ConvexClient["onUpdate"]>[0],
 			args: unknown
@@ -70,23 +70,27 @@ describe("useQuery handoff to the keeper", () => {
 	});
 
 	it("unmount keeps the server subscription alive", () => {
-		const f = fakeClient();
-		bindQueryKeeper(f.client);
+		const fake = fakeClient();
+		bindQueryKeeper(fake.client);
 		setKeeperActive(true);
-		const m = mount(f.client, () => useQuery(api.events.listEvents, {}));
-		m.dispose();
+		const mounted = mount(fake.client, () =>
+			useQuery(api.events.listEvents, {})
+		);
+		mounted.dispose();
 		expect(
-			f.minAfterFirst.get(getFunctionName(api.events.listEvents) + "{}")
+			fake.minAfterFirst.get(
+				getFunctionName(api.events.listEvents) + "{}"
+			)
 		).toBeGreaterThanOrEqual(1);
 		expect(keptCount()).toBe(1);
 	});
 
 	it("changing args keeps the previous args subscribed", () => {
-		const f = fakeClient();
-		bindQueryKeeper(f.client);
+		const fake = fakeClient();
+		bindQueryKeeper(fake.client);
 		setKeeperActive(true);
 		const [id, setId] = createSignal("a");
-		const m = mount(f.client, () =>
+		const mounted = mount(fake.client, () =>
 			useQuery(api.events.listEventAttendees, () => ({
 				eventId: id() as never,
 			}))
@@ -95,8 +99,8 @@ describe("useQuery handoff to the keeper", () => {
 		const key =
 			getFunctionName(api.events.listEventAttendees) +
 			JSON.stringify({ eventId: "a" });
-		expect(f.minAfterFirst.get(key)).toBeGreaterThanOrEqual(1);
+		expect(fake.minAfterFirst.get(key)).toBeGreaterThanOrEqual(1);
 		expect(keptCount()).toBe(1);
-		m.dispose();
+		mounted.dispose();
 	});
 });

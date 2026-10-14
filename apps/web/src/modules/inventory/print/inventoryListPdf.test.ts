@@ -51,14 +51,15 @@ async function pageTexts(bytes: Uint8Array): Promise<string[]> {
 }
 
 async function pdfText(bytes: Uint8Array): Promise<string> {
-	return (await pageTexts(bytes)).join("\n");
+	const texts = await pageTexts(bytes);
+	return texts.join("\n");
 }
 
 function longList(): InventoryListRow[] {
-	return Array.from({ length: 80 }, (_, i) =>
+	return Array.from({ length: 80 }, (_, index) =>
 		row({
-			assetTag: `A${String(i + 1).padStart(5, "0")}`,
-			description: `Item ${String(i + 1)}`,
+			assetTag: `A${String(index + 1).padStart(5, "0")}`,
+			description: `Item ${String(index + 1)}`,
 		})
 	);
 }
@@ -133,13 +134,13 @@ describe("generateInventoryListPdf", () => {
 	it("carries the letterhead and a page number on every page", async () => {
 		const pages = await pageTexts(await generate(longList()));
 		expect(pages.length).toBeGreaterThan(1);
-		pages.forEach((text, i) => {
+		pages.forEach((text, index) => {
 			expect(text).toContain("Inventory List");
 			expect(text).toContain(
 				"J floor. Build in Zurich. Capture the world."
 			);
 			expect(text).toContain(
-				`Page ${String(i + 1)} of ${String(pages.length)}`
+				`Page ${String(index + 1)} of ${String(pages.length)}`
 			);
 		});
 	});

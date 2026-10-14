@@ -7,6 +7,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { doorOpensFor } from "./lib/derive.ts";
+import type { LockSlot } from "./lib/doorLocks.ts";
 import type { DoorPosition } from "./lib/doorProvider.ts";
 import { personByEmail } from "./lib/emailAddress.ts";
 import { displayName } from "./lib/names.ts";
@@ -19,16 +20,15 @@ type DoorPerson = { email: string; name: string; personId: Id<"people"> };
  * have a matching row, AND the door opens for them
  * ({@link doorOpensFor}) — the whole gate on the app's door buttons.
  */
-async function currentDoorPerson(ctx: QueryCtx): Promise<Doc<"people"> | null> {
-	const identity = await ctx.auth.getUserIdentity();
+async function currentDoorPerson(
+	context: QueryCtx
+): Promise<Doc<"people"> | null> {
+	const identity = await context.auth.getUserIdentity();
 	const email = identity?.email;
 	if (!email) return null;
 
-	const person = await personByEmail(ctx, email);
-	if (!person) return null;
-	if (!doorOpensFor(person, Date.now())) return null;
-
-	return person;
+	const person = await personByEmail(context, email);
+	return person && doorOpensFor(person, Date.now()) ? person : null;
 }
 
 type DoorActionWho = DoorPerson & {
@@ -62,14 +62,14 @@ export const doorActionContext = internalQuery({
 		lock: lockSlot,
 		action: doorAction,
 	},
-	handler: async (ctx, args): Promise<DoorActionWho | null> => {
-		const person = await currentDoorPerson(ctx);
+	handler: async (context, args): Promise<DoorActionWho | null> => {
+		const person = await currentDoorPerson(context);
 		if (!person) return null;
 
-		const last = await ctx.db
+		const last = await context.db
 			.query("doorLog")
-			.withIndex("by_personId_and_slot_and_outcome_and_at", (q) =>
-				q
+			.withIndex("by_personId_and_slot_and_outcome_and_at", (range) =>
+				range
 					.eq("personId", person._id)
 					.eq("slot", args.lock)
 					.eq("outcome", "ok")
@@ -90,39 +90,48 @@ export const doorActionContext = internalQuery({
 });
 
 /** Whether the caller may read door positions: the door opens for them. */
+// eslint-disable-next-line unicorn/consistent-boolean-name -- registered Convex function: the name is its deployed path (internal.doorInternal.canSeeDoorPosition)
 export const canSeeDoorPosition = internalQuery({
 	args: {},
-	handler: async (ctx): Promise<boolean> =>
-		(await currentDoorPerson(ctx)) !== null,
+	handler: async (context): Promise<boolean> =>
+		(await currentDoorPerson(context)) !== null,
 });
 
 /** The cached bolt position for a door, or null when there is none or it was
  *  checked before `freshSince`. */
 export const readDoorPositionCache = internalQuery({
 	args: { slot: lockSlot, freshSince: v.number() },
-	handler: async (ctx, args): Promise<DoorPosition | null> => {
-		const row = await ctx.db
+	handler: async (context, args): Promise<DoorPosition | null> => {
+		const row = await context.db
 			.query("doorPositionCache")
-			.withIndex("by_slot", (q) => q.eq("slot", args.slot))
+			.withIndex("by_slot", (range) => range.eq("slot", args.slot))
 			.first();
 		return row && row.checkedAt >= args.freshSince ? row.position : null;
 	},
 });
 
+/** The one cached bolt-position row for a door, if any. */
+async function cachedPositionRow(
+	context: QueryCtx,
+	slot: LockSlot
+): Promise<Doc<"doorPositionCache"> | null> {
+	return await context.db
+		.query("doorPositionCache")
+		.withIndex("by_slot", (range) => range.eq("slot", slot))
+		.unique();
+}
+
 /** Upserts the cached bolt position for a door: one row per slot. */
 export const writeDoorPositionCache = internalMutation({
 	args: { slot: lockSlot, position: doorPosition, checkedAt: v.number() },
-	handler: async (ctx, args): Promise<null> => {
-		const row = await ctx.db
-			.query("doorPositionCache")
-			.withIndex("by_slot", (q) => q.eq("slot", args.slot))
-			.unique();
+	handler: async (context, args): Promise<null> => {
+		const row = await cachedPositionRow(context, args.slot);
 		if (row)
-			await ctx.db.patch(row._id, {
+			await context.db.patch(row._id, {
 				position: args.position,
 				checkedAt: args.checkedAt,
 			});
-		else await ctx.db.insert("doorPositionCache", args);
+		else await context.db.insert("doorPositionCache", args);
 		return null;
 	},
 });
@@ -130,12 +139,9 @@ export const writeDoorPositionCache = internalMutation({
 /** Drops a door's cached bolt position, so the next read asks the provider. */
 export const clearDoorPositionCache = internalMutation({
 	args: { slot: lockSlot },
-	handler: async (ctx, args): Promise<null> => {
-		const row = await ctx.db
-			.query("doorPositionCache")
-			.withIndex("by_slot", (q) => q.eq("slot", args.slot))
-			.unique();
-		if (row) await ctx.db.delete(row._id);
+	handler: async (context, args): Promise<null> => {
+		const row = await cachedPositionRow(context, args.slot);
+		if (row) await context.db.delete(row._id);
 		return null;
 	},
 });

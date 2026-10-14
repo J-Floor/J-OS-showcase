@@ -10,6 +10,6 @@ export const communityModule: ModuleManifest = {
 	subject: "Community",
 	// Code-split: the page and everything only it imports load on first visit.
 	view: lazyPage(() =>
-		import("./CommunityPage.tsx").then((m) => m.CommunityPage)
+		import("./CommunityPage.tsx").then((loaded) => loaded.CommunityPage)
 	),
 };

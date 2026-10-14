@@ -25,6 +25,19 @@ export type Inbox = {
 	markAllRead: () => void;
 };
 
+function withReadState(
+	prev: ReadonlySet<string>,
+	ids: readonly string[],
+	isRead: boolean
+): ReadonlySet<string> {
+	const next = new Set(prev);
+	for (const id of ids) {
+		if (isRead) next.add(id);
+		else next.delete(id);
+	}
+	return next;
+}
+
 /**
  * The caller's notification history, paged like the door log
  * (`useFlooredLog`): the floor is read on the first open (the drawer is
@@ -57,15 +70,8 @@ export function useInbox(open: Accessor<boolean>): Inbox {
 	const pending = new Map<string, number>();
 	const confirmed = new Set<string>();
 
-	function setRead(ids: readonly string[], read: boolean): void {
-		setReadLocally((prev) => {
-			const next = new Set(prev);
-			for (const id of ids) {
-				if (read) next.add(id);
-				else next.delete(id);
-			}
-			return next;
-		});
+	function setRead(ids: readonly string[], isRead: boolean): void {
+		setReadLocally((prev) => withReadState(prev, ids, isRead));
 	}
 
 	function mark(

@@ -73,8 +73,9 @@ export function timeToValue(
  * component (a plain `CalendarDate`), which the time field never produces.
  */
 export function valueToTime(value: DateValue): Time | undefined {
-	if (!("hour" in value)) return undefined;
-	return new Time(value.hour, value.minute, value.second);
+	return "hour" in value
+		? new Time(value.hour, value.minute, value.second)
+		: undefined;
 }
 
 /**
@@ -98,8 +99,7 @@ const HHMM_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
  */
 export function parseHHMM(text: string): Time | null {
 	const match = HHMM_PATTERN.exec(text);
-	if (!match) return null;
-	return new Time(Number(match[1]), Number(match[2]));
+	return match ? new Time(Number(match[1]), Number(match[2])) : null;
 }
 
 /** Formats a `Time` as a zero-padded 24-hour `"HH:MM"` string. */

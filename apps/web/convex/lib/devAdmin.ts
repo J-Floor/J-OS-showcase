@@ -1,4 +1,4 @@
-export function devAdminEmail() {
+export function developmentAdminEmail() {
 	const email = process.env.DEV_ADMIN_EMAIL;
 	return email === undefined || email === "" ? "admin@example.com" : email;
 }

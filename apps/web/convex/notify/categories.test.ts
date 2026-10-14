@@ -41,9 +41,9 @@ describe("notification categories", () => {
 	});
 
 	it("keeps the validator in step with the category list", () => {
-		expect(categoryValidator.members.map((m) => m.value)).toEqual([
-			...CATEGORIES,
-		]);
+		expect(categoryValidator.members.map((member) => member.value)).toEqual(
+			[...CATEGORIES]
+		);
 	});
 
 	it("marks only events as push only", () => {

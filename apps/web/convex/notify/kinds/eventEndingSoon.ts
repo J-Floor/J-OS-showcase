@@ -13,7 +13,7 @@ export const eventEndingSoon = defineKind({
 		name: v.string(),
 		endsAtLocal: v.string(),
 	}),
-	audience: (ctx) => communityIds(ctx),
+	audience: (context) => communityIds(context),
 	push: ({ eventId, name, endsAtLocal }) => ({
 		title: `${name} ends soon`,
 		body: `Ends at ${zonedTime(endsAtLocal)}.`,

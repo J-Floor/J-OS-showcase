@@ -5,7 +5,7 @@
 import { injectedDoorProvider, type DoorProvider } from "./doorProvider.ts";
 import {
 	doorProviderConfigured as adapterConfigured,
-	doorProviderFromEnv,
+	doorProviderFromEnvironment,
 	doorWritesEnabled,
 } from "./nukiClient.ts";
 
@@ -13,9 +13,11 @@ export { doorWritesEnabled };
 
 /** The door provider to use: the injected test fake when one is set,
  *  otherwise the real one built from this deployment's configuration.
- *  `requireWrites` as for `doorProviderFromEnv`. */
-export function doorProvider(opts: { requireWrites: boolean }): DoorProvider {
-	return injectedDoorProvider() ?? doorProviderFromEnv(opts);
+ *  `requireWrites` as for `doorProviderFromEnvironment`. */
+export function doorProvider(options: {
+	requireWrites: boolean;
+}): DoorProvider {
+	return injectedDoorProvider() ?? doorProviderFromEnvironment(options);
 }
 
 /** Whether a door provider is available: a test fake is always treated as

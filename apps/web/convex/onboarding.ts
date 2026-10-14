@@ -2,7 +2,7 @@ import { v } from "convex/values";
 
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { requireRole } from "./lib/authGuard.ts";
 import { personForCurrentUser } from "./lib/currentPerson.ts";
 import { entitled } from "./lib/derive.ts";
@@ -19,8 +19,8 @@ import { applyEventIfLegal } from "./lifecycle.ts";
  */
 export const getState = query({
 	args: {},
-	handler: async (ctx) => {
-		const person = await personForCurrentUser(ctx);
+	handler: async (context) => {
+		const person = await personForCurrentUser(context);
 		if (!person)
 			return { person: null, hasAccess: true, needsOnboarding: false };
 		const hasAccess = entitled(person, Date.now());
@@ -38,9 +38,9 @@ export const getState = query({
  * steps to complete.
  */
 async function requireOnboardingPerson(
-	ctx: MutationCtx
+	context: MutationCtx
 ): Promise<Doc<"people">> {
-	const person = await personForCurrentUser(ctx);
+	const person = await personForCurrentUser(context);
 	if (!person)
 		throw new Error("No onboarding in progress for the current user.");
 	if (!entitled(person, Date.now()))
@@ -60,19 +60,19 @@ async function requireOnboardingPerson(
  * second audit row.
  */
 export async function markStepComplete(
-	ctx: MutationCtx,
+	context: MutationCtx,
 	personId: Id<"people">,
 	stepId: string
 ): Promise<void> {
-	const person = await ctx.db.get(personId);
+	const person = await context.db.get(personId);
 	if (!person) return;
 	const prev = person.onboarding ?? { steps: {} };
 	if (stepId in prev.steps) return;
 
 	const steps = { ...prev.steps, [stepId]: { completedAt: Date.now() } };
-	await ctx.db.patch(personId, { onboarding: { ...prev, steps } });
+	await context.db.patch(personId, { onboarding: { ...prev, steps } });
 	// The person is their own actor here: the timeline shows their name.
-	await ctx.db.insert("personEvents", {
+	await context.db.insert("personEvents", {
 		personId,
 		at: Date.now(),
 		actorId: personId,
@@ -80,13 +80,15 @@ export async function markStepComplete(
 		meta: stepId,
 	});
 	// Still blocked (another step or the agreement) is an ordinary outcome.
-	await applyEventIfLegal(ctx, personId, { type: "ONBOARDING_PROGRESSED" });
+	await applyEventIfLegal(context, personId, {
+		type: "ONBOARDING_PROGRESSED",
+	});
 }
 
 export const completeStep = mutation({
 	args: { stepId: v.string() },
-	handler: async (ctx, { stepId }) => {
-		const person = await requireOnboardingPerson(ctx);
+	handler: async (context, { stepId }) => {
+		const person = await requireOnboardingPerson(context);
 		// Same list the activation guard uses. The retired door-key step is not in
 		// it, so completing it is rejected like any unknown step.
 		const required = requiredSelfStepIds(person.tier) as string[];
@@ -100,7 +102,7 @@ export const completeStep = mutation({
 				"The document step is completed by signing the agreement."
 			);
 		}
-		await markStepComplete(ctx, person._id, stepId);
+		await markStepComplete(context, person._id, stepId);
 		return null;
 	},
 });
@@ -113,9 +115,9 @@ export const completeStep = mutation({
  */
 export const resume = mutation({
 	args: {},
-	handler: async (ctx): Promise<{ activated: boolean }> => {
-		const person = await requireOnboardingPerson(ctx);
-		const next = await applyEventIfLegal(ctx, person._id, {
+	handler: async (context): Promise<{ activated: boolean }> => {
+		const person = await requireOnboardingPerson(context);
+		const next = await applyEventIfLegal(context, person._id, {
 			type: "ONBOARDING_PROGRESSED",
 		});
 		if (next === null)
@@ -129,10 +131,10 @@ export const resume = mutation({
 
 export const setTourSeen = mutation({
 	args: {},
-	handler: async (ctx) => {
-		const person = await requireRole(ctx, ACCESS_TIERS);
+	handler: async (context) => {
+		const person = await requireRole(context, ACCESS_TIERS);
 		const prev = person.onboarding ?? { steps: {} };
-		await ctx.db.patch(person._id, {
+		await context.db.patch(person._id, {
 			onboarding: { ...prev, tourSeen: true },
 		});
 		return null;
@@ -145,11 +147,12 @@ export const setTourSeen = mutation({
  */
 export const setDoorsIntroSeen = mutation({
 	args: {},
-	handler: async (ctx) => {
-		const person = await requireRole(ctx, ACCESS_TIERS);
-		if (person.doorsIntroSeenAt !== undefined) return null;
-		await ctx.db.patch(person._id, { doorsIntroSeenAt: Date.now() });
-		return null;
+	handler: async (context) => {
+		const person = await requireRole(context, ACCESS_TIERS);
+		if (person.doorsIntroSeenAt === undefined)
+			await context.db.patch(person._id, {
+				doorsIntroSeenAt: Date.now(),
+			});
 	},
 });
 
@@ -159,12 +162,30 @@ export const setDoorsIntroSeen = mutation({
  */
 export const whatsappInvite = query({
 	args: {},
-	handler: async (ctx) => {
-		await requireRole(ctx, ACCESS_TIERS);
+	handler: async (context) => {
+		await requireRole(context, ACCESS_TIERS);
 		const url = process.env.WHATSAPP_INVITE_URL;
 		return url === undefined || url === "" ? null : url;
 	},
 });
+
+async function findHost(
+	context: QueryCtx,
+	person: Doc<"people">
+): Promise<Doc<"people"> | null> {
+	const host = person.hostedById
+		? await context.db.get(person.hostedById)
+		: null;
+	if (host || !person.hostedBy) return host;
+	const people = await context.db.query("people").collect();
+	return (
+		people.find(
+			(candidate) =>
+				(candidate.tier === "board" || candidate.tier === "admin") &&
+				displayName(candidate) === person.hostedBy
+		) ?? null
+	);
+}
 
 /**
  * For the last guest onboarding step: the guest's host (a board member) as name
@@ -174,26 +195,14 @@ export const whatsappInvite = query({
  */
 export const getOnboardingHost = query({
 	args: {},
-	handler: async (ctx) => {
-		const person = await personForCurrentUser(ctx);
-		if (!person) return null;
-		if (person.tier !== "guest") return null;
-		if (!entitled(person, Date.now())) return null;
-
-		let host = person.hostedById
-			? await ctx.db.get(person.hostedById)
-			: null;
-		if (!host && person.hostedBy) {
-			const people = await ctx.db.query("people").collect();
-			host =
-				people.find(
-					(p) =>
-						(p.tier === "board" || p.tier === "admin") &&
-						displayName(p) === person.hostedBy
-				) ?? null;
-		}
-		if (!host || (host.tier !== "board" && host.tier !== "admin"))
+	handler: async (context) => {
+		const person = await personForCurrentUser(context);
+		if (person?.tier !== "guest" || !entitled(person, Date.now()))
 			return null;
-		return { name: displayName(host), phone: host.phone };
+
+		const host = await findHost(context, person);
+		return !host || (host.tier !== "board" && host.tier !== "admin")
+			? null
+			: { name: displayName(host), phone: host.phone };
 	},
 });

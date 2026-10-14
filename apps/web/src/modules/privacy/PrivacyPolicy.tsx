@@ -49,14 +49,16 @@ export function PrivacyPolicy() {
 										<Match
 											when={block.kind === "p" && block}
 										>
-											{(p) => (
+											{(paragraph) => (
 												<p class={styles.para}>
-													<Show when={p().lead}>
+													<Show
+														when={paragraph().lead}
+													>
 														<strong>
-															{p().lead}
+															{paragraph().lead}
 														</strong>{" "}
 													</Show>
-													{p().text}
+													{paragraph().text}
 												</p>
 											)}
 										</Match>

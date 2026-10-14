@@ -5,7 +5,14 @@ import {
 	useDatePicker,
 	type UseDatePickerProps,
 } from "@ark-ui/solid/date-picker";
-import { type JSX, Index, Show, createMemo, splitProps } from "solid-js";
+import {
+	type ComponentProps,
+	type JSX,
+	Index,
+	Show,
+	createMemo,
+	splitProps,
+} from "solid-js";
 import { Portal } from "solid-js/web";
 
 import { ICONS } from "../../icons.ts";
@@ -174,138 +181,143 @@ export function DatePicker(props: DatePickerProps): JSX.Element {
 	);
 }
 
+/** The day view of the calendar. */
+function DayView(): JSX.Element {
+	return (
+		<ArkDatePicker.View view="day" class={styles.view}>
+			<ArkDatePicker.Context>
+				{(api) => (
+					<>
+						<ViewControl />
+						<ArkDatePicker.Table class={styles.table}>
+							<ArkDatePicker.TableHead>
+								<ArkDatePicker.TableRow>
+									<Index each={api().weekDays}>
+										{(weekDay) => (
+											<ArkDatePicker.TableHeader
+												class={styles.weekday}
+											>
+												{weekDay().short}
+											</ArkDatePicker.TableHeader>
+										)}
+									</Index>
+								</ArkDatePicker.TableRow>
+							</ArkDatePicker.TableHead>
+							<ArkDatePicker.TableBody>
+								<Index each={api().weeks}>
+									{(week) => (
+										<CellRow
+											cells={week()}
+											value={(day) => day}
+											label={(day) => day.day}
+										/>
+									)}
+								</Index>
+							</ArkDatePicker.TableBody>
+						</ArkDatePicker.Table>
+					</>
+				)}
+			</ArkDatePicker.Context>
+		</ArkDatePicker.View>
+	);
+}
+
+/** One row of a calendar view's grid: a pickable cell per day, month or
+ *  year, carrying its `value` and showing its `label`. */
+function CellRow<Cell>(props: {
+	cells: Cell[];
+	value: (
+		cell: Cell
+	) => ComponentProps<typeof ArkDatePicker.TableCell>["value"];
+	label: (cell: Cell) => JSX.Element;
+}): JSX.Element {
+	return (
+		<ArkDatePicker.TableRow>
+			<Index each={props.cells}>
+				{(cell) => (
+					<ArkDatePicker.TableCell value={props.value(cell())}>
+						<ArkDatePicker.TableCellTrigger class={styles.cell}>
+							{props.label(cell())}
+						</ArkDatePicker.TableCellTrigger>
+					</ArkDatePicker.TableCell>
+				)}
+			</Index>
+		</ArkDatePicker.TableRow>
+	);
+}
+
+/** The month view of the calendar. */
+function MonthView(): JSX.Element {
+	return (
+		<ArkDatePicker.View view="month" class={styles.view}>
+			<ArkDatePicker.Context>
+				{(api) => (
+					<>
+						<ViewControl />
+						<ArkDatePicker.Table class={styles.table}>
+							<ArkDatePicker.TableBody>
+								<Index
+									each={api().getMonthsGrid({
+										columns: 4,
+										format: "short",
+									})}
+								>
+									{(months) => (
+										<CellRow
+											cells={months()}
+											value={(month) => month.value}
+											label={(month) => month.label}
+										/>
+									)}
+								</Index>
+							</ArkDatePicker.TableBody>
+						</ArkDatePicker.Table>
+					</>
+				)}
+			</ArkDatePicker.Context>
+		</ArkDatePicker.View>
+	);
+}
+
+/** The year view of the calendar. */
+function YearView(): JSX.Element {
+	return (
+		<ArkDatePicker.View view="year" class={styles.view}>
+			<ArkDatePicker.Context>
+				{(api) => (
+					<>
+						<ViewControl />
+						<ArkDatePicker.Table class={styles.table}>
+							<ArkDatePicker.TableBody>
+								<Index
+									each={api().getYearsGrid({
+										columns: 4,
+									})}
+								>
+									{(years) => (
+										<CellRow
+											cells={years()}
+											value={(year) => year.value}
+											label={(year) => year.label}
+										/>
+									)}
+								</Index>
+							</ArkDatePicker.TableBody>
+						</ArkDatePicker.Table>
+					</>
+				)}
+			</ArkDatePicker.Context>
+		</ArkDatePicker.View>
+	);
+}
+
 /** Day / month / year calendar views. */
 function Calendar(): JSX.Element {
 	return (
 		<>
-			<ArkDatePicker.View view="day" class={styles.view}>
-				<ArkDatePicker.Context>
-					{(api) => (
-						<>
-							<ViewControl />
-							<ArkDatePicker.Table class={styles.table}>
-								<ArkDatePicker.TableHead>
-									<ArkDatePicker.TableRow>
-										<Index each={api().weekDays}>
-											{(weekDay) => (
-												<ArkDatePicker.TableHeader
-													class={styles.weekday}
-												>
-													{weekDay().short}
-												</ArkDatePicker.TableHeader>
-											)}
-										</Index>
-									</ArkDatePicker.TableRow>
-								</ArkDatePicker.TableHead>
-								<ArkDatePicker.TableBody>
-									<Index each={api().weeks}>
-										{(week) => (
-											<ArkDatePicker.TableRow>
-												<Index each={week()}>
-													{(day) => (
-														<ArkDatePicker.TableCell
-															value={day()}
-														>
-															<ArkDatePicker.TableCellTrigger
-																class={
-																	styles.cell
-																}
-															>
-																{day().day}
-															</ArkDatePicker.TableCellTrigger>
-														</ArkDatePicker.TableCell>
-													)}
-												</Index>
-											</ArkDatePicker.TableRow>
-										)}
-									</Index>
-								</ArkDatePicker.TableBody>
-							</ArkDatePicker.Table>
-						</>
-					)}
-				</ArkDatePicker.Context>
-			</ArkDatePicker.View>
-
-			<ArkDatePicker.View view="month" class={styles.view}>
-				<ArkDatePicker.Context>
-					{(api) => (
-						<>
-							<ViewControl />
-							<ArkDatePicker.Table class={styles.table}>
-								<ArkDatePicker.TableBody>
-									<Index
-										each={api().getMonthsGrid({
-											columns: 4,
-											format: "short",
-										})}
-									>
-										{(months) => (
-											<ArkDatePicker.TableRow>
-												<Index each={months()}>
-													{(month) => (
-														<ArkDatePicker.TableCell
-															value={
-																month().value
-															}
-														>
-															<ArkDatePicker.TableCellTrigger
-																class={
-																	styles.cell
-																}
-															>
-																{month().label}
-															</ArkDatePicker.TableCellTrigger>
-														</ArkDatePicker.TableCell>
-													)}
-												</Index>
-											</ArkDatePicker.TableRow>
-										)}
-									</Index>
-								</ArkDatePicker.TableBody>
-							</ArkDatePicker.Table>
-						</>
-					)}
-				</ArkDatePicker.Context>
-			</ArkDatePicker.View>
-
-			<ArkDatePicker.View view="year" class={styles.view}>
-				<ArkDatePicker.Context>
-					{(api) => (
-						<>
-							<ViewControl />
-							<ArkDatePicker.Table class={styles.table}>
-								<ArkDatePicker.TableBody>
-									<Index
-										each={api().getYearsGrid({
-											columns: 4,
-										})}
-									>
-										{(years) => (
-											<ArkDatePicker.TableRow>
-												<Index each={years()}>
-													{(year) => (
-														<ArkDatePicker.TableCell
-															value={year().value}
-														>
-															<ArkDatePicker.TableCellTrigger
-																class={
-																	styles.cell
-																}
-															>
-																{year().label}
-															</ArkDatePicker.TableCellTrigger>
-														</ArkDatePicker.TableCell>
-													)}
-												</Index>
-											</ArkDatePicker.TableRow>
-										)}
-									</Index>
-								</ArkDatePicker.TableBody>
-							</ArkDatePicker.Table>
-						</>
-					)}
-				</ArkDatePicker.Context>
-			</ArkDatePicker.View>
+			<DayView />
+			<MonthView />
+			<YearView />
 		</>
 	);
 }

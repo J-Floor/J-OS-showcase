@@ -1,0 +1,29 @@
+{
+  "minTokens": 60,
+  "threshold": 0,
+  "reporters": [
+    "console"
+  ],
+  "path": [
+    "apps/web/src",
+    "apps/web/convex",
+    "apps/web/emails",
+    "apps/web/agreements",
+    "packages/design-system/src",
+    "apps/landing-page/src"
+  ],
+  "ignore": [
+    "**/*.test.*",
+    "**/_generated/**",
+    "**/emails/generated/**",
+    "**/dist/**",
+    "**/node_modules/**"
+  ],
+  "gitignore": true,
+  "format": [
+    "typescript",
+    "tsx",
+    "javascript",
+    "jsx"
+  ]
+}

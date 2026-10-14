@@ -10,11 +10,11 @@ import type { DispatchResult } from "./types.ts";
  * commits. The payload is type-checked against the kind.
  */
 export async function notify<K extends KindName>(
-	ctx: MutationCtx,
+	context: MutationCtx,
 	kind: K,
 	payload: PayloadOf<K>
 ): Promise<void> {
-	await ctx.scheduler.runAfter(0, internal.notify.dispatch.run, {
+	await context.scheduler.runAfter(0, internal.notify.dispatch.run, {
 		kind,
 		payload,
 	});
@@ -25,9 +25,9 @@ export async function notify<K extends KindName>(
  * door alerts, which give their `opsAlerts` claim back when nothing went out.
  */
 export async function notifyNow<K extends KindName>(
-	ctx: ActionCtx,
+	context: ActionCtx,
 	kind: K,
 	payload: PayloadOf<K>
 ): Promise<DispatchResult> {
-	return ctx.runAction(internal.notify.dispatch.run, { kind, payload });
+	return context.runAction(internal.notify.dispatch.run, { kind, payload });
 }

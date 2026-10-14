@@ -1,10 +1,4 @@
-import {
-	Button,
-	Dialog,
-	IconButton,
-	Query,
-	fireConfetti,
-} from "@j-os/design-system";
+import { Button, Dialog, IconButton, Query } from "@j-os/design-system";
 import {
 	DragDropProvider,
 	DragDropSensors,
@@ -12,28 +6,28 @@ import {
 	createDroppable,
 	useDragDropContext,
 } from "@thisbeyond/solid-dnd";
-import {
-	For,
-	Show,
-	createEffect,
-	createSignal,
-	onCleanup,
-	onMount,
-	type JSX,
-} from "solid-js";
+import { For, Show, type JSX } from "solid-js";
 
-import type { Id } from "../../../../convex/_generated/dataModel";
 import { ICONS } from "../../../shared/icons.ts";
 import { sortColumn } from "../data/taskHelpers.ts";
-import type { Person, Project, Task } from "../data/tasksData.tsx";
-import { useTaskActions } from "../data/tasksData.tsx";
+import {
+	useTaskActions,
+	type Person,
+	type Project,
+	type Task,
+} from "../data/tasksData.tsx";
 
 import styles from "./KanbanBoard.module.scss";
+import {
+	createBulkDelete,
+	createDropHandler,
+	createGroupDrag,
+	createMarqueeSelection,
+	createStatusOverrides,
+	type Vec,
+} from "./kanbanInteraction.ts";
 import { COLUMNS, type TaskStatus } from "./onDrop.ts";
 import { TaskCard } from "./TaskCard.tsx";
-
-type Rect = { x: number; y: number; w: number; h: number };
-type Vec = { x: number; y: number };
 
 function DraggableCard(props: {
 	task: Task;
@@ -47,8 +41,8 @@ function DraggableCard(props: {
 	// eslint-disable-next-line solid/reactivity -- solid-dnd takes a stable id at creation time
 	const draggable = createDraggable(props.task._id);
 	function transform(): string {
-		const t = props.transformFor(props.task._id, draggable.transform);
-		return `translate(${String(t.x)}px, ${String(t.y)}px)`;
+		const offset = props.transformFor(props.task._id, draggable.transform);
+		return `translate(${String(offset.x)}px, ${String(offset.y)}px)`;
 	}
 	return (
 		<div
@@ -135,6 +129,70 @@ function Column(props: {
 	);
 }
 
+/** The confirm dialog for bulk delete; focuses Cancel when it opens (safer
+ *  default than Delete/close). */
+function BulkDeleteDialog(props: {
+	count: number;
+	bulkDelete: ReturnType<typeof createBulkDelete>;
+}) {
+	let cancelElement: HTMLElement | undefined;
+	return (
+		<Dialog.Root
+			open={props.bulkDelete.confirmOpen()}
+			onOpenChange={(details) => {
+				props.bulkDelete.setConfirmOpen(details.open);
+			}}
+			initialFocusEl={() => cancelElement ?? null}
+		>
+			<Dialog.Content>
+				<Dialog.Title>
+					Delete {props.count} {props.count === 1 ? "task" : "tasks"}?
+				</Dialog.Title>
+				<Dialog.Description>
+					This can&rsquo;t be undone.
+				</Dialog.Description>
+				<div class={styles.confirmActions}>
+					<Button
+						variant="tertiary"
+						ref={(element) => {
+							cancelElement = element;
+						}}
+						onClick={() => {
+							props.bulkDelete.setConfirmOpen(false);
+						}}
+					>
+						Cancel
+					</Button>
+					<Button onClick={props.bulkDelete.deleteSelected}>
+						Delete
+					</Button>
+				</div>
+			</Dialog.Content>
+		</Dialog.Root>
+	);
+}
+
+/** The rubber-band rectangle while a marquee drag is under way. */
+function MarqueeOutline(props: {
+	marquee: ReturnType<typeof createMarqueeSelection>["marquee"];
+}): JSX.Element {
+	return (
+		<Show when={props.marquee()}>
+			{(marquee) => (
+				<div
+					class={styles.marquee}
+					style={{
+						left: `${String(marquee().x)}px`,
+						top: `${String(marquee().y)}px`,
+						width: `${String(marquee().w)}px`,
+						height: `${String(marquee().h)}px`,
+					}}
+				/>
+			)}
+		</Show>
+	);
+}
+
 function Board(props: {
 	tasks: Task[] | undefined;
 	people: Person[];
@@ -142,231 +200,44 @@ function Board(props: {
 	onCardClick: (t: Task) => void;
 	onAddTask: (status: TaskStatus) => void;
 }): JSX.Element {
+	const context = useDragDropContext()!;
+	function tasks(): Task[] | undefined {
+		return props.tasks;
+	}
+	const overrides = createStatusOverrides({ tasks });
+	const selection = createMarqueeSelection();
+	const groupDrag = createGroupDrag({ context, selection });
 	const actions = useTaskActions();
-	const ctx = useDragDropContext()!;
-	const dndState = ctx[0];
-
-	// Optimistic status overrides: on drop, reflect the new column immediately so
-	// the card doesn't snap back to its origin while the Convex round-trip lands.
-	const [override, setOverride] = createSignal<Record<string, TaskStatus>>(
-		{}
-	);
-	function statusOf(t: Task): string {
-		return override()[t._id] ?? t.status;
-	}
-
-	createEffect(() => {
-		const tasks = props.tasks ?? [];
-		setOverride((current) => {
-			const next: Record<string, TaskStatus> = {};
-			let changed = false;
-			for (const [id, st] of Object.entries(current)) {
-				const live = tasks.find((t) => t._id === id);
-				if (live && live.status !== st) next[id] = st;
-				else changed = true;
-			}
-			return changed ? next : current;
-		});
+	createDropHandler({
+		context,
+		selection,
+		groupDrag,
+		overrides,
+		tasks,
+		actions,
 	});
+	const bulkDelete = createBulkDelete({ selection, actions });
 
-	// --- Selection (marquee) -------------------------------------------------
-	const [selected, setSelected] = createSignal<Set<string>>(
-		new Set<string>()
-	);
-	function isSelected(id: string): boolean {
-		return selected().has(id);
-	}
-	const [marquee, setMarquee] = createSignal<Rect | null>(null);
-	// eslint-disable-next-line no-unassigned-vars -- assigned by Solid's ref={boardEl} binding
-	let boardEl: HTMLDivElement | undefined;
-	let selecting = false;
-	let startX = 0;
-	let startY = 0;
-
-	function onPointerDown(e: PointerEvent) {
-		if (e.button !== 0 || !boardEl) return;
-		const target = e.target as HTMLElement;
-		if (target.closest("[data-task-id], button, a, input, textarea"))
-			return;
-		selecting = true;
-		startX = e.clientX;
-		startY = e.clientY;
-		setSelected(new Set<string>());
-		// Don't render the rect yet — a plain click would flash a 1px box.
-		boardEl.setPointerCapture(e.pointerId);
-	}
-	function onPointerMove(e: PointerEvent) {
-		if (!selecting || !boardEl) return;
-		const br = boardEl.getBoundingClientRect();
-		const left = Math.min(startX, e.clientX);
-		const top = Math.min(startY, e.clientY);
-		const right = Math.max(startX, e.clientX);
-		const bottom = Math.max(startY, e.clientY);
-		setMarquee({
-			x: left - br.left,
-			y: top - br.top,
-			w: right - left,
-			h: bottom - top,
-		});
-		const hits = new Set<string>();
-		boardEl
-			.querySelectorAll<HTMLElement>("[data-task-id]")
-			.forEach((el) => {
-				const r = el.getBoundingClientRect();
-				if (
-					r.left < right &&
-					r.right > left &&
-					r.top < bottom &&
-					r.bottom > top
-				) {
-					hits.add(el.dataset.taskId ?? "");
-				}
-			});
-		setSelected(hits);
-	}
-	function onPointerUp(e: PointerEvent) {
-		if (!selecting) return;
-		selecting = false;
-		setMarquee(null);
-		boardEl?.releasePointerCapture(e.pointerId);
-	}
-
-	// --- Group drag: selected cards slide onto the dragged card --------------
-	// Per-card offset (captured at drag start) that brings each selected card to
-	// the dragged card's origin; added to the live drag delta during the drag.
-	const [offsets, setOffsets] = createSignal<Map<string, Vec>>(new Map());
-	function activeId(): string | null {
-		const a = dndState.active.draggable;
-		return a ? String(a.id) : null;
-	}
-	function activeTransform(): Vec {
-		return dndState.active.draggable?.transform ?? { x: 0, y: 0 };
-	}
-	function isGrouped(id: string): boolean {
-		const aid = activeId();
-		return aid !== null && id !== aid && offsets().has(id);
-	}
-	function transformFor(id: string, own: Vec): Vec {
-		const aid = activeId();
-		if (aid === null) return { x: 0, y: 0 };
-		if (id === aid) return own; // dragged card tracks the cursor (solid-dnd)
-		const off = offsets().get(id);
-		if (!off) return { x: 0, y: 0 };
-		const t = activeTransform();
-		return { x: off.x + t.x, y: off.y + t.y };
-	}
-
-	// eslint-disable-next-line solid/reactivity -- onDragStart registers a callback, not a reactive read
-	ctx[1].onDragStart(({ draggable }) => {
-		const aid = String(draggable.id);
-		const board = boardEl;
-		if (!board || !selected().has(aid) || selected().size < 2) {
-			setOffsets(new Map());
-			return;
-		}
-		const activeEl = board.querySelector(`[data-task-id="${aid}"]`);
-		if (!activeEl) return;
-		const ar = activeEl.getBoundingClientRect();
-		const map = new Map<string, Vec>();
-		selected().forEach((id) => {
-			if (id === aid) return;
-			const el = board.querySelector(`[data-task-id="${id}"]`);
-			if (!el) return;
-			const r = el.getBoundingClientRect();
-			map.set(id, { x: ar.left - r.left, y: ar.top - r.top });
-		});
-		setOffsets(map);
-	});
-
-	// eslint-disable-next-line solid/reactivity -- onDragEnd registers a callback, not a reactive read
-	ctx[1].onDragEnd(({ draggable, droppable }) => {
-		setOffsets(new Map());
-		if (!droppable) return;
-		const status = COLUMNS.find((c) => c.id === String(droppable.id))?.id;
-		if (!status) return;
-		const draggedId = String(draggable.id);
-		const ids = selected().has(draggedId) ? [...selected()] : [draggedId];
-		// Which cards actually change column? Must be read BEFORE setOverride —
-		// once the optimistic override is written, statusOf() returns the new
-		// status and every card looks unchanged (so nothing would persist).
-		const moved = ids.filter((id) => {
-			const t = props.tasks?.find((x) => x._id === id);
-			return t !== undefined && statusOf(t) !== status;
-		});
-		const completed = status === "done" && moved.length > 0;
-		setOverride((o) => {
-			const next = { ...o };
-			for (const id of ids) next[id] = status;
-			return next;
-		});
-		for (const id of moved) {
-			void actions.update({ id: id as Id<"tasks">, status });
-		}
-		if (completed) {
-			// Burst from the card's resting spot in Done — wait a frame for the
-			// re-render to move it there.
-			requestAnimationFrame(() => {
-				try {
-					fireConfetti(
-						boardEl?.querySelector<HTMLElement>(
-							`[data-task-id="${draggedId}"]`
-						) ?? undefined
-					);
-				} catch {
-					/* decorative only */
-				}
-			});
-		}
-		setSelected(new Set<string>());
-	});
-
-	// --- Backspace/Delete → confirm → bulk delete ----------------------------
-	const [confirmOpen, setConfirmOpen] = createSignal(false);
-	// Focused when the confirm dialog opens (safer default than Delete/close).
-	let cancelEl: HTMLElement | undefined;
-	function onKeyDown(e: KeyboardEvent) {
-		if (e.key !== "Backspace" && e.key !== "Delete") return;
-		if (selected().size === 0) return;
-		const a = document.activeElement as HTMLElement | null;
-		if (
-			a &&
-			(a.tagName === "INPUT" ||
-				a.tagName === "TEXTAREA" ||
-				a.isContentEditable)
-		) {
-			return;
-		}
-		if (document.querySelector('[role="dialog"][data-state="open"]'))
-			return;
-		e.preventDefault();
-		setConfirmOpen(true);
-	}
-	onMount(() => {
-		document.addEventListener("keydown", onKeyDown);
-	});
-	onCleanup(() => {
-		document.removeEventListener("keydown", onKeyDown);
-	});
-
-	function deleteSelected() {
-		const ids = [...selected()];
-		setConfirmOpen(false);
-		setSelected(new Set<string>());
-		for (const id of ids) void actions.remove(id as Id<"tasks">);
-	}
-
-	function byStatus(s: TaskStatus): Task[] | undefined {
-		return props.tasks?.filter((t) => statusOf(t) === s);
+	function byStatus(status: TaskStatus): Task[] | undefined {
+		return props.tasks?.filter(
+			(task) => overrides.statusOf(task) === status
+		);
 	}
 
 	return (
 		<>
 			<div
-				ref={boardEl}
+				ref={selection.setBoardElement}
 				class={styles.board}
-				onPointerDown={onPointerDown}
-				onPointerMove={onPointerMove}
-				onPointerUp={onPointerUp}
+				onPointerDown={(event) => {
+					selection.onPointerDown(event);
+				}}
+				onPointerMove={(event) => {
+					selection.onPointerMove(event);
+				}}
+				onPointerUp={(event) => {
+					selection.onPointerUp(event);
+				}}
 			>
 				<For each={COLUMNS}>
 					{(col) => (
@@ -376,9 +247,9 @@ function Board(props: {
 							tasks={byStatus(col.id)}
 							people={props.people}
 							projects={props.projects}
-							isSelected={isSelected}
-							isGrouped={isGrouped}
-							transformFor={transformFor}
+							isSelected={selection.isSelected}
+							isGrouped={groupDrag.isGrouped}
+							transformFor={groupDrag.transformFor}
 							onCardClick={props.onCardClick}
 							onAdd={() => {
 								props.onAddTask(col.id);
@@ -386,52 +257,12 @@ function Board(props: {
 						/>
 					)}
 				</For>
-				<Show when={marquee()}>
-					{(m) => (
-						<div
-							class={styles.marquee}
-							style={{
-								left: `${String(m().x)}px`,
-								top: `${String(m().y)}px`,
-								width: `${String(m().w)}px`,
-								height: `${String(m().h)}px`,
-							}}
-						/>
-					)}
-				</Show>
+				<MarqueeOutline marquee={selection.marquee} />
 			</div>
-
-			<Dialog.Root
-				open={confirmOpen()}
-				onOpenChange={(d) => {
-					setConfirmOpen(d.open);
-				}}
-				initialFocusEl={() => cancelEl ?? null}
-			>
-				<Dialog.Content>
-					<Dialog.Title>
-						Delete {selected().size}{" "}
-						{selected().size === 1 ? "task" : "tasks"}?
-					</Dialog.Title>
-					<Dialog.Description>
-						This can&rsquo;t be undone.
-					</Dialog.Description>
-					<div class={styles.confirmActions}>
-						<Button
-							variant="tertiary"
-							ref={(el) => {
-								cancelEl = el;
-							}}
-							onClick={() => {
-								setConfirmOpen(false);
-							}}
-						>
-							Cancel
-						</Button>
-						<Button onClick={deleteSelected}>Delete</Button>
-					</div>
-				</Dialog.Content>
-			</Dialog.Root>
+			<BulkDeleteDialog
+				count={selection.selected().size}
+				bulkDelete={bulkDelete}
+			/>
 		</>
 	);
 }

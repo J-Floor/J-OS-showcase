@@ -60,7 +60,7 @@ function labels(): (string | null)[] {
 		document.querySelectorAll(
 			'[data-scope="combobox"][data-part="item-text"]'
 		)
-	).map((el) => el.textContent);
+	).map((element) => element.textContent);
 }
 
 async function type(value: string): Promise<void> {
@@ -133,7 +133,9 @@ describe("CommandPalette", () => {
 		// Once, under Recent — not also under People. Ark keys rows by value, so
 		// a duplicate would highlight both copies and make arrowing down look
 		// like it had stalled.
-		expect(labels().filter((l) => l === "Grace Hopper")).toHaveLength(1);
+		expect(
+			labels().filter((label) => label === "Grace Hopper")
+		).toHaveLength(1);
 		expect(labels()[0]).toBe("Grace Hopper");
 
 		// Once you are searching you want the thing, not your history — and a
@@ -173,7 +175,7 @@ describe("CommandPalette", () => {
 			<CommandPalette open onOpenChange={() => {}} items={items()} />
 		));
 		expect(screen.queryByText("Recent")).toBeNull();
-		expect(localStorage.length).toBe(0);
+		expect(localStorage).toHaveLength(0);
 	});
 
 	it("offers a clear button only once there is something to clear", async () => {
@@ -257,9 +259,9 @@ describe("CommandPalette", () => {
 	it("caps a long group and says how many it left out", async () => {
 		const many: CommandPaletteItem[] = Array.from(
 			{ length: 12 },
-			(_unused, i) => ({
-				value: `p:${String(i)}`,
-				label: `Ada ${String(i)}`,
+			(_unused, index) => ({
+				value: `p:${String(index)}`,
+				label: `Ada ${String(index)}`,
 				group: "People",
 				onSelect,
 			})
@@ -501,32 +503,32 @@ describe("while closed", () => {
  * `document.activeElement` is the combobox input, and typing filters the list.
  */
 
+function withSpies() {
+	const firstAction = vi.fn();
+	const secondAction = vi.fn();
+	const list: CommandPaletteItem[] = [
+		{
+			value: "p:ada",
+			label: "Ada Lovelace",
+			group: "People",
+			onSelect,
+			onHighlight: firstAction,
+		},
+		{
+			value: "p:adam",
+			label: "Adam Smith",
+			group: "People",
+			onSelect,
+			onHighlight: secondAction,
+		},
+	];
+	return { a: firstAction, b: secondAction, list };
+}
+
 describe("onHighlight", () => {
 	afterEach(() => {
 		vi.useRealTimers();
 	});
-
-	function withSpies() {
-		const a = vi.fn();
-		const b = vi.fn();
-		const list: CommandPaletteItem[] = [
-			{
-				value: "p:ada",
-				label: "Ada Lovelace",
-				group: "People",
-				onSelect,
-				onHighlight: a,
-			},
-			{
-				value: "p:adam",
-				label: "Adam Smith",
-				group: "People",
-				onSelect,
-				onHighlight: b,
-			},
-		];
-		return { a, b, list };
-	}
 
 	it("fires once per stable highlight after the intent delay", async () => {
 		vi.useFakeTimers();

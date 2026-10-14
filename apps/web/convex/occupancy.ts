@@ -12,8 +12,8 @@ export type OccupancyAnswer =
  */
 export const current = action({
 	args: {},
-	handler: async (ctx): Promise<OccupancyAnswer> => {
-		if (!(await ctx.runQuery(internal.people.callerInCommunity, {})))
+	handler: async (context): Promise<OccupancyAnswer> => {
+		if (!(await context.runQuery(internal.people.callerInCommunity, {})))
 			throw new Error("Forbidden");
 		if (!ACTIVE_PROVIDER) return { enabled: false };
 		const count = await ACTIVE_PROVIDER.count(Date.now());

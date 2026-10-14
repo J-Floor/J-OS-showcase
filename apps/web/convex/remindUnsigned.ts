@@ -28,29 +28,32 @@ const AGREEMENT_TIERS = ["guest", "member", "core"] as const;
  *  past onboarding (signing is what moves them on), and anyone already compliant. */
 export const preview = internalQuery({
 	args: {},
-	handler: async (ctx) => {
+	handler: async (context) => {
 		const rows: {
 			email: string;
 			name: string;
 			variant: "guest" | "member";
 		}[] = [];
 		for (const tier of AGREEMENT_TIERS) {
-			const people = await ctx.db
+			const people = await context.db
 				.query("people")
-				.withIndex("by_tier_and_formerOf", (q) => q.eq("tier", tier))
+				.withIndex("by_tier_and_formerOf", (range) =>
+					range.eq("tier", tier)
+				)
 				.collect();
 			for (const person of people) {
 				const variant = agreementVariantFor(person.tier);
-				if (variant === null) continue;
-				if (person.stage !== "onboarding") continue;
-				const sigs = await ctx.db
+				if (variant === null || person.stage !== "onboarding") continue;
+				const sigs = await context.db
 					.query("signatures")
-					.withIndex("by_person", (q) => q.eq("personId", person._id))
+					.withIndex("by_person", (range) =>
+						range.eq("personId", person._id)
+					)
 					.collect();
 				if (
 					compliance(
 						person,
-						sigs.map((s) => s.variant)
+						sigs.map((signature) => signature.variant)
 					) === "met"
 				)
 					continue;
@@ -68,7 +71,7 @@ export const preview = internalQuery({
 export const run = internalAction({
 	args: { dryRun: v.optional(v.boolean()) },
 	handler: async (
-		ctx,
+		context,
 		{ dryRun }
 	): Promise<{
 		sent: number;
@@ -76,7 +79,7 @@ export const run = internalAction({
 		invalid: string[];
 		dryRun: boolean;
 	}> => {
-		const { rows } = await ctx.runQuery(
+		const { rows } = await context.runQuery(
 			internal.remindUnsigned.preview,
 			{}
 		);
@@ -102,9 +105,12 @@ export const run = internalAction({
 			try {
 				// Re-sends the member/guest welcome email (with the sign-in link)
 				// — `sendApprovalEmail` picks the right variant from the live row.
-				await ctx.runAction(internal.notifications.sendApprovalEmail, {
-					email: row.email,
-				});
+				await context.runAction(
+					internal.notifications.sendApprovalEmail,
+					{
+						email: row.email,
+					}
+				);
 				sent++;
 			} catch (error) {
 				failed.push({

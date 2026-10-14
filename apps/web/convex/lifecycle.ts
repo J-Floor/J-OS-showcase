@@ -99,21 +99,193 @@ function targetTier(person: Doc<"people">, event: LifecycleEvent): Tier {
  * own access window, and no event changes which window applies.
  */
 export async function loadFacts(
-	ctx: MutationCtx,
+	context: MutationCtx,
 	person: Doc<"people">,
 	event: LifecycleEvent
 ): Promise<Facts> {
-	const signatures = await ctx.db
+	const signatures = await context.db
 		.query("signatures")
-		.withIndex("by_person", (q) => q.eq("personId", person._id))
+		.withIndex("by_person", (range) => range.eq("personId", person._id))
 		.collect();
 	return factsFor(
 		person,
-		signatures.map((s) => s.variant),
+		signatures.map((signature) => signature.variant),
 		targetTier(person, event),
 		Date.now()
 	);
 }
+
+type EffectOf<T extends Effect["type"]> = Extract<Effect, { type: T }>;
+
+type EffectHandler<T extends Effect["type"]> = (
+	context: MutationCtx,
+	person: Doc<"people">,
+	effect: EffectOf<T>,
+	event: LifecycleEvent
+) => Promise<void>;
+
+async function scheduleEffectEmail(
+	context: MutationCtx,
+	person: Doc<"people">,
+	template: EffectOf<"EMAIL">["template"]
+): Promise<void> {
+	switch (template) {
+		case "rejection":
+			await context.scheduler.runAfter(
+				0,
+				internal.notifications.sendRejectionEmail,
+				{
+					email: person.email,
+					name: person.firstName,
+					venture: person.venture?.name ?? "your venture",
+				}
+			);
+			return;
+		case "memberUpgrade":
+			await context.scheduler.runAfter(
+				0,
+				internal.notifications.sendMemberUpgradeEmail,
+				{ email: person.email }
+			);
+			return;
+		case "applicationReceived":
+			await context.scheduler.runAfter(
+				0,
+				internal.notifications.sendApplicationReceivedEmail,
+				{ email: person.email }
+			);
+			return;
+		case "approval":
+			await context.scheduler.runAfter(
+				0,
+				internal.notifications.sendApprovalEmail,
+				{
+					email: person.email,
+				}
+			);
+			return;
+	}
+}
+
+const EFFECT_HANDLERS: { [T in Effect["type"]]: EffectHandler<T> } = {
+	EMAIL: async (context, person, effect) => {
+		// Every lifecycle email is auditable: one row per send, kind "email",
+		// with the template in `meta`.
+		await context.db.insert("personEvents", {
+			personId: person._id,
+			at: Date.now(),
+			kind: "email",
+			meta: effect.template,
+		});
+		await scheduleEffectEmail(context, person, effect.template);
+	},
+	NOTIFY_BOARD: async (context, person) => {
+		await notify(context, "newApplication", {
+			personId: person._id,
+			applicantName: displayName(person),
+			venture: person.venture?.name ?? "—",
+		});
+	},
+	RESET_STEP: async (context, person, effect) => {
+		// Nothing to reset: a fresh applicant keeps having no onboarding record.
+		if (!person.onboarding || !(effect.step in person.onboarding.steps))
+			return;
+		await context.db.patch(person._id, {
+			onboarding: onboardingWithoutStep(person.onboarding, effect.step),
+		});
+	},
+	SET_WINDOW: async (context, person, effect) => {
+		await context.db.patch(person._id, {
+			// Only STAMP the start when there isn't one. `EXTEND_WINDOW` reuses
+			// this effect; re-stamping `accessFrom` on every extension rewrites
+			// the window start and, with it, the "from" date in the guest
+			// approval email and the Guests tab's "joined" column.
+			accessFrom: person.accessFrom ?? Date.now(),
+			// `undefined` here is an OPEN-ENDED grant, and Convex reads it as
+			// "remove the field" — which is exactly right: `windowOpen` treats a
+			// missing `accessUntil` as a window that never closes, and
+			// `sendApprovalEmail` switches to its windowless variant.
+			accessUntil: effect.until,
+			// Model B source-of-truth: the wall-clock+zone the epoch represents,
+			// so a future IANA rule change can be recomputed. undefined =
+			// open-ended grant.
+			accessUntilLocal:
+				effect.until === undefined
+					? undefined
+					: zonedLocalFromEpoch(effect.until, SITE_TIMEZONE),
+		});
+	},
+	CLEAR_WINDOW: async (context, person) => {
+		await context.db.patch(person._id, {
+			accessFrom: undefined,
+			accessUntil: undefined,
+			accessUntilLocal: undefined,
+		});
+	},
+	SET_HOST: async (context, person, effect) => {
+		await context.db.patch(person._id, { hostedById: effect.hostedById });
+	},
+	SCHEDULE_WINDOW_EXPIRY: async (context, person, effect) => {
+		await context.scheduler.runAt(
+			effect.at,
+			internal.lifecycle.windowExpired,
+			{
+				personId: person._id,
+			}
+		);
+		await scheduleGuestExpiringSoon(
+			context,
+			person._id,
+			effect.at,
+			person.accessUntil
+		);
+	},
+	// `revokeUnlessBreakGlass` returns a discriminated
+	// `RevokeUnlessBreakGlassResult` and REJECTS on a door-provider error.
+	// Scheduling discards both: the promise here
+	// resolves once the job is queued, so there is nothing to read and
+	// nothing to catch — it must not fail the transition that caused it.
+	// There is no nightly sweep behind it any more: a failed revoke shows
+	// as a failed scheduled run in the dashboard and is re-run by hand
+	// (README, door access section). A grant needs nothing — the app opens
+	// the door off `access()` directly.
+	RECONCILE_DOOR: async (context, person, _effect, event) => {
+		await context.scheduler.runAfter(
+			0,
+			internal.doorRevoke.revokeUnlessBreakGlass,
+			{
+				personId: person._id,
+				trigger: "lifecycle",
+				detail: event.type,
+			}
+		);
+	},
+	SET_DENIED_AT: async (context, person) => {
+		await context.db.patch(person._id, { deniedAt: Date.now() });
+	},
+	CLEAR_DENIED_AT: async (context, person) => {
+		await context.db.patch(person._id, { deniedAt: undefined });
+	},
+	RESET_SCORE: async (context, person) => {
+		// Skip the patch entirely when there is no `board` object to clear —
+		// a fresh prospect who was never scored has none, and patching one in
+		// just to hold `{ score: undefined }` is dashboard noise with no
+		// observable effect.
+		if (person.board === undefined) return;
+		await context.db.patch(person._id, {
+			board: { ...person.board, score: undefined },
+		});
+	},
+	SET_FORMER: async (context, person, effect) => {
+		await context.db.patch(person._id, {
+			formerOf: formerOfTier(person.tier),
+			formerReason: effect.reason,
+			accessFrom: undefined,
+			accessUntil: undefined,
+			accessUntilLocal: undefined,
+		});
+	},
+};
 
 /**
  * Execute one declarative effect. Every database and scheduler write lives here.
@@ -134,180 +306,27 @@ export async function loadFacts(
  * field.
  */
 async function runEffect(
-	ctx: MutationCtx,
+	context: MutationCtx,
 	person: Doc<"people">,
 	effect: Effect,
 	event: LifecycleEvent
 ): Promise<void> {
-	switch (effect.type) {
-		case "EMAIL": {
-			// Every lifecycle email is auditable: one row per send, kind "email",
-			// with the template in `meta`.
-			await ctx.db.insert("personEvents", {
-				personId: person._id,
-				at: Date.now(),
-				kind: "email",
-				meta: effect.template,
-			});
-			switch (effect.template) {
-				case "rejection":
-					await ctx.scheduler.runAfter(
-						0,
-						internal.notifications.sendRejectionEmail,
-						{
-							email: person.email,
-							name: person.firstName,
-							venture: person.venture?.name ?? "your venture",
-						}
-					);
-					return;
-				case "memberUpgrade":
-					await ctx.scheduler.runAfter(
-						0,
-						internal.notifications.sendMemberUpgradeEmail,
-						{ email: person.email }
-					);
-					return;
-				case "applicationReceived":
-					await ctx.scheduler.runAfter(
-						0,
-						internal.notifications.sendApplicationReceivedEmail,
-						{ email: person.email }
-					);
-					return;
-				case "approval":
-					await ctx.scheduler.runAfter(
-						0,
-						internal.notifications.sendApprovalEmail,
-						{
-							email: person.email,
-						}
-					);
-					return;
-			}
-			break; // exhaustive above; only here to satisfy no-fallthrough
-		}
-		case "NOTIFY_BOARD":
-			await notify(ctx, "newApplication", {
-				personId: person._id,
-				applicantName: displayName(person),
-				venture: person.venture?.name ?? "—",
-			});
-			return;
-		case "RESET_STEP":
-			// Nothing to reset: a fresh applicant keeps having no onboarding record.
-			if (!person.onboarding || !(effect.step in person.onboarding.steps))
-				return;
-			await ctx.db.patch(person._id, {
-				onboarding: onboardingWithoutStep(
-					person.onboarding,
-					effect.step
-				),
-			});
-			return;
-		case "SET_WINDOW":
-			await ctx.db.patch(person._id, {
-				// Only STAMP the start when there isn't one. `EXTEND_WINDOW` reuses
-				// this effect; re-stamping `accessFrom` on every extension rewrites
-				// the window start and, with it, the "from" date in the guest
-				// approval email and the Guests tab's "joined" column.
-				accessFrom: person.accessFrom ?? Date.now(),
-				// `undefined` here is an OPEN-ENDED grant, and Convex reads it as
-				// "remove the field" — which is exactly right: `windowOpen` treats a
-				// missing `accessUntil` as a window that never closes, and
-				// `sendApprovalEmail` switches to its windowless variant.
-				accessUntil: effect.until,
-				// Model B source-of-truth: the wall-clock+zone the epoch represents,
-				// so a future IANA rule change can be recomputed. undefined =
-				// open-ended grant.
-				accessUntilLocal:
-					effect.until == null
-						? undefined
-						: zonedLocalFromEpoch(effect.until, SITE_TIMEZONE),
-			});
-			return;
-		case "CLEAR_WINDOW":
-			await ctx.db.patch(person._id, {
-				accessFrom: undefined,
-				accessUntil: undefined,
-				accessUntilLocal: undefined,
-			});
-			return;
-		case "SET_HOST":
-			await ctx.db.patch(person._id, { hostedById: effect.hostedById });
-			return;
-		case "SCHEDULE_WINDOW_EXPIRY":
-			await ctx.scheduler.runAt(
-				effect.at,
-				internal.lifecycle.windowExpired,
-				{
-					personId: person._id,
-				}
-			);
-			await scheduleGuestExpiringSoon(
-				ctx,
-				person._id,
-				effect.at,
-				person.accessUntil
-			);
-			return;
-		// `revokeUnlessBreakGlass` returns a discriminated
-		// `RevokeUnlessBreakGlassResult` and REJECTS on a door-provider error.
-		// Scheduling discards both: the promise here
-		// resolves once the job is queued, so there is nothing to read and
-		// nothing to catch — it must not fail the transition that caused it.
-		// There is no nightly sweep behind it any more: a failed revoke shows
-		// as a failed scheduled run in the dashboard and is re-run by hand
-		// (README, door access section). A grant needs nothing — the app opens
-		// the door off `access()` directly.
-		case "RECONCILE_DOOR":
-			await ctx.scheduler.runAfter(
-				0,
-				internal.doorRevoke.revokeUnlessBreakGlass,
-				{
-					personId: person._id,
-					trigger: "lifecycle",
-					detail: event.type,
-				}
-			);
-			return;
-		case "SET_DENIED_AT":
-			await ctx.db.patch(person._id, { deniedAt: Date.now() });
-			return;
-		case "CLEAR_DENIED_AT":
-			await ctx.db.patch(person._id, { deniedAt: undefined });
-			return;
-		case "RESET_SCORE":
-			// Skip the patch entirely when there is no `board` object to clear —
-			// a fresh prospect who was never scored has none, and patching one in
-			// just to hold `{ score: undefined }` is dashboard noise with no
-			// observable effect.
-			if (person.board === undefined) return;
-			await ctx.db.patch(person._id, {
-				board: { ...person.board, score: undefined },
-			});
-			return;
-		case "SET_FORMER": {
-			await ctx.db.patch(person._id, {
-				formerOf: formerOfTier(person.tier),
-				formerReason: effect.reason,
-				accessFrom: undefined,
-				accessUntil: undefined,
-				accessUntilLocal: undefined,
-			});
-			return;
-		}
-	}
+	// TypeScript cannot correlate `effect.type` with its handler's narrowed
+	// argument, so the lookup is widened to accept any effect.
+	const handler = EFFECT_HANDLERS[effect.type] as EffectHandler<
+		Effect["type"]
+	>;
+	await handler(context, person, effect, event);
 }
 
 /** Board member behind the current call, or undefined for system events. */
 export async function currentActorId(
-	ctx: MutationCtx
+	context: MutationCtx
 ): Promise<Id<"people"> | undefined> {
-	const identity = await ctx.auth.getUserIdentity();
+	const identity = await context.auth.getUserIdentity();
 	const email = identity?.email;
 	if (!email) return undefined;
-	const actor = await personByEmail(ctx, email);
+	const actor = await personByEmail(context, email);
 	return actor?._id;
 }
 
@@ -319,18 +338,18 @@ export async function currentActorId(
  * and the audit log untouched.
  */
 export async function applyEvent(
-	ctx: MutationCtx,
+	context: MutationCtx,
 	personId: Id<"people">,
 	event: LifecycleEvent,
 	actorId?: Id<"people">
 ): Promise<StateId> {
-	const person = await ctx.db.get(personId);
+	const person = await context.db.get(personId);
 	if (!person) throw new Error("Person not found");
 
 	const from = stateOf(person);
 	// The event goes in: two edges (RE_ADMIT, SET_ROLE) resolve their stage
 	// against the tier they move INTO, not the one the row is in.
-	const facts = await loadFacts(ctx, person, event);
+	const facts = await loadFacts(context, person, event);
 	const { next, effects } = reduce(from, event, facts);
 
 	const [tier, stage] = next.split(".") as [
@@ -343,7 +362,7 @@ export async function applyEvent(
 	// days") is the spec's only stuck-person signal — a board re-score must not
 	// reset it to zero.
 	const now = Date.now();
-	await ctx.db.patch(personId, {
+	await context.db.patch(personId, {
 		tier,
 		stage,
 		...(next === from ? {} : { stageSince: now }),
@@ -356,7 +375,7 @@ export async function applyEvent(
 				}
 			: {}),
 	});
-	await ctx.db.insert("personEvents", {
+	await context.db.insert("personEvents", {
 		personId,
 		at: Date.now(),
 		actorId,
@@ -366,14 +385,15 @@ export async function applyEvent(
 		to: next,
 	});
 
-	for (const effect of effects) await runEffect(ctx, person, effect, event);
+	for (const effect of effects)
+		await runEffect(context, person, effect, event);
 	// After the effects, so the notification reads the new window. These two
 	// events are exactly what `setGuestAccess` and `upgradeGuestToMember` apply
 	// (PROMOTE_TO_MEMBER is only legal from guest states).
 	if (event.type === "EXTEND_WINDOW")
-		await notifyGuestWindowChanged(ctx, personId, person.accessUntil);
+		await notifyGuestWindowChanged(context, personId, person.accessUntil);
 	if (event.type === "PROMOTE_TO_MEMBER")
-		await notifyGuestAccessChanged(ctx, personId, "upgraded");
+		await notifyGuestAccessChanged(context, personId, "upgraded");
 	return next;
 }
 
@@ -384,13 +404,13 @@ export async function applyEvent(
  * still propagates.
  */
 export async function applyEventIfLegal(
-	ctx: MutationCtx,
+	context: MutationCtx,
 	personId: Id<"people">,
 	event: LifecycleEvent,
 	actorId?: Id<"people">
 ): Promise<StateId | null> {
 	try {
-		return await applyEvent(ctx, personId, event, actorId);
+		return await applyEvent(context, personId, event, actorId);
 	} catch (error) {
 		if (error instanceof IllegalTransitionError) return null;
 		throw error;
@@ -403,15 +423,23 @@ export async function applyEventIfLegal(
  * this is one row per deliberate edit rather than one per keystroke.
  */
 export async function logFieldEdit(
-	ctx: MutationCtx,
-	personId: Id<"people">,
-	field: string,
-	before: unknown,
-	after: unknown,
-	actorId?: Id<"people">
+	context: MutationCtx,
+	{
+		personId,
+		field,
+		before,
+		after,
+		actorId,
+	}: {
+		personId: Id<"people">;
+		field: string;
+		before: unknown;
+		after: unknown;
+		actorId?: Id<"people">;
+	}
 ): Promise<void> {
 	if (before === after) return;
-	await ctx.db.insert("personEvents", {
+	await context.db.insert("personEvents", {
 		personId,
 		at: Date.now(),
 		actorId,
@@ -459,9 +487,14 @@ const lifecycleEvent = v.union(
 
 export const transition = mutation({
 	args: { personId: v.id("people"), event: lifecycleEvent },
-	handler: async (ctx, { personId, event }) => {
-		await requireRole(ctx, BOARD_LEVEL);
-		return applyEvent(ctx, personId, event, await currentActorId(ctx));
+	handler: async (context, { personId, event }) => {
+		await requireRole(context, BOARD_LEVEL);
+		return applyEvent(
+			context,
+			personId,
+			event,
+			await currentActorId(context)
+		);
 	},
 });
 
@@ -473,11 +506,11 @@ export const transition = mutation({
  */
 export const windowExpired = internalMutation({
 	args: { personId: v.id("people") },
-	handler: async (ctx, { personId }) => {
-		const next = await applyEventIfLegal(ctx, personId, {
+	handler: async (context, { personId }) => {
+		const next = await applyEventIfLegal(context, personId, {
 			type: "WINDOW_EXPIRED",
 		});
-		if (next !== null) await notifyGuestExpired(ctx, personId);
+		if (next !== null) await notifyGuestExpired(context, personId);
 		return null;
 	},
 });
@@ -493,10 +526,12 @@ export const SWEEP_BATCH = 100;
  */
 export const sweepExpiredWindows = internalMutation({
 	args: { cursor: v.optional(v.union(v.string(), v.null())) },
-	handler: async (ctx, { cursor }): Promise<{ expired: number }> => {
-		const page = await ctx.db
+	handler: async (context, { cursor }): Promise<{ expired: number }> => {
+		const page = await context.db
 			.query("people")
-			.withIndex("by_tier_and_formerOf", (q) => q.eq("tier", "guest"))
+			.withIndex("by_tier_and_formerOf", (range) =>
+				range.eq("tier", "guest")
+			)
 			.paginate({ numItems: SWEEP_BATCH, cursor: cursor ?? null });
 		let expired = 0;
 		for (const guest of page.page) {
@@ -504,16 +539,16 @@ export const sweepExpiredWindows = internalMutation({
 			// whose window closes before they finish onboarding must expire too,
 			// or they sit in `guest.onboarding` with no way forward.
 			if (!isLiveStage(guest.stage)) continue;
-			const next = await applyEventIfLegal(ctx, guest._id, {
+			const next = await applyEventIfLegal(context, guest._id, {
 				type: "WINDOW_EXPIRED",
 			});
 			if (next !== null) {
 				expired++;
-				await notifyGuestExpired(ctx, guest._id);
+				await notifyGuestExpired(context, guest._id);
 			}
 		}
 		if (!page.isDone)
-			await ctx.scheduler.runAfter(
+			await context.scheduler.runAfter(
 				0,
 				internal.lifecycle.sweepExpiredWindows,
 				{ cursor: page.continueCursor }

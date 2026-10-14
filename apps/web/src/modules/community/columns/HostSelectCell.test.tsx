@@ -15,7 +15,7 @@ vi.mock("../../../shared/data/boardLevel.tsx", async (orig) => ({
 	useBoardLevel: () => ({
 		data: () => staffRef.current,
 		isLoading: () => false,
-		error: () => undefined,
+		error: () => {},
 	}),
 }));
 

@@ -48,17 +48,17 @@ const PROJECT1 = {
 vi.mock("./data/tasksData.tsx", () => ({
 	useTasks: () => ({
 		data: () => [TASK1],
-		error: () => undefined,
+		error: () => {},
 		isLoading: () => false,
 	}),
 	useProjects: () => ({
 		data: () => [PROJECT1],
-		error: () => undefined,
+		error: () => {},
 		isLoading: () => false,
 	}),
 	useCurrentPerson: () => ({
-		data: () => undefined,
-		error: () => undefined,
+		data: () => {},
+		error: () => {},
 		isLoading: () => false,
 	}),
 	useTaskActions: () => ({
@@ -76,7 +76,7 @@ vi.mock("./data/tasksData.tsx", () => ({
 vi.mock("../../shared/data/boardLevel.tsx", () => ({
 	useBoardLevel: () => ({
 		data: () => [],
-		error: () => undefined,
+		error: () => {},
 		isLoading: () => false,
 	}),
 }));
@@ -176,7 +176,7 @@ test("closing the task drawer clears ?task=", async () => {
 	});
 	expect(history.get()).toContain("task=task1");
 	const onOpenChange = mainTaskDrawerProps().onOpenChange as (
-		open: boolean
+		isOpen: boolean
 	) => void;
 	onOpenChange(false);
 	await waitFor(() => {
@@ -224,7 +224,7 @@ test("closing the project drawer clears ?project=", async () => {
 		expect(projectDrawerProps.at(-1)?.open).toBe(true);
 	});
 	const onOpenChange = projectDrawerProps.at(-1)?.onOpenChange as (
-		open: boolean
+		isOpen: boolean
 	) => void;
 	onOpenChange(false);
 	await waitFor(() => {

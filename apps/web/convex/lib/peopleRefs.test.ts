@@ -2,15 +2,19 @@ import { describe, expect, it } from "vitest";
 
 import {
 	pathsNaming,
-	peopleRefPlans,
-	peopleRefTables,
+	peopleReferencePlans,
+	peopleReferenceTables,
 	replacePersonId,
 	stripPersonId,
 } from "./peopleRefs.ts";
 
-describe("peopleRefTables", () => {
+describe("peopleReferenceTables", () => {
 	it("finds every table that can point at a person", () => {
-		expect(peopleRefTables().sort()).toEqual(
+		expect(
+			peopleReferenceTables().sort((first, second) =>
+				first.localeCompare(second)
+			)
+		).toEqual(
 			[
 				"confirmTokens",
 				"eventAttendance",
@@ -24,18 +28,18 @@ describe("peopleRefTables", () => {
 				"pushSubscriptions",
 				"signatures",
 				"tasks",
-			].sort()
+			].sort((first, second) => first.localeCompare(second))
 		);
 	});
 });
 
-describe("peopleRefPlans", () => {
+describe("peopleReferencePlans", () => {
 	it("index-walks exactly the tables whose every person id leads an index", () => {
-		const plans = peopleRefPlans();
+		const plans = peopleReferencePlans();
 		const walked = Object.entries(plans)
 			.filter(([, plan]) => plan.mode === "index")
 			.map(([name]) => name)
-			.sort();
+			.sort((first, second) => first.localeCompare(second));
 		expect(walked).toEqual(
 			[
 				"confirmTokens",
@@ -45,7 +49,7 @@ describe("peopleRefPlans", () => {
 				"personState",
 				"pushSubscriptions",
 				"signatures",
-			].sort()
+			].sort((first, second) => first.localeCompare(second))
 		);
 		const logPlan = {
 			mode: "index",
@@ -64,7 +68,7 @@ describe("peopleRefPlans", () => {
 	});
 
 	it("scans a table with a nested id, an unindexed id, or an any", () => {
-		const plans = peopleRefPlans();
+		const plans = peopleReferencePlans();
 		// Nested ids and unindexed id fields.
 		for (const table of ["people", "tasks", "projects", "events"])
 			expect(plans[table]).toEqual({ mode: "scan" });

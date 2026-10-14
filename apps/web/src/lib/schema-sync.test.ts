@@ -62,5 +62,6 @@ export type _VerticalSync = Expect<Equal<Vertical, Infer<typeof vertical>>>;
 test("schema-sync unions are guarded at compile time", () => {
 	// The real assertions are the `Expect<Equal<…>>` types above; they fail the
 	// typecheck if any union drifts from its schema validator.
+	// eslint-disable-next-line sonarjs/no-trivial-assertions -- the guard is the compile-time types above; Vitest only needs one runtime assertion to count the file
 	expect(true).toBe(true);
 });

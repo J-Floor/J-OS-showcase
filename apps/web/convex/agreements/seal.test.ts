@@ -31,9 +31,9 @@ function makeTestP12(passphrase: string): Buffer {
 	cert.serialNumber = "01";
 	cert.validity.notBefore = new Date();
 	cert.validity.notAfter = new Date(Date.now() + 365 * 24 * 3600 * 1000);
-	const attrs = [{ name: "commonName", value: "J floor Test" }];
-	cert.setSubject(attrs);
-	cert.setIssuer(attrs);
+	const attributes = [{ name: "commonName", value: "J floor Test" }];
+	cert.setSubject(attributes);
+	cert.setIssuer(attributes);
 	cert.sign(keys.privateKey, forge.md.sha256.create());
 	const p12 = forge.pkcs12.toPkcs12Asn1(keys.privateKey, [cert], passphrase, {
 		algorithm: "3des",
@@ -41,8 +41,8 @@ function makeTestP12(passphrase: string): Buffer {
 	return Buffer.from(forge.asn1.toDer(p12).getBytes(), "binary");
 }
 
-function countOccurrences(buf: Uint8Array, needle: string): number {
-	return Buffer.from(buf).toString("latin1").split(needle).length - 1;
+function countOccurrences(buffer: Uint8Array, needle: string): number {
+	return Buffer.from(buffer).toString("latin1").split(needle).length - 1;
 }
 
 describe("sealWith", () => {
@@ -118,8 +118,8 @@ describe("certFingerprintFromP12", () => {
 
 describe("sha256Hex", () => {
 	it("is stable and 64 hex chars", () => {
-		const h = sha256Hex(new Uint8Array([1, 2, 3]));
-		expect(h).toMatch(/^[0-9a-f]{64}$/);
-		expect(sha256Hex(new Uint8Array([1, 2, 3]))).toBe(h);
+		const hash = sha256Hex(new Uint8Array([1, 2, 3]));
+		expect(hash).toMatch(/^[0-9a-f]{64}$/);
+		expect(sha256Hex(new Uint8Array([1, 2, 3]))).toBe(hash);
 	});
 });

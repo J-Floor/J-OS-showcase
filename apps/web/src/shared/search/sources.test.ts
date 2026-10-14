@@ -8,7 +8,7 @@ import { COMMUNITY_TABS, INVENTORY_TABS } from "./sources.tsx";
 type Tab = { tab: string; icon: string };
 
 function icon(tabs: readonly Tab[], tab: string): string | undefined {
-	return tabs.find((t) => t.tab === tab)?.icon;
+	return tabs.find((entry) => entry.tab === tab)?.icon;
 }
 
 test("palette sources use the shared icons for members, item types and categories", () => {

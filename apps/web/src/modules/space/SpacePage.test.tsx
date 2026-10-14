@@ -30,23 +30,23 @@ const { me, doorHealthCalls } = vi.hoisted(() => {
 vi.mock("convex-solidjs", async () => {
 	const { getFunctionName } = await import("convex/server");
 	return {
-		useAction: (ref: Parameters<typeof getFunctionName>[0]) => ({
+		useAction: (reference: Parameters<typeof getFunctionName>[0]) => ({
 			mutate: vi.fn(),
 			mutateAsync: () => {
-				if (getFunctionName(ref) === "doorHealth:doorHealth")
+				if (getFunctionName(reference) === "doorHealth:doorHealth")
 					doorHealthCalls.count++;
 				return Promise.resolve(undefined);
 			},
 			isLoading: () => false,
-			data: () => undefined,
-			error: () => undefined,
+			data: () => {},
+			error: () => {},
 		}),
-		useQuery: (ref: Parameters<typeof getFunctionName>[0]) => ({
+		useQuery: (reference: Parameters<typeof getFunctionName>[0]) => ({
 			data: () =>
-				getFunctionName(ref) === "people:getCurrentPerson"
+				getFunctionName(reference) === "people:getCurrentPerson"
 					? me.value
 					: undefined,
-			error: () => undefined,
+			error: () => {},
 			isLoading: () => false,
 		}),
 		useMutation: () => ({
@@ -54,7 +54,7 @@ vi.mock("convex-solidjs", async () => {
 		}),
 		// DiagnosticsTab's door log reads its floor one-shot; never resolving
 		// keeps the log loading, which these tests do not look at.
-		useConvexClient: () => ({ query: () => new Promise(() => undefined) }),
+		useConvexClient: () => ({ query: () => new Promise(() => {}) }),
 	};
 });
 

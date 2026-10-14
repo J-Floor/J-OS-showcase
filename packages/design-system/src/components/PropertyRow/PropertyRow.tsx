@@ -10,7 +10,7 @@ export function PropertyRow(props: {
 	label: string;
 	children: JSX.Element;
 	/** Forwarded to the row element (e.g. to anchor an effect to this row). */
-	ref?: (el: HTMLDivElement) => void;
+	ref?: (element: HTMLDivElement) => void;
 }): JSX.Element {
 	return (
 		<div ref={props.ref} class={styles.row}>

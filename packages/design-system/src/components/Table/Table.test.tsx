@@ -24,7 +24,7 @@ import {
 	TEXT_CELL_ATTR,
 } from "./domContract.ts";
 import { Table } from "./Table.tsx";
-import type { JfColumnDef } from "./types.ts";
+import type { JfColumnDefinition } from "./types.ts";
 
 // jsdom workarounds for ark/zag (Popover/Tooltip) used by header buttons.
 if (!(Element.prototype as { scrollTo?: unknown }).scrollTo) {
@@ -71,7 +71,7 @@ test("onDisplayedRowsChange fires with on-screen row order", async () => {
 		/>
 	));
 	await waitFor(() => {
-		expect(captured.map((r) => r.id)).toEqual(["a", "b", "c"]);
+		expect(captured.map((row) => row.id)).toEqual(["a", "b", "c"]);
 	});
 });
 
@@ -98,11 +98,11 @@ test("onSelectedRowsChange fires with the checked rows, not written from inside 
 	const checkboxes = screen.getAllByRole("checkbox");
 	fireEvent.click(checkboxes[1]);
 	await waitFor(() => {
-		expect(captured.map((r) => r.id)).toEqual(["a"]);
+		expect(captured.map((row) => row.id)).toEqual(["a"]);
 	});
 	fireEvent.click(checkboxes[3]);
 	await waitFor(() => {
-		expect(captured.map((r) => r.id)).toEqual(["a", "c"]);
+		expect(captured.map((row) => row.id)).toEqual(["a", "c"]);
 	});
 });
 
@@ -116,12 +116,12 @@ test("renders rows and sorts by column", () => {
 	));
 	const rows = screen.getAllByRole("row");
 	// header + 2 data rows
-	expect(rows.length).toBe(3);
+	expect(rows).toHaveLength(3);
 	expect(rows[1]).toHaveTextContent("A"); // score 2 first (desc)
 });
 
 type ActionRow = { name: string; group: string };
-const actionColumns: JfColumnDef<ActionRow>[] = [
+const actionColumns: JfColumnDefinition<ActionRow>[] = [
 	{ accessorKey: "name", header: "Name", dataType: "string" },
 	{ accessorKey: "group", header: "Group", dataType: "string" },
 	{
@@ -138,7 +138,7 @@ function cellCounts(): { head: number; body: number } {
 	const head = table?.querySelector("thead tr")?.children.length ?? 0;
 	const body = Array.from(table?.querySelectorAll("tbody tr") ?? [])
 		.map((tr) => tr.children.length)
-		.find((n) => n > 1);
+		.find((size) => size > 1);
 	return { head, body: body ?? 0 };
 }
 
@@ -186,7 +186,7 @@ test("ungrouped skeleton has one cell per header cell, even with an actions colu
 test("undefined data renders skeleton rows, not 'No results.'", () => {
 	render(() => <Table.Root columns={columns as never} data={undefined} />);
 	expect(screen.queryByText("No results.")).toBeNull();
-	expect(document.querySelectorAll("[data-skeleton-row]").length).toBe(8);
+	expect(document.querySelectorAll("[data-skeleton-row]")).toHaveLength(8);
 });
 
 test("loading renders one skeleton cell per visible column", () => {
@@ -207,9 +207,13 @@ test("first mount shows skeleton rows until the paint, then real rows", async ()
 		render(() => (
 			<Table.Root columns={columns as never} data={loadedRows} />
 		));
-		expect(document.querySelectorAll("[data-skeleton-row]").length).toBe(8);
+		expect(document.querySelectorAll("[data-skeleton-row]")).toHaveLength(
+			8
+		);
 		await vi.runAllTimersAsync();
-		expect(document.querySelectorAll("[data-skeleton-row]").length).toBe(0);
+		expect(document.querySelectorAll("[data-skeleton-row]")).toHaveLength(
+			0
+		);
 	} finally {
 		vi.useRealTimers();
 		setDeferredImmediate(true);
@@ -251,6 +255,15 @@ function floor(): string {
 	);
 }
 
+function measureTenPixelsPerCharacter(text: string): number {
+	return text.length * 10;
+}
+
+async function settle(): Promise<void> {
+	await Promise.resolve();
+	await Promise.resolve();
+}
+
 describe("column tracks", () => {
 	let noPadding: HTMLStyleElement;
 
@@ -258,7 +271,7 @@ describe("column tracks", () => {
 		noPadding = document.createElement("style");
 		noPadding.textContent = "th, td { padding: 0; }";
 		document.head.append(noPadding);
-		setTableTextMeasurer(() => (text) => text.length * 10);
+		setTableTextMeasurer(() => measureTenPixelsPerCharacter);
 		Object.defineProperty(HTMLElement.prototype, "scrollWidth", {
 			configurable: true,
 			get(this: HTMLElement) {
@@ -289,7 +302,7 @@ describe("column tracks", () => {
 		{ name: "Ada", team: "Core", note: "x" },
 		{ name: "Grace Hopper", team: "Core", note: "y" },
 	];
-	const personColumns: JfColumnDef<Person>[] = [
+	const personColumns: JfColumnDefinition<Person>[] = [
 		{ accessorKey: "name", header: "Name", dataType: "string" },
 		{ accessorKey: "team", header: "Team", dataType: "string" },
 		{
@@ -482,11 +495,11 @@ describe("column tracks", () => {
 	test("measure only a row a push inserts at the head", () => {
 		type Doc = { _id: string; name: string };
 		const measureText = vi.fn((row: Doc) => row.name);
-		const docs: Doc[] = [
+		const documents: Doc[] = [
 			{ _id: "a", name: "Ada" },
 			{ _id: "b", name: "Grace" },
 		];
-		const [rows, setRows] = createSignal<Doc[]>(docs);
+		const [rows, setRows] = createSignal<Doc[]>(documents);
 		render(() => (
 			<Table.Root
 				columns={[
@@ -503,7 +516,7 @@ describe("column tracks", () => {
 		));
 		measureText.mockClear();
 		const head: Doc = { _id: "z", name: "Lin" };
-		setRows([head, ...docs.map((doc) => ({ ...doc }))]);
+		setRows([head, ...documents.map((doc) => ({ ...doc }))]);
 		expect(measureText.mock.calls.map(([row]) => row)).toEqual([head]);
 	});
 
@@ -544,14 +557,14 @@ describe("column tracks", () => {
 			venture: { name: string; links: { url: string }[] };
 		};
 		const measureText = vi.fn((row: Nested) => row.name);
-		const docs: Nested[] = [
+		const documents: Nested[] = [
 			{
 				_id: "a",
 				name: "Ada",
 				venture: { name: "V", links: [{ url: "https://a" }] },
 			},
 		];
-		const [rows, setRows] = createSignal<Nested[]>(docs);
+		const [rows, setRows] = createSignal<Nested[]>(documents);
 		render(() => (
 			<Table.Root
 				columns={[
@@ -567,9 +580,9 @@ describe("column tracks", () => {
 			/>
 		));
 		measureText.mockClear();
-		setRows(docs.map((doc) => structuredClone(doc)));
+		setRows(documents.map((doc) => structuredClone(doc)));
 		expect(measureText).not.toHaveBeenCalled();
-		const changed = structuredClone(docs[0]);
+		const changed = structuredClone(documents[0]);
 		changed.venture.links[0].url = "https://b";
 		setRows([changed]);
 		expect(measureText.mock.calls.map(([row]) => row)).toEqual([changed]);
@@ -631,7 +644,7 @@ describe("column tracks", () => {
 describe("column re-measure", () => {
 	type Named = { name: string };
 	const named: Named[] = [{ name: "Ada" }, { name: "Grace Hopper" }];
-	const nameColumns: JfColumnDef<Named>[] = [
+	const nameColumns: JfColumnDefinition<Named>[] = [
 		{
 			accessorKey: "name",
 			header: "Name",
@@ -669,11 +682,6 @@ describe("column re-measure", () => {
 		Reflect.deleteProperty(HTMLElement.prototype, "scrollWidth");
 		vi.unstubAllGlobals();
 	});
-
-	async function settle(): Promise<void> {
-		await Promise.resolve();
-		await Promise.resolve();
-	}
 
 	test("re-measure once when web fonts finish loading", async () => {
 		render(() => <Table.Root columns={nameColumns} data={named} />);
@@ -736,7 +744,7 @@ describe("column re-measure", () => {
 	});
 
 	test("keep widths when a font that measures nothing differently loads", async () => {
-		setTableTextMeasurer(() => (text) => text.length * 10);
+		setTableTextMeasurer(() => measureTenPixelsPerCharacter);
 		const [rows, setRows] = createSignal<Named[]>(named);
 		render(() => <Table.Root columns={nameColumns} data={rows()} />);
 		await settle();
@@ -748,7 +756,7 @@ describe("column re-measure", () => {
 	});
 
 	test("animate track changes only once a hidden table has been shown", async () => {
-		let shown = false;
+		let isShown = false;
 		const observers: (() => void)[] = [];
 		vi.stubGlobal(
 			"ResizeObserver",
@@ -764,10 +772,10 @@ describe("column re-measure", () => {
 		render(() => (
 			<div
 				style={{ "overflow-y": "auto" }}
-				ref={(el) => {
-					Object.defineProperty(el, "clientHeight", {
+				ref={(element) => {
+					Object.defineProperty(element, "clientHeight", {
 						configurable: true,
-						get: () => (shown ? 400 : 0),
+						get: () => (isShown ? 400 : 0),
 					});
 				}}
 			>
@@ -777,7 +785,7 @@ describe("column re-measure", () => {
 		const table = document.querySelector("table");
 		await new Promise((resolve) => setTimeout(resolve, 50));
 		expect(table).not.toHaveAttribute("data-animate-tracks");
-		shown = true;
+		isShown = true;
 		for (const observe of observers) observe();
 		await waitFor(() => {
 			expect(table).toHaveAttribute("data-animate-tracks", "true");
@@ -785,11 +793,11 @@ describe("column re-measure", () => {
 	});
 
 	test("re-measure the headers once a hidden scroll parent gets a height", () => {
-		let shown = false;
+		let isShown = false;
 		Object.defineProperty(HTMLElement.prototype, "scrollWidth", {
 			configurable: true,
 			get(this: HTMLElement) {
-				return shown && this.hasAttribute("data-header-label")
+				return isShown && this.hasAttribute("data-header-label")
 					? this.textContent.length * 100
 					: 0;
 			},
@@ -810,10 +818,10 @@ describe("column re-measure", () => {
 			<div
 				data-testid="scroller"
 				style={{ "overflow-y": "auto" }}
-				ref={(el) => {
-					Object.defineProperty(el, "clientHeight", {
+				ref={(element) => {
+					Object.defineProperty(element, "clientHeight", {
 						configurable: true,
-						get: () => (shown ? 400 : 0),
+						get: () => (isShown ? 400 : 0),
 					});
 				}}
 			>
@@ -821,7 +829,7 @@ describe("column re-measure", () => {
 			</div>
 		));
 		expect(tracks()).toBe("121px minmax(0, 1fr)");
-		shown = true;
+		isShown = true;
 		for (const observe of observers) observe();
 		// The "Name" label at 100px a character, + 1.
 		expect(tracks()).toBe("401px minmax(0, 1fr)");
@@ -870,7 +878,7 @@ describe("accessibility", () => {
 		render(() => (
 			<Table.Root
 				columns={[
-					...(columns as unknown as JfColumnDef<Row>[]),
+					...(columns as unknown as JfColumnDefinition<Row>[]),
 					{ id: "actions", header: "", size: 84, cell: () => null },
 				]}
 				data={data()}
@@ -965,12 +973,12 @@ describe("DOM contract", () => {
 		render(() => <Table.Root columns={columns as never} data={data()} />);
 		const th = document.querySelector(HEADER_COLUMN_SELECTOR);
 		expect(th?.getAttribute(COLUMN_ID_ATTR)).toBe("name");
-		for (const attr of [
+		for (const attribute of [
 			HEADER_CELL_ATTR,
 			HEADER_LABEL_ATTR,
 			HEADER_ACTIONS_ATTR,
 		]) {
-			expect(th?.querySelector(`[${attr}]`)).not.toBeNull();
+			expect(th?.querySelector(`[${attribute}]`)).not.toBeNull();
 		}
 		expect(document.querySelector(BODY_TEXT_CELL_SELECTOR)).not.toBeNull();
 	});
@@ -1018,6 +1026,17 @@ describe("track animation stylesheet", () => {
 	});
 });
 
+function renderTable(spy: (row: unknown) => void, rows = data()) {
+	render(() => (
+		<Table.Root
+			columns={columns as never}
+			data={rows}
+			onRowHoverIntent={spy}
+		/>
+	));
+	return screen.getAllByRole("row")[2];
+}
+
 describe("onRowHoverIntent", () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
@@ -1025,17 +1044,6 @@ describe("onRowHoverIntent", () => {
 	afterEach(() => {
 		vi.useRealTimers();
 	});
-
-	function renderTable(spy: (row: unknown) => void, rows = data()) {
-		render(() => (
-			<Table.Root
-				columns={columns as never}
-				data={rows}
-				onRowHoverIntent={spy}
-			/>
-		));
-		return screen.getAllByRole("row")[2];
-	}
 
 	test("fires with the row's original data after 150 ms of rest", () => {
 		const spy = vi.fn();

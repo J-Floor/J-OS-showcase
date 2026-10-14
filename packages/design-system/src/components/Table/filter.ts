@@ -33,6 +33,17 @@ type BoundScale = {
 	upper: (bound: string) => number;
 };
 
+/** The least and the most a row may be: an exact filter bounds both ends at
+ *  its value. */
+function rangeBounds(value: RangeFilterValue<string>): {
+	from: string | undefined;
+	to: string | undefined;
+} {
+	return value.mode === "exact"
+		? { from: value.value, to: value.value }
+		: { from: value.from, to: value.to };
+}
+
 /**
  * Whether a row's position on a scale passes a range filter. No filter, an
  * exact filter with no value, or a range with neither bound passes
@@ -44,14 +55,12 @@ function matchesRange(
 	scale: BoundScale
 ): boolean {
 	if (filterValue === undefined || filterValue === null) return true;
-	const value = filterValue as RangeFilterValue<string>;
-	const from = value.mode === "exact" ? value.value : value.from;
-	const to = value.mode === "exact" ? value.value : value.to;
-	if (from === undefined && to === undefined) return true;
-	if (Number.isNaN(position)) return false;
+	const { from, to } = rangeBounds(filterValue as RangeFilterValue<string>);
 	return (
-		(from === undefined || position >= scale.lower(from)) &&
-		(to === undefined || position <= scale.upper(to))
+		(from === undefined && to === undefined) ||
+		(!Number.isNaN(position) &&
+			(from === undefined || position >= scale.lower(from)) &&
+			(to === undefined || position <= scale.upper(to)))
 	);
 }
 
@@ -59,8 +68,9 @@ function matchesRange(
  *  non-blank string counts, so a missing value never reads as 0. */
 function numericValue(value: unknown): number {
 	if (typeof value === "number") return value;
-	if (typeof value === "string" && value.trim() !== "") return Number(value);
-	return Number.NaN;
+	return typeof value === "string" && value.trim() !== ""
+		? Number(value)
+		: Number.NaN;
 }
 
 const NUMBER_SCALE: BoundScale = { lower: Number, upper: Number };
@@ -85,13 +95,11 @@ export function numberRangeColumnFilter<Data extends Record<string, unknown>>(
 /** Epoch ms of a row's date value: J floor date columns hold timestamps, but
  *  a `Date` or a date string coerces too. */
 function timestampOf(value: unknown): number {
-	if (
-		typeof value === "number" ||
+	return typeof value === "number" ||
 		typeof value === "string" ||
 		value instanceof Date
-	)
-		return new Date(value).getTime();
-	return Number.NaN;
+		? new Date(value).getTime()
+		: Number.NaN;
 }
 
 /** Local midnight at the start of an ISO day. */
@@ -129,9 +137,11 @@ export function dateRangeColumnFilter<Data extends Record<string, unknown>>(
 	);
 }
 
+const MINUTES_PER_HOUR = 60;
+
 function toMinutes(time: string): number {
 	const [hours, minutes] = time.split(":").map(Number);
-	return hours * 60 + minutes;
+	return hours * MINUTES_PER_HOUR + minutes;
 }
 
 const TIME_SCALE: BoundScale = { lower: toMinutes, upper: toMinutes };
@@ -161,8 +171,9 @@ export function booleanEqualsColumnFilter<Data extends Record<string, unknown>>(
 	columnId: string,
 	filterValue: unknown
 ): boolean {
-	if (typeof filterValue !== "boolean") return true;
-	return row.getValue(columnId) === filterValue;
+	return typeof filterValue === "boolean"
+		? row.getValue(columnId) === filterValue
+		: true;
 }
 
 /**
@@ -204,12 +215,15 @@ export function textContainsColumnFilter<Data extends Record<string, unknown>>(
 		return true;
 
 	const rowValue = row.getValue(columnId);
-	if (!isEnumValue(rowValue) || !isEnumValue(filterValue)) return false;
 
 	/* eslint-disable no-restricted-syntax -- case-insensitive filter matching is business logic, not UI text */
-	return String(rowValue)
-		.toLowerCase()
-		.includes(String(filterValue).toLowerCase());
+	return (
+		isEnumValue(rowValue) &&
+		isEnumValue(filterValue) &&
+		String(rowValue)
+			.toLowerCase()
+			.includes(String(filterValue).toLowerCase())
+	);
 	/* eslint-enable no-restricted-syntax -- re-enable after the filter comparison */
 }
 
@@ -275,14 +289,15 @@ export function selectedEnumOptionIds(
 	options: readonly EnumOption<EnumValue>[],
 	filterValue: unknown
 ): string[] {
-	if (!Array.isArray(filterValue)) return options.map(enumOptionId);
+	if (!Array.isArray(filterValue))
+		return options.map((option) => enumOptionId(option));
 
 	const present = new Set(filterValue.filter(isEnumValue).map(String));
 	return options
 		.filter((option) =>
 			enumOptionValues(option).every((value) => present.has(value))
 		)
-		.map(enumOptionId);
+		.map((option) => enumOptionId(option));
 }
 
 /** The stored filter value for a set of selected options: every raw value
@@ -294,7 +309,13 @@ export function enumFilterValueFromIds(
 	const selected = new Set(selectedIds);
 	return options
 		.filter((option) => selected.has(enumOptionId(option)))
-		.flatMap(enumOptionValues);
+		.flatMap((option) => enumOptionValues(option));
+}
+
+function isRangeActive(range: RangeFilterValue<unknown>): boolean {
+	return range.mode === "exact"
+		? range.value !== undefined
+		: range.from !== undefined || range.to !== undefined;
 }
 
 /**
@@ -313,10 +334,7 @@ export function filterIsActive(
 		case "number":
 		case "time":
 		case "date": {
-			const range = value as RangeFilterValue<unknown>;
-			return range.mode === "exact"
-				? range.value !== undefined
-				: range.from !== undefined || range.to !== undefined;
+			return isRangeActive(value as RangeFilterValue<unknown>);
 		}
 		case "string":
 			return value !== "";
@@ -366,13 +384,11 @@ export function switchRangeMode<T>(
 /** The boolean segment a stored filter value shows. */
 export function booleanSegment(value: unknown): BooleanSegment {
 	if (value === true) return "true";
-	if (value === false) return "false";
-	return "any";
+	return value === false ? "false" : "any";
 }
 
 /** The stored filter value for a boolean segment. */
 export function booleanFilter(segment: string | null): boolean | undefined {
 	if (segment === "true") return true;
-	if (segment === "false") return false;
-	return undefined;
+	return segment === "false" ? false : undefined;
 }

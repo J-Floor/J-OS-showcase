@@ -1,24 +1,27 @@
 import {
-	Button,
 	Drawer,
-	DrawerNav,
-	IconButton,
 	Input,
 	PropertyRow,
 	Select,
-	TextArea,
 	fireConfetti,
 } from "@j-os/design-system";
-import { For, Show, type JSX } from "solid-js";
+import { Show, type JSX } from "solid-js";
 
 import { NAME_MAX, TEXT_MAX } from "../../../../convex/lib/validate.ts";
 import {
 	createSyncedField,
 	shallowArrayEquals,
 } from "../../../lib/createSyncedField.ts";
+import { DescriptionField } from "../../../shared/components/DescriptionField.tsx";
+import { SelectOptionList } from "../../../shared/components/SelectOptionList.tsx";
+import { EntityCreateFooter } from "../../../shared/entity/EntityCreateFooter.tsx";
+import {
+	EntityDrawerHeader,
+	type DrawerNavState,
+} from "../../../shared/entity/EntityDrawerHeader.tsx";
 import { ICONS } from "../../../shared/icons.ts";
 import type { Person, Project, Task } from "../data/tasksData.tsx";
-import { useTaskActions } from "../data/tasksData.tsx";
+import { useTaskActions, type TaskActions } from "../data/tasksData.tsx";
 
 import { AssigneeSelect } from "./fields/AssigneeSelect.tsx";
 import { DateField } from "./fields/DateField.tsx";
@@ -62,9 +65,9 @@ function TaskFieldsPlaceholder() {
 	);
 }
 
-export function TaskDrawer(props: {
+type TaskDrawerProps = {
 	open: boolean;
-	onOpenChange: (open: boolean) => void;
+	onOpenChange: (isOpen: boolean) => void;
 	task?: Task;
 	/** Status the form starts with in create mode (e.g. a column's "+" prefills it). */
 	initialStatus?: Task["status"];
@@ -74,96 +77,177 @@ export function TaskDrawer(props: {
 	 *  data hasn't loaded yet — distinct from create, where there is no id at
 	 *  all. Wins over `task` (which is undefined in both states). */
 	loading?: boolean;
-	nav?: {
-		hasPrev: () => boolean;
-		hasNext: () => boolean;
-		onPrev: () => void;
-		onNext: () => void;
-	};
-}): JSX.Element {
-	const actions = useTaskActions();
-	function isEdit() {
-		return props.task !== undefined;
-	}
+	nav?: DrawerNavState;
+};
 
-	// Focused when the drawer opens.
-	let titleEl: HTMLInputElement | undefined;
-	// Anchors the completion confetti to the Status row.
-	let statusRowEl: HTMLDivElement | undefined;
-
-	// Each field is a draft synced to its Convex value via createSyncedField: the
-	// local draft drives the input (no echo race on fast typing), edits push to
-	// Convex (debounced for free text, immediately for discrete controls), and
-	// remote changes are adopted while the field is idle. `key` includes `open`
-	// so the form re-seeds every time the drawer opens — in create mode `remote`
-	// is the empty/initial value, so it resets; the `write`s no-op (patch guards
-	// on `props.task`) and createTask reads the drafts directly.
+/**
+ * Each field is a draft synced to its Convex value via createSyncedField: the
+ * local draft drives the input (no echo race on fast typing), edits push to
+ * Convex (debounced for free text, immediately for discrete controls), and
+ * remote changes are adopted while the field is idle. `key` includes `open`
+ * so the form re-seeds every time the drawer opens — in create mode `remote`
+ * is the empty/initial value, so it resets; the `write`s no-op (patch guards
+ * on `props.task`) and createTask reads the drafts directly.
+ */
+function createTaskFields(props: TaskDrawerProps, actions: TaskActions) {
 	function key() {
 		return `${String(props.open)}:${props.task?._id ?? "new"}`;
 	}
 
 	// Simplified patch: the server validator constrains the real payload.
-	function patch(p: Record<string, unknown>) {
-		if (props.task) void actions.update({ id: props.task._id, ...p });
+	function patch(fields: Record<string, unknown>) {
+		if (props.task) void actions.update({ id: props.task._id, ...fields });
 	}
 
-	const title = createSyncedField({
-		remote: () => props.task?.title ?? "",
-		key,
-		write: (v) => {
-			patch({ title: v });
-		},
-	});
-	const status = createSyncedField<Task["status"]>({
-		remote: () => props.task?.status ?? props.initialStatus ?? "backlog",
-		key,
-		write: (v) => {
-			patch({ status: v });
-		},
-		debounceMs: 0,
-	});
-	const assignees = createSyncedField({
-		remote: () => props.task?.assigneeIds ?? [],
-		key,
-		write: (v) => {
-			patch({ assigneeIds: v });
-		},
-		debounceMs: 0,
-		equals: shallowArrayEquals,
-	});
-	const projectId = createSyncedField({
-		remote: () => props.task?.projectId,
-		key,
-		write: (v) => {
-			patch({ projectId: v ?? null });
-		},
-		debounceMs: 0,
-	});
-	const dueDate = createSyncedField({
-		remote: () => props.task?.dueDate,
-		key,
-		write: (v) => {
-			patch({ dueDate: v ?? null });
-		},
-		debounceMs: 0,
-	});
-	const description = createSyncedField({
-		remote: () => props.task?.description ?? "",
-		key,
-		write: (v) => {
-			patch({ description: v });
-		},
-	});
+	return {
+		title: createSyncedField({
+			remote: () => props.task?.title ?? "",
+			key,
+			write: (value) => {
+				patch({ title: value });
+			},
+		}),
+		status: createSyncedField<Task["status"]>({
+			remote: () =>
+				props.task?.status ?? props.initialStatus ?? "backlog",
+			key,
+			write: (value) => {
+				patch({ status: value });
+			},
+			debounceMs: 0,
+		}),
+		assignees: createSyncedField({
+			remote: () => props.task?.assigneeIds ?? [],
+			key,
+			write: (value) => {
+				patch({ assigneeIds: value });
+			},
+			debounceMs: 0,
+			equals: shallowArrayEquals,
+		}),
+		projectId: createSyncedField({
+			remote: () => props.task?.projectId,
+			key,
+			write: (value) => {
+				patch({ projectId: value ?? null });
+			},
+			debounceMs: 0,
+		}),
+		dueDate: createSyncedField({
+			remote: () => props.task?.dueDate,
+			key,
+			write: (value) => {
+				patch({ dueDate: value ?? null });
+			},
+			debounceMs: 0,
+		}),
+		description: createSyncedField({
+			remote: () => props.task?.description ?? "",
+			key,
+			write: (value) => {
+				patch({ description: value });
+			},
+		}),
+	};
+}
 
+type TaskFields = ReturnType<typeof createTaskFields>;
+
+/** The status picker. Completing a task bursts confetti from its row — set
+ *  first, since the status write must never depend on the decorative
+ *  confetti, which can throw. */
+function StatusRow(props: { status: TaskFields["status"] }) {
+	// Anchors the completion confetti to the Status row.
+	let statusRowElement: HTMLDivElement | undefined;
+	return (
+		<PropertyRow
+			icon={ICONS.status}
+			label="Status"
+			ref={(element) => {
+				statusRowElement = element;
+			}}
+		>
+			<Select.Root
+				options={STATUS_OPTIONS}
+				value={[props.status.value()]}
+				sameWidth
+				onValueChange={(details) => {
+					const next = details.value[0] as Task["status"];
+					const isCompleted =
+						next === "done" && props.status.value() !== "done";
+					// Set first — the status write must never depend on the
+					// decorative confetti, which can throw.
+					props.status.set(next);
+					if (isCompleted) {
+						try {
+							fireConfetti(statusRowElement);
+						} catch {
+							/* decorative only */
+						}
+					}
+				}}
+			>
+				<SelectOptionList options={STATUS_OPTIONS} />
+			</Select.Root>
+		</PropertyRow>
+	);
+}
+
+/** Assignees, project and due date. */
+function TaskDetailRows(props: {
+	fields: TaskFields;
+	people: Person[];
+	projects: Project[];
+}) {
+	return (
+		<>
+			<PropertyRow icon={ICONS.assignees} label="Assignees">
+				<AssigneeSelect
+					people={props.people}
+					value={props.fields.assignees.value()}
+					onChange={(ids) => {
+						props.fields.assignees.set(ids);
+					}}
+				/>
+			</PropertyRow>
+
+			<PropertyRow icon={ICONS.project} label="Project">
+				<ProjectSelect
+					projects={props.projects}
+					value={props.fields.projectId.value()}
+					onChange={(id) => {
+						props.fields.projectId.set(id);
+					}}
+				/>
+			</PropertyRow>
+
+			<PropertyRow icon={ICONS.date} label="Due date">
+				<DateField
+					value={props.fields.dueDate.value()}
+					onChange={(ms) => {
+						props.fields.dueDate.set(ms);
+					}}
+				/>
+			</PropertyRow>
+		</>
+	);
+}
+
+/** Creating a task from the drafts, and deleting the open one. */
+function createTaskCommands(
+	props: TaskDrawerProps,
+	fields: TaskFields,
+	actions: TaskActions
+) {
 	async function createTask() {
-		if (!title.value().trim()) return;
+		if (!fields.title.value().trim()) return;
 		await actions.create({
-			title: title.value().trim(),
-			status: status.value(),
-			assigneeIds: assignees.value(),
-			projectId: projectId.value(),
-			dueDate: dueDate.value(),
-			description: description.value().trim() || undefined,
+			title: fields.title.value().trim(),
+			status: fields.status.value(),
+			assigneeIds: fields.assignees.value(),
+			projectId: fields.projectId.value(),
+			dueDate: fields.dueDate.value(),
+			description: fields.description.value().trim() || undefined,
 		});
 		props.onOpenChange(false);
 	}
@@ -173,38 +257,38 @@ export function TaskDrawer(props: {
 		props.onOpenChange(false);
 	}
 
+	return { createTask, deleteTask };
+}
+
+export function TaskDrawer(props: TaskDrawerProps): JSX.Element {
+	const actions = useTaskActions();
+	const fields = createTaskFields(props, actions);
+	const { createTask, deleteTask } = createTaskCommands(
+		props,
+		fields,
+		actions
+	);
+	function isEdit() {
+		return props.task !== undefined;
+	}
+
+	// Focused when the drawer opens.
+	let titleElement: HTMLInputElement | undefined;
+
 	return (
 		<Drawer.Root
 			open={props.open}
 			onOpenChange={props.onOpenChange}
-			initialFocusEl={() => titleEl ?? null}
+			initialFocusEl={() => titleElement ?? null}
 		>
-			<Drawer.Header>
-				<Drawer.Title loading={props.loading}>
-					{isEdit() ? "Task" : "New task"}
-				</Drawer.Title>
-				<Drawer.HeaderActions>
-					<Show when={props.nav}>
-						{(n) => (
-							<DrawerNav
-								onPrev={n().onPrev}
-								onNext={n().onNext}
-								hasPrev={n().hasPrev()}
-								hasNext={n().hasNext()}
-							/>
-						)}
-					</Show>
-					<Show when={isEdit()}>
-						<IconButton
-							tooltipLabel="Delete task"
-							onClick={deleteTask}
-						>
-							{ICONS.delete}
-						</IconButton>
-					</Show>
-					<Drawer.Close />
-				</Drawer.HeaderActions>
-			</Drawer.Header>
+			<EntityDrawerHeader
+				title={isEdit() ? "Task" : "New task"}
+				loading={props.loading}
+				nav={props.nav}
+				isEdit={isEdit()}
+				deleteLabel="Delete task"
+				onDelete={deleteTask}
+			/>
 			<Drawer.Body
 				loading={props.loading}
 				skeleton={<TaskFieldsPlaceholder />}
@@ -213,110 +297,38 @@ export function TaskDrawer(props: {
 					label="Title"
 					maxLength={NAME_MAX}
 					required
-					ref={(el: HTMLInputElement) => {
-						titleEl = el;
+					ref={(element: HTMLInputElement) => {
+						titleElement = element;
 					}}
 					class={styles.titleInput}
 					placeholder="Task title"
-					value={title.value()}
-					onInput={(e) => {
-						title.set(e.currentTarget.value);
+					value={fields.title.value()}
+					onInput={(event) => {
+						fields.title.set(event.currentTarget.value);
 					}}
-					onBlur={title.flush}
+					onBlur={fields.title.flush}
 				/>
-
-				<PropertyRow
-					icon={ICONS.status}
-					label="Status"
-					ref={(el) => {
-						statusRowEl = el;
-					}}
-				>
-					<Select.Root
-						options={STATUS_OPTIONS}
-						value={[status.value()]}
-						sameWidth
-						onValueChange={(d) => {
-							const next = d.value[0] as Task["status"];
-							const completed =
-								next === "done" && status.value() !== "done";
-							// Set first — the status write must never depend on the
-							// decorative confetti, which can throw.
-							status.set(next);
-							if (completed) {
-								try {
-									fireConfetti(statusRowEl);
-								} catch {
-									/* decorative only */
-								}
-							}
-						}}
-					>
-						<Select.Content>
-							<For each={STATUS_OPTIONS}>
-								{(o) => (
-									<Select.Option
-										value={o.value}
-										title={o.title}
-									/>
-								)}
-							</For>
-						</Select.Content>
-					</Select.Root>
-				</PropertyRow>
-
-				<PropertyRow icon={ICONS.assignees} label="Assignees">
-					<AssigneeSelect
-						people={props.people}
-						value={assignees.value()}
-						onChange={(ids) => {
-							assignees.set(ids);
-						}}
-					/>
-				</PropertyRow>
-
-				<PropertyRow icon={ICONS.project} label="Project">
-					<ProjectSelect
-						projects={props.projects}
-						value={projectId.value()}
-						onChange={(id) => {
-							projectId.set(id);
-						}}
-					/>
-				</PropertyRow>
-
-				<PropertyRow icon={ICONS.date} label="Due date">
-					<DateField
-						value={dueDate.value()}
-						onChange={(ms) => {
-							dueDate.set(ms);
-						}}
-					/>
-				</PropertyRow>
-
-				<div class={styles.description}>
-					<TextArea
-						label="Description"
-						maxLength={TEXT_MAX}
-						autoresize
-						value={description.value()}
-						onInput={(value) => {
-							description.set(value);
-						}}
-						onBlur={description.flush}
-					/>
-				</div>
+				<StatusRow status={fields.status} />
+				<TaskDetailRows
+					fields={fields}
+					people={props.people}
+					projects={props.projects}
+				/>
+				<DescriptionField
+					class={styles.description}
+					description={fields.description}
+					maxLength={TEXT_MAX}
+				/>
 			</Drawer.Body>
 			<Show when={!props.loading && !isEdit()}>
-				<Drawer.Footer>
-					<Button
-						disabled={!title.value().trim()}
-						disabledReason="Add a title first"
-						onClick={createTask}
-					>
-						Create task
-					</Button>
-				</Drawer.Footer>
+				<EntityCreateFooter
+					label="Create task"
+					disabledReason="Add a title first"
+					canCreate={fields.title.value().trim() !== ""}
+					onCreate={() => {
+						void createTask();
+					}}
+				/>
 			</Show>
 		</Drawer.Root>
 	);

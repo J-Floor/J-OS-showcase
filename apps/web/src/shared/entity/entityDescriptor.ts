@@ -28,11 +28,11 @@ export type EntityDescriptor<Row extends { _id: string }> = {
 	/** Entities with a shareable QR (items, events). */
 	qr?: (row: Row) => { url: string; fileName: string };
 	/** Warms the drawer's extra queries for one row on hover, focus or palette
-	 *  highlight. `can` gates queries the drawer only runs for some viewers. Arg
+	 *  highlight. `canPerform` gates queries the drawer only runs for some viewers. Arg
 	 *  objects must equal the drawer's own, or the keeper key differs. */
 	prefetch?: (
 		row: Row,
-		can: (action: Action, subject: Subject) => boolean
+		canPerform: (action: Action, subject: Subject) => boolean
 	) => void;
 };
 

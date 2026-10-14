@@ -98,14 +98,15 @@ vi.mock("../print/inventoryPdfAssets.ts", () => ({
 
 import { ItemsTab } from "./ItemsTab.tsx";
 
+function Harness() {
+	const selection = createEntitySelection<Item>({
+		rows: () => rows,
+		param: "item",
+	});
+	return <ItemsTab selection={selection} />;
+}
+
 function renderTab(): void {
-	function Harness() {
-		const selection = createEntitySelection<Item>({
-			rows: () => rows,
-			param: "item",
-		});
-		return <ItemsTab selection={selection} />;
-	}
 	render(() => (
 		<AbilityProvider role="board">
 			<MemoryRouter>
@@ -140,7 +141,7 @@ test("Print generates a PDF of the checked rows and downloads it", async () => {
 		Item[],
 		{ now: Date },
 	];
-	expect(generateArgs[0].map((r) => r.assetTag)).toEqual([
+	expect(generateArgs[0].map((row) => row.assetTag)).toEqual([
 		"A00001",
 		"A00003",
 	]);

@@ -30,7 +30,7 @@ describe("sendApprovalEmail (windowed guest)", () => {
 	});
 
 	it("renders untilDate as the CHOSEN day, not the exclusive-end instant", async () => {
-		const t = convexTest(schema, modules);
+		const backend = convexTest(schema, modules);
 		// The board picked 2026-10-18 in the guest dialog; end-of-day-inclusive
 		// semantics put the instant at 00:00:01 Zurich of the day AFTER, i.e.
 		// 2026-10-19. `accessUntilLocal` is that zoned wall-clock — but the
@@ -41,8 +41,8 @@ describe("sendApprovalEmail (windowed guest)", () => {
 		if (!zoned)
 			throw new Error("composeExpiry returned null for a valid date");
 
-		await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "ada@example.com",
 				firstName: "Ada",
 				lastName: "Lovelace",
@@ -56,7 +56,7 @@ describe("sendApprovalEmail (windowed guest)", () => {
 		);
 
 		const fetchSpy = stubResend();
-		await t.action(internal.notifications.sendApprovalEmail, {
+		await backend.action(internal.notifications.sendApprovalEmail, {
 			email: "ada@example.com",
 		});
 
@@ -78,7 +78,7 @@ describe("sendApprovalEmail (windowed guest)", () => {
 	});
 
 	it("falls back to the epoch's own Zurich-zone day for a legacy row with no accessUntilLocal", async () => {
-		const t = convexTest(schema, modules);
+		const backend = convexTest(schema, modules);
 		// 2026-10-17T22:30:00Z is already 2026-10-18 in Zurich (CEST +2) — a
 		// deliberate UTC/Zurich day-boundary straddle. The OLD code
 		// (`formatEmailDate` = UTC day) would show "17 October 2026"; the fix's
@@ -86,8 +86,8 @@ describe("sendApprovalEmail (windowed guest)", () => {
 		// 18th instead.
 		const until = Date.UTC(2026, 9, 17, 22, 30, 0);
 
-		await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "ada@example.com",
 				firstName: "Ada",
 				lastName: "Lovelace",
@@ -101,7 +101,7 @@ describe("sendApprovalEmail (windowed guest)", () => {
 		);
 
 		const fetchSpy = stubResend();
-		await t.action(internal.notifications.sendApprovalEmail, {
+		await backend.action(internal.notifications.sendApprovalEmail, {
 			email: "ada@example.com",
 		});
 
@@ -115,7 +115,7 @@ describe("sendApprovalEmail (windowed guest)", () => {
 	});
 
 	it("shows a preserved ARBITRARY accessUntilLocal's own day (not a day early)", async () => {
-		const t = convexTest(schema, modules);
+		const backend = convexTest(schema, modules);
 		// A seed/legacy-style arbitrary instant (NOT 00:00:01 Zurich) — the
 		// preserved-row shape `guestChosenIso` exists to fix: its own day, not
 		// the day before.
@@ -126,8 +126,8 @@ describe("sendApprovalEmail (windowed guest)", () => {
 		// exercising the real epoch.
 		const until = utcFromLocal(local);
 
-		await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "seed-guest@example.com",
 				firstName: "Seed",
 				lastName: "Guest",
@@ -141,7 +141,7 @@ describe("sendApprovalEmail (windowed guest)", () => {
 		);
 
 		const fetchSpy = stubResend();
-		await t.action(internal.notifications.sendApprovalEmail, {
+		await backend.action(internal.notifications.sendApprovalEmail, {
 			email: "seed-guest@example.com",
 		});
 
@@ -154,11 +154,11 @@ describe("sendApprovalEmail (windowed guest)", () => {
 	});
 
 	it("still shows the CHOSEN (day-before) date for a 00:00:01 Model-B row", async () => {
-		const t = convexTest(schema, modules);
+		const backend = convexTest(schema, modules);
 		const zoned = composeExpiry("2026-10-18", SITE_TIMEZONE)!; // -> 19th 00:00:01 Zurich
 
-		await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "windowed-guest@example.com",
 				firstName: "Windowed",
 				lastName: "Guest",
@@ -172,7 +172,7 @@ describe("sendApprovalEmail (windowed guest)", () => {
 		);
 
 		const fetchSpy = stubResend();
-		await t.action(internal.notifications.sendApprovalEmail, {
+		await backend.action(internal.notifications.sendApprovalEmail, {
 			email: "windowed-guest@example.com",
 		});
 

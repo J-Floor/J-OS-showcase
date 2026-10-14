@@ -29,10 +29,10 @@ export function Avatar(props: AvatarProps): JSX.Element {
 				{initials(props.name)}
 			</ArkAvatar.Fallback>
 			<Show when={props.src}>
-				{(src) => (
+				{(source) => (
 					<ArkAvatar.Image
 						class={styles.image}
-						src={src()}
+						src={source()}
 						alt={props.name}
 					/>
 				)}

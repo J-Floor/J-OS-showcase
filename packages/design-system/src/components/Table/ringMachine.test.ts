@@ -7,15 +7,26 @@ import {
 	step,
 } from "./ringMachine.ts";
 
-const ctx: RingContext = { rowIds: ["a", "b", "c"], autofocusFirstRow: true };
+const context: RingContext = {
+	rowIds: ["a", "b", "c"],
+	autofocusFirstRow: true,
+};
 const LIVE: RingInputs = {
 	selection: false,
 	suppressed: false,
 	pinned: undefined,
 };
 
-function inputs(state: RingState, patch: Partial<RingInputs>, c = ctx) {
-	return step(state, { type: "inputs", inputs: { ...LIVE, ...patch } }, c);
+function inputs(
+	state: RingState,
+	patch: Partial<RingInputs>,
+	machineContext = context
+) {
+	return step(
+		state,
+		{ type: "inputs", inputs: { ...LIVE, ...patch } },
+		machineContext
+	);
 }
 
 describe("inputs", () => {
@@ -26,16 +37,16 @@ describe("inputs", () => {
 	});
 
 	test("auto rings the first row only with autofocusFirstRow", () => {
-		expect(ringId({ kind: "auto" }, ctx)).toBe("a");
+		expect(ringId({ kind: "auto" }, context)).toBe("a");
 		expect(
-			ringId({ kind: "auto" }, { ...ctx, autofocusFirstRow: false })
+			ringId({ kind: "auto" }, { ...context, autofocusFirstRow: false })
 		).toBeUndefined();
 	});
 
 	test("auto follows a re-sorted first row without a transition", () => {
-		expect(ringId({ kind: "auto" }, { ...ctx, rowIds: ["c", "a"] })).toBe(
-			"c"
-		);
+		expect(
+			ringId({ kind: "auto" }, { ...context, rowIds: ["c", "a"] })
+		).toBe("c");
 	});
 
 	test("selection wins over a pin and over suppression", () => {
@@ -97,7 +108,7 @@ describe("arrow", () => {
 		const out = step(
 			{ kind: "auto" },
 			{ type: "arrow", delta: -1 },
-			{ ...ctx, autofocusFirstRow: false }
+			{ ...context, autofocusFirstRow: false }
 		);
 		expect(out.state).toEqual({ kind: "user", id: "a", index: 0 });
 		expect(out.takeFocus).toBe(false);
@@ -105,7 +116,7 @@ describe("arrow", () => {
 
 	test("moves from the autofocused first row", () => {
 		expect(
-			step({ kind: "auto" }, { type: "arrow", delta: 1 }, ctx).state
+			step({ kind: "auto" }, { type: "arrow", delta: 1 }, context).state
 		).toEqual({ kind: "user", id: "b", index: 1 });
 	});
 
@@ -114,14 +125,14 @@ describe("arrow", () => {
 			step(
 				{ kind: "user", id: "c", index: 2 },
 				{ type: "arrow", delta: 1 },
-				ctx
+				context
 			).state
 		).toEqual({ kind: "user", id: "c", index: 2 });
 		expect(
 			step(
 				{ kind: "user", id: "a", index: 0 },
 				{ type: "arrow", delta: -1 },
-				ctx
+				context
 			).state
 		).toEqual({ kind: "user", id: "a", index: 0 });
 	});
@@ -131,7 +142,7 @@ describe("arrow", () => {
 			step(
 				{ kind: "user", id: "gone", index: 1 },
 				{ type: "arrow", delta: 1 },
-				ctx
+				context
 			).state
 		).toEqual({ kind: "user", id: "a", index: 0 });
 	});
@@ -139,14 +150,14 @@ describe("arrow", () => {
 	test("is ignored while inert or pinned, and with no rows", () => {
 		const pinned: RingState = { kind: "pinned", id: "b", index: 1 };
 		expect(
-			step({ kind: "inert" }, { type: "arrow", delta: 1 }, ctx).state
+			step({ kind: "inert" }, { type: "arrow", delta: 1 }, context).state
 		).toEqual({ kind: "inert" });
-		expect(step(pinned, { type: "arrow", delta: 1 }, ctx).state).toBe(
+		expect(step(pinned, { type: "arrow", delta: 1 }, context).state).toBe(
 			pinned
 		);
 		const auto: RingState = { kind: "auto" };
 		expect(
-			step(auto, { type: "arrow", delta: 1 }, { ...ctx, rowIds: [] })
+			step(auto, { type: "arrow", delta: 1 }, { ...context, rowIds: [] })
 				.state
 		).toBe(auto);
 	});
@@ -157,7 +168,7 @@ describe("advance", () => {
 		const out = step(
 			{ kind: "user", id: "b", index: 1 },
 			{ type: "advance" },
-			{ ...ctx, rowIds: ["a", "c"] }
+			{ ...context, rowIds: ["a", "c"] }
 		);
 		expect(out.state).toEqual({ kind: "user", id: "c", index: 1 });
 	});
@@ -167,7 +178,7 @@ describe("advance", () => {
 			step(
 				{ kind: "user", id: "c", index: 2 },
 				{ type: "advance" },
-				{ ...ctx, rowIds: ["a", "b"] }
+				{ ...context, rowIds: ["a", "b"] }
 			).state
 		).toEqual({ kind: "user", id: "b", index: 1 });
 	});
@@ -177,7 +188,7 @@ describe("advance", () => {
 			step(
 				{ kind: "auto" },
 				{ type: "advance" },
-				{ ...ctx, rowIds: ["b", "c"] }
+				{ ...context, rowIds: ["b", "c"] }
 			).state
 		).toEqual({ kind: "user", id: "b", index: 0 });
 	});
@@ -187,7 +198,7 @@ describe("advance", () => {
 			step(
 				{ kind: "user", id: "a", index: 0 },
 				{ type: "advance" },
-				{ ...ctx, rowIds: [] }
+				{ ...context, rowIds: [] }
 			).state
 		).toEqual({ kind: "user", id: undefined, index: 0 });
 	});
@@ -196,16 +207,16 @@ describe("advance", () => {
 		const out = step(
 			{ kind: "user", id: "a", index: 0 },
 			{ type: "advance" },
-			{ ...ctx, rowIds: [undefined, "b"] }
+			{ ...context, rowIds: [undefined, "b"] }
 		);
-		expect(ringId(out.state, ctx)).toBeUndefined();
+		expect(ringId(out.state, context)).toBeUndefined();
 	});
 
 	test("is ignored while inert or pinned", () => {
 		const pinned: RingState = { kind: "pinned", id: "b", index: 1 };
-		expect(step({ kind: "inert" }, { type: "advance" }, ctx).state).toEqual(
-			{ kind: "inert" }
-		);
-		expect(step(pinned, { type: "advance" }, ctx).state).toBe(pinned);
+		expect(
+			step({ kind: "inert" }, { type: "advance" }, context).state
+		).toEqual({ kind: "inert" });
+		expect(step(pinned, { type: "advance" }, context).state).toBe(pinned);
 	});
 });

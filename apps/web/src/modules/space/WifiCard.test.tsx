@@ -4,10 +4,10 @@ import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
 import { getFunctionName } from "convex/server";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
-const { logWifiOpenMutate, updateWifiMutate, creds } = vi.hoisted(() => ({
+const { logWifiOpenMutate, updateWifiMutate, credentials } = vi.hoisted(() => ({
 	logWifiOpenMutate: vi.fn(() => Promise.resolve(null)),
 	updateWifiMutate: vi.fn(() => Promise.resolve(null)),
-	creds: {
+	credentials: {
 		value: undefined as { ssid: string; password: string } | undefined,
 	},
 }));
@@ -19,21 +19,21 @@ const { logWifiOpenMutate, updateWifiMutate, creds } = vi.hoisted(() => ({
 // function's stable string name rather than by reference.
 vi.mock("convex-solidjs", () => ({
 	useQuery: () => ({
-		data: () => creds.value,
-		error: () => undefined,
+		data: () => credentials.value,
+		error: () => {},
 		isLoading: () => false,
 	}),
-	useMutation: (fn: unknown) => {
+	useMutation: (function_: unknown) => {
 		const name = getFunctionName(
-			fn as Parameters<typeof getFunctionName>[0]
+			function_ as Parameters<typeof getFunctionName>[0]
 		);
 		const mutateAsync =
 			name === "wifi:update" ? updateWifiMutate : logWifiOpenMutate;
 		return {
 			mutate: mutateAsync,
 			mutateAsync,
-			data: () => undefined,
-			error: () => undefined,
+			data: () => {},
+			error: () => {},
 			isLoading: () => false,
 			reset: () => {},
 		};
@@ -48,7 +48,7 @@ const PHONE_HINT =
 	"Viewing on phone? Use Circle to Search (long-press your home button/pill)";
 
 beforeEach(() => {
-	creds.value = { ssid: "J floor", password: "test-wifi-password" };
+	credentials.value = { ssid: "J floor", password: "test-wifi-password" };
 });
 
 afterEach(() => {
@@ -123,7 +123,7 @@ test("cancelling the edit brings the code back without saving", () => {
 });
 
 test("shows a skeleton and no QR code while the credentials load", () => {
-	creds.value = undefined;
+	credentials.value = undefined;
 	setDeferredImmediate(true);
 	const { container } = renderAs("member");
 	expect(container.querySelector("[data-wifi-skeleton]")).not.toBeNull();

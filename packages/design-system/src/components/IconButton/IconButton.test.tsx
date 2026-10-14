@@ -32,39 +32,39 @@ test("renders a spinner instead of the icon while loading", () => {
 });
 
 test("fires onClick", () => {
-	let clicked = false;
+	let isClicked = false;
 	render(() => (
 		<IconButton
 			tooltipLabel="Add"
 			onClick={() => {
-				clicked = true;
+				isClicked = true;
 			}}
 		>
 			add
 		</IconButton>
 	));
 	screen.getByRole("button", { name: "Add" }).click();
-	expect(clicked).toBe(true);
+	expect(isClicked).toBe(true);
 });
 
 test("when disabled, renders bare without a tooltip trigger and is non-interactive", () => {
-	let clicked = false;
+	let isClicked = false;
 	render(() => (
 		<IconButton
 			tooltipLabel="Add"
 			disabled
 			shamefullyOmitDisabledReason
 			onClick={() => {
-				clicked = true;
+				isClicked = true;
 			}}
 		>
 			add
 		</IconButton>
 	));
-	const btn = screen.getByRole("button", { name: "Add" });
-	btn.click();
-	expect(clicked).toBe(false);
-	expect(btn).toBeDisabled();
+	const button = screen.getByRole("button", { name: "Add" });
+	button.click();
+	expect(isClicked).toBe(false);
+	expect(button).toBeDisabled();
 });
 
 test("the tooltip carries the shortcut chip, the accessible name does not", async () => {

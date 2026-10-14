@@ -7,8 +7,8 @@ import { AbilityProvider, type Role } from "../../../lib/ability.tsx";
 
 const prefetchModule = vi.fn();
 vi.mock("../../../modules/prefetchModule.ts", () => ({
-	prefetchModule: (m: { id: string }) => {
-		prefetchModule(m);
+	prefetchModule: (entry: { id: string }) => {
+		prefetchModule(entry);
 	},
 }));
 

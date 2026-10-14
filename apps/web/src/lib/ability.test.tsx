@@ -46,14 +46,14 @@ test("board can view Inventory; member, guest, and core cannot", () => {
 });
 
 test("staff sees Space and Community, nothing else", () => {
-	const a = defineAbilityFor("staff");
-	expect(a.can("view", "Space")).toBe(true);
-	expect(a.can("view", "Community")).toBe(true);
-	expect(a.can("view", "SpaceInfo")).toBe(false);
-	expect(a.can("view", "Events")).toBe(false);
-	expect(a.can("view", "Notifications")).toBe(false);
-	expect(a.can("view", "Tasks")).toBe(false);
-	expect(a.can("view", "Applications")).toBe(false);
+	const ability = defineAbilityFor("staff");
+	expect(ability.can("view", "Space")).toBe(true);
+	expect(ability.can("view", "Community")).toBe(true);
+	expect(ability.can("view", "SpaceInfo")).toBe(false);
+	expect(ability.can("view", "Events")).toBe(false);
+	expect(ability.can("view", "Notifications")).toBe(false);
+	expect(ability.can("view", "Tasks")).toBe(false);
+	expect(ability.can("view", "Applications")).toBe(false);
 });
 
 test("members still see the space info", () => {

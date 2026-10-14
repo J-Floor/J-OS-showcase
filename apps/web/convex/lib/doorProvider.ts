@@ -6,23 +6,20 @@
 import type { LockSlot } from "./doorLocks.ts";
 import { normalizeEmail } from "./emailAddress.ts";
 
-export type LockId = string;
-export type ProviderUserId = string;
-
 /** A resolvable person-identity on the provider. */
 export type DoorIdentity = {
-	providerUserId: ProviderUserId;
+	providerUserId: string;
 	email: string;
 	/** This identity's account-user authorizations on configured locks — what
 	 *  the per-person revoke deletes by. Optional — a
 	 *  read path that cannot list auths leaves it undefined. */
-	authIds?: { lockId: LockId; authId: string }[];
+	authIds?: { lockId: string; authId: string }[];
 };
 
 /** One configured lock and its human name — the lock id → name source for
  *  every Door-log line (see {@link lockNamesFromModel}). */
 export type DoorLock = {
-	lockId: LockId;
+	lockId: string;
 	name: string;
 };
 
@@ -44,7 +41,7 @@ export type DoorAction = "unlock" | "lock";
  *  `durationMs` (ok only): how long the action's effect lasts at the door.
  *  `positionBefore` (ok only): where the door was just before the command was
  *  sent, read in the same request that checked it was reachable — the
- *  baseline a later reading is judged against (`lib/doorActuation#reacted`). */
+ *  baseline a later reading is judged against (`lib/doorActuation#hasReacted`). */
 export type DoorActionResult =
 	| {
 			status: "ok";
@@ -68,7 +65,7 @@ export type DoorPosition =
 
 /** One configured lock's reachability, for the board's door-health tiles. */
 export type LockStatus = {
-	lockId: LockId;
+	lockId: string;
 	name: string;
 	/** Whether the provider can reach the lock right now. */
 	online: boolean;
@@ -123,7 +120,7 @@ export function matchesStrictly(
 }
 
 /** The label for a lock id the provider does not know. */
-export function unknownLockName(lockId: LockId): string {
+export function unknownLockName(lockId: string): string {
 	return `unknown lock ${lockId}`;
 }
 
@@ -134,7 +131,7 @@ export function unknownLockName(lockId: LockId): string {
  * identically.
  */
 export function lockNamesFromModel(model: DoorModel, ids: string[]): string[] {
-	const byId = new Map(model.locks.map((l) => [l.lockId, l.name]));
+	const byId = new Map(model.locks.map((lock) => [lock.lockId, lock.name]));
 	return ids.map((id) => byId.get(id) ?? unknownLockName(id));
 }
 
@@ -160,9 +157,9 @@ export function injectedDoorProvider(): DoorProvider | undefined {
 	return injectedProvider;
 }
 
-/** `e instanceof Error ? e.message : String(e)` — shared so a caught provider
+/** `error instanceof Error ? error.message : String(error)` — shared so a caught provider
  *  failure reads the same wherever it is logged or reported (the app
  *  door action's audit row). */
-export function errorMessage(e: unknown): string {
-	return e instanceof Error ? e.message : String(e);
+export function errorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
 }

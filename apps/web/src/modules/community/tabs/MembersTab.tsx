@@ -16,8 +16,82 @@ import {
 } from "../columns/memberColumns.tsx";
 import { useMembers } from "../data/useMembers.ts";
 
-import { RosterTab } from "./RosterTab.tsx";
+import { RosterTab, type RosterBatchProps } from "./RosterTab.tsx";
 import type { TabProps } from "./TabProps.ts";
+
+/** The selection bar: change role for, and kick out, the checked rows. */
+function MemberBatchActions(props: {
+	batch: RosterBatchProps<MemberRow>;
+	isRoleOpen: boolean;
+	onRoleOpenChange: (isOpen: boolean) => void;
+	kickOutAction: () => ActionDescriptor<MemberRow>;
+}): JSX.Element {
+	const triage = useTriage();
+	const confirm = useConfirm();
+
+	// The rows Kick out applies to — the SAME rule the per-row button
+	// and the `K` key ask, via `kickOutAction().can`.
+	function targets() {
+		return eligible(props.kickOutAction(), props.batch.selectedRows);
+	}
+
+	return (
+		<>
+			<Show when={props.batch.selectedRows.length > 0}>
+				<Button
+					onClick={() => {
+						props.onRoleOpenChange(true);
+					}}
+				>
+					<Icon>{ICONS.role}</Icon>Change role
+				</Button>
+			</Show>
+			<ChangeRoleDialog
+				open={props.isRoleOpen}
+				onOpenChange={props.onRoleOpenChange}
+				count={props.batch.selectedRows.length}
+				states={props.batch.selectedRows.map<StateId>(
+					(row) => `${row.tier}.${row.stage}`
+				)}
+				onMove={(move) => {
+					// Read the tracked selection synchronously (before the
+					// promise) so `solid/reactivity` stays happy, then let
+					// the dialog await the whole batch before it closes.
+					const ids = props.batch.selectedRows.map((row) => row._id);
+					const clearSelection = props.batch.clearSelection;
+					return applyMove(triage, ids, move).then(() => {
+						clearSelection();
+					});
+				}}
+			/>
+			<Show when={targets().length > 0}>
+				<Button
+					variant="secondary"
+					onClick={() => {
+						void (async () => {
+							const rows = targets();
+							if (
+								await confirm({
+									title: "Kick out?",
+									message: `Revoke access for ${rows.length} person(s)? They'll be moved to Kicked out, keeping their whole history.`,
+									confirmLabel: "Kick out",
+									tone: "danger",
+								})
+							)
+								await props.batch.runBatch(
+									rows,
+									triage.kickOut,
+									props.batch.clearSelection
+								);
+						})();
+					}}
+				>
+					<Icon>{ICONS.kickOut}</Icon>Kick out
+				</Button>
+			</Show>
+		</>
+	);
+}
 
 /**
  * Members tab: members / board / kicked-out grouped, with batch triage and a
@@ -35,7 +109,6 @@ import type { TabProps } from "./TabProps.ts";
 export function MembersTab(props: TabProps): JSX.Element {
 	const members = useMembers();
 	const triage = useTriage();
-	const confirm = useConfirm();
 	const [roleOpen, setRoleOpen] = createSignal(false);
 	const [singleRoleOpen, setSingleRoleOpen] = createSignal(false);
 	const [roleTarget, setRoleTarget] = createSignal<MemberRow>();
@@ -47,7 +120,9 @@ export function MembersTab(props: TabProps): JSX.Element {
 		group: memberGroup,
 	});
 	function kickOutAction(): ActionDescriptor<MemberRow> {
-		const action = memberActions.actions().find((a) => a.id === "kick");
+		const action = memberActions
+			.actions()
+			.find((candidate) => candidate.id === "kick");
 		if (!action) throw new Error("useMemberActions: no 'kick' descriptor");
 		return action;
 	}
@@ -74,68 +149,14 @@ export function MembersTab(props: TabProps): JSX.Element {
 					)}
 				</Show>
 			}
-			batchActions={(p) => {
-				// The rows Kick out applies to — the SAME rule the per-row button
-				// and the `K` key ask, via `kickOutAction().can`.
-				function targets() {
-					return eligible(kickOutAction(), p.selectedRows);
-				}
-				return (
-					<>
-						<Show when={p.selectedRows.length > 0}>
-							<Button
-								onClick={() => {
-									setRoleOpen(true);
-								}}
-							>
-								<Icon>{ICONS.role}</Icon>Change role
-							</Button>
-						</Show>
-						<ChangeRoleDialog
-							open={roleOpen()}
-							onOpenChange={setRoleOpen}
-							count={p.selectedRows.length}
-							states={p.selectedRows.map<StateId>(
-								(r) => `${r.tier}.${r.stage}`
-							)}
-							onMove={(move) => {
-								// Read the tracked selection synchronously (before the
-								// promise) so `solid/reactivity` stays happy, then let
-								// the dialog await the whole batch before it closes.
-								const ids = p.selectedRows.map((r) => r._id);
-								return applyMove(triage, ids, move).then(() => {
-									p.clearSelection();
-								});
-							}}
-						/>
-						<Show when={targets().length > 0}>
-							<Button
-								variant="secondary"
-								onClick={() => {
-									void (async () => {
-										const rows = targets();
-										if (
-											await confirm({
-												title: "Kick out?",
-												message: `Revoke access for ${rows.length} person(s)? They'll be moved to Kicked out, keeping their whole history.`,
-												confirmLabel: "Kick out",
-												tone: "danger",
-											})
-										)
-											await p.runBatch(
-												rows,
-												triage.kickOut,
-												p.clearSelection
-											);
-									})();
-								}}
-							>
-								<Icon>{ICONS.kickOut}</Icon>Kick out
-							</Button>
-						</Show>
-					</>
-				);
-			}}
+			batchActions={(batch) => (
+				<MemberBatchActions
+					batch={batch}
+					isRoleOpen={roleOpen()}
+					onRoleOpenChange={setRoleOpen}
+					kickOutAction={() => kickOutAction()}
+				/>
+			)}
 		/>
 	);
 }

@@ -13,30 +13,33 @@ const payload = v.object({
 });
 
 function copy(
-	p: Infer<typeof payload>,
-	r: Recipient
+	details: Infer<typeof payload>,
+	recipient: Recipient
 ): { title: string; body: string; url: string } {
-	if (r.personId === p.guestId) {
+	if (recipient.personId === details.guestId) {
 		return {
 			title: "Your guest access ends soon",
-			body: `Your guest access ends on ${p.untilDate}.`,
+			body: `Your guest access ends on ${details.untilDate}.`,
 			url: spaceUrl(),
 		};
 	}
 	return {
 		title: "Guest access ending soon",
-		body: `${p.guestName}'s guest access ends on ${p.untilDate}.`,
-		url: personUrl(p.guestId),
+		body: `${details.guestName}'s guest access ends on ${details.untilDate}.`,
+		url: personUrl(details.guestId),
 	};
 }
 
 export const guestExpiringSoon = defineKind({
 	category: "guests",
 	payload,
-	audience: (ctx, { guestId }) =>
-		guestAudience(ctx, guestId, { guest: "entitled" }),
-	push: (p, r) => ({ ...copy(p, r), tag: `guest-${p.guestId}-expiring` }),
-	email: (p, r) => {
-		return noticeEmail(copy(p, r));
+	audience: (context, { guestId }) =>
+		guestAudience(context, guestId, { guest: "entitled" }),
+	push: (details, recipient) => ({
+		...copy(details, recipient),
+		tag: `guest-${details.guestId}-expiring`,
+	}),
+	email: (details, recipient) => {
+		return noticeEmail(copy(details, recipient));
 	},
 });

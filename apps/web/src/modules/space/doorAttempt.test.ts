@@ -16,7 +16,7 @@ const subscriptions = vi.hoisted(() => ({
 vi.mock("convex-solidjs", async () => {
 	const { onCleanup, createSignal } = await import("solid-js");
 	return {
-		useQuery: (_ref: unknown, args: { id: string }) => {
+		useQuery: (_reference: unknown, args: { id: string }) => {
 			subscriptions.opened.push(args.id);
 			onCleanup(() => {
 				subscriptions.closed.push(args.id);
@@ -36,7 +36,7 @@ vi.mock("convex-solidjs", async () => {
 							}
 						: undefined,
 				isLoading: () => false,
-				error: () => undefined,
+				error: () => {},
 			};
 		},
 	};

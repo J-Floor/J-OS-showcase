@@ -54,9 +54,9 @@ export function TextArea(props: TextAreaProps): JSX.Element {
 	]);
 
 	function handleInput(
-		e: InputEvent & { currentTarget: HTMLTextAreaElement }
+		event: InputEvent & { currentTarget: HTMLTextAreaElement }
 	): void {
-		own.onInput(e.currentTarget.value);
+		own.onInput(event.currentTarget.value);
 	}
 
 	return (

@@ -55,20 +55,20 @@ export function AccessUntilControl(props: {
 		// ending access early is `KICK_OUT` / `MARK_LEFT` — both of which live
 		// in the role dialog, where they say what they do.
 		if (until === null || until === props.value || saving()) return;
-		const shorter = until < props.value;
+		const isShorter = until < props.value;
 		void (async () => {
 			setSaving(true);
 			try {
 				if (
 					await confirm({
 						title: `Move ${props.name}'s access to ${iso}?`,
-						message: shorter
+						message: isShorter
 							? "Their key stops working on the new date, which is earlier than the one they have now."
 							: "Their key keeps working until the new date. If their access had already run out, this puts them back in.",
-						confirmLabel: shorter
+						confirmLabel: isShorter
 							? "Shorten access"
 							: "Extend access",
-						tone: shorter ? "danger" : "default",
+						tone: isShorter ? "danger" : "default",
 					})
 				)
 					await extendWindow(props.personId, until);

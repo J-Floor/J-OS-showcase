@@ -44,9 +44,7 @@ describe("printInventoryList", () => {
 
 	it("logs instead of rejecting when the assets cannot be fetched", async () => {
 		const failure = new Error("network down");
-		const error = vi
-			.spyOn(console, "error")
-			.mockImplementation(() => undefined);
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
 		vi.mocked(loadInventoryPdfAssets).mockRejectedValue(failure);
 
 		await expect(printInventoryList(ROWS)).resolves.toBeUndefined();

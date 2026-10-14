@@ -1,4 +1,4 @@
-import type { JfColumnDef } from "@j-os/design-system";
+import type { JfColumnDefinition } from "@j-os/design-system";
 
 import type { Doc } from "../../../convex/_generated/dataModel";
 import { SITE_TIMEZONE } from "../../../convex/lib/time.ts";
@@ -31,8 +31,7 @@ const phaseOptions = [
 
 function eventPhase(event: Doc<"events">, now: number): string {
 	if (now < event.startsAt) return "future";
-	if (now > event.endsAt) return "past";
-	return "current";
+	return now > event.endsAt ? "past" : "current";
 }
 
 /**
@@ -40,7 +39,7 @@ function eventPhase(event: Doc<"events">, now: number): string {
  * (copy link / download QR) mirroring the community roster's actions column —
  * `disableRowClick` so those buttons don't also open the drawer.
  */
-export function eventColumns(): JfColumnDef<Doc<"events">>[] {
+export function eventColumns(): JfColumnDefinition<Doc<"events">>[] {
 	// Captured once when the columns are built (Table reads config once at
 	// setup). An event silently crossing future→current→past won't re-bucket
 	// until the page reloads — fine for a board tool that refetches often, and
@@ -66,7 +65,7 @@ export function eventColumns(): JfColumnDef<Doc<"events">>[] {
 			dataType: "date",
 			size: "content",
 			cell: (info) => formatEventDate(info.row.original.startsAt),
-			measureText: (r) => formatEventDate(r.startsAt),
+			measureText: (row) => formatEventDate(row.startsAt),
 		},
 		{
 			accessorKey: "endsAt",
@@ -74,7 +73,7 @@ export function eventColumns(): JfColumnDef<Doc<"events">>[] {
 			dataType: "date",
 			size: "content",
 			cell: (info) => formatEventDate(info.row.original.endsAt),
-			measureText: (r) => formatEventDate(r.endsAt),
+			measureText: (row) => formatEventDate(row.endsAt),
 		},
 		{
 			id: "actions",

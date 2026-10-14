@@ -43,12 +43,15 @@ export type RingStep = { state: RingState; takeFocus: boolean };
 
 export const INITIAL_RING: RingState = { kind: "inert" };
 
-export function ringId(state: RingState, ctx: RingContext): string | undefined {
+export function ringId(
+	state: RingState,
+	context: RingContext
+): string | undefined {
 	switch (state.kind) {
 		case "inert":
 			return undefined;
 		case "auto":
-			return ctx.autofocusFirstRow ? ctx.rowIds[0] : undefined;
+			return context.autofocusFirstRow ? context.rowIds[0] : undefined;
 		case "pinned":
 		case "user":
 			return state.id;
@@ -65,62 +68,76 @@ function savedIndex(state: RingState): number {
 	return state.kind === "pinned" || state.kind === "user" ? state.index : 0;
 }
 
+function onInputs(
+	state: RingState,
+	inputs: RingInputs,
+	context: RingContext
+): RingState {
+	const { selection, suppressed, pinned } = inputs;
+	if (selection) return INITIAL_RING;
+	if (pinned !== undefined) {
+		if (state.kind === "pinned" && state.id === pinned) return state;
+		const found = context.rowIds.indexOf(pinned);
+		return {
+			kind: "pinned",
+			id: pinned,
+			index: found >= 0 ? found : savedIndex(state),
+		};
+	}
+	if (suppressed) return INITIAL_RING;
+	if (state.kind === "pinned") {
+		const found = context.rowIds.indexOf(state.id);
+		return {
+			kind: "user",
+			id: state.id,
+			index: found >= 0 ? found : state.index,
+		};
+	}
+	return state.kind === "inert" ? { kind: "auto" } : state;
+}
+
+function onArrow(
+	state: RingState,
+	delta: number,
+	context: RingContext
+): RingState {
+	const count = context.rowIds.length;
+	if (!isLive(state) || count === 0) return state;
+	const id = ringId(state, context);
+	const current = id === undefined ? -1 : context.rowIds.indexOf(id);
+	const index =
+		current === -1 ? 0 : Math.min(Math.max(current + delta, 0), count - 1);
+	return { kind: "user", id: context.rowIds[index], index };
+}
+
+function onAdvance(state: RingState, context: RingContext): RingState {
+	if (!isLive(state)) return state;
+	const count = context.rowIds.length;
+	if (count === 0) return { kind: "user", id: undefined, index: 0 };
+	const index = Math.min(savedIndex(state), count - 1);
+	return { kind: "user", id: context.rowIds[index], index };
+}
+
 function transition(
 	state: RingState,
 	event: RingEvent,
-	ctx: RingContext
+	context: RingContext
 ): RingState {
-	const count = ctx.rowIds.length;
 	switch (event.type) {
-		case "inputs": {
-			const { selection, suppressed, pinned } = event.inputs;
-			if (selection) return INITIAL_RING;
-			if (pinned !== undefined) {
-				if (state.kind === "pinned" && state.id === pinned)
-					return state;
-				const found = ctx.rowIds.indexOf(pinned);
-				return {
-					kind: "pinned",
-					id: pinned,
-					index: found >= 0 ? found : savedIndex(state),
-				};
-			}
-			if (suppressed) return INITIAL_RING;
-			if (state.kind === "pinned") {
-				const found = ctx.rowIds.indexOf(state.id);
-				return {
-					kind: "user",
-					id: state.id,
-					index: found >= 0 ? found : state.index,
-				};
-			}
-			if (state.kind === "inert") return { kind: "auto" };
-			return state;
-		}
-		case "arrow": {
-			if (!isLive(state) || count === 0) return state;
-			const id = ringId(state, ctx);
-			const current = id === undefined ? -1 : ctx.rowIds.indexOf(id);
-			const index =
-				current === -1
-					? 0
-					: Math.min(Math.max(current + event.delta, 0), count - 1);
-			return { kind: "user", id: ctx.rowIds[index], index };
-		}
-		case "advance": {
-			if (!isLive(state)) return state;
-			if (count === 0) return { kind: "user", id: undefined, index: 0 };
-			const index = Math.min(savedIndex(state), count - 1);
-			return { kind: "user", id: ctx.rowIds[index], index };
-		}
+		case "inputs":
+			return onInputs(state, event.inputs, context);
+		case "arrow":
+			return onArrow(state, event.delta, context);
+		case "advance":
+			return onAdvance(state, context);
 	}
 }
 
 export function step(
 	state: RingState,
 	event: RingEvent,
-	ctx: RingContext
+	context: RingContext
 ): RingStep {
-	const next = transition(state, event, ctx);
+	const next = transition(state, event, context);
 	return { state: next, takeFocus: !isLive(state) && isLive(next) };
 }

@@ -1,3 +1,6 @@
+import type { Id } from "../_generated/dataModel";
+import type { QueryCtx } from "../_generated/server";
+
 /**
  * The single display string for a person, built from their name pair. firstName
  * and lastName are required on both `people` and `applications`, so this is
@@ -5,11 +8,11 @@
  * Door-log row, the signed agreement PDF). Greetings that want just a first
  * name should read `firstName` directly.
  */
-export function displayName(p: {
+export function displayName(person: {
 	firstName: string;
 	lastName: string;
 }): string {
-	return `${p.firstName} ${p.lastName}`.trim();
+	return `${person.firstName} ${person.lastName}`.trim();
 }
 
 /**
@@ -32,37 +35,66 @@ export function displayName(p: {
 export function shortNames(
 	people: readonly { _id: string; firstName: string; lastName: string }[]
 ): Map<string, string> {
-	const countByFirst = new Map<string, number>();
-	for (const p of people) {
-		const first = p.firstName.trim();
-		countByFirst.set(first, (countByFirst.get(first) ?? 0) + 1);
-	}
-
+	const countByFirst = countBy(people, (person) => person.firstName.trim());
 	// Second pass over the ambiguous ones only: an initial is no use if every
 	// Alan's surname starts with the same letter, so those get the full name.
-	const countByInitial = new Map<string, number>();
-	for (const p of people) {
-		const key = initialKey(p);
-		countByInitial.set(key, (countByInitial.get(key) ?? 0) + 1);
-	}
-
+	const countByInitial = countBy(people, initialKey);
 	const out = new Map<string, string>();
-	for (const p of people) {
-		const first = p.firstName.trim();
-		if ((countByFirst.get(first) ?? 0) <= 1) {
-			out.set(p._id, first);
-			continue;
-		}
-		const initial = p.lastName.trim().charAt(0);
-		if (initial === "" || (countByInitial.get(initialKey(p)) ?? 0) > 1) {
-			out.set(p._id, displayName(p));
-			continue;
-		}
-		out.set(p._id, `${first} ${initial}.`);
-	}
+	for (const person of people)
+		out.set(person._id, shortLabel(person, countByFirst, countByInitial));
 	return out;
 }
 
-function initialKey(p: { firstName: string; lastName: string }): string {
-	return `${p.firstName.trim()} ${p.lastName.trim().charAt(0)}`;
+function countBy<T>(
+	items: readonly T[],
+	keyOf: (item: T) => string
+): Map<string, number> {
+	const counts = new Map<string, number>();
+	for (const item of items) {
+		const key = keyOf(item);
+		counts.set(key, (counts.get(key) ?? 0) + 1);
+	}
+	return counts;
+}
+
+function shortLabel(
+	person: { firstName: string; lastName: string },
+	countByFirst: ReadonlyMap<string, number>,
+	countByInitial: ReadonlyMap<string, number>
+): string {
+	const first = person.firstName.trim();
+	if ((countByFirst.get(first) ?? 0) <= 1) return first;
+	const initial = person.lastName.trim().charAt(0);
+	const isAmbiguous =
+		initial === "" || (countByInitial.get(initialKey(person)) ?? 0) > 1;
+	return isAmbiguous ? displayName(person) : `${first} ${initial}.`;
+}
+
+function initialKey(person: { firstName: string; lastName: string }): string {
+	return `${person.firstName.trim()} ${person.lastName.trim().charAt(0)}`;
+}
+
+/**
+ * Each row with its actor's display name attached (`undefined` when the row has
+ * no actor or the actor's row is gone). Every actor is read once, however many
+ * rows they appear on.
+ */
+export async function withActorNames<Row extends { actorId?: Id<"people"> }>(
+	context: QueryCtx,
+	rows: readonly Row[]
+): Promise<(Row & { actorName: string | undefined })[]> {
+	const names = new Map<string, string>();
+	return Promise.all(
+		rows.map(async (row) => {
+			if (row.actorId === undefined)
+				return { ...row, actorName: undefined };
+			const cached = names.get(row.actorId);
+			if (cached !== undefined) return { ...row, actorName: cached };
+			const actor = await context.db.get(row.actorId);
+			if (!actor) return { ...row, actorName: undefined };
+			const actorName = displayName(actor);
+			names.set(row.actorId, actorName);
+			return { ...row, actorName };
+		})
+	);
 }

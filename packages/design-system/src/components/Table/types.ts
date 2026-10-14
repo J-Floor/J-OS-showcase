@@ -67,7 +67,7 @@ type EnumByAccessorKey<Data> = {
 }[keyof Data & string];
 
 /** The enum arm for an `accessorFn` column: nothing to bind the options to. */
-type EnumByAccessorFn = {
+type EnumByAccessorFunction = {
 	readonly dataType: "enum";
 	readonly accessorKey?: never;
 	readonly enumOptions: readonly EnumOption<EnumValue>[];
@@ -81,7 +81,7 @@ type NonEnumDataType = {
 type DataTypeFor<Data> =
 	| NonEnumDataType
 	| EnumByAccessorKey<Data>
-	| EnumByAccessorFn;
+	| EnumByAccessorFunction;
 
 /**
  * The row-agnostic `dataType` surface: what a processed column carries in its
@@ -160,7 +160,7 @@ type NoAccessor = {
  * Ported from EmboUI's `CustomColumnDef` (`@tanstack/react-table` →
  * `@tanstack/solid-table`), without group columns.
  */
-export type JfColumnDef<
+export type JfColumnDefinition<
 	Data extends Record<string, unknown>,
 	Value = unknown,
 > =

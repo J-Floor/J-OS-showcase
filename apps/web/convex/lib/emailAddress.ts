@@ -18,24 +18,35 @@ export function normalizeEmail(email: string): string {
  * can forget to. Use it directly only where duplicates are expected (collision
  * checks, purges, migrations); everyone else wants {@link personByEmail}.
  */
-export function peopleByEmail(ctx: QueryCtx, email: string) {
-	return ctx.db
+export function peopleByEmail(context: QueryCtx, email: string) {
+	return context.db
 		.query("people")
-		.withIndex("by_email", (q) => q.eq("email", normalizeEmail(email)));
+		.withIndex("by_email", (range) =>
+			range.eq("email", normalizeEmail(email))
+		);
 }
 
 /** The one person whose identity key is `email`, or null. Throws on duplicates. */
 export async function personByEmail(
-	ctx: QueryCtx,
+	context: QueryCtx,
 	email: string
 ): Promise<Doc<"people"> | null> {
-	return peopleByEmail(ctx, email).unique();
+	return peopleByEmail(context, email).unique();
 }
+
+const EMAIL_PART = /^[^\s@]+$/;
 
 /** A basic address shape check: rejects garbage in an email field (a venture
  *  name leaked into it, say) before it reaches a mail provider or an identity key. */
 export function validEmail(email: string): boolean {
-	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+	const parts = email.split("@");
+	if (parts.length !== 2) return false;
+	const [local, domain] = parts;
+	return (
+		EMAIL_PART.test(local) &&
+		EMAIL_PART.test(domain) &&
+		domain.slice(1, -1).includes(".")
+	);
 }
 
 /** Refusal shown when an email is already some other person's identity key. */

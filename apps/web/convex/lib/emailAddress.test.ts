@@ -21,7 +21,7 @@ describe("groupByNormalizedEmail", () => {
 			{ id: 3, email: "other@example.com" },
 		]);
 		expect([...groups.keys()]).toEqual(["shane@example.com"]);
-		expect(groups.get("shane@example.com")?.map((r) => r.id)).toEqual([
+		expect(groups.get("shane@example.com")?.map((row) => row.id)).toEqual([
 			1, 2,
 		]);
 	});

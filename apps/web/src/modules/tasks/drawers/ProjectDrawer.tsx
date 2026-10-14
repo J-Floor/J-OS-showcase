@@ -1,21 +1,18 @@
-import {
-	Button,
-	Drawer,
-	DrawerNav,
-	IconButton,
-	Input,
-	PropertyRow,
-	Query,
-	TextArea,
-} from "@j-os/design-system";
+import { Drawer, Input, PropertyRow, Query } from "@j-os/design-system";
 import { For, Show, type JSX } from "solid-js";
 
 import { NAME_MAX, TEXT_MAX } from "../../../../convex/lib/validate.ts";
 import { createSyncedField } from "../../../lib/createSyncedField.ts";
+import { DescriptionField } from "../../../shared/components/DescriptionField.tsx";
+import { EntityCreateFooter } from "../../../shared/entity/EntityCreateFooter.tsx";
+import {
+	EntityDrawerHeader,
+	type DrawerNavState,
+} from "../../../shared/entity/EntityDrawerHeader.tsx";
 import { ICONS } from "../../../shared/icons.ts";
 import { dateToIso, isoToMs } from "../data/taskHelpers.ts";
 import type { Person, Project, Task } from "../data/tasksData.tsx";
-import { useProjectActions } from "../data/tasksData.tsx";
+import { useProjectActions, type ProjectActions } from "../data/tasksData.tsx";
 import { TaskCard } from "../kanban/TaskCard.tsx";
 
 import { DateField } from "./fields/DateField.tsx";
@@ -55,9 +52,9 @@ function ProjectFieldsPlaceholder() {
 	);
 }
 
-export function ProjectDrawer(props: {
+type ProjectDrawerProps = {
 	open: boolean;
-	onOpenChange: (open: boolean) => void;
+	onOpenChange: (isOpen: boolean) => void;
 	project?: Project;
 	/** Create-mode date prefill (e.g. from dragging the timeline's "New" row). */
 	initialStart?: number;
@@ -70,84 +67,93 @@ export function ProjectDrawer(props: {
 	 *  data hasn't loaded yet — distinct from create, where there is no id at
 	 *  all. Wins over `project` (which is undefined in both states). */
 	loading?: boolean;
-	nav?: {
-		hasPrev: () => boolean;
-		hasNext: () => boolean;
-		onPrev: () => void;
-		onNext: () => void;
-	};
-}): JSX.Element {
-	const actions = useProjectActions();
-	function isEdit() {
-		return props.project !== undefined;
-	}
+	nav?: DrawerNavState;
+};
 
-	// Each field is a draft synced to its Convex value via createSyncedField (see
-	// TaskDrawer for the rationale). `key` includes `open` so the form re-seeds
-	// each time the drawer opens; in create mode `remote` is the empty/initial
-	// value (start defaults to today) and the `write`s no-op since `patch` guards
-	// on `props.project`.
+/**
+ * Each field is a draft synced to its Convex value via createSyncedField (see
+ * TaskDrawer for the rationale). `key` includes `open` so the form re-seeds
+ * each time the drawer opens; in create mode `remote` is the empty/initial
+ * value (start defaults to today) and the `write`s no-op since `patch` guards
+ * on `props.project`.
+ */
+function createProjectFields(
+	props: ProjectDrawerProps,
+	actions: ProjectActions
+) {
 	function key() {
 		return `${String(props.open)}:${props.project?._id ?? "new"}`;
 	}
 
-	function patch(p: Record<string, unknown>) {
-		if (props.project) void actions.update({ id: props.project._id, ...p });
+	function patch(fields: Record<string, unknown>) {
+		if (props.project)
+			void actions.update({ id: props.project._id, ...fields });
 	}
 
-	const name = createSyncedField({
-		remote: () => props.project?.name ?? "",
-		key,
-		write: (v) => {
-			patch({ name: v });
-		},
-	});
-	const leaderId = createSyncedField({
-		remote: () => props.project?.leaderId,
-		key,
-		write: (v) => {
-			patch({ leaderId: v ?? null });
-		},
-		debounceMs: 0,
-	});
-	const startDate = createSyncedField({
-		// Create mode: use the dragged-range prefill if given, else today. An
-		// existing project's unset start must stay unset.
-		remote: () =>
-			props.project
-				? props.project.startDate
-				: (props.initialStart ?? todayMs()),
-		key,
-		write: (v) => {
-			patch({ startDate: v ?? null });
-		},
-		debounceMs: 0,
-	});
-	const endDate = createSyncedField({
-		remote: () =>
-			props.project ? props.project.endDate : props.initialEnd,
-		key,
-		write: (v) => {
-			patch({ endDate: v ?? null });
-		},
-		debounceMs: 0,
-	});
-	const description = createSyncedField({
-		remote: () => props.project?.description ?? "",
-		key,
-		write: (v) => {
-			patch({ description: v });
-		},
-	});
+	return {
+		name: createSyncedField({
+			remote: () => props.project?.name ?? "",
+			key,
+			write: (value) => {
+				patch({ name: value });
+			},
+		}),
+		leaderId: createSyncedField({
+			remote: () => props.project?.leaderId,
+			key,
+			write: (value) => {
+				patch({ leaderId: value ?? null });
+			},
+			debounceMs: 0,
+		}),
+		startDate: createSyncedField({
+			// Create mode: use the dragged-range prefill if given, else today. An
+			// existing project's unset start must stay unset.
+			remote: () =>
+				props.project
+					? props.project.startDate
+					: (props.initialStart ?? todayMs()),
+			key,
+			write: (value) => {
+				patch({ startDate: value ?? null });
+			},
+			debounceMs: 0,
+		}),
+		endDate: createSyncedField({
+			remote: () =>
+				props.project ? props.project.endDate : props.initialEnd,
+			key,
+			write: (value) => {
+				patch({ endDate: value ?? null });
+			},
+			debounceMs: 0,
+		}),
+		description: createSyncedField({
+			remote: () => props.project?.description ?? "",
+			key,
+			write: (value) => {
+				patch({ description: value });
+			},
+		}),
+	};
+}
 
+type ProjectFields = ReturnType<typeof createProjectFields>;
+
+/** Creating a project from the drafts, and deleting the open one. */
+function createProjectCommands(
+	props: ProjectDrawerProps,
+	fields: ProjectFields,
+	actions: ProjectActions
+) {
 	async function createProject() {
-		if (!name.value().trim()) return;
+		if (!fields.name.value().trim()) return;
 		await actions.create({
-			name: name.value().trim(),
-			leaderId: leaderId.value(),
-			startDate: startDate.value(),
-			endDate: endDate.value(),
-			description: description.value().trim() || undefined,
+			name: fields.name.value().trim(),
+			leaderId: fields.leaderId.value(),
+			startDate: fields.startDate.value(),
+			endDate: fields.endDate.value(),
+			description: fields.description.value().trim() || undefined,
 		});
 		props.onOpenChange(false);
 	}
@@ -157,40 +163,128 @@ export function ProjectDrawer(props: {
 		props.onOpenChange(false);
 	}
 
+	return { createProject, deleteProject };
+}
+
+/** Leader, then start and end dates kept ordered: pushing start past end
+ *  drags end with it, pulling end before start drags start back. */
+function ProjectDetailRows(props: { fields: ProjectFields; people: Person[] }) {
+	return (
+		<>
+			<PropertyRow icon={ICONS.person} label="Leader">
+				<PersonSelect
+					people={props.people}
+					value={props.fields.leaderId.value()}
+					placeholder="No leader"
+					onChange={(id) => {
+						props.fields.leaderId.set(id);
+					}}
+				/>
+			</PropertyRow>
+
+			<PropertyRow icon={ICONS.start} label="Start">
+				<DateField
+					value={props.fields.startDate.value()}
+					onChange={(ms) => {
+						props.fields.startDate.set(ms);
+						// Keep start ≤ end: pushing start past end drags end with it.
+						const end = props.fields.endDate.value();
+						if (ms !== undefined && end !== undefined && ms > end)
+							props.fields.endDate.set(ms);
+					}}
+				/>
+			</PropertyRow>
+
+			<PropertyRow icon={ICONS.end} label="End">
+				<DateField
+					value={props.fields.endDate.value()}
+					onChange={(ms) => {
+						props.fields.endDate.set(ms);
+						// Keep start ≤ end: pulling end before start drags start back.
+						const start = props.fields.startDate.value();
+						if (
+							ms !== undefined &&
+							start !== undefined &&
+							ms < start
+						)
+							props.fields.startDate.set(ms);
+					}}
+				/>
+			</PropertyRow>
+		</>
+	);
+}
+
+/** The project's tasks, as cards that open the task. */
+function ProjectTasksSection(props: {
+	tasks: Task[] | undefined;
+	people: Person[];
+	projects: Project[];
+	onTaskClick: (task: Task) => void;
+}) {
+	return (
+		<section class={styles.tasks}>
+			<h4>Tasks</h4>
+			<Query.Root data={props.tasks}>
+				<Query.Empty>
+					<p class={styles.empty}>No tasks yet.</p>
+				</Query.Empty>
+				<Query.Content of={props.tasks}>
+					{(rows) => (
+						<ul>
+							<For each={rows()}>
+								{(task) => (
+									<li>
+										<TaskCard
+											task={task}
+											people={props.people}
+											projects={props.projects}
+											hideProject
+											pointer
+											onClick={() => {
+												props.onTaskClick(task);
+											}}
+										/>
+									</li>
+								)}
+							</For>
+						</ul>
+					)}
+				</Query.Content>
+			</Query.Root>
+		</section>
+	);
+}
+
+export function ProjectDrawer(props: ProjectDrawerProps): JSX.Element {
+	const actions = useProjectActions();
+	const fields = createProjectFields(props, actions);
+	const { createProject, deleteProject } = createProjectCommands(
+		props,
+		fields,
+		actions
+	);
+	function isEdit() {
+		return props.project !== undefined;
+	}
+
 	function projectTasks() {
 		const project = props.project;
-		if (!project) return [];
-		return props.tasks?.filter((t) => t.projectId === project._id);
+		return project
+			? props.tasks?.filter((task) => task.projectId === project._id)
+			: [];
 	}
 
 	return (
 		<Drawer.Root open={props.open} onOpenChange={props.onOpenChange}>
-			<Drawer.Header>
-				<Drawer.Title loading={props.loading}>
-					{isEdit() ? "Project" : "New project"}
-				</Drawer.Title>
-				<Drawer.HeaderActions>
-					<Show when={props.nav}>
-						{(n) => (
-							<DrawerNav
-								onPrev={n().onPrev}
-								onNext={n().onNext}
-								hasPrev={n().hasPrev()}
-								hasNext={n().hasNext()}
-							/>
-						)}
-					</Show>
-					<Show when={isEdit()}>
-						<IconButton
-							tooltipLabel="Delete project"
-							onClick={deleteProject}
-						>
-							{ICONS.delete}
-						</IconButton>
-					</Show>
-					<Drawer.Close />
-				</Drawer.HeaderActions>
-			</Drawer.Header>
+			<EntityDrawerHeader
+				title={isEdit() ? "Project" : "New project"}
+				loading={props.loading}
+				nav={props.nav}
+				isEdit={isEdit()}
+				deleteLabel="Delete project"
+				onDelete={deleteProject}
+			/>
 			<Drawer.Body
 				loading={props.loading}
 				skeleton={<ProjectFieldsPlaceholder />}
@@ -201,110 +295,39 @@ export function ProjectDrawer(props: {
 					required
 					class={styles.nameInput}
 					placeholder="Project name"
-					value={name.value()}
-					onInput={(e) => {
-						name.set(e.currentTarget.value);
+					value={fields.name.value()}
+					onInput={(event) => {
+						fields.name.set(event.currentTarget.value);
 					}}
-					onBlur={name.flush}
+					onBlur={fields.name.flush}
 				/>
 
-				<PropertyRow icon={ICONS.person} label="Leader">
-					<PersonSelect
-						people={props.people}
-						value={leaderId.value()}
-						placeholder="No leader"
-						onChange={(id) => {
-							leaderId.set(id);
-						}}
-					/>
-				</PropertyRow>
+				<ProjectDetailRows fields={fields} people={props.people} />
 
-				<PropertyRow icon={ICONS.start} label="Start">
-					<DateField
-						value={startDate.value()}
-						onChange={(ms) => {
-							startDate.set(ms);
-							// Keep start ≤ end: pushing start past end drags end with it.
-							const end = endDate.value();
-							if (ms != null && end != null && ms > end)
-								endDate.set(ms);
-						}}
-					/>
-				</PropertyRow>
-
-				<PropertyRow icon={ICONS.end} label="End">
-					<DateField
-						value={endDate.value()}
-						onChange={(ms) => {
-							endDate.set(ms);
-							// Keep start ≤ end: pulling end before start drags start back.
-							const start = startDate.value();
-							if (ms != null && start != null && ms < start)
-								startDate.set(ms);
-						}}
-					/>
-				</PropertyRow>
-
-				<div class={styles.description}>
-					<TextArea
-						label="Description"
-						maxLength={TEXT_MAX}
-						autoresize
-						value={description.value()}
-						onInput={(value) => {
-							description.set(value);
-						}}
-						onBlur={description.flush}
-					/>
-				</div>
+				<DescriptionField
+					class={styles.description}
+					description={fields.description}
+					maxLength={TEXT_MAX}
+				/>
 
 				<Show when={isEdit()}>
-					<section class={styles.tasks}>
-						<h4>Tasks</h4>
-						<Query.Root data={projectTasks()}>
-							<Query.Empty>
-								<p class={styles.empty}>No tasks yet.</p>
-							</Query.Empty>
-							<Query.Content of={projectTasks()}>
-								{(rows) => (
-									<ul>
-										<For each={rows()}>
-											{(t) => (
-												<li>
-													<TaskCard
-														task={t}
-														people={props.people}
-														projects={
-															props.projects
-														}
-														hideProject
-														pointer
-														onClick={() => {
-															props.onTaskClick(
-																t
-															);
-														}}
-													/>
-												</li>
-											)}
-										</For>
-									</ul>
-								)}
-							</Query.Content>
-						</Query.Root>
-					</section>
+					<ProjectTasksSection
+						tasks={projectTasks()}
+						people={props.people}
+						projects={props.projects}
+						onTaskClick={props.onTaskClick}
+					/>
 				</Show>
 			</Drawer.Body>
 			<Show when={!props.loading && !isEdit()}>
-				<Drawer.Footer>
-					<Button
-						disabled={!name.value().trim()}
-						disabledReason="Add a name first"
-						onClick={createProject}
-					>
-						Create project
-					</Button>
-				</Drawer.Footer>
+				<EntityCreateFooter
+					label="Create project"
+					disabledReason="Add a name first"
+					canCreate={fields.name.value().trim() !== ""}
+					onCreate={() => {
+						void createProject();
+					}}
+				/>
 			</Show>
 		</Drawer.Root>
 	);

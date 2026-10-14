@@ -63,41 +63,42 @@ const {
 }));
 
 vi.mock("convex-solidjs", () => ({
-	useMutation: (fn: unknown) => ({
+	useMutation: (function_: unknown) => ({
 		mutateAsync:
-			getFunctionName(fn as Parameters<typeof getFunctionName>[0]) ===
-			"people:cancelEmailChange"
+			getFunctionName(
+				function_ as Parameters<typeof getFunctionName>[0]
+			) === "people:cancelEmailChange"
 				? cancelEmailChangeMock
 				: completeBoardStepMock,
 		mutate: vi.fn(),
-		data: () => undefined,
-		error: () => undefined,
+		data: () => {},
+		error: () => {},
 		isLoading: () => false,
 		reset: vi.fn(),
 	}),
-	useQuery: (fn: unknown) => {
+	useQuery: (function_: unknown) => {
 		const name = getFunctionName(
-			fn as Parameters<typeof getFunctionName>[0]
+			function_ as Parameters<typeof getFunctionName>[0]
 		);
 		if (name === "people:pendingEmailChange") {
 			return {
 				data: () => pendingEmailChange.current,
 				isLoading: () => false,
-				error: () => undefined,
+				error: () => {},
 			};
 		}
 		if (name === "people:attendedEvents") {
 			return {
 				data: () => attendedEventsRows.current,
 				isLoading: () => false,
-				error: () => undefined,
+				error: () => {},
 			};
 		}
 		timelineQueryCalls.count += 1;
 		return {
 			data: () => timelineRows.current,
 			isLoading: () => false,
-			error: () => undefined,
+			error: () => {},
 		};
 	},
 	// The Status section's "Signed" line opens the agreement on click, which
@@ -115,7 +116,7 @@ vi.mock("../../../shared/data/boardLevel.tsx", () => ({
 	useBoardLevel: () => ({
 		data: () => [],
 		isLoading: () => false,
-		error: () => undefined,
+		error: () => {},
 	}),
 }));
 

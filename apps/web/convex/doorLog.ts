@@ -3,12 +3,7 @@ import { v, type Infer } from "convex/values";
 
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import {
-	internalMutation,
-	query,
-	type MutationCtx,
-	type QueryCtx,
-} from "./_generated/server";
+import { internalMutation, query, type MutationCtx } from "./_generated/server";
 import { requireRole } from "./lib/authGuard.ts";
 import { DOOR_LOG_PAGE_SIZE } from "./lib/constants.ts";
 import {
@@ -23,7 +18,7 @@ import {
 } from "./lib/doorActuation.ts";
 import type { LockSlot } from "./lib/doorLocks.ts";
 import { personByEmail } from "./lib/emailAddress.ts";
-import { displayName } from "./lib/names.ts";
+import { withActorNames } from "./lib/names.ts";
 import { BOARD_LEVEL } from "./lib/roles.ts";
 import {
 	doorAction,
@@ -35,32 +30,12 @@ import {
 
 export type LogRow = Doc<"doorLog"> & { actorName: string | undefined };
 
-async function withActorNames(
-	ctx: QueryCtx,
-	rows: Doc<"doorLog">[]
-): Promise<LogRow[]> {
-	const names = new Map<string, string>();
-	return Promise.all(
-		rows.map(async (row) => {
-			if (row.actorId === undefined)
-				return { ...row, actorName: undefined };
-			const cached = names.get(row.actorId);
-			if (cached !== undefined) return { ...row, actorName: cached };
-			const actor = await ctx.db.get(row.actorId);
-			if (!actor) return { ...row, actorName: undefined };
-			const actorName = displayName(actor);
-			names.set(row.actorId, actorName);
-			return { ...row, actorName };
-		})
-	);
-}
-
 /** The `at` of the DOOR_LOG_PAGE_SIZE-th newest row, or null when the log fits one page. */
 export const firstPageFloor = query({
 	args: {},
-	handler: async (ctx): Promise<{ since: number | null }> => {
-		await requireRole(ctx, BOARD_LEVEL);
-		const rows = await ctx.db
+	handler: async (context): Promise<{ since: number | null }> => {
+		await requireRole(context, BOARD_LEVEL);
+		const rows = await context.db
 			.query("doorLog")
 			.withIndex("by_at")
 			.order("desc")
@@ -76,16 +51,16 @@ export const firstPageFloor = query({
 /** Every row with `at >= since` (all rows when null), newest first. */
 export const listSince = query({
 	args: { since: v.union(v.number(), v.null()) },
-	handler: async (ctx, { since }): Promise<LogRow[]> => {
-		await requireRole(ctx, BOARD_LEVEL);
-		const rows = await ctx.db
+	handler: async (context, { since }): Promise<LogRow[]> => {
+		await requireRole(context, BOARD_LEVEL);
+		const rows = await context.db
 			.query("doorLog")
-			.withIndex("by_at", (q) =>
-				since === null ? q : q.gte("at", since)
+			.withIndex("by_at", (range) =>
+				since === null ? range : range.gte("at", since)
 			)
 			.order("desc")
 			.collect();
-		return withActorNames(ctx, rows);
+		return withActorNames(context, rows);
 	},
 });
 
@@ -93,16 +68,16 @@ export const listSince = query({
 export const listBefore = query({
 	args: { before: v.number(), paginationOpts: paginationOptsValidator },
 	handler: async (
-		ctx,
+		context,
 		{ before, paginationOpts }
 	): Promise<PaginationResult<LogRow>> => {
-		await requireRole(ctx, BOARD_LEVEL);
-		const result = await ctx.db
+		await requireRole(context, BOARD_LEVEL);
+		const result = await context.db
 			.query("doorLog")
-			.withIndex("by_at", (q) => q.lt("at", before))
+			.withIndex("by_at", (range) => range.lt("at", before))
 			.order("desc")
 			.paginate(paginationOpts);
-		return { ...result, page: await withActorNames(ctx, result.page) };
+		return { ...result, page: await withActorNames(context, result.page) };
 	},
 });
 
@@ -115,10 +90,10 @@ export const doorLogRecordRow = v.object({
 /** Append one or more door-log rows. */
 export const record = internalMutation({
 	args: { rows: v.array(doorLogRecordRow) },
-	handler: async (ctx, { rows }): Promise<null> => {
+	handler: async (context, { rows }): Promise<null> => {
 		const at = Date.now();
 		for (const row of rows) {
-			await ctx.db.insert("doorLog", {
+			await context.db.insert("doorLog", {
 				at,
 				operation: row.operation,
 				trigger: row.trigger,
@@ -167,8 +142,8 @@ export const recordAttempt = internalMutation({
 		requestedAt: v.number(),
 		actuatedAt: v.optional(v.number()),
 	},
-	handler: async (ctx, args): Promise<Id<"doorLog">> => {
-		const id = await ctx.db.insert("doorLog", {
+	handler: async (context, args): Promise<Id<"doorLog">> => {
+		const id = await context.db.insert("doorLog", {
 			at: Date.now(),
 			operation: args.action,
 			trigger: "app",
@@ -190,12 +165,12 @@ export const recordAttempt = internalMutation({
 				action: args.action,
 				positionBefore: args.positionBefore,
 			};
-			await ctx.scheduler.runAfter(
+			await context.scheduler.runAfter(
 				CONFIRM_POLL_MS,
 				internal.doorActions.pollActuation,
 				{ ...chain, slot: args.slot }
 			);
-			await ctx.scheduler.runAt(
+			await context.scheduler.runAt(
 				args.requestedAt + CONFIRM_WINDOW_MS,
 				internal.doorLog.actuationTimeout,
 				chain
@@ -212,7 +187,7 @@ export const recordAttempt = internalMutation({
  * row is gone or holds no attempt.
  */
 async function advanceAttempt(
-	ctx: MutationCtx,
+	context: MutationCtx,
 	chain: AttemptChain,
 	event: ActuationEvent
 ): Promise<{
@@ -220,7 +195,7 @@ async function advanceAttempt(
 	requestedAt: number;
 	slot: LockSlot;
 } | null> {
-	const row = await ctx.db.get(chain.id);
+	const row = await context.db.get(chain.id);
 	if (
 		row?.actuation === undefined ||
 		row.requestedAt === undefined ||
@@ -239,7 +214,7 @@ async function advanceAttempt(
 	const next = transition(state, event);
 	const stored = storedAttempt(next);
 	if (next.phase !== state.phase && stored)
-		await ctx.db.patch(chain.id, {
+		await context.db.patch(chain.id, {
 			actuation: stored.actuation,
 			actuatedAt: stored.actuatedAt,
 		});
@@ -253,9 +228,9 @@ async function advanceAttempt(
  */
 export const applyActuationReading = internalMutation({
 	args: { ...attemptChain.fields, position: doorPosition, at: v.number() },
-	handler: async (ctx, args): Promise<null> => {
+	handler: async (context, args): Promise<null> => {
 		const { position, at, ...chain } = args;
-		const after = await advanceAttempt(ctx, chain, {
+		const after = await advanceAttempt(context, chain, {
 			type: "POSITION",
 			position,
 			at,
@@ -264,7 +239,7 @@ export const applyActuationReading = internalMutation({
 			after?.phase === "accepted" &&
 			at + CONFIRM_POLL_MS < after.requestedAt + CONFIRM_WINDOW_MS
 		)
-			await ctx.scheduler.runAfter(
+			await context.scheduler.runAfter(
 				CONFIRM_POLL_MS,
 				internal.doorActions.pollActuation,
 				{ ...chain, slot: after.slot }
@@ -281,8 +256,8 @@ export const applyActuationReading = internalMutation({
  */
 export const actuationTimeout = internalMutation({
 	args: attemptChain.fields,
-	handler: async (ctx, args): Promise<null> => {
-		await advanceAttempt(ctx, args, { type: "TIMEOUT" });
+	handler: async (context, args): Promise<null> => {
+		await advanceAttempt(context, args, { type: "TIMEOUT" });
 		return null;
 	},
 });
@@ -299,11 +274,12 @@ export type DoorAttemptView = StoredAttempt & { durationMs: number };
  */
 export const attempt = query({
 	args: { id: v.id("doorLog") },
-	handler: async (ctx, { id }): Promise<DoorAttemptView | null> => {
-		const email = (await ctx.auth.getUserIdentity())?.email;
+	handler: async (context, { id }): Promise<DoorAttemptView | null> => {
+		const identity = await context.auth.getUserIdentity();
+		const email = identity?.email;
 		if (!email) return null;
-		const person = await personByEmail(ctx, email);
-		const row = await ctx.db.get(id);
+		const person = await personByEmail(context, email);
+		const row = await context.db.get(id);
 		if (
 			!person ||
 			row?.personId !== person._id ||

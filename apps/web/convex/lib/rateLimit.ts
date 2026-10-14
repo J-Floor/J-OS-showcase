@@ -50,13 +50,13 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
  * same status they return on the sent path (enumeration parity).
  */
 export async function sendEmailLimited(
-	ctx: ActionCtx,
-	opts: SendEmailArgs
+	context: ActionCtx,
+	options: SendEmailArgs
 ): Promise<boolean> {
-	const { ok } = await rateLimiter.limit(ctx, "sendEmail", {
-		key: normalizeEmail(opts.to),
+	const { ok } = await rateLimiter.limit(context, "sendEmail", {
+		key: normalizeEmail(options.to),
 	});
-	if (ok) await sendEmail(opts);
+	if (ok) await sendEmail(options);
 	return ok;
 }
 
@@ -66,10 +66,10 @@ export async function sendEmailLimited(
  * answers exactly as it does on the delivered path.
  */
 export async function mayPublicSubmit(
-	ctx: RunMutationCtx,
+	context: RunMutationCtx,
 	form: "application" | "visitor"
 ): Promise<boolean> {
-	const { ok } = await rateLimiter.limit(ctx, "publicSubmit");
+	const { ok } = await rateLimiter.limit(context, "publicSubmit");
 	if (!ok) {
 		// eslint-disable-next-line no-console -- surface a tripped global cap in the Convex logs
 		console.warn(
@@ -86,16 +86,17 @@ export async function mayPublicSubmit(
  * when the email may be sent; the caller answers the same either way.
  */
 export async function mayMagicLink(
-	ctx: RunMutationCtx,
+	context: RunMutationCtx,
 	email: string
 ): Promise<boolean> {
-	const perAddress = await rateLimiter.limit(ctx, "magicLinkAddress", {
+	const perAddress = await rateLimiter.limit(context, "magicLinkAddress", {
 		key: normalizeEmail(email),
 	});
 	if (!perAddress.ok) return false;
-	const person = await ctx.runQuery(internal.people.getPersonByEmail, {
+	const person = await context.runQuery(internal.people.getPersonByEmail, {
 		email,
 	});
 	if (person) return true;
-	return (await rateLimiter.limit(ctx, "magicLink")).ok;
+	const overall = await rateLimiter.limit(context, "magicLink");
+	return overall.ok;
 }

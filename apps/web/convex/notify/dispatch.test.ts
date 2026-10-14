@@ -22,15 +22,17 @@ vi.mock("./registry.ts", async (importOriginal) => {
 	const original = await importOriginal<typeof import("./registry.ts")>();
 	return {
 		...original,
-		kindDef: (kind: Parameters<typeof original.kindDef>[0]) => {
-			const def = original.kindDef(kind);
+		kindDefinition: (
+			kind: Parameters<typeof original.kindDefinition>[0]
+		) => {
+			const definition = original.kindDefinition(kind);
 			return {
-				...def,
+				...definition,
 				push: (payload: unknown, recipient: { email: string }) => {
 					if (recipient.email === pushBuilder.failFor) {
 						throw new Error("push builder broke");
 					}
-					return def.push(payload, recipient as never);
+					return definition.push(payload, recipient as never);
 				},
 			};
 		},
@@ -42,13 +44,13 @@ const modules = import.meta.glob("/convex/**/*.*s");
 type T = ReturnType<typeof convexTest>;
 
 async function seedPerson(
-	t: T,
+	backend: T,
 	email: string,
 	tier: "member" | "board" = "member",
 	notificationPrefs?: { tasks?: { push: boolean; email: boolean } }
 ): Promise<Id<"people">> {
-	return t.run((ctx) =>
-		ctx.db.insert("people", {
+	return backend.run((context) =>
+		context.db.insert("people", {
 			email,
 			firstName: email.split("@")[0],
 			lastName: "X",
@@ -61,12 +63,12 @@ async function seedPerson(
 }
 
 async function seedSubscription(
-	t: T,
+	backend: T,
 	personId: Id<"people">,
 	endpoint: string
 ) {
-	await t.run((ctx) =>
-		ctx.db.insert("pushSubscriptions", {
+	await backend.run((context) =>
+		context.db.insert("pushSubscriptions", {
 			personId,
 			endpoint,
 			p256dh: "p",
@@ -77,9 +79,12 @@ async function seedSubscription(
 	);
 }
 
-async function seedTask(t: T, createdBy: Id<"people">): Promise<Id<"tasks">> {
-	return t.run((ctx) =>
-		ctx.db.insert("tasks", {
+async function seedTask(
+	backend: T,
+	createdBy: Id<"people">
+): Promise<Id<"tasks">> {
+	return backend.run((context) =>
+		context.db.insert("tasks", {
 			title: "Wire it",
 			status: "backlog",
 			assigneeIds: [],
@@ -95,10 +100,10 @@ function stubVapid(): void {
 }
 
 function captureLogs() {
-	const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+	const spy = vi.spyOn(console, "log").mockImplementation(() => {});
 	return () =>
 		spy.mock.calls
-			.map((c) => String(c[0]))
+			.map((call) => String(call[0]))
 			.filter((line) => line.startsWith("[notify:"));
 }
 
@@ -112,16 +117,16 @@ afterEach(() => {
 
 describe("dispatch", () => {
 	it("sends push and email when both are on (the default)", async () => {
-		const t = convexTest(schema, modules);
-		const ada = await seedPerson(t, "ada@example.org");
-		await seedSubscription(t, ada, "https://push/ada");
-		const taskId = await seedTask(t, ada);
+		const backend = convexTest(schema, modules);
+		const ada = await seedPerson(backend, "ada@example.org");
+		await seedSubscription(backend, ada, "https://push/ada");
+		const taskId = await seedTask(backend, ada);
 		const sender = vi.fn<PushSender>(() => Promise.resolve());
 		setPushSenderForTests(sender);
 		stubVapid();
 		const emails = captureLogs();
 
-		const result = await t.action(internal.notify.dispatch.run, {
+		const result = await backend.action(internal.notify.dispatch.run, {
 			kind: "taskAssigned",
 			payload: { assigneeId: ada, taskId, taskTitle: "Wire it" },
 		});
@@ -134,31 +139,31 @@ describe("dispatch", () => {
 	});
 
 	it("respects a person's switches per channel", async () => {
-		const t = convexTest(schema, modules);
-		const ada = await seedPerson(t, "ada@example.org", "member", {
+		const backend = convexTest(schema, modules);
+		const ada = await seedPerson(backend, "ada@example.org", "member", {
 			tasks: { push: false, email: true },
 		});
-		const bob = await seedPerson(t, "bob@example.org", "member", {
+		const bob = await seedPerson(backend, "bob@example.org", "member", {
 			tasks: { push: true, email: false },
 		});
-		await seedSubscription(t, ada, "https://push/ada");
-		await seedSubscription(t, bob, "https://push/bob");
-		const taskId = await seedTask(t, ada);
+		await seedSubscription(backend, ada, "https://push/ada");
+		await seedSubscription(backend, bob, "https://push/bob");
+		const taskId = await seedTask(backend, ada);
 		const sender = vi.fn<PushSender>(() => Promise.resolve());
 		setPushSenderForTests(sender);
 		stubVapid();
 		const emails = captureLogs();
 
-		await t.action(internal.notify.dispatch.run, {
+		await backend.action(internal.notify.dispatch.run, {
 			kind: "taskAssigned",
 			payload: { assigneeId: ada, taskId, taskTitle: "Wire it" },
 		});
-		await t.action(internal.notify.dispatch.run, {
+		await backend.action(internal.notify.dispatch.run, {
 			kind: "taskAssigned",
 			payload: { assigneeId: bob, taskId, taskTitle: "Wire it" },
 		});
 
-		expect(sender.mock.calls.map((c) => c[0].endpoint)).toEqual([
+		expect(sender.mock.calls.map((call) => call[0].endpoint)).toEqual([
 			"https://push/bob",
 		]);
 		expect(emails()).toEqual([
@@ -167,13 +172,13 @@ describe("dispatch", () => {
 	});
 
 	it("never emails a push-only kind, even with email on", async () => {
-		const t = convexTest(schema, modules);
-		const ada = await seedPerson(t, "ada@example.org");
-		await seedSubscription(t, ada, "https://push/ada");
+		const backend = convexTest(schema, modules);
+		const ada = await seedPerson(backend, "ada@example.org");
+		await seedSubscription(backend, ada, "https://push/ada");
 		const startsAt = Date.now() + 3_600_000;
 		const endsAt = startsAt + 3_600_000;
-		const eventId = await t.run((ctx) =>
-			ctx.db.insert("events", {
+		const eventId = await backend.run((context) =>
+			context.db.insert("events", {
 				name: "Demo",
 				startsAt,
 				endsAt,
@@ -188,7 +193,7 @@ describe("dispatch", () => {
 		stubVapid();
 		const emails = captureLogs();
 
-		await t.action(internal.notify.dispatch.run, {
+		await backend.action(internal.notify.dispatch.run, {
 			kind: "eventEndingSoon",
 			payload: {
 				eventId,
@@ -202,10 +207,10 @@ describe("dispatch", () => {
 	});
 
 	it("a failed email does not stop the push, and is reported as a failure", async () => {
-		const t = convexTest(schema, modules);
-		const ada = await seedPerson(t, "ada@example.org");
-		await seedSubscription(t, ada, "https://push/ada");
-		const taskId = await seedTask(t, ada);
+		const backend = convexTest(schema, modules);
+		const ada = await seedPerson(backend, "ada@example.org");
+		await seedSubscription(backend, ada, "https://push/ada");
+		const taskId = await seedTask(backend, ada);
 		const sender = vi.fn<PushSender>(() => Promise.resolve());
 		setPushSenderForTests(sender);
 		stubVapid();
@@ -214,9 +219,9 @@ describe("dispatch", () => {
 			"fetch",
 			vi.fn().mockRejectedValue(new Error("resend down"))
 		);
-		vi.spyOn(console, "error").mockImplementation(() => undefined);
+		vi.spyOn(console, "error").mockImplementation(() => {});
 
-		const result = await t.action(internal.notify.dispatch.run, {
+		const result = await backend.action(internal.notify.dispatch.run, {
 			kind: "taskAssigned",
 			payload: { assigneeId: ada, taskId, taskTitle: "Wire it" },
 		});
@@ -226,14 +231,14 @@ describe("dispatch", () => {
 	});
 
 	it("one recipient's push failure does not block the next recipient", async () => {
-		const t = convexTest(schema, modules);
-		const b1 = await seedPerson(t, "b1@example.org", "board");
-		const b2 = await seedPerson(t, "b2@example.org", "board");
-		await seedSubscription(t, b1, "https://push/b1");
-		await seedSubscription(t, b2, "https://push/b2");
-		vi.spyOn(console, "error").mockImplementation(() => undefined);
-		const sender = vi.fn<PushSender>((s) =>
-			s.endpoint === "https://push/b1"
+		const backend = convexTest(schema, modules);
+		const b1 = await seedPerson(backend, "b1@example.org", "board");
+		const b2 = await seedPerson(backend, "b2@example.org", "board");
+		await seedSubscription(backend, b1, "https://push/b1");
+		await seedSubscription(backend, b2, "https://push/b2");
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const sender = vi.fn<PushSender>((subscription) =>
+			subscription.endpoint === "https://push/b1"
 				? Promise.reject(new Error("boom"))
 				: Promise.resolve()
 		);
@@ -241,7 +246,7 @@ describe("dispatch", () => {
 		stubVapid();
 		captureLogs();
 
-		const result = await t.action(internal.notify.dispatch.run, {
+		const result = await backend.action(internal.notify.dispatch.run, {
 			kind: "doorAlert",
 			payload: {
 				headline: "h",
@@ -259,14 +264,14 @@ describe("dispatch", () => {
 	});
 
 	it("one slow recipient does not hold up the others' delivery", async () => {
-		const t = convexTest(schema, modules);
-		const b1 = await seedPerson(t, "b1@example.org", "board");
-		const b2 = await seedPerson(t, "b2@example.org", "board");
-		await seedSubscription(t, b1, "https://push/b1");
-		await seedSubscription(t, b2, "https://push/b2");
+		const backend = convexTest(schema, modules);
+		const b1 = await seedPerson(backend, "b1@example.org", "board");
+		const b2 = await seedPerson(backend, "b2@example.org", "board");
+		await seedSubscription(backend, b1, "https://push/b1");
+		await seedSubscription(backend, b2, "https://push/b2");
 		let releaseSlow: (() => void) | undefined;
-		const sender = vi.fn<PushSender>((s) =>
-			s.endpoint === "https://push/b1"
+		const sender = vi.fn<PushSender>((subscription) =>
+			subscription.endpoint === "https://push/b1"
 				? new Promise<void>((resolve) => {
 						releaseSlow = resolve;
 					})
@@ -276,7 +281,7 @@ describe("dispatch", () => {
 		stubVapid();
 		const emails = captureLogs();
 
-		const pending = t.action(internal.notify.dispatch.run, {
+		const pending = backend.action(internal.notify.dispatch.run, {
 			kind: "doorAlert",
 			payload: {
 				headline: "h",
@@ -306,9 +311,9 @@ describe("dispatch", () => {
 	});
 
 	it("an email the provider rejects counts as failed, not delivered", async () => {
-		const t = convexTest(schema, modules);
-		const ada = await seedPerson(t, "ada@example.org");
-		const taskId = await seedTask(t, ada);
+		const backend = convexTest(schema, modules);
+		const ada = await seedPerson(backend, "ada@example.org");
+		const taskId = await seedTask(backend, ada);
 		vi.stubEnv("RESEND_API_KEY", "re_test");
 		vi.stubGlobal(
 			"fetch",
@@ -318,10 +323,10 @@ describe("dispatch", () => {
 				text: () => Promise.resolve("boom"),
 			})
 		);
-		vi.spyOn(console, "error").mockImplementation(() => undefined);
-		vi.spyOn(console, "log").mockImplementation(() => undefined);
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		vi.spyOn(console, "log").mockImplementation(() => {});
 
-		const result = await t.action(internal.notify.dispatch.run, {
+		const result = await backend.action(internal.notify.dispatch.run, {
 			kind: "taskAssigned",
 			payload: { assigneeId: ada, taskId, taskTitle: "Wire it" },
 		});
@@ -330,10 +335,10 @@ describe("dispatch", () => {
 	});
 
 	it("reports delivered 0 and failed > 0 when every channel fails", async () => {
-		const t = convexTest(schema, modules);
-		const ada = await seedPerson(t, "ada@example.org");
-		await seedSubscription(t, ada, "https://push/ada");
-		const taskId = await seedTask(t, ada);
+		const backend = convexTest(schema, modules);
+		const ada = await seedPerson(backend, "ada@example.org");
+		await seedSubscription(backend, ada, "https://push/ada");
+		const taskId = await seedTask(backend, ada);
 		setPushSenderForTests(() => Promise.reject(new Error("push down")));
 		stubVapid();
 		vi.stubEnv("RESEND_API_KEY", "re_test");
@@ -341,9 +346,9 @@ describe("dispatch", () => {
 			"fetch",
 			vi.fn().mockRejectedValue(new Error("resend down"))
 		);
-		vi.spyOn(console, "error").mockImplementation(() => undefined);
+		vi.spyOn(console, "error").mockImplementation(() => {});
 
-		const result = await t.action(internal.notify.dispatch.run, {
+		const result = await backend.action(internal.notify.dispatch.run, {
 			kind: "taskAssigned",
 			payload: { assigneeId: ada, taskId, taskTitle: "Wire it" },
 		});
@@ -353,10 +358,10 @@ describe("dispatch", () => {
 	});
 
 	it("a null email side is a skip, not a delivery or a failure", async () => {
-		const t = convexTest(schema, modules);
-		const host = await seedPerson(t, "host@example.org", "board");
-		const guest = await t.run((ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const host = await seedPerson(backend, "host@example.org", "board");
+		const guest = await backend.run((context) =>
+			context.db.insert("people", {
 				email: "guest@example.org",
 				firstName: "Gus",
 				lastName: "X",
@@ -368,10 +373,10 @@ describe("dispatch", () => {
 				notificationPrefs: { guests: { push: false, email: true } },
 			})
 		);
-		await seedPerson(t, "other@example.org");
+		await seedPerson(backend, "other@example.org");
 		const emails = captureLogs();
 
-		const result = await t.action(internal.notify.dispatch.run, {
+		const result = await backend.action(internal.notify.dispatch.run, {
 			kind: "guestAccessChanged",
 			payload: { guestId: guest, guestName: "Gus X", change: "upgraded" },
 		});
@@ -382,18 +387,18 @@ describe("dispatch", () => {
 	});
 
 	it("notify schedules the dispatch action from a mutation", async () => {
-		const t = convexTest(schema, modules);
-		const ada = await seedPerson(t, "ada@example.org");
-		const taskId = await seedTask(t, ada);
-		await t.run((ctx) =>
-			notify(ctx, "taskAssigned", {
+		const backend = convexTest(schema, modules);
+		const ada = await seedPerson(backend, "ada@example.org");
+		const taskId = await seedTask(backend, ada);
+		await backend.run((context) =>
+			notify(context, "taskAssigned", {
 				assigneeId: ada,
 				taskId,
 				taskTitle: "Wire it",
 			})
 		);
-		const jobs = await t.run((ctx) =>
-			ctx.db.system.query("_scheduled_functions").collect()
+		const jobs = await backend.run((context) =>
+			context.db.system.query("_scheduled_functions").collect()
 		);
 		expect(jobs).toEqual([
 			expect.objectContaining({
@@ -416,12 +421,12 @@ describe("dispatch", () => {
 describe("history", () => {
 	it("writes one row per recipient with the push title, body and in-app path", async () => {
 		vi.stubEnv("SITE_URL", "https://j.floor");
-		const t = convexTest(schema, modules);
-		const b1 = await seedPerson(t, "b1@jfloor.test", "board");
-		const b2 = await seedPerson(t, "b2@jfloor.test", "board");
+		const backend = convexTest(schema, modules);
+		const b1 = await seedPerson(backend, "b1@jfloor.test", "board");
+		const b2 = await seedPerson(backend, "b2@jfloor.test", "board");
 		captureLogs();
 
-		const result = await t.action(internal.notify.dispatch.run, {
+		const result = await backend.action(internal.notify.dispatch.run, {
 			kind: "doorAlert",
 			payload: {
 				headline: "Upstairs lock is offline.",
@@ -433,10 +438,16 @@ describe("history", () => {
 
 		// Neither board member has a device: the emails are the deliveries.
 		expect(result).toEqual({ recipients: 2, delivered: 2, failed: 0 });
-		const rows = await t.run((ctx) =>
-			ctx.db.query("notifications").collect()
+		const rows = await backend.run((context) =>
+			context.db.query("notifications").collect()
 		);
-		expect(rows.map((r) => r.personId).sort()).toEqual([b1, b2].sort());
+		// eslint-disable-next-line id-length -- conventional comparator parameter names
+		const expectedIds = [b1, b2].sort((a, b) => a.localeCompare(b));
+		const gotIds = rows
+			.map((row) => row.personId)
+			// eslint-disable-next-line id-length -- conventional comparator parameter names
+			.sort((a, b) => a.localeCompare(b));
+		expect(gotIds).toEqual(expectedIds);
 		for (const row of rows) {
 			expect(row).toMatchObject({
 				kind: "doorAlert",
@@ -449,18 +460,18 @@ describe("history", () => {
 
 	it("keeps a row for a recipient with push and email both off for the category", async () => {
 		vi.stubEnv("SITE_URL", "https://j.floor");
-		const t = convexTest(schema, modules);
-		const ada = await seedPerson(t, "ada@jfloor.test", "member", {
+		const backend = convexTest(schema, modules);
+		const ada = await seedPerson(backend, "ada@jfloor.test", "member", {
 			tasks: { push: false, email: false },
 		});
-		await seedSubscription(t, ada, "https://push/ada");
-		const taskId = await seedTask(t, ada);
+		await seedSubscription(backend, ada, "https://push/ada");
+		const taskId = await seedTask(backend, ada);
 		const sender = vi.fn<PushSender>(() => Promise.resolve());
 		setPushSenderForTests(sender);
 		stubVapid();
 		const emails = captureLogs();
 
-		const result = await t.action(internal.notify.dispatch.run, {
+		const result = await backend.action(internal.notify.dispatch.run, {
 			kind: "taskAssigned",
 			payload: { assigneeId: ada, taskId, taskTitle: "Wire it" },
 		});
@@ -468,8 +479,8 @@ describe("history", () => {
 		expect(result).toEqual({ recipients: 1, delivered: 0, failed: 0 });
 		expect(sender).not.toHaveBeenCalled();
 		expect(emails()).toEqual([]);
-		const rows = await t.run((ctx) =>
-			ctx.db.query("notifications").collect()
+		const rows = await backend.run((context) =>
+			context.db.query("notifications").collect()
 		);
 		expect(rows).toEqual([
 			expect.objectContaining({
@@ -488,25 +499,23 @@ describe("history", () => {
 			handler: (): Promise<null> =>
 				Promise.reject(new Error("inbox down")),
 		});
-		const t = convexTest(schema, {
+		const backend = convexTest(schema, {
 			...modules,
 			"/convex/notify/inbox.ts": async () => ({
 				...(await import("./inbox.ts")),
 				record: failingRecord,
 			}),
 		});
-		const ada = await seedPerson(t, "ada@jfloor.test");
-		await seedSubscription(t, ada, "https://push/ada");
-		const taskId = await seedTask(t, ada);
+		const ada = await seedPerson(backend, "ada@jfloor.test");
+		await seedSubscription(backend, ada, "https://push/ada");
+		const taskId = await seedTask(backend, ada);
 		const sender = vi.fn<PushSender>(() => Promise.resolve());
 		setPushSenderForTests(sender);
 		stubVapid();
 		const emails = captureLogs();
-		const errors = vi
-			.spyOn(console, "error")
-			.mockImplementation(() => undefined);
+		const errors = vi.spyOn(console, "error").mockImplementation(() => {});
 
-		const result = await t.action(internal.notify.dispatch.run, {
+		const result = await backend.action(internal.notify.dispatch.run, {
 			kind: "taskAssigned",
 			payload: { assigneeId: ada, taskId, taskTitle: "Wire it" },
 		});
@@ -521,26 +530,26 @@ describe("history", () => {
 			new Error("inbox down")
 		);
 		expect(
-			await t.run((ctx) => ctx.db.query("notifications").collect())
+			await backend.run((context) =>
+				context.db.query("notifications").collect()
+			)
 		).toEqual([]);
 	});
 
 	it("a throwing push builder skips that recipient's row and push, not their email or anyone else", async () => {
-		const t = convexTest(schema, modules);
-		const b1 = await seedPerson(t, "b1@jfloor.test", "board");
-		const b2 = await seedPerson(t, "b2@jfloor.test", "board");
-		await seedSubscription(t, b1, "https://push/b1");
-		await seedSubscription(t, b2, "https://push/b2");
+		const backend = convexTest(schema, modules);
+		const b1 = await seedPerson(backend, "b1@jfloor.test", "board");
+		const b2 = await seedPerson(backend, "b2@jfloor.test", "board");
+		await seedSubscription(backend, b1, "https://push/b1");
+		await seedSubscription(backend, b2, "https://push/b2");
 		const sender = vi.fn<PushSender>(() => Promise.resolve());
 		setPushSenderForTests(sender);
 		stubVapid();
 		const emails = captureLogs();
-		const errors = vi
-			.spyOn(console, "error")
-			.mockImplementation(() => undefined);
+		const errors = vi.spyOn(console, "error").mockImplementation(() => {});
 		pushBuilder.failFor = "b1@jfloor.test";
 
-		const result = await t.action(internal.notify.dispatch.run, {
+		const result = await backend.action(internal.notify.dispatch.run, {
 			kind: "doorAlert",
 			payload: {
 				headline: "h",
@@ -552,7 +561,7 @@ describe("history", () => {
 
 		// b2 push + two emails delivered; b1's push is the one failure
 		expect(result).toEqual({ recipients: 2, delivered: 3, failed: 1 });
-		expect(sender.mock.calls.map((c) => c[0].endpoint)).toEqual([
+		expect(sender.mock.calls.map((call) => call[0].endpoint)).toEqual([
 			"https://push/b2",
 		]);
 		expect(
@@ -562,9 +571,9 @@ describe("history", () => {
 			"[notify:doorAlert] push message for b1@jfloor.test failed",
 			new Error("push builder broke")
 		);
-		const rows = await t.run((ctx) =>
-			ctx.db.query("notifications").collect()
+		const rows = await backend.run((context) =>
+			context.db.query("notifications").collect()
 		);
-		expect(rows.map((r) => r.personId)).toEqual([b2]);
+		expect(rows.map((row) => row.personId)).toEqual([b2]);
 	});
 });

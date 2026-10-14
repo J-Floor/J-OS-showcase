@@ -11,9 +11,9 @@ export function Breadcrumbs() {
 	return (
 		<h1 class={styles.breadcrumbs}>
 			<For each={segments()}>
-				{(seg, i) => (
+				{(seg, index) => (
 					<>
-						<Show when={i() > 0}>
+						<Show when={index() > 0}>
 							<span class={styles.separator}>/</span>
 						</Show>
 						<A
@@ -21,7 +21,7 @@ export function Breadcrumbs() {
 							href={
 								"/" +
 								segments()
-									.slice(0, i() + 1)
+									.slice(0, index() + 1)
 									.join("/")
 							}
 						>

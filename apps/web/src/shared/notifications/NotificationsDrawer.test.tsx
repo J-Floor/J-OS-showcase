@@ -39,7 +39,7 @@ const { unread, inbox, device } = await vi.hoisted(async () => {
 vi.mock("convex-solidjs", () => ({
 	useQuery: () => ({
 		data: () => unread.value,
-		error: () => undefined,
+		error: () => {},
 	}),
 	useMutation: () => ({ mutateAsync: vi.fn() }),
 }));
@@ -48,12 +48,12 @@ vi.mock("../../../convex/_generated/api", () => ({
 }));
 vi.mock("./useInbox.ts", () => ({ useInbox: () => inbox }));
 vi.mock("./NotificationList.tsx", () => ({
-	NotificationList: (p: { onClose: () => void }) => (
+	NotificationList: (props: { onClose: () => void }) => (
 		<button
 			type="button"
 			data-testid="list"
 			onClick={() => {
-				p.onClose();
+				props.onClose();
 			}}
 		>
 			a row
@@ -61,18 +61,20 @@ vi.mock("./NotificationList.tsx", () => ({
 	),
 }));
 vi.mock("./usePushDevice.ts", () => ({
-	usePushDevice: (open: () => boolean) => {
-		device.open = open;
+	usePushDevice: (isOpen: () => boolean) => {
+		device.open = isOpen;
 		return device;
 	},
 }));
 vi.mock("./NotificationDeviceRow.tsx", () => ({
-	NotificationDeviceRow: (p: { device: { enable: () => Promise<void> } }) => (
+	NotificationDeviceRow: (props: {
+		device: { enable: () => Promise<void> };
+	}) => (
 		<button
 			type="button"
 			data-testid="device-row"
 			onClick={() => {
-				void p.device.enable();
+				void props.device.enable();
 			}}
 		>
 			turn push on
@@ -80,8 +82,8 @@ vi.mock("./NotificationDeviceRow.tsx", () => ({
 	),
 }));
 vi.mock("./NotificationCategories.tsx", () => ({
-	NotificationCategories: (p: { pushOn: boolean }) => (
-		<p data-testid="categories" data-push-on={String(p.pushOn)} />
+	NotificationCategories: (props: { pushOn: boolean }) => (
+		<p data-testid="categories" data-push-on={String(props.pushOn)} />
 	),
 }));
 
@@ -109,7 +111,7 @@ afterEach(() => {
 
 function renderDrawer(tab: NotificationsTab = "inbox") {
 	return render(() => (
-		<NotificationsDrawer open tab={tab} onOpenChange={() => undefined} />
+		<NotificationsDrawer open tab={tab} onOpenChange={() => {}} />
 	));
 }
 
@@ -222,7 +224,7 @@ test("the device hook follows the drawer's open state", () => {
 });
 
 test("the device row shows while the inbox is still loading", () => {
-	inbox.rows = () => undefined;
+	inbox.rows = () => {};
 	renderDrawer("inbox");
 	expect(screen.getByTestId("device-row")).toBeVisible();
 	expect(tabNamed("Inbox")).toBeInTheDocument();
@@ -231,7 +233,7 @@ test("the device row shows while the inbox is still loading", () => {
 });
 
 test("a failed inbox load shows the list, not the skeleton", () => {
-	inbox.rows = () => undefined;
+	inbox.rows = () => {};
 	inbox.failed = () => true;
 	renderDrawer("inbox");
 	expect(screen.getByTestId("list")).toBeInTheDocument();

@@ -38,7 +38,7 @@ function renderTab() {
 						mode={() => "month"}
 						jumpToday={() => 0}
 						active={() => true}
-						onNeedTab={() => undefined}
+						onNeedTab={() => {}}
 					/>
 				)}
 			/>

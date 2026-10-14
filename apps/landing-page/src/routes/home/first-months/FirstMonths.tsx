@@ -20,11 +20,18 @@ function easeOutQuad(progress: number): number {
  * the trailing suffix ("+" / "M+") that stays attached to it while it
  * counts up. */
 function parseStatValue(value: string): { target: number; suffix: string } {
-	const match = /^(\d+)(.*)$/.exec(value);
-	if (!match) {
-		return { target: 0, suffix: value };
+	const match = /^(\d+)([^\d\n].*|)$/.exec(value);
+	return match
+		? { target: Number(match[1]), suffix: match[2] }
+		: { target: 0, suffix: value };
+}
+
+function readPrefersReducedMotion(): boolean {
+	try {
+		return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+	} catch {
+		return false;
 	}
-	return { target: Number(match[1]), suffix: match[2] };
 }
 
 /** A stat number that counts up from 0 to its target the first time it
@@ -37,7 +44,7 @@ function StatNumber(props: { value: string }) {
 	// Starts at the real value so the prerendered HTML (and crawlers) carry it;
 	// the browser resets it to 0 on mount before counting up.
 	const [count, setCount] = createSignal(untrack(parsed).target);
-	let ref: HTMLParagraphElement | undefined;
+	let reference: HTMLParagraphElement | undefined;
 	let frame: number | undefined;
 
 	function animate(target: number) {
@@ -53,22 +60,13 @@ function StatNumber(props: { value: string }) {
 		frame = requestAnimationFrame(tick);
 	}
 
-	function readPrefersReducedMotion(): boolean {
-		try {
-			return window.matchMedia("(prefers-reduced-motion: reduce)")
-				.matches;
-		} catch {
-			return false;
-		}
-	}
-
 	onMount(() => {
 		const target = parsed().target;
 
 		if (
 			readPrefersReducedMotion() ||
 			typeof IntersectionObserver === "undefined" ||
-			!ref
+			!reference
 		) {
 			setCount(target);
 			return;
@@ -86,7 +84,7 @@ function StatNumber(props: { value: string }) {
 			},
 			{ threshold: 0.4 }
 		);
-		observer.observe(ref);
+		observer.observe(reference);
 
 		onCleanup(() => {
 			observer.disconnect();
@@ -97,7 +95,7 @@ function StatNumber(props: { value: string }) {
 	});
 
 	return (
-		<p class={styles.statNumber} ref={(el) => (ref = el)}>
+		<p class={styles.statNumber} ref={(element) => (reference = element)}>
 			{count()}
 			{parsed().suffix}
 		</p>

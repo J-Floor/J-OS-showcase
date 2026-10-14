@@ -5,6 +5,7 @@ import { createEffect, Show } from "solid-js";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { Can } from "../../lib/ability.tsx";
 import { createEntitySelection } from "../../shared/entity/createEntitySelection.ts";
+import { isTabKey } from "../../shared/tabKey.ts";
 
 import { ExportActions } from "./actions/ExportActions.tsx";
 import styles from "./CommunityPage.module.scss";
@@ -19,7 +20,7 @@ import { MyProfile } from "./MyProfile.tsx";
 import { ApplicationsTab } from "./tabs/ApplicationsTab.tsx";
 import { GuestsTab } from "./tabs/GuestsTab.tsx";
 import { MembersTab } from "./tabs/MembersTab.tsx";
-import type { PersonRef } from "./tabs/TabProps.ts";
+import type { PersonReference, PersonSelection } from "./tabs/TabProps.ts";
 
 // Insights last: the three rosters are what the board opens this page to do,
 // and a dashboard in front of them would put a read-only tab between them and
@@ -33,17 +34,13 @@ const TAB_KEYS = [
 	"insights",
 	"profile",
 ] as const;
-type TabKey = (typeof TAB_KEYS)[number];
+type CommunityTabKey = (typeof TAB_KEYS)[number];
 
 /**
- * The board triage console: Applications / Members / Guests, and the drawer,
- * plus the board member's own My profile tab.
- *
- * Split out from {@link CommunityPage} so the roster subscriptions below are
- * only ever read by someone allowed to have them — this component is the `Can`
- * block's child, so a plain member never runs its body.
+ * Which tab is on screen and which rows the page-wide selection may name, both
+ * derived from the URL and the three roster subscriptions.
  */
-function CommunityConsole() {
+function useRosterTabs() {
 	const [params, setParams] = useSearchParams();
 	// Free here: the same three queries are already subscribed for the whole
 	// session up in the shell (see CommunityDataProvider), so reading them at
@@ -61,12 +58,14 @@ function CommunityConsole() {
 	 * person who has since been upgraded could all make it wrong, and a wrong
 	 * tab means a drawer that opens on nobody.
 	 */
-	function tabOf(id: Id<"people">): TabKey | undefined {
-		if ((applications.data() ?? []).some((r) => r._id === id))
+	function tabOf(id: Id<"people">): CommunityTabKey | undefined {
+		if ((applications.data() ?? []).some((row) => row._id === id))
 			return "applications";
-		if ((members.data() ?? []).some((r) => r._id === id)) return "members";
-		if ((guests.data() ?? []).some((r) => r._id === id)) return "guests";
-		return undefined;
+		if ((members.data() ?? []).some((row) => row._id === id))
+			return "members";
+		return (guests.data() ?? []).some((row) => row._id === id)
+			? "guests"
+			: undefined;
 	}
 
 	/** True once every roster has answered, so "in none of them" is a fact
@@ -79,21 +78,15 @@ function CommunityConsole() {
 		);
 	}
 
-	function isTabKey(value: unknown): value is TabKey {
-		return (
-			typeof value === "string" &&
-			(TAB_KEYS as readonly string[]).includes(value)
-		);
-	}
-
 	/** The tab a `?person=` link resolves to, when the URL names no tab. The
 	 *  rosters are warm session-wide, so on an in-app palette jump this is
 	 *  known on the very first render. The page mounts that tab directly
 	 *  instead of building Applications and then switching. */
-	function linkedTab(): TabKey | undefined {
+	function linkedTab(): CommunityTabKey | undefined {
 		const person = params.person;
-		if (typeof person !== "string") return undefined;
-		return tabOf(person as Id<"people">);
+		return typeof person === "string"
+			? tabOf(person as Id<"people">)
+			: undefined;
 	}
 
 	/** A `?person=` link with no tab whose rosters have not answered yet:
@@ -101,7 +94,7 @@ function CommunityConsole() {
 	function awaitingLinkedTab(): boolean {
 		return (
 			typeof params.person === "string" &&
-			!isTabKey(params.tab) &&
+			!isTabKey(TAB_KEYS, params.tab) &&
 			!rostersReady()
 		);
 	}
@@ -112,16 +105,17 @@ function CommunityConsole() {
 	 * recognise WITHOUT rewriting the URL, so `?tab=bogus` shows Applications
 	 * while the param still says `bogus`.
 	 */
-	function activeTab(): TabKey {
+	function activeTab(): CommunityTabKey {
 		const value = params.tab;
-		if (isTabKey(value)) return value;
-		return linkedTab() ?? "applications";
+		return isTabKey(TAB_KEYS, value)
+			? value
+			: (linkedTab() ?? "applications");
 	}
 
 	/** Everyone on the three rosters, once ALL of them have answered. A partial
 	 *  union would make the selection treat a person whose roster is still
 	 *  loading as a dead link and drop `?person=`. */
-	function people(): PersonRef[] | undefined {
+	function people(): PersonReference[] | undefined {
 		if (!rostersReady()) return undefined;
 		return [
 			...(applications.data() ?? []),
@@ -129,6 +123,84 @@ function CommunityConsole() {
 			...(guests.data() ?? []),
 		];
 	}
+
+	return {
+		params,
+		setParams,
+		activeTab,
+		awaitingLinkedTab,
+		linkedTab,
+		people,
+	};
+}
+
+function CommunityTabBar() {
+	return (
+		<div class={styles.tabBar}>
+			<Tabs.List>
+				<Tabs.Trigger value="applications">Applications</Tabs.Trigger>
+				<Tabs.Trigger value="members">Members</Tabs.Trigger>
+				<Tabs.Trigger value="guests">Guests</Tabs.Trigger>
+				<Tabs.Trigger value="insights">Insights</Tabs.Trigger>
+				<Tabs.Trigger value="profile">My profile</Tabs.Trigger>
+			</Tabs.List>
+			<ExportActions />
+		</div>
+	);
+}
+
+function CommunityPanels(props: {
+	selection: PersonSelection;
+	activeTab: () => CommunityTabKey;
+	isAwaitingLinkedTab: () => boolean;
+}) {
+	return (
+		<Show when={!props.isAwaitingLinkedTab()} fallback={<TableSkeleton />}>
+			<Tabs.Content value="applications" class={styles.panel}>
+				<ApplicationsTab
+					selection={props.selection}
+					active={props.activeTab() === "applications"}
+				/>
+			</Tabs.Content>
+			<Tabs.Content value="members" class={styles.panel}>
+				<MembersTab
+					selection={props.selection}
+					active={props.activeTab() === "members"}
+				/>
+			</Tabs.Content>
+			<Tabs.Content value="guests" class={styles.panel}>
+				<GuestsTab
+					selection={props.selection}
+					active={props.activeTab() === "guests"}
+				/>
+			</Tabs.Content>
+			<Tabs.Content value="insights" class={styles.panel}>
+				<InsightsTab />
+			</Tabs.Content>
+			<Tabs.Content value="profile" class={styles.panel}>
+				<MyProfile />
+			</Tabs.Content>
+		</Show>
+	);
+}
+
+/**
+ * The board triage console: Applications / Members / Guests, and the drawer,
+ * plus the board member's own My profile tab.
+ *
+ * Split out from {@link CommunityPage} so the roster subscriptions below are
+ * only ever read by someone allowed to have them — this component is the `Can`
+ * block's child, so a plain member never runs its body.
+ */
+function CommunityConsole() {
+	const {
+		params,
+		setParams,
+		activeTab,
+		awaitingLinkedTab,
+		linkedTab,
+		people,
+	} = useRosterTabs();
 
 	// Follow the person to the tab that holds them. Written straight to the URL
 	// with `replace`, not through the tabs' own setter — that setter means "the
@@ -155,7 +227,7 @@ function CommunityConsole() {
 	// One selection for all three rosters: `?person=` is page-wide, and a single
 	// owner is what lets Back close the drawer (it owns the history entry the
 	// open pushed) instead of leaving the page.
-	const selection = createEntitySelection<PersonRef>({
+	const selection = createEntitySelection<PersonReference>({
 		rows: people,
 		param: "person",
 	});
@@ -171,7 +243,7 @@ function CommunityConsole() {
 			lazyMount
 			urlParam={{
 				get: () => activeTab(),
-				set: (v) => {
+				set: (value) => {
 					// Only ever called for a tab the USER picked (zag emits
 					// `onValueChange` from its own events, never from a
 					// controlled value change). A new tab is a new subject:
@@ -179,50 +251,18 @@ function CommunityConsole() {
 					// the Guests table. Not popped: the tab write below is the
 					// navigation, and a `navigate(-1)` would race it.
 					selection.close(false);
-					setParams({ tab: v, person: undefined });
+					setParams({ tab: value, person: undefined });
 				},
 				fallback: "applications",
 				keys: TAB_KEYS,
 			}}
 		>
-			<div class={styles.tabBar}>
-				<Tabs.List>
-					<Tabs.Trigger value="applications">
-						Applications
-					</Tabs.Trigger>
-					<Tabs.Trigger value="members">Members</Tabs.Trigger>
-					<Tabs.Trigger value="guests">Guests</Tabs.Trigger>
-					<Tabs.Trigger value="insights">Insights</Tabs.Trigger>
-					<Tabs.Trigger value="profile">My profile</Tabs.Trigger>
-				</Tabs.List>
-				<ExportActions />
-			</div>
-			<Show when={!awaitingLinkedTab()} fallback={<TableSkeleton />}>
-				<Tabs.Content value="applications" class={styles.panel}>
-					<ApplicationsTab
-						selection={selection}
-						active={activeTab() === "applications"}
-					/>
-				</Tabs.Content>
-				<Tabs.Content value="members" class={styles.panel}>
-					<MembersTab
-						selection={selection}
-						active={activeTab() === "members"}
-					/>
-				</Tabs.Content>
-				<Tabs.Content value="guests" class={styles.panel}>
-					<GuestsTab
-						selection={selection}
-						active={activeTab() === "guests"}
-					/>
-				</Tabs.Content>
-				<Tabs.Content value="insights" class={styles.panel}>
-					<InsightsTab />
-				</Tabs.Content>
-				<Tabs.Content value="profile" class={styles.panel}>
-					<MyProfile />
-				</Tabs.Content>
-			</Show>
+			<CommunityTabBar />
+			<CommunityPanels
+				selection={selection}
+				activeTab={activeTab}
+				isAwaitingLinkedTab={awaitingLinkedTab}
+			/>
 		</Tabs.Root>
 	);
 }

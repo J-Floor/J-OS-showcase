@@ -11,6 +11,12 @@ const shortDate = new Intl.DateTimeFormat(undefined, {
 	day: "numeric",
 });
 
+export const MS_PER_SECOND = 1000;
+const MS_PER_MINUTE = 60_000;
+const MINUTES_PER_HOUR = 60;
+const HOURS_PER_DAY = 24;
+const DAYS_BEFORE_ABSOLUTE_DATE = 30;
+
 function startOfDay(ms: number): Date {
 	const date = new Date(ms);
 	date.setHours(0, 0, 0, 0);
@@ -24,8 +30,9 @@ export function dayLabel(at: number, now: number): string {
 	if (day.getTime() === today.getTime()) return "Today";
 	const yesterday = new Date(today);
 	yesterday.setDate(today.getDate() - 1);
-	if (day.getTime() === yesterday.getTime()) return "Yesterday";
-	return mediumDate.format(day);
+	return day.getTime() === yesterday.getTime()
+		? "Yesterday"
+		: mediumDate.format(day);
 }
 
 /**
@@ -36,14 +43,15 @@ export function dayLabel(at: number, now: number): string {
  */
 export function formatAgo(ms: number, nowMs = Date.now()): string {
 	const diff = nowMs - ms;
-	if (diff < 60_000) return "just now";
-	const minutes = Math.floor(diff / 60_000);
-	if (minutes < 60) return `${String(minutes)}m ago`;
-	const hours = Math.floor(minutes / 60);
-	if (hours < 24) return `${String(hours)}h ago`;
-	const days = Math.floor(hours / 24);
-	if (days < 30) return `${String(days)}d ago`;
-	return formatDate(ms);
+	if (diff < MS_PER_MINUTE) return "just now";
+	const minutes = Math.floor(diff / MS_PER_MINUTE);
+	if (minutes < MINUTES_PER_HOUR) return `${String(minutes)}m ago`;
+	const hours = Math.floor(minutes / MINUTES_PER_HOUR);
+	if (hours < HOURS_PER_DAY) return `${String(hours)}h ago`;
+	const days = Math.floor(hours / HOURS_PER_DAY);
+	return days < DAYS_BEFORE_ABSOLUTE_DATE
+		? `${String(days)}d ago`
+		: formatDate(ms);
 }
 
 /** Format an absolute timestamp (ms since epoch) as a short local date. */
@@ -59,11 +67,11 @@ export function formatDate(ms: number): string {
 export function formatDistance(untilMs: number, nowMs = Date.now()): string {
 	const diff = untilMs - nowMs;
 	if (diff <= 0) return "Expired";
-	const minutes = Math.floor(diff / 60_000);
+	const minutes = Math.floor(diff / MS_PER_MINUTE);
 	if (minutes < 1) return "<1m";
-	if (minutes < 60) return `${String(minutes)}m`;
-	const hours = Math.floor(minutes / 60);
-	if (hours < 24) return `${String(hours)}h`;
-	const days = Math.floor(hours / 24);
+	if (minutes < MINUTES_PER_HOUR) return `${String(minutes)}m`;
+	const hours = Math.floor(minutes / MINUTES_PER_HOUR);
+	if (hours < HOURS_PER_DAY) return `${String(hours)}h`;
+	const days = Math.floor(hours / HOURS_PER_DAY);
 	return `${String(days)}d`;
 }

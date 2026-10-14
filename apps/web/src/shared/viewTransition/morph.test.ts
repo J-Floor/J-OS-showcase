@@ -22,24 +22,24 @@ test("with View Transitions it runs the update inside one and resolves when it f
 			resolve(undefined);
 		};
 	});
-	const start = vi.fn((cb: () => unknown) => {
-		void cb();
+	const start = vi.fn((callback: () => unknown) => {
+		void callback();
 		return { finished };
 	});
 	Object.assign(document, { startViewTransition: start });
 	vi.stubGlobal("matchMedia", () => ({ matches: false }));
 	const update = vi.fn();
-	let resolved = false;
+	let isResolved = false;
 	void morph(update).then(() => {
-		resolved = true;
+		isResolved = true;
 	});
 	expect(start).toHaveBeenCalledTimes(1);
 	expect(update).toHaveBeenCalledTimes(1);
 	await Promise.resolve();
-	expect(resolved).toBe(false);
+	expect(isResolved).toBe(false);
 	finish?.();
 	await vi.waitFor(() => {
-		expect(resolved).toBe(true);
+		expect(isResolved).toBe(true);
 	});
 });
 

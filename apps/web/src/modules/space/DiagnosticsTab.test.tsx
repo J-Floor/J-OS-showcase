@@ -99,12 +99,12 @@ vi.mock("@j-os/design-system", async (importOriginal) => {
 vi.mock("convex-solidjs", () => ({
 	useAction: () => ({ mutateAsync: () => Promise.resolve(health.value) }),
 	useQuery: (
-		_ref: unknown,
+		_reference: unknown,
 		args: () => unknown,
 		options?: () => { enabled?: boolean }
 	) => ({
 		data: () => {
-			if (options?.().enabled === false) return undefined;
+			if (options?.().enabled === false) return;
 			state.headArgs.push(args());
 			return state.head;
 		},
@@ -113,10 +113,10 @@ vi.mock("convex-solidjs", () => ({
 	}),
 	useConvexClient: () => ({
 		query: async (
-			ref: Parameters<typeof getFunctionName>[0],
+			reference: Parameters<typeof getFunctionName>[0],
 			args: unknown
 		) => {
-			const name = getFunctionName(ref);
+			const name = getFunctionName(reference);
 			if (name === "doorLog:firstPageFloor") {
 				await state.floorGate;
 				if (state.floorError) throw new Error("boom");
@@ -278,7 +278,7 @@ test("shows an error state when the log query fails", async () => {
 	expect(
 		await screen.findByText("Couldn't load the log.")
 	).toBeInTheDocument();
-	expect(document.querySelectorAll("[data-skeleton-row]").length).toBe(0);
+	expect(document.querySelectorAll("[data-skeleton-row]")).toHaveLength(0);
 });
 
 test("shows an error state when the floor query fails", async () => {
@@ -474,7 +474,7 @@ test("nothing loads after the tab unmounts", async () => {
 	endReached();
 	view.unmount();
 	open();
-	await new Promise((r) => setTimeout(r, 0));
+	await new Promise((resolve) => setTimeout(resolve, 0));
 	endReached();
 	expect(state.listBefore).not.toHaveBeenCalled();
 });
@@ -489,10 +489,15 @@ type LogColumn = {
 test("the log's columns fit their content and leave the rest to Person and Locks", async () => {
 	await mounted();
 	const columns = new Map(
-		(table.columns as LogColumn[]).map((c) => [c.id ?? c.accessorKey, c])
+		(table.columns as LogColumn[]).map((column) => [
+			column.id ?? column.accessorKey,
+			column,
+		])
 	);
 	expect(
-		Object.fromEntries([...columns].map(([id, c]) => [id, c.size]))
+		Object.fromEntries(
+			[...columns].map(([id, column]) => [id, column.size])
+		)
 	).toEqual({
 		day: undefined,
 		at: "content",

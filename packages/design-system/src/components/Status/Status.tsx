@@ -16,11 +16,11 @@ const StatusContext = createContext<Accessor<string>>();
 
 /** Reactive accessor for the current status's icon name. Use within <Status>. */
 export function useStatusIcon(): Accessor<string> {
-	const ctx = useContext(StatusContext);
-	if (!ctx) {
+	const context = useContext(StatusContext);
+	if (!context) {
 		throw new Error("useStatusIcon must be used within a <Status>");
 	}
-	return ctx;
+	return context;
 }
 
 export type StatusProps = {

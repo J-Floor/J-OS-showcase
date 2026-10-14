@@ -12,6 +12,31 @@ import type { TaskStatus } from "../kanban/onDrop.ts";
 
 import styles from "./TabShared.module.scss";
 
+/** The tasks, and those shown on the board, narrowed by the assignee filter.
+ *  Drives the kanban and the drawer's prev/next nav so navigation stays within
+ *  the visible set; the edited task itself still resolves from the full
+ *  list. */
+function useVisibleTasks(options: { assigneeFilter: () => string }) {
+	const tasks = useTasks();
+	const currentPerson = useCurrentPerson();
+	return {
+		tasks,
+		/** Tasks shown on the board, narrowed by the assignee filter;
+		 *  `undefined` while the tasks load. */
+		visibleTasks: () => {
+			const all = tasks.data();
+			return (
+				all &&
+				filterTasksByAssignee(
+					all,
+					options.assigneeFilter(),
+					currentPerson.data()?._id
+				)
+			);
+		},
+	};
+}
+
 export function TasksTab(props: {
 	requestNew: () => number;
 	/** Active assignee filter: "all", "me", or a person id. */
@@ -23,23 +48,11 @@ export function TasksTab(props: {
 	 *  this tab so the selection below can open it. */
 	onNeedTab: (slug: string) => void;
 }): JSX.Element {
-	const tasks = useTasks();
 	const boardLevel = useBoardLevel();
 	const projects = useProjects();
-	const currentPerson = useCurrentPerson();
-
-	// Tasks shown on the board, narrowed by the assignee filter. Drives the
-	// kanban and the drawer's prev/next nav so navigation stays within the
-	// visible set; the edited task itself still resolves from the full list.
-	function visibleTasks() {
-		const all = tasks.data();
-		if (!all) return undefined;
-		return filterTasksByAssignee(
-			all,
-			props.assigneeFilter(),
-			currentPerson.data()?._id
-		);
-	}
+	const { tasks, visibleTasks } = useVisibleTasks({
+		assigneeFilter: () => props.assigneeFilter(),
+	});
 
 	// Bidirectional deep-linking: opening a task writes `?task=<id>`; an
 	// inbound `?task=<id>` opens it (switching to this tab first via
@@ -76,15 +89,10 @@ export function TasksTab(props: {
 	const nav = createDrawerNav({
 		items: () => visibleTasks() ?? [],
 		currentId: selectedId,
-		onSelect: (t) => {
-			openRow(t);
+		onSelect: (task) => {
+			openRow(task);
 		},
 	});
-
-	function openNew() {
-		setCreateStatus("backlog");
-		openCreate();
-	}
 
 	// Column "+": open the create drawer prefilled with that column's status.
 	function addToColumn(status: TaskStatus) {
@@ -94,7 +102,15 @@ export function TasksTab(props: {
 
 	// Open the create drawer when the tab-bar "+ Task" button fires (defer so it
 	// doesn't open on mount).
-	createEffect(on(() => props.requestNew(), openNew, { defer: true }));
+	createEffect(
+		on(
+			() => props.requestNew(),
+			() => {
+				addToColumn("backlog");
+			},
+			{ defer: true }
+		)
+	);
 
 	return (
 		<div class={styles.tab}>
@@ -107,8 +123,8 @@ export function TasksTab(props: {
 			/>
 			<TaskDrawer
 				open={open()}
-				onOpenChange={(v) => {
-					if (!v) close();
+				onOpenChange={(isOpen) => {
+					if (!isOpen) close();
 				}}
 				task={selected()}
 				loading={loading()}

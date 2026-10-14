@@ -34,7 +34,7 @@ export function ShortcutPeekProvider(props: {
 	children: JSX.Element;
 }): JSX.Element {
 	const [latched, setLatched] = createSignal(false);
-	const altHeld = createKeyHold("Alt");
+	const isAltHeld = createKeyHold("Alt");
 
 	/**
 	 * On Windows and Linux a bare Alt press-and-release focuses the browser's
@@ -48,6 +48,7 @@ export function ShortcutPeekProvider(props: {
 		// eat Option input at worst, so install this only where the menu-bar
 		// problem actually exists.
 		if (/Mac|iPhone|iPad|iPod/.test(navigator.platform)) return;
+		// eslint-disable-next-line unicorn/consistent-function-scoping -- addEventListener dedupes a shared listener reference, so each provider needs its own or one unmounting would remove another's
 		function swallowAlt(event: KeyboardEvent): void {
 			if (event.key === "Alt") event.preventDefault();
 		}
@@ -60,7 +61,7 @@ export function ShortcutPeekProvider(props: {
 	});
 
 	const value: PeekContext = {
-		peeking: () => latched() || altHeld(),
+		peeking: () => latched() || isAltHeld(),
 		latched,
 		toggleLatched: () => {
 			setLatched((on) => !on);

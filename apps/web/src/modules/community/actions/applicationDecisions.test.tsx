@@ -68,12 +68,11 @@ test("the real application actions have four distinct hotkeys and no collisions"
 	expect(() => {
 		assertNoCollisions(captured);
 	}).not.toThrow();
-	expect(captured.map((action) => action.hotkey).sort()).toEqual([
-		"G",
-		"M",
-		"U",
-		"X",
-	]);
+	expect(
+		captured
+			.map((action) => action.hotkey)
+			.sort((first, second) => first.localeCompare(second))
+	).toEqual(["G", "M", "U", "X"]);
 });
 
 /**

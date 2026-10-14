@@ -25,7 +25,7 @@ beforeAll(() => {
 // generated api module (imported by tasksData.tsx) can load unmocked.
 vi.mock("convex-solidjs", () => ({
 	useMutation: () => ({ mutate: vi.fn().mockResolvedValue(undefined) }),
-	useQuery: () => ({ data: () => undefined }),
+	useQuery: () => ({ data: () => {} }),
 }));
 
 import { ProjectDrawer } from "./ProjectDrawer.tsx";

@@ -15,8 +15,8 @@ vi.mock("./tabs/ProjectsTab.tsx", () => ({
 // Convex client so those queries resolve to empty without a ConvexProvider.
 vi.mock("convex-solidjs", () => ({
 	useQuery: () => ({
-		data: () => undefined,
-		error: () => undefined,
+		data: () => {},
+		error: () => {},
 		isLoading: () => false,
 	}),
 }));

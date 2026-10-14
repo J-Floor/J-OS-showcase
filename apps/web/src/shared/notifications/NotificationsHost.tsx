@@ -5,7 +5,7 @@ import { resyncPush } from "../../lib/push.ts";
 
 import { NotificationsDrawer } from "./NotificationsDrawer.tsx";
 import {
-	notificationsOpen,
+	isNotificationsOpen,
 	notificationsTab,
 	openNotifications,
 	setNotificationsOpen,
@@ -33,7 +33,7 @@ export function NotificationsHost(): JSX.Element {
 		// page is matched; the redirect carries the query there. A bare
 		// `pathname === "/"` check misses the `*` route, which redirects too.
 		// A titleless non-redirect route keeps the param in the URL (harmless).
-		if (!matches().some((m) => m.route.info?.title)) return;
+		if (!matches().some((match) => match.route.info?.title)) return;
 		setParams({ [PARAM]: undefined }, { replace: true });
 	});
 	onMount(() => {
@@ -44,7 +44,7 @@ export function NotificationsHost(): JSX.Element {
 	});
 	return (
 		<NotificationsDrawer
-			open={notificationsOpen()}
+			open={isNotificationsOpen()}
 			tab={notificationsTab()}
 			onOpenChange={setNotificationsOpen}
 		/>

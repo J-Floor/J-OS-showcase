@@ -95,9 +95,7 @@ test("a refused permission dismisses the pill for good", async () => {
 });
 
 test("a thrown error keeps the pill up so it can be retried", async () => {
-	const error = vi
-		.spyOn(console, "error")
-		.mockImplementation(() => undefined);
+	const error = vi.spyOn(console, "error").mockImplementation(() => {});
 	push.enable.mockRejectedValueOnce(new Error("timeout"));
 	render(() => <NotificationsPrompt />);
 	fireEvent.click(screen.getByText("Enable notifications"));

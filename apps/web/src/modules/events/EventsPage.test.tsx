@@ -49,14 +49,20 @@ const oneEvent = [
 // `{eventId}`). Convex's `api` is a proxy whose refs aren't `===`-stable, so we
 // route by args shape, not by comparing the query ref. `q` (hoisted) holds the
 // event rows the factory reads — `undefined` models the query still loading.
-const q = vi.hoisted(() => ({ rows: (): unknown[] | undefined => [] }));
+const queryState = vi.hoisted(() => ({
+	rows: (): unknown[] | undefined => [],
+}));
 vi.mock("convex-solidjs", () => ({
 	useQuery: (_query: unknown, args: unknown) => {
-		const a = typeof args === "function" ? (args as () => unknown)() : args;
-		const isAttendees = !!a && typeof a === "object" && "eventId" in a;
+		const resolvedArgs =
+			typeof args === "function" ? (args as () => unknown)() : args;
+		const isAttendees =
+			!!resolvedArgs &&
+			typeof resolvedArgs === "object" &&
+			"eventId" in resolvedArgs;
 		return {
-			data: () => (isAttendees ? [] : q.rows()),
-			error: () => undefined,
+			data: () => (isAttendees ? [] : queryState.rows()),
+			error: () => {},
 			isLoading: () => false,
 		};
 	},
@@ -70,7 +76,7 @@ import { EventsPage } from "./EventsPage.tsx";
 const [rows, setRows] = createSignal<(typeof oneEvent)[number][] | undefined>(
 	oneEvent
 );
-q.rows = rows;
+queryState.rows = rows;
 
 afterEach(() => {
 	mutateAsync.mockClear();
@@ -111,7 +117,7 @@ test("shows the empty state once events resolve with no rows", () => {
 	setRows([]);
 	renderAs("board");
 	expect(screen.getByText("No events yet")).toBeInTheDocument();
-	expect(document.querySelectorAll("[data-skeleton-row]").length).toBe(0);
+	expect(document.querySelectorAll("[data-skeleton-row]")).toHaveLength(0);
 });
 
 test("groups events into Future / Current / Past accordion sections", () => {

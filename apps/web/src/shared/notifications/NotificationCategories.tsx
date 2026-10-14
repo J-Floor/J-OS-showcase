@@ -1,4 +1,5 @@
 import { Checkbox, Query, Skeleton } from "@j-os/design-system";
+import type { FunctionReturnType } from "convex/server";
 import { useMutation } from "convex-solidjs";
 import { createSignal, For, type JSX, Show } from "solid-js";
 
@@ -18,6 +19,53 @@ type Channel = "push" | "email";
 
 function labelId(category: Category): string {
 	return `notification-category-${category}`;
+}
+
+type CategoryPrefRow = FunctionReturnType<typeof api.notify.prefs.mine>[number];
+
+function CategoryRow(props: {
+	row: CategoryPrefRow;
+	isPushOn: boolean;
+	isPending: boolean;
+	onToggle: (channel: Channel, isChecked: boolean) => void;
+}): JSX.Element {
+	return (
+		<div
+			class={styles.category}
+			role="group"
+			aria-labelledby={labelId(props.row.category)}
+		>
+			<p id={labelId(props.row.category)} class={styles.label}>
+				{props.row.label}
+			</p>
+			<p class={styles.copy}>{props.row.description}</p>
+			<div class={styles.channels}>
+				<Checkbox
+					checked={props.row.push}
+					disabled={!props.isPushOn || props.isPending}
+					onCheckedChange={(details) => {
+						props.onToggle("push", details.checked === true);
+					}}
+				>
+					Push
+				</Checkbox>
+				<Show when={!props.row.pushOnly}>
+					<Checkbox
+						checked={props.row.email}
+						disabled={props.isPending}
+						onCheckedChange={(details) => {
+							props.onToggle("email", details.checked === true);
+						}}
+					>
+						Email
+					</Checkbox>
+				</Show>
+			</div>
+			<Show when={props.row.note}>
+				{(note) => <p class={styles.copy}>{note()}</p>}
+			</Show>
+		</div>
+	);
 }
 
 /**
@@ -42,17 +90,17 @@ export function NotificationCategories(props: {
 	async function toggle(
 		category: Category,
 		channel: Channel,
-		checked: boolean
+		isChecked: boolean
 	): Promise<void> {
-		const row = rows().find((r) => r.category === category);
+		const row = rows().find((candidate) => candidate.category === category);
 		if (!row || pending().has(category)) return;
 		setPending((prev) => new Set(prev).add(category));
 		setError(undefined);
 		try {
 			await setPref.mutateAsync({
 				category,
-				push: channel === "push" ? checked : row.push,
-				email: channel === "email" ? checked : row.email,
+				push: channel === "push" ? isChecked : row.push,
+				email: channel === "email" ? isChecked : row.email,
 			});
 		} catch (err) {
 			setError(userErrorMessage(err, "Could not save that change."));
@@ -82,63 +130,18 @@ export function NotificationCategories(props: {
 						{(loaded) => (
 							<For each={loaded()}>
 								{(row) => (
-									<div
-										class={styles.category}
-										role="group"
-										aria-labelledby={labelId(row.category)}
-									>
-										<p
-											id={labelId(row.category)}
-											class={styles.label}
-										>
-											{row.label}
-										</p>
-										<p class={styles.copy}>
-											{row.description}
-										</p>
-										<div class={styles.channels}>
-											<Checkbox
-												checked={row.push}
-												disabled={
-													!props.pushOn ||
-													pending().has(row.category)
-												}
-												onCheckedChange={(d) => {
-													void toggle(
-														row.category,
-														"push",
-														d.checked === true
-													);
-												}}
-											>
-												Push
-											</Checkbox>
-											<Show when={!row.pushOnly}>
-												<Checkbox
-													checked={row.email}
-													disabled={pending().has(
-														row.category
-													)}
-													onCheckedChange={(d) => {
-														void toggle(
-															row.category,
-															"email",
-															d.checked === true
-														);
-													}}
-												>
-													Email
-												</Checkbox>
-											</Show>
-										</div>
-										<Show when={row.note}>
-											{(note) => (
-												<p class={styles.copy}>
-													{note()}
-												</p>
-											)}
-										</Show>
-									</div>
+									<CategoryRow
+										row={row}
+										isPushOn={props.pushOn}
+										isPending={pending().has(row.category)}
+										onToggle={(channel, isChecked) =>
+											void toggle(
+												row.category,
+												channel,
+												isChecked
+											)
+										}
+									/>
 								)}
 							</For>
 						)}

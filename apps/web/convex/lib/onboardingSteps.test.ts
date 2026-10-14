@@ -23,7 +23,7 @@ describe("requiredSelfStepIds", () => {
 
 	it("excludes whatsapp, which is a board task and must never gate activation", () => {
 		expect(requiredSelfStepIds("member")).not.toContain("whatsapp");
-		expect(BOARD_STEPS.map((s) => s.id)).toContain("whatsapp");
+		expect(BOARD_STEPS.map((step) => step.id)).toContain("whatsapp");
 	});
 });
 

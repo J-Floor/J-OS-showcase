@@ -25,8 +25,8 @@ import type { EnumOption, EnumValue } from "./types.ts";
 
 // Minimal Row stub: the filters only ever call `getValue`, so we expose just
 // that method and cast through `unknown` to the full Row shape.
-function row(v: unknown): Row<Record<string, unknown>> {
-	return { getValue: () => v } as unknown as Row<Record<string, unknown>>;
+function row(value: unknown): Row<Record<string, unknown>> {
+	return { getValue: () => value } as unknown as Row<Record<string, unknown>>;
 }
 
 test("number filter: exact value", () => {
@@ -174,7 +174,7 @@ test("an option covering several values is one entry", () => {
 	// A partial set means the option was not what put those values there.
 	expect(selectedEnumOptionIds(options, ["ok"])).toEqual([]);
 	expect(selectedEnumOptionIds(options, undefined)).toEqual(
-		options.map(enumOptionId)
+		options.map((option) => enumOptionId(option))
 	);
 });
 

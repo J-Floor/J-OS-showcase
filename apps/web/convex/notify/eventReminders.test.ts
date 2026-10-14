@@ -12,9 +12,9 @@ const DAY = 24 * HOUR;
 const BOARD_EMAIL = "boss@example.com";
 
 async function setup() {
-	const t = convexTest(schema, modules);
-	await t.run((ctx) =>
-		ctx.db.insert("people", {
+	const backend = convexTest(schema, modules);
+	await backend.run((context) =>
+		context.db.insert("people", {
 			email: BOARD_EMAIL,
 			firstName: "Boss",
 			lastName: "",
@@ -23,46 +23,54 @@ async function setup() {
 			stageSince: Date.now(),
 		})
 	);
-	return { t, asBoard: t.withIdentity({ email: BOARD_EMAIL }) };
+	return { backend, asBoard: backend.withIdentity({ email: BOARD_EMAIL }) };
 }
 
 function local(ms: number): string {
 	return zonedLocalFromEpoch(ms, SITE_TIMEZONE);
 }
 
-async function jobs(t: TestConvex<typeof schema>) {
-	return t.run((ctx) =>
-		ctx.db.system.query("_scheduled_functions").collect()
+async function jobs(backend: TestConvex<typeof schema>) {
+	return backend.run((context) =>
+		context.db.system.query("_scheduled_functions").collect()
 	);
 }
 
-async function reminderJobs(t: TestConvex<typeof schema>) {
-	return (await jobs(t)).filter((j) =>
-		j.name.startsWith("notify/eventReminders:")
+async function reminderJobs(backend: TestConvex<typeof schema>) {
+	const allJobs = await jobs(backend);
+	return allJobs.filter((job) =>
+		job.name.startsWith("notify/eventReminders:")
 	);
 }
 
-async function eventRow(t: TestConvex<typeof schema>, id: Id<"events">) {
-	return t.run((ctx) => ctx.db.get(id));
+async function eventRow(backend: TestConvex<typeof schema>, id: Id<"events">) {
+	return backend.run((context) => context.db.get(id));
 }
 
 describe("event reminders", () => {
 	it("schedules 30 minutes before the start and 15 before the end", async () => {
-		const { t, asBoard } = await setup();
+		const { backend, asBoard } = await setup();
 		const start = Date.now() + 2 * DAY;
 		const id = await asBoard.mutation(api.events.createEvent, {
 			name: "Demo Night",
 			startsAtLocal: local(start),
 			endsAtLocal: local(start + 3 * HOUR),
 		});
-		const event = await eventRow(t, id);
-		const pending = await reminderJobs(t);
-		expect(pending.map((j) => j.name).sort()).toEqual([
+		const event = await eventRow(backend, id);
+		const pending = await reminderJobs(backend);
+		expect(
+			pending
+				.map((job) => job.name)
+				// eslint-disable-next-line id-length -- conventional comparator parameter names
+				.sort((a, b) => a.localeCompare(b))
+		).toEqual([
 			"notify/eventReminders:endingSoon",
 			"notify/eventReminders:startingSoon",
 		]);
-		const startJob = pending.find((j) => j.name.endsWith(":startingSoon"));
-		const endJob = pending.find((j) => j.name.endsWith(":endingSoon"));
+		const startJob = pending.find((job) =>
+			job.name.endsWith(":startingSoon")
+		);
+		const endJob = pending.find((job) => job.name.endsWith(":endingSoon"));
 		expect(startJob?.scheduledTime).toBe(event!.startsAt - 30 * 60_000);
 		expect(endJob?.scheduledTime).toBe(event!.endsAt - 15 * 60_000);
 		expect(event?.reminderJobIds).toEqual({
@@ -72,32 +80,32 @@ describe("event reminders", () => {
 	});
 
 	it("skips reminders whose time has already passed", async () => {
-		const { t, asBoard } = await setup();
+		const { backend, asBoard } = await setup();
 		await asBoard.mutation(api.events.createEvent, {
 			name: "Past",
 			startsAtLocal: "2026-10-01T18:00:00+02:00[Europe/Zurich]",
 			endsAtLocal: "2026-10-01T22:00:00+02:00[Europe/Zurich]",
 		});
-		expect(await reminderJobs(t)).toEqual([]);
+		expect(await reminderJobs(backend)).toEqual([]);
 	});
 
 	it("moving the start cancels the old reminder and schedules a new one", async () => {
-		const { t, asBoard } = await setup();
+		const { backend, asBoard } = await setup();
 		const start = Date.now() + 2 * DAY;
 		const id = await asBoard.mutation(api.events.createEvent, {
 			name: "Demo Night",
 			startsAtLocal: local(start),
 			endsAtLocal: local(start + 3 * HOUR),
 		});
-		const before = (await eventRow(t, id))!.reminderJobIds!;
+		const before = (await eventRow(backend, id))!.reminderJobIds!;
 		await asBoard.mutation(api.events.updateEvent, {
 			eventId: id,
 			startsAtLocal: local(start + HOUR),
 		});
-		const after = (await eventRow(t, id))!.reminderJobIds!;
-		const all = await jobs(t);
+		const after = (await eventRow(backend, id))!.reminderJobIds!;
+		const all = await jobs(backend);
 		function state(jobId: string | undefined) {
-			return all.find((j) => j._id === jobId)?.state.kind;
+			return all.find((job) => job._id === jobId)?.state.kind;
 		}
 		expect(state(before.startingSoon)).toBe("canceled");
 		expect(state(after.startingSoon)).toBe("pending");
@@ -105,23 +113,24 @@ describe("event reminders", () => {
 	});
 
 	it("renaming does not reschedule (the handler reads the name when it fires)", async () => {
-		const { t, asBoard } = await setup();
+		const { backend, asBoard } = await setup();
 		const start = Date.now() + 2 * DAY;
 		const id = await asBoard.mutation(api.events.createEvent, {
 			name: "Demo Night",
 			startsAtLocal: local(start),
 			endsAtLocal: local(start + 3 * HOUR),
 		});
-		const before = (await eventRow(t, id))!.reminderJobIds;
+		const before = (await eventRow(backend, id))!.reminderJobIds;
 		await asBoard.mutation(api.events.updateEvent, {
 			eventId: id,
 			name: "Demo Night II",
 		});
-		expect((await eventRow(t, id))!.reminderJobIds).toEqual(before);
+		const after = await eventRow(backend, id);
+		expect(after!.reminderJobIds).toEqual(before);
 	});
 
 	it("deleting the event cancels both reminders", async () => {
-		const { t, asBoard } = await setup();
+		const { backend, asBoard } = await setup();
 		const start = Date.now() + 2 * DAY;
 		const id = await asBoard.mutation(api.events.createEvent, {
 			name: "Demo Night",
@@ -129,30 +138,32 @@ describe("event reminders", () => {
 			endsAtLocal: local(start + 3 * HOUR),
 		});
 		await asBoard.mutation(api.events.deleteEvent, { eventId: id });
-		const states = (await reminderJobs(t)).map((j) => j.state.kind);
+		const reminders = await reminderJobs(backend);
+		const states = reminders.map((job) => job.state.kind);
 		expect(states).toEqual(["canceled", "canceled"]);
 	});
 
 	it("a reminder fires the notification with the current name", async () => {
-		const { t, asBoard } = await setup();
+		const { backend, asBoard } = await setup();
 		const start = Date.now() + 2 * DAY;
 		const id = await asBoard.mutation(api.events.createEvent, {
 			name: "Demo Night",
 			startsAtLocal: local(start),
 			endsAtLocal: local(start + 3 * HOUR),
 		});
-		const event = (await eventRow(t, id))!;
-		await t.mutation(internal.notify.eventReminders.startingSoon, {
+		const event = (await eventRow(backend, id))!;
+		await backend.mutation(internal.notify.eventReminders.startingSoon, {
 			eventId: id,
 			startsAt: event.startsAt,
 		});
-		await t.mutation(internal.notify.eventReminders.endingSoon, {
+		await backend.mutation(internal.notify.eventReminders.endingSoon, {
 			eventId: id,
 			endsAt: event.endsAt,
 		});
-		const dispatched = (await jobs(t))
-			.filter((j) => j.name === "notify/dispatch:run")
-			.map((j): unknown => j.args[0]);
+		const allJobs = await jobs(backend);
+		const dispatched = allJobs
+			.filter((job) => job.name === "notify/dispatch:run")
+			.map((job): unknown => job.args[0]);
 		expect(dispatched).toEqual([
 			{
 				kind: "eventStartingSoon",
@@ -174,25 +185,26 @@ describe("event reminders", () => {
 	});
 
 	it("a stale reminder (time moved, or event deleted) does nothing", async () => {
-		const { t, asBoard } = await setup();
+		const { backend, asBoard } = await setup();
 		const start = Date.now() + 2 * DAY;
 		const id = await asBoard.mutation(api.events.createEvent, {
 			name: "Demo Night",
 			startsAtLocal: local(start),
 			endsAtLocal: local(start + 3 * HOUR),
 		});
-		const event = (await eventRow(t, id))!;
-		await t.mutation(internal.notify.eventReminders.startingSoon, {
+		const event = (await eventRow(backend, id))!;
+		await backend.mutation(internal.notify.eventReminders.startingSoon, {
 			eventId: id,
 			startsAt: event.startsAt - HOUR,
 		});
 		await asBoard.mutation(api.events.deleteEvent, { eventId: id });
-		await t.mutation(internal.notify.eventReminders.endingSoon, {
+		await backend.mutation(internal.notify.eventReminders.endingSoon, {
 			eventId: id,
 			endsAt: event.endsAt,
 		});
-		expect(
-			(await jobs(t)).some((j) => j.name === "notify/dispatch:run")
-		).toBe(false);
+		const allJobs = await jobs(backend);
+		expect(allJobs.some((job) => job.name === "notify/dispatch:run")).toBe(
+			false
+		);
 	});
 });

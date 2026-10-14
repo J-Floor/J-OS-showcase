@@ -91,8 +91,7 @@ export function headline(status: PersonStatus): string {
  */
 export function sinceLabel(days: number): string {
 	if (days <= 0) return "Today";
-	if (days === 1) return "Yesterday";
-	return `${String(days)} days ago`;
+	return days === 1 ? "Yesterday" : `${String(days)} days ago`;
 }
 
 /**
@@ -171,6 +170,46 @@ export function flagTone(flag: StatusFlag): Tone {
 	}
 }
 
+type FactOf<Id extends StatusFact["id"]> = Extract<StatusFact, { id: Id }>;
+
+const AGREEMENT_FACT: Record<
+	FactOf<"agreement">["state"],
+	{ value: string; tone?: Tone }
+> = {
+	not_required: { value: "Not required" },
+	signed: { value: "Signed", tone: "success" },
+	missing: { value: "Not signed", tone: "error" },
+};
+
+const FORMER_FACT: Record<
+	FactOf<"former">["reason"],
+	{ value: string; tone?: Tone }
+> = {
+	kicked: { value: "Kicked out", tone: "error" },
+	left: { value: "Left voluntarily" },
+};
+
+const DOOR_FACT_TONE: Record<FactOf<"door">["state"], Tone | undefined> = {
+	suspended: "error",
+	forced_open: "warning",
+	open: undefined,
+	closed: undefined,
+};
+
+/** "Door: Open" read as a statement about the building. This line is about one
+ *  person: whether the lock lets THEM in right now. */
+function doorFactValue(fact: FactOf<"door">): string {
+	if (fact.state === "suspended")
+		return `Blocked by ${byWhom(fact.actorName)}`;
+	// Not "forced by X": that said who did it but not what it costs. The
+	// override never expires, so this person keeps getting in long after their
+	// membership ends. "Forever" is the part worth reading; the actor is the
+	// footnote.
+	if (fact.state === "forced_open")
+		return `Allowed forever (${byWhom(fact.actorName)})`;
+	return fact.state === "open" ? "Allowed" : "Not allowed";
+}
+
 export type FactLine = {
 	icon: string;
 	label: string;
@@ -213,18 +252,7 @@ export function factLine(fact: StatusFact): FactLine {
 			return {
 				icon: ICONS.agreement,
 				label: "Agreement",
-				value:
-					fact.state === "not_required"
-						? "Not required"
-						: fact.state === "signed"
-							? "Signed"
-							: "Not signed",
-				tone:
-					fact.state === "missing"
-						? "error"
-						: fact.state === "signed"
-							? "success"
-							: undefined,
+				...AGREEMENT_FACT[fact.state],
 			};
 		case "door":
 			// "Door: Open" read as a statement about the building. This line is
@@ -232,25 +260,8 @@ export function factLine(fact: StatusFact): FactLine {
 			return {
 				icon: ICONS.door,
 				label: "Door access",
-				value:
-					fact.state === "suspended"
-						? `Blocked by ${byWhom(fact.actorName)}`
-						: fact.state === "forced_open"
-							? // Not "forced by X": that said who did it but not what
-								// it costs. The override never expires, so this
-								// person keeps getting in long after their
-								// membership ends. "Forever" is the part worth
-								// reading; the actor is the footnote.
-								`Allowed forever (${byWhom(fact.actorName)})`
-							: fact.state === "open"
-								? "Allowed"
-								: "Not allowed",
-				tone:
-					fact.state === "suspended"
-						? "error"
-						: fact.state === "forced_open"
-							? "warning"
-							: undefined,
+				value: doorFactValue(fact),
+				tone: DOOR_FACT_TONE[fact.state],
 			};
 		case "access_until":
 			// No tone: the State line already says "Expired" when this date has
@@ -274,11 +285,7 @@ export function factLine(fact: StatusFact): FactLine {
 			return {
 				icon: ICONS.departed,
 				label: "How they left",
-				value:
-					fact.reason === "kicked"
-						? "Kicked out"
-						: "Left voluntarily",
-				tone: fact.reason === "kicked" ? "error" : undefined,
+				...FORMER_FACT[fact.reason],
 			};
 	}
 }
@@ -341,9 +348,18 @@ const LEGACY_EVENT_LABEL: Record<string, string> = {
  */
 export function eventLabel(event: string | undefined): string {
 	if (event === undefined) return "Changed";
-	if (Object.hasOwn(EVENT_LABEL, event))
-		return EVENT_LABEL[event as EventType];
-	return LEGACY_EVENT_LABEL[event] ?? event;
+	return Object.hasOwn(EVENT_LABEL, event)
+		? EVENT_LABEL[event as EventType]
+		: (LEGACY_EVENT_LABEL[event] ?? event);
+}
+
+// Sentence case for a sentence: the labels are written for a column header
+// ("Core member", "In queue"), and reading "Now Core member, In queue" mid
+// sentence is worse than lowercasing them here. Not a CSS transform — this
+// string is data the Timeline renders, not a styled element of its own.
+function nowIn(tierLabel: string, stageLabel: string): string {
+	// eslint-disable-next-line no-restricted-syntax -- sentence-casing data strings, not UI text
+	return `Now ${tierLabel.toLowerCase()}, ${stageLabel.toLowerCase()}`;
 }
 
 /** "member.active" as the board reads it. */
@@ -352,13 +368,9 @@ export function stateLabel(state: string | undefined): string | undefined {
 	const [tier, stage] = state.split(".");
 	const tierLabel = TIER_LABEL[tier as Tier] as string | undefined;
 	const stageLabel = STAGE_LABEL[stage as Stage] as string | undefined;
-	if (tierLabel === undefined || stageLabel === undefined) return state;
-	// Sentence case for a sentence: the labels are written for a column header
-	// ("Core member", "In queue"), and reading "Now Core member, In queue" mid
-	// sentence is worse than lowercasing them here. Not a CSS transform — this
-	// string is data the Timeline renders, not a styled element of its own.
-	// eslint-disable-next-line no-restricted-syntax -- see above
-	return `Now ${tierLabel.toLowerCase()}, ${stageLabel.toLowerCase()}`;
+	return tierLabel === undefined || stageLabel === undefined
+		? state
+		: nowIn(tierLabel, stageLabel);
 }
 
 const STEP_LABEL: Record<string, string> = {
@@ -387,21 +399,21 @@ const FIELD_LABEL: Record<string, string> = {
 };
 
 export function fieldLabel(field: string | undefined): string {
-	if (field === undefined) return "A field";
-	return FIELD_LABEL[field] ?? field;
+	return field === undefined ? "A field" : (FIELD_LABEL[field] ?? field);
 }
 
 /** A door audit row records the override it moved to. */
 export function doorEventLabel(override: unknown): string {
 	if (override === "force_off") return "Door access blocked by the board";
-	if (override === "force_on") return "Door access forced open by the board";
-	return "Door override cleared — back to normal rules";
+	return override === "force_on"
+		? "Door access forced open by the board"
+		: "Door override cleared — back to normal rules";
 }
 
 /** "the Downstairs door", worded from the Space page's own door labels so the
  *  timeline and the unlock buttons never name a door differently. */
 function doorName(slot: unknown): string {
-	const label = LOCK_SLOTS.find((s) => s.slot === slot)?.label;
+	const label = LOCK_SLOTS.find((info) => info.slot === slot)?.label;
 	return label === undefined ? "a door" : `the ${label} door`;
 }
 

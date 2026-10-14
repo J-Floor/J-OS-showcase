@@ -3,7 +3,7 @@ import { expect, it, vi } from "vitest";
 
 import { api } from "../../../convex/_generated/api";
 
-const prefetch = vi.fn<(...a: unknown[]) => void>();
+const prefetch = vi.fn<(...args: unknown[]) => void>();
 vi.mock("../../shared/data/queryKeeper.ts", async (orig) => ({
 	...(await orig<typeof import("../../shared/data/queryKeeper.ts")>()),
 	prefetchSpec: (
@@ -23,7 +23,7 @@ it("prefetches the drawer's attended events for a viewer of applications", () =>
 	prefetch.mockClear();
 	personEntity.prefetch?.(
 		row,
-		(a, s) => a === "view" && s === "Applications"
+		(action, subject) => action === "view" && subject === "Applications"
 	);
 	expect(prefetch).toHaveBeenCalledWith(api.people.attendedEvents, {
 		personId: "p1",

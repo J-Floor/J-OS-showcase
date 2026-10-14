@@ -19,9 +19,9 @@ authComponent.registerRoutes(http, createAuth, { cors: true });
 http.route({
 	path: PRESENCE_PATH,
 	method: "GET",
-	handler: httpAction((_ctx, req) =>
+	handler: httpAction((_context, request) =>
 		presenceHttpResponse(
-			req,
+			request,
 			{
 				buildingIp: process.env.DOOR_BUILDING_IP,
 				secret: process.env.DOOR_PRESENCE_SECRET,

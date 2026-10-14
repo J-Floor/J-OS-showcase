@@ -65,8 +65,8 @@ export function EventsPage() {
 			</div>
 			<EventDrawer
 				open={open()}
-				onOpenChange={(v) => {
-					if (!v) close();
+				onOpenChange={(isOpen) => {
+					if (!isOpen) close();
 				}}
 				event={selected()}
 				loading={loading()}

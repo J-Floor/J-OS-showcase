@@ -34,6 +34,32 @@ function formatDate(at: number): string {
 	});
 }
 
+/** One event on the rail. */
+function EntryRow(props: { entry: TimelineEntry }): JSX.Element {
+	return (
+		<li
+			class={styles.entry}
+			classList={{ [styles.muted]: props.entry.muted }}
+		>
+			<span class={styles.rail}>
+				<Icon>{props.entry.icon ?? "radio_button_unchecked"}</Icon>
+			</span>
+			<span class={styles.body}>
+				<span class={styles.title}>{props.entry.title}</span>
+				<Show when={props.entry.detail}>
+					<span class={styles.detail}>{props.entry.detail}</span>
+				</Show>
+				<span class={styles.meta}>
+					{formatDate(props.entry.at)}
+					<Show when={props.entry.actor}>
+						{(actor) => <> · {actor()}</>}
+					</Show>
+				</span>
+			</span>
+		</li>
+	);
+}
+
 /**
  * Vertical history rail: newest first, one row per event, filtered by kind.
  *
@@ -63,7 +89,7 @@ export function Timeline(props: TimelineProps): JSX.Element {
 
 	/** A kind is off by default only when every one of its entries is muted. */
 	const mutedKinds = createMemo(() => {
-		const set = new Set(props.entries.map((e) => e.kind));
+		const set = new Set(props.entries.map((entry) => entry.kind));
 		for (const entry of props.entries) {
 			if (entry.muted !== true) set.delete(entry.kind);
 		}
@@ -79,7 +105,10 @@ export function Timeline(props: TimelineProps): JSX.Element {
 	}
 
 	const visible = createMemo(() =>
-		[...props.entries].sort((a, b) => b.at - a.at).filter((e) => on(e.kind))
+		[...props.entries]
+			// eslint-disable-next-line id-length -- conventional comparator parameter names
+			.sort((a, b) => b.at - a.at)
+			.filter((entry) => on(entry.kind))
 	);
 
 	return (
@@ -88,17 +117,19 @@ export function Timeline(props: TimelineProps): JSX.Element {
 			<Show when={kinds().length > 1}>
 				<div class={styles.filters}>
 					<For each={kinds()}>
-						{(k) => (
+						{(group) => (
 							<button
 								type="button"
 								class={styles.toggle}
-								aria-pressed={on(k.kind)}
-								classList={{ [styles.toggleOff]: !on(k.kind) }}
+								aria-pressed={on(group.kind)}
+								classList={{
+									[styles.toggleOff]: !on(group.kind),
+								}}
 								onClick={() => {
-									toggle(k.kind);
+									toggle(group.kind);
 								}}
 							>
-								{k.kind} ({k.count})
+								{group.kind} ({group.count})
 							</button>
 						)}
 					</For>
@@ -110,34 +141,7 @@ export function Timeline(props: TimelineProps): JSX.Element {
 			>
 				<ul class={styles.list}>
 					<For each={visible()}>
-						{(entry) => (
-							<li
-								class={styles.entry}
-								classList={{ [styles.muted]: entry.muted }}
-							>
-								<span class={styles.rail}>
-									<Icon>
-										{entry.icon ?? "radio_button_unchecked"}
-									</Icon>
-								</span>
-								<span class={styles.body}>
-									<span class={styles.title}>
-										{entry.title}
-									</span>
-									<Show when={entry.detail}>
-										<span class={styles.detail}>
-											{entry.detail}
-										</span>
-									</Show>
-									<span class={styles.meta}>
-										{formatDate(entry.at)}
-										<Show when={entry.actor}>
-											{(actor) => <> · {actor()}</>}
-										</Show>
-									</span>
-								</span>
-							</li>
-						)}
+						{(entry) => <EntryRow entry={entry} />}
 					</For>
 				</ul>
 			</Show>

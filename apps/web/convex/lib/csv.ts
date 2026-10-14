@@ -5,6 +5,6 @@
 export function parseCsv(raw: string | undefined): string[] {
 	return (raw ?? "")
 		.split(",")
-		.map((s) => s.trim())
-		.filter((s) => s.length > 0);
+		.map((segment) => segment.trim())
+		.filter((segment) => segment.length > 0);
 }

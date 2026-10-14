@@ -8,8 +8,12 @@ const { resync } = vi.hoisted(() => ({
 }));
 vi.mock("../../lib/push.ts", () => ({ resyncPush: resync }));
 vi.mock("./NotificationsDrawer.tsx", () => ({
-	NotificationsDrawer: (p: { open: boolean; tab: string }) => (
-		<div data-testid="drawer" data-open={String(p.open)} data-tab={p.tab} />
+	NotificationsDrawer: (props: { open: boolean; tab: string }) => (
+		<div
+			data-testid="drawer"
+			data-open={String(props.open)}
+			data-tab={props.tab}
+		/>
 	),
 }));
 

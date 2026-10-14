@@ -1,10 +1,18 @@
+import { displayName } from "../../../../convex/lib/names.ts";
 import { useConfirm } from "../../../shared/confirm.tsx";
 import { ICONS } from "../../../shared/icons.ts";
 import type { GuestRow } from "../columns/guestColumns.tsx";
 import { useOpenAgreement } from "../openAgreement.ts";
 
+import { agreementAction } from "./agreementAction.ts";
 import type { ActionDescriptor } from "./shortcuts.ts";
 import { useTriage } from "./triage.ts";
+
+// A guest whose access already ended (expired, or already former) can't be
+// kicked out a second time.
+function expired(person: GuestRow): boolean {
+	return person.stage === "expired" || person.tier === "former";
+}
 
 /**
  * What the board can do to a guest. `M` matches Applications' "make member":
@@ -20,21 +28,11 @@ export function useGuestActions(): {
 	const confirm = useConfirm();
 	const agreement = useOpenAgreement();
 
-	function fullName(person: GuestRow): string {
-		return `${person.firstName} ${person.lastName}`.trim();
-	}
-
-	// A guest whose access already ended (expired, or already former) can't be
-	// kicked out a second time.
-	function expired(person: GuestRow): boolean {
-		return person.stage === "expired" || person.tier === "former";
-	}
-
 	async function upgrade(person: GuestRow): Promise<void> {
 		if (
 			await confirm({
 				title: "Upgrade to member?",
-				message: `Promote ${fullName(person)} from guest to full member? They'll be emailed an invite.`,
+				message: `Promote ${displayName(person)} from guest to full member? They'll be emailed an invite.`,
 				confirmLabel: "Upgrade",
 			})
 		)
@@ -45,7 +43,7 @@ export function useGuestActions(): {
 		if (
 			await confirm({
 				title: "Kick out?",
-				message: `Revoke ${fullName(person)}'s guest access? They'll be moved to Kicked out, keeping their whole history.`,
+				message: `Revoke ${displayName(person)}'s guest access? They'll be moved to Kicked out, keeping their whole history.`,
 				confirmLabel: "Kick out",
 				tone: "danger",
 			})
@@ -74,23 +72,7 @@ export function useGuestActions(): {
 				disabledReason: () => "Guest access has already ended",
 				run: (person) => kickOut(person),
 			},
-			{
-				id: "agreement",
-				label: "View agreement",
-				icon: ICONS.agreement,
-				hotkey: "A",
-				scope: "guests",
-				can: (person) => person.hasAgreement && !agreement.loading(),
-				// Two distinct answers, kept apart: "there is none" vs "one is on
-				// its way" (mirrors the Members descriptor).
-				disabledReason: (person) =>
-					person.hasAgreement
-						? "Opening…"
-						: "No signed agreement on file",
-				run: (person) => {
-					agreement.open(person._id);
-				},
-			},
+			agreementAction(agreement, "guests"),
 		];
 	}
 

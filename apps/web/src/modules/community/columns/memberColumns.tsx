@@ -1,18 +1,21 @@
-import { IconButton, type JfColumnDef } from "@j-os/design-system";
+import type { JfColumnDefinition } from "@j-os/design-system";
 import { For, createSignal } from "solid-js";
 
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import type { PersonStatus } from "../../../../convex/lib/derive.ts";
 import { SHORT_TEXT_SIZE } from "../../../shared/columnSizes.ts";
-import { formatDate } from "../../../shared/time.ts";
 import { ChangeRoleDialog } from "../actions/ChangeRoleDialog.tsx";
 import type { RoleMove } from "../actions/ChangeRoleDialog.tsx";
 import { useMemberActions } from "../actions/memberActions.ts";
 import { useTriage } from "../actions/triage.ts";
-import { FLAG_FILTER_OPTIONS, flagFilterValue } from "../status/copy.ts";
-import { FlagsCell } from "../status/FlagsCell.tsx";
 
-import { actionsColumnSize, RowActions } from "./RowActions.tsx";
+import { flagsColumn } from "./flagsColumn.tsx";
+import { joinedColumn } from "./joinedColumn.ts";
+import {
+	actionsColumnSize,
+	RowActionButton,
+	RowActions,
+} from "./RowActions.tsx";
 import { ventureColumns } from "./ventureColumns.tsx";
 
 export type MemberRow = Doc<"people"> & {
@@ -45,8 +48,7 @@ export function memberGroup(
 	if (row.tier === "admin") return "admin";
 	if (row.tier === "staff") return "staff";
 	if (row.stage === "onboarding") return "not_onboarded";
-	if (row.tier === "core") return "core";
-	return "member";
+	return row.tier === "core" ? "core" : "member";
 }
 
 /**
@@ -61,9 +63,50 @@ function assertNever(value: never): never {
 	throw new Error(`applyMove: unhandled RoleMove event ${String(value)}`);
 }
 
+type Triage = ReturnType<typeof useTriage>;
+
+// A `switch`, not an `if`/`else if` chain ending in a bare `else`: once
+// every other case is listed, TS narrows `event` in the `default` arm to
+// `never` on its own, so `assertNever` is reachable only if
+// `RoleMove["event"]` grows a literal this switch doesn't handle — and,
+// unlike an `if (event === "KICK_OUT") {…} else {…}` chain, nothing here is
+// a comparison `@typescript-eslint/no-unnecessary-condition` can call
+// "always true" once every other branch is a `case`.
+async function applyEventMove(
+	triage: Triage,
+	id: Id<"people">,
+	event: Extract<RoleMove, { kind: "event" }>["event"]
+): Promise<void> {
+	switch (event) {
+		case "PROMOTE_TO_MEMBER":
+			await triage.upgradeToMember(id);
+			return;
+		case "GRANT_CORE":
+			await triage.grantCore(id);
+			return;
+		case "REVOKE_CORE":
+			await triage.revokeCore(id);
+			return;
+		case "PROMOTE_TO_BOARD":
+			await triage.promoteToBoard(id);
+			return;
+		case "RE_ADMIT":
+			await triage.reAdmit(id);
+			return;
+		case "MARK_LEFT":
+			await triage.markLeft(id);
+			return;
+		case "KICK_OUT":
+			await triage.kickOut(id);
+			return;
+		default:
+			assertNever(event);
+	}
+}
+
 /** Turn the dialog's choice into the matching triage call, for one row or many. */
 export async function applyMove(
-	triage: ReturnType<typeof useTriage>,
+	triage: Triage,
 	ids: Id<"people">[],
 	move: RoleMove
 ): Promise<void> {
@@ -78,40 +121,11 @@ export async function applyMove(
 			await triage.setRole(id, move.tier);
 			continue;
 		}
-		// A `switch`, not an `if`/`else if` chain ending in a bare `else`: once
-		// every other case is listed, TS narrows `move.event` in the `default`
-		// arm to `never` on its own, so `assertNever` is reachable only if
-		// `RoleMove["event"]` grows a literal this switch doesn't handle — and,
-		// unlike an `if (move.event === "KICK_OUT") {…} else {…}` chain, nothing
-		// here is a comparison `@typescript-eslint/no-unnecessary-condition` can
-		// call "always true" once every other branch is a `case`.
-		switch (move.event) {
-			case "PROMOTE_TO_MEMBER":
-				await triage.upgradeToMember(id);
-				break;
-			case "GRANT_CORE":
-				await triage.grantCore(id);
-				break;
-			case "REVOKE_CORE":
-				await triage.revokeCore(id);
-				break;
-			case "PROMOTE_TO_BOARD":
-				await triage.promoteToBoard(id);
-				break;
-			case "RE_ADMIT":
-				await triage.reAdmit(id);
-				break;
-			case "MARK_LEFT":
-				await triage.markLeft(id);
-				break;
-			case "KICK_OUT":
-				await triage.kickOut(id);
-				break;
-			default:
-				assertNever(move.event);
-		}
+		await applyEventMove(triage, id, move.event);
 	}
 }
+
+const MEMBER_ACTION_COUNT = 3;
 
 /** Group order for the hidden grouping column: board, admins, staff, core
  * members, members, then the kicked-out archive at the bottom. */
@@ -143,22 +157,7 @@ function MemberActions(props: { row: MemberRow }) {
 		<RowActions>
 			<For each={memberActions.actions()}>
 				{(action) => (
-					<IconButton
-						tooltipLabel={action.label}
-						shortcut={action.hotkey}
-						disabled={!action.can(props.row)}
-						// The union behind `disabled` demands a reason whenever the
-						// button can be disabled at all, so this cannot be
-						// optional. The fallback is unreachable for an action
-						// whose `can` is always true — never disabled, so its
-						// reason is never shown.
-						disabledReason={
-							action.disabledReason?.(props.row) ?? action.label
-						}
-						onClick={() => void action.run(props.row)}
-					>
-						{action.icon}
-					</IconButton>
+					<RowActionButton action={action} row={props.row} />
 				)}
 			</For>
 			<ChangeRoleDialog
@@ -179,7 +178,7 @@ function MemberActions(props: { row: MemberRow }) {
  * {@link guestColumns}, which has to be one — and so the venture columns below
  * are built once per call rather than shared by reference across two tables.
  */
-export function memberColumns(): JfColumnDef<MemberRow>[] {
+export function memberColumns(): JfColumnDefinition<MemberRow>[] {
 	return [
 		{
 			// Hidden grouping column — board / members / kicked-out. Derived (not a
@@ -189,49 +188,27 @@ export function memberColumns(): JfColumnDef<MemberRow>[] {
 			header: "Group",
 			dataType: "enum",
 			enumOptions: groupOptions,
-			accessorFn: (r) => memberGroup(r),
+			accessorFn: (row) => memberGroup(row),
 		},
 		{ accessorKey: "firstName", header: "First name", dataType: "string" },
 		{ accessorKey: "lastName", header: "Last name", dataType: "string" },
-		{
-			// Exceptions only — the group header above the row already carries the
-			// tier and stage. Filterable/sortable on the flag text, so "show me
-			// everyone with something outstanding" is a column filter.
-			id: "flags",
-			header: "Flags",
-			dataType: "enum",
-			// Ids, not labels: the filter compares stable values while the cell
-			// renders the wording. A row may carry several, which the enum filter
-			// now matches on any-of.
-			enumOptions: FLAG_FILTER_OPTIONS,
-			size: 240,
-			accessorFn: (r) => r.status.flags.map(flagFilterValue),
-			cell: (info) => <FlagsCell status={info.row.original.status} />,
-		},
+		flagsColumn<MemberRow>(),
 		{
 			id: "ventureName",
 			header: "Venture",
 			dataType: "string",
 			size: SHORT_TEXT_SIZE,
 			measureText: false,
-			accessorFn: (r) => r.venture?.name ?? "",
+			accessorFn: (row) => row.venture?.name ?? "",
 		},
 		...ventureColumns<MemberRow>(),
-		{
-			id: "joinedAt",
-			header: "Joined",
-			dataType: "date",
-			size: "content",
-			accessorFn: (r) => r._creationTime,
-			cell: (info) => formatDate(info.row.original._creationTime),
-			measureText: (r) => formatDate(r._creationTime),
-		},
+		joinedColumn<MemberRow>(),
 		{
 			id: "actions",
 			header: "",
 			disableRowClick: true,
 			// The agreement, change role, and kick out.
-			size: actionsColumnSize(3),
+			size: actionsColumnSize(MEMBER_ACTION_COUNT),
 			cell: (info) => <MemberActions row={info.row.original} />,
 		},
 	];

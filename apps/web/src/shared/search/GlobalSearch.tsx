@@ -15,25 +15,48 @@ import { morph } from "../viewTransition/morph.ts";
 import styles from "./GlobalSearch.module.scss";
 import { SearchSources, pageItems, tabItems } from "./sources.tsx";
 
-/** `base`, plus the shared view-transition name when `carries` is true. */
-function withMorph(base: string, carries: boolean): string {
-	return carries ? `${base} ${styles.morph}` : base;
-}
-
-/**
- * A header control: it carries the morph while the palette is closed, and is
- * hidden while it is open. Without the hide, the field stays in the header's
- * "after" snapshot, so the morph played on top of a second copy of the search
- * box and the palette looked duplicated.
- */
-function headerControl(base: string, paletteOpen: boolean): string {
-	return paletteOpen
-		? `${base} ${styles.hiddenWhileOpen}`
-		: withMorph(base, true);
+/** `base`, plus the shared view-transition name when `isCarrying` is true. */
+function withMorph(base: string, isCarrying: boolean): string {
+	return isCarrying ? `${base} ${styles.morph}` : base;
 }
 
 /** One string, bound by the palette and rendered by the field's hint. */
 const SEARCH_SHORTCUT: Hotkey = "Mod+K";
+
+function SearchField(props: {
+	class: string;
+	onOpen: () => void;
+}): JSX.Element {
+	return (
+		<Input
+			// `label=""` is falsy, so MakeField renders no <label> at all
+			// and the field would reach a screen reader unnamed. The visible
+			// design has no label — the magnifier and the placeholder carry
+			// it — so the name goes on the control itself.
+			label=""
+			aria-label="Search"
+			class={props.class}
+			leadingIconName={ICONS.search}
+			placeholder="Search"
+			readOnly
+			value=""
+			trailing={<Kbd shortcut={SEARCH_SHORTCUT} />}
+			onClick={() => {
+				props.onOpen();
+			}}
+			// NOT `onFocus`. Closing the palette returns focus to whatever
+			// opened it — this field — which fired `onFocus` and reopened it
+			// immediately, so a selected result never seemed to close
+			// anything. Keyboard users get the field via Enter/Space, and
+			// the shortcut works from anywhere.
+			onKeyDown={(event: KeyboardEvent) => {
+				if (event.key !== "Enter" && event.key !== " ") return;
+				event.preventDefault();
+				props.onOpen();
+			}}
+		/>
+	);
+}
 
 /**
  * The header's search field, and the palette behind it.
@@ -57,6 +80,18 @@ export function GlobalSearch(): JSX.Element {
 	const [open, setOpen] = createSignal(false);
 	const [entities, setEntities] = createSignal<CommandPaletteItem[]>([]);
 
+	/**
+	 * A header control: it carries the morph while the palette is closed, and is
+	 * hidden while it is open. Without the hide, the field stays in the header's
+	 * "after" snapshot, so the morph played on top of a second copy of the search
+	 * box and the palette looked duplicated.
+	 */
+	function headerControl(base: string): string {
+		return open()
+			? `${base} ${styles.hiddenWhileOpen}`
+			: withMorph(base, true);
+	}
+
 	// Order matters: it is the order a blank palette lists them in, and the
 	// tie-break when several things score the same.
 	const items = createMemo(() =>
@@ -78,7 +113,7 @@ export function GlobalSearch(): JSX.Element {
 	// state is the last request. Known limit: ⌘K sends `!props.open`, so a
 	// second ⌘K inside the ~1-frame pending window repeats the same request and
 	// is ignored.
-	let target = false;
+	let isTarget = false;
 	let settled: Promise<void> = Promise.resolve();
 	// Where focus was before the palette opened. Without a morph the dialog puts
 	// it back on close. Inside a View Transition the palette's combobox refocuses
@@ -86,10 +121,10 @@ export function GlobalSearch(): JSX.Element {
 	// caret stayed in the closed palette, swallowing every keystroke.
 	let opener: HTMLElement | null = null;
 
-	function setOpenMorphing(next: boolean): void {
-		if (next === target) return;
-		target = next;
-		if (next) {
+	function setOpenMorphing(isNext: boolean): void {
+		if (isNext === isTarget) return;
+		isTarget = isNext;
+		if (isNext) {
 			opener =
 				document.activeElement instanceof HTMLElement
 					? document.activeElement
@@ -106,30 +141,9 @@ export function GlobalSearch(): JSX.Element {
 
 	return (
 		<>
-			<Input
-				// `label=""` is falsy, so MakeField renders no <label> at all
-				// and the field would reach a screen reader unnamed. The visible
-				// design has no label — the magnifier and the placeholder carry
-				// it — so the name goes on the control itself.
-				label=""
-				aria-label="Search"
-				class={headerControl(styles.field, open())}
-				leadingIconName={ICONS.search}
-				placeholder="Search"
-				readOnly
-				value=""
-				trailing={<Kbd shortcut={SEARCH_SHORTCUT} />}
-				onClick={() => {
-					setOpenMorphing(true);
-				}}
-				// NOT `onFocus`. Closing the palette returns focus to whatever
-				// opened it — this field — which fired `onFocus` and reopened it
-				// immediately, so a selected result never seemed to close
-				// anything. Keyboard users get the field via Enter/Space, and
-				// the shortcut works from anywhere.
-				onKeyDown={(event: KeyboardEvent) => {
-					if (event.key !== "Enter" && event.key !== " ") return;
-					event.preventDefault();
+			<SearchField
+				class={headerControl(styles.field)}
+				onOpen={() => {
 					setOpenMorphing(true);
 				}}
 			/>
@@ -148,7 +162,7 @@ export function GlobalSearch(): JSX.Element {
 			 * already makes.
 			 */}
 			<IconButton
-				class={headerControl(styles.compact, open())}
+				class={headerControl(styles.compact)}
 				tooltipLabel="Search"
 				onClick={() => {
 					setOpenMorphing(true);

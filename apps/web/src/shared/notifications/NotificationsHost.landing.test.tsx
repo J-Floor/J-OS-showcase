@@ -11,15 +11,15 @@ vi.mock("convex-solidjs", () => ({
 vi.mock("../../lib/convex.ts", () => ({
 	convex: {},
 	ottPending: () => false,
-	bindConvexAuth: () => undefined,
+	bindConvexAuth: () => {},
 }));
 vi.mock("../../lib/auth.ts", () => ({ authClient: {} }));
 vi.mock("../../lib/push.ts", () => ({
 	resyncPush: () => Promise.resolve(),
 }));
 vi.mock("./NotificationsDrawer.tsx", () => ({
-	NotificationsDrawer: (p: { open: boolean }) => (
-		<div data-testid="drawer" data-open={String(p.open)} />
+	NotificationsDrawer: (props: { open: boolean }) => (
+		<div data-testid="drawer" data-open={String(props.open)} />
 	),
 }));
 

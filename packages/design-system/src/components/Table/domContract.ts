@@ -1,7 +1,7 @@
 /**
  * The DOM contract between the table's markup and the width measurement:
- * Table.tsx and SkeletonRows.tsx put these attributes on, and the measurement
- * finds its cells by them.
+ * TableHead.tsx, TableRow.tsx and SkeletonRows.tsx put these attributes on,
+ * and the measurement finds its cells by them.
  */
 export const COLUMN_ID_ATTR = "data-column-id";
 export const HEADER_CELL_ATTR = "data-header-cell";

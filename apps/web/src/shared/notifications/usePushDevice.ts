@@ -29,14 +29,14 @@ export type PushDevice = {
  * mounted for the whole shell, so the state is re-read on every open: push
  * may have been enabled elsewhere (the prompt pill).
  */
-export function usePushDevice(open: () => boolean): PushDevice {
+export function usePushDevice(isOpen: () => boolean): PushDevice {
 	const [support, setSupport] = createSignal<PushSupport>(pushSupport());
 	const [subscribed, setSubscribed] = createSignal(false);
 	const [busy, setBusy] = createSignal(false);
 	const [error, setError] = createSignal<string>();
 
 	createEffect(() => {
-		if (!open()) return;
+		if (!isOpen()) return;
 		setError(undefined);
 		setSupport(pushSupport());
 		pushSubscribed()

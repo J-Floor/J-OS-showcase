@@ -56,15 +56,15 @@ function fakeDevice(state: {
 	error?: string;
 }): PushDevice {
 	const support = state.support ?? "default";
-	const configured = state.configured ?? true;
+	const isConfigured = state.configured ?? true;
 	return {
 		support: () => support,
 		busy: () => state.busy ?? false,
 		error: () => state.error,
 		pushOn: () => state.pushOn ?? false,
-		configured: () => configured,
+		configured: () => isConfigured,
 		canToggle: () =>
-			configured && (support === "default" || support === "granted"),
+			isConfigured && (support === "default" || support === "granted"),
 		enable: vi.fn(() => Promise.resolve()),
 		disable: vi.fn(() => Promise.resolve()),
 	};
@@ -74,9 +74,9 @@ function renderRow(device: PushDevice) {
 	return render(() => <NotificationDeviceRow device={device} />);
 }
 
-function renderWithHook(open: () => boolean = () => true) {
+function renderWithHook(isOpen: () => boolean = () => true) {
 	return render(() => {
-		const device = usePushDevice(open);
+		const device = usePushDevice(isOpen);
 		return <NotificationDeviceRow device={device} />;
 	});
 }

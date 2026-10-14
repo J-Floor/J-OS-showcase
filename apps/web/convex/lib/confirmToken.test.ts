@@ -20,15 +20,19 @@ const HOUR = 3_600_000;
 const BATCH = 3;
 
 async function hashes(raws: string[]): Promise<string[]> {
-	return Promise.all(raws.map(hashConfirmToken));
+	return Promise.all(raws.map((raw) => hashConfirmToken(raw)));
+}
+
+function sortedStrings(values: string[]): string[] {
+	return values.toSorted((first, second) => first.localeCompare(second));
 }
 
 async function seedPerson(
-	t: ReturnType<typeof convexTest>,
+	backend: ReturnType<typeof convexTest>,
 	tier: "prospect" | "visitor" | "member" = "prospect"
 ) {
-	return t.run((ctx) =>
-		ctx.db.insert("people", {
+	return backend.run((context) =>
+		context.db.insert("people", {
 			email: "ada@example.com",
 			firstName: "Ada",
 			lastName: "",
@@ -41,31 +45,33 @@ async function seedPerson(
 
 describe("confirmToken", () => {
 	it("issues one live token per person and purpose", async () => {
-		const t = convexTest(schema, modules);
-		const personId = await seedPerson(t);
-		await t.run(async (ctx) => {
-			await issueToken(ctx, {
+		const backend = convexTest(schema, modules);
+		const personId = await seedPerson(backend);
+		await backend.run(async (context) => {
+			await issueToken(context, {
 				token: "t1",
 				purpose: "application",
 				personId,
 				ttlMs: HOUR,
 			});
-			await issueToken(ctx, {
+			await issueToken(context, {
 				token: "t2",
 				purpose: "application",
 				personId,
 				ttlMs: HOUR,
 			});
-			const rows = await ctx.db.query("confirmTokens").collect();
-			expect(rows.map((r) => r.tokenHash)).toEqual(await hashes(["t2"]));
+			const rows = await context.db.query("confirmTokens").collect();
+			expect(rows.map((row) => row.tokenHash)).toEqual(
+				await hashes(["t2"])
+			);
 		});
 	});
 
 	it("keeps invites to two events apart", async () => {
-		const t = convexTest(schema, modules);
-		const personId = await seedPerson(t);
-		await t.run(async (ctx) => {
-			const a = await ctx.db.insert("events", {
+		const backend = convexTest(schema, modules);
+		const personId = await seedPerson(backend);
+		await backend.run(async (context) => {
+			const firstEvent = await context.db.insert("events", {
 				name: "A",
 				startsAt: 0,
 				endsAt: 1,
@@ -74,7 +80,7 @@ describe("confirmToken", () => {
 				createdBy: personId,
 				createdAt: 0,
 			});
-			const b = await ctx.db.insert("events", {
+			const secondEvent = await context.db.insert("events", {
 				name: "B",
 				startsAt: 0,
 				endsAt: 1,
@@ -83,112 +89,120 @@ describe("confirmToken", () => {
 				createdBy: personId,
 				createdAt: 0,
 			});
-			await issueToken(ctx, {
+			await issueToken(context, {
 				token: "ia",
 				purpose: "eventInvite",
 				personId,
-				eventId: a,
+				eventId: firstEvent,
 				ttlMs: HOUR,
 			});
-			await issueToken(ctx, {
+			await issueToken(context, {
 				token: "ib",
 				purpose: "eventInvite",
 				personId,
-				eventId: b,
+				eventId: secondEvent,
 				ttlMs: HOUR,
 			});
-			await issueToken(ctx, {
+			await issueToken(context, {
 				token: "ia2",
 				purpose: "eventInvite",
 				personId,
-				eventId: a,
+				eventId: firstEvent,
 				ttlMs: HOUR,
 			});
-			const rows = await ctx.db.query("confirmTokens").collect();
-			expect(rows.map((r) => r.tokenHash).sort()).toEqual(
-				(await hashes(["ia2", "ib"])).sort()
+			const rows = await context.db.query("confirmTokens").collect();
+			const expectedInviteHashes = await hashes(["ia2", "ib"]);
+			expect(sortedStrings(rows.map((row) => row.tokenHash))).toEqual(
+				sortedStrings(expectedInviteHashes)
 			);
 			const live = await liveTokens(
-				ctx.db,
+				context.db,
 				personId,
 				"eventInvite",
 				Date.now()
 			);
-			expect(live.map((r) => r.tokenHash).sort()).toEqual(
-				(await hashes(["ia2", "ib"])).sort()
+			expect(sortedStrings(live.map((row) => row.tokenHash))).toEqual(
+				sortedStrings(expectedInviteHashes)
 			);
 		});
 	});
 
 	it("redeems once, then says already; wrong purpose is invalid", async () => {
-		const t = convexTest(schema, modules);
-		const personId = await seedPerson(t);
-		await t.run(async (ctx) => {
-			await issueToken(ctx, {
+		const backend = convexTest(schema, modules);
+		const personId = await seedPerson(backend);
+		await backend.run(async (context) => {
+			await issueToken(context, {
 				token: "t1",
 				purpose: "application",
 				personId,
 				ttlMs: HOUR,
 			});
-			expect((await redeemToken(ctx, "t1", "visitor")).status).toBe(
-				"invalid"
+			const wrongPurpose = await redeemToken(context, "t1", "visitor");
+			expect(wrongPurpose.status).toBe("invalid");
+			const unknownToken = await redeemToken(
+				context,
+				"nope",
+				"application"
 			);
-			expect((await redeemToken(ctx, "nope", "application")).status).toBe(
-				"invalid"
-			);
-			const first = await redeemToken(ctx, "t1", "application");
+			expect(unknownToken.status).toBe("invalid");
+			const first = await redeemToken(context, "t1", "application");
 			expect(first.status).toBe("ok");
-			expect((await redeemToken(ctx, "t1", "application")).status).toBe(
-				"already"
-			);
+			const repeat = await redeemToken(context, "t1", "application");
+			expect(repeat.status).toBe("already");
 		});
 	});
 
 	it("reports expired and purges past expiry", async () => {
-		const t = convexTest(schema, modules);
-		const personId = await seedPerson(t);
-		await t.run(async (ctx) => {
-			await issueToken(ctx, {
+		const backend = convexTest(schema, modules);
+		const personId = await seedPerson(backend);
+		await backend.run(async (context) => {
+			await issueToken(context, {
 				token: "old",
 				purpose: "application",
 				personId,
 				ttlMs: -1,
 			});
-			expect((await redeemToken(ctx, "old", "application")).status).toBe(
-				"expired"
+			const redeemed = await redeemToken(context, "old", "application");
+			expect(redeemed.status).toBe("expired");
+			expect(
+				await liveTokens(
+					context.db,
+					personId,
+					"application",
+					Date.now()
+				)
+			).toEqual([]);
+			expect(await purgeConfirmTokens(context, Date.now(), BATCH)).toBe(
+				1
 			);
 			expect(
-				await liveTokens(ctx.db, personId, "application", Date.now())
-			).toEqual([]);
-			expect(await purgeConfirmTokens(ctx, Date.now(), BATCH)).toBe(1);
-			expect(await ctx.db.query("confirmTokens").collect()).toHaveLength(
-				0
-			);
+				await context.db.query("confirmTokens").collect()
+			).toHaveLength(0);
 		});
 	});
 
 	it("abandoned = unverified self-serve row with no live token", async () => {
-		const t = convexTest(schema, modules);
-		const personId = await seedPerson(t);
-		await t.run(async (ctx) => {
-			const person = (await ctx.db.get(personId))!;
-			expect(await abandoned(ctx.db, person, Date.now())).toBe(true);
-			await issueToken(ctx, {
+		const backend = convexTest(schema, modules);
+		const personId = await seedPerson(backend);
+		await backend.run(async (context) => {
+			const person = (await context.db.get(personId))!;
+			expect(await abandoned(context.db, person, Date.now())).toBe(true);
+			await issueToken(context, {
 				token: "t1",
 				purpose: "application",
 				personId,
 				ttlMs: HOUR,
 			});
-			expect(await abandoned(ctx.db, person, Date.now())).toBe(false);
+			expect(await abandoned(context.db, person, Date.now())).toBe(false);
 		});
 	});
 
 	it("refuses an event invite without an event", async () => {
-		const t = convexTest(schema, modules);
-		const personId = await seedPerson(t);
-		await t.run(async (ctx) => {
+		const backend = convexTest(schema, modules);
+		const personId = await seedPerson(backend);
+		await backend.run(async (context) => {
 			await expect(
-				issueToken(ctx, {
+				issueToken(context, {
 					token: "i",
 					purpose: "eventInvite",
 					personId,
@@ -199,8 +213,8 @@ describe("confirmToken", () => {
 	});
 
 	it("round-trips a staged payload", async () => {
-		const t = convexTest(schema, modules);
-		const personId = await seedPerson(t);
+		const backend = convexTest(schema, modules);
+		const personId = await seedPerson(backend);
 		const payload = {
 			firstName: "Ada",
 			lastName: "Lovelace",
@@ -209,15 +223,15 @@ describe("confirmToken", () => {
 			venture: { name: "Engines", whyJoin: "Compute" },
 			submittedAt: 1,
 		};
-		await t.run(async (ctx) => {
-			await issueToken(ctx, {
+		await backend.run(async (context) => {
+			await issueToken(context, {
 				token: "p",
 				purpose: "application",
 				personId,
 				ttlMs: HOUR,
 				payload,
 			});
-			const redeemed = await redeemToken(ctx, "p", "application");
+			const redeemed = await redeemToken(context, "p", "application");
 			expect(redeemed.status).toBe("ok");
 			if (redeemed.status === "ok")
 				expect(redeemed.row.payload).toEqual(payload);
@@ -225,132 +239,128 @@ describe("confirmToken", () => {
 	});
 
 	it("re-issues after a consumed row and keeps the consumed row", async () => {
-		const t = convexTest(schema, modules);
-		const personId = await seedPerson(t);
-		await t.run(async (ctx) => {
-			await issueToken(ctx, {
+		const backend = convexTest(schema, modules);
+		const personId = await seedPerson(backend);
+		await backend.run(async (context) => {
+			await issueToken(context, {
 				token: "t1",
 				purpose: "application",
 				personId,
 				ttlMs: HOUR,
 			});
-			await redeemToken(ctx, "t1", "application");
-			await issueToken(ctx, {
+			await redeemToken(context, "t1", "application");
+			await issueToken(context, {
 				token: "t2",
 				purpose: "application",
 				personId,
 				ttlMs: HOUR,
 			});
-			const rows = await ctx.db.query("confirmTokens").collect();
-			expect(rows.map((r) => r.tokenHash).sort()).toEqual(
-				(await hashes(["t1", "t2"])).sort()
+			const rows = await context.db.query("confirmTokens").collect();
+			expect(sortedStrings(rows.map((row) => row.tokenHash))).toEqual(
+				sortedStrings(await hashes(["t1", "t2"]))
 			);
-			expect(
-				(
-					await liveTokens(
-						ctx.db,
-						personId,
-						"application",
-						Date.now()
-					)
-				).map((r) => r.tokenHash)
-			).toEqual(await hashes(["t2"]));
-			expect((await redeemToken(ctx, "t1", "application")).status).toBe(
-				"already"
+			const live = await liveTokens(
+				context.db,
+				personId,
+				"application",
+				Date.now()
 			);
+			expect(live.map((row) => row.tokenHash)).toEqual(
+				await hashes(["t2"])
+			);
+			const repeat = await redeemToken(context, "t1", "application");
+			expect(repeat.status).toBe("already");
 		});
 	});
 
 	it("abandoned reads the visitor token for a visitor", async () => {
-		const t = convexTest(schema, modules);
-		const personId = await seedPerson(t, "visitor");
-		await t.run(async (ctx) => {
-			const person = (await ctx.db.get(personId))!;
-			await issueToken(ctx, {
+		const backend = convexTest(schema, modules);
+		const personId = await seedPerson(backend, "visitor");
+		await backend.run(async (context) => {
+			const person = (await context.db.get(personId))!;
+			await issueToken(context, {
 				token: "a",
 				purpose: "application",
 				personId,
 				ttlMs: HOUR,
 			});
-			expect(await abandoned(ctx.db, person, Date.now())).toBe(true);
-			await issueToken(ctx, {
+			expect(await abandoned(context.db, person, Date.now())).toBe(true);
+			await issueToken(context, {
 				token: "v",
 				purpose: "visitor",
 				personId,
 				ttlMs: HOUR,
 			});
-			expect(await abandoned(ctx.db, person, Date.now())).toBe(false);
+			expect(await abandoned(context.db, person, Date.now())).toBe(false);
 		});
 	});
 
 	it("never calls a non-self-serve tier abandoned", async () => {
-		const t = convexTest(schema, modules);
-		const personId = await seedPerson(t, "member");
-		await t.run(async (ctx) => {
-			const person = (await ctx.db.get(personId))!;
-			expect(await abandoned(ctx.db, person, Date.now())).toBe(false);
+		const backend = convexTest(schema, modules);
+		const personId = await seedPerson(backend, "member");
+		await backend.run(async (context) => {
+			const person = (await context.db.get(personId))!;
+			expect(await abandoned(context.db, person, Date.now())).toBe(false);
 		});
 	});
 
 	it("purges at most one batch of expired rows per call", async () => {
-		const t = convexTest(schema, modules);
-		const personId = await seedPerson(t);
-		await t.run(async (ctx) => {
-			for (let i = 0; i <= BATCH; i++) {
-				await ctx.db.insert("confirmTokens", {
-					tokenHash: `x${i}`,
+		const backend = convexTest(schema, modules);
+		const personId = await seedPerson(backend);
+		await backend.run(async (context) => {
+			for (let index = 0; index <= BATCH; index++) {
+				await context.db.insert("confirmTokens", {
+					tokenHash: `x${index}`,
 					purpose: "application",
 					personId,
 					expiresAt: 1,
 				});
 			}
-			expect(await purgeConfirmTokens(ctx, Date.now(), BATCH)).toBe(
+			expect(await purgeConfirmTokens(context, Date.now(), BATCH)).toBe(
 				BATCH
 			);
-			expect(await ctx.db.query("confirmTokens").collect()).toHaveLength(
-				1
-			);
+			expect(
+				await context.db.query("confirmTokens").collect()
+			).toHaveLength(1);
 		});
 	});
 });
 
 describe("tokenRow and redeemRow", () => {
 	it("tokenRow finds an issued token and null for an unknown one", async () => {
-		const t = convexTest(schema, modules);
-		const personId = await seedPerson(t);
-		await t.run(async (ctx) => {
-			await issueToken(ctx, {
+		const backend = convexTest(schema, modules);
+		const personId = await seedPerson(backend);
+		await backend.run(async (context) => {
+			await issueToken(context, {
 				token: "t1",
 				purpose: "application",
 				personId,
 				ttlMs: HOUR,
 			});
-			expect((await tokenRow(ctx.db, "t1"))?.tokenHash).toBe(
-				await hashConfirmToken("t1")
-			);
-			expect(await tokenRow(ctx.db, "nope")).toBeNull();
+			const row = await tokenRow(context.db, "t1");
+			expect(row?.tokenHash).toBe(await hashConfirmToken("t1"));
+			expect(await tokenRow(context.db, "nope")).toBeNull();
 		});
 	});
 
 	it("redeemRow consumes the row it is given", async () => {
-		const t = convexTest(schema, modules);
-		const personId = await seedPerson(t);
-		await t.run(async (ctx) => {
-			await issueToken(ctx, {
+		const backend = convexTest(schema, modules);
+		const personId = await seedPerson(backend);
+		await backend.run(async (context) => {
+			await issueToken(context, {
 				token: "t1",
 				purpose: "application",
 				personId,
 				ttlMs: HOUR,
 			});
 			const ok = await redeemRow(
-				ctx,
-				await tokenRow(ctx.db, "t1"),
+				context,
+				await tokenRow(context.db, "t1"),
 				"application"
 			);
 			expect(ok.status).toBe("ok");
-			expect((await tokenRow(ctx.db, "t1"))?.consumedAt).toEqual(
-				expect.any(Number)
-			);
+			const consumed = await tokenRow(context.db, "t1");
+			expect(consumed?.consumedAt).toEqual(expect.any(Number));
 		});
 	});
 });
@@ -360,25 +370,25 @@ describe("newConfirmToken", () => {
 		expect(newConfirmToken()).toMatch(/^[0-9a-f]{64}$/);
 	});
 	it("is unique across calls", () => {
-		const a = newConfirmToken();
-		const b = newConfirmToken();
-		expect(a).not.toBe(b);
+		const first = newConfirmToken();
+		const second = newConfirmToken();
+		expect(first).not.toBe(second);
 	});
 });
 
 describe("hashed storage", () => {
 	it("stores only a sha256 hex of the token, never the raw token", async () => {
-		const t = convexTest(schema, modules);
-		const personId = await seedPerson(t);
+		const backend = convexTest(schema, modules);
+		const personId = await seedPerson(backend);
 		const raw = newConfirmToken();
-		await t.run(async (ctx) => {
-			await issueToken(ctx, {
+		await backend.run(async (context) => {
+			await issueToken(context, {
 				token: raw,
 				purpose: "application",
 				personId,
 				ttlMs: HOUR,
 			});
-			const [row] = await ctx.db.query("confirmTokens").collect();
+			const [row] = await context.db.query("confirmTokens").collect();
 			expect(row.tokenHash).toMatch(/^[0-9a-f]{64}$/);
 			expect(row.tokenHash).not.toBe(raw);
 			expect(row.tokenHash).toBe(await hashConfirmToken(raw));
@@ -392,25 +402,23 @@ describe("hashed storage", () => {
 	});
 
 	it("redeems by the raw token, never by the stored hash", async () => {
-		const t = convexTest(schema, modules);
-		const personId = await seedPerson(t);
-		await t.run(async (ctx) => {
-			await issueToken(ctx, {
+		const backend = convexTest(schema, modules);
+		const personId = await seedPerson(backend);
+		await backend.run(async (context) => {
+			await issueToken(context, {
 				token: "t1",
 				purpose: "application",
 				personId,
 				ttlMs: HOUR,
 			});
-			const [row] = await ctx.db.query("confirmTokens").collect();
+			const [row] = await context.db.query("confirmTokens").collect();
 			const stored = row.tokenHash;
 			expect(stored).not.toBe("");
-			expect(await tokenRow(ctx.db, stored)).toBeNull();
-			expect((await redeemToken(ctx, stored, "application")).status).toBe(
-				"invalid"
-			);
-			expect((await redeemToken(ctx, "t1", "application")).status).toBe(
-				"ok"
-			);
+			expect(await tokenRow(context.db, stored)).toBeNull();
+			const byHash = await redeemToken(context, stored, "application");
+			expect(byHash.status).toBe("invalid");
+			const byRaw = await redeemToken(context, "t1", "application");
+			expect(byRaw.status).toBe("ok");
 		});
 	});
 });

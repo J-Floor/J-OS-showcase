@@ -24,10 +24,10 @@ import { lockSlot } from "./schema.ts";
 /** Writes the door-log row for a door action the lock refused or that
  *  failed (`operation: "unlock"` / `"lock"`). */
 async function recordDoorLog(
-	ctx: ActionCtx,
+	context: ActionCtx,
 	row: Infer<typeof doorLogRecordRow>
 ): Promise<void> {
-	await ctx.runMutation(internal.doorLog.record, { rows: [row] });
+	await context.runMutation(internal.doorLog.record, { rows: [row] });
 }
 
 /** What an app door action returns. `attemptId` (ok only): the door-log row
@@ -50,7 +50,7 @@ const doorActionArgs = v.object({
  * person at the door.
  */
 async function recordAccepted(
-	ctx: ActionCtx,
+	context: ActionCtx,
 	attempt: {
 		who: { email: string; name: string; personId: Id<"people"> };
 		slot: LockSlot;
@@ -74,7 +74,7 @@ async function recordAccepted(
 		const stored = storedAttempt(state);
 		if (stored === null)
 			throw new Error(`an accepted ${doorAction} ended ${state.phase}`);
-		return await ctx.runMutation(internal.doorLog.recordAttempt, {
+		return await context.runMutation(internal.doorLog.recordAttempt, {
 			action: doorAction,
 			slot,
 			personId: who.personId,
@@ -91,6 +91,112 @@ async function recordAccepted(
 			`${fnName}: audit row lost for ${who.email} (${slot}, ok): ${errorMessage(err)}`
 		);
 		return null;
+	}
+}
+
+type DoorActionWho = { email: string; name: string; personId: Id<"people"> };
+
+/**
+ * The three gates in front of an actuation: presence, who, debounce. Throws
+ * the user-facing refusal for the first two; returns null when the same action
+ * on the same door is still inside its debounce window.
+ */
+async function authoriseDoorAction(
+	context: ActionCtx,
+	args: Infer<typeof doorActionArgs>,
+	doorAction: DoorAction
+): Promise<DoorActionWho | null> {
+	const secret = process.env.DOOR_PRESENCE_SECRET;
+	if (!secret) throw new ConvexError(`Door ${doorAction} is not configured.`);
+	if (!(await verifyPresenceToken(secret, args.presence, Date.now())))
+		throw new ConvexError(
+			`You need to be on the J floor Wi-Fi to ${doorAction}.`
+		);
+
+	const who = await context.runQuery(
+		internal.doorInternal.doorActionContext,
+		{
+			lock: args.lock,
+			action: doorAction,
+		}
+	);
+	if (!who)
+		throw new ConvexError(
+			`Door ${doorAction} is not available for your account.`
+		);
+	const isDebounced =
+		who.lastSameActionUntil !== undefined &&
+		Date.now() < who.lastSameActionUntil;
+	return isDebounced ? null : who;
+}
+
+function doorLogBase(who: DoorActionWho, doorAction: DoorAction) {
+	return {
+		operation: doorAction,
+		trigger: "app" as const,
+		email: who.email,
+		name: who.name,
+		personId: who.personId,
+		actorId: who.personId,
+	};
+}
+
+/** Drops the cached bolt position after an accepted action on a lockable door. */
+async function clearPositionCacheAfterActuation(
+	context: ActionCtx,
+	slot: LockSlot,
+	result: DoorActionResult,
+	functionName: string
+): Promise<void> {
+	if (result.status !== "ok" || !LOCK_CAPABILITIES[slot].canLock) return;
+	try {
+		await context.runMutation(
+			internal.doorInternal.clearDoorPositionCache,
+			{
+				slot,
+			}
+		);
+	} catch (err) {
+		// eslint-disable-next-line no-console -- a stale cached position only lingers until its TTL
+		console.error(
+			`${functionName}: cache clear failed (${slot}): ${errorMessage(err)}`
+		);
+	}
+}
+
+/**
+ * The lock refused it, so nothing was actuated and there is no attempt to
+ * follow. A failed audit write must not turn that into an error for the
+ * person at the door: report the lost row to the logs and carry on.
+ */
+async function recordRefusal(
+	context: ActionCtx,
+	refusal: {
+		base: ReturnType<typeof doorLogBase>;
+		slot: LockSlot;
+		result: Exclude<DoorActionResult, { status: "ok" }>;
+		email: string;
+		fnName: string;
+	}
+): Promise<void> {
+	const { base, slot, result, email, fnName } = refusal;
+	try {
+		await recordDoorLog(context, {
+			...base,
+			slot,
+			lockNames: [result.lockName],
+			...(result.status === "busy"
+				? {
+						outcome: "busy" as const,
+						detail: "still carrying out the previous command",
+					}
+				: { outcome: "failed" as const, detail: "offline" }),
+		});
+	} catch (err) {
+		// eslint-disable-next-line no-console -- the only trace of a door action whose audit row was lost
+		console.error(
+			`${fnName}: audit row lost for ${email} (${slot}, ${result.status}): ${errorMessage(err)}`
+		);
 	}
 }
 
@@ -131,44 +237,19 @@ async function recordAccepted(
  * `ConvexError`).
  */
 async function actuateDoor(
-	ctx: ActionCtx,
+	context: ActionCtx,
 	args: Infer<typeof doorActionArgs>,
 	doorAction: DoorAction,
-	fnName: string
+	functionName: string
 ): Promise<DoorActionOutcome> {
-	const secret = process.env.DOOR_PRESENCE_SECRET;
-	if (!secret) throw new ConvexError(`Door ${doorAction} is not configured.`);
-	if (!(await verifyPresenceToken(secret, args.presence, Date.now())))
-		throw new ConvexError(
-			`You need to be on the J floor Wi-Fi to ${doorAction}.`
-		);
-
-	const who = await ctx.runQuery(internal.doorInternal.doorActionContext, {
-		lock: args.lock,
-		action: doorAction,
-	});
-	if (!who)
-		throw new ConvexError(
-			`Door ${doorAction} is not available for your account.`
-		);
-	if (
-		who.lastSameActionUntil !== undefined &&
-		Date.now() < who.lastSameActionUntil
-	)
-		return { status: "debounced" };
+	const who = await authoriseDoorAction(context, args, doorAction);
+	if (who === null) return { status: "debounced" };
 
 	// A door action writes to the real lock account, which every deployment
 	// holding the provider credentials shares, so the factory refuses unless
 	// this deployment is opted in to door writes.
 	const provider = doorProvider({ requireWrites: true });
-	const base = {
-		operation: doorAction,
-		trigger: "app" as const,
-		email: who.email,
-		name: who.name,
-		personId: who.personId,
-		actorId: who.personId,
-	};
+	const base = doorLogBase(who, doorAction);
 
 	// Taken before the provider is called: the row's `at` is stamped by the
 	// insert, after the provider answered.
@@ -181,7 +262,7 @@ async function actuateDoor(
 		// "is this lock configured" check lives there too.
 		result = await provider.actuate(args.lock, doorAction);
 	} catch (err) {
-		await recordDoorLog(ctx, {
+		await recordDoorLog(context, {
 			...base,
 			slot: args.lock,
 			lockNames: [args.lock],
@@ -190,53 +271,31 @@ async function actuateDoor(
 		});
 		throw err;
 	}
-	if (result.status === "ok" && LOCK_CAPABILITIES[args.lock].canLock) {
-		try {
-			await ctx.runMutation(
-				internal.doorInternal.clearDoorPositionCache,
-				{ slot: args.lock }
-			);
-		} catch (err) {
-			// eslint-disable-next-line no-console -- a stale cached position only lingers until its TTL
-			console.error(
-				`${fnName}: cache clear failed (${args.lock}): ${errorMessage(err)}`
-			);
-		}
-	}
+	await clearPositionCacheAfterActuation(
+		context,
+		args.lock,
+		result,
+		functionName
+	);
 	if (result.status === "ok")
 		return {
 			status: "ok",
-			attemptId: await recordAccepted(ctx, {
+			attemptId: await recordAccepted(context, {
 				who,
 				slot: args.lock,
 				doorAction,
 				result,
 				requestedAt,
-				fnName,
+				fnName: functionName,
 			}),
 		};
-	// The lock refused it, so nothing was actuated and there is no attempt to
-	// follow. A failed audit write must not turn that into an error for the
-	// person at the door — report the lost row to the logs and still return
-	// the real result.
-	try {
-		await recordDoorLog(ctx, {
-			...base,
-			slot: args.lock,
-			lockNames: [result.lockName],
-			...(result.status === "busy"
-				? {
-						outcome: "busy" as const,
-						detail: "still carrying out the previous command",
-					}
-				: { outcome: "failed" as const, detail: "offline" }),
-		});
-	} catch (err) {
-		// eslint-disable-next-line no-console -- the only trace of a door action whose audit row was lost
-		console.error(
-			`${fnName}: audit row lost for ${who.email} (${args.lock}, ${result.status}): ${errorMessage(err)}`
-		);
-	}
+	await recordRefusal(context, {
+		base,
+		slot: args.lock,
+		result,
+		email: who.email,
+		fnName: functionName,
+	});
 	return { status: result.status };
 }
 
@@ -246,8 +305,8 @@ async function actuateDoor(
  */
 export const unlockDoor = action({
 	args: doorActionArgs.fields,
-	handler: (ctx, args): Promise<DoorActionOutcome> =>
-		actuateDoor(ctx, args, "unlock", "unlockDoor"),
+	handler: (context, args): Promise<DoorActionOutcome> =>
+		actuateDoor(context, args, "unlock", "unlockDoor"),
 });
 
 /**
@@ -259,10 +318,10 @@ export const unlockDoor = action({
  */
 export const lockDoor = action({
 	args: doorActionArgs.fields,
-	handler: async (ctx, args): Promise<DoorActionOutcome> => {
+	handler: async (context, args): Promise<DoorActionOutcome> => {
 		if (!LOCK_CAPABILITIES[args.lock].canLock)
 			throw new ConvexError("This door locks by itself.");
-		return actuateDoor(ctx, args, "lock", "lockDoor");
+		return actuateDoor(context, args, "lock", "lockDoor");
 	},
 });
 
@@ -281,14 +340,19 @@ const POSITION_TTL_MS = 15_000;
  */
 export const doorPosition = action({
 	args: { lock: lockSlot, fresh: v.optional(v.boolean()) },
-	handler: async (ctx, args): Promise<DoorPosition> => {
+	handler: async (context, args): Promise<DoorPosition> => {
 		if (!LOCK_CAPABILITIES[args.lock].canLock)
 			throw new ConvexError("This door's position is not shown.");
-		if (!(await ctx.runQuery(internal.doorInternal.canSeeDoorPosition, {})))
+		if (
+			!(await context.runQuery(
+				internal.doorInternal.canSeeDoorPosition,
+				{}
+			))
+		)
 			throw new ConvexError(
 				"Door position is not available for your account."
 			);
-		const cached = await ctx.runQuery(
+		const cached = await context.runQuery(
 			internal.doorInternal.readDoorPositionCache,
 			{
 				slot: args.lock,
@@ -304,7 +368,7 @@ export const doorPosition = action({
 			args.lock
 		);
 		try {
-			await ctx.runMutation(
+			await context.runMutation(
 				internal.doorInternal.writeDoorPositionCache,
 				{
 					slot: args.lock,
@@ -335,7 +399,7 @@ export const pollActuation = internalAction({
 		...attemptChain.fields,
 		slot: lockSlot,
 	},
-	handler: async (ctx, args): Promise<null> => {
+	handler: async (context, args): Promise<null> => {
 		let position: DoorPosition;
 		try {
 			// A read is harmless on the shared lock account, so it skips the
@@ -350,7 +414,7 @@ export const pollActuation = internalAction({
 			);
 			position = "unknown";
 		}
-		await ctx.runMutation(internal.doorLog.applyActuationReading, {
+		await context.runMutation(internal.doorLog.applyActuationReading, {
 			id: args.id,
 			action: args.action,
 			positionBefore: args.positionBefore,

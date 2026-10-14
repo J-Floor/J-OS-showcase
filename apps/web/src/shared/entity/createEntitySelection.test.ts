@@ -54,17 +54,17 @@ function renderHarness(
 	}
 ): Bag {
 	const bag: Bag = {};
-	const param = options?.param ?? "x";
+	const parameter = options?.param ?? "x";
 	function Harness() {
 		bag.sel = createEntitySelection<Row>({
 			rows,
-			param,
+			param: parameter,
 			slugOf: options?.slugOf,
 		});
 		const location = useLocation();
 		bag.search = () => location.search;
 		bag.pathname = () => location.pathname;
-		return undefined;
+		return null;
 	}
 	render(() =>
 		createComponent(MemoryRouter, {
@@ -351,7 +351,7 @@ test("Back closes a drawer reached by navigating in from another page, staying o
 		const location = useLocation();
 		bag.search = () => location.search;
 		bag.pathname = () => location.pathname;
-		return undefined;
+		return null;
 	}
 	render(() =>
 		createComponent(Router, {
@@ -399,7 +399,7 @@ test("navigating in from the same list adds no duplicate list entry: one Back cl
 		bag.navigate = useNavigate();
 		const location = useLocation();
 		bag.pathname = () => location.pathname;
-		return undefined;
+		return null;
 	}
 	render(() =>
 		createComponent(Router, {
@@ -446,7 +446,7 @@ test("a same-list pick stays one Back deep even when the page rewrites another p
 			if (bag.sel?.selectedId() !== undefined && params.tab !== "t2")
 				setParams({ tab: "t2" }, { replace: true });
 		});
-		return undefined;
+		return null;
 	}
 	render(() =>
 		createComponent(Router, {

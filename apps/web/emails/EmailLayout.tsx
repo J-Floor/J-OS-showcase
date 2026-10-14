@@ -15,6 +15,13 @@ import type React from "react";
 
 import { palette, styles } from "./theme.ts";
 
+/** What an email that greets someone by name and links them to sign-in takes. */
+export type SigninEmailProps = {
+	name: string;
+	signinUrl: string;
+	logoUrl: string;
+};
+
 export type LayoutProps = {
 	/** Inbox preview snippet (hidden in the body). */
 	preview: string;

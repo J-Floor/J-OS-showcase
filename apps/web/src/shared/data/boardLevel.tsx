@@ -30,8 +30,8 @@ export function BoardLevelProvider(props: {
  *  hosts, note authors. Reads the warm provider when mounted under it, and
  *  subscribes directly otherwise. */
 export function useBoardLevel() {
-	const ctx = useContext(BoardLevelContext);
-	return ctx ?? boardLevelQuery();
+	const context = useContext(BoardLevelContext);
+	return context ?? boardLevelQuery();
 }
 
 export type StaffMember = {
@@ -48,6 +48,6 @@ export function staffName(
 	id: Id<"people">
 ): string | null | undefined {
 	if (staff === undefined) return undefined;
-	const found = staff.find((s) => s._id === id);
+	const found = staff.find((member) => member._id === id);
 	return found ? `${found.firstName} ${found.lastName}`.trim() : null;
 }

@@ -55,8 +55,9 @@ export function shouldStartTour(
 	person: TourPerson | null | undefined,
 	now: number
 ): boolean {
-	if (!person?.onboarding || person.onboarding.tourSeen) return false;
-	return !doorsIntroPending(person, now);
+	return !person?.onboarding || person.onboarding.tourSeen
+		? false
+		: !doorsIntroPending(person, now);
 }
 
 export function WelcomeTour() {
@@ -69,18 +70,19 @@ export function WelcomeTour() {
 				details.status === "dismissed" ||
 				details.status === "completed"
 			) {
-				void setTourSeen.mutateAsync({}).catch(() => undefined);
+				void setTourSeen.mutateAsync({}).catch(() => {});
 			}
 		},
 	});
 
-	let started = false;
+	let isStarted = false;
 	createEffect(() => {
-		if (started) return;
-		if (shouldStartTour(state.data()?.person, Date.now())) {
-			started = true;
-			tour().start();
+		if (isStarted || !shouldStartTour(state.data()?.person, Date.now())) {
+			return;
 		}
+
+		isStarted = true;
+		tour().start();
 	});
 
 	return <Tour tour={tour} />;

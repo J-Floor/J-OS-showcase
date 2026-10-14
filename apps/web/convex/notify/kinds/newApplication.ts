@@ -16,7 +16,7 @@ export const newApplication = defineKind({
 		applicantName: v.string(),
 		venture: v.string(),
 	}),
-	audience: (ctx) => boardIds(ctx),
+	audience: (context) => boardIds(context),
 	push: ({ personId, applicantName, venture }) => ({
 		title: "New application",
 		body: `${applicantName} from ${venture} applied.`,

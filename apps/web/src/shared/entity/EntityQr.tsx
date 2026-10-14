@@ -1,38 +1,11 @@
 import { QrCode } from "@ark-ui/solid/qr-code";
 import { Button, Icon, IconButton, SwapIconButton } from "@j-os/design-system";
-import { createSignal, onCleanup, type JSX } from "solid-js";
+import type { JSX } from "solid-js";
 
+import { createCopyFeedback } from "../createCopyFeedback.ts";
 import { ICONS } from "../icons.ts";
 
 import styles from "./EntityQr.module.scss";
-
-/**
- * Copy-to-clipboard state shared by {@link EntityQrActions} and
- * {@link EntityQrBlock}: writes `url` on `copy()`, flips `copied()` for 1.5s.
- * A plain helper (not a component) so `onCleanup` still registers against the
- * caller's own owner.
- */
-function createCopyLink(url: () => string): {
-	copied: () => boolean;
-	copy: () => void;
-} {
-	const [copied, setCopied] = createSignal(false);
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	onCleanup(() => {
-		clearTimeout(timer);
-	});
-
-	function copy(): void {
-		void navigator.clipboard.writeText(url());
-		setCopied(true);
-		clearTimeout(timer);
-		timer = setTimeout(() => {
-			setCopied(false);
-		}, 1500);
-	}
-
-	return { copied, copy };
-}
 
 /**
  * Row-action pair: copy link (`SwapIconButton`) + download QR
@@ -48,7 +21,7 @@ export function EntityQrActions(props: {
 	url: string;
 	fileName: string;
 }): JSX.Element {
-	const { copied, copy } = createCopyLink(() => props.url);
+	const { copied, copy } = createCopyFeedback(() => props.url);
 
 	return (
 		<>
@@ -88,7 +61,7 @@ export function EntityQrBlock(props: {
 	url: string;
 	fileName: string;
 }): JSX.Element {
-	const { copied, copy } = createCopyLink(() => props.url);
+	const { copied, copy } = createCopyFeedback(() => props.url);
 
 	return (
 		<QrCode.Root value={props.url} class={styles.qrBlock}>

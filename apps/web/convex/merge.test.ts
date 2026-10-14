@@ -10,7 +10,7 @@ import {
 	FAKE_SLOT_LOCK_IDS,
 	FakeDoorProvider,
 } from "./lib/fakeDoorProvider.ts";
-import { MAX_SCANNED_DOCS, peopleRefTables } from "./lib/peopleRefs.ts";
+import { MAX_SCANNED_DOCS, peopleReferenceTables } from "./lib/peopleRefs.ts";
 import { isDryRunRollback } from "./merge.ts";
 import schema from "./schema.ts";
 
@@ -18,9 +18,9 @@ const modules = import.meta.glob("./**/*.*s");
 
 type T = ReturnType<typeof convexTest>;
 
-async function seed(t: T) {
-	return t.run(async (ctx) => {
-		const keep = await ctx.db.insert("people", {
+async function seed(backend: T) {
+	return backend.run(async (context) => {
+		const keep = await context.db.insert("people", {
 			email: "keep@example.com",
 			firstName: "K",
 			lastName: "Keep",
@@ -29,7 +29,7 @@ async function seed(t: T) {
 			stageSince: 1,
 			activatedAt: 1,
 		});
-		const drop = await ctx.db.insert("people", {
+		const drop = await context.db.insert("people", {
 			email: "drop@example.com",
 			firstName: "K",
 			lastName: "Keep",
@@ -39,7 +39,7 @@ async function seed(t: T) {
 			activatedAt: 1,
 			venture: { name: "Old Co" },
 		});
-		const guest = await ctx.db.insert("people", {
+		const guest = await context.db.insert("people", {
 			email: "g@example.com",
 			firstName: "G",
 			lastName: "Guest",
@@ -55,7 +55,7 @@ async function seed(t: T) {
 				boardSteps: { whatsapp: { completedAt: 1, byId: drop } },
 			},
 		});
-		await ctx.db.insert("signatures", {
+		await context.db.insert("signatures", {
 			personId: drop,
 			email: "drop@example.com",
 			variant: "member",
@@ -64,24 +64,24 @@ async function seed(t: T) {
 			agreementHash: "",
 			signedAt: 1,
 		});
-		await ctx.db.insert("personEvents", {
+		await context.db.insert("personEvents", {
 			personId: drop,
 			at: 1,
 			actorId: drop,
 			kind: "wifi",
 		});
-		await ctx.db.insert("tasks", {
+		await context.db.insert("tasks", {
 			title: "t",
 			status: "backlog",
 			assigneeIds: [drop],
 			createdBy: drop,
 		});
-		await ctx.db.insert("projects", {
+		await context.db.insert("projects", {
 			name: "p",
 			leaderId: drop,
 			createdBy: drop,
 		});
-		const event = await ctx.db.insert("events", {
+		const event = await context.db.insert("events", {
 			name: "e",
 			startsAt: 1,
 			endsAt: 2,
@@ -90,23 +90,23 @@ async function seed(t: T) {
 			createdBy: drop,
 			createdAt: 1,
 		});
-		await ctx.db.insert("eventAttendance", {
+		await context.db.insert("eventAttendance", {
 			personId: drop,
 			eventId: event,
 			confirmedAt: 1,
 		});
-		await ctx.db.insert("personState", {
+		await context.db.insert("personState", {
 			personId: drop,
 			lastPath: "/drop",
 		});
-		await issueToken(ctx, {
+		await issueToken(context, {
 			token: "confirm",
 			purpose: "eventInvite",
 			personId: drop,
 			eventId: event,
 			ttlMs: 1000,
 		});
-		await ctx.db.insert("pushSubscriptions", {
+		await context.db.insert("pushSubscriptions", {
 			personId: drop,
 			endpoint: "https://push.example/1",
 			p256dh: "k",
@@ -114,7 +114,7 @@ async function seed(t: T) {
 			userAgent: "ua",
 			createdAt: 1,
 		});
-		await ctx.db.insert("notifications", {
+		await context.db.insert("notifications", {
 			personId: drop,
 			kind: "taskAssigned",
 			title: "New task assigned",
@@ -133,7 +133,7 @@ async function seed(t: T) {
 			lockNames: [],
 			outcome: "ok",
 		} as const;
-		await ctx.db.insert("doorLog", logRow);
+		await context.db.insert("doorLog", logRow);
 		return { keep, drop, guest };
 	});
 }
@@ -163,9 +163,9 @@ afterEach(() => {
 
 describe("merge", () => {
 	it("moves every reference, patches the kept row, audits, and deletes the drop", async () => {
-		const t = convexTest(schema, modules);
-		const { keep, drop, guest } = await seed(t);
-		await t.mutation(internal.merge.apply, {
+		const backend = convexTest(schema, modules);
+		const { keep, drop, guest } = await seed(backend);
+		await backend.mutation(internal.merge.apply, {
 			keepId: keep,
 			dropId: drop,
 			patch: {
@@ -173,29 +173,32 @@ describe("merge", () => {
 				email: " Keep@Example.com ",
 			},
 		});
-		await t.run(async (ctx) => {
-			expect(await ctx.db.get(drop)).toBeNull();
-			const kept = await ctx.db.get(keep);
+		await backend.run(async (context) => {
+			expect(await context.db.get(drop)).toBeNull();
+			const kept = await context.db.get(keep);
 			expect(kept?.email).toBe("keep@example.com");
 			expect(kept?.venture?.name).toBe("Straintest");
-			const g = await ctx.db.get(guest);
-			expect(g?.hostedById).toBe(keep);
-			expect(g?.board?.noteLog?.[0]?.authorId).toBe(keep);
-			expect(g?.door?.byId).toBe(keep);
-			expect(g?.onboarding?.boardSteps?.whatsapp.byId).toBe(keep);
-			for (const table of peopleRefTables()) {
-				const docs = (
-					await ctx.db.query(table as "people").collect()
-				).filter(
+			const guestRow = await context.db.get(guest);
+			expect(guestRow?.hostedById).toBe(keep);
+			expect(guestRow?.board?.noteLog?.[0]?.authorId).toBe(keep);
+			expect(guestRow?.door?.byId).toBe(keep);
+			expect(guestRow?.onboarding?.boardSteps?.whatsapp.byId).toBe(keep);
+			for (const table of peopleReferenceTables()) {
+				const tableRows = await context.db
+					.query(table as "people")
+					.collect();
+				const documents = tableRows.filter(
 					// The merge audit row names the dropped id on purpose.
-					(d) => (d as { kind?: string }).kind !== "merge"
+					(document) =>
+						(document as { kind?: string }).kind !== "merge"
 				);
-				expect(docs.length).toBeGreaterThan(0);
-				expect(JSON.stringify(docs)).not.toContain(drop);
+				expect(documents.length).toBeGreaterThan(0);
+				expect(JSON.stringify(documents)).not.toContain(drop);
 			}
-			const audit = (await ctx.db.query("personEvents").collect()).find(
-				(e) => e.kind === "merge"
-			);
+			const auditEvents = await context.db
+				.query("personEvents")
+				.collect();
+			const audit = auditEvents.find((event) => event.kind === "merge");
 			expect(audit?.personId).toBe(keep);
 			expect(audit?.meta).toEqual({
 				dropId: drop,
@@ -205,9 +208,9 @@ describe("merge", () => {
 	});
 
 	it("recomputes the kept person's signedVariants from the moved signatures", async () => {
-		const t = convexTest(schema, modules);
-		const { keep, drop } = await t.run(async (ctx) => {
-			const keep = await ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const { keep, drop } = await backend.run(async (context) => {
+			const keep = await context.db.insert("people", {
 				email: "keep2@example.com",
 				firstName: "K",
 				lastName: "Keep",
@@ -216,7 +219,7 @@ describe("merge", () => {
 				stageSince: 1,
 				activatedAt: 1,
 			});
-			const drop = await ctx.db.insert("people", {
+			const drop = await context.db.insert("people", {
 				email: "drop2@example.com",
 				firstName: "K",
 				lastName: "Keep",
@@ -226,7 +229,7 @@ describe("merge", () => {
 				activatedAt: 1,
 				signedVariants: ["guest"],
 			});
-			await ctx.db.insert("signatures", {
+			await context.db.insert("signatures", {
 				personId: drop,
 				email: "drop2@example.com",
 				variant: "guest",
@@ -238,23 +241,23 @@ describe("merge", () => {
 			});
 			return { keep, drop };
 		});
-		await t.mutation(internal.merge.apply, {
+		await backend.mutation(internal.merge.apply, {
 			keepId: keep,
 			dropId: drop,
 			patch: {},
 		});
-		const kept = await t.run((ctx) => ctx.db.get(keep));
+		const kept = await backend.run((context) => context.db.get(keep));
 		expect(kept?.signedVariants).toEqual(["guest"]);
 	});
 
 	it("keeps both variants when the two people signed different ones", async () => {
-		const t = convexTest(schema, modules);
-		const { keep, drop } = await t.run(async (ctx) => {
-			const keep = await ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const { keep, drop } = await backend.run(async (context) => {
+			const keep = await context.db.insert("people", {
 				...person("keep3@example.com", undefined, "member"),
 				signedVariants: ["member"],
 			});
-			const drop = await ctx.db.insert("people", {
+			const drop = await context.db.insert("people", {
 				...person("drop3@example.com", undefined, "member"),
 				signedVariants: ["guest"],
 			});
@@ -262,7 +265,7 @@ describe("merge", () => {
 				[keep, "keep3@example.com", "member"],
 				[drop, "drop3@example.com", "guest"],
 			] as const)
-				await ctx.db.insert("signatures", {
+				await context.db.insert("signatures", {
 					personId,
 					email,
 					variant,
@@ -274,22 +277,22 @@ describe("merge", () => {
 				});
 			return { keep, drop };
 		});
-		await t.mutation(internal.merge.apply, {
+		await backend.mutation(internal.merge.apply, {
 			keepId: keep,
 			dropId: drop,
 			patch: {},
 		});
-		const kept = await t.run((ctx) => ctx.db.get(keep));
-		expect([...(kept?.signedVariants ?? [])].sort()).toEqual([
-			"guest",
-			"member",
-		]);
+		const kept = await backend.run((context) => context.db.get(keep));
+		expect(
+			// eslint-disable-next-line id-length -- conventional comparator parameter names
+			[...(kept?.signedVariants ?? [])].sort((a, b) => a.localeCompare(b))
+		).toEqual(["guest", "member"]);
 	});
 
 	it("moves the dropped person's notification history to the kept person", async () => {
-		const t = convexTest(schema, modules);
-		const { keep, drop } = await seed(t);
-		await t.mutation(internal.merge.apply, {
+		const backend = convexTest(schema, modules);
+		const { keep, drop } = await seed(backend);
+		await backend.mutation(internal.merge.apply, {
 			keepId: keep,
 			dropId: drop,
 			patch: {
@@ -297,29 +300,31 @@ describe("merge", () => {
 				email: " Keep@jfloor.test ",
 			},
 		});
-		const rows = await t.run((ctx) =>
-			ctx.db.query("notifications").collect()
+		const rows = await backend.run((context) =>
+			context.db.query("notifications").collect()
 		);
-		expect(rows.map((r) => r.personId)).toEqual([keep]);
+		expect(rows.map((row) => row.personId)).toEqual([keep]);
 	});
 
 	it("refuses a merge that leaves the kept row in a violated state, writing nothing", async () => {
-		const t = convexTest(schema, modules);
-		const { keep, drop } = await seed(t);
+		const backend = convexTest(schema, modules);
+		const { keep, drop } = await seed(backend);
 		await expect(
-			t.mutation(internal.merge.apply, {
+			backend.mutation(internal.merge.apply, {
 				keepId: keep,
 				dropId: drop,
 				patch: { tier: "guest" },
 			})
 		).rejects.toThrow(/Merge refused: active-without-agreement/);
-		expect(await t.run((ctx) => ctx.db.get(drop))).not.toBeNull();
+		expect(
+			await backend.run((context) => context.db.get(drop))
+		).not.toBeNull();
 	});
 
 	it("check reports the same refusal without writing", async () => {
-		const t = convexTest(schema, modules);
-		const { keep, drop } = await seed(t);
-		const result = await t.query(internal.merge.check, {
+		const backend = convexTest(schema, modules);
+		const { keep, drop } = await seed(backend);
+		const result = await backend.query(internal.merge.check, {
 			keepId: keep,
 			dropId: drop,
 			patch: { tier: "guest" },
@@ -330,10 +335,10 @@ describe("merge", () => {
 	});
 
 	it("refuses to merge a person into themselves", async () => {
-		const t = convexTest(schema, modules);
-		const { keep } = await seed(t);
+		const backend = convexTest(schema, modules);
+		const { keep } = await seed(backend);
 		await expect(
-			t.mutation(internal.merge.apply, {
+			backend.mutation(internal.merge.apply, {
 				keepId: keep,
 				dropId: keep,
 				patch: {},
@@ -342,41 +347,42 @@ describe("merge", () => {
 	});
 
 	it("refuses an email a third person already uses, but lets the kept row take the dropped row's", async () => {
-		const t = convexTest(schema, modules);
-		const { keep, drop } = await seed(t);
-		await t.run((ctx) =>
-			ctx.db.insert("people", person("third@example.com"))
+		const backend = convexTest(schema, modules);
+		const { keep, drop } = await seed(backend);
+		await backend.run((context) =>
+			context.db.insert("people", person("third@example.com"))
 		);
-		const clash = await t.query(internal.merge.check, {
+		const clash = await backend.query(internal.merge.check, {
 			keepId: keep,
 			dropId: drop,
 			patch: { email: "Third@Example.com" },
 		});
 		expect(clash).toEqual({ ok: false, reason: EMAIL_IN_USE });
 		await expect(
-			t.mutation(internal.merge.apply, {
+			backend.mutation(internal.merge.apply, {
 				keepId: keep,
 				dropId: drop,
 				patch: { email: "third@example.com" },
 			})
 		).rejects.toThrow(/already uses/);
-		expect(await t.run((ctx) => ctx.db.get(drop))).not.toBeNull();
+		expect(
+			await backend.run((context) => context.db.get(drop))
+		).not.toBeNull();
 
-		await t.mutation(internal.merge.apply, {
+		await backend.mutation(internal.merge.apply, {
 			keepId: keep,
 			dropId: drop,
 			patch: { email: "DROP@example.com" },
 		});
-		expect((await t.run((ctx) => ctx.db.get(keep)))?.email).toBe(
-			"drop@example.com"
-		);
+		const keptAfter = await backend.run((context) => context.db.get(keep));
+		expect(keptAfter?.email).toBe("drop@example.com");
 	});
 
 	it("check refuses a patch that is not an object", async () => {
-		const t = convexTest(schema, modules);
-		const { keep, drop } = await seed(t);
+		const backend = convexTest(schema, modules);
+		const { keep, drop } = await seed(backend);
 		expect(
-			await t.query(internal.merge.check, {
+			await backend.query(internal.merge.check, {
 				keepId: keep,
 				dropId: drop,
 				patch: "nope",
@@ -385,37 +391,41 @@ describe("merge", () => {
 	});
 
 	it("a patch the people schema rejects fails the write, leaving the dropped row", async () => {
-		const t = convexTest(schema, modules);
-		const { keep, drop } = await seed(t);
+		const backend = convexTest(schema, modules);
+		const { keep, drop } = await seed(backend);
 		for (const patch of [
 			{ nickname: "K" },
 			{ venture: { name: 3 } },
 			{ stage: "nonsense" },
 		]) {
-			const attempt = t.mutation(internal.merge.apply, {
+			const attempt = backend.mutation(internal.merge.apply, {
 				keepId: keep,
 				dropId: drop,
 				patch,
 			});
-			const error: unknown = await attempt.catch((e: unknown) => e);
+			const error: unknown = await attempt.catch(
+				(caught: unknown) => caught
+			);
 			expect(error).toBeInstanceOf(Error);
 			expect(isDryRunRollback(error)).toBe(false);
 		}
-		expect(await t.run((ctx) => ctx.db.get(drop))).not.toBeNull();
+		expect(
+			await backend.run((context) => context.db.get(drop))
+		).not.toBeNull();
 	});
 
 	it("check refuses when the references are too many to walk in one transaction", async () => {
-		const t = convexTest(schema, modules);
-		const { keep, drop } = await seed(t);
-		await t.run(async (ctx) => {
-			for (let i = 0; i < MAX_SCANNED_DOCS; i++)
-				await ctx.db.insert("personEvents", {
+		const backend = convexTest(schema, modules);
+		const { keep, drop } = await seed(backend);
+		await backend.run(async (context) => {
+			for (let index = 0; index < MAX_SCANNED_DOCS; index++)
+				await context.db.insert("personEvents", {
 					personId: keep,
-					at: i,
+					at: index,
 					kind: "wifi",
 				});
 		});
-		const result = await t.query(internal.merge.check, {
+		const result = await backend.query(internal.merge.check, {
 			keepId: keep,
 			dropId: drop,
 			patch: {},
@@ -427,13 +437,16 @@ describe("merge", () => {
 	});
 
 	it("refuses a dropped board or admin with door access, whose key would never be revoked", async () => {
-		const t = convexTest(schema, modules);
-		const ids = await t.run(async (ctx) => ({
-			keep: await ctx.db.insert("people", person("a@example.com")),
-			board: await ctx.db.insert("people", person("b@example.com", "u2")),
+		const backend = convexTest(schema, modules);
+		const ids = await backend.run(async (context) => ({
+			keep: await context.db.insert("people", person("a@example.com")),
+			board: await context.db.insert(
+				"people",
+				person("b@example.com", "u2")
+			),
 		}));
 		const reason = /break-glass key and would never be revoked/;
-		const verdict = await t.query(internal.merge.check, {
+		const verdict = await backend.query(internal.merge.check, {
 			keepId: ids.keep,
 			dropId: ids.board,
 			patch: {},
@@ -441,16 +454,18 @@ describe("merge", () => {
 		expect(verdict).toMatchObject({ ok: false });
 		expect(JSON.stringify(verdict)).toMatch(reason);
 		await expect(
-			t.mutation(internal.merge.apply, {
+			backend.mutation(internal.merge.apply, {
 				keepId: ids.keep,
 				dropId: ids.board,
 				patch: {},
 			})
 		).rejects.toThrow(reason);
-		expect(await t.run((ctx) => ctx.db.get(ids.board))).not.toBeNull();
+		expect(
+			await backend.run((context) => context.db.get(ids.board))
+		).not.toBeNull();
 		// Taking the dropped row's email makes its account the kept person's.
 		expect(
-			await t.query(internal.merge.check, {
+			await backend.query(internal.merge.check, {
 				keepId: ids.keep,
 				dropId: ids.board,
 				patch: { email: "b@example.com" },
@@ -464,46 +479,51 @@ describe("merge", () => {
 	});
 
 	it("a dry run does every write, then rolls all of them back", async () => {
-		const t = convexTest(schema, modules);
-		const { keep, drop, guest } = await seed(t);
-		const rollback: unknown = await t
+		const backend = convexTest(schema, modules);
+		const { keep, drop, guest } = await seed(backend);
+		const rollback: unknown = await backend
 			.mutation(internal.merge.apply, {
 				keepId: keep,
 				dropId: drop,
 				patch: { venture: { name: "Straintest" } },
 				dryRun: true,
 			})
-			.catch((e: unknown) => e);
+			.catch((caught: unknown) => caught);
 		expect(isDryRunRollback(rollback)).toBe(true);
-		await t.run(async (ctx) => {
-			expect(await ctx.db.get(drop)).not.toBeNull();
-			expect((await ctx.db.get(keep))?.venture).toBeUndefined();
-			expect((await ctx.db.get(guest))?.hostedById).toBe(drop);
-			const events = await ctx.db.query("personEvents").collect();
-			expect(events.some((e) => e.kind === "merge")).toBe(false);
-			expect(events.every((e) => e.personId === drop)).toBe(true);
+		await backend.run(async (context) => {
+			expect(await context.db.get(drop)).not.toBeNull();
+			const keptPerson = await context.db.get(keep);
+			const guestPerson = await context.db.get(guest);
+			expect(keptPerson?.venture).toBeUndefined();
+			expect(guestPerson?.hostedById).toBe(drop);
+			const events = await context.db.query("personEvents").collect();
+			expect(events.some((event) => event.kind === "merge")).toBe(false);
+			expect(events.every((event) => event.personId === drop)).toBe(true);
 		});
 	});
 
 	it("check says whether the dropped row's door account is the kept person's", async () => {
-		const t = convexTest(schema, modules);
-		const ids = await t.run(async (ctx) => ({
-			keep: await ctx.db.insert("people", person("a@example.com", "u1")),
-			shared: await ctx.db.insert(
+		const backend = convexTest(schema, modules);
+		const ids = await backend.run(async (context) => ({
+			keep: await context.db.insert(
+				"people",
+				person("a@example.com", "u1")
+			),
+			shared: await context.db.insert(
 				"people",
 				person("b@example.com", "u1", "member")
 			),
-			other: await ctx.db.insert(
+			other: await context.db.insert(
 				"people",
 				person("c@example.com", "u2", "member")
 			),
-			bare: await ctx.db.insert(
+			bare: await context.db.insert(
 				"people",
 				person("d@example.com", undefined, "member")
 			),
 		}));
 		function verdict(dropId: Id<"people">) {
-			return t.query(internal.merge.check, {
+			return backend.query(internal.merge.check, {
 				keepId: ids.keep,
 				dropId,
 				patch: {},
@@ -529,7 +549,7 @@ describe("merge", () => {
 		});
 		// Taking the dropped row's email makes its provider account the kept person's.
 		expect(
-			await t.query(internal.merge.check, {
+			await backend.query(internal.merge.check, {
 				keepId: ids.keep,
 				dropId: ids.bare,
 				patch: { email: "d@example.com" },
@@ -545,89 +565,95 @@ describe("merge", () => {
 
 describe("merge side effects", () => {
 	it("stores the kept row's email lowercased even when the patch leaves it alone", async () => {
-		const t = convexTest(schema, modules);
-		const ids = await t.run(async (ctx) => ({
-			keep: await ctx.db.insert("people", person("Shane@Example.com")),
-			drop: await ctx.db.insert(
+		const backend = convexTest(schema, modules);
+		const ids = await backend.run(async (context) => ({
+			keep: await context.db.insert(
+				"people",
+				person("Shane@Example.com")
+			),
+			drop: await context.db.insert(
 				"people",
 				person("shane@example.com", undefined, "member")
 			),
 		}));
-		await t.mutation(internal.merge.apply, {
+		await backend.mutation(internal.merge.apply, {
 			keepId: ids.keep,
 			dropId: ids.drop,
 			patch: {},
 		});
-		expect((await t.run((ctx) => ctx.db.get(ids.keep)))?.email).toBe(
-			"shane@example.com"
+		const keptPerson = await backend.run((context) =>
+			context.db.get(ids.keep)
 		);
+		expect(keptPerson?.email).toBe("shane@example.com");
 	});
 
 	it("names the kept person once in a task both were assigned to", async () => {
-		const t = convexTest(schema, modules);
-		const { keep, drop } = await seed(t);
-		const task = await t.run((ctx) =>
-			ctx.db.insert("tasks", {
+		const backend = convexTest(schema, modules);
+		const { keep, drop } = await seed(backend);
+		const task = await backend.run((context) =>
+			context.db.insert("tasks", {
 				title: "both",
 				status: "backlog",
 				assigneeIds: [keep, drop],
 				createdBy: keep,
 			})
 		);
-		await t.mutation(internal.merge.apply, {
+		await backend.mutation(internal.merge.apply, {
 			keepId: keep,
 			dropId: drop,
 			patch: {},
 		});
-		expect((await t.run((ctx) => ctx.db.get(task)))?.assigneeIds).toEqual([
-			keep,
-		]);
+		const reassigned = await backend.run((context) => context.db.get(task));
+		expect(reassigned?.assigneeIds).toEqual([keep]);
 	});
 
 	it("keeps one attendance when both people had them for an event", async () => {
-		const t = convexTest(schema, modules);
-		const { keep, drop } = await seed(t);
-		const event = await t.run(async (ctx) => {
-			const [row] = await ctx.db.query("eventAttendance").collect();
-			await ctx.db.insert("eventAttendance", {
+		const backend = convexTest(schema, modules);
+		const { keep, drop } = await seed(backend);
+		const event = await backend.run(async (context) => {
+			const [row] = await context.db.query("eventAttendance").collect();
+			await context.db.insert("eventAttendance", {
 				personId: keep,
 				eventId: row.eventId,
 				confirmedAt: 2,
 			});
 			return row.eventId;
 		});
-		await t.mutation(internal.merge.apply, {
+		await backend.mutation(internal.merge.apply, {
 			keepId: keep,
 			dropId: drop,
 			patch: {},
 		});
-		await t.run(async (ctx) => {
-			const attendance = await ctx.db
+		await backend.run(async (context) => {
+			const attendance = await context.db
 				.query("eventAttendance")
-				.withIndex("by_event", (q) => q.eq("eventId", event))
+				.withIndex("by_event", (range) => range.eq("eventId", event))
 				.collect();
-			expect(attendance.map((a) => [a.personId, a.confirmedAt])).toEqual([
-				[keep, 2],
-			]);
+			expect(
+				attendance.map((row) => [row.personId, row.confirmedAt])
+			).toEqual([[keep, 2]]);
 		});
 	});
 });
 
 describe("merge personState", () => {
 	it("keeps the kept person's row when both people had one", async () => {
-		const t = convexTest(schema, modules);
-		const { keep, drop } = await seed(t);
-		await t.run((ctx) =>
-			ctx.db.insert("personState", { personId: keep, lastPath: "/keep" })
+		const backend = convexTest(schema, modules);
+		const { keep, drop } = await seed(backend);
+		await backend.run((context) =>
+			context.db.insert("personState", {
+				personId: keep,
+				lastPath: "/keep",
+			})
 		);
-		await t.mutation(internal.merge.apply, {
+		await backend.mutation(internal.merge.apply, {
 			keepId: keep,
 			dropId: drop,
 			patch: {},
 		});
-		await t.run(async (ctx) => {
-			const rows = await ctx.db.query("personState").collect();
-			expect(rows.map((r) => [r.personId, r.lastPath])).toEqual([
+		await backend.run(async (context) => {
+			const rows = await context.db.query("personState").collect();
+			expect(rows.map((row) => [row.personId, row.lastPath])).toEqual([
 				[keep, "/keep"],
 			]);
 		});
@@ -651,12 +677,12 @@ describe("merge.run", () => {
 	}
 
 	it("revokes the dropped row's door keys while it still exists, then applies", async () => {
-		const t = convexTest(schema, modules);
-		const { keep, drop } = await seed(t);
+		const backend = convexTest(schema, modules);
+		const { keep, drop } = await seed(backend);
 		const fake = account("drop@example.com");
 		setDoorProviderForTests(fake);
 
-		const result = await t.action(internal.merge.run, {
+		const result = await backend.action(internal.merge.run, {
 			keepId: keep,
 			dropId: drop,
 			patch: { venture: { name: "Straintest" } },
@@ -665,37 +691,37 @@ describe("merge.run", () => {
 		expect(result.moved).toBeGreaterThan(0);
 		// Only possible while the row exists: the revoke resolves the email by id.
 		expect(fake.calls.revokes).toEqual([["a-dn"]]);
-		await t.run(async (ctx) => {
-			expect(await ctx.db.get(drop)).toBeNull();
-			const logged = await ctx.db.query("doorLog").collect();
-			expect(logged.map((l) => l.personId)).toEqual([keep, keep]);
+		await backend.run(async (context) => {
+			expect(await context.db.get(drop)).toBeNull();
+			const logged = await context.db.query("doorLog").collect();
+			expect(logged.map((row) => row.personId)).toEqual([keep, keep]);
 		});
 	});
 
 	it("leaves the provider account alone when it is the kept person's", async () => {
-		const t = convexTest(schema, modules);
-		const { keep, drop } = await seed(t);
+		const backend = convexTest(schema, modules);
+		const { keep, drop } = await seed(backend);
 		const fake = account("drop@example.com");
 		setDoorProviderForTests(fake);
 
-		await t.action(internal.merge.run, {
+		await backend.action(internal.merge.run, {
 			keepId: keep,
 			dropId: drop,
 			patch: { email: "drop@example.com" },
 		});
 
 		expect(fake.calls.revokes).toEqual([]);
-		expect(await t.run((ctx) => ctx.db.get(drop))).toBeNull();
+		expect(await backend.run((context) => context.db.get(drop))).toBeNull();
 	});
 
 	it("spares a provider account carrying the kept person's email even when the dropped row points at it", async () => {
-		const t = convexTest(schema, modules);
-		const ids = await t.run(async (ctx) => {
-			const keep = await ctx.db.insert(
+		const backend = convexTest(schema, modules);
+		const ids = await backend.run(async (context) => {
+			const keep = await context.db.insert(
 				"people",
 				person("keep@example.com", "stale-1", "member")
 			);
-			await ctx.db.insert("signatures", {
+			await context.db.insert("signatures", {
 				personId: keep,
 				email: "keep@example.com",
 				variant: "member",
@@ -704,7 +730,7 @@ describe("merge.run", () => {
 				agreementHash: "",
 				signedAt: 1,
 			});
-			const drop = await ctx.db.insert(
+			const drop = await context.db.insert(
 				"people",
 				person("drop@example.com", "acct-1", "member")
 			);
@@ -722,30 +748,32 @@ describe("merge.run", () => {
 		});
 		setDoorProviderForTests(fake);
 
-		await t.action(internal.merge.run, {
+		await backend.action(internal.merge.run, {
 			keepId: ids.keep,
 			dropId: ids.drop,
 			patch: {},
 		});
 
 		expect(fake.calls.revokes.flat()).not.toContain("a1");
-		expect(await t.run((ctx) => ctx.db.get(ids.drop))).toBeNull();
+		expect(
+			await backend.run((context) => context.db.get(ids.drop))
+		).toBeNull();
 	});
 
 	it("revokes the kept person when the shared account held the dropped board member's break-glass key", async () => {
-		const t = convexTest(schema, modules);
-		const ids = await t.run(async (ctx) => ({
-			keep: await ctx.db.insert(
+		const backend = convexTest(schema, modules);
+		const ids = await backend.run(async (context) => ({
+			keep: await context.db.insert(
 				"people",
 				person("drop@example.com", "u1", "member")
 			),
-			drop: await ctx.db.insert(
+			drop: await context.db.insert(
 				"people",
 				person("Drop@Example.com", "u1")
 			),
 		}));
-		await t.run((ctx) =>
-			ctx.db.insert("signatures", {
+		await backend.run((context) =>
+			context.db.insert("signatures", {
 				personId: ids.keep,
 				email: "drop@example.com",
 				variant: "member",
@@ -758,7 +786,7 @@ describe("merge.run", () => {
 		const fake = account("drop@example.com");
 		setDoorProviderForTests(fake);
 		expect(
-			await t.query(internal.merge.check, {
+			await backend.query(internal.merge.check, {
 				keepId: ids.keep,
 				dropId: ids.drop,
 				patch: {},
@@ -770,25 +798,27 @@ describe("merge.run", () => {
 			revokeKept: true,
 		});
 
-		await t.action(internal.merge.run, {
+		await backend.action(internal.merge.run, {
 			keepId: ids.keep,
 			dropId: ids.drop,
 			patch: {},
 		});
 
 		expect(fake.calls.revokes).toEqual([["a-dn"]]);
-		const logged = await t.run((ctx) => ctx.db.query("doorLog").collect());
-		expect(logged.map((l) => l.personId)).toEqual([ids.keep]);
+		const logged = await backend.run((context) =>
+			context.db.query("doorLog").collect()
+		);
+		expect(logged.map((row) => row.personId)).toEqual([ids.keep]);
 	});
 
 	it("revokes nothing when the merge is refused", async () => {
-		const t = convexTest(schema, modules);
-		const { keep, drop } = await seed(t);
+		const backend = convexTest(schema, modules);
+		const { keep, drop } = await seed(backend);
 		const fake = account("drop@example.com");
 		setDoorProviderForTests(fake);
 
 		await expect(
-			t.action(internal.merge.run, {
+			backend.action(internal.merge.run, {
 				keepId: keep,
 				dropId: drop,
 				patch: { tier: "guest" },
@@ -796,25 +826,29 @@ describe("merge.run", () => {
 		).rejects.toThrow(/Merge refused: active-without-agreement/);
 
 		expect(fake.calls.revokes).toEqual([]);
-		expect(await t.run((ctx) => ctx.db.get(drop))).not.toBeNull();
+		expect(
+			await backend.run((context) => context.db.get(drop))
+		).not.toBeNull();
 	});
 
 	it("revokes nothing when the dry run fails on a patch the schema rejects", async () => {
-		const t = convexTest(schema, modules);
-		const { keep, drop } = await seed(t);
+		const backend = convexTest(schema, modules);
+		const { keep, drop } = await seed(backend);
 		const fake = account("drop@example.com");
 		setDoorProviderForTests(fake);
 
-		const attempt = t.action(internal.merge.run, {
+		const attempt = backend.action(internal.merge.run, {
 			keepId: keep,
 			dropId: drop,
 			patch: { nickname: "K" },
 		});
-		const error: unknown = await attempt.catch((e: unknown) => e);
+		const error: unknown = await attempt.catch((caught: unknown) => caught);
 		expect(error).toBeInstanceOf(Error);
 		expect(isDryRunRollback(error)).toBe(false);
 
 		expect(fake.calls.revokes).toEqual([]);
-		expect(await t.run((ctx) => ctx.db.get(drop))).not.toBeNull();
+		expect(
+			await backend.run((context) => context.db.get(drop))
+		).not.toBeNull();
 	});
 });

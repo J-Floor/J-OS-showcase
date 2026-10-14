@@ -8,7 +8,7 @@ import styles from "./CopyFromItemDialog.module.scss";
 
 export function CopyFromItemDialog(props: {
 	open: boolean;
-	onOpenChange: (open: boolean) => void;
+	onOpenChange: (isOpen: boolean) => void;
 	items: Item[];
 	onSelect: (item: Item) => void;
 }): JSX.Element {
@@ -30,8 +30,8 @@ export function CopyFromItemDialog(props: {
 	return (
 		<Dialog.Root
 			open={props.open}
-			onOpenChange={(d) => {
-				props.onOpenChange(d.open);
+			onOpenChange={(details) => {
+				props.onOpenChange(details.open);
 			}}
 		>
 			<Dialog.Content>
@@ -44,8 +44,8 @@ export function CopyFromItemDialog(props: {
 					<Input
 						label="Asset tag"
 						value={query()}
-						onInput={(e) => {
-							setQuery(e.currentTarget.value);
+						onInput={(event) => {
+							setQuery(event.currentTarget.value);
 						}}
 					/>
 					<div class={styles.results}>

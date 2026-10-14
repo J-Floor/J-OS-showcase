@@ -6,18 +6,8 @@ import type { Infer } from "convex/values";
 
 import type { lockSlot } from "../schema.ts";
 
-import type { AssertEqual } from "./typeAssert.ts";
-
 /** Which physical door an app action targets. */
-export type LockSlot = "downstairs" | "upstairs";
-
-/** Compile-time check that this type and the schema's `lockSlot` validator
- *  agree. */
-const _lockSlotMatchesSchema: AssertEqual<
-	Infer<typeof lockSlot>,
-	LockSlot
-> = true;
-void _lockSlotMatchesSchema;
+export type LockSlot = Infer<typeof lockSlot>;
 
 export const FRESH_MIN_AGE_MS = 5_000;
 

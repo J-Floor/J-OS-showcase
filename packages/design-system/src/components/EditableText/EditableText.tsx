@@ -25,16 +25,16 @@ export type EditableTextProps = {
 export function EditableText(props: EditableTextProps) {
 	const [draft, setDraft] = createSignal<string | null>(null);
 	function display(): string {
-		const d = draft();
-		return d ?? props.value;
+		const current = draft();
+		return current ?? props.value;
 	}
 	function commit() {
-		const v = draft();
-		if (v === null || v === props.value) {
+		const current = draft();
+		if (current === null || current === props.value) {
 			setDraft(null);
 			return;
 		}
-		props.onCommit(v);
+		props.onCommit(current);
 		setDraft(null);
 	}
 	return (
@@ -46,7 +46,9 @@ export function EditableText(props: EditableTextProps) {
 					placeholder={props.placeholder}
 					maxLength={props.maxLength}
 					value={display()}
-					onValueChange={(e) => setDraft(e.currentTarget.value)}
+					onValueChange={(event) =>
+						setDraft(event.currentTarget.value)
+					}
 					onBlur={commit}
 				/>
 			}

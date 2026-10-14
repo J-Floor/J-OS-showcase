@@ -18,6 +18,45 @@ const BOARD_ONLY_TABS = [
 	{ value: "diagnostics", label: "Diagnostics" },
 ] as const;
 
+type TabEntry = { value: string; label: string };
+
+/** Which tabs this person sees: Access always, Rules for anyone who can view
+ *  the space info, Diagnostics for the board. */
+function createSpaceTabs() {
+	const [params, setParams] = useSearchParams();
+	const ability = useAbility();
+	function isBoard(): boolean {
+		return ability().can("manage", "Space");
+	}
+	function showsInfo(): boolean {
+		return ability().can("view", "SpaceInfo");
+	}
+	function infoTabs(): readonly TabEntry[] {
+		return showsInfo() ? INFO_TABS : [];
+	}
+	function boardOnlyTabs(): readonly TabEntry[] {
+		return isBoard() ? BOARD_ONLY_TABS : [];
+	}
+	function tabKeys(): readonly string[] {
+		return [
+			"access",
+			...infoTabs().map((tab) => tab.value),
+			...boardOnlyTabs().map((tab) => tab.value),
+		];
+	}
+	function urlParameter() {
+		return {
+			get: () => params.tab,
+			set: (value: string) => {
+				setParams({ tab: value });
+			},
+			fallback: "access",
+			keys: tabKeys(),
+		};
+	}
+	return { params, showsInfo, infoTabs, boardOnlyTabs, urlParameter };
+}
+
 /**
  * The Space page: a tabbed dashboard. Access = door/WiFi utilities plus (for
  * guests) the access countdown; Rules = the house rules as searchable cards;
@@ -29,42 +68,12 @@ const BOARD_ONLY_TABS = [
  * indicator (see MemberCommunity).
  */
 export function SpacePage() {
-	const [params, setParams] = useSearchParams();
-	const ability = useAbility();
 	const [rulesQuery, setRulesQuery] = createSignal("");
-
-	function isBoard(): boolean {
-		return ability().can("manage", "Space");
-	}
-	function showsInfo(): boolean {
-		return ability().can("view", "SpaceInfo");
-	}
-	function tabKeys(): readonly string[] {
-		return [
-			"access",
-			...infoTabs().map((t) => t.value),
-			...boardOnlyTabs().map((t) => t.value),
-		];
-	}
-	function infoTabs(): readonly { value: string; label: string }[] {
-		return showsInfo() ? INFO_TABS : [];
-	}
-	function boardOnlyTabs(): readonly { value: string; label: string }[] {
-		return isBoard() ? BOARD_ONLY_TABS : [];
-	}
+	const { params, showsInfo, infoTabs, boardOnlyTabs, urlParameter } =
+		createSpaceTabs();
 
 	return (
-		<Tabs.Root
-			class={styles.console}
-			urlParam={{
-				get: () => params.tab,
-				set: (v) => {
-					setParams({ tab: v });
-				},
-				fallback: "access",
-				keys: tabKeys(),
-			}}
-		>
+		<Tabs.Root class={styles.console} urlParam={urlParameter()}>
 			<div class={styles.tabBar}>
 				<Tabs.List>
 					<Tabs.Trigger value="access">Access</Tabs.Trigger>

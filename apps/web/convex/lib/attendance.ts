@@ -14,14 +14,14 @@ export function eventLive(
 /** Whether `(personId, eventId)` already has an attendance row: one
  *  `by_person_event` probe, never a read of the person's whole set. */
 export async function hasAttendance(
-	db: DatabaseReader,
+	database: DatabaseReader,
 	personId: Id<"people">,
 	eventId: Id<"events">
 ): Promise<boolean> {
-	const row = await db
+	const row = await database
 		.query("eventAttendance")
-		.withIndex("by_person_event", (q) =>
-			q.eq("personId", personId).eq("eventId", eventId)
+		.withIndex("by_person_event", (range) =>
+			range.eq("personId", personId).eq("eventId", eventId)
 		)
 		.first();
 	return row !== null;
@@ -41,14 +41,14 @@ export async function hasAttendance(
  * another for it.
  */
 export async function insertAttendanceOnce(
-	ctx: MutationCtx,
+	context: MutationCtx,
 	personId: Id<"people">,
 	eventId: Id<"events">
 ): Promise<void> {
-	const event = await ctx.db.get(eventId);
-	if (event === null) return;
-	if (await hasAttendance(ctx.db, personId, eventId)) return;
-	await ctx.db.insert("eventAttendance", {
+	const event = await context.db.get(eventId);
+	if (event === null || (await hasAttendance(context.db, personId, eventId)))
+		return;
+	await context.db.insert("eventAttendance", {
 		personId,
 		eventId,
 		confirmedAt: Date.now(),
@@ -61,12 +61,14 @@ export async function insertAttendanceOnce(
  * another route (applying) would otherwise lose the visit.
  */
 export async function settlePendingEvent(
-	ctx: MutationCtx,
+	context: MutationCtx,
 	personId: Id<"people">
 ): Promise<void> {
 	const now = Date.now();
-	for (const row of await liveTokens(ctx.db, personId, "visitor", now)) {
-		await ctx.db.patch(row._id, { consumedAt: now });
-		if (row.eventId) await insertAttendanceOnce(ctx, personId, row.eventId);
+	const rows = await liveTokens(context.db, personId, "visitor", now);
+	for (const row of rows) {
+		await context.db.patch(row._id, { consumedAt: now });
+		if (row.eventId)
+			await insertAttendanceOnce(context, personId, row.eventId);
 	}
 }

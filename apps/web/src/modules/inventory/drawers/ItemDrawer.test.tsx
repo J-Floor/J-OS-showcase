@@ -17,7 +17,7 @@ afterEach(() => {
 
 vi.mock("convex-solidjs", () => ({
 	useMutation: () => ({ mutate: vi.fn().mockResolvedValue(undefined) }),
-	useQuery: () => ({ data: () => undefined }),
+	useQuery: () => ({ data: () => {} }),
 }));
 
 vi.mock("../data/inventoryData.ts", () => ({

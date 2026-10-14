@@ -1,11 +1,13 @@
-import { type JfColumnDef } from "@j-os/design-system";
+import { type JfColumnDefinition } from "@j-os/design-system";
 
 import type { ItemType } from "../data/inventoryData.ts";
 
-import { DESCRIPTION_SIZE } from "./columnSizes.ts";
+import { descriptionColumn } from "./sharedColumns.ts";
 import { uniqueEnum } from "./uniqueEnum.ts";
 
-export function itemTypeColumns(rows: ItemType[]): JfColumnDef<ItemType>[] {
+export function itemTypeColumns(
+	rows: ItemType[]
+): JfColumnDefinition<ItemType>[] {
 	return [
 		{
 			accessorKey: "name",
@@ -16,19 +18,8 @@ export function itemTypeColumns(rows: ItemType[]): JfColumnDef<ItemType>[] {
 			accessorKey: "categoryName",
 			header: "Category",
 			dataType: "enum",
-			enumOptions: uniqueEnum(rows.map((r) => r.categoryName)),
+			enumOptions: uniqueEnum(rows.map((row) => row.categoryName)),
 		},
-		{
-			id: "description",
-			header: "Description",
-			dataType: "string",
-			size: DESCRIPTION_SIZE,
-			measureText: false,
-			accessorFn: (r) => r.description ?? "",
-			cell: (info) => {
-				const value = info.getValue() as string;
-				return value === "" ? "—" : value;
-			},
-		},
+		descriptionColumn<ItemType>(),
 	];
 }

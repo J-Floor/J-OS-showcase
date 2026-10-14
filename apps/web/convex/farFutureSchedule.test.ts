@@ -13,10 +13,10 @@ const SETTLE_MS = 50;
 // Past Node's 32-bit timer limit (~24.8 days) that fires after 1 ms, so a
 // guest's 30-day window job ran in the middle of whatever test came next.
 it("a job scheduled 30 days out does not run during the test", async () => {
-	const t = convexTest(schema, modules);
+	const backend = convexTest(schema, modules);
 	const accessUntil = Date.now() + THIRTY_DAYS;
-	await t.run(async (ctx) => {
-		const personId = await ctx.db.insert("people", {
+	await backend.run(async (context) => {
+		const personId = await context.db.insert("people", {
 			email: "guest@example.com",
 			firstName: "Gus",
 			lastName: "",
@@ -25,15 +25,15 @@ it("a job scheduled 30 days out does not run during the test", async () => {
 			stageSince: Date.now(),
 			accessUntil,
 		});
-		await ctx.scheduler.runAt(
+		await context.scheduler.runAt(
 			accessUntil,
 			internal.notify.guests.expiringSoon,
 			{ personId, accessUntil }
 		);
 	});
 	await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
-	const jobs = await t.run((ctx) =>
-		ctx.db.system.query("_scheduled_functions").collect()
+	const jobs = await backend.run((context) =>
+		context.db.system.query("_scheduled_functions").collect()
 	);
-	expect(jobs.map((j) => j.state.kind)).toEqual(["pending"]);
+	expect(jobs.map((job) => job.state.kind)).toEqual(["pending"]);
 });

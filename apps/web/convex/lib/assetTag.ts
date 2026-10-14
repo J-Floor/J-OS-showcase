@@ -1,5 +1,5 @@
 /** Asset tags are `A00000`: one Latin letter, then five digits. */
-const ASSET_TAG_RE = /^[A-Z][0-9]{5}$/;
+const ASSET_TAG_RE = /^[A-Z]\d{5}$/;
 
 /**
  * Normalize and validate an asset tag. Trims, uppercases the letter, then

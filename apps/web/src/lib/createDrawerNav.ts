@@ -1,6 +1,6 @@
 /** Hook that computes prev/next navigation over an ordered list of items,
  * identified by `_id`. Disable arrows at the ends (no wrap). */
-export function createDrawerNav<T extends { _id: string }>(opts: {
+export function createDrawerNav<T extends { _id: string }>(options: {
 	items: () => readonly T[];
 	currentId: () => string | undefined;
 	onSelect: (item: T) => void;
@@ -11,20 +11,22 @@ export function createDrawerNav<T extends { _id: string }>(opts: {
 	next: () => void;
 } {
 	function index(): number {
-		return opts.items().findIndex((i) => i._id === opts.currentId());
+		return options
+			.items()
+			.findIndex((item) => item._id === options.currentId());
 	}
 	function hasPrev(): boolean {
 		return index() > 0;
 	}
 	function hasNext(): boolean {
-		const i = index();
-		return i >= 0 && i < opts.items().length - 1;
+		const position = index();
+		return position >= 0 && position < options.items().length - 1;
 	}
 	function prev(): void {
-		if (hasPrev()) opts.onSelect(opts.items()[index() - 1]);
+		if (hasPrev()) options.onSelect(options.items()[index() - 1]);
 	}
 	function next(): void {
-		if (hasNext()) opts.onSelect(opts.items()[index() + 1]);
+		if (hasNext()) options.onSelect(options.items()[index() + 1]);
 	}
 	return { hasPrev, hasNext, prev, next };
 }

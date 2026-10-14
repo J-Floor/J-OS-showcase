@@ -9,9 +9,9 @@ const modules = import.meta.glob("./**/*.*s");
 const DAY = 86_400_000;
 
 async function setup() {
-	const t = convexTest(schema, modules);
-	const boardId = await t.run(async (ctx) =>
-		ctx.db.insert("people", {
+	const backend = convexTest(schema, modules);
+	const boardId = await backend.run(async (context) =>
+		context.db.insert("people", {
 			email: "board@example.com",
 			firstName: "Bo",
 			lastName: "Ard",
@@ -20,8 +20,8 @@ async function setup() {
 			stageSince: Date.now(),
 		})
 	);
-	const memberId = await t.run(async (ctx) =>
-		ctx.db.insert("people", {
+	const memberId = await backend.run(async (context) =>
+		context.db.insert("people", {
 			email: "ada@example.com",
 			firstName: "Ada",
 			lastName: "Lovelace",
@@ -31,8 +31,8 @@ async function setup() {
 		})
 	);
 	return {
-		t,
-		asBoard: t.withIdentity({ email: "board@example.com" }),
+		backend,
+		asBoard: backend.withIdentity({ email: "board@example.com" }),
 		boardId,
 		memberId,
 	};
@@ -47,15 +47,15 @@ async function setup() {
  * `runAfter`/`runAt` time and only executes it if the test calls
  * `finishAllScheduledFunctions`, which this file deliberately never does.
  */
-async function scheduledJobs(t: TestConvex<typeof schema>) {
-	return t.run((ctx) =>
-		ctx.db.system.query("_scheduled_functions").collect()
+async function scheduledJobs(backend: TestConvex<typeof schema>) {
+	return backend.run((context) =>
+		context.db.system.query("_scheduled_functions").collect()
 	);
 }
 
 describe("door.setOverride", () => {
 	it("suspends an active member with a reason and an actor, and reconciles the lock", async () => {
-		const { t, asBoard, boardId, memberId } = await setup();
+		const { backend, asBoard, boardId, memberId } = await setup();
 
 		await asBoard.mutation(api.door.setOverride, {
 			personId: memberId,
@@ -63,7 +63,9 @@ describe("door.setOverride", () => {
 			reason: "no night access until we talk",
 		});
 
-		const person = await t.run(async (ctx) => ctx.db.get(memberId));
+		const person = await backend.run(async (context) =>
+			context.db.get(memberId)
+		);
 		expect(person?.door).toMatchObject({
 			override: "force_off",
 			reason: "no night access until we talk",
@@ -71,10 +73,12 @@ describe("door.setOverride", () => {
 		});
 		expect(person?.door?.at).toBeTypeOf("number");
 
-		const events = await t.run(async (ctx) =>
-			ctx.db
+		const events = await backend.run(async (context) =>
+			context.db
 				.query("personEvents")
-				.withIndex("by_person", (q) => q.eq("personId", memberId))
+				.withIndex("by_person", (range) =>
+					range.eq("personId", memberId)
+				)
 				.collect()
 		);
 		expect(events.at(-1)).toMatchObject({
@@ -90,7 +94,7 @@ describe("door.setOverride", () => {
 		// the lock agree — a test that stops at `personEvents`/`door` would still
 		// pass if `setOverride` never scheduled anything, e.g. if it were
 		// swapped for some other scheduled job entirely.
-		const jobs = await scheduledJobs(t);
+		const jobs = await scheduledJobs(backend);
 		expect(jobs).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
@@ -108,9 +112,9 @@ describe("door.setOverride", () => {
 	});
 
 	it("keeps the stored provider account id, so a later revoke can still find the key", async () => {
-		const { t, asBoard, memberId } = await setup();
-		await t.run(async (ctx) =>
-			ctx.db.patch(memberId, {
+		const { backend, asBoard, memberId } = await setup();
+		await backend.run(async (context) =>
+			context.db.patch(memberId, {
 				door: {
 					override: "none",
 					doorUserId: "12345",
@@ -124,7 +128,9 @@ describe("door.setOverride", () => {
 			reason: "left the space",
 		});
 
-		const person = await t.run(async (ctx) => ctx.db.get(memberId));
+		const person = await backend.run(async (context) =>
+			context.db.get(memberId)
+		);
 		expect(person?.door).toMatchObject({
 			override: "force_off",
 			doorUserId: "12345",
@@ -132,9 +138,9 @@ describe("door.setOverride", () => {
 	});
 
 	it("grants an otherwise-unentitled person end to end with force_on", async () => {
-		const { t, asBoard } = await setup();
-		const prospectId = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const { backend, asBoard } = await setup();
+		const prospectId = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "prospect@example.com",
 				firstName: "Pro",
 				lastName: "Spect",
@@ -143,7 +149,9 @@ describe("door.setOverride", () => {
 				stageSince: Date.now(),
 			})
 		);
-		const before = await t.run(async (ctx) => ctx.db.get(prospectId));
+		const before = await backend.run(async (context) =>
+			context.db.get(prospectId)
+		);
 		expect(access(before!, Date.now())).toBe("denied");
 
 		await asBoard.mutation(api.door.setOverride, {
@@ -152,11 +160,13 @@ describe("door.setOverride", () => {
 			reason: "let them in for the demo night",
 		});
 
-		const person = await t.run(async (ctx) => ctx.db.get(prospectId));
+		const person = await backend.run(async (context) =>
+			context.db.get(prospectId)
+		);
 		expect(person?.door?.override).toBe("force_on");
 		expect(access(person!, Date.now())).toBe("granted");
 
-		const jobs = await scheduledJobs(t);
+		const jobs = await scheduledJobs(backend);
 		expect(jobs).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
@@ -174,13 +184,15 @@ describe("door.setOverride", () => {
 	});
 
 	it("clearing the override is its own act, returning access to the machine's own answer", async () => {
-		const { t, asBoard, boardId, memberId } = await setup();
+		const { backend, asBoard, boardId, memberId } = await setup();
 		await asBoard.mutation(api.door.setOverride, {
 			personId: memberId,
 			override: "force_off",
 			reason: "under review",
 		});
-		const suspended = await t.run(async (ctx) => ctx.db.get(memberId));
+		const suspended = await backend.run(async (context) =>
+			context.db.get(memberId)
+		);
 		expect(access(suspended!, Date.now())).toBe("denied");
 
 		await asBoard.mutation(api.door.setOverride, {
@@ -188,17 +200,21 @@ describe("door.setOverride", () => {
 			override: "none",
 		});
 
-		const person = await t.run(async (ctx) => ctx.db.get(memberId));
+		const person = await backend.run(async (context) =>
+			context.db.get(memberId)
+		);
 		expect(person?.door?.override).toBe("none");
 		// Not "restored to some stored value" — the active member is entitled on
 		// their own, so the machine's own answer is "granted" once nothing
 		// overrides it.
 		expect(access(person!, Date.now())).toBe("granted");
 
-		const events = await t.run(async (ctx) =>
-			ctx.db
+		const events = await backend.run(async (context) =>
+			context.db
 				.query("personEvents")
-				.withIndex("by_person", (q) => q.eq("personId", memberId))
+				.withIndex("by_person", (range) =>
+					range.eq("personId", memberId)
+				)
 				.collect()
 		);
 		expect(events.at(-1)).toMatchObject({
@@ -210,7 +226,7 @@ describe("door.setOverride", () => {
 	});
 
 	it("survives a promotion — GRANT_CORE never touches door", async () => {
-		const { t, asBoard, memberId } = await setup();
+		const { backend, asBoard, memberId } = await setup();
 		await asBoard.mutation(api.door.setOverride, {
 			personId: memberId,
 			override: "force_off",
@@ -221,7 +237,9 @@ describe("door.setOverride", () => {
 			event: { type: "GRANT_CORE" },
 		});
 
-		const person = await t.run(async (ctx) => ctx.db.get(memberId));
+		const person = await backend.run(async (context) =>
+			context.db.get(memberId)
+		);
 		expect(person?.tier).toBe("core");
 		// GRANT_CORE writes tier/stage/stageSince and nothing else, so a `door`
 		// that survived is meaningful only because setOverride wrote it first —
@@ -231,10 +249,10 @@ describe("door.setOverride", () => {
 	});
 
 	it("survives a window extension — EXTEND_WINDOW never touches door", async () => {
-		const { t, asBoard } = await setup();
+		const { backend, asBoard } = await setup();
 		const until = Date.now() + 30 * DAY;
-		const guestId = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const guestId = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "guest@example.com",
 				firstName: "Gil",
 				lastName: "Guest",
@@ -257,16 +275,18 @@ describe("door.setOverride", () => {
 			event: { type: "EXTEND_WINDOW", until: laterUntil },
 		});
 
-		const person = await t.run(async (ctx) => ctx.db.get(guestId));
+		const person = await backend.run(async (context) =>
+			context.db.get(guestId)
+		);
 		expect(person?.accessUntil).toBe(laterUntil);
 		expect(person?.door?.override).toBe("force_off");
 		expect(person?.door?.reason).toBe("no night access until we talk");
 	});
 
 	it("rejects a non-board caller", async () => {
-		const { t, memberId } = await setup();
+		const { backend, memberId } = await setup();
 		await expect(
-			t
+			backend
 				.withIdentity({ email: "ada@example.com" })
 				.mutation(api.door.setOverride, {
 					personId: memberId,
@@ -283,9 +303,9 @@ describe("door.setOverride", () => {
  * new fact, so any disagreement on screen is the client rendering a stale copy.
  */
 it("a door override changes the roster's flags and facts on the next read", async () => {
-	const t = convexTest(schema, modules);
-	await t.run(async (ctx) =>
-		ctx.db.insert("people", {
+	const backend = convexTest(schema, modules);
+	await backend.run(async (context) =>
+		context.db.insert("people", {
 			email: "boss@example.com",
 			firstName: "Boss",
 			lastName: "",
@@ -294,9 +314,9 @@ it("a door override changes the roster's flags and facts on the next read", asyn
 			stageSince: Date.now(),
 		})
 	);
-	const board = t.withIdentity({ email: "boss@example.com" });
-	const id = await t.run(async (ctx) =>
-		ctx.db.insert("people", {
+	const board = backend.withIdentity({ email: "boss@example.com" });
+	const id = await backend.run(async (context) =>
+		context.db.insert("people", {
 			email: "m@example.com",
 			firstName: "M",
 			lastName: "",
@@ -313,12 +333,12 @@ it("a door override changes the roster's flags and facts on the next read", asyn
 			status: { flags: unknown[]; facts: { id: string }[] };
 		}[]
 	) {
-		const row = rows.find((r) => r._id === id)!;
+		const row = rows.find((candidate) => candidate._id === id)!;
 		return {
-			flags: row.status.flags.filter((f) =>
-				(f as { id: string }).id.startsWith("door")
+			flags: row.status.flags.filter((flag) =>
+				(flag as { id: string }).id.startsWith("door")
 			),
-			door: row.status.facts.find((f) => f.id === "door"),
+			door: row.status.facts.find((fact) => fact.id === "door"),
 		};
 	}
 

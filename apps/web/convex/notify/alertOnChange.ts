@@ -12,7 +12,7 @@ import type { KindName, PayloadOf } from "./registry.ts";
  * run reads `silent`. Accepted loss: the fault alert already told the board.
  */
 export async function alertOnChange<K extends KindName>(
-	ctx: ActionCtx,
+	context: ActionCtx,
 	alert: {
 		key: string;
 		fingerprint: string;
@@ -23,18 +23,21 @@ export async function alertOnChange<K extends KindName>(
 	}
 ): Promise<AlertDecision> {
 	const { key, fingerprint, kind, payloadFor } = alert;
-	const decision = await ctx.runMutation(internal.opsAlerts.claim, {
+	const decision = await context.runMutation(internal.opsAlerts.claim, {
 		key,
 		fingerprint,
 	});
 	if (decision === "silent") return decision;
 	async function releaseClaim() {
 		if (decision === "resolved") return;
-		await ctx.runMutation(internal.opsAlerts.release, { key, fingerprint });
+		await context.runMutation(internal.opsAlerts.release, {
+			key,
+			fingerprint,
+		});
 	}
 	let result;
 	try {
-		result = await notifyNow(ctx, kind, payloadFor(decision));
+		result = await notifyNow(context, kind, payloadFor(decision));
 	} catch (err) {
 		await releaseClaim();
 		throw err;

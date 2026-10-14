@@ -67,9 +67,9 @@ function stubLocks(offline: string[] = []) {
 }
 
 async function setup() {
-	const t = convexTest(schema, modules);
-	await t.run((ctx) =>
-		ctx.db.insert("people", {
+	const backend = convexTest(schema, modules);
+	await backend.run((context) =>
+		context.db.insert("people", {
 			email: "b@example.org",
 			firstName: "B",
 			lastName: "O",
@@ -78,12 +78,12 @@ async function setup() {
 			stageSince: Date.now(),
 		})
 	);
-	return t;
+	return backend;
 }
 
 let log: MockInstance<typeof console.log>;
 beforeEach(() => {
-	log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+	log = vi.spyOn(console, "log").mockImplementation(() => {});
 });
 afterEach(() => {
 	dispatchFailure.failNext = false;
@@ -94,16 +94,16 @@ afterEach(() => {
 });
 
 function alertsSent(): number {
-	return log.mock.calls.filter((c) =>
-		String(c[0]).startsWith("[notify:doorAlert]")
+	return log.mock.calls.filter((call) =>
+		String(call[0]).startsWith("[notify:doorAlert]")
 	).length;
 }
 
-async function fingerprint(t: TestConvex<typeof schema>) {
-	const row = await t.run((ctx) =>
-		ctx.db
+async function fingerprint(backend: TestConvex<typeof schema>) {
+	const row = await backend.run((context) =>
+		context.db
 			.query("opsAlerts")
-			.withIndex("by_key", (q) => q.eq("key", "door-online"))
+			.withIndex("by_key", (range) => range.eq("key", "door-online"))
 			.unique()
 	);
 	return row?.fingerprint;
@@ -111,24 +111,24 @@ async function fingerprint(t: TestConvex<typeof schema>) {
 
 describe("door poll", () => {
 	it("seeds a healthy state silently, alerts once on offline, stays quiet while offline, and announces recovery", async () => {
-		const t = await setup();
+		const backend = await setup();
 
 		stubLocks();
-		await t.action(internal.notify.doorPoll.poll, {});
-		expect(await fingerprint(t)).toBe("");
+		await backend.action(internal.notify.doorPoll.poll, {});
+		expect(await fingerprint(backend)).toBe("");
 		expect(alertsSent()).toBe(0);
 
 		stubLocks([UP]);
-		await t.action(internal.notify.doorPoll.poll, {});
-		expect(await fingerprint(t)).toBe("2");
+		await backend.action(internal.notify.doorPoll.poll, {});
+		expect(await fingerprint(backend)).toBe("2");
 		expect(alertsSent()).toBe(1);
 
-		await t.action(internal.notify.doorPoll.poll, {});
+		await backend.action(internal.notify.doorPoll.poll, {});
 		expect(alertsSent()).toBe(1);
 
 		stubLocks();
-		await t.action(internal.notify.doorPoll.poll, {});
-		expect(await fingerprint(t)).toBe("");
+		await backend.action(internal.notify.doorPoll.poll, {});
+		expect(await fingerprint(backend)).toBe("");
 		expect(alertsSent()).toBe(2);
 		expect(dispatchFailure.headlines.at(-1)).toBe(
 			"Every door lock is back online."
@@ -136,16 +136,16 @@ describe("door poll", () => {
 	});
 
 	it("announces every change of the offline set and names the current one", async () => {
-		const t = await setup();
+		const backend = await setup();
 
 		stubLocks([UP]);
-		await t.action(internal.notify.doorPoll.poll, {});
-		expect(await fingerprint(t)).toBe("2");
+		await backend.action(internal.notify.doorPoll.poll, {});
+		expect(await fingerprint(backend)).toBe("2");
 		expect(alertsSent()).toBe(1);
 
 		stubLocks([DOWN, UP]);
-		await t.action(internal.notify.doorPoll.poll, {});
-		expect(await fingerprint(t)).toBe("1,2");
+		await backend.action(internal.notify.doorPoll.poll, {});
+		expect(await fingerprint(backend)).toBe("1,2");
 		expect(alertsSent()).toBe(2);
 		expect(dispatchFailure.headlines.at(-1)).toBe(
 			"Downstairs, Upstairs offline."
@@ -155,8 +155,8 @@ describe("door poll", () => {
 		);
 
 		stubLocks([DOWN]);
-		await t.action(internal.notify.doorPoll.poll, {});
-		expect(await fingerprint(t)).toBe("1");
+		await backend.action(internal.notify.doorPoll.poll, {});
+		expect(await fingerprint(backend)).toBe("1");
 		expect(alertsSent()).toBe(3);
 		expect(dispatchFailure.headlines.at(-1)).toBe("Downstairs offline.");
 		expect(dispatchFailure.details.at(-1)).toBe(
@@ -165,25 +165,67 @@ describe("door poll", () => {
 	});
 
 	it("alerts on the very first poll when a lock is already offline", async () => {
-		const t = await setup();
+		const backend = await setup();
 		stubLocks([UP]);
-		await t.action(internal.notify.doorPoll.poll, {});
-		expect(await fingerprint(t)).toBe("2");
+		await backend.action(internal.notify.doorPoll.poll, {});
+		expect(await fingerprint(backend)).toBe("2");
 		expect(alertsSent()).toBe(1);
 	});
 });
 
 describe("door poll without a configured door provider", () => {
 	it("logs and skips, recording nothing", async () => {
-		const t = await setup();
-		await t.action(internal.notify.doorPoll.poll, {});
-		expect(await fingerprint(t)).toBeUndefined();
+		const backend = await setup();
+		await backend.action(internal.notify.doorPoll.poll, {});
+		expect(await fingerprint(backend)).toBeUndefined();
 		expect(alertsSent()).toBe(0);
 		expect(
-			log.mock.calls.some((c) => String(c[0]).startsWith("[door-poll]"))
+			log.mock.calls.some((call) =>
+				String(call[0]).startsWith("[door-poll]")
+			)
 		).toBe(true);
 	});
 });
+
+async function pushOnlyBoard() {
+	const backend = convexTest(schema, modules);
+	const personId = await backend.run((context) =>
+		context.db.insert("people", {
+			email: "b@example.org",
+			firstName: "B",
+			lastName: "O",
+			tier: "board",
+			stage: "active",
+			stageSince: Date.now(),
+			notificationPrefs: { doors: { push: true, email: false } },
+		})
+	);
+	await backend.run((context) =>
+		context.db.insert("pushSubscriptions", {
+			personId,
+			endpoint: "https://push/b",
+			p256dh: "p",
+			auth: "a",
+			userAgent: "test",
+			createdAt: Date.now(),
+		})
+	);
+	return backend;
+}
+
+async function alertRow(backend: TestConvex<typeof schema>) {
+	return backend.run((context) =>
+		context.db
+			.query("opsAlerts")
+			.withIndex("by_key", (range) => range.eq("key", "door-online"))
+			.unique()
+	);
+}
+
+async function alertLastSentAt(backend: TestConvex<typeof schema>) {
+	const row = await alertRow(backend);
+	return row?.lastSentAt;
+}
 
 describe("door poll delivery", () => {
 	beforeEach(() => {
@@ -192,123 +234,88 @@ describe("door poll delivery", () => {
 		vi.stubEnv("VAPID_SUBJECT", "mailto:board@example.com");
 	});
 
-	async function pushOnlyBoard() {
-		const t = convexTest(schema, modules);
-		const personId = await t.run((ctx) =>
-			ctx.db.insert("people", {
-				email: "b@example.org",
-				firstName: "B",
-				lastName: "O",
-				tier: "board",
-				stage: "active",
-				stageSince: Date.now(),
-				notificationPrefs: { doors: { push: true, email: false } },
-			})
-		);
-		await t.run((ctx) =>
-			ctx.db.insert("pushSubscriptions", {
-				personId,
-				endpoint: "https://push/b",
-				p256dh: "p",
-				auth: "a",
-				userAgent: "test",
-				createdAt: Date.now(),
-			})
-		);
-		return t;
-	}
-
-	async function alertRow(t: TestConvex<typeof schema>) {
-		return t.run((ctx) =>
-			ctx.db
-				.query("opsAlerts")
-				.withIndex("by_key", (q) => q.eq("key", "door-online"))
-				.unique()
-		);
-	}
-
 	it("retries an alert that reached nobody on the next poll", async () => {
-		const t = await pushOnlyBoard();
+		const backend = await pushOnlyBoard();
 		setPushSenderForTests(() =>
 			Promise.reject(new Error("push service down"))
 		);
-		vi.spyOn(console, "error").mockImplementation(() => undefined);
-		vi.spyOn(console, "warn").mockImplementation(() => undefined);
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		vi.spyOn(console, "warn").mockImplementation(() => {});
 
 		stubLocks([UP]);
-		await t.action(internal.notify.doorPoll.poll, {});
-		expect((await alertRow(t))?.lastSentAt).toBe(0);
+		await backend.action(internal.notify.doorPoll.poll, {});
+		expect(await alertLastSentAt(backend)).toBe(0);
 
 		const sender = vi.fn<PushSender>(() => Promise.resolve());
 		setPushSenderForTests(sender);
-		await t.action(internal.notify.doorPoll.poll, {});
+		await backend.action(internal.notify.doorPoll.poll, {});
 		expect(sender).toHaveBeenCalledOnce();
-		expect((await alertRow(t))?.lastSentAt).toBeGreaterThan(0);
+		expect(await alertLastSentAt(backend)).toBeGreaterThan(0);
 
-		await t.action(internal.notify.doorPoll.poll, {});
+		await backend.action(internal.notify.doorPoll.poll, {});
 		expect(sender).toHaveBeenCalledOnce();
 	});
 
 	it("re-sends the offline alert after a week with the same offline set", async () => {
-		const t = await pushOnlyBoard();
+		const backend = await pushOnlyBoard();
 		const sender = vi.fn<PushSender>(() => Promise.resolve());
 		setPushSenderForTests(sender);
 
 		stubLocks([UP]);
-		await t.action(internal.notify.doorPoll.poll, {});
+		await backend.action(internal.notify.doorPoll.poll, {});
 		expect(sender).toHaveBeenCalledTimes(1);
 
-		await t.run(async (ctx) => {
-			const row = await ctx.db
+		await backend.run(async (context) => {
+			const row = await context.db
 				.query("opsAlerts")
-				.withIndex("by_key", (q) => q.eq("key", "door-online"))
+				.withIndex("by_key", (range) => range.eq("key", "door-online"))
 				.unique();
 			if (row)
-				await ctx.db.patch(row._id, {
+				await context.db.patch(row._id, {
 					lastSentAt: Date.now() - RENAG_MS - 1000,
 				});
 		});
-		await t.action(internal.notify.doorPoll.poll, {});
+		await backend.action(internal.notify.doorPoll.poll, {});
 		expect(sender).toHaveBeenCalledTimes(2);
 	});
 
 	it("releases the claim when dispatch throws, then re-sends on the next poll", async () => {
-		const t = await pushOnlyBoard();
+		const backend = await pushOnlyBoard();
 		const sender = vi.fn<PushSender>(() => Promise.resolve());
 		setPushSenderForTests(sender);
 
 		stubLocks([UP]);
 		dispatchFailure.failNext = true;
 		await expect(
-			t.action(internal.notify.doorPoll.poll, {})
+			backend.action(internal.notify.doorPoll.poll, {})
 		).rejects.toThrow("dispatch down");
-		expect((await alertRow(t))?.lastSentAt).toBe(0);
+		expect(await alertLastSentAt(backend)).toBe(0);
 		expect(sender).not.toHaveBeenCalled();
 
-		await t.action(internal.notify.doorPoll.poll, {});
+		await backend.action(internal.notify.doorPoll.poll, {});
 		expect(sender).toHaveBeenCalledOnce();
-		expect((await alertRow(t))?.lastSentAt).toBeGreaterThan(0);
+		expect(await alertLastSentAt(backend)).toBeGreaterThan(0);
 	});
 
 	it("does not retry a back-online alert that reached nobody", async () => {
-		const t = await pushOnlyBoard();
+		const backend = await pushOnlyBoard();
 		const sender = vi.fn<PushSender>(() => Promise.resolve());
 		setPushSenderForTests(sender);
 		stubLocks([UP]);
-		await t.action(internal.notify.doorPoll.poll, {});
+		await backend.action(internal.notify.doorPoll.poll, {});
 		expect(sender).toHaveBeenCalledTimes(1);
 
-		vi.spyOn(console, "error").mockImplementation(() => undefined);
+		vi.spyOn(console, "error").mockImplementation(() => {});
 		setPushSenderForTests(() =>
 			Promise.reject(new Error("push service down"))
 		);
 		stubLocks();
-		await t.action(internal.notify.doorPoll.poll, {});
-		expect((await alertRow(t))?.lastSentAt).toBeGreaterThan(0);
+		await backend.action(internal.notify.doorPoll.poll, {});
+		expect(await alertLastSentAt(backend)).toBeGreaterThan(0);
 
 		const later = vi.fn<PushSender>(() => Promise.resolve());
 		setPushSenderForTests(later);
-		await t.action(internal.notify.doorPoll.poll, {});
+		await backend.action(internal.notify.doorPoll.poll, {});
 		expect(later).not.toHaveBeenCalled();
 	});
 });

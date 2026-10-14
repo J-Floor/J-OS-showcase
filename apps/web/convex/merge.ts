@@ -24,6 +24,7 @@ import {
 } from "./lib/peopleRefs.ts";
 import { personStateOf } from "./lib/personState.ts";
 import { syncSignedVariants } from "./lib/signatures.ts";
+import { withoutSystemFields } from "./people.ts";
 
 const mergeArgs = {
 	keepId: v.id("people"),
@@ -62,17 +63,57 @@ type Preview =
 			revokeKept: boolean;
 	  };
 
+async function isEmailHeldByOther(
+	context: QueryCtx,
+	email: string,
+	keepId: Id<"people">,
+	dropId: Id<"people">
+): Promise<boolean> {
+	const holders = await peopleByEmail(context, email).collect();
+	// The dropped row's own address is the kept person's to take.
+	return holders.some(
+		(holder) => holder._id !== keepId && holder._id !== dropId
+	);
+}
+
+async function signatureVariantsOf(
+	context: QueryCtx,
+	personIds: Id<"people">[]
+): Promise<string[]> {
+	const variants: string[] = [];
+	for (const personId of personIds) {
+		const signatures = await context.db
+			.query("signatures")
+			.withIndex("by_person", (range) => range.eq("personId", personId))
+			.collect();
+		variants.push(...signatures.map((signature) => signature.variant));
+	}
+	return variants;
+}
+
+function isSharingProviderAccount(
+	drop: Doc<"people">,
+	merged: Doc<"people">,
+	email: string
+): boolean {
+	const dropUser = drop.door?.doorUserId;
+	return (
+		(dropUser !== undefined && dropUser === merged.door?.doorUserId) ||
+		email === normalizeEmail(drop.email)
+	);
+}
+
 /** The kept row as it will be after the merge, and what is wrong with it. */
 async function preview(
-	ctx: QueryCtx,
+	context: QueryCtx,
 	keepId: Id<"people">,
 	dropId: Id<"people">,
 	patch: Partial<Doc<"people">>
 ): Promise<Preview> {
 	if (keepId === dropId)
 		return { problem: "Cannot merge a person into itself." };
-	const keep = await ctx.db.get(keepId);
-	const drop = await ctx.db.get(dropId);
+	const keep = await context.db.get(keepId);
+	const drop = await context.db.get(dropId);
 	if (!keep || !drop) return { problem: "Person not found." };
 
 	const now = Date.now();
@@ -80,35 +121,23 @@ async function preview(
 	// Normalized even when the patch leaves the email alone: a kept row stored
 	// with capitals would otherwise stay unreachable by every lookup.
 	const email = normalizeEmail(merged.email);
-	const holders = await peopleByEmail(ctx, email).collect();
-	// The dropped row's own address is the kept person's to take.
-	if (holders.some((p) => p._id !== keepId && p._id !== dropId))
+	if (await isEmailHeldByOther(context, email, keepId, dropId))
 		return { problem: EMAIL_IN_USE };
 
-	const variants = [
-		...(await ctx.db
-			.query("signatures")
-			.withIndex("by_person", (q) => q.eq("personId", keepId))
-			.collect()),
-		...(await ctx.db
-			.query("signatures")
-			.withIndex("by_person", (q) => q.eq("personId", dropId))
-			.collect()),
-	].map((s) => s.variant);
+	const variants = await signatureVariantsOf(context, [keepId, dropId]);
 	const found = violations({ ...merged, email }, variants, now);
 	if (found.length)
 		return {
-			problem: found.map((f) => `${f.code} (${f.detail})`).join(", "),
+			problem: found
+				.map((finding) => `${finding.code} (${finding.detail})`)
+				.join(", "),
 		};
 
-	const dropUser = drop.door?.doorUserId;
-	const sharesAccount =
-		(dropUser !== undefined && dropUser === merged.door?.doorUserId) ||
-		email === normalizeEmail(drop.email);
-	const dropKeepsKey = keepsBreakGlassKey(drop, now);
+	const isSharesAccount = isSharingProviderAccount(drop, merged, email);
+	const isDropKeepsKey = keepsBreakGlassKey(drop, now);
 	// The revoke skips a break-glass key, and nothing else would ever revoke
 	// this one once the row is gone.
-	if (!sharesAccount && dropKeepsKey)
+	if (!isSharesAccount && isDropKeepsKey)
 		return {
 			problem:
 				"The dropped person is board or admin with door access granted, so their personal door key is a break-glass key and would never be revoked. Shut off their door access or demote them first.",
@@ -117,16 +146,18 @@ async function preview(
 		problem: null,
 		drop,
 		email,
-		revokeDropped: !sharesAccount,
+		revokeDropped: !isSharesAccount,
 		revokeKept:
-			sharesAccount && dropKeepsKey && !keepsBreakGlassKey(merged, now),
+			isSharesAccount &&
+			isDropKeepsKey &&
+			!keepsBreakGlassKey(merged, now),
 	};
 }
 
 function patchOf(raw: unknown): Partial<Doc<"people">> | null {
-	if (raw === null || typeof raw !== "object" || Array.isArray(raw))
-		return null;
-	return raw;
+	return raw === null || typeof raw !== "object" || Array.isArray(raw)
+		? null
+		: raw;
 }
 
 const NOT_AN_OBJECT = "The patch must be an object.";
@@ -136,17 +167,17 @@ const NOT_AN_OBJECT = "The patch must be an object.";
  * person. When the kept person already has the row the dropped one is moving
  * into, the moved one would count twice, so it is deleted instead.
  */
-async function keptAlreadyHas(
-	ctx: MutationCtx,
+async function isKeptAlreadyHolding(
+	context: MutationCtx,
 	{ table, doc }: Naming,
 	keepId: Id<"people">
 ): Promise<boolean> {
 	if (table === "personState") {
-		return (await personStateOf(ctx, keepId)) !== null;
+		return (await personStateOf(context, keepId)) !== null;
 	}
 	if (table !== "eventAttendance") return false;
 	const { eventId } = doc as unknown as Doc<"eventAttendance">;
-	return hasAttendance(ctx.db, keepId, eventId);
+	return hasAttendance(context.db, keepId, eventId);
 }
 
 /** The cheap preview to run before `run`: refuses what can be seen without
@@ -154,13 +185,13 @@ async function keptAlreadyHas(
  *  write, which the schema validates, before it revokes anything. */
 export const check = internalQuery({
 	args: mergeArgs,
-	handler: async (ctx, { keepId, dropId, patch }) => {
+	handler: async (context, { keepId, dropId, patch }) => {
 		const clean = patchOf(patch);
 		if (!clean) return { ok: false, reason: NOT_AN_OBJECT } as const;
-		const result = await preview(ctx, keepId, dropId, clean);
+		const result = await preview(context, keepId, dropId, clean);
 		if (result.problem !== null)
 			return { ok: false, reason: result.problem } as const;
-		const scan = await documentsNaming(ctx, dropId);
+		const scan = await documentsNaming(context, dropId);
 		if ("problem" in scan)
 			return { ok: false, reason: scan.problem } as const;
 		return {
@@ -187,41 +218,41 @@ export const apply = internalMutation({
 		actorId: v.optional(v.id("people")),
 		dryRun: v.optional(v.boolean()),
 	},
-	handler: async (ctx, { keepId, dropId, patch, actorId, dryRun }) => {
+	handler: async (context, { keepId, dropId, patch, actorId, dryRun }) => {
 		const clean = patchOf(patch);
 		if (!clean) throw new Error(`Merge refused: ${NOT_AN_OBJECT}`);
-		const result = await preview(ctx, keepId, dropId, clean);
+		const result = await preview(context, keepId, dropId, clean);
 		if (result.problem !== null)
 			throw new Error(`Merge refused: ${result.problem}`);
 
-		await ctx.db.patch(keepId, { ...clean, email: result.email });
+		await context.db.patch(keepId, { ...clean, email: result.email });
 		// Read after the patch so the kept row is walked as patched.
-		const scan = await documentsNaming(ctx, dropId);
+		const scan = await documentsNaming(context, dropId);
 		if ("problem" in scan)
 			throw new Error(`Merge refused: ${scan.problem}`);
 		let moved = 0;
 		for (const naming of scan.docs) {
-			const { _id, _creationTime, ...fields } = naming.doc;
+			const _id = naming.doc._id;
 			if (_id === dropId) continue;
-			void _creationTime;
+			const fields = withoutSystemFields(naming.doc);
 			const { value, changed } = replacePersonId(fields, dropId, keepId);
 			if (!changed) continue;
-			if (await keptAlreadyHas(ctx, naming, keepId))
-				await ctx.db.delete(_id);
-			else await ctx.db.replace(_id, value);
+			if (await isKeptAlreadyHolding(context, naming, keepId))
+				await context.db.delete(_id);
+			else await context.db.replace(_id, value);
 			moved += 1;
 		}
 		// Signature rows moved without going through insertSignature.
-		const keep = await ctx.db.get(keepId);
-		if (keep) await syncSignedVariants(ctx, keep);
-		await ctx.db.insert("personEvents", {
+		const keep = await context.db.get(keepId);
+		if (keep) await syncSignedVariants(context, keep);
+		await context.db.insert("personEvents", {
 			personId: keepId,
 			at: Date.now(),
 			actorId,
 			kind: "merge",
 			meta: { dropId, droppedEmail: result.drop.email },
 		});
-		await ctx.db.delete(dropId);
+		await context.db.delete(dropId);
 		if (dryRun) throw new ConvexError(DRY_RUN_ROLLBACK);
 		return { moved };
 	},
@@ -246,15 +277,15 @@ export const apply = internalMutation({
  */
 export const run = internalAction({
 	args: { ...mergeArgs, actorId: v.optional(v.id("people")) },
-	handler: async (ctx, args): Promise<{ moved: number }> => {
-		const verdict = await ctx.runQuery(internal.merge.check, {
+	handler: async (context, args): Promise<{ moved: number }> => {
+		const verdict = await context.runQuery(internal.merge.check, {
 			keepId: args.keepId,
 			dropId: args.dropId,
 			patch: args.patch as unknown,
 		});
 		if (!verdict.ok) throw new Error(`Merge refused: ${verdict.reason}`);
 		try {
-			await ctx.runMutation(internal.merge.apply, {
+			await context.runMutation(internal.merge.apply, {
 				...args,
 				dryRun: true,
 			});
@@ -262,15 +293,18 @@ export const run = internalAction({
 			if (!isDryRunRollback(error)) throw error;
 		}
 		async function revoke(personId: Id<"people">, spareEmail?: string) {
-			await ctx.runAction(internal.doorRevoke.revokeUnlessBreakGlass, {
-				personId,
-				trigger: "lifecycle",
-				detail: "MERGE",
-				spareEmail,
-			});
+			await context.runAction(
+				internal.doorRevoke.revokeUnlessBreakGlass,
+				{
+					personId,
+					trigger: "lifecycle",
+					detail: "MERGE",
+					spareEmail,
+				}
+			);
 		}
 		if (verdict.revokeDropped) await revoke(args.dropId, verdict.keptEmail);
-		const result = await ctx.runMutation(internal.merge.apply, args);
+		const result = await context.runMutation(internal.merge.apply, args);
 		if (verdict.revokeKept) await revoke(args.keepId);
 		return result;
 	},

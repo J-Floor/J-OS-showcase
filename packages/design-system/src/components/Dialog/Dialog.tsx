@@ -17,8 +17,8 @@ import styles from "./Dialog.module.scss";
  * on open. See {@link Root} for why that matters. Plain mutable capture rather
  * than a signal: it is read once, inside a zag callback, never rendered.
  */
-const ContentRef = createContext<{
-	set: (el: HTMLElement) => void;
+const ContentReference = createContext<{
+	set: (element: HTMLElement) => void;
 	get: () => HTMLElement | null;
 }>();
 
@@ -38,7 +38,7 @@ function Content(
 		"class",
 		"children",
 	]);
-	const contentRef = useContext(ContentRef);
+	const contentReference = useContext(ContentReference);
 	return (
 		<Portal>
 			<ArkDialog.Backdrop
@@ -49,8 +49,8 @@ function Content(
 			>
 				<ArkDialog.Content
 					{...rest}
-					ref={(el: HTMLElement) => {
-						contentRef?.set(el);
+					ref={(element: HTMLElement) => {
+						contentReference?.set(element);
 					}}
 					class={clsx(
 						getPartStyles(styles, local, "content"),
@@ -122,11 +122,11 @@ const FOCUSABLE_SELECTOR = [
  */
 function firstDialogFocusable(content: HTMLElement | null): HTMLElement | null {
 	if (!content) return null;
-	for (const el of content.querySelectorAll<HTMLElement>(
+	for (const element of content.querySelectorAll<HTMLElement>(
 		FOCUSABLE_SELECTOR
 	)) {
-		if (el.classList.contains(styles.close)) continue;
-		return el;
+		if (element.classList.contains(styles.close)) continue;
+		return element;
 	}
 	return null;
 }
@@ -152,23 +152,23 @@ function firstDialogFocusable(content: HTMLElement | null): HTMLElement | null {
  * confirm button, a specific field) still wins.
  */
 function Root(props: ArkDialog.RootProps) {
-	let contentEl: HTMLElement | null = null;
+	let contentElement: HTMLElement | null = null;
 	return (
-		<ContentRef.Provider
+		<ContentReference.Provider
 			value={{
-				set: (el) => {
-					contentEl = el;
+				set: (element) => {
+					contentElement = element;
 				},
-				get: () => contentEl,
+				get: () => contentElement,
 			}}
 		>
 			<ArkDialog.Root
 				initialFocusEl={() =>
-					firstDialogFocusable(contentEl) ?? contentEl
+					firstDialogFocusable(contentElement) ?? contentElement
 				}
 				{...props}
 			/>
-		</ContentRef.Provider>
+		</ContentReference.Provider>
 	);
 }
 

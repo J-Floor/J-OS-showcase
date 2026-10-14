@@ -8,8 +8,8 @@ import { WifiContent } from "./WifiContent.tsx";
 // system's, doesn't ignore `*.demo.tsx` from `import-x/no-default-export`.
 export const demo = {
 	title: "WifiContent",
-	render: (p: { ssid: string; password: string }) => (
-		<WifiContent ssid={p.ssid} password={p.password} />
+	render: (args: { ssid: string; password: string }) => (
+		<WifiContent ssid={args.ssid} password={args.password} />
 	),
 	controls: {
 		ssid: { type: "text", default: "J floor" },

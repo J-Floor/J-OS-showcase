@@ -51,6 +51,7 @@ test("no match gives no sections", () => {
 });
 
 test("the real rules have ids that are unique and no empty section", () => {
-	expect(new Set(RULES.map((s) => s.id)).size).toBe(RULES.length);
-	for (const s of RULES) expect(s.rules.length).toBeGreaterThan(0);
+	expect(new Set(RULES.map((section) => section.id)).size).toBe(RULES.length);
+	for (const section of RULES)
+		expect(section.rules.length).toBeGreaterThan(0);
 });

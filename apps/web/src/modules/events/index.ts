@@ -11,7 +11,9 @@ export const eventsModule: ModuleManifest = {
 	path: "/events",
 	subject: "Events",
 	// Code-split: the page and everything only it imports load on first visit.
-	view: lazyPage(() => import("./EventsPage.tsx").then((m) => m.EventsPage)),
+	view: lazyPage(() =>
+		import("./EventsPage.tsx").then((loaded) => loaded.EventsPage)
+	),
 	prefetch: () => {
 		prefetch(api.events.listEvents, {});
 	},

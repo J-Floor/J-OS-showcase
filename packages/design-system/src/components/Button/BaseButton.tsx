@@ -40,7 +40,7 @@ export type BaseButtonProps = {
 		}
 		// eslint-disable-next-line @typescript-eslint/no-invalid-void-type -- it's a return type
 	) => void | Promise<unknown>;
-	ref?: HTMLElement | ((el: HTMLElement) => void);
+	ref?: HTMLElement | ((element: HTMLElement) => void);
 } & PropsWithDisabling &
 	Omit<JSX.ButtonHTMLAttributes<HTMLButtonElement>, "onClick" | "ref">;
 
@@ -78,15 +78,17 @@ export function BaseButton(props: BaseButtonProps): JSX.Element {
 
 		const result = local.onClick(event);
 
-		if (result instanceof Promise) {
-			setClickHandlerExecuting(true);
-			local.setIsLoading?.(true);
-			// eslint-disable-next-line solid/reactivity -- promise-completion callback, behaves like an event handler
-			void result.finally(() => {
-				setClickHandlerExecuting(false);
-				local.setIsLoading?.(false);
-			});
+		if (!(result instanceof Promise)) {
+			return;
 		}
+
+		setClickHandlerExecuting(true);
+		local.setIsLoading?.(true);
+		// eslint-disable-next-line solid/reactivity -- promise-completion callback, behaves like an event handler
+		void result.finally(() => {
+			setClickHandlerExecuting(false);
+			local.setIsLoading?.(false);
+		});
 	}
 
 	// `type="button"` is only meaningful (and valid) on an actual <button>; a

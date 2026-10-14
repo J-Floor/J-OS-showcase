@@ -23,7 +23,7 @@ beforeAll(() => {
 // Mock convex-solidjs so TaskDrawer's useTaskActions doesn't need a ConvexProvider.
 vi.mock("convex-solidjs", () => ({
 	useMutation: () => ({ mutate: vi.fn().mockResolvedValue(undefined) }),
-	useQuery: () => ({ data: () => undefined }),
+	useQuery: () => ({ data: () => {} }),
 }));
 
 // Mock the Convex API barrel (not a real module in test context).

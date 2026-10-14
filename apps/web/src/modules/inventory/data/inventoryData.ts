@@ -60,8 +60,9 @@ export function useItemTypesByCategory(
 export function useLookupItemByAssetTag() {
 	const client = useConvexClient();
 	return function lookup(assetTag: string) {
-		if (!client) return Promise.resolve(null);
-		return client.query(api.inventory.getItemByAssetTag, { assetTag });
+		return client
+			? client.query(api.inventory.getItemByAssetTag, { assetTag })
+			: Promise.resolve(null);
 	};
 }
 

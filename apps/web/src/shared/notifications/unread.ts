@@ -18,14 +18,14 @@ export type UnreadBadge = {
 
 /**
  * The caller's unread notification count, live, as badge text and the label
- * that joins the button's accessible name. `enabled` gates the query: staff
+ * that joins the button's accessible name. `isEnabled` gates the query: staff
  * have no notifications to count. A failed query shows no badge.
  */
 export function useUnreadBadge(
-	enabled: () => boolean = () => true
+	isEnabled: () => boolean = () => true
 ): UnreadBadge {
 	const unread = useQuery(api.notify.inbox.unreadCount, {}, () => ({
-		enabled: enabled(),
+		enabled: isEnabled(),
 	}));
 	function count(): number {
 		return unread.data() ?? 0;

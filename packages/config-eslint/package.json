@@ -15,6 +15,8 @@
     "eslint-import-resolver-typescript": "catalog:",
     "eslint-plugin-import-x": "catalog:",
     "eslint-plugin-solid": "catalog:",
+    "eslint-plugin-sonarjs": "catalog:",
+    "eslint-plugin-unicorn": "catalog:",
     "eslint-plugin-unused-imports": "catalog:",
     "typescript-eslint": "catalog:"
   }

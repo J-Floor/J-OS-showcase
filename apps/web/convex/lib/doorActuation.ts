@@ -8,7 +8,6 @@ import type { Infer } from "convex/values";
 import type { doorActuation } from "../schema.ts";
 
 import type { DoorAction, DoorPosition } from "./doorProvider.ts";
-import type { AssertEqual } from "./typeAssert.ts";
 
 export const CONFIRM_POLL_MS = 500;
 export const CONFIRM_WINDOW_MS = 20_000;
@@ -80,7 +79,7 @@ const TARGET: Record<DoorAction, { moving: DoorPosition; done: DoorPosition }> =
  * showing an earlier command, so it is no information yet, like `offline`,
  * `unknown` or the starting position.
  */
-export function reacted(
+export function hasReacted(
 	action: DoorAction,
 	positionBefore: DoorPosition,
 	reading: DoorPosition
@@ -138,7 +137,7 @@ const TABLE: Record<Phase, Partial<Record<EventType, Rule>>> = {
 				ActuationEvent,
 				{ type: "POSITION" }
 			>;
-			return reacted(action, positionBefore, position)
+			return hasReacted(action, positionBefore, position)
 				? { phase: "actuated", action, requestedAt, actuatedAt: at }
 				: state;
 		},
@@ -167,15 +166,7 @@ export function transition(
 
 /** The phases a door-log row stores. Each is an `ok` row: the provider
  *  accepted the command. */
-export type StoredActuation = "accepted" | "actuated" | "unconfirmed";
-
-/** Compile-time check that this type and the schema's `doorActuation`
- *  validator agree. */
-const _storedActuationMatchesSchema: AssertEqual<
-	Infer<typeof doorActuation>,
-	StoredActuation
-> = true;
-void _storedActuationMatchesSchema;
+export type StoredActuation = Infer<typeof doorActuation>;
 
 /** An attempt as its door-log row stores it. */
 export type StoredAttempt = {

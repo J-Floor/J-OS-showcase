@@ -10,6 +10,14 @@ export type Control =
 /** Map of prop name -> control declaration. */
 export type Controls = Record<string, Control>;
 
+/** The validation and interactivity toggles every text-entry field demo offers. */
+export const FIELD_STATE_CONTROLS = {
+	invalid: { type: "boolean", default: false },
+	required: { type: "boolean", default: false },
+	disabled: { type: "boolean", default: false },
+	readOnly: { type: "boolean", default: false },
+} satisfies Controls;
+
 /**
  * Live prop values fed to `render`. Loosely typed on purpose: stories cast at
  * the render boundary (`p.variant`) without per-prop generics. This is harness

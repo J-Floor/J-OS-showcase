@@ -15,8 +15,9 @@ const answers = new Map<string, { value: unknown; at: number }>();
 // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- the caller names the stored type
 export function lastAnswer<T>(key: string, maxAgeMs: number): T | undefined {
 	const entry = answers.get(key);
-	if (!entry || Date.now() - entry.at > maxAgeMs) return undefined;
-	return entry.value as T;
+	return !entry || Date.now() - entry.at > maxAgeMs
+		? undefined
+		: (entry.value as T);
 }
 
 export function rememberAnswer(key: string, value: unknown): void {

@@ -13,8 +13,8 @@ describe("createDrawerNav", () => {
 		const nav = createDrawerNav({
 			items: () => items,
 			currentId: () => current,
-			onSelect: (i) => {
-				current = i._id;
+			onSelect: (item) => {
+				current = item._id;
 			},
 		});
 		expect(nav.hasPrev()).toBe(false);

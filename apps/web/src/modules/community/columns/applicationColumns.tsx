@@ -1,12 +1,11 @@
 import {
 	Avatar,
 	Confetti,
-	IconButton,
 	Input,
 	Kbd,
 	NumberInput,
 	Skeleton,
-	type JfColumnDef,
+	type JfColumnDefinition,
 } from "@j-os/design-system";
 import { useMutation } from "convex-solidjs";
 import {
@@ -14,7 +13,6 @@ import {
 	For,
 	Show,
 	createContext,
-	createMemo,
 	createSignal,
 	onCleanup,
 	onMount,
@@ -34,7 +32,12 @@ import { useApplicationDecisions } from "../actions/applicationDecisions.ts";
 import { noteAuthor } from "../noteAuthor.ts";
 
 import styles from "./applicationColumns.module.scss";
-import { actionsColumnSize, RowActions } from "./RowActions.tsx";
+import {
+	actionsColumnSize,
+	RowActionButton,
+	RowActions,
+} from "./RowActions.tsx";
+import { useScoreDraft } from "./useScoreDraft.ts";
 import { ventureColumns } from "./ventureColumns.tsx";
 
 /**
@@ -55,9 +58,13 @@ export type ApplicationRow = Doc<"people"> & {
  * spawning a fresh query that suspends, flickering the whole table.
  */
 export type CurrentPerson = Doc<"people"> | null | undefined;
-export const CurrentPersonContext = createContext<Accessor<CurrentPerson>>(
-	() => undefined
-);
+function noCurrentPerson(): CurrentPerson {
+	return;
+}
+export const CurrentPersonContext =
+	createContext<Accessor<CurrentPerson>>(noCurrentPerson);
+
+const APPLICATION_ACTION_COUNT = 4;
 
 /** Why a row's action button is disabled, per action id. Kept out of the
  *  descriptor (which is shared with the decision bar, which hides rather than
@@ -80,15 +87,11 @@ function ApplicationActions(props: { row: ApplicationRow }) {
 			<For each={decide.actions()}>
 				{(action) => {
 					const button = (
-						<IconButton
-							tooltipLabel={action.label}
-							shortcut={action.hotkey}
-							disabled={!action.can(props.row)}
+						<RowActionButton
+							action={action}
+							row={props.row}
 							disabledReason={DISABLED_REASON[action.id]}
-							onClick={() => void action.run(props.row)}
-						>
-							{action.icon}
-						</IconButton>
+						/>
 					);
 					return action.id === "member" ? (
 						<Confetti>{button}</Confetti>
@@ -99,6 +102,39 @@ function ApplicationActions(props: { row: ApplicationRow }) {
 			</For>
 		</RowActions>
 	);
+}
+
+/**
+ * How the score field is being changed, read from the pointerdown that started
+ * it (capture phase, before ark's own handler): a scrubber drag, a +/- button,
+ * or neither (typing). Calls `onScrubberRelease` when a scrubber drag ends.
+ */
+function usePointerEditSource(onScrubberRelease: () => void) {
+	let source: "scrubber" | "button" | null = null;
+	function onDown(event: PointerEvent) {
+		const target = event.target as Element | null;
+		if (target?.closest('[data-part="scrubber"]')) source = "scrubber";
+		else if (
+			target?.closest(
+				'button[aria-label="Increment"], button[aria-label="Decrement"]'
+			)
+		)
+			source = "button";
+		else source = null;
+	}
+	function onUp() {
+		if (source === "scrubber") onScrubberRelease();
+		source = null;
+	}
+	onMount(() => {
+		document.addEventListener("pointerdown", onDown, true);
+		document.addEventListener("pointerup", onUp, true);
+		onCleanup(() => {
+			document.removeEventListener("pointerdown", onDown, true);
+			document.removeEventListener("pointerup", onUp, true);
+		});
+	});
+	return () => source;
 }
 
 /**
@@ -113,80 +149,23 @@ function ApplicationActions(props: { row: ApplicationRow }) {
  */
 export function ScoreCell(props: { row: ApplicationRow }) {
 	const currentPerson = useContext(CurrentPersonContext);
-	const setScore = useMutation(api.applications.setScore);
-
 	// The score is global — shared by all board members — so it's a single
 	// entry, not one per board member.
-	const sharedScore = createMemo(() => props.row.board?.score);
+	const { setDraft, draft, display, commit } = useScoreDraft({
+		personId: () => props.row._id,
+		currentScore: () => props.row.board?.score,
+		canScore: () => Boolean(currentPerson()),
+	});
 
-	// Edits live in `draft`; WHEN we commit depends on how the value is changed
-	// (detected on pointerdown, capture phase, before ark's own handler):
+	// WHEN we commit depends on how the value is changed (detected on
+	// pointerdown, capture phase, before ark's own handler):
 	//  - scrubber drag   → defer, commit on release (pointerup); committing each
 	//    tick would refetch + re-render the table mid-drag and drop the scrub;
 	//  - +/- buttons     → discrete, commit immediately;
 	//  - keyboard typing → defer, commit on blur (focus-out) so a multi-digit
 	//    value isn't committed (and the row re-rendered) per keystroke.
-	// While editing the field shows the draft; otherwise it mirrors the server.
-	const [draft, setDraft] = createSignal<string | null>(null);
-	function displayValue(): string {
-		const d = draft();
-		if (d !== null) return d;
-		const score = sharedScore();
-		return score !== undefined ? String(score) : "";
-	}
-
-	function commit() {
-		const value = draft();
-		if (value === null || !currentPerson()) {
-			setDraft(null);
-			return;
-		}
-		// Empty = clear the score (the board un-rating); no-op if already unscored.
-		if (value === "") {
-			if (sharedScore() === undefined) {
-				setDraft(null);
-				return;
-			}
-			void setScore
-				.mutateAsync({ personId: props.row._id })
-				.finally(() => setDraft(null));
-			return;
-		}
-		const num = Number(value);
-		if (Number.isNaN(num) || num === sharedScore()) {
-			setDraft(null);
-			return;
-		}
-		// Clear the draft only once the server has the value, so the field never
-		// flashes back to the old score between commit and refetch.
-		void setScore
-			.mutateAsync({ personId: props.row._id, value: num })
-			.finally(() => setDraft(null));
-	}
-
-	let source: "scrubber" | "button" | null = null;
-	onMount(() => {
-		function onDown(event: PointerEvent) {
-			const target = event.target as Element | null;
-			if (target?.closest('[data-part="scrubber"]')) source = "scrubber";
-			else if (
-				target?.closest(
-					'button[aria-label="Increment"], button[aria-label="Decrement"]'
-				)
-			)
-				source = "button";
-			else source = null;
-		}
-		function onUp() {
-			if (source === "scrubber" && draft() !== null) commit();
-			source = null;
-		}
-		document.addEventListener("pointerdown", onDown, true);
-		document.addEventListener("pointerup", onUp, true);
-		onCleanup(() => {
-			document.removeEventListener("pointerdown", onDown, true);
-			document.removeEventListener("pointerup", onUp, true);
-		});
+	const editSource = usePointerEditSource(() => {
+		if (draft() !== null) commit();
 	});
 
 	return (
@@ -197,7 +176,7 @@ export function ScoreCell(props: { row: ApplicationRow }) {
 				max={11}
 				disabled={!currentPerson()}
 				disabledReason="Only board members can score applications"
-				value={displayValue()}
+				value={display()}
 				onFocusChange={(detail) => {
 					if (!detail.focused && draft() !== null) commit();
 				}}
@@ -207,7 +186,7 @@ export function ScoreCell(props: { row: ApplicationRow }) {
 					// typing (incl. backspacing to empty, which clears the score)
 					// for blur. The table cell has no clear button — it would crowd
 					// out the value at this width; the drawer's ScoreField has one.
-					if (source === "button") commit();
+					if (editSource() === "button") commit();
 				}}
 			/>
 			{/* Peek hint: a digit sets the ringed row's score. `inline` shows it
@@ -286,12 +265,11 @@ export function NotesCell(props: {
 						<Kbd shortcut="N" inline class={styles.noteKbd} />
 					) : undefined
 				}
-				onValueChange={(e) => setDraft(e.currentTarget.value)}
-				onKeyDown={(e) => {
-					if (e.key === "Enter") {
-						e.preventDefault();
-						submit();
-					}
+				onValueChange={(event) => setDraft(event.currentTarget.value)}
+				onKeyDown={(event) => {
+					if (event.key !== "Enter") return;
+					event.preventDefault();
+					submit();
 				}}
 				onBlur={submit}
 			/>
@@ -314,7 +292,7 @@ const triageGroupOptions = [
  * counts as scored). */
 export function triageGroupOf(row: ApplicationRow): string {
 	if (row.stage === "denied") return "denied";
-	return row.board?.score != null ? "queue" : "toScore";
+	return typeof row.board?.score === "number" ? "queue" : "toScore";
 }
 
 /** The submission date as the Date column shows it: the explicit
@@ -324,7 +302,7 @@ export function submissionDateText(row: ApplicationRow): string {
 	return formatDate(row.submittedAt ?? row._creationTime);
 }
 
-export function applicationColumns(): JfColumnDef<ApplicationRow>[] {
+export function applicationColumns(): JfColumnDefinition<ApplicationRow>[] {
 	return [
 		{
 			// Hidden grouping column (`Table` hides whatever it groups by): it must
@@ -344,7 +322,7 @@ export function applicationColumns(): JfColumnDef<ApplicationRow>[] {
 			dataType: "number",
 			disableRowClick: true,
 			size: 124,
-			accessorFn: (r) => r.board?.score ?? 0,
+			accessorFn: (row) => row.board?.score ?? 0,
 			cell: (info) => <ScoreCell row={info.row.original} />,
 		},
 		{
@@ -352,7 +330,7 @@ export function applicationColumns(): JfColumnDef<ApplicationRow>[] {
 			header: "Date",
 			dataType: "date",
 			size: "content",
-			accessorFn: (r) => r.submittedAt ?? r._creationTime,
+			accessorFn: (row) => row.submittedAt ?? row._creationTime,
 			cell: (info) => submissionDateText(info.row.original),
 			measureText: submissionDateText,
 		},
@@ -364,7 +342,7 @@ export function applicationColumns(): JfColumnDef<ApplicationRow>[] {
 			dataType: "string",
 			size: SHORT_TEXT_SIZE,
 			measureText: false,
-			accessorFn: (r) => r.venture?.name ?? "",
+			accessorFn: (row) => row.venture?.name ?? "",
 		},
 		{
 			id: "notes",
@@ -374,8 +352,8 @@ export function applicationColumns(): JfColumnDef<ApplicationRow>[] {
 			size: FREE_TEXT_SIZE,
 			measureText: false,
 			// Sort/filter on the latest note's text — what the cell shows.
-			accessorFn: (r) => {
-				const log = r.board?.noteLog ?? [];
+			accessorFn: (row) => {
+				const log = row.board?.noteLog ?? [];
 				return log.length > 0 ? log[log.length - 1].text : "";
 			},
 			cell: (info) => <NotesCell row={info.row.original} />,
@@ -386,7 +364,7 @@ export function applicationColumns(): JfColumnDef<ApplicationRow>[] {
 			header: "",
 			disableRowClick: true,
 			// Make guest, make member, turn down, undo deny.
-			size: actionsColumnSize(4),
+			size: actionsColumnSize(APPLICATION_ACTION_COUNT),
 			cell: (info) => <ApplicationActions row={info.row.original} />,
 		},
 	];

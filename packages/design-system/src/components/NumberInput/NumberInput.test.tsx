@@ -11,19 +11,19 @@ beforeAll(() => {
 });
 
 test("increments via increment trigger", async () => {
-	let val: string | undefined;
+	let value: string | undefined;
 	render(() => (
 		<NumberInput
 			label="N"
 			min={0}
 			max={5}
-			onValueChange={(d) => (val = d.value)}
+			onValueChange={(details) => (value = details.value)}
 		/>
 	));
 	// zag increments on pointerDown (the trigger spins on press), not click.
 	fireEvent.pointerDown(screen.getByLabelText("Increment"));
 	await waitFor(() => {
-		expect(val).toBe("1");
+		expect(value).toBe("1");
 	});
 });
 

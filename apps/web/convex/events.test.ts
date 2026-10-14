@@ -17,9 +17,9 @@ const modules = import.meta.glob("./**/*.*s");
 const BOARD_EMAIL = "boss@example.com";
 const MEMBER_EMAIL = "m@example.com";
 
-async function seedBoard(t: ReturnType<typeof convexTest>) {
-	const boardId = await t.run(async (ctx) =>
-		ctx.db.insert("people", {
+async function seedBoard(backend: ReturnType<typeof convexTest>) {
+	const boardId = await backend.run(async (context) =>
+		context.db.insert("people", {
 			email: BOARD_EMAIL,
 			firstName: "Boss",
 			lastName: "",
@@ -28,12 +28,12 @@ async function seedBoard(t: ReturnType<typeof convexTest>) {
 			stageSince: Date.now(),
 		})
 	);
-	return { boardId, asBoard: t.withIdentity({ email: BOARD_EMAIL }) };
+	return { boardId, asBoard: backend.withIdentity({ email: BOARD_EMAIL }) };
 }
 
-async function seedMember(t: ReturnType<typeof convexTest>) {
-	await t.run(async (ctx) =>
-		ctx.db.insert("people", {
+async function seedMember(backend: ReturnType<typeof convexTest>) {
+	await backend.run(async (context) =>
+		context.db.insert("people", {
 			email: MEMBER_EMAIL,
 			firstName: "M",
 			lastName: "",
@@ -42,7 +42,7 @@ async function seedMember(t: ReturnType<typeof convexTest>) {
 			stageSince: Date.now(),
 		})
 	);
-	return t.withIdentity({ email: MEMBER_EMAIL });
+	return backend.withIdentity({ email: MEMBER_EMAIL });
 }
 
 const eventInput = {
@@ -58,21 +58,23 @@ function localFromEpoch(ms: number): string {
 
 describe("createEvent", () => {
 	it("rejects a non-board caller", async () => {
-		const t = convexTest(schema, modules);
-		const asMember = await seedMember(t);
+		const backend = convexTest(schema, modules);
+		const asMember = await seedMember(backend);
 		await expect(
 			asMember.mutation(api.events.createEvent, eventInput)
 		).rejects.toThrow();
 	});
 
 	it("stores name/dates with the caller as createdBy", async () => {
-		const t = convexTest(schema, modules);
-		const { boardId, asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { boardId, asBoard } = await seedBoard(backend);
 		const eventId = await asBoard.mutation(
 			api.events.createEvent,
 			eventInput
 		);
-		const doc = await t.run(async (ctx) => ctx.db.get(eventId));
+		const doc = await backend.run(async (context) =>
+			context.db.get(eventId)
+		);
 		expect(doc?.name).toBe(eventInput.name);
 		expect(doc?.startsAt).toBe(utcFromLocal(eventInput.startsAtLocal));
 		expect(doc?.endsAt).toBe(utcFromLocal(eventInput.endsAtLocal));
@@ -81,14 +83,14 @@ describe("createEvent", () => {
 	});
 
 	it("stores IXDTF local + derived cached epoch", async () => {
-		const t = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
 		const id = await asBoard.mutation(api.events.createEvent, {
 			name: "Demo",
 			startsAtLocal: "2026-09-20T00:01:00+02:00[Europe/Zurich]",
 			endsAtLocal: "2026-09-20T23:59:00+02:00[Europe/Zurich]",
 		});
-		const row = await t.run((ctx) => ctx.db.get(id));
+		const row = await backend.run((context) => context.db.get(id));
 		// Assert the cached epoch is the Zurich instant.
 		expect(row!.startsAt).toBe(
 			new Date("2026-09-19T22:01:00.000Z").getTime()
@@ -104,8 +106,8 @@ describe("createEvent", () => {
 	});
 
 	it("rejects starts after ends", async () => {
-		const t = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
 		await expect(
 			asBoard.mutation(api.events.createEvent, {
 				name: "Backwards",
@@ -116,8 +118,8 @@ describe("createEvent", () => {
 	});
 
 	it("rejects a non-Europe/Zurich embedded zone on startsAtLocal", async () => {
-		const t = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
 		await expect(
 			asBoard.mutation(api.events.createEvent, {
 				name: "Wrong Zone",
@@ -128,8 +130,8 @@ describe("createEvent", () => {
 	});
 
 	it("rejects a non-Europe/Zurich embedded zone on endsAtLocal", async () => {
-		const t = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
 		await expect(
 			asBoard.mutation(api.events.createEvent, {
 				name: "Wrong Zone",
@@ -140,99 +142,107 @@ describe("createEvent", () => {
 	});
 
 	it("accepts an Europe/Zurich embedded zone (still works)", async () => {
-		const t = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
 		const eventId = await asBoard.mutation(
 			api.events.createEvent,
 			eventInput
 		);
-		const doc = await t.run(async (ctx) => ctx.db.get(eventId));
+		const doc = await backend.run(async (context) =>
+			context.db.get(eventId)
+		);
 		expect(doc?.name).toBe(eventInput.name);
 	});
 });
 
 describe("listEvents", () => {
 	it("lets any entitled member see the list (view is granted to guests+)", async () => {
-		const t = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
 		await asBoard.mutation(api.events.createEvent, eventInput);
-		const asMember = await seedMember(t);
+		const asMember = await seedMember(backend);
 		const all = await asMember.query(api.events.listEvents, {});
 		expect(all).toHaveLength(1);
 		expect(all[0].name).toBe(eventInput.name);
 	});
 
 	it("rejects a signed-in identity with no person row", async () => {
-		const t = convexTest(schema, modules);
-		const asStranger = t.withIdentity({ email: "nobody@example.com" });
+		const backend = convexTest(schema, modules);
+		const asStranger = backend.withIdentity({
+			email: "nobody@example.com",
+		});
 		await expect(
 			asStranger.query(api.events.listEvents, {})
 		).rejects.toThrow("Forbidden");
 	});
 
 	it("returns events newest first", async () => {
-		const t = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
 		const firstId = await asBoard.mutation(api.events.createEvent, {
 			...eventInput,
 			name: "Older",
 		});
-		await t.run(async (ctx) =>
-			ctx.db.patch(firstId, { createdAt: Date.now() - 1000 })
+		await backend.run(async (context) =>
+			context.db.patch(firstId, { createdAt: Date.now() - 1000 })
 		);
 		const secondId = await asBoard.mutation(api.events.createEvent, {
 			...eventInput,
 			name: "Newer",
 		});
 		const all = await asBoard.query(api.events.listEvents, {});
-		expect(all.map((e) => e._id)).toEqual([secondId, firstId]);
+		expect(all.map((event) => event._id)).toEqual([secondId, firstId]);
 	});
 });
 
 describe("deleteEvent", () => {
 	it("rejects a non-board caller", async () => {
-		const t = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
 		const eventId = await asBoard.mutation(
 			api.events.createEvent,
 			eventInput
 		);
-		const asMember = await seedMember(t);
+		const asMember = await seedMember(backend);
 		await expect(
 			asMember.mutation(api.events.deleteEvent, { eventId })
 		).rejects.toThrow();
 	});
 
 	it("deletes the event immediately and schedules the attendance purge", async () => {
-		const t = convexTest(schema, modules);
-		const { boardId, asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { boardId, asBoard } = await seedBoard(backend);
 		const eventId = await asBoard.mutation(
 			api.events.createEvent,
 			eventInput
 		);
-		await t.run((ctx) =>
-			ctx.db.insert("eventAttendance", {
+		await backend.run((context) =>
+			context.db.insert("eventAttendance", {
 				personId: boardId,
 				eventId,
 				confirmedAt: Date.now(),
 			})
 		);
 		expect(
-			await t.run((ctx) => ctx.db.query("eventAttendance").collect())
+			await backend.run((context) =>
+				context.db.query("eventAttendance").collect()
+			)
 		).toHaveLength(1);
 
 		await asBoard.mutation(api.events.deleteEvent, { eventId });
 
 		// The event itself is gone synchronously.
-		const result = await t.query(api.events.getEventPublic, { eventId });
+		const result = await backend.query(api.events.getEventPublic, {
+			eventId,
+		});
 		expect(result).toBeNull();
 
 		// convex-test never runs scheduled functions — it only records them at
 		// enqueue time. Assert the purge job's name AND args are exactly right;
 		// asserting merely "a job exists" wouldn't catch scheduling the wrong
 		// function or the wrong eventId.
-		const jobs = await t.run((ctx) =>
-			ctx.db.system.query("_scheduled_functions").collect()
+		const jobs = await backend.run((context) =>
+			context.db.system.query("_scheduled_functions").collect()
 		);
 		expect(jobs).toHaveLength(1);
 		expect(jobs[0].name).toBe("events:purgeEventAttendance");
@@ -241,22 +251,24 @@ describe("deleteEvent", () => {
 		// The attendance row is NOT purged synchronously — that's the point of
 		// the scheduled batch. It's still there until the job runs.
 		expect(
-			await t.run((ctx) => ctx.db.query("eventAttendance").collect())
+			await backend.run((context) =>
+				context.db.query("eventAttendance").collect()
+			)
 		).toHaveLength(1);
 	});
 });
 
 describe("purgeEventAttendance", () => {
 	it("deletes an event's attendance rows in a bounded batch", async () => {
-		const t = convexTest(schema, modules);
-		const { boardId, asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { boardId, asBoard } = await seedBoard(backend);
 		const eventId = await asBoard.mutation(
 			api.events.createEvent,
 			eventInput
 		);
-		await t.run(async (ctx) => {
-			for (let i = 0; i < 3; i++) {
-				await ctx.db.insert("eventAttendance", {
+		await backend.run(async (context) => {
+			for (let index = 0; index < 3; index++) {
+				await context.db.insert("eventAttendance", {
 					personId: boardId,
 					eventId,
 					confirmedAt: Date.now(),
@@ -264,26 +276,32 @@ describe("purgeEventAttendance", () => {
 			}
 		});
 		expect(
-			await t.run((ctx) => ctx.db.query("eventAttendance").collect())
+			await backend.run((context) =>
+				context.db.query("eventAttendance").collect()
+			)
 		).toHaveLength(3);
 
-		await t.mutation(internal.events.purgeEventAttendance, { eventId });
+		await backend.mutation(internal.events.purgeEventAttendance, {
+			eventId,
+		});
 
 		expect(
-			await t.run((ctx) => ctx.db.query("eventAttendance").collect())
+			await backend.run((context) =>
+				context.db.query("eventAttendance").collect()
+			)
 		).toEqual([]);
 	});
 });
 
 describe("updateEvent", () => {
 	it("rejects a non-board caller", async () => {
-		const t = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
 		const eventId = await asBoard.mutation(
 			api.events.createEvent,
 			eventInput
 		);
-		const asMember = await seedMember(t);
+		const asMember = await seedMember(backend);
 		await expect(
 			asMember.mutation(api.events.updateEvent, {
 				eventId,
@@ -293,8 +311,8 @@ describe("updateEvent", () => {
 	});
 
 	it("patches only the name, leaving dates unchanged", async () => {
-		const t = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
 		const eventId = await asBoard.mutation(
 			api.events.createEvent,
 			eventInput
@@ -303,7 +321,9 @@ describe("updateEvent", () => {
 			eventId,
 			name: "Renamed Demo Night",
 		});
-		const doc = await t.run(async (ctx) => ctx.db.get(eventId));
+		const doc = await backend.run(async (context) =>
+			context.db.get(eventId)
+		);
 		expect(doc?.name).toBe("Renamed Demo Night");
 		expect(doc?.startsAt).toBe(utcFromLocal(eventInput.startsAtLocal));
 		expect(doc?.endsAt).toBe(utcFromLocal(eventInput.endsAtLocal));
@@ -318,8 +338,8 @@ describe("updateEvent", () => {
 	});
 
 	it("patches startsAtLocal and endsAtLocal, leaving the name unchanged", async () => {
-		const t = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
 		const eventId = await asBoard.mutation(
 			api.events.createEvent,
 			eventInput
@@ -331,7 +351,9 @@ describe("updateEvent", () => {
 			startsAtLocal: newStartsAtLocal,
 			endsAtLocal: newEndsAtLocal,
 		});
-		const doc = await t.run(async (ctx) => ctx.db.get(eventId));
+		const doc = await backend.run(async (context) =>
+			context.db.get(eventId)
+		);
 		expect(doc?.name).toBe(eventInput.name);
 		expect(doc?.startsAt).toBe(utcFromLocal(newStartsAtLocal));
 		expect(doc?.endsAt).toBe(utcFromLocal(newEndsAtLocal));
@@ -342,8 +364,8 @@ describe("updateEvent", () => {
 	});
 
 	it("rejects a blank name (leaves the event labelled)", async () => {
-		const t = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
 		const eventId = await asBoard.mutation(
 			api.events.createEvent,
 			eventInput
@@ -351,13 +373,15 @@ describe("updateEvent", () => {
 		await expect(
 			asBoard.mutation(api.events.updateEvent, { eventId, name: "   " })
 		).rejects.toThrow(/name is required/i);
-		const doc = await t.run(async (ctx) => ctx.db.get(eventId));
+		const doc = await backend.run(async (context) =>
+			context.db.get(eventId)
+		);
 		expect(doc?.name).toBe(eventInput.name);
 	});
 
 	it("rejects a lone Starts edit that would invert the interval", async () => {
-		const t = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
 		const eventId = await asBoard.mutation(
 			api.events.createEvent,
 			eventInput
@@ -369,7 +393,9 @@ describe("updateEvent", () => {
 				startsAtLocal: "2026-10-01T22:01:00+02:00[Europe/Zurich]",
 			})
 		).rejects.toThrow(/start must be on or before the end/i);
-		const doc = await t.run(async (ctx) => ctx.db.get(eventId));
+		const doc = await backend.run(async (context) =>
+			context.db.get(eventId)
+		);
 		expect(doc?.startsAt).toBe(utcFromLocal(eventInput.startsAtLocal));
 		// The mutation stores the client string verbatim (no toString()
 		// round-trip), so a plain equality check is safe here.
@@ -377,8 +403,8 @@ describe("updateEvent", () => {
 	});
 
 	it("supplying only startsAtLocal updates just the start fields, leaving endsAtLocal as it was", async () => {
-		const t = convexTest(schema, modules);
-		const { boardId, asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { boardId, asBoard } = await seedBoard(backend);
 		// A row inserted directly (bypassing createEvent), with *Local derived
 		// from its own epochs (required by the schema).
 		const legacyStartsAt = utcFromLocal(eventInput.startsAtLocal);
@@ -387,8 +413,8 @@ describe("updateEvent", () => {
 			legacyEndsAt,
 			SITE_TIMEZONE
 		);
-		const eventId = await t.run((ctx) =>
-			ctx.db.insert("events", {
+		const eventId = await backend.run((context) =>
+			context.db.insert("events", {
 				name: "Legacy Event",
 				startsAt: legacyStartsAt,
 				startsAtLocal: zonedLocalFromEpoch(
@@ -408,7 +434,7 @@ describe("updateEvent", () => {
 			eventId,
 			startsAtLocal: newStartsAtLocal,
 		});
-		const doc = await t.run((ctx) => ctx.db.get(eventId));
+		const doc = await backend.run((context) => context.db.get(eventId));
 		expect(doc?.startsAtLocal).toBe(newStartsAtLocal);
 		expect(doc?.startsAt).toBe(utcFromLocal(newStartsAtLocal));
 		// endsAtLocal was not supplied, so it stays exactly as it was.
@@ -425,8 +451,8 @@ describe("updateEvent", () => {
 		// handler ever regressed to always sending `endsAtLocal:
 		// fields.endsAtLocal`, this row's *Local would be wiped and this
 		// assertion would catch it.
-		const t = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
 		const eventId = await asBoard.mutation(
 			api.events.createEvent,
 			eventInput
@@ -436,7 +462,7 @@ describe("updateEvent", () => {
 			eventId,
 			startsAtLocal: newStartsAtLocal,
 		});
-		const doc = await t.run((ctx) => ctx.db.get(eventId));
+		const doc = await backend.run((context) => context.db.get(eventId));
 		expect(doc?.startsAtLocal).toBe(newStartsAtLocal);
 		expect(doc?.startsAt).toBe(utcFromLocal(newStartsAtLocal));
 		expect(doc?.endsAtLocal).toBe(eventInput.endsAtLocal);
@@ -444,12 +470,12 @@ describe("updateEvent", () => {
 	});
 
 	it("accepts an edit when both *Local are supplied", async () => {
-		const t = convexTest(schema, modules);
-		const { boardId, asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { boardId, asBoard } = await seedBoard(backend);
 		const startsAt = utcFromLocal(eventInput.startsAtLocal);
 		const endsAt = utcFromLocal(eventInput.endsAtLocal);
-		const eventId = await t.run((ctx) =>
-			ctx.db.insert("events", {
+		const eventId = await backend.run((context) =>
+			context.db.insert("events", {
 				name: "Legacy Event",
 				startsAt,
 				startsAtLocal: zonedLocalFromEpoch(startsAt, SITE_TIMEZONE),
@@ -464,14 +490,14 @@ describe("updateEvent", () => {
 			startsAtLocal: eventInput.startsAtLocal,
 			endsAtLocal: eventInput.endsAtLocal,
 		});
-		const doc = await t.run((ctx) => ctx.db.get(eventId));
+		const doc = await backend.run((context) => context.db.get(eventId));
 		expect(doc?.startsAtLocal).toBe(eventInput.startsAtLocal);
 		expect(doc?.endsAtLocal).toBe(eventInput.endsAtLocal);
 	});
 
 	it("rejects a non-Europe/Zurich embedded zone on a supplied startsAtLocal", async () => {
-		const t = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
 		const eventId = await asBoard.mutation(
 			api.events.createEvent,
 			eventInput
@@ -485,8 +511,8 @@ describe("updateEvent", () => {
 	});
 
 	it("rejects a non-Europe/Zurich embedded zone on a supplied endsAtLocal", async () => {
-		const t = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
 		const eventId = await asBoard.mutation(
 			api.events.createEvent,
 			eventInput
@@ -500,8 +526,8 @@ describe("updateEvent", () => {
 	});
 
 	it("accepts an Europe/Zurich embedded zone on update (still works)", async () => {
-		const t = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
 		const eventId = await asBoard.mutation(
 			api.events.createEvent,
 			eventInput
@@ -512,34 +538,34 @@ describe("updateEvent", () => {
 			eventId,
 			startsAtLocal: newStartsAtLocal,
 		});
-		const doc = await t.run((ctx) => ctx.db.get(eventId));
+		const doc = await backend.run((context) => context.db.get(eventId));
 		expect(doc?.startsAtLocal).toBe(newStartsAtLocal);
 	});
 });
 
 describe("listEventAttendees", () => {
 	it("rejects a non-board caller", async () => {
-		const t = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
 		const eventId = await asBoard.mutation(
 			api.events.createEvent,
 			eventInput
 		);
-		const asMember = await seedMember(t);
+		const asMember = await seedMember(backend);
 		await expect(
 			asMember.query(api.events.listEventAttendees, { eventId })
 		).rejects.toThrow();
 	});
 
 	it("resolves attendees to name/email/confirmedAt, newest first", async () => {
-		const t = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
 		const eventId = await asBoard.mutation(
 			api.events.createEvent,
 			eventInput
 		);
-		const alice = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const alice = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "alice@example.com",
 				firstName: "Alice",
 				lastName: "Anders",
@@ -548,8 +574,8 @@ describe("listEventAttendees", () => {
 				stageSince: Date.now(),
 			})
 		);
-		const bob = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const bob = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "bob@example.com",
 				firstName: "Bob",
 				lastName: "Baker",
@@ -560,13 +586,13 @@ describe("listEventAttendees", () => {
 		);
 		const earlier = Date.now() - 1000;
 		const later = Date.now();
-		await t.run(async (ctx) => {
-			await ctx.db.insert("eventAttendance", {
+		await backend.run(async (context) => {
+			await context.db.insert("eventAttendance", {
 				personId: alice,
 				eventId,
 				confirmedAt: earlier,
 			});
-			await ctx.db.insert("eventAttendance", {
+			await context.db.insert("eventAttendance", {
 				personId: bob,
 				eventId,
 				confirmedAt: later,
@@ -594,14 +620,14 @@ describe("listEventAttendees", () => {
 	});
 
 	it("skips an attendance row whose person no longer exists", async () => {
-		const t = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
 		const eventId = await asBoard.mutation(
 			api.events.createEvent,
 			eventInput
 		);
-		const ghost = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const ghost = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "ghost@example.com",
 				firstName: "Ghost",
 				lastName: "Gone",
@@ -610,14 +636,14 @@ describe("listEventAttendees", () => {
 				stageSince: Date.now(),
 			})
 		);
-		await t.run(async (ctx) =>
-			ctx.db.insert("eventAttendance", {
+		await backend.run(async (context) =>
+			context.db.insert("eventAttendance", {
 				personId: ghost,
 				eventId,
 				confirmedAt: Date.now(),
 			})
 		);
-		await t.run(async (ctx) => ctx.db.delete(ghost));
+		await backend.run(async (context) => context.db.delete(ghost));
 
 		const attendees = await asBoard.query(api.events.listEventAttendees, {
 			eventId,
@@ -628,8 +654,8 @@ describe("listEventAttendees", () => {
 
 describe("getEventPublic", () => {
 	it("returns name, dates (epoch + zoned), and ended, unauthenticated", async () => {
-		const t = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
 		// Dated relative to now, so `ended: false` holds whatever day this
 		// runs. eventInput's fixed date passed on 2026-10-01 and turned this red.
 		const now = Date.now();
@@ -642,7 +668,9 @@ describe("getEventPublic", () => {
 			api.events.createEvent,
 			upcoming
 		);
-		const result = await t.query(api.events.getEventPublic, { eventId });
+		const result = await backend.query(api.events.getEventPublic, {
+			eventId,
+		});
 		expect(result).toEqual({
 			name: upcoming.name,
 			startsAt: utcFromLocal(upcoming.startsAtLocal),
@@ -651,7 +679,11 @@ describe("getEventPublic", () => {
 			endsAtLocal: upcoming.endsAtLocal,
 			ended: false,
 		});
-		expect(Object.keys(result ?? {}).sort()).toEqual(
+		expect(
+			Object.keys(result ?? {}).sort((first, second) =>
+				first.localeCompare(second)
+			)
+		).toEqual(
 			[
 				"ended",
 				"endsAt",
@@ -659,51 +691,57 @@ describe("getEventPublic", () => {
 				"name",
 				"startsAt",
 				"startsAtLocal",
-			].sort()
+			].sort((first, second) => first.localeCompare(second))
 		);
 	});
 
 	it("returns null for a missing event", async () => {
-		const t = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
 		const eventId = await asBoard.mutation(
 			api.events.createEvent,
 			eventInput
 		);
-		await t.run(async (ctx) => ctx.db.delete(eventId));
-		const result = await t.query(api.events.getEventPublic, { eventId });
+		await backend.run(async (context) => context.db.delete(eventId));
+		const result = await backend.query(api.events.getEventPublic, {
+			eventId,
+		});
 		expect(result).toBeNull();
 	});
 
 	it("ended is false for an event whose endsAt is still in the future (boundary: now + 100000)", async () => {
-		const t = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
 		const eventId = await asBoard.mutation(api.events.createEvent, {
 			name: "Still Open",
 			startsAtLocal: localFromEpoch(Date.now()),
 			endsAtLocal: localFromEpoch(Date.now() + 100_000),
 		});
-		const result = await t.query(api.events.getEventPublic, { eventId });
+		const result = await backend.query(api.events.getEventPublic, {
+			eventId,
+		});
 		expect(result?.ended).toBe(false);
 	});
 
 	it("ended is true for an event whose endsAt is in the past (boundary: now - 1000)", async () => {
-		const t = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
 		const eventId = await asBoard.mutation(api.events.createEvent, {
 			name: "Already Over",
 			startsAtLocal: localFromEpoch(Date.now() - 200_000),
 			endsAtLocal: localFromEpoch(Date.now() - 1000),
 		});
-		const result = await t.query(api.events.getEventPublic, { eventId });
+		const result = await backend.query(api.events.getEventPublic, {
+			eventId,
+		});
 		expect(result?.ended).toBe(true);
 	});
 });
 
 describe("event name length cap", () => {
 	it("createEvent and updateEvent reject a 201-char name", async () => {
-		const t = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
 		const message = "Event name is too long (max 200 characters).";
 		await expect(
 			asBoard.mutation(api.events.createEvent, {

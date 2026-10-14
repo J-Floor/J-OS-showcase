@@ -14,7 +14,7 @@ import {
 
 import { notify } from "./notify.ts";
 
-export const THREE_DAYS = 3 * 24 * 60 * 60 * 1000;
+export const THREE_DAYS = 259_200_000;
 
 /**
  * The day a guest's access ends, as the board chose it: the stored instant is
@@ -39,16 +39,15 @@ export function guestUntilLabel(
  * and the guard makes tracking unnecessary).
  */
 export async function scheduleGuestExpiringSoon(
-	ctx: MutationCtx,
+	context: MutationCtx,
 	personId: Id<"people">,
 	accessUntil: number,
-	previousAccessUntil: number | undefined,
-	now = Date.now()
+	previousAccessUntil: number | undefined
 ): Promise<void> {
 	if (accessUntil === previousAccessUntil) return;
 	const at = accessUntil - THREE_DAYS;
-	if (at <= now) return;
-	await ctx.scheduler.runAt(at, internal.notify.guests.expiringSoon, {
+	if (at <= Date.now()) return;
+	await context.scheduler.runAt(at, internal.notify.guests.expiringSoon, {
 		personId,
 		accessUntil,
 	});
@@ -56,29 +55,33 @@ export async function scheduleGuestExpiringSoon(
 
 export const expiringSoon = internalMutation({
 	args: { personId: v.id("people"), accessUntil: v.number() },
-	handler: async (ctx, { personId, accessUntil }): Promise<null> => {
-		const guest = await ctx.db.get(personId);
-		if (guest?.tier !== "guest") return null;
-		if (!isLiveStage(guest.stage)) return null;
-		if (guest.accessUntil !== accessUntil) return null;
-		if (guest.guestExpiryRemindedFor === accessUntil) return null;
-		await ctx.db.patch(personId, { guestExpiryRemindedFor: accessUntil });
-		await notify(ctx, "guestExpiringSoon", {
+	handler: async (context, { personId, accessUntil }): Promise<void> => {
+		const guest = await context.db.get(personId);
+		if (
+			guest?.tier !== "guest" ||
+			!isLiveStage(guest.stage) ||
+			guest.accessUntil !== accessUntil ||
+			guest.guestExpiryRemindedFor === accessUntil
+		)
+			return;
+		await context.db.patch(personId, {
+			guestExpiryRemindedFor: accessUntil,
+		});
+		await notify(context, "guestExpiringSoon", {
 			guestId: personId,
 			guestName: displayName(guest),
 			untilDate: guestUntilLabel(guest.accessUntilLocal, accessUntil),
 		});
-		return null;
 	},
 });
 
 export async function notifyGuestExpired(
-	ctx: MutationCtx,
+	context: MutationCtx,
 	personId: Id<"people">
 ): Promise<void> {
-	const guest = await ctx.db.get(personId);
+	const guest = await context.db.get(personId);
 	if (!guest) return;
-	await notify(ctx, "guestExpired", {
+	await notify(context, "guestExpired", {
 		guestId: personId,
 		guestName: displayName(guest),
 	});
@@ -87,23 +90,23 @@ export async function notifyGuestExpired(
 /** Called after EXTEND_WINDOW / PROMOTE_TO_MEMBER have been applied, so the
  *  row already carries the new window (or none, after an upgrade). */
 export async function notifyGuestAccessChanged(
-	ctx: MutationCtx,
+	context: MutationCtx,
 	personId: Id<"people">,
 	change: "extended" | "upgraded" | "shortened"
 ): Promise<void> {
-	const person = await ctx.db.get(personId);
+	const person = await context.db.get(personId);
 	if (!person) return;
 	const guestName = displayName(person);
 	if (change === "upgraded") {
-		await notify(ctx, "guestAccessChanged", {
+		await notify(context, "guestAccessChanged", {
 			guestId: personId,
 			guestName,
 			change,
 		});
 		return;
 	}
-	if (person.accessUntil == null) return;
-	await notify(ctx, "guestAccessChanged", {
+	if (person.accessUntil === undefined) return;
+	await notify(context, "guestAccessChanged", {
 		guestId: personId,
 		guestName,
 		change,
@@ -115,21 +118,24 @@ export async function notifyGuestAccessChanged(
  *  to a window that is still open: an unchanged date says nothing, and a date
  *  already in the past is announced by the expiry itself. */
 export async function notifyGuestWindowChanged(
-	ctx: MutationCtx,
+	context: MutationCtx,
 	personId: Id<"people">,
 	previousAccessUntil: number | undefined,
 	now = Date.now()
 ): Promise<void> {
-	const person = await ctx.db.get(personId);
-	if (person?.accessUntil == null) return;
-	if (person.accessUntil <= now) return;
-	if (person.accessUntil === previousAccessUntil) return;
-	const later =
+	const person = await context.db.get(personId);
+	if (
+		person?.accessUntil === undefined ||
+		person.accessUntil <= now ||
+		person.accessUntil === previousAccessUntil
+	)
+		return;
+	const isLater =
 		previousAccessUntil !== undefined &&
 		person.accessUntil > previousAccessUntil;
 	await notifyGuestAccessChanged(
-		ctx,
+		context,
 		personId,
-		later ? "extended" : "shortened"
+		isLater ? "extended" : "shortened"
 	);
 }

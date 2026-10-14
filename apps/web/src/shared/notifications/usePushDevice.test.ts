@@ -38,10 +38,10 @@ afterEach(() => {
 	push.configured = true;
 });
 
-function createDevice(open: () => boolean = () => true): PushDevice {
-	return createRoot((d) => {
-		dispose = d;
-		return usePushDevice(open);
+function createDevice(isOpen: () => boolean = () => true): PushDevice {
+	return createRoot((disposeRoot) => {
+		dispose = disposeRoot;
+		return usePushDevice(isOpen);
 	});
 }
 

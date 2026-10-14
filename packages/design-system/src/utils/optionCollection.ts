@@ -15,8 +15,7 @@ function readTextField(item: unknown, field: string): string | undefined {
 	if (typeof item !== "object" || item === null) return undefined;
 	const raw = (item as Record<string, unknown>)[field];
 	if (typeof raw === "string") return raw;
-	if (typeof raw === "number") return String(raw);
-	return undefined;
+	return typeof raw === "number" ? String(raw) : undefined;
 }
 
 /**

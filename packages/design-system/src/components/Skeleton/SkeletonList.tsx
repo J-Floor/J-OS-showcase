@@ -11,6 +11,7 @@ export type SkeletonListProps = {
 };
 
 const WIDTHS = ["long", "medium", "short"] as const;
+const DEFAULT_ROWS = 3;
 
 /** A stack of manual skeleton bars for a list whose rows are not known yet. */
 export function SkeletonList(props: SkeletonListProps): JSX.Element {
@@ -21,7 +22,12 @@ export function SkeletonList(props: SkeletonListProps): JSX.Element {
 			aria-label="Loading"
 			data-skeleton-list=""
 		>
-			<For each={Array.from({ length: props.rows ?? 3 }, (_, i) => i)}>
+			<For
+				each={Array.from(
+					{ length: props.rows ?? DEFAULT_ROWS },
+					(_, index) => index
+				)}
+			>
 				{(index) => <Skeleton width={WIDTHS[index % WIDTHS.length]} />}
 			</For>
 		</div>

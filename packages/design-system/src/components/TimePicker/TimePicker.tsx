@@ -1,4 +1,8 @@
-import { DateInput, useDateInput } from "@ark-ui/solid/date-input";
+import {
+	DateInput,
+	useDateInput,
+	type UseDateInputContext,
+} from "@ark-ui/solid/date-input";
 import { type Time } from "@internationalized/date";
 import {
 	type JSX,
@@ -67,9 +71,35 @@ const OWN_KEYS = [
 
 /** Parses a controlled `"HH:MM"` prop into the machine's `DateValue[]` shape. */
 function toControlledValue(value: string | null | undefined) {
-	if (!value) return undefined;
+	if (!value) return;
 	const time = parseHHMM(value);
 	return time ? [timeToValue(time, "minute")] : undefined;
+}
+
+/** `HH:MM` as a time, or `undefined` for no value or an unparseable one. */
+function parseOptionalHHMM(value: string | null | undefined): Time | undefined {
+	return value ? (parseHHMM(value) ?? undefined) : undefined;
+}
+
+/** The editable segments, rendered through `Index` so they stay reactive. */
+function Segments(props: { api: UseDateInputContext }): JSX.Element {
+	return (
+		<Index each={props.api().getSegments()}>
+			{(segment) => (
+				<DateInput.Segment class={styles.segment} segment={segment()} />
+			)}
+		</Index>
+	);
+}
+
+const EDITABLE_SEGMENT = "[data-part=segment][data-editable]";
+
+function isEditableSegment(element: HTMLElement): boolean {
+	return element.closest(EDITABLE_SEGMENT) !== null;
+}
+
+function focusFirstEditableSegment(control: HTMLElement | undefined): void {
+	control?.querySelector<HTMLElement>(EDITABLE_SEGMENT)?.focus();
 }
 
 /**
@@ -87,17 +117,13 @@ function toControlledValue(value: string | null | undefined) {
  * (mirroring EmboUI).
  */
 export function TimePicker(props: TimePickerProps): JSX.Element {
-	let controlEl: HTMLDivElement | undefined;
+	let controlElement: HTMLDivElement | undefined;
 
 	const [own, rest] = splitArkProps(props, OWN_KEYS);
 	const [makeFieldProps] = splitMakeFieldProps(rest);
 
-	const minTime = createMemo(() =>
-		own.minTime ? (parseHHMM(own.minTime) ?? undefined) : undefined
-	);
-	const maxTime = createMemo(() =>
-		own.maxTime ? (parseHHMM(own.maxTime) ?? undefined) : undefined
-	);
+	const minTime = createMemo(() => parseOptionalHHMM(own.minTime));
+	const maxTime = createMemo(() => parseOptionalHHMM(own.maxTime));
 	// Memoized by the string value, not recomputed identity — mirrors
 	// DatePicker's minDate/maxDate memoization. `toControlledValue` mints a
 	// fresh DateValue[] each call; without memoizing, every reactive
@@ -120,12 +146,10 @@ export function TimePicker(props: TimePickerProps): JSX.Element {
 	// below); updated directly from every attempted edit (in the machine's
 	// onValueChange, below) so a rejected out-of-range entry is still visible.
 	const [attemptedTime, setAttemptedTime] = createSignal<Time | undefined>(
-		own.value ? (parseHHMM(own.value) ?? undefined) : undefined
+		parseOptionalHHMM(own.value)
 	);
 	createEffect(() => {
-		setAttemptedTime(
-			own.value ? (parseHHMM(own.value) ?? undefined) : undefined
-		);
+		setAttemptedTime(parseOptionalHHMM(own.value));
 	});
 
 	const dateInput = useDateInput(() => ({
@@ -166,15 +190,15 @@ export function TimePicker(props: TimePickerProps): JSX.Element {
 
 	// Derive validity from the most recently attempted time. An out-of-range
 	// time marks the field invalid rather than being clamped.
-	const rangeInvalid = createMemo(() => {
+	const isRangeInvalid = createMemo(() => {
 		const time = attemptedTime();
 		return time ? !isWithinWindow(time, minTime(), maxTime()) : false;
 	});
-	const invalid = createMemo(
-		() => Boolean(makeFieldProps.invalid) || rangeInvalid()
+	const isInvalid = createMemo(
+		() => Boolean(makeFieldProps.invalid) || isRangeInvalid()
 	);
 	const errorText = createMemo(() =>
-		rangeInvalid()
+		isRangeInvalid()
 			? (makeFieldProps.errorText ?? DEFAULT_OUT_OF_RANGE_TEXT)
 			: makeFieldProps.errorText
 	);
@@ -183,36 +207,29 @@ export function TimePicker(props: TimePickerProps): JSX.Element {
 	// data-part="segment" but is aria-hidden and non-focusable (no
 	// data-editable) — selecting [data-editable] skips it and lands on hour.
 	function focusInput(): void {
-		controlEl
-			?.querySelector<HTMLElement>("[data-part=segment][data-editable]")
-			?.focus();
+		focusFirstEditableSegment(controlElement);
 	}
 
 	return (
 		<MakeField
 			{...makeFieldProps}
-			invalid={invalid()}
+			invalid={isInvalid()}
 			errorText={errorText()}
 			onLabelClicked={focusInput}
 			focusField={focusInput}
 		>
 			<DateInput.RootProvider value={dateInput} class={styles.root}>
 				<DateInput.Control
-					ref={(el) => {
-						controlEl = el;
+					ref={(element) => {
+						controlElement = element;
 					}}
 					class={styles.control}
-					data-invalid={invalid() ? "true" : undefined}
+					data-invalid={isInvalid() ? "true" : undefined}
 					onClick={(event) => {
 						// Clicking the empty field area (or the icon) focuses
 						// the first segment, like a normal text field. Clicks
 						// on an editable segment keep their own behaviour.
-						const target = event.target as HTMLElement;
-						if (
-							!target.closest(
-								"[data-part=segment][data-editable]"
-							)
-						) {
+						if (!isEditableSegment(event.target as HTMLElement)) {
 							focusInput();
 						}
 					}}
@@ -220,16 +237,7 @@ export function TimePicker(props: TimePickerProps): JSX.Element {
 					<Icon class={styles.icon}>{ICONS.time}</Icon>
 					<DateInput.SegmentGroup class={styles.segmentGroup}>
 						<DateInput.Context>
-							{(api) => (
-								<Index each={api().getSegments()}>
-									{(segment) => (
-										<DateInput.Segment
-											class={styles.segment}
-											segment={segment()}
-										/>
-									)}
-								</Index>
-							)}
+							{(api) => <Segments api={api} />}
 						</DateInput.Context>
 					</DateInput.SegmentGroup>
 				</DateInput.Control>

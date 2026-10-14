@@ -10,9 +10,9 @@ import schema from "./schema.ts";
 
 const modules = import.meta.glob("./**/*.*s");
 
-async function seedBoard(t: ReturnType<typeof convexTest>) {
-	const boardId = await t.run((ctx) =>
-		ctx.db.insert("people", {
+async function seedBoard(backend: ReturnType<typeof convexTest>) {
+	const boardId = await backend.run((context) =>
+		context.db.insert("people", {
 			email: "b@example.org",
 			firstName: "B",
 			lastName: "O",
@@ -21,14 +21,14 @@ async function seedBoard(t: ReturnType<typeof convexTest>) {
 			stageSince: Date.now(),
 		})
 	);
-	return { board: t.withIdentity({ email: "b@example.org" }), boardId };
+	return { board: backend.withIdentity({ email: "b@example.org" }), boardId };
 }
 
 async function seedAssignee(
-	t: ReturnType<typeof convexTest>
+	backend: ReturnType<typeof convexTest>
 ): Promise<Id<"people">> {
-	return t.run((ctx) =>
-		ctx.db.insert("people", {
+	return backend.run((context) =>
+		context.db.insert("people", {
 			email: "a@example.org",
 			firstName: "A",
 			lastName: "Z",
@@ -40,8 +40,8 @@ async function seedAssignee(
 }
 
 test("create defaults to backlog + empty assignees, then list returns it", async () => {
-	const t = convexTest(schema, modules);
-	const { board } = await seedBoard(t);
+	const backend = convexTest(schema, modules);
+	const { board } = await seedBoard(backend);
 	const id = await board.mutation(api.tasks.create, { title: "Ship it" });
 	const tasks = await board.query(api.tasks.list, {});
 	expect(tasks).toHaveLength(1);
@@ -54,8 +54,8 @@ test("create defaults to backlog + empty assignees, then list returns it", async
 });
 
 test("update patches status", async () => {
-	const t = convexTest(schema, modules);
-	const { board } = await seedBoard(t);
+	const backend = convexTest(schema, modules);
+	const { board } = await seedBoard(backend);
 	const id = await board.mutation(api.tasks.create, { title: "Move me" });
 	await board.mutation(api.tasks.update, { id, status: "in_progress" });
 	const tasks = await board.query(api.tasks.list, {});
@@ -63,9 +63,9 @@ test("update patches status", async () => {
 });
 
 test("non-board is forbidden", async () => {
-	const t = convexTest(schema, modules);
-	await t.run(async (ctx) => {
-		await ctx.db.insert("people", {
+	const backend = convexTest(schema, modules);
+	await backend.run(async (context) => {
+		await context.db.insert("people", {
 			email: "m@example.org",
 			firstName: "M",
 			lastName: "E",
@@ -74,15 +74,15 @@ test("non-board is forbidden", async () => {
 			stageSince: Date.now(),
 		});
 	});
-	const member = t.withIdentity({ email: "m@example.org" });
+	const member = backend.withIdentity({ email: "m@example.org" });
 	await expect(member.query(api.tasks.list, {})).rejects.toThrow(/Forbidden/);
 });
 
 test("create emails a newly-assigned person", async () => {
-	const t = convexTest(schema, modules);
-	const { board } = await seedBoard(t);
-	const assigneeId = await seedAssignee(t);
-	const logs = await runAndCollectLogs(t, () =>
+	const backend = convexTest(schema, modules);
+	const { board } = await seedBoard(backend);
+	const assigneeId = await seedAssignee(backend);
+	const logs = await runAndCollectLogs(backend, () =>
 		board.mutation(api.tasks.create, {
 			title: "Wire it",
 			assigneeIds: [assigneeId],
@@ -90,47 +90,51 @@ test("create emails a newly-assigned person", async () => {
 	);
 	expect(
 		logs.some(
-			(m) =>
-				m.includes("[notify:taskAssigned]") &&
-				m.includes("a@example.org") &&
-				m.includes("Wire it")
+			(message) =>
+				message.includes("[notify:taskAssigned]") &&
+				message.includes("a@example.org") &&
+				message.includes("Wire it")
 		)
 	).toBe(true);
 });
 
 test("update emails only the newly-added assignee", async () => {
-	const t = convexTest(schema, modules);
-	const { board } = await seedBoard(t);
-	const assigneeId = await seedAssignee(t);
+	const backend = convexTest(schema, modules);
+	const { board } = await seedBoard(backend);
+	const assigneeId = await seedAssignee(backend);
 	const id = await board.mutation(api.tasks.create, { title: "Grow it" });
-	const logs = await runAndCollectLogs(t, () =>
+	const logs = await runAndCollectLogs(backend, () =>
 		board.mutation(api.tasks.update, { id, assigneeIds: [assigneeId] })
 	);
-	expect(logs.some((m) => m.includes("[notify:taskAssigned]"))).toBe(true);
+	expect(
+		logs.some((message) => message.includes("[notify:taskAssigned]"))
+	).toBe(true);
 });
 
 test("does not email the actor for a self-assignment", async () => {
-	const t = convexTest(schema, modules);
-	const { board, boardId } = await seedBoard(t);
-	const logs = await runAndCollectLogs(t, () =>
+	const backend = convexTest(schema, modules);
+	const { board, boardId } = await seedBoard(backend);
+	const logs = await runAndCollectLogs(backend, () =>
 		board.mutation(api.tasks.create, {
 			title: "Mine",
 			assigneeIds: [boardId],
 		})
 	);
-	expect(logs.some((m) => m.includes("[notify:taskAssigned]"))).toBe(false);
+	expect(
+		logs.some((message) => message.includes("[notify:taskAssigned]"))
+	).toBe(false);
 });
 
 test("the assignment email deep-links to the task, not the board", async () => {
-	const t = convexTest(schema, modules);
-	const { board } = await seedBoard(t);
-	const assigneeId = await seedAssignee(t);
+	const backend = convexTest(schema, modules);
+	const { board } = await seedBoard(backend);
+	const assigneeId = await seedAssignee(backend);
 	const id = await board.mutation(api.tasks.create, {
 		title: "Wire it",
 		assigneeIds: [assigneeId],
 	});
-	const jobs = await t.run((ctx) =>
-		ctx.db.system.query("_scheduled_functions").collect()
+	const jobs = await backend.run((context) =>
+		context.db.system.query("_scheduled_functions").collect()
 	);
 	expect(jobs).toEqual(
 		expect.arrayContaining([
@@ -152,8 +156,8 @@ test("the assignment email deep-links to the task, not the board", async () => {
 });
 
 test("create and update reject an over-long title or description", async () => {
-	const t = convexTest(schema, modules);
-	const { board } = await seedBoard(t);
+	const backend = convexTest(schema, modules);
+	const { board } = await seedBoard(backend);
 	await expect(
 		board.mutation(api.tasks.create, { title: "t".repeat(201) })
 	).rejects.toThrow("Title is too long (max 200 characters).");

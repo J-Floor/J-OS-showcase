@@ -5,13 +5,14 @@ import {
 	PropertyRow,
 	Select,
 } from "@j-os/design-system";
-import { For } from "solid-js";
+import { createMemo } from "solid-js";
 
 import {
 	PHONE_MAX,
 	TEXT_MAX,
 	VENTURE_NAME_MAX,
 } from "../../../convex/lib/validate.ts";
+import { SelectOptionList } from "../../shared/components/SelectOptionList.tsx";
 import { ICONS } from "../../shared/icons.ts";
 import type {
 	FundingStage,
@@ -63,7 +64,7 @@ export function CompanyField(props: {
 	);
 }
 
-export function DescriptionField(props: {
+export function DescriptionRow(props: {
 	value?: string;
 	onCommit: (v: string) => void;
 }) {
@@ -87,11 +88,13 @@ export function TeamSizeField(props: {
 		<PropertyRow icon={ICONS.teamSize} label="Team size">
 			<NumberInput
 				min={1}
-				value={props.value != null ? String(props.value) : ""}
-				onValueChange={(d) => {
+				value={
+					typeof props.value === "number" ? String(props.value) : ""
+				}
+				onValueChange={(details) => {
 					props.onCommit(
-						Number.isFinite(d.valueAsNumber)
-							? d.valueAsNumber
+						Number.isFinite(details.valueAsNumber)
+							? details.valueAsNumber
 							: undefined
 					);
 				}}
@@ -110,13 +113,13 @@ export function VerticalField(props: {
 				placeholder="Pick one or more"
 				multiple
 				allowClearing
-				items={verticalOptions.map((o) => ({
-					value: o.value,
-					label: o.label,
+				items={verticalOptions.map((option) => ({
+					value: option.value,
+					label: option.label,
 				}))}
 				value={props.value ?? []}
-				onValueChange={(d) => {
-					props.onCommit(d.value as Vertical[]);
+				onValueChange={(details) => {
+					props.onCommit(details.value as Vertical[]);
 				}}
 			/>
 		</PropertyRow>
@@ -131,27 +134,24 @@ function StageSelect<T extends string>(props: {
 	value?: T;
 	onCommit: (v: T | undefined) => void;
 }) {
+	const selectItems = createMemo(() =>
+		props.options.map((option) => ({
+			value: option.value,
+			title: option.label,
+		}))
+	);
 	return (
 		<PropertyRow icon={props.icon} label={props.label}>
 			<Select.Root
 				placeholder="Pick one"
 				allowClearing
-				options={props.options.map((o) => ({
-					value: o.value,
-					title: o.label,
-				}))}
+				options={selectItems()}
 				value={props.value ? [props.value] : []}
-				onValueChange={(d) => {
-					props.onCommit(d.value[0] as T | undefined);
+				onValueChange={(details) => {
+					props.onCommit(details.value[0] as T | undefined);
 				}}
 			>
-				<Select.Content>
-					<For each={props.options}>
-						{(o) => (
-							<Select.Option value={o.value} title={o.label} />
-						)}
-					</For>
-				</Select.Content>
+				<SelectOptionList options={selectItems()} />
 			</Select.Root>
 		</PropertyRow>
 	);

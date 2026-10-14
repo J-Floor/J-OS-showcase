@@ -16,9 +16,13 @@ const mocks = vi.hoisted(() => {
 });
 const { signOut, navigate } = mocks;
 
+function readSessionState(): SessionState {
+	return mocks.sessionState;
+}
+
 vi.mock("../lib/auth.ts", () => ({
 	authClient: {
-		useSession: () => () => mocks.sessionState,
+		useSession: () => readSessionState,
 		signOut: mocks.signOut,
 	},
 }));

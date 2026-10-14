@@ -24,10 +24,10 @@ export function ProjectCard(props: {
 			<span class={styles.name}>{props.name}</span>
 			<span class={styles.meta}>
 				<Show when={props.leaderName}>
-					{(n) => (
+					{(name) => (
 						<span class={styles.item}>
 							<Icon>{ICONS.person}</Icon>
-							{n()}
+							{name()}
 						</span>
 					)}
 				</Show>

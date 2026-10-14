@@ -65,8 +65,8 @@ describe("Drawer", () => {
 		));
 		expect(screen.queryByText("fields")).toBeNull();
 		expect(
-			document.querySelectorAll("[data-drawer-skeleton-row]").length
-		).toBe(6);
+			document.querySelectorAll("[data-drawer-skeleton-row]")
+		).toHaveLength(6);
 		expect(
 			document.querySelector("[data-drawer-skeleton]")
 		).toBeInTheDocument();
@@ -95,8 +95,8 @@ describe("Drawer", () => {
 			document.querySelector("[data-drawer-skeleton]")
 		).toBeInTheDocument();
 		expect(
-			document.querySelectorAll("[data-drawer-skeleton-row]").length
-		).toBe(0);
+			document.querySelectorAll("[data-drawer-skeleton-row]")
+		).toHaveLength(0);
 	});
 
 	test("Title with loading shows a shimmer, not the text", () => {
@@ -167,7 +167,10 @@ describe("Drawer", () => {
 						<Drawer.Title>T</Drawer.Title>
 					</Drawer.Header>
 					<Drawer.Body>
-						<input ref={(el) => (input = el)} aria-label="title" />
+						<input
+							ref={(element) => (input = element)}
+							aria-label="title"
+						/>
 					</Drawer.Body>
 				</Drawer.Root>
 			));

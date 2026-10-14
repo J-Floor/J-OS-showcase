@@ -59,8 +59,8 @@ const TASKS = {
 const PUSH_OFF_HINT =
 	"Turn on push notifications above to choose what gets pushed here.";
 
-function renderCategories(pushOn = true) {
-	return render(() => <NotificationCategories pushOn={pushOn} />);
+function renderCategories(isPushOn = true) {
+	return render(() => <NotificationCategories pushOn={isPushOn} />);
 }
 
 function group(name: string) {

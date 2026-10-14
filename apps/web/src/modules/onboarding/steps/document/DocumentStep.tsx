@@ -8,23 +8,11 @@ import type { OnboardingStepProps } from "../../types.ts";
 
 import styles from "./DocumentStep.module.scss";
 
-/**
- * Onboarding step A: read + sign the J floor agreement. Shows an unsigned
- * preview PDF (the signer's details + today's date stamped onto the template,
- * via `previewAgreement`), pre-fills read-only signer details, captures a drawn
- * signature, and submits to `signAgreement` — which generates the countersigned
- * PDF, stores it, emails it, and marks this step complete.
- */
-export function DocumentStep(props: OnboardingStepProps) {
-	const sign = useAction(api.agreements.signAgreement);
+/** The agreement PDF for this person: the filled-but-unsigned preview once
+ *  it is generated (on mount), the blank template until then or if
+ *  generation failed. */
+function createAgreementPdf(props: OnboardingStepProps) {
 	const preview = useAction(api.agreements.previewAgreement);
-	const [sig, setSig] = createSignal<string | null>(null);
-	const [busy, setBusy] = createSignal(false);
-	const [error, setError] = createSignal<string | null>(null);
-	// Inline embed is hidden by default: <object>/inline PDF is unreliable on
-	// iOS Safari / Android Chrome (and the embed is bulky), so we gate it behind
-	// "View inline" and make "Download PDF" — which works everywhere — primary.
-	const [showPdf, setShowPdf] = createSignal(false);
 	// Blob URL of the filled-but-unsigned preview, generated once on mount.
 	const [previewUrl, setPreviewUrl] = createSignal<string | null>(null);
 
@@ -39,17 +27,14 @@ export function DocumentStep(props: OnboardingStepProps) {
 	function docUrl() {
 		return previewUrl() ?? templateUrl();
 	}
-	function canSign() {
-		return Boolean(sig()) && !busy();
-	}
 
 	onMount(() => {
 		void (async () => {
 			try {
 				const b64 = await preview.mutateAsync({});
 				if (!b64) return;
-				const bytes = Uint8Array.from(atob(b64), (c) =>
-					c.charCodeAt(0)
+				const bytes = Uint8Array.from(atob(b64), (character) =>
+					character.charCodeAt(0)
 				);
 				const url = URL.createObjectURL(
 					new Blob([bytes], { type: "application/pdf" })
@@ -61,17 +46,57 @@ export function DocumentStep(props: OnboardingStepProps) {
 		})();
 	});
 	onCleanup(() => {
-		const u = previewUrl();
-		if (u) URL.revokeObjectURL(u);
+		const url = previewUrl();
+		if (url) URL.revokeObjectURL(url);
 	});
 
 	function downloadPdf() {
-		const a = document.createElement("a");
-		a.href = docUrl();
-		a.download = "J floor agreement.pdf";
-		document.body.appendChild(a);
-		a.click();
-		a.remove();
+		const link = document.createElement("a");
+		link.href = docUrl();
+		link.download = "J floor agreement.pdf";
+		document.body.appendChild(link);
+		link.click();
+		link.remove();
+	}
+
+	return { docUrl, downloadPdf };
+}
+
+/** The signer's details, read-only, as stamped onto the agreement. */
+function SignerDetails(props: { person: OnboardingStepProps["person"] }) {
+	return (
+		<dl class={styles.fields}>
+			<dt>Name</dt>
+			<dd>
+				{props.person.firstName} {props.person.lastName}
+			</dd>
+			<dt>Company</dt>
+			<dd>{props.person.venture?.name}</dd>
+			<dt>Email</dt>
+			<dd>{props.person.email}</dd>
+		</dl>
+	);
+}
+
+/**
+ * Onboarding step A: read + sign the J floor agreement. Shows an unsigned
+ * preview PDF (the signer's details + today's date stamped onto the template,
+ * via `previewAgreement`), pre-fills read-only signer details, captures a drawn
+ * signature, and submits to `signAgreement` — which generates the countersigned
+ * PDF, stores it, emails it, and marks this step complete.
+ */
+export function DocumentStep(props: OnboardingStepProps) {
+	const sign = useAction(api.agreements.signAgreement);
+	const [sig, setSig] = createSignal<string | null>(null);
+	const [busy, setBusy] = createSignal(false);
+	const [error, setError] = createSignal<string | null>(null);
+	// Inline embed is hidden by default: <object>/inline PDF is unreliable on
+	// iOS Safari / Android Chrome (and the embed is bulky), so we gate it behind
+	// "View inline" and make "Download PDF" — which works everywhere — primary.
+	const [showPdf, setShowPdf] = createSignal(false);
+	const { docUrl, downloadPdf } = createAgreementPdf(props);
+	function canSign() {
+		return Boolean(sig()) && !busy();
 	}
 
 	async function submit() {
@@ -99,7 +124,7 @@ export function DocumentStep(props: OnboardingStepProps) {
 				<Button
 					variant="secondary"
 					onClick={() => {
-						setShowPdf((v) => !v);
+						setShowPdf((isShown) => !isShown);
 					}}
 				>
 					{showPdf() ? "Hide inline" : "Read inline"}
@@ -117,6 +142,7 @@ export function DocumentStep(props: OnboardingStepProps) {
 				Read privacy policy
 			</Button>
 			<Show when={showPdf()}>
+				{/* eslint-disable-next-line sonarjs/object-alt-content -- the Download PDF button beside it is the fallback; the embed is only an inline preview */}
 				<object
 					class={styles.doc}
 					data={docUrl()}
@@ -124,16 +150,7 @@ export function DocumentStep(props: OnboardingStepProps) {
 					aria-label="J floor agreement"
 				/>
 			</Show>
-			<dl class={styles.fields}>
-				<dt>Name</dt>
-				<dd>
-					{props.person.firstName} {props.person.lastName}
-				</dd>
-				<dt>Company</dt>
-				<dd>{props.person.venture?.name}</dd>
-				<dt>Email</dt>
-				<dd>{props.person.email}</dd>
-			</dl>
+			<SignerDetails person={props.person} />
 			<SignaturePad label="Your signature" onChange={setSig} />
 			<Show when={error()}>
 				<p class={styles.error}>{error()}</p>

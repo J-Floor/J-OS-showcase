@@ -16,7 +16,7 @@ export const projectAssigned = defineKind({
 		projectId: v.id("projects"),
 		projectName: v.string(),
 	}),
-	audience: (ctx, { leaderId }) => entitledIds(ctx, [leaderId]),
+	audience: (context, { leaderId }) => entitledIds(context, [leaderId]),
 	push: ({ projectId, projectName }) => ({
 		title: "You're leading a project",
 		body: projectName,

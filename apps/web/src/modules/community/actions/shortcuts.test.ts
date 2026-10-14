@@ -14,7 +14,7 @@ function stub(
 		hotkey,
 		scope,
 		can: () => true,
-		run: () => undefined,
+		run: () => {},
 	};
 }
 

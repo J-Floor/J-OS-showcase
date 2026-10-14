@@ -27,9 +27,9 @@ export function hostOptions(
 ): HostOption[] {
 	const labels = shortNames(boardLevel);
 	return [
-		...boardLevel.map((s) => ({
-			value: s._id,
-			label: labels.get(s._id) ?? "—",
+		...boardLevel.map((member) => ({
+			value: member._id,
+			label: labels.get(member._id) ?? "—",
 		})),
 		{ value: UNRESOLVED_HOST, label: "Unresolved (imported)" },
 		{ value: NO_HOST, label: "No host" },
@@ -42,5 +42,5 @@ export function hostValue(row: {
 	hostedBy?: string;
 }): string {
 	if (row.hostedById !== undefined) return row.hostedById;
-	return row.hostedBy !== undefined ? UNRESOLVED_HOST : NO_HOST;
+	return row.hostedBy === undefined ? NO_HOST : UNRESOLVED_HOST;
 }

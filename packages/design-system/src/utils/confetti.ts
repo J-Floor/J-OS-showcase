@@ -1,5 +1,7 @@
 import confetti from "canvas-confetti";
 
+const VIEWPORT_CENTRE = 0.5;
+
 /**
  * Fire a small confetti burst localised to `origin` — an element (burst from its
  * centre) or a normalised viewport point `{ x, y }` (0–1). Defaults to centre.
@@ -8,8 +10,8 @@ import confetti from "canvas-confetti";
  * Respects `prefers-reduced-motion`.
  */
 export function fireConfetti(origin?: HTMLElement | { x: number; y: number }) {
-	let x = 0.5;
-	let y = 0.5;
+	let x = VIEWPORT_CENTRE;
+	let y = VIEWPORT_CENTRE;
 	if (origin instanceof HTMLElement) {
 		const rect = origin.getBoundingClientRect();
 		// A detached element measures 0×0 — fall back to centre rather than 0,0.

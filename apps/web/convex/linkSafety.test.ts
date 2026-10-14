@@ -7,9 +7,9 @@ import schema from "./schema.ts";
 const modules = import.meta.glob("./**/*.*s");
 const ENDPOINT = "https://safebrowsing.googleapis.com/v4/threatMatches:find";
 
-async function seed(t: ReturnType<typeof convexTest>) {
-	return t.run((ctx) =>
-		ctx.db.insert("people", {
+async function seed(backend: ReturnType<typeof convexTest>) {
+	return backend.run((context) =>
+		context.db.insert("people", {
 			email: "ada@example.com",
 			firstName: "Ada",
 			lastName: "",
@@ -33,8 +33,8 @@ afterEach(() => {
 
 describe("linkSafety.check", () => {
 	it("flags a matched link and stamps checkedAt on every link", async () => {
-		const t = convexTest(schema, modules);
-		const id = await seed(t);
+		const backend = convexTest(schema, modules);
+		const id = await seed(backend);
 		vi.stubEnv("SAFE_BROWSING_API_KEY", "k");
 		const fetchMock = vi.fn<(url: string) => Promise<Response>>(() =>
 			Promise.resolve(
@@ -52,37 +52,40 @@ describe("linkSafety.check", () => {
 			)
 		);
 		vi.stubGlobal("fetch", fetchMock);
-		await t.action(internal.linkSafety.check, { personId: id });
+		await backend.action(internal.linkSafety.check, { personId: id });
 		expect(fetchMock.mock.calls[0][0]).toContain(ENDPOINT);
-		const links = (await t.run((ctx) => ctx.db.get(id)))!.venture!.links!;
+		const links = (await backend.run((context) => context.db.get(id)))!
+			.venture!.links!;
 		expect(links[0].threat).toBeUndefined();
 		expect(links[0].checkedAt).toBeTypeOf("number");
 		expect(links[1].threat).toBe("SOCIAL_ENGINEERING");
 	});
 
 	it("leaves links untouched without a key or on an API error", async () => {
-		const t = convexTest(schema, modules);
-		const id = await seed(t);
+		const backend = convexTest(schema, modules);
+		const id = await seed(backend);
 		vi.stubEnv("SAFE_BROWSING_API_KEY", "");
-		await t.action(internal.linkSafety.check, { personId: id });
+		await backend.action(internal.linkSafety.check, { personId: id });
 		expect(
-			(await t.run((ctx) => ctx.db.get(id)))!.venture!.links![0].checkedAt
+			(await backend.run((context) => context.db.get(id)))!.venture!
+				.links![0].checkedAt
 		).toBeUndefined();
 		vi.stubEnv("SAFE_BROWSING_API_KEY", "k");
 		vi.stubGlobal(
 			"fetch",
 			vi.fn(() => Promise.resolve(new Response("nope", { status: 500 })))
 		);
-		await t.action(internal.linkSafety.check, { personId: id });
+		await backend.action(internal.linkSafety.check, { personId: id });
 		expect(
-			(await t.run((ctx) => ctx.db.get(id)))!.venture!.links![0].checkedAt
+			(await backend.run((context) => context.db.get(id)))!.venture!
+				.links![0].checkedAt
 		).toBeUndefined();
 	});
 
 	it("sends the key in a header and every link in the body, and matches a trailing-slash verdict", async () => {
-		const t = convexTest(schema, modules);
-		const id = await t.run((ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const id = await backend.run((context) =>
+			context.db.insert("people", {
 				email: "bo@example.com",
 				firstName: "Bo",
 				lastName: "",
@@ -117,7 +120,7 @@ describe("linkSafety.check", () => {
 			)
 		);
 		vi.stubGlobal("fetch", fetchMock);
-		await t.action(internal.linkSafety.check, { personId: id });
+		await backend.action(internal.linkSafety.check, { personId: id });
 		const [url, init] = fetchMock.mock.calls[0];
 		expect(url).toBe(ENDPOINT);
 		expect(new Headers(init.headers).get("X-Goog-Api-Key")).toBe(
@@ -139,14 +142,15 @@ describe("linkSafety.check", () => {
 			{ url: "https://evil.example" },
 			{ url: "https://fine.example/" },
 		]);
-		const links = (await t.run((ctx) => ctx.db.get(id)))!.venture!.links!;
+		const links = (await backend.run((context) => context.db.get(id)))!
+			.venture!.links!;
 		expect(links[0].threat).toBe("MALWARE");
 		expect(links[1].threat).toBeUndefined();
 	});
 
 	it("survives a thrown fetch: logs the error name only and writes nothing", async () => {
-		const t = convexTest(schema, modules);
-		const id = await seed(t);
+		const backend = convexTest(schema, modules);
+		const id = await seed(backend);
 		vi.stubEnv("SAFE_BROWSING_API_KEY", "secret-key");
 		vi.stubGlobal(
 			"fetch",
@@ -157,14 +161,15 @@ describe("linkSafety.check", () => {
 			)
 		);
 		const err = vi.spyOn(console, "error").mockImplementation(() => {});
-		await t.action(internal.linkSafety.check, { personId: id });
+		await backend.action(internal.linkSafety.check, { personId: id });
 		const logged = err.mock.calls.flat().map(String).join(" ");
 		err.mockRestore();
 		expect(logged).toContain("TypeError");
 		expect(logged).not.toContain("good.example");
 		expect(logged).not.toContain("secret-key");
 		expect(
-			(await t.run((ctx) => ctx.db.get(id)))!.venture!.links![0].checkedAt
+			(await backend.run((context) => context.db.get(id)))!.venture!
+				.links![0].checkedAt
 		).toBeUndefined();
 	});
 });

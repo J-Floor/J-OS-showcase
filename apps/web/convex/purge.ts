@@ -15,12 +15,15 @@ import {
 import { displayName } from "./lib/names.ts";
 import {
 	documentsNaming,
+	type Naming,
 	overBudget,
 	readBudget,
+	type ReadBudget,
 	stripPersonId,
 	takeCharged,
 } from "./lib/peopleRefs.ts";
 import { personStateOf } from "./lib/personState.ts";
+import { withoutSystemFields } from "./people.ts";
 
 // Convex mutations are transactions with limits on documents read and
 // written; the application and visitor sign-up forms are both public and
@@ -47,43 +50,47 @@ export const BATCH_SIZE = 200;
  */
 export const purgeUnverified = internalMutation({
 	args: {},
-	handler: async (ctx) => {
+	handler: async (context) => {
 		const now = Date.now();
-		const prospects = await ctx.db
+		const prospects = await context.db
 			.query("people")
-			.withIndex("by_tier_and_formerOf", (q) => q.eq("tier", "prospect"))
+			.withIndex("by_tier_and_formerOf", (range) =>
+				range.eq("tier", "prospect")
+			)
 			.take(BATCH_SIZE);
 		let count = 0;
 		for (const person of prospects) {
-			if (!(await abandoned(ctx.db, person, now))) continue;
-			await deleteAbandoned(ctx, person._id);
+			if (!(await abandoned(context.db, person, now))) continue;
+			await deleteAbandoned(context, person._id);
 			count++;
 		}
-		const visitors = await ctx.db
+		const visitors = await context.db
 			.query("people")
-			.withIndex("by_tier_and_formerOf", (q) => q.eq("tier", "visitor"))
+			.withIndex("by_tier_and_formerOf", (range) =>
+				range.eq("tier", "visitor")
+			)
 			.take(BATCH_SIZE);
 		for (const person of visitors) {
-			if (!(await abandoned(ctx.db, person, now))) continue;
-			await deleteAbandoned(ctx, person._id);
+			if (!(await abandoned(context.db, person, now))) continue;
+			await deleteAbandoned(context, person._id);
 			count++;
 		}
-		const tokens = await purgeConfirmTokens(ctx, now, BATCH_SIZE);
-		await ctx.db.insert("purgeLog", { at: now, count });
+		const tokens = await purgeConfirmTokens(context, now, BATCH_SIZE);
+		await context.db.insert("purgeLog", { at: now, count });
 		return { count, tokens };
 	},
 });
 
 /** Delete an abandoned person with their events and `personState` row. */
-async function deleteAbandoned(ctx: MutationCtx, personId: Id<"people">) {
-	const events = await ctx.db
+async function deleteAbandoned(context: MutationCtx, personId: Id<"people">) {
+	const events = await context.db
 		.query("personEvents")
-		.withIndex("by_person", (q) => q.eq("personId", personId))
+		.withIndex("by_person", (range) => range.eq("personId", personId))
 		.collect();
-	for (const event of events) await ctx.db.delete(event._id);
-	const state = await personStateOf(ctx, personId);
-	if (state) await ctx.db.delete(state._id);
-	await ctx.db.delete(personId);
+	for (const event of events) await context.db.delete(event._id);
+	const state = await personStateOf(context, personId);
+	if (state) await context.db.delete(state._id);
+	await context.db.delete(personId);
 }
 
 /**
@@ -91,12 +98,66 @@ async function deleteAbandoned(ctx: MutationCtx, personId: Id<"people">) {
  * and no other host's id says otherwise. Read from the row as stored, before
  * the host's id is stripped from it.
  */
-function legacyHostIs(row: object, host: Doc<"people">): boolean {
+function isLegacyHost(row: object, host: Doc<"people">): boolean {
 	const { hostedBy, hostedById } = row as Partial<Doc<"people">>;
 	return (
 		hostedBy === displayName(host) &&
 		(hostedById === undefined || hostedById === host._id)
 	);
+}
+
+type ErasureOutcome = "deleted" | "stripped" | "kept";
+
+/** Delete a document the person owns, or strip their id from one that only
+ *  names them. */
+async function eraseDocument(
+	context: MutationCtx,
+	person: Doc<"people">,
+	{ table, doc }: Naming
+): Promise<ErasureOutcome> {
+	if (doc._id === person._id) return "kept";
+	const fields = withoutSystemFields(doc);
+	if (ownedBy(fields, person._id)) {
+		if (table === "signatures") {
+			const { fileId } = doc as unknown as Doc<"signatures">;
+			if (fileId) await context.storage.delete(fileId);
+		}
+		await context.db.delete(doc._id);
+		return "deleted";
+	}
+	const { value, changed } = stripPersonId(fields, person._id);
+	// The legacy host field names a host by display name only.
+	const isHost = table === "people" && isLegacyHost(fields, person);
+	if (isHost) delete (value as { hostedBy?: string }).hostedBy;
+	if (!changed && !isHost) return "kept";
+	await context.db.replace(doc._id, value);
+	return "stripped";
+}
+
+async function erasePerson(
+	context: MutationCtx,
+	{
+		person,
+		budget,
+		tally,
+		used,
+	}: {
+		person: Doc<"people">;
+		budget: ReadBudget;
+		tally: { deleted: number; stripped: number };
+		used: Set<string>;
+	}
+): Promise<void> {
+	const scan = await documentsNaming(context, person._id, budget);
+	if ("problem" in scan) throw new Error(`Erasure refused: ${scan.problem}`);
+	for (const address of addressesOf(person, scan.docs)) used.add(address);
+	for (const naming of scan.docs) {
+		const outcome = await eraseDocument(context, person, naming);
+		if (outcome === "deleted") tally.deleted++;
+		if (outcome === "stripped") tally.stripped++;
+	}
+	await context.db.delete(person._id);
+	tally.deleted++;
 }
 
 /**
@@ -121,57 +182,34 @@ function legacyHostIs(row: object, host: Doc<"people">): boolean {
  */
 export const purgeEmail = internalMutation({
 	args: { email: v.string() },
-	handler: async (ctx, { email }) => {
-		let deleted = 0;
-		let stripped = 0;
+	handler: async (context, { email }) => {
 		const budget = readBudget();
-		const people = await takeCharged(peopleByEmail(ctx, email), budget);
+		const people = await takeCharged(peopleByEmail(context, email), budget);
 		if (!people)
 			throw new Error(`Erasure refused: ${overBudget("people")}`);
-		const ids = new Set<string>(people.map((p) => p._id));
+		const tally = { deleted: 0, stripped: 0 };
+		const ids = new Set<string>(people.map((person) => person._id));
 		const used = new Set<string>();
-		for (const p of people) {
-			const scan = await documentsNaming(ctx, p._id, budget);
-			if ("problem" in scan)
-				throw new Error(`Erasure refused: ${scan.problem}`);
-			for (const address of addressesOf(p, scan.docs)) used.add(address);
-			for (const { table, doc } of scan.docs) {
-				const { _id, _creationTime, ...fields } = doc;
-				void _creationTime;
-				if (_id === p._id) continue;
-				if (ownedBy(fields, p._id)) {
-					if (table === "signatures") {
-						const { fileId } = doc as unknown as Doc<"signatures">;
-						if (fileId) await ctx.storage.delete(fileId);
-					}
-					await ctx.db.delete(_id);
-					deleted++;
-					continue;
-				}
-				const { value, changed } = stripPersonId(fields, p._id);
-				// The legacy host field names a host by display name only.
-				const host = table === "people" && legacyHostIs(fields, p);
-				if (host) delete (value as { hostedBy?: string }).hostedBy;
-				if (!changed && !host) continue;
-				await ctx.db.replace(_id, value);
-				stripped++;
-			}
-			await ctx.db.delete(p._id);
-			deleted++;
-		}
-		const own = await addressesHeldBy(ctx, [...used], ids, budget);
+		for (const person of people)
+			await erasePerson(context, { person, budget, tally, used });
+		const own = await addressesHeldBy(context, [...used], ids, budget);
 		if ("problem" in own)
 			throw new Error(`Erasure refused: ${own.problem}`);
-		const door = await legacyDoorRows(ctx, own.addresses, budget);
+		const door = await legacyDoorRows(context, own.addresses, budget);
 		if ("problem" in door)
 			throw new Error(`Erasure refused: ${door.problem}`);
 		for (const row of door.rows) {
-			await ctx.db.delete(row._id);
-			deleted++;
+			await context.db.delete(row._id);
+			tally.deleted++;
 		}
 		let auth = 0;
 		for (const address of own.addresses)
-			auth += await eraseAuthRecords(ctx, address);
-		return { deleted, stripped, auth, addresses: own.addresses };
+			auth += await eraseAuthRecords(context, address);
+		return {
+			deleted: tally.deleted,
+			stripped: tally.stripped,
+			auth,
+			addresses: own.addresses,
+		};
 	},
 });

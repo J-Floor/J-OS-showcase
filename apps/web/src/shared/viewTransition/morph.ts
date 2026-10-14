@@ -16,10 +16,10 @@
  * runs after that, and would undo whatever the caller did.
  */
 export function morph(update: () => void): Promise<void> {
-	const reduced =
+	const isReduced =
 		typeof matchMedia === "function" &&
 		matchMedia("(prefers-reduced-motion: reduce)").matches;
-	if (reduced || typeof document.startViewTransition !== "function") {
+	if (isReduced || typeof document.startViewTransition !== "function") {
 		update();
 		return Promise.resolve();
 	}
@@ -28,7 +28,7 @@ export function morph(update: () => void): Promise<void> {
 		await new Promise<void>((resolve) => setTimeout(resolve, 0));
 	});
 	return transition.finished.then(
-		() => undefined,
-		() => undefined
+		() => {},
+		() => {}
 	);
 }

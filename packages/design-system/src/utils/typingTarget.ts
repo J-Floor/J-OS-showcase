@@ -108,11 +108,11 @@ export function isTypingTarget(target: EventTarget | null): boolean {
 	if (
 		target.closest(
 			`[role="listbox"], [role="option"], [role="menu"], [role="menuitem"], [role="grid"]:not([${TABLE_GRID_ATTR}])`
-		) !== null
+		) !== null ||
+		target instanceof HTMLTextAreaElement ||
+		target instanceof HTMLSelectElement
 	)
 		return true;
-	if (target instanceof HTMLTextAreaElement) return true;
-	if (target instanceof HTMLSelectElement) return true;
 	if (target instanceof HTMLInputElement) {
 		// eslint-disable-next-line no-restricted-syntax -- input type, not UI copy
 		const type = target.type.toLowerCase();

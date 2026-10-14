@@ -136,29 +136,29 @@ const rows = [
 ] as unknown as MemberRow[];
 
 /** Flip to simulate the roster query still loading (`data()` undefined). */
-let membersLoading = false;
+let isMembersLoading = false;
 afterEach(() => {
-	membersLoading = false;
+	isMembersLoading = false;
 });
 
 vi.mock("../data/useMembers.ts", () => ({
 	useMembers: () => ({
-		data: () => (membersLoading ? undefined : rows),
+		data: () => (isMembersLoading ? undefined : rows),
 	}),
 }));
 
 // memberColumns now calls useQuery(api.people.getAgreementUrl, ...) per row.
 // Stub convex-solidjs so tests don't need a ConvexProvider.
 vi.mock("convex-solidjs", () => ({
-	useQuery: () => ({ data: () => undefined, isLoading: () => true }),
+	useQuery: () => ({ data: () => {}, isLoading: () => true }),
 	// `AgreementButton` resolves the document URL on click instead of holding a
 	// per-row subscription, so the rows now need the raw client too.
 	useConvexClient: () => ({ query: vi.fn(() => Promise.resolve(null)) }),
 	useMutation: vi.fn(() => ({
 		mutate: vi.fn(),
 		mutateAsync: vi.fn(),
-		data: () => undefined,
-		error: () => undefined,
+		data: () => {},
+		error: () => {},
 		isLoading: () => false,
 		reset: vi.fn(),
 	})),
@@ -241,13 +241,13 @@ test("MemberManagement: drawer body contains no inputs or textareas (read-only)"
 	// Scope the "no inputs" check to the Ark Dialog content panel so we don't
 	// accidentally pick up inputs in the table (e.g. filter inputs). Ark renders
 	// Dialog.Content with data-scope="dialog" data-part="content".
-	const dialogEl = openPanel();
-	expect(dialogEl).not.toBeNull();
+	const dialogElement = openPanel();
+	expect(dialogElement).not.toBeNull();
 	// Read-only means the PROFILE is display-only. The one editable control that
 	// remains is the always-available board-notes composer — you can leave a note
 	// without entering edit mode — so assert it is the only one.
 	const editables = [
-		...(dialogEl ?? document.body).querySelectorAll("input, textarea"),
+		...(dialogElement ?? document.body).querySelectorAll("input, textarea"),
 	];
 	expect(editables).toHaveLength(1);
 	expect(editables[0]).toHaveAttribute("placeholder", "Add a note…");
@@ -278,27 +278,33 @@ test("MemberManagement: drawer has Prev (disabled) and Next arrows; Next advance
 	expect(dialogContent).not.toBeNull();
 
 	// Both arrows render in the drawer header
-	const prevBtn = within(dialogContent ?? document.body).getByRole("button", {
-		name: /previous/i,
-		hidden: true,
-	});
-	const nextBtn = within(dialogContent ?? document.body).getByRole("button", {
-		name: /next/i,
-		hidden: true,
-	});
+	const prevButton = within(dialogContent ?? document.body).getByRole(
+		"button",
+		{
+			name: /previous/i,
+			hidden: true,
+		}
+	);
+	const nextButton = within(dialogContent ?? document.body).getByRole(
+		"button",
+		{
+			name: /next/i,
+			hidden: true,
+		}
+	);
 	// Previous button should be disabled (first row in list)
-	expect(prevBtn).toBeDisabled();
+	expect(prevButton).toBeDisabled();
 
 	// `onDisplayedRowsChange` fires via a reactive effect once the table renders;
 	// wait for it to propagate so the nav has the full list and Next is enabled.
 	await waitFor(() => {
-		expect(nextBtn).not.toBeDisabled();
+		expect(nextButton).not.toBeDisabled();
 	});
 
 	// Click Next → drawer should now show the second row's email. Second in
 	// display order is Grace (p3): both p1 and p3 are "not_onboarded", ahead of
 	// Alan's "kicked_out" group.
-	fireEvent.click(nextBtn);
+	fireEvent.click(nextButton);
 	await waitFor(() => {
 		expect(screen.getAllByText("grace@example.com")[0]).toBeInTheDocument();
 	});
@@ -347,10 +353,10 @@ test("MemberManagement: selecting rows and clicking batch Change role opens the 
 		name: /clear selection/i,
 	});
 	const batchBar = clear.parentElement!;
-	const changeRoleBtn = within(batchBar).getByRole("button", {
+	const changeRoleButton = within(batchBar).getByRole("button", {
 		name: /change role/i,
 	});
-	fireEvent.click(changeRoleBtn);
+	fireEvent.click(changeRoleButton);
 
 	// ChangeRoleDialog (unmountOnExit) mounts its content asynchronously on open.
 	// legalEvents("member.onboarding") ∩ legalEvents("former.active") = { SET_ROLE }
@@ -375,10 +381,10 @@ test("MemberManagement: batch Kick out button is still present after the Change 
 		name: /clear selection/i,
 	});
 	const batchBar = clear.parentElement!;
-	const kickOutBtn = within(batchBar).getByRole("button", {
+	const kickOutButton = within(batchBar).getByRole("button", {
 		name: /kick out/i,
 	});
-	expect(kickOutBtn).toBeInTheDocument();
+	expect(kickOutButton).toBeInTheDocument();
 });
 
 test("MemberManagement: per-row Kick out icon is still present after the Change role refactor", () => {
@@ -450,7 +456,7 @@ test("opens a person's drawer when the URL named them", async () => {
 test("a deep link opened while the roster loads shows the drawer skeleton", async () => {
 	// The deep-link id can arrive before the roster's query has answered, so
 	// the drawer must open on the loading skeleton, not a blank name.
-	membersLoading = true;
+	isMembersLoading = true;
 	renderWithSelection(
 		(selection) => <MembersTab selection={selection} active />,
 		{ path: "/community?person=p1" }
@@ -480,7 +486,7 @@ test("a person from another roster opens no drawer here", async () => {
 		).not.toBeNull();
 	});
 	expect(openPanel()).toBeNull();
-	expect(document.querySelectorAll("[data-drawer-skeleton]").length).toBe(0);
+	expect(document.querySelectorAll("[data-drawer-skeleton]")).toHaveLength(0);
 });
 
 test("opening a row from the table puts them in the URL", async () => {
@@ -502,9 +508,9 @@ test("closes its drawer when the person leaves the URL", async () => {
 	// reappears stacked under the next one.
 	let selection!: PersonSelection;
 	renderWithSelection(
-		(s) => {
-			selection = s;
-			return <MembersTab selection={s} />;
+		(created) => {
+			selection = created;
+			return <MembersTab selection={created} />;
 		},
 		{ path: "/community?person=p1" }
 	);

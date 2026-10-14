@@ -2,7 +2,8 @@ import { v } from "convex/values";
 
 import { internalMutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
-import { devAdminEmail } from "./lib/devAdmin.ts";
+import { DAY_MS, NINETY_DAYS } from "./lib/constants.ts";
+import { developmentAdminEmail } from "./lib/devAdmin.ts";
 import { normalizeEmail, personByEmail } from "./lib/emailAddress.ts";
 import type { Tier } from "./lib/lifecycleTypes.ts";
 import { SELF_STEP_IDS } from "./lib/onboardingSteps.ts";
@@ -23,8 +24,6 @@ import { syncSignedVariants } from "./lib/signatures.ts";
  * NEVER run in prod.
  */
 
-const DAY = 24 * 60 * 60 * 1000;
-
 type Preset = {
 	tier: Exclude<Tier, "former" | "visitor">;
 	stage: "onboarding" | "active" | "verified" | "denied";
@@ -38,16 +37,31 @@ function fullSteps(now: number) {
 	);
 }
 
+function onboardingFor(preset: Preset, now: number) {
+	return preset.onboarding === "clear"
+		? undefined
+		: {
+				steps: fullSteps(now),
+				tourSeen: preset.onboarding === "full-seen",
+			};
+}
+
+function accessWindowFor(preset: Preset, now: number) {
+	return preset.access
+		? { accessFrom: now - DAY_MS, accessUntil: now + NINETY_DAYS }
+		: { accessFrom: undefined, accessUntil: undefined };
+}
+
 /** Drive `email`'s person to the given target state. */
 async function apply(
-	ctx: MutationCtx,
+	context: MutationCtx,
 	preset: Preset,
 	email: string | undefined
 ) {
-	const addr = normalizeEmail(email ?? devAdminEmail());
+	const addr = normalizeEmail(email ?? developmentAdminEmail());
 	const now = Date.now();
 
-	const existing = await personByEmail(ctx, addr);
+	const existing = await personByEmail(context, addr);
 	// Display-only name pair for the impersonation account; preserved if the row
 	// already exists, else a generic default.
 	const firstName = existing?.firstName ?? "J Floor";
@@ -56,25 +70,15 @@ async function apply(
 	// Re-onboarding presets clear progress; also wipe any prior signature so the
 	// document step can be re-signed (signAgreement rejects a second signing).
 	if (existing && preset.onboarding === "clear") {
-		const sigs = await ctx.db
+		const sigs = await context.db
 			.query("signatures")
-			.withIndex("by_person", (q) => q.eq("personId", existing._id))
+			.withIndex("by_person", (range) =>
+				range.eq("personId", existing._id)
+			)
 			.collect();
-		for (const sig of sigs) await ctx.db.delete(sig._id);
-		await syncSignedVariants(ctx, existing);
+		for (const sig of sigs) await context.db.delete(sig._id);
+		await syncSignedVariants(context, existing);
 	}
-
-	const onboarding =
-		preset.onboarding === "clear"
-			? undefined
-			: {
-					steps: fullSteps(now),
-					tourSeen: preset.onboarding === "full-seen",
-				};
-
-	const access = preset.access
-		? { accessFrom: now - DAY, accessUntil: now + 90 * DAY }
-		: { accessFrom: undefined, accessUntil: undefined };
 
 	const fields = {
 		tier: preset.tier,
@@ -82,15 +86,15 @@ async function apply(
 		stageSince: now,
 		provenance: "seed" as const,
 		door: { override: "none" as const },
-		onboarding,
-		...access,
+		onboarding: onboardingFor(preset, now),
+		...accessWindowFor(preset, now),
 	};
 
 	if (existing) {
-		await ctx.db.patch(existing._id, fields);
+		await context.db.patch(existing._id, fields);
 		return { person: existing._id };
 	}
-	const id = await ctx.db.insert("people", {
+	const id = await context.db.insert("people", {
 		email: addr,
 		firstName,
 		lastName,
@@ -99,13 +103,13 @@ async function apply(
 	return { person: id };
 }
 
-const emailArg = { email: v.optional(v.string()) };
+const emailArgument = { email: v.optional(v.string()) };
 
 /** Define a zero-arg (optional email) dev mutation for one target state. */
 function presetMutation(preset: Preset) {
 	return internalMutation({
-		args: emailArg,
-		handler: (ctx, { email }) => apply(ctx, preset, email),
+		args: emailArgument,
+		handler: (context, { email }) => apply(context, preset, email),
 	});
 }
 

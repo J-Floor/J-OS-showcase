@@ -4,14 +4,20 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import type { confirmPurpose, reapplyPayload } from "../schema.ts";
 
+import { HEX_RADIX } from "./constants.ts";
+
+const TOKEN_BYTES = 32;
+
 /**
  * A 256-bit opaque confirm token (hex). Uses Web Crypto, so it must be called
  * from an ACTION (or test), never a Convex mutation/query: those are
  * deterministic-replayed and forbid real randomness.
  */
 export function newConfirmToken(): string {
-	const bytes = crypto.getRandomValues(new Uint8Array(32));
-	return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+	const bytes = crypto.getRandomValues(new Uint8Array(TOKEN_BYTES));
+	return Array.from(bytes, (byte) =>
+		byte.toString(HEX_RADIX).padStart(2, "0")
+	).join("");
 }
 
 /**
@@ -24,8 +30,8 @@ export async function hashConfirmToken(token: string): Promise<string> {
 		"SHA-256",
 		new TextEncoder().encode(token)
 	);
-	return Array.from(new Uint8Array(digest), (b) =>
-		b.toString(16).padStart(2, "0")
+	return Array.from(new Uint8Array(digest), (byte) =>
+		byte.toString(HEX_RADIX).padStart(2, "0")
 	).join("");
 }
 
@@ -40,8 +46,8 @@ export type ConfirmStatus =
 	| "invalid"
 	| "ended";
 
-function live(row: Doc<"confirmTokens">, now: number): boolean {
-	return row.consumedAt == null && row.expiresAt > now;
+function isLive(row: Doc<"confirmTokens">, now: number): boolean {
+	return row.consumedAt === undefined && row.expiresAt > now;
 }
 
 /**
@@ -51,7 +57,7 @@ function live(row: Doc<"confirmTokens">, now: number): boolean {
  * is replaced, so a resend invalidates the earlier link.
  */
 export async function issueToken(
-	ctx: MutationCtx,
+	context: MutationCtx,
 	args: {
 		token: string;
 		purpose: Purpose;
@@ -69,19 +75,19 @@ export async function issueToken(
 	if (args.purpose === "emailChange" && args.newEmail === undefined) {
 		throw new Error("emailChange tokens need a newEmail");
 	}
-	const prior = await ctx.db
+	const prior = await context.db
 		.query("confirmTokens")
-		.withIndex("by_person_purpose", (q) =>
-			q.eq("personId", args.personId).eq("purpose", args.purpose)
+		.withIndex("by_person_purpose", (range) =>
+			range.eq("personId", args.personId).eq("purpose", args.purpose)
 		)
 		.collect();
 	for (const row of prior) {
-		if (row.consumedAt != null) continue;
+		if (row.consumedAt !== undefined) continue;
 		if (args.eventId !== undefined && row.eventId !== args.eventId)
 			continue;
-		await ctx.db.delete(row._id);
+		await context.db.delete(row._id);
 	}
-	return ctx.db.insert("confirmTokens", {
+	return context.db.insert("confirmTokens", {
 		tokenHash: await hashConfirmToken(args.token),
 		purpose: args.purpose,
 		personId: args.personId,
@@ -101,23 +107,23 @@ export type Redeem =
 
 /** The raw token's row, or null: the one `by_tokenHash` read every redeem uses. */
 export async function tokenRow(
-	db: DatabaseReader,
+	database: DatabaseReader,
 	token: string
 ): Promise<Doc<"confirmTokens"> | null> {
 	const tokenHash = await hashConfirmToken(token);
-	return db
+	return database
 		.query("confirmTokens")
-		.withIndex("by_tokenHash", (q) => q.eq("tokenHash", tokenHash))
+		.withIndex("by_tokenHash", (range) => range.eq("tokenHash", tokenHash))
 		.first();
 }
 
 /** Look a token up and consume it, in the caller's transaction. */
 export async function redeemToken(
-	ctx: MutationCtx,
+	context: MutationCtx,
 	token: string,
 	purpose: Purpose
 ): Promise<Redeem> {
-	return redeemRow(ctx, await tokenRow(ctx.db, token), purpose);
+	return redeemRow(context, await tokenRow(context.db, token), purpose);
 }
 
 /**
@@ -126,48 +132,48 @@ export async function redeemToken(
  * "invalid".
  */
 export async function redeemRow(
-	ctx: MutationCtx,
+	context: MutationCtx,
 	row: Doc<"confirmTokens"> | null,
 	purpose: Purpose
 ): Promise<Redeem> {
 	if (row?.purpose !== purpose) return { status: "invalid" };
-	if (row.consumedAt != null) return { status: "already", row };
+	if (row.consumedAt !== undefined) return { status: "already", row };
 	const now = Date.now();
 	if (row.expiresAt <= now) return { status: "expired", row };
-	await ctx.db.patch(row._id, { consumedAt: now });
+	await context.db.patch(row._id, { consumedAt: now });
 	return { status: "ok", row: { ...row, consumedAt: now } };
 }
 
 /** Every unconsumed, unexpired token for a person and purpose. */
 export async function liveTokens(
-	db: DatabaseReader,
+	database: DatabaseReader,
 	personId: Id<"people">,
 	purpose: Purpose,
 	now: number
 ): Promise<Doc<"confirmTokens">[]> {
-	const rows = await db
+	const rows = await database
 		.query("confirmTokens")
-		.withIndex("by_person_purpose", (q) =>
-			q.eq("personId", personId).eq("purpose", purpose)
+		.withIndex("by_person_purpose", (range) =>
+			range.eq("personId", personId).eq("purpose", purpose)
 		)
 		.collect();
-	return rows.filter((r) => live(r, now));
+	return rows.filter((row) => isLive(row, now));
 }
 
 /** Delete every unconsumed token for a person and purpose, killing its link. */
 export async function revokeTokens(
-	ctx: MutationCtx,
+	context: MutationCtx,
 	personId: Id<"people">,
 	purpose: Purpose
 ): Promise<void> {
-	const rows = await ctx.db
+	const rows = await context.db
 		.query("confirmTokens")
-		.withIndex("by_person_purpose", (q) =>
-			q.eq("personId", personId).eq("purpose", purpose)
+		.withIndex("by_person_purpose", (range) =>
+			range.eq("personId", personId).eq("purpose", purpose)
 		)
 		.collect();
 	for (const row of rows)
-		if (row.consumedAt == null) await ctx.db.delete(row._id);
+		if (row.consumedAt === undefined) await context.db.delete(row._id);
 }
 
 /**
@@ -175,27 +181,28 @@ export async function revokeTokens(
  * visitor) whose confirm link is dead. The nightly purge deletes these.
  */
 export async function abandoned(
-	db: DatabaseReader,
+	database: DatabaseReader,
 	person: Doc<"people">,
 	now: number
 ): Promise<boolean> {
-	const selfServe = person.tier === "prospect" || person.tier === "visitor";
-	if (!selfServe || person.stage !== "unverified") return false;
+	const isSelfServe = person.tier === "prospect" || person.tier === "visitor";
+	if (!isSelfServe || person.stage !== "unverified") return false;
 	const purpose: Purpose =
 		person.tier === "prospect" ? "application" : "visitor";
-	return (await liveTokens(db, person._id, purpose, now)).length === 0;
+	const tokens = await liveTokens(database, person._id, purpose, now);
+	return tokens.length === 0;
 }
 
 /** Delete rows past `expiresAt`, consumed or not. Returns the count. */
 export async function purgeConfirmTokens(
-	ctx: MutationCtx,
+	context: MutationCtx,
 	now: number,
 	batch: number
 ): Promise<number> {
-	const expired = await ctx.db
+	const expired = await context.db
 		.query("confirmTokens")
-		.withIndex("by_expiresAt", (q) => q.lt("expiresAt", now))
+		.withIndex("by_expiresAt", (range) => range.lt("expiresAt", now))
 		.take(batch);
-	for (const row of expired) await ctx.db.delete(row._id);
+	for (const row of expired) await context.db.delete(row._id);
 	return expired.length;
 }

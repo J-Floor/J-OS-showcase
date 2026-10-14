@@ -1,18 +1,22 @@
-import { Confetti, IconButton, type JfColumnDef } from "@j-os/design-system";
+import { Confetti, type JfColumnDefinition } from "@j-os/design-system";
 import { For } from "solid-js";
 
 import type { Doc } from "../../../../convex/_generated/dataModel";
 import type { PersonStatus } from "../../../../convex/lib/derive.ts";
 import { SHORT_TEXT_SIZE } from "../../../shared/columnSizes.ts";
-import { formatDate, formatDistance } from "../../../shared/time.ts";
+import { formatDistance } from "../../../shared/time.ts";
 import { useGuestActions } from "../actions/guestActions.ts";
-import { FLAG_FILTER_OPTIONS, flagFilterValue } from "../status/copy.ts";
-import { FlagsCell } from "../status/FlagsCell.tsx";
 
 import { NotesCell } from "./applicationColumns.tsx";
+import { flagsColumn } from "./flagsColumn.tsx";
 import { hostValue, type HostOption } from "./hostOptions.ts";
 import { HostSelectCell } from "./HostSelectCell.tsx";
-import { actionsColumnSize, RowActions } from "./RowActions.tsx";
+import { joinedColumn } from "./joinedColumn.ts";
+import {
+	actionsColumnSize,
+	RowActionButton,
+	RowActions,
+} from "./RowActions.tsx";
 import { ventureColumns } from "./ventureColumns.tsx";
 
 export type GuestRow = Doc<"people"> & {
@@ -29,9 +33,10 @@ export function guestStatus(
 	if (row.tier === "former")
 		return row.formerReason === "left" ? "alumni" : "kicked_out";
 	if (row.stage === "onboarding") return "not_onboarded";
-	if (row.stage === "expired") return "expired";
-	return "active";
+	return row.stage === "expired" ? "expired" : "active";
 }
+
+const GUEST_ACTION_COUNT = 3;
 
 const statusOptions = [
 	{ value: "active", label: "Current" },
@@ -55,23 +60,7 @@ function GuestActions(props: { row: GuestRow }) {
 			<For each={guestActions.actions()}>
 				{(action) => {
 					const button = (
-						<IconButton
-							tooltipLabel={action.label}
-							shortcut={action.hotkey}
-							disabled={!action.can(props.row)}
-							// The union behind `disabled` demands a reason whenever the
-							// button can be disabled at all, so this cannot be
-							// optional. The fallback is unreachable for an action
-							// whose `can` is always true — never disabled, so its
-							// reason is never shown.
-							disabledReason={
-								action.disabledReason?.(props.row) ??
-								action.label
-							}
-							onClick={() => void action.run(props.row)}
-						>
-							{action.icon}
-						</IconButton>
+						<RowActionButton action={action} row={props.row} />
 					);
 					return action.id === "member" ? (
 						<Confetti>{button}</Confetti>
@@ -103,7 +92,7 @@ function timeRemainingText(row: GuestRow): string {
  */
 export function guestColumns(
 	hosts: readonly HostOption[]
-): JfColumnDef<GuestRow>[] {
+): JfColumnDefinition<GuestRow>[] {
 	return [
 		{
 			// Hidden grouping column — active above expired (group order from
@@ -112,31 +101,18 @@ export function guestColumns(
 			header: "Status",
 			dataType: "enum",
 			enumOptions: statusOptions,
-			accessorFn: (r) => guestStatus(r),
+			accessorFn: (row) => guestStatus(row),
 		},
 		{ accessorKey: "firstName", header: "First name", dataType: "string" },
 		{ accessorKey: "lastName", header: "Last name", dataType: "string" },
-		{
-			// Exceptions only — the group header above the row already carries the
-			// guest's stage. See `FlagsCell`.
-			id: "flags",
-			header: "Flags",
-			dataType: "enum",
-			// Ids, not labels: the filter compares stable values while the cell
-			// renders the wording. A row may carry several, which the enum filter
-			// now matches on any-of.
-			enumOptions: FLAG_FILTER_OPTIONS,
-			size: 240,
-			accessorFn: (r) => r.status.flags.map(flagFilterValue),
-			cell: (info) => <FlagsCell status={info.row.original.status} />,
-		},
+		flagsColumn<GuestRow>(),
 		{
 			id: "ventureName",
 			header: "Venture",
 			dataType: "string",
 			size: SHORT_TEXT_SIZE,
 			measureText: false,
-			accessorFn: (r) => r.venture?.name ?? "",
+			accessorFn: (row) => row.venture?.name ?? "",
 		},
 		{
 			// Editable: the board member who vouches for this guest. Inline-editable
@@ -154,7 +130,7 @@ export function guestColumns(
 			enumOptions: hosts,
 			disableRowClick: true,
 			size: 180,
-			accessorFn: (r) => hostValue(r),
+			accessorFn: (row) => hostValue(row),
 			cell: (info) => <HostSelectCell row={info.row.original} />,
 		},
 		{
@@ -167,29 +143,21 @@ export function guestColumns(
 			size: { min: 240, weight: 2 },
 			measureText: false,
 			// Sort/filter on the latest note's text — what the cell shows.
-			accessorFn: (r) => r.board?.noteLog?.at(-1)?.text ?? "",
+			accessorFn: (row) => row.board?.noteLog?.at(-1)?.text ?? "",
 			cell: (info) => (
 				<NotesCell row={info.row.original} showShortcutHint={false} />
 			),
 		},
 		...ventureColumns<GuestRow>(),
-		{
-			id: "joinedAt",
-			header: "Joined",
-			dataType: "date",
-			size: "content",
-			accessorFn: (r) => r._creationTime,
-			cell: (info) => formatDate(info.row.original._creationTime),
-			measureText: (r) => formatDate(r._creationTime),
-		},
+		joinedColumn<GuestRow>(),
 		{
 			id: "timeRemaining",
 			header: "Time remaining",
 			dataType: "number",
 			size: "content",
 			// Coalesce to 0 so the accessor's value type is `number` (keeps the
-			// JfColumnDef generics happy); the cell branches on the raw field.
-			accessorFn: (r) => r.accessUntil ?? 0,
+			// JfColumnDefinition generics happy); the cell branches on the raw field.
+			accessorFn: (row) => row.accessUntil ?? 0,
 			cell: (info) => timeRemainingText(info.row.original),
 			measureText: timeRemainingText,
 			measureVolatile: true,
@@ -199,7 +167,7 @@ export function guestColumns(
 			header: "",
 			disableRowClick: true,
 			// The agreement, upgrade to member, and kick out.
-			size: actionsColumnSize(3),
+			size: actionsColumnSize(GUEST_ACTION_COUNT),
 			cell: (info) => <GuestActions row={info.row.original} />,
 		},
 	];

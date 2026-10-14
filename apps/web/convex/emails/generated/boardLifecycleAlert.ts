@@ -19,13 +19,13 @@ export function boardLifecycleAlert({ headline, rows, communityUrl, manageUrl, l
 	return {
 		html: HTML
 		.split("__JF_HEADLINE__").join(escapeHtml(headline))
-		.split("__JF_ROWS__").join(rows.map((item) => ROWS_HTML.replace(/\{(name|url|code|detail)\}/g, (_, k: keyof (typeof rows)[number]) => escapeHtml(item[k]))).join(""))
+		.split("__JF_ROWS__").join(rows.map((item) => ROWS_HTML.replaceAll(/\{(name|url|code|detail)\}/g, (_, key: keyof (typeof rows)[number]) => escapeHtml(item[key]))).join(""))
 		.split("__JF_COMMUNITY_URL__").join(escapeHtml(communityUrl))
 		.split("__JF_MANAGE_URL__").join(escapeHtml(manageUrl))
 		.split("__JF_LOGO_URL__").join(escapeHtml(logoUrl)),
 		text: TEXT
 		.split("__JF_HEADLINE__").join(headline)
-		.split("__JF_ROWS__").join(rows.map((item) => ROWS_TEXT.replace(/\{(name|url|code|detail)\}/g, (_, k: keyof (typeof rows)[number]) => item[k])).join(""))
+		.split("__JF_ROWS__").join(rows.map((item) => ROWS_TEXT.replaceAll(/\{(name|url|code|detail)\}/g, (_, key: keyof (typeof rows)[number]) => item[key])).join(""))
 		.split("__JF_COMMUNITY_URL__").join(communityUrl)
 		.split("__JF_MANAGE_URL__").join(manageUrl)
 		.split("__JF_LOGO_URL__").join(logoUrl),

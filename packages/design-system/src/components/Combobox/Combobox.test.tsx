@@ -41,7 +41,7 @@ async function type(value: string): Promise<void> {
  */
 function optionLabels(): (string | null)[] {
 	return Array.from(document.querySelectorAll('[data-part="item-text"]')).map(
-		(el) => el.textContent
+		(element) => element.textContent
 	);
 }
 

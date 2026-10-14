@@ -29,7 +29,7 @@ test("selecting a row shows the batch bar with count", async () => {
 			enableRowSelection
 		>
 			<Table.BatchActions>
-				{(p) => <span>{`sel:${String(p.selectedCount)}`}</span>}
+				{(batch) => <span>{`sel:${String(batch.selectedCount)}`}</span>}
 			</Table.BatchActions>
 		</Table.Root>
 	));
@@ -48,7 +48,7 @@ test("the render-prop count stays reactive across multiple selections", async ()
 			enableRowSelection
 		>
 			<Table.BatchActions>
-				{(p) => <span>{`sel:${String(p.selectedCount)}`}</span>}
+				{(batch) => <span>{`sel:${String(batch.selectedCount)}`}</span>}
 			</Table.BatchActions>
 		</Table.Root>
 	));
@@ -66,16 +66,16 @@ test("the render-prop count stays reactive across multiple selections", async ()
 type Doc = { _id: string; name: string };
 
 test("selection follows the row by _id when a push inserts a row above it", async () => {
-	const docs: Doc[] = [
+	const documents: Doc[] = [
 		{ _id: "a", name: "A" },
 		{ _id: "b", name: "B" },
 	];
-	const [rows, setRows] = createSignal<Doc[]>(docs);
+	const [rows, setRows] = createSignal<Doc[]>(documents);
 	render(() => (
 		<Table.Root columns={columns as never} data={rows()} enableRowSelection>
 			<Table.BatchActions>
-				{(p) => (
-					<span>{`sel:${p.selectedRows.map((r) => r.name).join(",")}`}</span>
+				{(batch) => (
+					<span>{`sel:${batch.selectedRows.map((row) => row.name).join(",")}`}</span>
 				)}
 			</Table.BatchActions>
 		</Table.Root>
@@ -84,7 +84,7 @@ test("selection follows the row by _id when a push inserts a row above it", asyn
 	await waitFor(() => {
 		expect(screen.getByText("sel:A")).toBeInTheDocument();
 	});
-	setRows([{ _id: "z", name: "Z" }, ...docs]);
+	setRows([{ _id: "z", name: "Z" }, ...documents]);
 	await waitFor(() => {
 		expect(screen.getByText("sel:A")).toBeInTheDocument();
 	});
@@ -98,7 +98,7 @@ test("the count drops when a push removes a selected row", async () => {
 	render(() => (
 		<Table.Root columns={columns as never} data={rows()} enableRowSelection>
 			<Table.BatchActions>
-				{(p) => <span>{`sel:${String(p.selectedCount)}`}</span>}
+				{(batch) => <span>{`sel:${String(batch.selectedCount)}`}</span>}
 			</Table.BatchActions>
 		</Table.Root>
 	));
@@ -123,8 +123,8 @@ test("a getRowId keys selection for data with no _id", async () => {
 			getRowId={(row) => row.name}
 		>
 			<Table.BatchActions>
-				{(p) => (
-					<span>{`sel:${p.selectedRows.map((r) => r.name).join(",")}`}</span>
+				{(batch) => (
+					<span>{`sel:${batch.selectedRows.map((row) => row.name).join(",")}`}</span>
 				)}
 			</Table.BatchActions>
 		</Table.Root>
@@ -140,15 +140,15 @@ test("a getRowId keys selection for data with no _id", async () => {
 });
 
 test("a row that leaves and comes back is not selected", async () => {
-	const docs: Doc[] = [
+	const documents: Doc[] = [
 		{ _id: "a", name: "A" },
 		{ _id: "b", name: "B" },
 	];
-	const [rows, setRows] = createSignal<Doc[]>(docs);
+	const [rows, setRows] = createSignal<Doc[]>(documents);
 	render(() => (
 		<Table.Root columns={columns as never} data={rows()} enableRowSelection>
 			<Table.BatchActions>
-				{(p) => <span>{`sel:${String(p.selectedCount)}`}</span>}
+				{(batch) => <span>{`sel:${String(batch.selectedCount)}`}</span>}
 			</Table.BatchActions>
 		</Table.Root>
 	));
@@ -156,14 +156,14 @@ test("a row that leaves and comes back is not selected", async () => {
 	await waitFor(() => {
 		expect(screen.getByText("sel:1")).toBeInTheDocument();
 	});
-	setRows([docs[1]]);
+	setRows([documents[1]]);
 	// The select-all box is not indeterminate over a row that is gone.
 	expect(
 		document
 			.querySelector('thead [data-part="root"]')
 			?.getAttribute("data-state")
 	).toBe("unchecked");
-	setRows(docs);
+	setRows(documents);
 	expect(screen.queryByText("sel:1")).toBeNull();
 	expect(
 		screen

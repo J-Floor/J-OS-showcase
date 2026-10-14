@@ -12,7 +12,7 @@ describe("onboarding registry", () => {
 	});
 
 	it("orderedViews follows the shared step order", () => {
-		expect(orderedViews().map((v) => v.id)).toEqual([
+		expect(orderedViews().map((value) => value.id)).toEqual([
 			"welcome",
 			"document",
 			"rules",

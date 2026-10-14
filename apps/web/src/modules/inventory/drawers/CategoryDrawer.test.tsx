@@ -38,8 +38,7 @@ vi.mock("../data/inventoryData.ts", () => ({
 		return {
 			data: () => {
 				if (id === "itemCategories:furniture") return furnitureTypes;
-				if (id === "itemCategories:empty") return [];
-				return undefined;
+				return id === "itemCategories:empty" ? [] : undefined;
 			},
 		};
 	},

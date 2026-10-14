@@ -20,13 +20,13 @@ import type { Tier } from "./lifecycleTypes.ts";
  * open the door.
  */
 export async function requireRole(
-	ctx: QueryCtx,
+	context: QueryCtx,
 	tiers: readonly Tier[]
 ): Promise<Doc<"people">> {
-	const identity = await ctx.auth.getUserIdentity();
+	const identity = await context.auth.getUserIdentity();
 	const email = identity?.email;
 	if (!email) throw new Error("Not authenticated");
-	const person = await personByEmail(ctx, email);
+	const person = await personByEmail(context, email);
 	if (!person || !tiers.includes(person.tier)) {
 		throw new Error("Forbidden");
 	}

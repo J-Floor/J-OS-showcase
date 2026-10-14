@@ -99,7 +99,6 @@ import type * as lib_routes from "../lib/routes.js";
 import type * as lib_safeUrl from "../lib/safeUrl.js";
 import type * as lib_signatures from "../lib/signatures.js";
 import type * as lib_time from "../lib/time.js";
-import type * as lib_typeAssert from "../lib/typeAssert.js";
 import type * as lib_validate from "../lib/validate.js";
 import type * as lib_wifi from "../lib/wifi.js";
 import type * as lifecycle from "../lifecycle.js";
@@ -249,7 +248,6 @@ declare const fullApi: ApiFromModules<{
   "lib/safeUrl": typeof lib_safeUrl;
   "lib/signatures": typeof lib_signatures;
   "lib/time": typeof lib_time;
-  "lib/typeAssert": typeof lib_typeAssert;
   "lib/validate": typeof lib_validate;
   "lib/wifi": typeof lib_wifi;
   lifecycle: typeof lifecycle;

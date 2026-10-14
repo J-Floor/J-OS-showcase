@@ -5,6 +5,8 @@ export type RecaptchaResult = {
 	score?: number;
 };
 
+const BOT_SCORE_THRESHOLD = 0.5;
+
 // Pure pass/fail decision, factored out so it can be unit-tested without the
 // live siteverify fetch. Accept only a successful verification for the expected
 // action whose score clears the bot threshold.
@@ -16,7 +18,7 @@ export function passesRecaptcha(
 		result.success === true &&
 		result.action === expectedAction &&
 		typeof result.score === "number" &&
-		result.score >= 0.5
+		result.score >= BOT_SCORE_THRESHOLD
 	);
 }
 
@@ -33,7 +35,7 @@ export async function verifyRecaptchaToken(
 ): Promise<boolean> {
 	let result: RecaptchaResult;
 	try {
-		const res = await fetch(
+		const response = await fetch(
 			"https://www.google.com/recaptcha/api/siteverify",
 			{
 				method: "POST",
@@ -46,8 +48,9 @@ export async function verifyRecaptchaToken(
 				}).toString(),
 			}
 		);
-		if (!res.ok) throw new Error("siteverify returned a non-2xx response");
-		result = (await res.json()) as RecaptchaResult;
+		if (!response.ok)
+			throw new Error("siteverify returned a non-2xx response");
+		result = (await response.json()) as RecaptchaResult;
 	} catch {
 		throw new Error("Couldn't verify you're human — please try again.");
 	}

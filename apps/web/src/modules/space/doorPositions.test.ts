@@ -91,6 +91,6 @@ test("an enabled accessor that re-runs with the same value does not re-read", ()
 	const calls = positionAsync.mock.calls.length;
 	expect(calls).toBeGreaterThan(0);
 	setTick(1);
-	expect(positionAsync.mock.calls.length).toBe(calls);
+	expect(positionAsync.mock.calls).toHaveLength(calls);
 	dispose();
 });

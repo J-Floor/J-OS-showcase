@@ -14,40 +14,41 @@ export function uniqueIds(
 }
 
 async function entitledInTiers(
-	ctx: QueryCtx,
+	context: QueryCtx,
 	tiers: readonly Doc<"people">["tier"][],
 	now: number
 ): Promise<Id<"people">[]> {
-	return (await peopleByTiers(ctx, tiers))
+	const people = await peopleByTiers(context, tiers);
+	return people
 		.filter((person) => entitled(person, now))
 		.map((person) => person._id);
 }
 
 /** Entitled board + admin: the audience of every board-facing kind. */
 export function boardIds(
-	ctx: QueryCtx,
+	context: QueryCtx,
 	now = Date.now()
 ): Promise<Id<"people">[]> {
-	return entitledInTiers(ctx, BOARD_LEVEL, now);
+	return entitledInTiers(context, BOARD_LEVEL, now);
 }
 
 /** Everyone entitled in the community (guests inside their window included, staff not). */
 export function communityIds(
-	ctx: QueryCtx,
+	context: QueryCtx,
 	now = Date.now()
 ): Promise<Id<"people">[]> {
-	return entitledInTiers(ctx, COMMUNITY_TIERS, now);
+	return entitledInTiers(context, COMMUNITY_TIERS, now);
 }
 
 /** The given people, deduplicated, keeping only those entitled right now. */
 export async function entitledIds(
-	ctx: QueryCtx,
+	context: QueryCtx,
 	ids: readonly (Id<"people"> | undefined)[],
 	now = Date.now()
 ): Promise<Id<"people">[]> {
 	const out: Id<"people">[] = [];
 	for (const id of uniqueIds(ids)) {
-		const person = await ctx.db.get(id);
+		const person = await context.db.get(id);
 		if (person && entitled(person, now)) out.push(id);
 	}
 	return out;

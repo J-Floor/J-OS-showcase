@@ -9,5 +9,11 @@ import { modules } from "./registry.ts";
 // import this registry). Keep the two in lockstep so a renamed/added module
 // doesn't silently stop persisting as the last-visited route.
 test("convex MODULE_PATHS matches the module registry paths", () => {
-	expect([...MODULE_PATHS].sort()).toEqual(modules.map((m) => m.path).sort());
+	expect(
+		[...MODULE_PATHS].sort((first, second) => first.localeCompare(second))
+	).toEqual(
+		modules
+			.map((entry) => entry.path)
+			.sort((first, second) => first.localeCompare(second))
+	);
 });

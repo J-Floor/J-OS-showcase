@@ -6,7 +6,7 @@ import { createDismissed } from "../lib/dismissed.ts";
 import { ICONS } from "./icons.ts";
 import styles from "./InstallPwaPrompt.module.scss";
 import {
-	appInstalled,
+	isAppInstalled,
 	type InstallMethod,
 	installMethod,
 	installPrompt,
@@ -55,6 +55,21 @@ function PillButton(props: {
 	);
 }
 
+// `beforeinstallprompt` is captured at module load (see ./pwaInstall) — long
+// before the pill mounts inside the authed shell — so the event is not
+// missed. Here we only read the captured state.
+function method() {
+	return installMethod(
+		navigator.userAgent,
+		installPrompt() !== undefined,
+		navigator.maxTouchPoints
+	);
+}
+
+function isInstalled(): boolean {
+	return isStandalone() || isAppInstalled();
+}
+
 /**
  * Small dismissable "Install app" pill, floated at the foot of the content
  * column (above the phone bottom bar, which lives outside `.main`). Browsers no
@@ -72,25 +87,12 @@ function PillButton(props: {
 export function InstallPwaPrompt() {
 	const [dismissed, dismiss] = createDismissed(DISMISSED_KEY);
 
-	// `beforeinstallprompt` is captured at module load (see ./pwaInstall) — long
-	// before this pill mounts inside the authed shell — so the event is not
-	// missed. Here we only read the captured state.
-	function method() {
-		return installMethod(
-			navigator.userAgent,
-			installPrompt() !== undefined,
-			navigator.maxTouchPoints
-		);
-	}
 	function stepsMethod(): StepsMethod | undefined {
 		const current = method();
 		return current === "prompt" || current === "none" ? undefined : current;
 	}
-	function installed(): boolean {
-		return isStandalone() || appInstalled();
-	}
 	function show(): boolean {
-		return !installed() && !dismissed() && method() !== "none";
+		return !isInstalled() && !dismissed() && method() !== "none";
 	}
 
 	return (

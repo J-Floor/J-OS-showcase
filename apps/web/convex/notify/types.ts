@@ -35,21 +35,21 @@ export type ResolvedRecipient = Recipient & { subscriptions: PushKeys[] };
  * `email` may return null to skip one recipient's email (e.g. a person who
  * already gets a transactional email for the same event).
  */
-export type KindDef<V extends GenericValidator> = {
+export type KindDefinition<V extends GenericValidator> = {
 	category: Category;
 	payload: V;
-	audience: (ctx: QueryCtx, payload: Infer<V>) => Promise<Id<"people">[]>;
+	audience: (context: QueryCtx, payload: Infer<V>) => Promise<Id<"people">[]>;
 	push: (payload: Infer<V>, recipient: Recipient) => PushMessage;
 	email?: (payload: Infer<V>, recipient: Recipient) => EmailMessage | null;
 };
 
-export type AnyKindDef = KindDef<GenericValidator>;
+export type AnyKindDefinition = KindDefinition<GenericValidator>;
 
 /** Identity helper so each kind file infers its payload type from its validator. */
 export function defineKind<V extends GenericValidator>(
-	def: KindDef<V>
-): KindDef<V> {
-	return def;
+	definition: KindDefinition<V>
+): KindDefinition<V> {
+	return definition;
 }
 
 export type PushSendResult = { delivered: number; failed: number };

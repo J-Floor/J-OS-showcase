@@ -1,4 +1,4 @@
-import type { JfColumnDef } from "@j-os/design-system";
+import type { JfColumnDefinition } from "@j-os/design-system";
 import { Show } from "solid-js";
 
 import type { Doc } from "../../../../convex/_generated/dataModel";
@@ -37,7 +37,9 @@ type PersonLike = Doc<"people">;
  * a row is as tall as its tallest cell — so a clamp missing on one tab is not a
  * cosmetic difference, it is a tab whose rows are four times as tall.
  */
-export function ventureColumns<Row extends PersonLike>(): JfColumnDef<Row>[] {
+export function ventureColumns<
+	Row extends PersonLike,
+>(): JfColumnDefinition<Row>[] {
 	return [
 		{
 			id: "vertical",
@@ -46,48 +48,24 @@ export function ventureColumns<Row extends PersonLike>(): JfColumnDef<Row>[] {
 			enumOptions: verticalOptions,
 			size: "content",
 			// The raw values, so the filter matches a person carrying several.
-			accessorFn: (r) => r.vertical ?? [],
+			accessorFn: (row) => row.vertical ?? [],
 		},
-		{
-			id: "description",
-			header: "Description",
-			dataType: "string",
-			size: FREE_TEXT_SIZE,
-			measureText: false,
-			accessorFn: (r) => r.venture?.description ?? "",
-			cell: (info) => clampCell(info.row.original.venture?.description),
-		},
-		{
-			id: "pastBuilt",
-			header: "Past built",
-			dataType: "string",
-			size: FREE_TEXT_SIZE,
-			measureText: false,
-			accessorFn: (r) => r.venture?.pastBuilt ?? "",
-			cell: (info) => clampCell(info.row.original.venture?.pastBuilt),
-		},
-		{
-			id: "whyJoin",
-			header: "Why join",
-			dataType: "string",
-			size: FREE_TEXT_SIZE,
-			measureText: false,
-			accessorFn: (r) => r.venture?.whyJoin ?? "",
-			cell: (info) => clampCell(info.row.original.venture?.whyJoin),
-		},
+		freeTextColumn<Row>("description", "Description"),
+		freeTextColumn<Row>("pastBuilt", "Past built"),
+		freeTextColumn<Row>("whyJoin", "Why join"),
 		{
 			id: "productStage",
 			header: "Product stage",
 			dataType: "enum",
 			enumOptions: productStageOptions,
-			accessorFn: (r) => r.venture?.productStage,
+			accessorFn: (row) => row.venture?.productStage,
 		},
 		{
 			id: "fundingStage",
 			header: "Funding stage",
 			dataType: "enum",
 			enumOptions: fundingStageOptions,
-			accessorFn: (r) => r.venture?.fundingStage,
+			accessorFn: (row) => row.venture?.fundingStage,
 		},
 		{
 			id: "teamSize",
@@ -95,7 +73,7 @@ export function ventureColumns<Row extends PersonLike>(): JfColumnDef<Row>[] {
 			dataType: "number",
 			// Not `?? 0`: a founder who left the field blank would otherwise be
 			// indistinguishable from one who told us they work alone.
-			accessorFn: (r) => r.venture?.teamSize,
+			accessorFn: (row) => row.venture?.teamSize,
 			cell: (info) => teamSizeText(info.row.original),
 			measureText: teamSizeText,
 		},
@@ -105,7 +83,7 @@ export function ventureColumns<Row extends PersonLike>(): JfColumnDef<Row>[] {
 			dataType: "string",
 			size: SHORT_TEXT_SIZE,
 			measureText: false,
-			accessorFn: (r) => r.venture?.referral ?? "",
+			accessorFn: (row) => row.venture?.referral ?? "",
 		},
 		{
 			id: "links",
@@ -114,10 +92,26 @@ export function ventureColumns<Row extends PersonLike>(): JfColumnDef<Row>[] {
 			disableRowClick: true,
 			size: LINKS_COLUMN_WIDTH,
 			measureText: false,
-			accessorFn: (r) => (r.venture?.links ?? []).length,
+			accessorFn: (row) => (row.venture?.links ?? []).length,
 			cell: (info) => <LinksCell venture={info.row.original.venture} />,
 		},
 	];
+}
+
+/** A clamped free-text venture answer, sorted and filtered on its text. */
+function freeTextColumn<Row extends PersonLike>(
+	id: "description" | "pastBuilt" | "whyJoin",
+	header: string
+): JfColumnDefinition<Row> {
+	return {
+		id,
+		header,
+		dataType: "string",
+		size: FREE_TEXT_SIZE,
+		measureText: false,
+		accessorFn: (row) => row.venture?.[id] ?? "",
+		cell: (info) => clampCell(info.row.original.venture?.[id]),
+	};
 }
 
 function teamSizeText(row: PersonLike): string {

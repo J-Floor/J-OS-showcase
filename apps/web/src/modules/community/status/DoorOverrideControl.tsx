@@ -65,7 +65,7 @@ export function DoorOverrideControl(props: {
 
 	function change(next: DoorOverride): void {
 		if (next === props.value) return;
-		const option = OPTIONS.find((o) => o.value === next);
+		const option = OPTIONS.find((candidate) => candidate.value === next);
 		if (!option) return;
 		void (async () => {
 			if (
@@ -84,7 +84,9 @@ export function DoorOverrideControl(props: {
 	}
 
 	function hint(): string {
-		return OPTIONS.find((o) => o.value === props.value)?.hint ?? "";
+		return (
+			OPTIONS.find((option) => option.value === props.value)?.hint ?? ""
+		);
 	}
 
 	return (

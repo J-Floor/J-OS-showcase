@@ -13,6 +13,98 @@ import type {
 } from "./doorProvider.ts";
 import { normalizeEmail } from "./emailAddress.ts";
 
+// What the Nuki device codes mean: which device types exist, which action int
+// opens or locks each, and how a reported state code maps to the app's door
+// position. Pure lookups, no requests.
+const OPENER_TYPE = 2;
+const SMART_LOCK_1_2_TYPE = 0;
+const SMART_DOOR_TYPE = 3;
+const SMART_LOCK_3_4_TYPE = 4;
+const SMART_LOCK_5_TYPE = 5;
+const SMART_LOCK_TYPES: ReadonlySet<number> = new Set([
+	SMART_LOCK_1_2_TYPE,
+	SMART_DOOR_TYPE,
+	SMART_LOCK_3_4_TYPE,
+	SMART_LOCK_5_TYPE,
+]);
+const OPENER_STRIKE_ACTION = 3;
+const OPENER_STATE_OPEN = 5;
+const OPENER_STATE_OPENING = 7;
+const STATE_UNLOCKED = 3;
+const STATE_LOCKING = 4;
+const STATE_UNLATCHED = 5;
+const STATE_LOCK_N_GO = 6;
+const STATE_UNLATCHING = 7;
+
+/**
+ * The Nuki action int for a door action on a device of this type.
+ *
+ * Unlock: an Opener (2) opens by actuating the electric strike — action 3,
+ * the "buzz". Every Smart Lock variant (0, 3, 4, 5) opens with action 1,
+ * unlock: the bolt retracts and the handle opens the door, which is what the
+ * Nuki app's Unlock button does.
+ *
+ * Lock: a Smart Lock locks with action 2. An Opener has NO lock action (the
+ * street door it buzzes locks by itself), so locking one throws.
+ *
+ * A Box (1) or an unknown type is refused rather than guessed at.
+ */
+export function nukiActionFor(
+	type: number | undefined,
+	action: DoorAction
+): number {
+	if (type === OPENER_TYPE) {
+		if (action === "unlock") return OPENER_STRIKE_ACTION;
+		throw new Error("A Nuki Opener cannot lock: it has no lock action.");
+	}
+	if (type !== undefined && SMART_LOCK_TYPES.has(type))
+		return action === "unlock" ? 1 : 2;
+	throw new Error(`Unsupported Nuki device type: ${String(type)}`);
+}
+
+/** The app's position for an Opener state code: 1 online and idle (the
+ *  street door is shut), 7 opening, 5 open. Every other Opener code (3,
+ *  ring-to-open active, among them) is one the app does not model. */
+function openerPositionFor(state: number | undefined): DoorPosition {
+	switch (state) {
+		case 1:
+			return "locked";
+		case OPENER_STATE_OPENING:
+			return "unlocking";
+		case OPENER_STATE_OPEN:
+			return "unlocked";
+		default:
+			return "unknown";
+	}
+}
+
+/** The app's position for a Nuki device's state code, read with the
+ *  device's type from the same response. An Opener (2) has its own table
+ *  ({@link openerPositionFor}). Every Smart Lock: 1 locked; 3 unlocked,
+ *  5 unlatched, 6 unlocked (lock 'n' go) (all open); 2 unlocking and
+ *  7 unlatching (both opening); 4 locking. */
+function positionFor(
+	type: number | undefined,
+	state: number | undefined
+): DoorPosition {
+	if (type === OPENER_TYPE) return openerPositionFor(state);
+	switch (state) {
+		case 1:
+			return "locked";
+		case STATE_UNLOCKED:
+		case STATE_UNLATCHED:
+		case STATE_LOCK_N_GO:
+			return "unlocked";
+		case 2:
+		case STATE_UNLATCHING:
+			return "unlocking";
+		case STATE_LOCKING:
+			return "locking";
+		default:
+			return "unknown";
+	}
+}
+
 /** The smartlock id of each door this app manages, read from the
  *  environment. The app addresses doors by slot, and only this adapter turns a
  *  slot into an id. A missing variable throws: nothing may fall back to an
@@ -113,7 +205,7 @@ export function parseLockIds(raw: string | undefined): string[] {
  * the per-person revoke) needs these off `process.env`, so they are read here
  * once rather than re-implemented per caller with the same error strings.
  */
-function nukiEnv(): { token: string; lockIds: string[] } {
+function nukiEnvironment(): { token: string; lockIds: string[] } {
 	const token = process.env.NUKI_API_TOKEN;
 	if (!token) throw new Error("NUKI_API_TOKEN is not set.");
 	const lockIds = parseLockIds(process.env.NUKI_SMARTLOCK_IDS);
@@ -137,7 +229,11 @@ export function doorProviderConfigured(): boolean {
 const WRITES_DISABLED =
 	'Door writes are disabled on this deployment (NUKI_WRITE_ENABLED is not "1"), so nothing was sent to the lock.';
 
-const OPENER_TYPE = 2;
+const HTTP_NO_CONTENT = 204;
+const HTTP_REQUEST_TIMEOUT = 408;
+const HTTP_LOCKED = 423;
+const HTTP_TOO_MANY_REQUESTS = 429;
+const HTTP_SERVER_ERROR = 500;
 
 /**
  * The adapter's entry point for generic code (re-exported by
@@ -147,93 +243,24 @@ const OPENER_TYPE = 2;
  * {@link doorWritesEnabled}; `false` is for a read, or a write whose caller
  * already checked the gate. Reads are never gated.
  */
-export function doorProviderFromEnv(opts: {
+export function doorProviderFromEnvironment(options: {
 	requireWrites: boolean;
 }): DoorProvider {
-	if (opts.requireWrites && !doorWritesEnabled())
+	if (options.requireWrites && !doorWritesEnabled())
 		throw new Error(WRITES_DISABLED);
-	const { token, lockIds } = nukiEnv();
+	const { token, lockIds } = nukiEnvironment();
 	return nukiProvider({ fetch, token }, lockIds);
-}
-
-/**
- * The Nuki action int for a door action on a device of this type.
- *
- * Unlock: an Opener (2) opens by actuating the electric strike — action 3,
- * the "buzz". Every Smart Lock variant (0, 3, 4, 5) opens with action 1,
- * unlock: the bolt retracts and the handle opens the door, which is what the
- * Nuki app's Unlock button does.
- *
- * Lock: a Smart Lock locks with action 2. An Opener has NO lock action (the
- * street door it buzzes locks by itself), so locking one throws.
- *
- * A Box (1) or an unknown type is refused rather than guessed at.
- */
-export function nukiActionFor(
-	type: number | undefined,
-	action: DoorAction
-): number {
-	if (type === OPENER_TYPE) {
-		if (action === "unlock") return 3;
-		throw new Error("A Nuki Opener cannot lock: it has no lock action.");
-	}
-	if (type === 0 || type === 3 || type === 4 || type === 5)
-		return action === "unlock" ? 1 : 2;
-	throw new Error(`Unsupported Nuki device type: ${String(type)}`);
-}
-
-/** The app's position for an Opener state code: 1 online and idle (the
- *  street door is shut), 7 opening, 5 open. Every other Opener code (3,
- *  ring-to-open active, among them) is one the app does not model. */
-function openerPositionFor(state: number | undefined): DoorPosition {
-	switch (state) {
-		case 1:
-			return "locked";
-		case 7:
-			return "unlocking";
-		case 5:
-			return "unlocked";
-		default:
-			return "unknown";
-	}
-}
-
-/** The app's position for a Nuki device's state code, read with the
- *  device's type from the same response. An Opener (2) has its own table
- *  ({@link openerPositionFor}). Every Smart Lock: 1 locked; 3 unlocked,
- *  5 unlatched, 6 unlocked (lock 'n' go) (all open); 2 unlocking and
- *  7 unlatching (both opening); 4 locking. */
-function positionFor(
-	type: number | undefined,
-	state: number | undefined
-): DoorPosition {
-	if (type === OPENER_TYPE) return openerPositionFor(state);
-	switch (state) {
-		case 1:
-			return "locked";
-		case 3:
-		case 5:
-		case 6:
-			return "unlocked";
-		case 2:
-		case 7:
-			return "unlocking";
-		case 4:
-			return "locking";
-		default:
-			return "unknown";
-	}
 }
 
 /** How long the action's effect lasts at the door: an Opener keeps the street
  *  door released for its strike delay + duration; a Smart Lock reports no
  *  turn time, so a fixed estimate. */
 function actionDurationMs(lock: Smartlock): number {
-	if (lock.type !== 2) return SMART_LOCK_TURN_MS;
-	const cfg = lock.openerAdvancedConfig;
+	if (lock.type !== OPENER_TYPE) return SMART_LOCK_TURN_MS;
+	const config = lock.openerAdvancedConfig;
 	return (
-		(cfg?.electricStrikeDelay ?? 0) +
-		(cfg?.electricStrikeDuration ?? STRIKE_FALLBACK_MS)
+		(config?.electricStrikeDelay ?? 0) +
+		(config?.electricStrikeDuration ?? STRIKE_FALLBACK_MS)
 	);
 }
 
@@ -251,8 +278,36 @@ function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function retryableStatus(status: number): boolean {
-	return status === 429 || status === 408 || status >= 500;
+function pause(deps: NukiDeps, ms: number): Promise<void> {
+	return (deps.sleep ?? sleep)(ms);
+}
+
+function isRetryableStatus(status: number): boolean {
+	return (
+		status === HTTP_TOO_MANY_REQUESTS ||
+		status === HTTP_REQUEST_TIMEOUT ||
+		status >= HTTP_SERVER_ERROR
+	);
+}
+
+/** The body of a successful response; auth-create returns No Content. */
+function readBody(response: Response): Promise<unknown> | null {
+	return response.status === HTTP_NO_CONTENT
+		? null
+		: response.json().catch(() => null);
+}
+
+/** The error for a non-2xx response, carrying the status and Nuki's text. */
+async function httpFailure(
+	method: string,
+	path: string,
+	response: Response
+): Promise<NukiHttpError> {
+	const text = await response.text().catch(() => "");
+	return new NukiHttpError(
+		response.status,
+		`Nuki ${method} ${path} failed: ${String(response.status)} ${text}`
+	);
 }
 
 /** Delay before retry `n` (1-based): `min(8000, 750 * 2^(n-1))`. */
@@ -285,38 +340,29 @@ class NukiHttpError extends Error {
  * requests at all (see {@link readSnapshot}). A retry loop over a request
  * storm just spreads the storm out.
  */
-async function req(
+async function request(
 	deps: NukiDeps,
 	method: string,
 	path: string,
-	body?: unknown,
-	opts: { retries?: number } = {}
+	{ body, retries = RETRIES }: { body?: unknown; retries?: number } = {}
 ): Promise<unknown> {
-	const wait = deps.sleep ?? sleep;
-	const retries = opts.retries ?? RETRIES;
 	let last: unknown;
 
 	for (let attempt = 0; attempt <= retries; attempt++) {
-		if (attempt > 0) await wait(backoffMs(attempt));
-		let res: Response;
+		if (attempt > 0) await pause(deps, backoffMs(attempt));
+		let response: Response;
 		try {
-			res = await send();
-		} catch (e) {
-			last = e;
-			if (attempt === retries) throw e;
+			response = await send();
+		} catch (error) {
+			last = error;
+			if (attempt === retries) throw error;
 			continue;
 		}
-		if (res.ok) {
-			if (res.status === 204) return null; // auth-create returns No Content
-			return res.json().catch(() => null);
-		}
-		const text = await res.text().catch(() => "");
-		const err = new NukiHttpError(
-			res.status,
-			`Nuki ${method} ${path} failed: ${String(res.status)} ${text}`
-		);
-		last = err;
-		if (!retryableStatus(res.status) || attempt === retries) throw err;
+		if (response.ok) return readBody(response);
+		const failure = await httpFailure(method, path, response);
+		last = failure;
+		if (!isRetryableStatus(response.status) || attempt === retries)
+			throw failure;
 	}
 	throw last;
 
@@ -334,17 +380,17 @@ async function req(
 
 /** All Nuki account users on the team. */
 export async function listAccountUsers(deps: NukiDeps): Promise<AccountUser[]> {
-	return (await req(deps, "GET", "/account/user")) as AccountUser[];
+	return (await request(deps, "GET", "/account/user")) as AccountUser[];
 }
 
 /** Every smartlock authorization on the team (across all locks and users). */
 async function listSmartlockAuths(deps: NukiDeps): Promise<SmartlockAuth[]> {
-	return (await req(deps, "GET", "/smartlock/auth")) as SmartlockAuth[];
+	return (await request(deps, "GET", "/smartlock/auth")) as SmartlockAuth[];
 }
 
 /** Every lock on the team, with the health flag Nuki reports for it. */
 async function listSmartlocks(deps: NukiDeps): Promise<Smartlock[]> {
-	return (await req(deps, "GET", "/smartlock")) as Smartlock[];
+	return (await request(deps, "GET", "/smartlock")) as Smartlock[];
 }
 
 /**
@@ -380,7 +426,9 @@ export function configuredLockStatus(
 	locks: Smartlock[],
 	lockIds: string[]
 ): LockStatus[] {
-	const byId = new Map(locks.map((s) => [String(s.smartlockId), s]));
+	const byId = new Map(
+		locks.map((smartlock) => [String(smartlock.smartlockId), smartlock])
+	);
 	return lockIds.map((lockId) => {
 		const lock = byId.get(lockId);
 		if (!lock) {
@@ -416,8 +464,8 @@ export function configuredLockStatus(
 function accountUserIdsFor(users: AccountUser[], email: string): number[] {
 	const wanted = normalizeEmail(email);
 	return users
-		.filter((u) => normalizeEmail(u.email) === wanted)
-		.map((u) => u.accountUserId);
+		.filter((user) => normalizeEmail(user.email) === wanted)
+		.map((user) => user.accountUserId);
 }
 
 type NukiLogEntry = { action: number; date: string };
@@ -435,7 +483,7 @@ export async function fetchSmartlockLog(
 		fromDate: args.sinceIso,
 		limit: "200",
 	});
-	return (await req(
+	return (await request(
 		deps,
 		"GET",
 		`/smartlock/log?${params.toString()}`
@@ -451,7 +499,91 @@ export async function revokeAuthIds(
 	authIds: string[]
 ): Promise<void> {
 	if (authIds.length === 0) return;
-	await req(deps, "DELETE", "/smartlock/auth", authIds);
+	await request(deps, "DELETE", "/smartlock/auth", { body: authIds });
+}
+
+/**
+ * One identity per email — this account has addresses split across several
+ * account-user records, so identity is keyed by email, not by record. Keyed by
+ * the normalized email, so casing variants of one address are one identity; the
+ * identity keeps the provider's own spelling as its `email`.
+ *
+ * Each identity carries its own account-user auths on configured locks: those
+ * keyed to any account user on the address. An auth with no account user (app
+ * pairing, a direct share, a device) never enters the model. The lock's own
+ * Nuki Web authorization is infrastructure, not a key: per the
+ * `DoorProvider.readModel` contract it never enters the model either, so
+ * nothing that deletes from the model can target it — deleting it cuts the
+ * lock off from this API. This is the only place that rule lives.
+ */
+function identitiesOf(
+	snapshot: NukiSnapshot,
+	managed: ReadonlySet<string>
+): DoorModel["identities"] {
+	const byEmail = new Map<
+		string,
+		{ providerUserId: string; email: string }
+	>();
+	for (const user of snapshot.users) {
+		const key = normalizeEmail(user.email);
+		if (!byEmail.has(key))
+			byEmail.set(key, {
+				providerUserId: String(user.accountUserId),
+				email: user.email,
+			});
+	}
+	return [...byEmail.values()].map((base) => {
+		const userIds = new Set(accountUserIdsFor(snapshot.users, base.email));
+		const authIds = snapshot.auths
+			.filter(
+				(auth) =>
+					auth.accountUserId !== undefined &&
+					userIds.has(auth.accountUserId) &&
+					auth.name !== NUKI_WEB_AUTH_NAME &&
+					managed.has(String(auth.smartlockId))
+			)
+			.map((auth) => ({
+				lockId: String(auth.smartlockId),
+				authId: auth.id,
+			}));
+		return { ...base, authIds };
+	});
+}
+
+/**
+ * The lock id → name source for every door-log line: one entry per CONFIGURED
+ * id, named by its id when Nuki did not return it — see `lockNamesFromModel`.
+ */
+function lockNamesOf(
+	snapshot: NukiSnapshot,
+	configured: ReadonlySet<string>
+): DoorModel["locks"] {
+	return [...configured].map((lockId) => {
+		const lock = snapshot.locks.find(
+			(candidate) => String(candidate.smartlockId) === lockId
+		);
+		return { lockId, name: lock?.name ?? lockId };
+	});
+}
+
+/** The configured lock id behind a slot; throws for one that is not configured. */
+function configuredLockId(
+	slot: LockSlot,
+	slotIds: Record<LockSlot, string>,
+	configured: ReadonlySet<string>
+): string {
+	const lockId = slotIds[slot];
+	if (!configured.has(lockId))
+		throw new Error(`Lock ${lockId} is not configured.`);
+	return lockId;
+}
+
+/** One lock read, not readModel's three account-wide reads: someone is
+ *  standing at the door, so it is not retried. */
+async function readLock(deps: NukiDeps, lockId: string): Promise<Smartlock> {
+	return (await request(deps, "GET", `/smartlock/${lockId}`, {
+		retries: 0,
+	})) as Smartlock;
 }
 
 /**
@@ -474,63 +606,11 @@ export function nukiProvider(deps: NukiDeps, lockIds: string[]): DoorProvider {
 			return configuredLockStatus(await listSmartlocks(deps), lockIds);
 		},
 		async readModel(): Promise<DoorModel> {
-			const snap = await readSnapshot(deps);
-
-			// One identity per email — this account has addresses split across
-			// several account-user records, so identity is keyed by email, not
-			// by record. Keyed by the normalized email, so casing variants of one
-			// address are one identity; the identity keeps the provider's own
-			// spelling as its `email`.
-			const byEmail = new Map<
-				string,
-				{ providerUserId: string; email: string }
-			>();
-			for (const u of snap.users) {
-				const key = normalizeEmail(u.email);
-				if (!byEmail.has(key))
-					byEmail.set(key, {
-						providerUserId: String(u.accountUserId),
-						email: u.email,
-					});
-			}
-			const identities = [...byEmail.values()].map((base) => {
-				// This identity's own account-user auths on configured locks:
-				// those keyed to any account user on the address. An auth with
-				// no account user (app pairing, a direct share, a device) never
-				// enters the model. The lock's own Nuki Web authorization is
-				// infrastructure, not a key: per the `DoorProvider.readModel`
-				// contract it never enters the model either, so nothing that
-				// deletes from the model can target it — deleting it cuts the
-				// lock off from this API. This is the only place that rule lives.
-				const userIds = new Set(
-					accountUserIdsFor(snap.users, base.email)
-				);
-				const authIds = snap.auths
-					.filter(
-						(a) =>
-							a.accountUserId !== undefined &&
-							userIds.has(a.accountUserId) &&
-							a.name !== NUKI_WEB_AUTH_NAME &&
-							managed.has(String(a.smartlockId))
-					)
-					.map((a) => ({
-						lockId: String(a.smartlockId),
-						authId: a.id,
-					}));
-				return { ...base, authIds };
-			});
-
-			// The lock id → name source for every door-log line: one entry per
-			// CONFIGURED id, named by its id when Nuki did not return it — see
-			// `lockNamesFromModel`.
-			const locks = [...configured].map((lockId) => {
-				const lock = snap.locks.find(
-					(l) => String(l.smartlockId) === lockId
-				);
-				return { lockId, name: lock?.name ?? lockId };
-			});
-
-			return { identities, locks };
+			const snapshot = await readSnapshot(deps);
+			return {
+				identities: identitiesOf(snapshot, managed),
+				locks: lockNamesOf(snapshot, configured),
+			};
 		},
 
 		revokeAuthIds(authIds): Promise<void> {
@@ -538,18 +618,8 @@ export function nukiProvider(deps: NukiDeps, lockIds: string[]): DoorProvider {
 		},
 
 		async actuate(slot, action): Promise<DoorActionResult> {
-			const lockId = slotIds[slot];
-			if (!configured.has(lockId))
-				throw new Error(`Lock ${lockId} is not configured.`);
-			// One lock read, not readModel's three account-wide reads: someone
-			// is standing at the door. Neither request is retried.
-			const lock = (await req(
-				deps,
-				"GET",
-				`/smartlock/${lockId}`,
-				undefined,
-				{ retries: 0 }
-			)) as Smartlock;
+			const lockId = configuredLockId(slot, slotIds, configured);
+			const lock = await readLock(deps, lockId);
 			// Resolved before the offline check and the POST, so an action the
 			// device cannot do (lock on an Opener) always throws, online or
 			// not, without sending anything.
@@ -558,18 +628,15 @@ export function nukiProvider(deps: NukiDeps, lockIds: string[]): DoorProvider {
 			if ((lock.serverState ?? 0) !== 0)
 				return { status: "offline", lockName };
 			try {
-				await req(
-					deps,
-					"POST",
-					`/smartlock/${lockId}/action`,
-					{ action: nukiAction, option: 0 },
-					{ retries: 0 }
-				);
+				await request(deps, "POST", `/smartlock/${lockId}/action`, {
+					body: { action: nukiAction, option: 0 },
+					retries: 0,
+				});
 			} catch (err) {
 				// 423 Locked: the device is still carrying out the previous
 				// command (an Opener buzz takes several seconds). Not a fault —
 				// the person at the door just needs to wait a moment.
-				if (err instanceof NukiHttpError && err.status === 423)
+				if (err instanceof NukiHttpError && err.status === HTTP_LOCKED)
 					return { status: "busy", lockName };
 				throw err;
 			}
@@ -582,16 +649,8 @@ export function nukiProvider(deps: NukiDeps, lockIds: string[]): DoorProvider {
 		},
 
 		async position(slot): Promise<DoorPosition> {
-			const lockId = slotIds[slot];
-			if (!configured.has(lockId))
-				throw new Error(`Lock ${lockId} is not configured.`);
-			const lock = (await req(
-				deps,
-				"GET",
-				`/smartlock/${lockId}`,
-				undefined,
-				{ retries: 0 }
-			)) as Smartlock;
+			const lockId = configuredLockId(slot, slotIds, configured);
+			const lock = await readLock(deps, lockId);
 			if ((lock.serverState ?? 0) !== 0) return "offline";
 			const position = positionFor(lock.type, lock.state?.state);
 			if (position === "unknown")

@@ -8,8 +8,8 @@ export const COLUMNS = [
 
 export type TaskStatus = (typeof COLUMNS)[number]["id"];
 
-function isStatus(x: string): x is TaskStatus {
-	return COLUMNS.some((c) => c.id === x);
+function isStatus(value: string): value is TaskStatus {
+	return COLUMNS.some((column) => column.id === value);
 }
 
 /** Pure: maps a solid-dnd drop to a status mutation payload, or null to ignore. */
@@ -19,7 +19,8 @@ export function resolveDrop(
 	tasks: readonly { _id: string; status: string }[]
 ): { id: Id<"tasks">; status: TaskStatus } | null {
 	if (!isStatus(droppableId)) return null;
-	const task = tasks.find((t) => t._id === draggableId);
-	if (!task || task.status === droppableId) return null;
-	return { id: draggableId as Id<"tasks">, status: droppableId };
+	const task = tasks.find((candidate) => candidate._id === draggableId);
+	return !task || task.status === droppableId
+		? null
+		: { id: draggableId as Id<"tasks">, status: droppableId };
 }

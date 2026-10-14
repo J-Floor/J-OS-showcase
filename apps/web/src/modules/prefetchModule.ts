@@ -3,7 +3,7 @@ import type { ModuleManifest } from "./types.ts";
 
 /** Loads a module's page chunk ahead of a visit. Failures are ignored. */
 export function preloadView(module: ModuleManifest): void {
-	void module.view.preload().catch(() => undefined);
+	void module.view.preload().catch(() => {});
 }
 
 /** Warms a module's page chunk and list queries ahead of a visit. */
@@ -16,5 +16,5 @@ export function prefetchModule(module: ModuleManifest): void {
 export function descriptorModule(desc: {
 	route: string;
 }): ModuleManifest | undefined {
-	return modules.find((m) => m.path === desc.route);
+	return modules.find((entry) => entry.path === desc.route);
 }

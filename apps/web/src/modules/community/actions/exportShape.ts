@@ -30,10 +30,14 @@ export type ExportRow = {
 /** Bucket rows into `{ groupKey: rows[] }`. */
 function groupBy<T>(
 	rows: readonly T[],
-	keyFn: (row: T) => string
+	keyFunction: (row: T) => string
 ): Record<string, T[]> {
 	const out: Record<string, T[]> = {};
-	for (const row of rows) (out[keyFn(row)] ??= []).push(row);
+	for (const row of rows) {
+		const key = keyFunction(row);
+		out[key] ??= [];
+		out[key].push(row);
+	}
 	return out;
 }
 
@@ -44,7 +48,7 @@ function iso(ms: number | undefined): string | undefined {
 /** Drop undefined and empty-string values, keeping key order. */
 function compact(out: Record<string, unknown>): ExportRow {
 	const kept = Object.entries(out).filter(
-		([, v]) => v !== undefined && v !== ""
+		([, value]) => value !== undefined && value !== ""
 	);
 	return Object.fromEntries(kept) as unknown as ExportRow;
 }
@@ -54,13 +58,15 @@ export function toExportRow(
 	row: PersonRow,
 	nameById: ReadonlyMap<string, string>
 ): ExportRow {
-	const notes = (row.board?.noteLog ?? []).map((n) => {
+	const notes = (row.board?.noteLog ?? []).map((note) => {
 		const author =
-			n.authorId === undefined ? undefined : nameById.get(n.authorId);
+			note.authorId === undefined
+				? undefined
+				: nameById.get(note.authorId);
 		return {
 			...(author === undefined ? {} : { author }),
-			at: new Date(n.at).toISOString(),
-			text: n.text,
+			at: new Date(note.at).toISOString(),
+			text: note.text,
 		};
 	});
 	const out = {
@@ -89,39 +95,44 @@ export function toExportRow(
 
 function mapGroups<T, U>(
 	rows: readonly T[],
-	keyFn: (row: T) => string,
+	keyFunction: (row: T) => string,
 	mapRow: (row: T) => U
 ): Record<string, U[]> {
 	return Object.fromEntries(
-		Object.entries(groupBy(rows, keyFn)).map(([k, v]) => [k, v.map(mapRow)])
+		Object.entries(groupBy(rows, keyFunction)).map(([key, value]) => [
+			key,
+			value.map((row) => mapRow(row)),
+		])
 	);
 }
 
-function buildDoc(r: Rosters, mapRow: (row: PersonRow) => unknown): string {
+function buildDoc(
+	rosters: Rosters,
+	mapRow: (row: PersonRow) => unknown
+): string {
 	const doc = {
 		applications: mapGroups(
-			r.applications,
-			(a) => `${a.tier}.${a.stage}`,
+			rosters.applications,
+			(row) => `${row.tier}.${row.stage}`,
 			mapRow
 		),
-		members: mapGroups(r.members, memberGroup, mapRow),
-		guests: mapGroups(r.guests, guestStatus, mapRow),
+		members: mapGroups(rosters.members, memberGroup, mapRow),
+		guests: mapGroups(rosters.guests, guestStatus, mapRow),
 	};
 	return JSON.stringify(doc, null, 2);
 }
 
 /** Lightweight grouped export of all three rosters. */
-export function buildLightExport(r: Rosters): string {
+export function buildLightExport(rosters: Rosters): string {
 	const nameById = new Map(
-		[...r.applications, ...r.members, ...r.guests].map((p) => [
-			p._id as string,
-			displayName(p),
-		])
+		[...rosters.applications, ...rosters.members, ...rosters.guests].map(
+			(person) => [person._id as string, displayName(person)]
+		)
 	);
-	return buildDoc(r, (row) => toExportRow(row, nameById));
+	return buildDoc(rosters, (row) => toExportRow(row, nameById));
 }
 
 /** Raw rows as queried. */
-export function buildFullExport(r: Rosters): string {
-	return buildDoc(r, (row) => row);
+export function buildFullExport(rosters: Rosters): string {
+	return buildDoc(rosters, (row) => row);
 }

@@ -80,8 +80,8 @@ beforeEach(() => {
 		value: { writeText },
 		configurable: true,
 	});
-	URL.createObjectURL = vi.fn((b: Blob) => {
-		blobs.push(b);
+	URL.createObjectURL = vi.fn((blob: Blob) => {
+		blobs.push(blob);
 		return "blob:x";
 	});
 	URL.revokeObjectURL = vi.fn();
@@ -146,7 +146,7 @@ describe("ExportActions", () => {
 		expect(clickSpy).not.toHaveBeenCalled();
 		fireEvent.click(await screen.findByRole("button", { name: /cancel/i }));
 		// Let the dismissal settle the confirm promise before asserting.
-		await new Promise((r) => setTimeout(r, 0));
+		await new Promise((resolve) => setTimeout(resolve, 0));
 		expect(clickSpy).not.toHaveBeenCalled();
 		expect(blobs).toHaveLength(0);
 	});

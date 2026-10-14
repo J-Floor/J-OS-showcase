@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 
 import { api, internal } from "./_generated/api";
+import type { Doc } from "./_generated/dataModel";
 import { action, internalMutation } from "./_generated/server";
 import { eventInvite } from "./emails/generated/eventInvite.ts";
 import { verifyVisitor } from "./emails/generated/verifyVisitor.ts";
@@ -60,7 +61,7 @@ export const registerVisitor = action({
 		token: v.string(),
 	},
 	handler: async (
-		ctx,
+		context,
 		args
 	): Promise<{ status: "pending" | "no-event" | "ended" }> => {
 		const secret = process.env.RECAPTCHA_SECRET;
@@ -70,11 +71,11 @@ export const registerVisitor = action({
 		}
 		// Global cap after reCAPTCHA, so failed bots cannot spend it and lock
 		// real visitors out. Exhausted looks exactly like delivered (parity).
-		if (!(await mayPublicSubmit(ctx, "visitor")))
+		if (!(await mayPublicSubmit(context, "visitor")))
 			return { status: "pending" };
 		validateVisitorInput(args);
 
-		const event = await ctx.runQuery(api.events.getEventPublic, {
+		const event = await context.runQuery(api.events.getEventPublic, {
 			eventId: args.eventId,
 		});
 		if (!event) return { status: "no-event" };
@@ -90,13 +91,13 @@ export const registerVisitor = action({
 		// re-arming or sending. Consuming here (not at the send) is the fix: a
 		// re-arm followed by a throttled send would kill the last delivered
 		// email's confirm link and replace it with nothing, locking the user out.
-		const { ok: mayEmail } = await rateLimiter.limit(ctx, "sendEmail", {
+		const { ok: mayEmail } = await rateLimiter.limit(context, "sendEmail", {
 			key: normalizeEmail(args.email),
 		});
 		if (!mayEmail) return { status: "pending" };
 
 		const token = newConfirmToken();
-		const res = await ctx.runMutation(
+		const result = await context.runMutation(
 			internal.visitors.insertOrResendVisitor,
 			{
 				firstName: args.firstName,
@@ -110,7 +111,7 @@ export const registerVisitor = action({
 		// The limit was already consumed above, so these are plain sends — do
 		// NOT use sendEmailLimited here or it would double-consume.
 		const urls = emailUrls();
-		if (res.purpose === "visitor") {
+		if (result.purpose === "visitor") {
 			const { html, text } = verifyVisitor({
 				confirmUrl: confirmUrl("visitor", token),
 				logoUrl: urls.logoUrl,
@@ -165,16 +166,16 @@ export const insertOrResendVisitor = internalMutation({
 		token: v.string(),
 	},
 	handler: async (
-		ctx,
+		context,
 		args
 	): Promise<{ purpose: "visitor" | "eventInvite" }> => {
 		const email = normalizeEmail(args.email);
-		const existing = await personByEmail(ctx, email);
+		const existing = await personByEmail(context, email);
 
 		if (existing) {
 			const purpose =
 				existing.tier === "visitor" ? "visitor" : "eventInvite";
-			await issueToken(ctx, {
+			await issueToken(context, {
 				token: args.token,
 				purpose,
 				personId: existing._id,
@@ -184,7 +185,7 @@ export const insertOrResendVisitor = internalMutation({
 			return { purpose };
 		}
 
-		const personId = await ctx.db.insert("people", {
+		const personId = await context.db.insert("people", {
 			email,
 			firstName: args.firstName,
 			lastName: args.lastName,
@@ -197,7 +198,7 @@ export const insertOrResendVisitor = internalMutation({
 			submittedAt: Date.now(),
 			verifiedAt: undefined,
 		});
-		await issueToken(ctx, {
+		await issueToken(context, {
 			token: args.token,
 			purpose: "visitor",
 			personId,
@@ -207,6 +208,19 @@ export const insertOrResendVisitor = internalMutation({
 		return { purpose: "visitor" };
 	},
 });
+
+type VisitorWho = { firstName: string; lastName: string; email: string };
+
+/** A settled visitor is still in while their event runs, and out once it ends. */
+function liveOrEnded(
+	event: Doc<"events"> | null,
+	now: number,
+	who: VisitorWho
+): { status: "already" | "ended"; who: VisitorWho } {
+	return eventLive(event, now)
+		? { status: "already", who }
+		: { status: "ended", who };
+}
 
 /**
  * Redeem the visitor's confirm TOKEN and apply the whole confirm decision
@@ -220,15 +234,15 @@ export const insertOrResendVisitor = internalMutation({
 export const confirmVisitorByToken = internalMutation({
 	args: { token: v.string() },
 	handler: async (
-		ctx,
+		context,
 		{ token }
 	): Promise<{
 		status: ConfirmStatus;
 		who?: { firstName: string; lastName: string; email: string };
 	}> => {
-		const r = await redeemToken(ctx, token, "visitor");
-		if (r.status === "invalid") return { status: "invalid" };
-		const person = await ctx.db.get(r.row.personId);
+		const redeemed = await redeemToken(context, token, "visitor");
+		if (redeemed.status === "invalid") return { status: "invalid" };
+		const person = await context.db.get(redeemed.row.personId);
 		if (person?.tier !== "visitor") return { status: "invalid" };
 		const who = {
 			firstName: person.firstName,
@@ -236,28 +250,26 @@ export const confirmVisitorByToken = internalMutation({
 			email: person.email,
 		};
 		const now = Date.now();
-		const event = r.row.eventId ? await ctx.db.get(r.row.eventId) : null;
-		if (r.status === "already")
-			return eventLive(event, now)
-				? { status: "already", who }
-				: { status: "ended", who };
-		if (r.status === "expired") {
+		const event = redeemed.row.eventId
+			? await context.db.get(redeemed.row.eventId)
+			: null;
+		if (redeemed.status === "already") return liveOrEnded(event, now, who);
+		if (redeemed.status === "expired") {
 			// A verified visitor keeps Wi-Fi while their event runs; an
 			// unverified one must register again.
-			if (person.verifiedAt == null) return { status: "expired" };
-			return eventLive(event, now)
-				? { status: "already", who }
-				: { status: "ended", who };
+			return person.verifiedAt === undefined
+				? { status: "expired" }
+				: liveOrEnded(event, now, who);
 		}
 		// Hard stop, no grace: the event this token would settle has already
 		// ended. Refuse before any write — no stage flip, no attendance, no
 		// Wi-Fi.
 		if (!eventLive(event, now)) return { status: "ended", who };
-		await ctx.db.patch(person._id, {
+		await context.db.patch(person._id, {
 			stage: "verified",
-			...(person.verifiedAt == null ? { verifiedAt: now } : {}),
+			...(person.verifiedAt === undefined ? { verifiedAt: now } : {}),
 		});
-		await insertAttendanceOnce(ctx, person._id, event._id);
+		await insertAttendanceOnce(context, person._id, event._id);
 		return { status: "verified", who };
 	},
 });
@@ -265,19 +277,22 @@ export const confirmVisitorByToken = internalMutation({
 export const confirmVisitor = action({
 	args: { token: v.string() },
 	handler: async (
-		ctx,
+		context,
 		{ token }
 	): Promise<{
 		status: ConfirmStatus;
 		wifi?: Wifi;
 		who?: { firstName: string; lastName: string; email: string };
 	}> => {
-		const res = await ctx.runMutation(
+		const result = await context.runMutation(
 			internal.visitors.confirmVisitorByToken,
 			{ token }
 		);
-		if (res.status === "verified" || res.status === "already")
-			return { ...res, wifi: await ctx.runQuery(internal.wifi.read, {}) };
-		return res;
+		return result.status === "verified" || result.status === "already"
+			? {
+					...result,
+					wifi: await context.runQuery(internal.wifi.read, {}),
+				}
+			: result;
 	},
 });

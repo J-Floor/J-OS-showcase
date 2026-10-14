@@ -11,10 +11,9 @@ import { personByEmail } from "./emailAddress.ts";
  * copy in each.
  */
 export async function personForCurrentUser(
-	ctx: QueryCtx
+	context: QueryCtx
 ): Promise<Doc<"people"> | null> {
-	const identity = await ctx.auth.getUserIdentity();
+	const identity = await context.auth.getUserIdentity();
 	const email = identity?.email;
-	if (!email) return null;
-	return personByEmail(ctx, email);
+	return email ? personByEmail(context, email) : null;
 }

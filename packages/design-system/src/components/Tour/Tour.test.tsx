@@ -41,22 +41,24 @@ const steps: TourStep[] = [
 	},
 ];
 
+function StartedTourHarness() {
+	const tour = useTour({ steps });
+	tour().start();
+	return <Tour tour={tour} />;
+}
+
+function IdleTourHarness() {
+	const tour = useTour({ steps });
+	return <Tour tour={tour} />;
+}
+
 test("renders the active step's title once started", async () => {
-	function Harness() {
-		const tour = useTour({ steps });
-		tour().start();
-		return <Tour tour={tour} />;
-	}
-	render(() => <Harness />);
+	render(() => <StartedTourHarness />);
 	expect(await screen.findByText("Hello there")).toBeInTheDocument();
 });
 
 test("renders nothing at all while the tour has not started", () => {
-	function Harness() {
-		const tour = useTour({ steps });
-		return <Tour tour={tour} />;
-	}
-	const { baseElement } = render(() => <Harness />);
+	const { baseElement } = render(() => <IdleTourHarness />);
 	// Ark keeps its positioner and content mounted when closed, with no
 	// `hidden` and no `display: none`, so an unstarted tour used to leave an
 	// empty card in the document — parked past the fold on desktop, reachable

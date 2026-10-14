@@ -16,10 +16,10 @@ vi.mock("@solidjs/router", () => ({
 
 const prefetchModule = vi.fn();
 vi.mock("../../modules/prefetchModule.ts", () => ({
-	descriptorModule: (d: { route: string }) =>
-		d.route === "/things" ? { id: "things" } : undefined,
-	prefetchModule: (m: unknown) => {
-		prefetchModule(m);
+	descriptorModule: (entry: { route: string }) =>
+		entry.route === "/things" ? { id: "things" } : undefined,
+	prefetchModule: (entry: unknown) => {
+		prefetchModule(entry);
 	},
 }));
 
@@ -33,6 +33,10 @@ type Row = { _id: string; name: string };
 const rowA: Row = { _id: "a1", name: "Alpha" };
 const rowB: Row = { _id: "b1", name: "Bravo" };
 
+function rowsOfBoth() {
+	return [rowA, rowB];
+}
+
 /** `view`/`Inventory` is board+admin only (see `defineAbilityFor`), so this
  *  descriptor exercises a real allow/deny split across roles rather than a
  *  fabricated ability. */
@@ -42,7 +46,7 @@ const descriptor: EntityDescriptor<Row> = {
 	param: "thing",
 	group: "Things",
 	icon: "widgets",
-	useRows: () => () => [rowA, rowB],
+	useRows: () => rowsOfBoth,
 	label: (row) => row.name,
 	keywords: (row) => [`kw-${row._id}`],
 	detail: (row) => `detail-${row._id}`,
@@ -114,6 +118,9 @@ test("onHighlight prefetches the descriptor's module and extras with the ability
 	expect(prefetchModule).toHaveBeenCalledWith({ id: "things" });
 	expect(prefetch).toHaveBeenCalledTimes(1);
 	expect(prefetch.mock.calls[0][0]).toEqual(rowB);
-	const can = prefetch.mock.calls[0][1] as (a: string, s: string) => boolean;
-	expect(can("view", "Inventory")).toBe(true);
+	const canPerform = prefetch.mock.calls[0][1] as (
+		a: string,
+		s: string
+	) => boolean;
+	expect(canPerform("view", "Inventory")).toBe(true);
 });

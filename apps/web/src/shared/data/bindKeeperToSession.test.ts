@@ -32,9 +32,9 @@ function setup(initial: State) {
 		onUpdate: vi.fn(() => vi.fn()),
 	} as unknown as ConvexClient);
 	const [state, setState] = createSignal<State>(initial, { equals: false });
-	const dispose = createRoot((d) => {
+	const dispose = createRoot((disposeRoot) => {
 		bindKeeperToSession(state);
-		return d;
+		return disposeRoot;
 	});
 	return { setState, dispose };
 }

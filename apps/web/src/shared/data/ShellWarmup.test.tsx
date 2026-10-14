@@ -5,25 +5,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "../../../convex/_generated/api";
 
-const convexUseQuery = vi.fn<(...a: unknown[]) => unknown>();
+const convexUseQuery = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("convex-solidjs", () => ({
-	useQuery: (...a: unknown[]) => convexUseQuery(...a),
+	useQuery: (...args: unknown[]) => convexUseQuery(...args),
 }));
-const prefetch = vi.fn<(...a: unknown[]) => void>();
+const prefetch = vi.fn<(...args: unknown[]) => void>();
 vi.mock("./queryKeeper.ts", async (orig) => ({
 	...(await orig<typeof import("./queryKeeper.ts")>()),
-	prefetch: (...a: unknown[]) => {
-		prefetch(...a);
+	prefetch: (...args: unknown[]) => {
+		prefetch(...args);
 	},
 }));
 const [allowed, setAllowed] = createSignal(true);
-vi.mock("../../lib/ability.tsx", () => ({
-	useAbility: () => () => ({
+function ability() {
+	return {
 		can: (action: string, subject: string) =>
 			allowed() &&
 			action === "view" &&
 			(subject === "SpaceInfo" || subject === "Events"),
-	}),
+	};
+}
+vi.mock("../../lib/ability.tsx", () => ({
+	useAbility: () => ability,
 }));
 const preloads = vi.hoisted(() => ({ events: vi.fn(), other: vi.fn() }));
 vi.mock("../../modules/registry.ts", () => ({
@@ -67,8 +70,8 @@ describe("ShellWarmup", () => {
 		prefetch.mockReset();
 		preloads.events.mockReset().mockResolvedValue(undefined);
 		preloads.other.mockReset().mockResolvedValue(undefined);
-		vi.stubGlobal("requestIdleCallback", (fn: () => void) => {
-			idleCallbacks.push(fn);
+		vi.stubGlobal("requestIdleCallback", (callback: () => void) => {
+			idleCallbacks.push(callback);
 			return idleCallbacks.length;
 		});
 		vi.stubGlobal("cancelIdleCallback", vi.fn());
@@ -92,8 +95,8 @@ describe("ShellWarmup", () => {
 	it("prefetches wifi.get once idle when the person may see it", () => {
 		const dispose = mount();
 		expect(prefetch).not.toHaveBeenCalled();
-		idleCallbacks.forEach((fn) => {
-			fn();
+		idleCallbacks.forEach((callback) => {
+			callback();
 		});
 		expect(prefetch).toHaveBeenCalledTimes(1);
 		expect(
@@ -108,8 +111,8 @@ describe("ShellWarmup", () => {
 	it("does not prefetch wifi.get without the ability", () => {
 		setAllowed(false);
 		const dispose = mount();
-		idleCallbacks.forEach((fn) => {
-			fn();
+		idleCallbacks.forEach((callback) => {
+			callback();
 		});
 		expect(prefetch).not.toHaveBeenCalled();
 		dispose();
@@ -118,8 +121,8 @@ describe("ShellWarmup", () => {
 	it("preloads the chunks of modules the person may view once idle", () => {
 		const dispose = mount();
 		expect(preloads.events).not.toHaveBeenCalled();
-		idleCallbacks.forEach((fn) => {
-			fn();
+		idleCallbacks.forEach((callback) => {
+			callback();
 		});
 		expect(preloads.events).toHaveBeenCalledTimes(1);
 		expect(preloads.other).not.toHaveBeenCalled();
@@ -129,8 +132,8 @@ describe("ShellWarmup", () => {
 	it("warms once the role resolves after idle, and only once", () => {
 		setAllowed(false);
 		const dispose = mount();
-		idleCallbacks.forEach((fn) => {
-			fn();
+		idleCallbacks.forEach((callback) => {
+			callback();
 		});
 		expect(prefetch).not.toHaveBeenCalled();
 		setAllowed(true);
@@ -152,8 +155,8 @@ describe("ShellWarmup", () => {
 	it("waits for the session before prefetching wifi.get", () => {
 		setKeeperActive(false);
 		const dispose = mount();
-		idleCallbacks.forEach((fn) => {
-			fn();
+		idleCallbacks.forEach((callback) => {
+			callback();
 		});
 		expect(prefetch).not.toHaveBeenCalled();
 		expect(preloads.events).toHaveBeenCalledTimes(1);

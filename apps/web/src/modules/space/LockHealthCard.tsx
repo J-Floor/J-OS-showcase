@@ -17,17 +17,11 @@ import { SpaceCard } from "./SpaceCard.tsx";
 const POLL_MS = 60_000;
 
 /**
- * Diagnostics-tab card: how many of the space's smart locks the door provider
- * can actually reach right now, and which ones. Board-only — members no longer
- * see this on Access.
- *
- * An action, not a query, because it asks the provider — so it cannot be
- * subscribed. Instead it checks on mount and again every minute while the page
- * is visible, plus straight away when the page comes back into view. The
- * action's server-side cache keeps that from becoming one provider call per
- * viewer per minute.
+ * The door provider's health, checked on mount and again every `POLL_MS`
+ * while the page is visible, plus straight away when the page comes back
+ * into view.
  */
-export function LockHealthCard(): JSX.Element {
+function createLockHealthPolling() {
 	const health = useAction(api.doorHealth.doorHealth);
 	const [reading, setReading] = createSignal<DoorHealth>();
 	const [failed, setFailed] = createSignal(false);
@@ -59,6 +53,22 @@ export function LockHealthCard(): JSX.Element {
 			);
 		});
 	});
+	return { reading, failed };
+}
+
+/**
+ * Diagnostics-tab card: how many of the space's smart locks the door provider
+ * can actually reach right now, and which ones. Board-only — members no longer
+ * see this on Access.
+ *
+ * An action, not a query, because it asks the provider — so it cannot be
+ * subscribed. Instead it checks on mount and again every minute while the page
+ * is visible, plus straight away when the page comes back into view. The
+ * action's server-side cache keeps that from becoming one provider call per
+ * viewer per minute.
+ */
+export function LockHealthCard(): JSX.Element {
+	const { reading, failed } = createLockHealthPolling();
 
 	function summary() {
 		const data = reading();
@@ -84,7 +94,7 @@ export function LockHealthCard(): JSX.Element {
 								: "Checking door status…"
 						}
 					>
-						{(s) => s().detail}
+						{(loadedSummary) => loadedSummary().detail}
 					</Show>
 				</p>
 			}
@@ -99,9 +109,11 @@ export function LockHealthCard(): JSX.Element {
 							</span>
 						}
 					>
-						{(s) => (
+						{(loadedSummary) => (
 							<>
-								<span class={styles.num}>{s().value}</span>
+								<span class={styles.num}>
+									{loadedSummary().value}
+								</span>
 								<span class={styles.label}>doors online</span>
 							</>
 						)}

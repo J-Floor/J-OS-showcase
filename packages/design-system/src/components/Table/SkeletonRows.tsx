@@ -5,6 +5,8 @@ import { Skeleton } from "../Skeleton/Skeleton.tsx";
 import styles from "./Table.module.scss";
 
 const WIDTHS = ["long", "medium", "short", "medium"] as const;
+const DEFAULT_ROWS = 8;
+const DEFAULT_COLUMNS = 4;
 
 /** `<tr>` placeholders inside a real `<tbody>`: one cell per visible column, so
  *  the skeleton lines up with the header that is already on screen. The last
@@ -15,25 +17,31 @@ export function SkeletonRows(props: {
 	rows?: number;
 }): JSX.Element {
 	return (
-		<Index each={Array.from({ length: props.rows ?? 8 })}>
-			{(_, r) => (
+		<Index each={Array.from({ length: props.rows ?? DEFAULT_ROWS })}>
+			{(_, rowIndex) => (
 				<tr
 					class={styles.skeletonRow}
 					data-skeleton-row=""
 					aria-hidden="true"
 				>
 					<Index each={Array.from({ length: props.columns })}>
-						{(_, c) => (
+						{(_, columnIndex) => (
 							<td
 								data-text-cell=""
 								class={
-									props.hasActions && c === props.columns - 1
+									props.hasActions &&
+									columnIndex === props.columns - 1
 										? styles.actionsCell
 										: undefined
 								}
 							>
 								<Skeleton
-									width={WIDTHS[(r + c) % WIDTHS.length]}
+									width={
+										WIDTHS[
+											(rowIndex + columnIndex) %
+												WIDTHS.length
+										]
+									}
 								/>
 							</td>
 						)}
@@ -52,15 +60,22 @@ export function TableSkeleton(props: {
 }): JSX.Element {
 	return (
 		<div class={styles.skeletonTable} role="status" aria-label="Loading">
-			<For each={Array.from({ length: props.rows ?? 8 })}>
-				{(_, r) => (
+			<For each={Array.from({ length: props.rows ?? DEFAULT_ROWS })}>
+				{(_, rowIndex) => (
 					<div class={styles.skeletonTableRow} data-skeleton-row="">
 						<Index
-							each={Array.from({ length: props.columns ?? 4 })}
+							each={Array.from({
+								length: props.columns ?? DEFAULT_COLUMNS,
+							})}
 						>
-							{(_, c) => (
+							{(_, columnIndex) => (
 								<Skeleton
-									width={WIDTHS[(r() + c) % WIDTHS.length]}
+									width={
+										WIDTHS[
+											(rowIndex() + columnIndex) %
+												WIDTHS.length
+										]
+									}
 								/>
 							)}
 						</Index>

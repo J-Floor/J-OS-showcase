@@ -17,7 +17,7 @@ export function doorsIntroPending(
 	person: DoorsIntroPerson | null | undefined,
 	now: number
 ): boolean {
-	if (!person) return false;
-	if (person.doorsIntroSeenAt !== undefined) return false;
-	return doorOpensFor(person, now);
+	return person && person.doorsIntroSeenAt === undefined
+		? doorOpensFor(person, now)
+		: false;
 }

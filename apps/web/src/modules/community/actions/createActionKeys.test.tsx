@@ -17,7 +17,7 @@ afterEach(cleanup);
 
 type Person = { _id: string; deniable: boolean };
 
-function setup(opts: {
+function setup(options: {
 	drawerPerson?: Person;
 	selected?: Person[];
 	focused?: Person;
@@ -40,12 +40,12 @@ function setup(opts: {
 	function Probe() {
 		createActionKeys<Person>({
 			actions: () => [deny],
-			drawerPerson: () => opts.drawerPerson,
-			selected: () => opts.selected ?? [],
-			focused: () => opts.focused,
+			drawerPerson: () => options.drawerPerson,
+			selected: () => options.selected ?? [],
+			focused: () => options.focused,
 			onAdvance: () => advanced.push(1),
 			onClearSelection: () => cleared.push(1),
-			active: () => opts.active ?? true,
+			active: () => options.active ?? true,
 		});
 		return <div />;
 	}
@@ -53,8 +53,8 @@ function setup(opts: {
 	return { ran, advanced, cleared };
 }
 
-function person(id: string, deniable = true): Person {
-	return { _id: id, deniable };
+function person(id: string, isDeniable = true): Person {
+	return { _id: id, deniable: isDeniable };
 }
 
 test("the open drawer's person wins over everything else", () => {

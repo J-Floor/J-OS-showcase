@@ -9,6 +9,7 @@ import {
 	type ColumnFiltersState,
 	type RowSelectionState,
 	type FilterFn,
+	type Table as TanTable,
 } from "@tanstack/solid-table";
 import { createComputed, createEffect, createSignal, on } from "solid-js";
 
@@ -28,7 +29,13 @@ import {
 	textContainsColumnFilter,
 	timeRangeColumnFilter,
 } from "./filter.ts";
-import type { ColumnSize, DataType, JfColumnDef } from "./types.ts";
+import type {
+	ColumnSize,
+	DataType,
+	EnumOption,
+	EnumValue,
+	JfColumnDefinition,
+} from "./types.ts";
 
 /**
  * What a processed column carries in its `meta`: its `dataType` arm, the
@@ -48,15 +55,17 @@ type TableColumnMeta = (
 export function columnMeta(column: {
 	columnDef: { meta?: unknown };
 }): TableColumnMeta {
-	return columnDefMeta(column.columnDef);
+	return columnDefinitionMeta(column.columnDef);
 }
 
 /** A processed column def's {@link TableColumnMeta}. */
-export function columnDefMeta(columnDef: { meta?: unknown }): TableColumnMeta {
-	return (columnDef.meta as TableColumnMeta | undefined) ?? {};
+export function columnDefinitionMeta(columnDefinition: {
+	meta?: unknown;
+}): TableColumnMeta {
+	return (columnDefinition.meta as TableColumnMeta | undefined) ?? {};
 }
 
-function filterFnFor<Data extends Record<string, unknown>>(
+function filterFunctionFor<Data extends Record<string, unknown>>(
 	dataType: DataType["dataType"] | undefined
 ): FilterFn<Data> | undefined {
 	switch (dataType) {
@@ -86,10 +95,10 @@ function filterFnFor<Data extends Record<string, unknown>>(
  * so every filter is wired explicitly.
  */
 function processColumn<Data extends Record<string, unknown>>(
-	column: JfColumnDef<Data>
+	column: JfColumnDefinition<Data>
 ): ColumnDef<Data> {
 	const { size, ...rest } = column;
-	const filterFn = filterFnFor<Data>(column.dataType);
+	const filterFunction = filterFunctionFor<Data>(column.dataType);
 	const enumOptions =
 		column.dataType === "enum" ? { enumOptions: column.enumOptions } : {};
 	// An enum shows its option labels unless the caller renders its own cell:
@@ -104,7 +113,7 @@ function processColumn<Data extends Record<string, unknown>>(
 	return {
 		...rest,
 		...enumCell,
-		...(filterFn ? { filterFn } : {}),
+		...(filterFunction ? { filterFn: filterFunction } : {}),
 		meta: {
 			...column.meta,
 			dataType: column.dataType,
@@ -118,7 +127,7 @@ function processColumn<Data extends Record<string, unknown>>(
 /** The display-only leading column `Table.Root` renders as checkboxes. */
 function selectColumn<
 	Data extends Record<string, unknown>,
->(): JfColumnDef<Data> {
+>(): JfColumnDefinition<Data> {
 	return { id: SELECT_COLUMN_ID, size: SELECT_COLUMN_WIDTH };
 }
 
@@ -127,9 +136,78 @@ function enumKey(value: unknown): string | undefined {
 	return isEnumValue(value) && value !== "" ? String(value) : undefined;
 }
 
+/** The values a row cell holds: an array cell holds several. */
+function cellEntries(value: unknown): unknown[] {
+	return Array.isArray(value) ? value : [value];
+}
+
+/** The row values of an enum column that no `enumOptions` entry covers. */
+function unmatchedEnumValues(
+	rows: readonly { getValue: (columnId: string) => unknown }[],
+	columnId: string,
+	enumOptions: readonly EnumOption<EnumValue>[]
+): Set<string> {
+	const known = new Set(
+		enumOptions.flatMap((option) => enumOptionValues(option))
+	);
+	const unmatched = new Set<string>();
+	for (const row of rows) {
+		const entries = cellEntries(row.getValue(columnId));
+		for (const entry of entries) {
+			const key = enumKey(entry);
+			if (key !== undefined && !known.has(key)) unmatched.add(key);
+		}
+	}
+	return unmatched;
+}
+
+/** Warns once per enum column whose rows hold values its options miss. */
+function warnEnumDrift<Data extends Record<string, unknown>>(
+	table: TanTable<Data>,
+	warned: Set<string>
+): void {
+	const rows = table.getCoreRowModel().rows;
+	for (const column of table.getAllLeafColumns()) {
+		const meta = columnMeta(column);
+		if (meta.dataType !== "enum" || warned.has(column.id)) continue;
+		const unmatched = unmatchedEnumValues(
+			rows,
+			column.id,
+			meta.enumOptions
+		);
+		if (unmatched.size === 0) continue;
+		warned.add(column.id);
+		// eslint-disable-next-line no-console -- a warning for the developer, not the user
+		console.warn(
+			`Table: column "${column.id}" has row values that match no enumOptions entry: ${[
+				...unmatched,
+			]
+				.map((value) => `"${value}"`)
+				.join(", ")}. These rows cannot be reached through the filter.`
+		);
+	}
+}
+
+/** Warns, in development, when the actions column is not listed last. */
+function warnMisplacedActionsColumn(columns: readonly { id?: string }[]): void {
+	const actionsIndex = columns.findIndex(
+		(column) => column.id === ACTIONS_COLUMN_ID
+	);
+	if (
+		import.meta.env.DEV &&
+		actionsIndex !== -1 &&
+		actionsIndex !== columns.length - 1
+	) {
+		// eslint-disable-next-line no-console -- a warning for the developer, not the user
+		console.warn(
+			`Table: the "${ACTIONS_COLUMN_ID}" column must be the last column; it renders in the last track wherever it is listed.`
+		);
+	}
+}
+
 export type CreateTableOptions<Data extends Record<string, unknown>> = {
 	data: () => Data[];
-	columns: JfColumnDef<Data>[];
+	columns: JfColumnDefinition<Data>[];
 	initialSorting?: SortingState;
 	initialFilters?: ColumnFiltersState;
 	enableRowSelection?: boolean;
@@ -165,44 +243,32 @@ export function defaultRowId(
  * `createSignal`; state passed via getters + `onXChange`.
  */
 export function createTable<Data extends Record<string, unknown>>(
-	opts: CreateTableOptions<Data>
+	options: CreateTableOptions<Data>
 ) {
 	const [sorting, setSorting] = createSignal<SortingState>(
-		opts.initialSorting ?? []
+		options.initialSorting ?? []
 	);
 	const [columnFilters, setColumnFilters] = createSignal<ColumnFiltersState>(
-		opts.initialFilters ?? []
+		options.initialFilters ?? []
 	);
 	const [rowSelection, setRowSelection] = createSignal<RowSelectionState>({});
 
 	const columns = (
-		opts.enableRowSelection
-			? [selectColumn<Data>(), ...opts.columns]
-			: opts.columns
-	).map(processColumn);
+		options.enableRowSelection
+			? [selectColumn<Data>(), ...options.columns]
+			: options.columns
+	).map((column) => processColumn(column));
 
 	// The actions column renders pinned to the trailing edge, in the last
 	// track, whatever its place in the list.
-	const actionsIndex = columns.findIndex(
-		(column) => column.id === ACTIONS_COLUMN_ID
-	);
-	if (
-		import.meta.env.DEV &&
-		actionsIndex !== -1 &&
-		actionsIndex !== columns.length - 1
-	) {
-		// eslint-disable-next-line no-console -- a warning for the developer, not the user
-		console.warn(
-			`Table: the "${ACTIONS_COLUMN_ID}" column must be the last column; it renders in the last track wherever it is listed.`
-		);
-	}
+	warnMisplacedActionsColumn(columns);
 
 	const table = createSolidTable<Data>({
 		get data() {
-			return opts.data();
+			return options.data();
 		},
 		columns,
-		getRowId: opts.getRowId ?? defaultRowId,
+		getRowId: options.getRowId ?? defaultRowId,
 		state: {
 			get sorting() {
 				return sorting();
@@ -216,13 +282,13 @@ export function createTable<Data extends Record<string, unknown>>(
 			// Hide the grouped column: its value is shown in the group's
 			// header row instead of as a redundant data column.
 			get columnVisibility() {
-				return opts.groupBy ? { [opts.groupBy]: false } : {};
+				return options.groupBy ? { [options.groupBy]: false } : {};
 			},
 		},
 		onSortingChange: setSorting,
 		onColumnFiltersChange: setColumnFilters,
 		onRowSelectionChange: setRowSelection,
-		enableRowSelection: opts.enableRowSelection ?? false,
+		enableRowSelection: options.enableRowSelection ?? false,
 		enableMultiSort: true,
 		getCoreRowModel: getCoreRowModel(),
 		getSortedRowModel: getSortedRowModel(),
@@ -257,34 +323,7 @@ export function createTable<Data extends Record<string, unknown>>(
 	const warnedEnumColumns = new Set<string>();
 	createEffect(() => {
 		if (!import.meta.env.DEV) return;
-		const rows = table.getCoreRowModel().rows;
-		for (const column of table.getAllLeafColumns()) {
-			const meta = columnMeta(column);
-			if (meta.dataType !== "enum" || warnedEnumColumns.has(column.id))
-				continue;
-			const known = new Set(meta.enumOptions.flatMap(enumOptionValues));
-			const unmatched = new Set<string>();
-			for (const row of rows) {
-				const value = row.getValue(column.id);
-				for (const entry of Array.isArray(value) ? value : [value]) {
-					const key = enumKey(entry);
-					if (key !== undefined && !known.has(key))
-						unmatched.add(key);
-				}
-			}
-			if (unmatched.size === 0) continue;
-			warnedEnumColumns.add(column.id);
-			// eslint-disable-next-line no-console -- a warning for the developer, not the user
-			console.warn(
-				`Table: column "${column.id}" has row values that match no enumOptions entry: ${[
-					...unmatched,
-				]
-					.map((value) => `"${value}"`)
-					.join(
-						", "
-					)}. These rows cannot be reached through the filter.`
-			);
-		}
+		warnEnumDrift(table, warnedEnumColumns);
 	});
 
 	return {

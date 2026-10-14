@@ -35,8 +35,9 @@ export const BOARD_STEPS = [
  * list whatever the door state: nothing here is about the door any more.
  */
 export function requiredSelfStepIds(tier: Tier): OnboardingStepId[] {
-	if (tier !== "guest" && tier !== "member" && tier !== "core") return [];
-	return [...SELF_STEP_IDS];
+	return tier === "guest" || tier === "member" || tier === "core"
+		? [...SELF_STEP_IDS]
+		: [];
 }
 
 /** The next self-serve step this person still owes, or null when none is left. */

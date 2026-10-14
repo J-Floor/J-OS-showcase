@@ -19,6 +19,39 @@ import {
 import styles from "./RoleChooser.module.scss";
 import { MOVES, type RoleMove } from "./roleMoves.ts";
 
+type Via = (typeof MOVES)[number]["via"][number];
+
+/** The move a chosen destination dispatches through `event`, or undefined while
+ *  it still lacks what that event needs (a date, a target tier). `expiryIso`
+ *  is an accessor read only for `EXTEND_WINDOW`, so a caller's memo tracks the
+ *  date only while that move is chosen. */
+function toRoleMove(
+	chosen: (typeof MOVES)[number],
+	event: Via,
+	expiryIso: Accessor<string | null>
+): RoleMove | undefined {
+	if (event === "EXTEND_WINDOW") {
+		const until = composeExpiry(expiryIso(), SITE_TIMEZONE)?.utc ?? null;
+		// A guest window without a date is what let the old console bypass
+		// the machine; the date is required.
+		return until === null ? undefined : { kind: "extendWindow", until };
+	}
+	if (event === "SET_ROLE") {
+		// Every row whose `via` contains SET_ROLE declares a `tier`; without
+		// one there is no target to carry, so offer nothing rather than
+		// dispatch a role move at nobody.
+		return chosen.tier === undefined
+			? undefined
+			: { kind: "role", tier: chosen.tier };
+	}
+	// NO CAST. `MOVES` is `as const`, so `event` is a union of the literals
+	// in the `via` lists, and the two checks above have removed
+	// `EXTEND_WINDOW` and `SET_ROLE`, leaving exactly those `RoleMove`
+	// accepts. An assertion would be a no-op, and
+	// `@typescript-eslint/no-unnecessary-type-assertion` is an ERROR here.
+	return { kind: "event", event };
+}
+
 /**
  * Pick a destination for one or many people, and turn it into the event that
  * gets there.
@@ -60,10 +93,13 @@ export function RoleChooser(props: {
 	 * event beats the generic `SET_ROLE` wherever both apply.
 	 */
 	function eventFor(move: (typeof MOVES)[number]) {
-		if (props.states.length === 0) return undefined;
-		return move.via.find((event) =>
-			props.states.every((state) => legalEvents(state).includes(event))
-		);
+		return props.states.length === 0
+			? undefined
+			: move.via.find((event) =>
+					props.states.every((state) =>
+						legalEvents(state).includes(event)
+					)
+				);
 	}
 
 	const available = createMemo(() =>
@@ -71,13 +107,10 @@ export function RoleChooser(props: {
 			// Hide a destination every selected row already occupies. SET_ROLE is
 			// legal from almost everywhere, so without this it offers "Member" to
 			// a member and "Board" to a board member.
-			if (
-				move.tier !== undefined &&
+			return move.tier !== undefined &&
 				props.states.every((state) => state.startsWith(`${move.tier}.`))
-			) {
-				return false;
-			}
-			return eventFor(move) !== undefined;
+				? false
+				: eventFor(move) !== undefined;
 		})
 	);
 
@@ -85,33 +118,13 @@ export function RoleChooser(props: {
 	 *  choice is missing, illegal, or still waiting on its date. */
 	const move = createMemo<RoleMove | undefined>(() => {
 		const value = choice();
-		if (value === undefined) return undefined;
-		const chosen = MOVES.find((m) => m.value === value);
-		if (!chosen) return undefined;
+		if (value === undefined) return;
+		const chosen = MOVES.find((candidate) => candidate.value === value);
+		if (!chosen) return;
 		const event = eventFor(chosen);
-		if (event === undefined) return undefined;
+		if (event === undefined) return;
 
-		if (event === "EXTEND_WINDOW") {
-			const until = composeExpiry(iso(), SITE_TIMEZONE)?.utc ?? null;
-			// A guest window without a date is what let the old console bypass
-			// the machine; the date is required.
-			if (until === null) return undefined;
-			return { kind: "extendWindow", until };
-		}
-		if (event === "SET_ROLE") {
-			// Every row whose `via` contains SET_ROLE declares a `tier`; without
-			// one there is no target to carry, so offer nothing rather than
-			// dispatch a role move at nobody.
-			return chosen.tier === undefined
-				? undefined
-				: { kind: "role", tier: chosen.tier };
-		}
-		// NO CAST. `MOVES` is `as const`, so `event` is a union of the literals
-		// in the `via` lists, and the two checks above have removed
-		// `EXTEND_WINDOW` and `SET_ROLE`, leaving exactly those `RoleMove`
-		// accepts. An assertion would be a no-op, and
-		// `@typescript-eslint/no-unnecessary-type-assertion` is an ERROR here.
-		return { kind: "event", event };
+		return toRoleMove(chosen, event, iso);
 	});
 
 	function commit(): void {
@@ -133,16 +146,18 @@ export function RoleChooser(props: {
 			<Segment.Root
 				class={styles.segment}
 				value={choice() ?? ""}
-				onValueChange={(d) => {
+				onValueChange={(details) => {
 					// Ark's `ValueChangeDetails.value` is `string | null` (it also
 					// models "cleared"); `choice` only ever needs undefined for
 					// "nothing chosen yet".
-					setChoice(d.value ?? undefined);
+					setChoice(details.value ?? undefined);
 				}}
 			>
 				<For each={available()}>
-					{(o) => (
-						<Segment.Item value={o.value}>{o.label}</Segment.Item>
+					{(option) => (
+						<Segment.Item value={option.value}>
+							{option.label}
+						</Segment.Item>
 					)}
 				</For>
 			</Segment.Root>

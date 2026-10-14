@@ -6,10 +6,10 @@ import type { InventoryPdfAssets } from "./inventoryListPdf.ts";
 import letterheadUrl from "./letterhead.pdf?url";
 
 async function fetchBytes(url: string): Promise<Uint8Array> {
-	const res = await fetch(url);
-	if (!res.ok)
-		throw new Error(`Failed to load ${url}: ${String(res.status)}`);
-	return new Uint8Array(await res.arrayBuffer());
+	const response = await fetch(url);
+	if (!response.ok)
+		throw new Error(`Failed to load ${url}: ${String(response.status)}`);
+	return new Uint8Array(await response.arrayBuffer());
 }
 
 /** Fetch the letterhead and brand fonts for the inventory list PDF. Called on

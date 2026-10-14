@@ -19,19 +19,19 @@ type Seed = {
 };
 
 async function seed(
-	t: ReturnType<typeof convexTest>,
-	p: Seed
+	backend: ReturnType<typeof convexTest>,
+	person: Seed
 ): Promise<Id<"people">> {
-	return t.run((ctx) =>
-		ctx.db.insert("people", {
-			email: p.email,
-			firstName: p.email.split("@")[0],
+	return backend.run((context) =>
+		context.db.insert("people", {
+			email: person.email,
+			firstName: person.email.split("@")[0],
 			lastName: "X",
-			tier: p.tier,
-			stage: p.stage ?? "active",
+			tier: person.tier,
+			stage: person.stage ?? "active",
 			stageSince: Date.now(),
-			accessUntil: p.accessUntil,
-			hostedById: p.hostedById,
+			accessUntil: person.accessUntil,
+			hostedById: person.hostedById,
 		})
 	);
 }
@@ -47,7 +47,8 @@ function recipient(personId: string, firstName = "Ada"): Recipient {
 }
 
 function sorted(ids: string[]): string[] {
-	return [...ids].sort();
+	// eslint-disable-next-line id-length -- conventional comparator parameter names
+	return [...ids].sort((a, b) => a.localeCompare(b));
 }
 
 beforeEach(() => {
@@ -59,17 +60,17 @@ afterEach(() => {
 
 describe("registry", () => {
 	it("validates exactly the registered kind names", () => {
-		expect(kindValidator.members.map((m) => m.value).sort()).toEqual(
-			Object.keys(KINDS).sort()
-		);
+		expect(
+			sorted(kindValidator.members.map((member) => member.value))
+		).toEqual(sorted(Object.keys(KINDS)));
 	});
 
 	it("gives every kind an email except the push-only event reminders", () => {
-		for (const [name, def] of Object.entries(KINDS)) {
-			expect(def.push, name).toBeTypeOf("function");
+		for (const [name, definition] of Object.entries(KINDS)) {
+			expect(definition.push, name).toBeTypeOf("function");
 			if (name === "eventEndingSoon" || name === "eventStartingSoon")
-				expect(def.email).toBeUndefined();
-			else expect(def.email, name).toBeTypeOf("function");
+				expect(definition.email).toBeUndefined();
+			else expect(definition.email, name).toBeTypeOf("function");
 		}
 	});
 });
@@ -83,13 +84,19 @@ describe("event reminders", () => {
 
 describe("audiences", () => {
 	it("board kinds reach entitled board and admin only", async () => {
-		const t = convexTest(schema, modules);
-		const board = await seed(t, { email: "b@example.org", tier: "board" });
-		const admin = await seed(t, { email: "a@example.org", tier: "admin" });
-		await seed(t, { email: "m@example.org", tier: "member" });
-		await seed(t, { email: "f@example.org", tier: "former" });
-		const ids = await t.run((ctx) =>
-			KINDS.doorAlert.audience(ctx, {
+		const backend = convexTest(schema, modules);
+		const board = await seed(backend, {
+			email: "b@example.org",
+			tier: "board",
+		});
+		const admin = await seed(backend, {
+			email: "a@example.org",
+			tier: "admin",
+		});
+		await seed(backend, { email: "m@example.org", tier: "member" });
+		await seed(backend, { email: "f@example.org", tier: "former" });
+		const ids = await backend.run((context) =>
+			KINDS.doorAlert.audience(context, {
 				headline: "h",
 				detail: "d",
 				consequence: "c",
@@ -100,24 +107,24 @@ describe("audiences", () => {
 	});
 
 	it("event reminders reach every entitled access tier", async () => {
-		const t = convexTest(schema, modules);
-		const member = await seed(t, {
+		const backend = convexTest(schema, modules);
+		const member = await seed(backend, {
 			email: "m@example.org",
 			tier: "member",
 		});
-		const guest = await seed(t, {
+		const guest = await seed(backend, {
 			email: "g@example.org",
 			tier: "guest",
 			accessUntil: Date.now() + DAY,
 		});
-		await seed(t, {
+		await seed(backend, {
 			email: "late@example.org",
 			tier: "guest",
 			accessUntil: Date.now() - DAY,
 		});
-		await seed(t, { email: "f@example.org", tier: "former" });
-		const eventId = await t.run(async (ctx) =>
-			ctx.db.insert("events", {
+		await seed(backend, { email: "f@example.org", tier: "former" });
+		const eventId = await backend.run(async (context) =>
+			context.db.insert("events", {
 				name: "Demo",
 				startsAt: Date.now() + DAY,
 				endsAt: Date.now() + DAY + 3_600_000,
@@ -127,8 +134,8 @@ describe("audiences", () => {
 				createdAt: Date.now(),
 			})
 		);
-		const ids = await t.run((ctx) =>
-			KINDS.eventStartingSoon.audience(ctx, {
+		const ids = await backend.run((context) =>
+			KINDS.eventStartingSoon.audience(context, {
 				eventId,
 				name: "Demo",
 				startsAtLocal: "2026-10-10T18:00:00+02:00[Europe/Zurich]",
@@ -138,32 +145,32 @@ describe("audiences", () => {
 	});
 
 	it("task assignment reaches the assignee only while they are entitled", async () => {
-		const t = convexTest(schema, modules);
-		const member = await seed(t, {
+		const backend = convexTest(schema, modules);
+		const member = await seed(backend, {
 			email: "m@example.org",
 			tier: "member",
 		});
-		const former = await seed(t, {
+		const former = await seed(backend, {
 			email: "f@example.org",
 			tier: "former",
 		});
-		const taskId = await t.run((ctx) =>
-			ctx.db.insert("tasks", {
+		const taskId = await backend.run((context) =>
+			context.db.insert("tasks", {
 				title: "Wire it",
 				status: "backlog",
 				assigneeIds: [],
 				createdBy: member,
 			})
 		);
-		const toMember = await t.run((ctx) =>
-			KINDS.taskAssigned.audience(ctx, {
+		const toMember = await backend.run((context) =>
+			KINDS.taskAssigned.audience(context, {
 				assigneeId: member,
 				taskId,
 				taskTitle: "Wire it",
 			})
 		);
-		const toFormer = await t.run((ctx) =>
-			KINDS.taskAssigned.audience(ctx, {
+		const toFormer = await backend.run((context) =>
+			KINDS.taskAssigned.audience(context, {
 				assigneeId: former,
 				taskId,
 				taskTitle: "Wire it",
@@ -174,23 +181,23 @@ describe("audiences", () => {
 	});
 
 	it("guest expiring soon reaches the guest and their host once each, not the rest of the board", async () => {
-		const t = convexTest(schema, modules);
-		const hostBoard = await seed(t, {
+		const backend = convexTest(schema, modules);
+		const hostBoard = await seed(backend, {
 			email: "host@example.org",
 			tier: "board",
 		});
-		const otherBoard = await seed(t, {
+		const otherBoard = await seed(backend, {
 			email: "b2@example.org",
 			tier: "board",
 		});
-		const guest = await seed(t, {
+		const guest = await seed(backend, {
 			email: "g@example.org",
 			tier: "guest",
 			accessUntil: Date.now() + 2 * DAY,
 			hostedById: hostBoard,
 		});
-		const ids = await t.run((ctx) =>
-			KINDS.guestExpiringSoon.audience(ctx, {
+		const ids = await backend.run((context) =>
+			KINDS.guestExpiringSoon.audience(context, {
 				guestId: guest,
 				guestName: "g X",
 				untilDate: "6 October 2026",
@@ -201,24 +208,24 @@ describe("audiences", () => {
 	});
 
 	it("guest expired reaches the guest whose window just closed and their host, not the rest of the board", async () => {
-		const t = convexTest(schema, modules);
-		const host = await seed(t, {
+		const backend = convexTest(schema, modules);
+		const host = await seed(backend, {
 			email: "host@example.org",
 			tier: "member",
 		});
-		const otherBoard = await seed(t, {
+		const otherBoard = await seed(backend, {
 			email: "b@example.org",
 			tier: "board",
 		});
-		const guest = await seed(t, {
+		const guest = await seed(backend, {
 			email: "g@example.org",
 			tier: "guest",
 			stage: "expired",
 			accessUntil: Date.now() - DAY,
 			hostedById: host,
 		});
-		const ids = await t.run((ctx) =>
-			KINDS.guestExpired.audience(ctx, {
+		const ids = await backend.run((context) =>
+			KINDS.guestExpired.audience(context, {
 				guestId: guest,
 				guestName: "g X",
 			})
@@ -228,22 +235,22 @@ describe("audiences", () => {
 	});
 
 	it("a guest with no host is the whole audience for expiring soon and expired", async () => {
-		const t = convexTest(schema, modules);
-		await seed(t, { email: "b@example.org", tier: "board" });
-		const guest = await seed(t, {
+		const backend = convexTest(schema, modules);
+		await seed(backend, { email: "b@example.org", tier: "board" });
+		const guest = await seed(backend, {
 			email: "g@example.org",
 			tier: "guest",
 			accessUntil: Date.now() + 2 * DAY,
 		});
-		const soon = await t.run((ctx) =>
-			KINDS.guestExpiringSoon.audience(ctx, {
+		const soon = await backend.run((context) =>
+			KINDS.guestExpiringSoon.audience(context, {
 				guestId: guest,
 				guestName: "g X",
 				untilDate: "6 October 2026",
 			})
 		);
-		const expired = await t.run((ctx) =>
-			KINDS.guestExpired.audience(ctx, {
+		const expired = await backend.run((context) =>
+			KINDS.guestExpired.audience(context, {
 				guestId: guest,
 				guestName: "g X",
 			})
@@ -253,20 +260,20 @@ describe("audiences", () => {
 	});
 
 	it("guest expired keeps the guest but drops a host who is no longer entitled", async () => {
-		const t = convexTest(schema, modules);
-		const formerHost = await seed(t, {
+		const backend = convexTest(schema, modules);
+		const formerHost = await seed(backend, {
 			email: "host@example.org",
 			tier: "former",
 		});
-		const guest = await seed(t, {
+		const guest = await seed(backend, {
 			email: "g@example.org",
 			tier: "guest",
 			stage: "expired",
 			accessUntil: Date.now() - DAY,
 			hostedById: formerHost,
 		});
-		const ids = await t.run((ctx) =>
-			KINDS.guestExpired.audience(ctx, {
+		const ids = await backend.run((context) =>
+			KINDS.guestExpired.audience(context, {
 				guestId: guest,
 				guestName: "g X",
 			})
@@ -275,20 +282,20 @@ describe("audiences", () => {
 	});
 
 	it("guest access changes reach the guest and the host, not the whole board", async () => {
-		const t = convexTest(schema, modules);
-		const host = await seed(t, {
+		const backend = convexTest(schema, modules);
+		const host = await seed(backend, {
 			email: "host@example.org",
 			tier: "board",
 		});
-		await seed(t, { email: "b2@example.org", tier: "board" });
-		const guest = await seed(t, {
+		await seed(backend, { email: "b2@example.org", tier: "board" });
+		const guest = await seed(backend, {
 			email: "g@example.org",
 			tier: "guest",
 			accessUntil: Date.now() + 30 * DAY,
 			hostedById: host,
 		});
-		const ids = await t.run((ctx) =>
-			KINDS.guestAccessChanged.audience(ctx, {
+		const ids = await backend.run((context) =>
+			KINDS.guestAccessChanged.audience(context, {
 				guestId: guest,
 				guestName: "g X",
 				change: "extended",
@@ -419,15 +426,17 @@ describe("rendering", () => {
 			'href="https://j.floor/space"'
 		);
 		for (const change of ["extended", "shortened"] as const) {
-			const p = { ...base, change, untilDate: "3 November 2026" };
-			expect(KINDS.guestAccessChanged.push(p, guest).url, change).toBe(
-				"https://j.floor/space"
-			);
-			expect(KINDS.guestAccessChanged.push(p, host).url, change).toBe(
-				guestDrawer
-			);
+			const payload = { ...base, change, untilDate: "3 November 2026" };
 			expect(
-				KINDS.guestAccessChanged.email?.(p, guest)?.html,
+				KINDS.guestAccessChanged.push(payload, guest).url,
+				change
+			).toBe("https://j.floor/space");
+			expect(
+				KINDS.guestAccessChanged.push(payload, host).url,
+				change
+			).toBe(guestDrawer);
+			expect(
+				KINDS.guestAccessChanged.email?.(payload, guest)?.html,
 				change
 			).toContain('href="https://j.floor/space"');
 		}

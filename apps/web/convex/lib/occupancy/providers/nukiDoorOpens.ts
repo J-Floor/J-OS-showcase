@@ -25,7 +25,7 @@ export function isDoorOpened(entry: { action: number }): boolean {
 }
 
 export function countDoorOpens(entries: { action: number }[]): number {
-	return entries.filter(isDoorOpened).length;
+	return entries.filter((entry) => isDoorOpened(entry)).length;
 }
 
 /** Sum door-open events across all locks since `sinceIso`. */
@@ -45,8 +45,8 @@ async function countDoorOpensSince(
 }
 
 export function startOfTodayIso(now: number): string {
-	const z = zonedFromEpoch(now, SITE_TIMEZONE);
-	const today = `${z.year}-${pad(z.month)}-${pad(z.day)}`;
+	const zoned = zonedFromEpoch(now, SITE_TIMEZONE);
+	const today = `${zoned.year}-${pad(zoned.month)}-${pad(zoned.day)}`;
 	return new Date(
 		composeZoned(today, "00:00", SITE_TIMEZONE).utc
 	).toISOString();
@@ -58,10 +58,11 @@ export const nukiDoorOpensProvider: OccupancyProvider = {
 	async count(now) {
 		const token = process.env.NUKI_API_TOKEN;
 		const lockIds = parseLockIds(process.env.NUKI_SMARTLOCK_IDS);
-		if (!token || lockIds.length === 0) return null;
-		return countDoorOpensSince(
-			{ fetch, token },
-			{ lockIds, sinceIso: startOfTodayIso(now) }
-		);
+		return !token || lockIds.length === 0
+			? null
+			: countDoorOpensSince(
+					{ fetch, token },
+					{ lockIds, sinceIso: startOfTodayIso(now) }
+				);
 	},
 };

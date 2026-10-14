@@ -12,7 +12,7 @@ import { ConfirmProvider, useConfirm } from "./confirm.tsx";
 
 afterEach(cleanup);
 
-function Harness(props: { onResult: (ok: boolean) => void }) {
+function Harness(props: { onResult: (isConfirmed: boolean) => void }) {
 	const confirm = useConfirm();
 	return (
 		<button
@@ -56,6 +56,7 @@ function Harness(props: { onResult: (ok: boolean) => void }) {
  *
  * Re-verify by hand if `initialFocusEl` in confirm.tsx changes.
  */
+// eslint-disable-next-line sonarjs/assertions-in-tests -- skipped browser-only test, the reason is documented above
 test.skip("the confirm button takes initial focus (browser-only, see comment)", () => {
 	// Intentionally empty: see the comment above.
 });
@@ -64,7 +65,7 @@ test("confirming resolves true", async () => {
 	const results: boolean[] = [];
 	render(() => (
 		<ConfirmProvider>
-			<Harness onResult={(ok) => results.push(ok)} />
+			<Harness onResult={(isConfirmed) => results.push(isConfirmed)} />
 		</ConfirmProvider>
 	));
 	fireEvent.click(screen.getByText("open"));
@@ -78,7 +79,7 @@ test("cancelling resolves false", async () => {
 	const results: boolean[] = [];
 	render(() => (
 		<ConfirmProvider>
-			<Harness onResult={(ok) => results.push(ok)} />
+			<Harness onResult={(isConfirmed) => results.push(isConfirmed)} />
 		</ConfirmProvider>
 	));
 	fireEvent.click(screen.getByText("open"));

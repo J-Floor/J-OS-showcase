@@ -7,6 +7,10 @@ import {
 	filterItemsByInput,
 } from "./optionCollection.ts";
 
+function toValue(option: { value: string }) {
+	return option.value;
+}
+
 describe("optionCollection helpers", () => {
 	test("defaultItemToValue reads a string, number, or .value", () => {
 		expect(defaultItemToValue("a")).toBe("a");
@@ -19,9 +23,6 @@ describe("optionCollection helpers", () => {
 	});
 
 	test("defaultItemToString prefers .label, falls back to the value", () => {
-		function toValue(i: { value: string }) {
-			return i.value;
-		}
 		expect(defaultItemToString({ value: "v", label: "L" }, toValue)).toBe(
 			"L"
 		);
@@ -41,13 +42,10 @@ describe("optionCollection helpers", () => {
 			{ value: "solid" },
 			{ value: "svelte" },
 		];
-		function toString(i: { value: string }) {
-			return i.value;
-		}
-		expect(filterItemsByInput(items, "E", toString)).toEqual([
+		expect(filterItemsByInput(items, "E", toValue)).toEqual([
 			{ value: "react" },
 			{ value: "svelte" },
 		]);
-		expect(filterItemsByInput(items, "", toString)).toEqual(items);
+		expect(filterItemsByInput(items, "", toValue)).toEqual(items);
 	});
 });

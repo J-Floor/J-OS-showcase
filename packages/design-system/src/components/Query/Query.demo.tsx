@@ -23,6 +23,19 @@ const STATES: Record<string, Item[] | null | undefined> = {
 	rows: ROWS,
 };
 
+/** The loaded rows as a list; renders only once `Query.Root` has data. */
+function DemoRows(props: { data: Item[] | null | undefined }) {
+	return (
+		<Query.Content of={props.data}>
+			{(rows) => (
+				<ul class={styles.list}>
+					<For each={rows()}>{(r) => <li>{r.name}</li>}</For>
+				</ul>
+			)}
+		</Query.Content>
+	);
+}
+
 function QueryDemo() {
 	const [state, setState] = createSignal("loading");
 	const data = (): Item[] | null | undefined => STATES[state()];
@@ -50,26 +63,14 @@ function QueryDemo() {
 				<Query.Empty>
 					<p class={styles.empty}>No items yet</p>
 				</Query.Empty>
-				<Query.Content of={data()}>
-					{(rows) => (
-						<ul class={styles.list}>
-							<For each={rows()}>{(r) => <li>{r.name}</li>}</For>
-						</ul>
-					)}
-				</Query.Content>
+				<DemoRows data={data()} />
 			</Query.Root>
 			<p class={styles.caption}>Custom Query.Skeleton</p>
 			<Query.Root data={data()}>
 				<Query.Skeleton>
 					<SkeletonList rows={CUSTOM_SKELETON_ROWS} />
 				</Query.Skeleton>
-				<Query.Content of={data()}>
-					{(rows) => (
-						<ul class={styles.list}>
-							<For each={rows()}>{(r) => <li>{r.name}</li>}</For>
-						</ul>
-					)}
-				</Query.Content>
+				<DemoRows data={data()} />
 			</Query.Root>
 		</div>
 	);

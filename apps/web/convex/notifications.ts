@@ -1,7 +1,8 @@
 import { v } from "convex/values";
 
 import { internal } from "./_generated/api";
-import { internalAction } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
+import { internalAction, type ActionCtx } from "./_generated/server";
 import { formatEmailDate } from "./emails/format.ts";
 import { applicationReceived } from "./emails/generated/applicationReceived.ts";
 import { approvalGuest } from "./emails/generated/approvalGuest.ts";
@@ -14,10 +15,21 @@ import { sendEmail } from "./lib/email.ts";
 import { isBoardLevel } from "./lib/roles.ts";
 import { guestUntilLabel } from "./notify/guests.ts";
 
+/** The args of an email addressed to an existing person, looked up by address. */
+const recipientArgs = { email: v.string() };
+
+/** The committed `people` row for `email`, read from an action. */
+async function personFor(
+	context: ActionCtx,
+	email: string
+): Promise<Doc<"people"> | null> {
+	return await context.runQuery(internal.people.getPersonByEmail, { email });
+}
+
 /** Polite, no-reason rejection with a reapply hint. Scheduled from `transition`. */
 export const sendRejectionEmail = internalAction({
 	args: { email: v.string(), name: v.string(), venture: v.string() },
-	handler: async (_ctx, { email, name, venture }) => {
+	handler: async (_context, { email, name, venture }) => {
 		const urls = emailUrls();
 		const { html, text } = rejection({
 			name,
@@ -41,17 +53,15 @@ export const sendRejectionEmail = internalAction({
  * the sign-in URL — so it never trains users to click login links in mail.
  */
 export const sendApprovalEmail = internalAction({
-	args: { email: v.string() },
-	handler: async (ctx, { email }) => {
-		const person = await ctx.runQuery(internal.people.getPersonByEmail, {
-			email,
-		});
+	args: recipientArgs,
+	handler: async (context, { email }) => {
+		const person = await personFor(context, email);
 		if (!person || isBoardLevel(person.tier)) return;
 		const urls = emailUrls();
 		const name = person.firstName;
 
 		if (person.tier === "guest") {
-			if (person.accessUntil == null) {
+			if (person.accessUntil === undefined) {
 				// Open-ended guest: no access window → send the windowless variant
 				const { html, text } = approvalGuestOpen({
 					name,
@@ -111,11 +121,9 @@ export const sendApprovalEmail = internalAction({
  * EMAIL:memberUpgrade effect, never by a caller.
  */
 export const sendMemberUpgradeEmail = internalAction({
-	args: { email: v.string() },
-	handler: async (ctx, { email }) => {
-		const person = await ctx.runQuery(internal.people.getPersonByEmail, {
-			email,
-		});
+	args: recipientArgs,
+	handler: async (context, { email }) => {
+		const person = await personFor(context, email);
 		if (!person) return;
 		const urls = emailUrls();
 		const { html, text } = memberUpgrade({
@@ -138,11 +146,9 @@ export const sendMemberUpgradeEmail = internalAction({
  * Scheduled by the machine's EMAIL:applicationReceived effect.
  */
 export const sendApplicationReceivedEmail = internalAction({
-	args: { email: v.string() },
-	handler: async (ctx, { email }) => {
-		const person = await ctx.runQuery(internal.people.getPersonByEmail, {
-			email,
-		});
+	args: recipientArgs,
+	handler: async (context, { email }) => {
+		const person = await personFor(context, email);
 		if (!person) return;
 		const urls = emailUrls();
 		const { html, text } = applicationReceived({

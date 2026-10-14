@@ -12,11 +12,11 @@ const DAY = 86_400_000;
 
 describe("purgeDoorLog", () => {
 	it("deletes rows older than 12 months across several batches and keeps newer ones", async () => {
-		const t = convexTest(schema, modules);
+		const backend = convexTest(schema, modules);
 		const now = Date.now();
-		await t.run(async (ctx) => {
-			for (let i = 0; i < RETENTION_BATCH + 1; i++)
-				await ctx.db.insert("doorLog", {
+		await backend.run(async (context) => {
+			for (let index = 0; index < RETENTION_BATCH + 1; index++)
+				await context.db.insert("doorLog", {
 					at: now - TWELVE_MONTHS - DAY,
 					operation: "unlock",
 					trigger: "app",
@@ -25,7 +25,7 @@ describe("purgeDoorLog", () => {
 					lockNames: [],
 					outcome: "ok",
 				});
-			await ctx.db.insert("doorLog", {
+			await context.db.insert("doorLog", {
 				at: now - TWELVE_MONTHS + DAY,
 				operation: "unlock",
 				trigger: "app",
@@ -36,21 +36,23 @@ describe("purgeDoorLog", () => {
 			});
 		});
 
-		await runAndCollectLogs(t, () =>
-			t.mutation(internal.accessLogRetention.purgeDoorLog, {})
+		await runAndCollectLogs(backend, () =>
+			backend.mutation(internal.accessLogRetention.purgeDoorLog, {})
 		);
 
-		const left = await t.run((ctx) => ctx.db.query("doorLog").collect());
-		expect(left.map((r) => r.email)).toEqual(["kept@jfloor.test"]);
+		const left = await backend.run((context) =>
+			context.db.query("doorLog").collect()
+		);
+		expect(left.map((row) => row.email)).toEqual(["kept@jfloor.test"]);
 	});
 });
 
 describe("purgeWifiEvents", () => {
 	it("deletes only old wifi events, across batches", async () => {
-		const t = convexTest(schema, modules);
+		const backend = convexTest(schema, modules);
 		const now = Date.now();
-		await t.run(async (ctx) => {
-			const personId = await ctx.db.insert("people", {
+		await backend.run(async (context) => {
+			const personId = await context.db.insert("people", {
 				email: "ada@jfloor.test",
 				firstName: "Ada",
 				lastName: "L",
@@ -58,33 +60,37 @@ describe("purgeWifiEvents", () => {
 				stage: "active",
 				stageSince: now,
 			});
-			for (let i = 0; i < RETENTION_BATCH + 1; i++)
-				await ctx.db.insert("personEvents", {
+			for (let index = 0; index < RETENTION_BATCH + 1; index++)
+				await context.db.insert("personEvents", {
 					personId,
 					at: now - TWELVE_MONTHS - DAY,
 					kind: "wifi",
 				});
-			await ctx.db.insert("personEvents", {
+			await context.db.insert("personEvents", {
 				personId,
 				at: now - TWELVE_MONTHS + DAY,
 				kind: "wifi",
 			});
-			await ctx.db.insert("personEvents", {
+			await context.db.insert("personEvents", {
 				personId,
 				at: now - TWELVE_MONTHS - DAY,
 				kind: "door",
 			});
 		});
 
-		await runAndCollectLogs(t, () =>
-			t.mutation(internal.accessLogRetention.purgeWifiEvents, {})
+		await runAndCollectLogs(backend, () =>
+			backend.mutation(internal.accessLogRetention.purgeWifiEvents, {})
 		);
 
-		const left = await t.run((ctx) =>
-			ctx.db.query("personEvents").collect()
+		const left = await backend.run((context) =>
+			context.db.query("personEvents").collect()
 		);
-		expect(left.map((r) => r.kind).sort()).toEqual(["door", "wifi"]);
-		expect(left.find((r) => r.kind === "wifi")!.at).toBeGreaterThan(
+		expect(
+			left
+				.map((row) => row.kind)
+				.sort((first, second) => first.localeCompare(second))
+		).toEqual(["door", "wifi"]);
+		expect(left.find((row) => row.kind === "wifi")!.at).toBeGreaterThan(
 			now - TWELVE_MONTHS
 		);
 	});

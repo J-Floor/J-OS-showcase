@@ -8,9 +8,9 @@ const modules = import.meta.glob("./**/*.*s");
 
 describe("personEvents.listForPerson", () => {
 	it("returns rows newest first with the actor's name resolved", async () => {
-		const t = convexTest(schema, modules);
-		const boardId = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const boardId = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "board@example.com",
 				firstName: "Bo",
 				lastName: "Ard",
@@ -19,8 +19,8 @@ describe("personEvents.listForPerson", () => {
 				stageSince: Date.now(),
 			})
 		);
-		const id = await t.run(async (ctx) => {
-			const personId = await ctx.db.insert("people", {
+		const id = await backend.run(async (context) => {
+			const personId = await context.db.insert("people", {
 				email: "ada@example.com",
 				firstName: "Ada",
 				lastName: "Lovelace",
@@ -28,14 +28,14 @@ describe("personEvents.listForPerson", () => {
 				stage: "active",
 				stageSince: Date.now(),
 			});
-			await ctx.db.insert("personEvents", {
+			await context.db.insert("personEvents", {
 				personId,
 				at: 1000,
 				kind: "transition",
 				event: "SUBMIT",
 				to: "prospect.unverified",
 			});
-			await ctx.db.insert("personEvents", {
+			await context.db.insert("personEvents", {
 				personId,
 				at: 2000,
 				actorId: boardId,
@@ -52,8 +52,8 @@ describe("personEvents.listForPerson", () => {
 		// assertions below unchanged, but this row must never appear in Ada's
 		// timeline: one board member's drawer showing another person's history
 		// is the failure mode this query exists to prevent.
-		await t.run(async (ctx) => {
-			const otherId = await ctx.db.insert("people", {
+		await backend.run(async (context) => {
+			const otherId = await context.db.insert("people", {
 				email: "cy@example.com",
 				firstName: "Cy",
 				lastName: "Borg",
@@ -61,7 +61,7 @@ describe("personEvents.listForPerson", () => {
 				stage: "active",
 				stageSince: Date.now(),
 			});
-			await ctx.db.insert("personEvents", {
+			await context.db.insert("personEvents", {
 				personId: otherId,
 				at: 1500,
 				kind: "field_edit",
@@ -71,29 +71,29 @@ describe("personEvents.listForPerson", () => {
 			});
 		});
 
-		const rows = await t
+		const rows = await backend
 			.withIdentity({ email: "board@example.com" })
 			.query(api.personEvents.listForPerson, { personId: id });
 
-		expect(rows.map((r) => r.at)).toEqual([2000, 1000]);
+		expect(rows.map((row) => row.at)).toEqual([2000, 1000]);
 		expect(rows[0].actorName).toBe("Bo Ard");
 		// A backfilled row has no actor and must render without inventing one.
 		expect(rows[1].actorName).toBeUndefined();
 		// Scoping: the other person's row never leaks into this timeline.
 		expect(
 			rows.some(
-				(r) =>
-					r.kind === "field_edit" &&
-					r.field === "board.notes" &&
-					r.after === "y"
+				(row) =>
+					row.kind === "field_edit" &&
+					row.field === "board.notes" &&
+					row.after === "y"
 			)
 		).toBe(false);
 	});
 
 	it("merges the person's app door unlocks and locks in, but not key grants", async () => {
-		const t = convexTest(schema, modules);
-		await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "board@example.com",
 				firstName: "Bo",
 				lastName: "Ard",
@@ -102,8 +102,8 @@ describe("personEvents.listForPerson", () => {
 				stageSince: Date.now(),
 			})
 		);
-		const id = await t.run(async (ctx) => {
-			const personId = await ctx.db.insert("people", {
+		const id = await backend.run(async (context) => {
+			const personId = await context.db.insert("people", {
 				email: "ada@example.com",
 				firstName: "Ada",
 				lastName: "Lovelace",
@@ -111,7 +111,7 @@ describe("personEvents.listForPerson", () => {
 				stage: "active",
 				stageSince: Date.now(),
 			});
-			const otherId = await ctx.db.insert("people", {
+			const otherId = await context.db.insert("people", {
 				email: "cy@example.com",
 				firstName: "Cy",
 				lastName: "Borg",
@@ -119,7 +119,7 @@ describe("personEvents.listForPerson", () => {
 				stage: "active",
 				stageSince: Date.now(),
 			});
-			await ctx.db.insert("personEvents", {
+			await context.db.insert("personEvents", {
 				personId,
 				at: 1000,
 				kind: "transition",
@@ -133,7 +133,7 @@ describe("personEvents.listForPerson", () => {
 				personId,
 				actorId: personId,
 			};
-			await ctx.db.insert("doorLog", {
+			await context.db.insert("doorLog", {
 				...door,
 				at: 1500,
 				operation: "unlock",
@@ -141,7 +141,7 @@ describe("personEvents.listForPerson", () => {
 				lockNames: ["J floor Downstairs"],
 				outcome: "ok",
 			});
-			await ctx.db.insert("doorLog", {
+			await context.db.insert("doorLog", {
 				...door,
 				at: 2500,
 				operation: "lock",
@@ -151,7 +151,7 @@ describe("personEvents.listForPerson", () => {
 				detail: "offline",
 			});
 			// A key grant is not something the person did at the door.
-			await ctx.db.insert("doorLog", {
+			await context.db.insert("doorLog", {
 				...door,
 				at: 3000,
 				operation: "grant",
@@ -159,7 +159,7 @@ describe("personEvents.listForPerson", () => {
 				lockNames: ["J floor Upstairs"],
 				outcome: "ok",
 			});
-			await ctx.db.insert("doorLog", {
+			await context.db.insert("doorLog", {
 				...door,
 				at: 2000,
 				personId: otherId,
@@ -172,11 +172,11 @@ describe("personEvents.listForPerson", () => {
 			return personId;
 		});
 
-		const rows = await t
+		const rows = await backend
 			.withIdentity({ email: "board@example.com" })
 			.query(api.personEvents.listForPerson, { personId: id });
 
-		expect(rows.map((r) => [r.at, r.kind])).toEqual([
+		expect(rows.map((row) => [row.at, row.kind])).toEqual([
 			[2500, "door_action"],
 			[1500, "door_action"],
 			[1000, "transition"],
@@ -196,9 +196,9 @@ describe("personEvents.listForPerson", () => {
 	});
 
 	it("returns an empty list for a person with no events, rather than throwing", async () => {
-		const t = convexTest(schema, modules);
-		await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "board@example.com",
 				firstName: "Bo",
 				lastName: "Ard",
@@ -207,8 +207,8 @@ describe("personEvents.listForPerson", () => {
 				stageSince: Date.now(),
 			})
 		);
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const id = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "ada@example.com",
 				firstName: "Ada",
 				lastName: "Lovelace",
@@ -218,7 +218,7 @@ describe("personEvents.listForPerson", () => {
 			})
 		);
 
-		const rows = await t
+		const rows = await backend
 			.withIdentity({ email: "board@example.com" })
 			.query(api.personEvents.listForPerson, { personId: id });
 
@@ -226,9 +226,9 @@ describe("personEvents.listForPerson", () => {
 	});
 
 	it("is board-only — it records suspensions and internal reasons", async () => {
-		const t = convexTest(schema, modules);
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const id = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "ada@example.com",
 				firstName: "Ada",
 				lastName: "Lovelace",
@@ -239,7 +239,7 @@ describe("personEvents.listForPerson", () => {
 		);
 
 		await expect(
-			t
+			backend
 				.withIdentity({ email: "ada@example.com" })
 				.query(api.personEvents.listForPerson, { personId: id })
 		).rejects.toThrow(/Forbidden/);

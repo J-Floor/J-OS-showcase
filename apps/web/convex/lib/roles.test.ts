@@ -11,15 +11,16 @@ import {
 
 describe("tier membership", () => {
 	it("isAccessTier: every sign-in tier, nothing else", () => {
-		for (const t of ACCESS_TIERS) expect(isAccessTier(t)).toBe(true);
-		for (const t of ["prospect", "former", "visitor", "none", undefined])
-			expect(isAccessTier(t)).toBe(false);
+		for (const tier of ACCESS_TIERS) expect(isAccessTier(tier)).toBe(true);
+		for (const tier of ["prospect", "former", "visitor", "none", undefined])
+			expect(isAccessTier(tier)).toBe(false);
 	});
 
 	it("isCommunityTier: sign-in tiers except staff", () => {
-		for (const t of COMMUNITY_TIERS) expect(isCommunityTier(t)).toBe(true);
-		for (const t of ["staff", "prospect", "former", "none", undefined])
-			expect(isCommunityTier(t)).toBe(false);
+		for (const tier of COMMUNITY_TIERS)
+			expect(isCommunityTier(tier)).toBe(true);
+		for (const tier of ["staff", "prospect", "former", "none", undefined])
+			expect(isCommunityTier(tier)).toBe(false);
 	});
 });
 
@@ -43,7 +44,7 @@ describe("isBoardLevel", () => {
 	});
 
 	it("agrees with BOARD_LEVEL", () => {
-		expect([...BOARD_LEVEL].every((t) => isBoardLevel(t))).toBe(true);
+		expect([...BOARD_LEVEL].every((tier) => isBoardLevel(tier))).toBe(true);
 	});
 
 	it("ACCESS_TIERS is exactly the sign-in tiers — not a superset check an empty array would pass", () => {

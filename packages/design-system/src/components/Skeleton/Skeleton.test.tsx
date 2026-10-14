@@ -28,9 +28,11 @@ test("controlled visible=true still renders children content (jsdom no-layout fa
 		"[data-shimmer-container]"
 	);
 	expect(shimmerContainer).not.toBeNull();
-	const measureEl = shimmerContainer?.querySelector("[aria-hidden='true']");
-	expect(measureEl).not.toBeNull();
-	expect(measureEl).toContainElement(screen.getByText("Loading me"));
+	const measureElement = shimmerContainer?.querySelector(
+		"[aria-hidden='true']"
+	);
+	expect(measureElement).not.toBeNull();
+	expect(measureElement).toContainElement(screen.getByText("Loading me"));
 });
 
 test("manual mode renders one bar sized by a width preset", () => {

@@ -13,13 +13,17 @@ type ItemRow = {
 	assetTag: string;
 };
 
+function noRows(): undefined {
+	return;
+}
+
 const eventDescriptor: EntityDescriptor<EventRow> = {
 	key: "event",
 	route: "/events",
 	param: "event",
 	group: "Events",
 	icon: "calendar",
-	useRows: () => () => undefined,
+	useRows: () => noRows,
 	label: (row) => row._id,
 	ability: { action: "view", subject: "Events" },
 };
@@ -30,7 +34,7 @@ const itemDescriptor: EntityDescriptor<ItemRow> = {
 	param: "item",
 	group: "Inventory",
 	icon: "box",
-	useRows: () => () => undefined,
+	useRows: () => noRows,
 	label: (row) => row.assetTag,
 	slug: (row) => row.assetTag,
 	tab: "items",

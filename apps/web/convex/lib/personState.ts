@@ -5,10 +5,10 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
  * The person's `personState` row. One row per person is the invariant: a
  * person merge dedupes and `setPersonLastPath` upserts.
  */
-export function personStateOf(ctx: QueryCtx, personId: Id<"people">) {
-	return ctx.db
+export function personStateOf(context: QueryCtx, personId: Id<"people">) {
+	return context.db
 		.query("personState")
-		.withIndex("by_person", (q) => q.eq("personId", personId))
+		.withIndex("by_person", (range) => range.eq("personId", personId))
 		.unique();
 }
 
@@ -17,12 +17,12 @@ export function personStateOf(ctx: QueryCtx, personId: Id<"people">) {
  * stored.
  */
 export async function setPersonLastPath(
-	ctx: MutationCtx,
+	context: MutationCtx,
 	personId: Id<"people">,
 	path: string
 ): Promise<void> {
-	const state = await personStateOf(ctx, personId);
+	const state = await personStateOf(context, personId);
 	if (state?.lastPath === path) return;
-	if (state) await ctx.db.patch(state._id, { lastPath: path });
-	else await ctx.db.insert("personState", { personId, lastPath: path });
+	if (state) await context.db.patch(state._id, { lastPath: path });
+	else await context.db.insert("personState", { personId, lastPath: path });
 }

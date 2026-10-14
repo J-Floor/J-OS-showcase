@@ -5,7 +5,7 @@ import {
 	CONFIRM_WINDOW_MS,
 	IllegalActuationTransitionError,
 	attemptState,
-	reacted,
+	hasReacted,
 	storedAttempt,
 	transition,
 	type ActuationEvent,
@@ -81,60 +81,60 @@ describe("timing", () => {
 	});
 });
 
-describe("reacted", () => {
-	it.each(POSITIONS.filter((p) => p !== "unlocking"))(
+describe("hasReacted", () => {
+	it.each(POSITIONS.filter((position) => position !== "unlocking"))(
 		"an unlock reading unlocking counts, from %s",
 		(before) => {
-			expect(reacted("unlock", before, "unlocking")).toBe(true);
+			expect(hasReacted("unlock", before, "unlocking")).toBe(true);
 		}
 	);
 
-	it.each(POSITIONS.filter((p) => p !== "unlocked"))(
+	it.each(POSITIONS.filter((position) => position !== "unlocked"))(
 		"an unlock reading unlocked counts, from %s",
 		(before) => {
-			expect(reacted("unlock", before, "unlocked")).toBe(true);
+			expect(hasReacted("unlock", before, "unlocked")).toBe(true);
 		}
 	);
 
 	it.each(["unlocking", "unlocked"] as const)(
 		"an unlock reading %s does not count when the door already read it",
 		(position) => {
-			expect(reacted("unlock", position, position)).toBe(false);
+			expect(hasReacted("unlock", position, position)).toBe(false);
 		}
 	);
 
 	it.each(pairs(["locked", "locking", "offline", "unknown"]))(
 		"an unlock from %s reading %s is no information",
 		(before, reading) => {
-			expect(reacted("unlock", before, reading)).toBe(false);
+			expect(hasReacted("unlock", before, reading)).toBe(false);
 		}
 	);
 
-	it.each(POSITIONS.filter((p) => p !== "locking"))(
+	it.each(POSITIONS.filter((position) => position !== "locking"))(
 		"a lock reading locking counts, from %s",
 		(before) => {
-			expect(reacted("lock", before, "locking")).toBe(true);
+			expect(hasReacted("lock", before, "locking")).toBe(true);
 		}
 	);
 
-	it.each(POSITIONS.filter((p) => p !== "locked"))(
+	it.each(POSITIONS.filter((position) => position !== "locked"))(
 		"a lock reading locked counts, from %s",
 		(before) => {
-			expect(reacted("lock", before, "locked")).toBe(true);
+			expect(hasReacted("lock", before, "locked")).toBe(true);
 		}
 	);
 
 	it.each(["locking", "locked"] as const)(
 		"a lock reading %s does not count when the door already read it",
 		(position) => {
-			expect(reacted("lock", position, position)).toBe(false);
+			expect(hasReacted("lock", position, position)).toBe(false);
 		}
 	);
 
 	it.each(pairs(["unlocked", "unlocking", "offline", "unknown"]))(
 		"a lock from %s reading %s is no information",
 		(before, reading) => {
-			expect(reacted("lock", before, reading)).toBe(false);
+			expect(hasReacted("lock", before, reading)).toBe(false);
 		}
 	);
 });

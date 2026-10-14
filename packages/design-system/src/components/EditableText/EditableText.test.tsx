@@ -11,9 +11,9 @@ test("multiline field carries maxLength", () => {
 	render(() => (
 		<EditableText multiline value="" maxLength={5} onCommit={() => {}} />
 	));
-	const el = screen.getByRole("textbox");
-	expect(el.tagName).toBe("TEXTAREA");
-	expect(el).toHaveAttribute("maxlength", "5");
+	const element = screen.getByRole("textbox");
+	expect(element.tagName).toBe("TEXTAREA");
+	expect(element).toHaveAttribute("maxlength", "5");
 });
 
 test("commits on blur only when the value changed", () => {

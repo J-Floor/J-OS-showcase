@@ -12,16 +12,16 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
  * no signature lacks both.
  */
 export async function insertSignature(
-	ctx: MutationCtx,
+	context: MutationCtx,
 	row: WithoutSystemFields<Doc<"signatures">>
 ): Promise<Id<"signatures">> {
 	if (row.fileId === undefined && row.sourceUrl === undefined)
 		throw new Error("A signature needs a fileId or a sourceUrl.");
-	const id = await ctx.db.insert("signatures", row);
-	const person = await ctx.db.get(row.personId);
+	const id = await context.db.insert("signatures", row);
+	const person = await context.db.get(row.personId);
 	const signed = person?.signedVariants ?? [];
 	if (person && !signed.includes(row.variant))
-		await ctx.db.patch(person._id, {
+		await context.db.patch(person._id, {
 			signedVariants: [...signed, row.variant],
 		});
 	return id;
@@ -33,24 +33,28 @@ export async function insertSignature(
  * is kept equal to.
  */
 async function signedVariantsOf(
-	ctx: QueryCtx,
+	context: QueryCtx,
 	personId: Id<"people">
 ): Promise<Doc<"signatures">["variant"][] | undefined> {
-	const signatures = await ctx.db
+	const signatures = await context.db
 		.query("signatures")
-		.withIndex("by_person", (q) => q.eq("personId", personId))
+		.withIndex("by_person", (range) => range.eq("personId", personId))
 		.collect();
-	const variants = [...new Set(signatures.map((s) => s.variant))];
+	const variants = [
+		...new Set(signatures.map((signature) => signature.variant)),
+	];
 	return variants.length > 0 ? variants : undefined;
 }
 
 /** Whether two variant sets hold the same variants, order aside. */
-function sameVariants(
-	a: readonly string[] | undefined,
-	b: readonly string[] | undefined
+function isSameVariantSet(
+	left: readonly string[] | undefined,
+	right: readonly string[] | undefined
 ): boolean {
-	if (a === undefined || b === undefined) return a === b;
-	return a.length === b.length && a.every((variant) => b.includes(variant));
+	return left === undefined || right === undefined
+		? left === right
+		: left.length === right.length &&
+				left.every((variant) => right.includes(variant));
 }
 
 /**
@@ -59,12 +63,13 @@ function sameVariants(
  * nothing is written).
  */
 export async function syncSignedVariants(
-	ctx: MutationCtx,
+	context: MutationCtx,
 	person: Doc<"people">,
-	opts?: { dryRun?: boolean }
+	options?: { dryRun?: boolean }
 ): Promise<boolean> {
-	const want = await signedVariantsOf(ctx, person._id);
-	if (sameVariants(want, person.signedVariants)) return false;
-	if (!opts?.dryRun) await ctx.db.patch(person._id, { signedVariants: want });
+	const want = await signedVariantsOf(context, person._id);
+	if (isSameVariantSet(want, person.signedVariants)) return false;
+	if (!options?.dryRun)
+		await context.db.patch(person._id, { signedVariants: want });
 	return true;
 }

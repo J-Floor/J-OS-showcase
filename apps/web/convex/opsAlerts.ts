@@ -3,7 +3,7 @@ import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
 
 /** How long a fault that has not changed stays quiet before it re-nags. */
-export const RENAG_MS = 7 * 24 * 60 * 60 * 1000;
+export const RENAG_MS = 604_800_000;
 
 /** Lock reachability seen by the 10-minute poll. */
 export const DOOR_ONLINE_ALERT_KEY = "door-online";
@@ -47,18 +47,21 @@ export const claim = internalMutation({
 		fingerprint: v.string(),
 		now: v.optional(v.number()),
 	},
-	handler: async (ctx, { key, fingerprint, now }): Promise<AlertDecision> => {
+	handler: async (
+		context,
+		{ key, fingerprint, now }
+	): Promise<AlertDecision> => {
 		const at = now ?? Date.now();
-		const existing = await ctx.db
+		const existing = await context.db
 			.query("opsAlerts")
-			.withIndex("by_key", (q) => q.eq("key", key))
+			.withIndex("by_key", (range) => range.eq("key", key))
 			.unique();
 
 		if (!existing) {
 			// Nothing on record. A first healthy sweep must NOT send an
 			// all-clear for a fault that never happened, so it records silence
 			// rather than announcing it.
-			await ctx.db.insert("opsAlerts", {
+			await context.db.insert("opsAlerts", {
 				key,
 				fingerprint,
 				lastSentAt: at,
@@ -68,13 +71,13 @@ export const claim = internalMutation({
 
 		if (existing.fingerprint === fingerprint) {
 			// Healthy and still healthy: nothing to say, and no clock to run.
-			if (fingerprint === "") return "silent";
-			if (at - existing.lastSentAt < RENAG_MS) return "silent";
-			await ctx.db.patch(existing._id, { lastSentAt: at });
+			if (fingerprint === "" || at - existing.lastSentAt < RENAG_MS)
+				return "silent";
+			await context.db.patch(existing._id, { lastSentAt: at });
 			return "renag";
 		}
 
-		await ctx.db.patch(existing._id, { fingerprint, lastSentAt: at });
+		await context.db.patch(existing._id, { fingerprint, lastSentAt: at });
 		return fingerprint === "" ? "resolved" : "changed";
 	},
 });
@@ -95,10 +98,10 @@ export const claim = internalMutation({
  */
 export const release = internalMutation({
 	args: { key: v.string(), fingerprint: v.optional(v.string()) },
-	handler: async (ctx, { key, fingerprint }): Promise<null> => {
-		const existing = await ctx.db
+	handler: async (context, { key, fingerprint }): Promise<null> => {
+		const existing = await context.db
 			.query("opsAlerts")
-			.withIndex("by_key", (q) => q.eq("key", key))
+			.withIndex("by_key", (range) => range.eq("key", key))
 			.unique();
 		// With a fingerprint this is compare-and-set: a newer claim for a
 		// different fault must not be undone by an older send that failed.
@@ -106,7 +109,7 @@ export const release = internalMutation({
 			existing &&
 			(fingerprint === undefined || existing.fingerprint === fingerprint)
 		)
-			await ctx.db.patch(existing._id, { lastSentAt: 0 });
+			await context.db.patch(existing._id, { lastSentAt: 0 });
 		return null;
 	},
 });

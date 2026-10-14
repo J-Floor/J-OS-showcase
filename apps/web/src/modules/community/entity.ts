@@ -46,13 +46,13 @@ export const personEntity: EntityDescriptor<PersonRow> = {
 	// The email is often how a board member knows someone, but it is not a
 	// better name for them — keywords rank below the name by design.
 	keywords: (row) =>
-		[row.email, row.venture?.name ?? ""].filter((k) => k !== ""),
+		[row.email, row.venture?.name ?? ""].filter((term) => term !== ""),
 	detail: (row) => row.venture?.name,
 	ability: { action: "view", subject: "Applications" },
 	// PersonDetail's "Came from" row, which renders for every status.
 	// Board-level on the server, like this descriptor's own ability.
-	prefetch: (row, can) => {
-		if (can("view", "Applications"))
+	prefetch: (row, canPerform) => {
+		if (canPerform("view", "Applications"))
 			prefetchSpec(attendedEventsQuery, row._id);
 	},
 };

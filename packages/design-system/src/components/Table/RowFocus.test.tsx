@@ -2,14 +2,14 @@ import { render, screen, fireEvent } from "@solidjs/testing-library";
 import { createSignal } from "solid-js";
 
 import { Table } from "./Table.tsx";
-import type { JfColumnDef } from "./types.ts";
+import type { JfColumnDefinition } from "./types.ts";
 
 type Row = { _id: string; name: string };
-// Annotated rather than inferred: `Table` takes its own `JfColumnDef`, whose
+// Annotated rather than inferred: `Table` takes its own `JfColumnDefinition`, whose
 // `dataType` is a literal union, so an unannotated object literal widens it to
 // `string` and stops matching. A `createColumnHelper` accessor does not satisfy
 // it either — it carries no `dataType` at all.
-const columns: JfColumnDef<Row>[] = [
+const columns: JfColumnDefinition<Row>[] = [
 	{ accessorKey: "name", header: "Name", dataType: "string" },
 ];
 const data: Row[] = [
@@ -20,12 +20,11 @@ const data: Row[] = [
 
 function focused(): string | null {
 	const row = document.querySelector('tr[data-focused="true"]');
-	if (!row) return null;
 	// The last cell, not the whole row: with `enableRowSelection` the row also
 	// carries the select column's checkbox, whose two state icons are always in
 	// the DOM (Ark hides the unmatched one via the `hidden` attribute, which
 	// does not remove it from `textContent`) and would otherwise leak into it.
-	return row.querySelector("td:last-child")?.textContent ?? null;
+	return row?.querySelector("td:last-child")?.textContent ?? null;
 }
 
 function grid(): HTMLElement {
@@ -141,15 +140,16 @@ test("moving the ring scrolls the newly-focused row into view", async () => {
 			expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
 		});
 	} finally {
-		if (!original)
-			delete (Element.prototype as { scrollIntoView?: unknown })
-				.scrollIntoView;
-		else
+		if (original) {
 			Object.defineProperty(
 				Element.prototype,
 				"scrollIntoView",
 				original
 			);
+		} else {
+			delete (Element.prototype as { scrollIntoView?: unknown })
+				.scrollIntoView;
+		}
 	}
 });
 
@@ -206,7 +206,7 @@ test("with grouping, arrows walk the displayed order, not the flat column sort",
 		score: number;
 		name: string;
 	};
-	const groupedColumns: JfColumnDef<GroupedRow>[] = [
+	const groupedColumns: JfColumnDefinition<GroupedRow>[] = [
 		{
 			accessorKey: "band",
 			header: "Band",
@@ -338,7 +338,7 @@ test("onFocusedRowChange fires with undefined when a selection clears focus", as
 
 test("a row with no _id is never marked focused", () => {
 	type UnidentifiedRow = { name: string };
-	const unidentifiedColumns: JfColumnDef<UnidentifiedRow>[] = [
+	const unidentifiedColumns: JfColumnDefinition<UnidentifiedRow>[] = [
 		{ accessorKey: "name", header: "Name", dataType: "string" },
 	];
 	const unidentifiedData: UnidentifiedRow[] = [
@@ -422,7 +422,7 @@ test("arrow/Enter keydown at a focused field is not preventDefaulted, even thoug
 
 test("advance never focuses a row with no usable id", () => {
 	type UnidentifiedRow = { name: string };
-	const unidentifiedColumns: JfColumnDef<UnidentifiedRow>[] = [
+	const unidentifiedColumns: JfColumnDefinition<UnidentifiedRow>[] = [
 		{ accessorKey: "name", header: "Name", dataType: "string" },
 	];
 	const unidentifiedData: UnidentifiedRow[] = [
@@ -484,7 +484,7 @@ test("Enter on a button outside the table does not activate the ringed row", () 
 
 test("Enter on a button inside a row does not activate that row", () => {
 	const activated: string[] = [];
-	const withAction: JfColumnDef<Row>[] = [
+	const withAction: JfColumnDefinition<Row>[] = [
 		...columns,
 		{
 			id: "actions",
@@ -682,7 +682,7 @@ test("keys with nothing focused are left alone when modified, unrelated, or the 
 test("the ring hides when a focused node is removed with no focusout", async () => {
 	// Chrome (and jsdom) fire no focusout for a removed focused node, so the
 	// table must re-read focus from the DOM when the next key arrives.
-	const withAction: JfColumnDef<Row>[] = [
+	const withAction: JfColumnDefinition<Row>[] = [
 		...columns,
 		{
 			id: "actions",

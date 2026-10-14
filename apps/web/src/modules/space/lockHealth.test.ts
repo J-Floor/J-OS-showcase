@@ -4,30 +4,30 @@ import { lockHealthSummary } from "./lockHealth.ts";
 
 describe("lockHealthSummary", () => {
 	it("reports every door online when nothing is unavailable", () => {
-		const s = lockHealthSummary({ configured: 2, unavailable: [] });
-		expect(s.value).toBe("2/2");
-		expect(s.tone).toBe("neutral");
-		expect(s.detail).toBe("Every door is online.");
+		const summary = lockHealthSummary({ configured: 2, unavailable: [] });
+		expect(summary.value).toBe("2/2");
+		expect(summary.tone).toBe("neutral");
+		expect(summary.detail).toBe("Every door is online.");
 	});
 
 	it("flags an offline door by name with an error tone", () => {
-		const s = lockHealthSummary({
+		const summary = lockHealthSummary({
 			configured: 2,
 			unavailable: [{ name: "Upstairs" }],
 		});
-		expect(s.value).toBe("1/2");
-		expect(s.tone).toBe("error");
-		expect(s.detail).toContain("Upstairs");
-		expect(s.detail).toContain("offline");
+		expect(summary.value).toBe("1/2");
+		expect(summary.tone).toBe("error");
+		expect(summary.detail).toContain("Upstairs");
+		expect(summary.detail).toContain("offline");
 	});
 
 	it("lists several offline doors, comma-separated", () => {
-		const s = lockHealthSummary({
+		const summary = lockHealthSummary({
 			configured: 3,
 			unavailable: [{ name: "Upstairs" }, { name: "Downstairs" }],
 		});
-		expect(s.value).toBe("1/3");
-		expect(s.tone).toBe("error");
-		expect(s.detail).toContain("Upstairs, Downstairs");
+		expect(summary.value).toBe("1/3");
+		expect(summary.tone).toBe("error");
+		expect(summary.detail).toContain("Upstairs, Downstairs");
 	});
 });

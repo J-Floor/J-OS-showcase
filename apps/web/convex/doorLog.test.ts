@@ -10,9 +10,9 @@ import schema from "./schema.ts";
 const modules = import.meta.glob("./**/*.*s");
 
 async function insertBoard() {
-	const t = convexTest(schema, modules);
-	await t.run(async (ctx) =>
-		ctx.db.insert("people", {
+	const backend = convexTest(schema, modules);
+	await backend.run(async (context) =>
+		context.db.insert("people", {
 			email: "board@example.com",
 			firstName: "Bo",
 			lastName: "Ard",
@@ -21,7 +21,7 @@ async function insertBoard() {
 			stageSince: Date.now(),
 		})
 	);
-	return t;
+	return backend;
 }
 
 function logRow(at: number) {
@@ -40,9 +40,9 @@ describe("doorLog chunked queries", () => {
 	const firstPage = { numItems: DOOR_LOG_PAGE_SIZE, cursor: null };
 
 	it("refuses non-board callers on all three", async () => {
-		const t = convexTest(schema, modules);
-		await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "ada@example.com",
 				firstName: "Ada",
 				lastName: "Lovelace",
@@ -51,7 +51,7 @@ describe("doorLog chunked queries", () => {
 				stageSince: Date.now(),
 			})
 		);
-		const ada = t.withIdentity({ email: "ada@example.com" });
+		const ada = backend.withIdentity({ email: "ada@example.com" });
 		await expect(ada.query(api.doorLog.firstPageFloor, {})).rejects.toThrow(
 			/Forbidden/
 		);
@@ -67,21 +67,24 @@ describe("doorLog chunked queries", () => {
 	});
 
 	it("splits the log at the floor with no gap or overlap", async () => {
-		const t = await insertBoard();
+		const backend = await insertBoard();
 		const total = DOOR_LOG_PAGE_SIZE + 25;
-		await t.run(async (ctx) => {
-			for (let i = 1; i <= total; i++)
-				await ctx.db.insert("doorLog", logRow(i));
+		await backend.run(async (context) => {
+			for (let index = 1; index <= total; index++)
+				await context.db.insert("doorLog", logRow(index));
 		});
-		const board = t.withIdentity({ email: "board@example.com" });
+		const board = backend.withIdentity({ email: "board@example.com" });
 
 		const { since } = await board.query(api.doorLog.firstPageFloor, {});
 		expect(since).toBe(total - DOOR_LOG_PAGE_SIZE + 1);
 
 		const head = await board.query(api.doorLog.listSince, { since });
 		expect(head).toHaveLength(DOOR_LOG_PAGE_SIZE);
-		expect(head.map((r) => r.at)).toEqual(
-			Array.from({ length: DOOR_LOG_PAGE_SIZE }, (_, i) => total - i)
+		expect(head.map((row) => row.at)).toEqual(
+			Array.from(
+				{ length: DOOR_LOG_PAGE_SIZE },
+				(_, index) => total - index
+			)
 		);
 
 		const older = await board.query(api.doorLog.listBefore, {
@@ -91,41 +94,41 @@ describe("doorLog chunked queries", () => {
 		expect(older.page).toHaveLength(25);
 		expect(older.isDone).toBe(true);
 
-		const ids = [...head, ...older.page].map((r) => r._id);
+		const ids = [...head, ...older.page].map((row) => row._id);
 		expect(new Set(ids).size).toBe(total);
 	});
 
 	it("keeps rows tied with the floor in the head only", async () => {
-		const t = await insertBoard();
-		await t.run(async (ctx) => {
-			for (let i = 1; i <= 10; i++)
-				await ctx.db.insert("doorLog", logRow(i));
-			for (let i = 0; i < 3; i++)
-				await ctx.db.insert("doorLog", logRow(500));
-			for (let i = 0; i < DOOR_LOG_PAGE_SIZE - 2; i++)
-				await ctx.db.insert("doorLog", logRow(1000 + i));
+		const backend = await insertBoard();
+		await backend.run(async (context) => {
+			for (let index = 1; index <= 10; index++)
+				await context.db.insert("doorLog", logRow(index));
+			for (let index = 0; index < 3; index++)
+				await context.db.insert("doorLog", logRow(500));
+			for (let index = 0; index < DOOR_LOG_PAGE_SIZE - 2; index++)
+				await context.db.insert("doorLog", logRow(1000 + index));
 		});
-		const board = t.withIdentity({ email: "board@example.com" });
+		const board = backend.withIdentity({ email: "board@example.com" });
 
 		const { since } = await board.query(api.doorLog.firstPageFloor, {});
 		expect(since).toBe(500);
 		const head = await board.query(api.doorLog.listSince, { since });
-		expect(head.filter((r) => r.at === 500)).toHaveLength(3);
+		expect(head.filter((row) => row.at === 500)).toHaveLength(3);
 		const older = await board.query(api.doorLog.listBefore, {
 			before: since!,
 			paginationOpts: firstPage,
 		});
-		expect(older.page.some((r) => r.at === 500)).toBe(false);
+		expect(older.page.some((row) => row.at === 500)).toBe(false);
 		expect(older.page).toHaveLength(10);
 	});
 
 	it("returns a null floor and the whole log when it fits one page", async () => {
-		const t = await insertBoard();
-		await t.run(async (ctx) => {
-			for (let i = 1; i <= DOOR_LOG_PAGE_SIZE; i++)
-				await ctx.db.insert("doorLog", logRow(i));
+		const backend = await insertBoard();
+		await backend.run(async (context) => {
+			for (let index = 1; index <= DOOR_LOG_PAGE_SIZE; index++)
+				await context.db.insert("doorLog", logRow(index));
 		});
-		const board = t.withIdentity({ email: "board@example.com" });
+		const board = backend.withIdentity({ email: "board@example.com" });
 
 		const { since } = await board.query(api.doorLog.firstPageFloor, {});
 		expect(since).toBeNull();
@@ -134,15 +137,17 @@ describe("doorLog chunked queries", () => {
 	});
 
 	it("shows a row inserted after the floor in the head", async () => {
-		const t = await insertBoard();
-		await t.run(async (ctx) => {
-			for (let i = 1; i <= DOOR_LOG_PAGE_SIZE + 5; i++)
-				await ctx.db.insert("doorLog", logRow(i));
+		const backend = await insertBoard();
+		await backend.run(async (context) => {
+			for (let index = 1; index <= DOOR_LOG_PAGE_SIZE + 5; index++)
+				await context.db.insert("doorLog", logRow(index));
 		});
-		const board = t.withIdentity({ email: "board@example.com" });
+		const board = backend.withIdentity({ email: "board@example.com" });
 		const { since } = await board.query(api.doorLog.firstPageFloor, {});
 
-		await t.run(async (ctx) => ctx.db.insert("doorLog", logRow(9999)));
+		await backend.run(async (context) =>
+			context.db.insert("doorLog", logRow(9999))
+		);
 
 		const head = await board.query(api.doorLog.listSince, { since });
 		expect(head).toHaveLength(DOOR_LOG_PAGE_SIZE + 1);
@@ -150,31 +155,31 @@ describe("doorLog chunked queries", () => {
 	});
 
 	it("resolves actorName in the head and in older chunks", async () => {
-		const t = await insertBoard();
-		await t.run(async (ctx) => {
-			const board = await ctx.db
+		const backend = await insertBoard();
+		await backend.run(async (context) => {
+			const board = await context.db
 				.query("people")
-				.withIndex("by_email", (q) =>
-					q.eq("email", "board@example.com")
+				.withIndex("by_email", (range) =>
+					range.eq("email", "board@example.com")
 				)
 				.unique();
-			await ctx.db.insert("doorLog", {
+			await context.db.insert("doorLog", {
 				...logRow(1),
 				actorId: board!._id,
 			});
-			await ctx.db.insert("doorLog", logRow(2));
+			await context.db.insert("doorLog", logRow(2));
 		});
-		const board = t.withIdentity({ email: "board@example.com" });
+		const board = backend.withIdentity({ email: "board@example.com" });
 
 		const head = await board.query(api.doorLog.listSince, {
 			since: null,
 		});
-		expect(head.map((r) => r.actorName)).toEqual([undefined, "Bo Ard"]);
+		expect(head.map((row) => row.actorName)).toEqual([undefined, "Bo Ard"]);
 		const older = await board.query(api.doorLog.listBefore, {
 			before: 3,
 			paginationOpts: firstPage,
 		});
-		expect(older.page.map((r) => r.actorName)).toEqual([
+		expect(older.page.map((row) => row.actorName)).toEqual([
 			undefined,
 			"Bo Ard",
 		]);
@@ -183,10 +188,10 @@ describe("doorLog chunked queries", () => {
 
 describe("doorLog.record", () => {
 	it("inserts nothing for an empty batch", async () => {
-		const t = convexTest(schema, modules);
-		await t.mutation(internal.doorLog.record, { rows: [] });
-		const rows = await t.run(async (ctx) =>
-			ctx.db.query("doorLog").collect()
+		const backend = convexTest(schema, modules);
+		await backend.mutation(internal.doorLog.record, { rows: [] });
+		const rows = await backend.run(async (context) =>
+			context.db.query("doorLog").collect()
 		);
 		expect(rows).toHaveLength(0);
 	});
@@ -197,9 +202,9 @@ describe("doorLog.record", () => {
 		// mutation is the only insert path for an action-written row, so a
 		// handler that forgets to forward `slot` would silently break that
 		// debounce in production while every other assertion here still passes.
-		const t = convexTest(schema, modules);
-		const personId = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const personId = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "ada@example.com",
 				firstName: "Ada",
 				lastName: "Lovelace",
@@ -209,7 +214,7 @@ describe("doorLog.record", () => {
 			})
 		);
 
-		await t.mutation(internal.doorLog.record, {
+		await backend.mutation(internal.doorLog.record, {
 			rows: [
 				{
 					operation: "unlock",
@@ -224,13 +229,33 @@ describe("doorLog.record", () => {
 			],
 		});
 
-		const rows = await t.run(async (ctx) =>
-			ctx.db.query("doorLog").collect()
+		const rows = await backend.run(async (context) =>
+			context.db.query("doorLog").collect()
 		);
 		expect(rows).toHaveLength(1);
 		expect(rows[0]?.slot).toBe("downstairs");
 	});
 });
+
+async function jobs(backend: TestConvex<typeof schema>) {
+	const all = await backend.run(async (context) =>
+		context.db.system.query("_scheduled_functions").collect()
+	);
+	return all.map((job) => ({
+		name: job.name,
+		args: job.args,
+		scheduledTime: job.scheduledTime,
+	}));
+}
+
+async function rowOf(backend: TestConvex<typeof schema>, id: Id<"doorLog">) {
+	return backend.run(async (context) => context.db.get(id));
+}
+
+async function polls(backend: TestConvex<typeof schema>) {
+	const allJobs = await jobs(backend);
+	return allJobs.filter((job) => job.name === "doorActions:pollActuation");
+}
 
 describe("door attempts", () => {
 	const T0 = Date.UTC(2026, 9, 8, 12, 0);
@@ -249,9 +274,9 @@ describe("door attempts", () => {
 	});
 
 	async function withAda() {
-		const t = convexTest(schema, modules);
-		const personId = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const personId = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: ADA,
 				firstName: "Ada",
 				lastName: "Lovelace",
@@ -260,7 +285,7 @@ describe("door attempts", () => {
 				stageSince: T0,
 			})
 		);
-		return { t, personId };
+		return { backend, personId };
 	}
 
 	function attemptArgs(
@@ -287,35 +312,14 @@ describe("door attempts", () => {
 		positionBefore: "locked" as const,
 	};
 
-	async function jobs(t: TestConvex<typeof schema>) {
-		const all = await t.run(async (ctx) =>
-			ctx.db.system.query("_scheduled_functions").collect()
-		);
-		return all.map((job) => ({
-			name: job.name,
-			args: job.args,
-			scheduledTime: job.scheduledTime,
-		}));
-	}
-
-	async function polls(t: TestConvex<typeof schema>) {
-		return (await jobs(t)).filter(
-			(job) => job.name === "doorActions:pollActuation"
-		);
-	}
-
-	async function rowOf(t: TestConvex<typeof schema>, id: Id<"doorLog">) {
-		return t.run(async (ctx) => ctx.db.get(id));
-	}
-
 	it("recordAttempt writes an accepted attempt and schedules its first poll and its timeout, which counts from the request", async () => {
 		const PROVIDER_LAG_MS = 1500;
-		const { t, personId } = await withAda();
-		const id = await t.mutation(internal.doorLog.recordAttempt, {
+		const { backend, personId } = await withAda();
+		const id = await backend.mutation(internal.doorLog.recordAttempt, {
 			...attemptArgs(personId),
 			requestedAt: T0 - PROVIDER_LAG_MS,
 		});
-		const row = await rowOf(t, id);
+		const row = await rowOf(backend, id);
 		expect(row).toMatchObject({
 			at: T0,
 			operation: "unlock",
@@ -331,7 +335,7 @@ describe("door attempts", () => {
 			requestedAt: T0 - PROVIDER_LAG_MS,
 		});
 		expect(row).not.toHaveProperty("actuatedAt");
-		expect(await jobs(t)).toEqual([
+		expect(await jobs(backend)).toEqual([
 			{
 				name: "doorActions:pollActuation",
 				args: [{ id, ...CHAIN, slot: "downstairs" }],
@@ -346,52 +350,54 @@ describe("door attempts", () => {
 	});
 
 	it("recordAttempt schedules nothing for an attempt the door had already completed", async () => {
-		const { t, personId } = await withAda();
-		const id = await t.mutation(
+		const { backend, personId } = await withAda();
+		const id = await backend.mutation(
 			internal.doorLog.recordAttempt,
 			attemptArgs(personId, "actuated")
 		);
-		expect(await rowOf(t, id)).toMatchObject({
+		expect(await rowOf(backend, id)).toMatchObject({
 			actuation: "actuated",
 			requestedAt: T0,
 			actuatedAt: T0,
 		});
-		expect(await jobs(t)).toEqual([]);
+		expect(await jobs(backend)).toEqual([]);
 	});
 
 	it("a reading that shows the reaction marks the attempt actuated and polls no more", async () => {
-		const { t, personId } = await withAda();
-		const id = await t.mutation(
+		const { backend, personId } = await withAda();
+		const id = await backend.mutation(
 			internal.doorLog.recordAttempt,
 			attemptArgs(personId)
 		);
-		await t.mutation(internal.doorLog.applyActuationReading, {
+		await backend.mutation(internal.doorLog.applyActuationReading, {
 			id,
 			...CHAIN,
 			position: "unlocking",
 			at: T0 + CONFIRM_POLL_MS,
 		});
-		expect(await rowOf(t, id)).toMatchObject({
+		expect(await rowOf(backend, id)).toMatchObject({
 			actuation: "actuated",
 			actuatedAt: T0 + CONFIRM_POLL_MS,
 		});
-		expect(await polls(t)).toHaveLength(1);
+		expect(await polls(backend)).toHaveLength(1);
 	});
 
 	it("a reading with no reaction keeps the attempt accepted and schedules the next poll", async () => {
-		const { t, personId } = await withAda();
-		const id = await t.mutation(
+		const { backend, personId } = await withAda();
+		const id = await backend.mutation(
 			internal.doorLog.recordAttempt,
 			attemptArgs(personId)
 		);
-		await t.mutation(internal.doorLog.applyActuationReading, {
+		await backend.mutation(internal.doorLog.applyActuationReading, {
 			id,
 			...CHAIN,
 			position: "locked",
 			at: T0,
 		});
-		expect(await rowOf(t, id)).toMatchObject({ actuation: "accepted" });
-		const scheduled = await polls(t);
+		expect(await rowOf(backend, id)).toMatchObject({
+			actuation: "accepted",
+		});
+		const scheduled = await polls(backend);
 		expect(scheduled).toHaveLength(2);
 		expect(scheduled[1]).toEqual({
 			name: "doorActions:pollActuation",
@@ -401,72 +407,83 @@ describe("door attempts", () => {
 	});
 
 	it("the last reading that fits the window schedules no further poll", async () => {
-		const { t, personId } = await withAda();
-		const id = await t.mutation(
+		const { backend, personId } = await withAda();
+		const id = await backend.mutation(
 			internal.doorLog.recordAttempt,
 			attemptArgs(personId)
 		);
-		await t.mutation(internal.doorLog.applyActuationReading, {
+		await backend.mutation(internal.doorLog.applyActuationReading, {
 			id,
 			...CHAIN,
 			position: "locked",
 			at: T0 + CONFIRM_WINDOW_MS - CONFIRM_POLL_MS,
 		});
-		expect(await polls(t)).toHaveLength(1);
+		expect(await polls(backend)).toHaveLength(1);
 	});
 
 	it("the timeout marks an attempt the door never reacted to unconfirmed", async () => {
-		const { t, personId } = await withAda();
-		const id = await t.mutation(
+		const { backend, personId } = await withAda();
+		const id = await backend.mutation(
 			internal.doorLog.recordAttempt,
 			attemptArgs(personId)
 		);
-		await t.mutation(internal.doorLog.actuationTimeout, { id, ...CHAIN });
-		expect(await rowOf(t, id)).toMatchObject({ actuation: "unconfirmed" });
+		await backend.mutation(internal.doorLog.actuationTimeout, {
+			id,
+			...CHAIN,
+		});
+		expect(await rowOf(backend, id)).toMatchObject({
+			actuation: "unconfirmed",
+		});
 	});
 
 	it("a reading after the timeout never moves the attempt", async () => {
-		const { t, personId } = await withAda();
-		const id = await t.mutation(
+		const { backend, personId } = await withAda();
+		const id = await backend.mutation(
 			internal.doorLog.recordAttempt,
 			attemptArgs(personId)
 		);
-		await t.mutation(internal.doorLog.actuationTimeout, { id, ...CHAIN });
-		await t.mutation(internal.doorLog.applyActuationReading, {
+		await backend.mutation(internal.doorLog.actuationTimeout, {
+			id,
+			...CHAIN,
+		});
+		await backend.mutation(internal.doorLog.applyActuationReading, {
 			id,
 			...CHAIN,
 			position: "unlocking",
 			at: T0 + CONFIRM_WINDOW_MS + CONFIRM_POLL_MS,
 		});
-		const row = await rowOf(t, id);
+		const row = await rowOf(backend, id);
 		expect(row).toMatchObject({ actuation: "unconfirmed" });
 		expect(row?.actuatedAt).toBeUndefined();
-		expect(await polls(t)).toHaveLength(1);
+		expect(await polls(backend)).toHaveLength(1);
 	});
 
 	it("the timeout leaves an attempt the door reacted to alone", async () => {
-		const { t, personId } = await withAda();
-		const id = await t.mutation(
+		const { backend, personId } = await withAda();
+		const id = await backend.mutation(
 			internal.doorLog.recordAttempt,
 			attemptArgs(personId)
 		);
-		await t.mutation(internal.doorLog.applyActuationReading, {
+		await backend.mutation(internal.doorLog.applyActuationReading, {
 			id,
 			...CHAIN,
 			position: "unlocking",
 			at: T0 + CONFIRM_POLL_MS,
 		});
-		await t.mutation(internal.doorLog.actuationTimeout, { id, ...CHAIN });
-		expect(await rowOf(t, id)).toMatchObject({
+		await backend.mutation(internal.doorLog.actuationTimeout, {
+			id,
+			...CHAIN,
+		});
+		expect(await rowOf(backend, id)).toMatchObject({
 			actuation: "actuated",
 			actuatedAt: T0 + CONFIRM_POLL_MS,
 		});
 	});
 
 	it("a reading for a row with no attempt changes nothing", async () => {
-		const { t, personId } = await withAda();
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("doorLog", {
+		const { backend, personId } = await withAda();
+		const id = await backend.run(async (context) =>
+			context.db.insert("doorLog", {
 				at: T0,
 				operation: "unlock",
 				trigger: "app",
@@ -478,33 +495,33 @@ describe("door attempts", () => {
 				slot: "downstairs",
 			})
 		);
-		await t.mutation(internal.doorLog.applyActuationReading, {
+		await backend.mutation(internal.doorLog.applyActuationReading, {
 			id,
 			...CHAIN,
 			position: "unlocking",
 			at: T0,
 		});
-		expect(await rowOf(t, id)).not.toHaveProperty("actuation");
-		expect(await jobs(t)).toEqual([]);
+		expect(await rowOf(backend, id)).not.toHaveProperty("actuation");
+		expect(await jobs(backend)).toEqual([]);
 	});
 
 	it("attempt returns the caller's own attempt", async () => {
-		const { t, personId } = await withAda();
-		const id = await t.mutation(
+		const { backend, personId } = await withAda();
+		const id = await backend.mutation(
 			internal.doorLog.recordAttempt,
 			attemptArgs(personId)
 		);
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: ADA })
 				.query(api.doorLog.attempt, { id })
 		).toEqual({ actuation: "accepted", durationMs: 3000, requestedAt: T0 });
 	});
 
 	it("attempt is null for someone else's attempt", async () => {
-		const { t, personId } = await withAda();
-		await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const { backend, personId } = await withAda();
+		await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: BEA,
 				firstName: "Bea",
 				lastName: "B",
@@ -513,21 +530,21 @@ describe("door attempts", () => {
 				stageSince: T0,
 			})
 		);
-		const id = await t.mutation(
+		const id = await backend.mutation(
 			internal.doorLog.recordAttempt,
 			attemptArgs(personId)
 		);
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: BEA })
 				.query(api.doorLog.attempt, { id })
 		).toBeNull();
 	});
 
 	it("attempt is null for a row with no attempt", async () => {
-		const { t, personId } = await withAda();
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("doorLog", {
+		const { backend, personId } = await withAda();
+		const id = await backend.run(async (context) =>
+			context.db.insert("doorLog", {
 				at: T0,
 				operation: "unlock",
 				trigger: "app",
@@ -541,18 +558,18 @@ describe("door attempts", () => {
 			})
 		);
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: ADA })
 				.query(api.doorLog.attempt, { id })
 		).toBeNull();
 	});
 
 	it("attempt is null when signed out", async () => {
-		const { t, personId } = await withAda();
-		const id = await t.mutation(
+		const { backend, personId } = await withAda();
+		const id = await backend.mutation(
 			internal.doorLog.recordAttempt,
 			attemptArgs(personId)
 		);
-		expect(await t.query(api.doorLog.attempt, { id })).toBeNull();
+		expect(await backend.query(api.doorLog.attempt, { id })).toBeNull();
 	});
 });

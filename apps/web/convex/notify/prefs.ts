@@ -26,8 +26,8 @@ export type CategoryPrefRow = {
 /** The caller's switches, one row per category their tier can receive. */
 export const mine = query({
 	args: {},
-	handler: async (ctx): Promise<CategoryPrefRow[]> => {
-		const person = await requireRole(ctx, COMMUNITY_TIERS);
+	handler: async (context): Promise<CategoryPrefRow[]> => {
+		const person = await requireRole(context, COMMUNITY_TIERS);
 		return categoriesForTier(person.tier).map((category) => {
 			const info = CATEGORY_INFO[category];
 			return {
@@ -49,8 +49,8 @@ export const set = mutation({
 		push: v.boolean(),
 		email: v.boolean(),
 	},
-	handler: async (ctx, { category, push, email }): Promise<null> => {
-		const person = await requireRole(ctx, COMMUNITY_TIERS);
+	handler: async (context, { category, push, email }): Promise<null> => {
+		const person = await requireRole(context, COMMUNITY_TIERS);
 		if (!categoriesForTier(person.tier).includes(category))
 			throw new Error("Forbidden");
 		const notificationPrefs: NotificationPrefs = {
@@ -60,7 +60,7 @@ export const set = mutation({
 			push,
 			email: CATEGORY_INFO[category].pushOnly ? false : email,
 		};
-		await ctx.db.patch(person._id, { notificationPrefs });
+		await context.db.patch(person._id, { notificationPrefs });
 		return null;
 	},
 });

@@ -4,7 +4,7 @@
 @use "../../styles/utils" as utils;
 
 /* One table row's height: skeleton rows use it so the swap to real rows does
-   not shift the page. Mirrored by ESTIMATED_ROW_HEIGHT in Table.tsx (the
+   not shift the page. Mirrored by ESTIMATED_ROW_HEIGHT in virtualRows.ts (the
    virtualiser's estimate) — change both together. */
 $row-height: 53px;
 

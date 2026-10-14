@@ -26,8 +26,8 @@ afterEach(() => {
 // be. The promise is never awaited, so the real page component never
 // mounts and no module-specific providers are needed.
 test("every module view renders the loading skeleton first, not the real page", () => {
-	for (const m of modules) {
-		const View = m.view;
+	for (const entry of modules) {
+		const View = entry.view;
 		const { container, unmount } = render(() => <View />);
 		expect(
 			container.querySelectorAll("[data-skeleton-row]").length

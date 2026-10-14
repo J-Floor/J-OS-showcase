@@ -11,7 +11,7 @@ describe("Kbd", () => {
 		// and a screen reader needs each key to be its own element.
 		const { container } = render(() => <Kbd shortcut="Mod+K" />);
 		const keys = container.querySelectorAll("kbd kbd");
-		expect([...keys].map((k) => k.textContent)).toEqual(["Ctrl", "K"]);
+		expect([...keys].map((key) => key.textContent)).toEqual(["Ctrl", "K"]);
 	});
 
 	it("renders a named key as its glyph", () => {

@@ -4,13 +4,13 @@ import { createSignal } from "solid-js";
 import { SearchInput } from "./SearchInput.tsx";
 
 function Harness() {
-	const [q, setQ] = createSignal("");
+	const [query, setQuery] = createSignal("");
 	return (
 		<SearchInput
 			label=""
 			aria-label="Search rules"
-			value={q()}
-			onValueChange={setQ}
+			value={query()}
+			onValueChange={setQuery}
 		/>
 	);
 }
@@ -22,7 +22,7 @@ test("reports typed text as a plain string", () => {
 			label=""
 			aria-label="Q"
 			value=""
-			onValueChange={(v) => (got = v)}
+			onValueChange={(value) => (got = value)}
 		/>
 	));
 	fireEvent.input(screen.getByRole("searchbox"), {
@@ -45,17 +45,17 @@ test("shows the search icon", () => {
 });
 
 test("hands the input element to a consumer ref", () => {
-	let el: HTMLInputElement | undefined;
+	let element: HTMLInputElement | undefined;
 	render(() => (
 		<SearchInput
 			label=""
 			aria-label="Q"
 			value=""
-			ref={(e: HTMLInputElement) => (el = e)}
+			ref={(input: HTMLInputElement) => (element = input)}
 			onValueChange={() => {}}
 		/>
 	));
-	expect(el).toBe(screen.getByRole("searchbox"));
+	expect(element).toBe(screen.getByRole("searchbox"));
 });
 
 test("applies a consumer class alongside its own", () => {

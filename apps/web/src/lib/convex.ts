@@ -1,5 +1,5 @@
 import { ConvexClient } from "convex/browser";
-import { createEffect, createSignal, onMount } from "solid-js";
+import { createEffect, createSignal, on, onMount } from "solid-js";
 
 import { bindKeeperToSession } from "../shared/data/bindKeeperToSession.ts";
 import { bindQueryKeeper } from "../shared/data/queryKeeper.ts";
@@ -60,14 +60,19 @@ export function bindConvexAuth() {
 	});
 	const session = authClient.useSession();
 	bindKeeperToSession(session);
-	createEffect(() => {
-		// re-run whenever the session emits
-		void session().data;
-		convex.setAuth(async () => {
-			const { data } = await authClient.convex.token({
-				fetchOptions: { throw: false },
-			});
-			return data?.token ?? null;
-		});
-	});
+	// Re-bind whenever the session changes. Better Auth reconciles the session
+	// in place, so `session()` keeps its identity: depend on `.data`.
+	createEffect(
+		on(
+			() => session().data,
+			() => {
+				convex.setAuth(async () => {
+					const { data } = await authClient.convex.token({
+						fetchOptions: { throw: false },
+					});
+					return data?.token ?? null;
+				});
+			}
+		)
+	);
 }

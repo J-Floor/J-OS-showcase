@@ -35,7 +35,7 @@ import { markStepComplete } from "./onboarding.ts";
 export const signingContext = internalQuery({
 	args: {},
 	handler: async (
-		ctx
+		context
 	): Promise<{
 		personId: Id<"people">;
 		email: string;
@@ -44,21 +44,18 @@ export const signingContext = internalQuery({
 		variant: "member" | "guest";
 		alreadySigned: boolean;
 	} | null> => {
-		const identity = await ctx.auth.getUserIdentity();
+		const identity = await context.auth.getUserIdentity();
 		const email = identity?.email;
 		if (!email) return null;
 
-		const person = await personByEmail(ctx, email);
-		if (!person) return null;
-
-		if (person.stage !== "onboarding") return null;
+		const person = await personByEmail(context, email);
+		if (person?.stage !== "onboarding") return null;
 		const variant = agreementVariantFor(person.tier);
-		if (variant === null) return null;
-		if (!entitled(person, Date.now())) return null;
+		if (variant === null || !entitled(person, Date.now())) return null;
 
-		const signatures = await ctx.db
+		const signatures = await context.db
 			.query("signatures")
-			.withIndex("by_person", (q) => q.eq("personId", person._id))
+			.withIndex("by_person", (range) => range.eq("personId", person._id))
 			.collect();
 
 		return {
@@ -68,7 +65,9 @@ export const signingContext = internalQuery({
 			company: person.venture?.name,
 			variant,
 			alreadySigned: signatures.some(
-				(s) => s.variant === variant && s.fileId !== undefined
+				(signature) =>
+					signature.variant === variant &&
+					signature.fileId !== undefined
 			),
 		};
 	},
@@ -80,11 +79,11 @@ export const signingContext = internalQuery({
 // ---------------------------------------------------------------------------
 export const signatureForVerification = internalQuery({
 	args: { personId: v.id("people") },
-	handler: async (ctx, { personId }) => {
-		await requireRole(ctx, BOARD_LEVEL);
-		const sig = await ctx.db
+	handler: async (context, { personId }) => {
+		await requireRole(context, BOARD_LEVEL);
+		const sig = await context.db
 			.query("signatures")
-			.withIndex("by_person", (q) => q.eq("personId", personId))
+			.withIndex("by_person", (range) => range.eq("personId", personId))
 			.order("desc")
 			.first();
 		if (!sig?.fileId) return null;
@@ -114,7 +113,7 @@ export const recordSignature = internalMutation({
 		signedPdfHash: v.optional(v.string()),
 		certFingerprint: v.optional(v.string()),
 	},
-	handler: async (ctx, args) => {
+	handler: async (context, args) => {
 		// Crush any LEGACY agreement of the same variant — an imported Notion row
 		// carrying only a Google Drive `sourceUrl` (no `fileId`). Signing in-app
 		// replaces it with the freshly sealed PDF, so the person is not left with
@@ -123,16 +122,21 @@ export const recordSignature = internalMutation({
 		// on every re-onboarding). A native signature (has `fileId`) is never
 		// touched here — a genuine double-sign is already blocked upstream by
 		// `signingContext.alreadySigned`.
-		const prior = await ctx.db
+		const prior = await context.db
 			.query("signatures")
-			.withIndex("by_person", (q) => q.eq("personId", args.personId))
+			.withIndex("by_person", (range) =>
+				range.eq("personId", args.personId)
+			)
 			.collect();
-		for (const s of prior) {
-			if (s.variant === args.variant && s.fileId === undefined) {
-				await ctx.db.delete(s._id);
+		for (const signature of prior) {
+			if (
+				signature.variant === args.variant &&
+				signature.fileId === undefined
+			) {
+				await context.db.delete(signature._id);
 			}
 		}
-		await insertSignature(ctx, {
+		await insertSignature(context, {
 			personId: args.personId,
 			email: args.email,
 			variant: args.variant,
@@ -147,31 +151,33 @@ export const recordSignature = internalMutation({
 		});
 		// Completing the document step is what asks the machine to re-evaluate
 		// activation, now that compliance can be met.
-		await markStepComplete(ctx, args.personId, "document");
+		await markStepComplete(context, args.personId, "document");
 	},
 });
 
 export const boardSignatureFiles = internalQuery({
 	args: {},
-	handler: async (ctx) =>
-		(await ctx.db.query("boardSignatures").collect()).map((r) => ({
-			slug: r.slug,
-			fileId: r.fileId,
-		})),
+	handler: async (context) => {
+		const signatures = await context.db.query("boardSignatures").collect();
+		return signatures.map((signature) => ({
+			slug: signature.slug,
+			fileId: signature.fileId,
+		}));
+	},
 });
 
 export const upsertBoardSignature = internalMutation({
 	args: { slug: v.string(), fileId: v.id("_storage") },
-	handler: async (ctx, { slug, fileId }) => {
-		const prior = await ctx.db
+	handler: async (context, { slug, fileId }) => {
+		const prior = await context.db
 			.query("boardSignatures")
-			.withIndex("by_slug", (q) => q.eq("slug", slug))
+			.withIndex("by_slug", (range) => range.eq("slug", slug))
 			.first();
 		if (prior) {
-			await ctx.storage.delete(prior.fileId);
-			await ctx.db.patch(prior._id, { fileId });
+			await context.storage.delete(prior.fileId);
+			await context.db.patch(prior._id, { fileId });
 		} else {
-			await ctx.db.insert("boardSignatures", { slug, fileId });
+			await context.db.insert("boardSignatures", { slug, fileId });
 		}
 		return null;
 	},

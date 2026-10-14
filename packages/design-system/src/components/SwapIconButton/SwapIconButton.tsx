@@ -21,7 +21,7 @@ export type SwapIconButtonProps = {
 	 *  caller's job. */
 	shortcut?: Hotkey | Modifier;
 	isLoading?: boolean;
-	onClick?: IconButtonProps["onClick"];
+	onClick?: NonNullable<IconButtonProps["onClick"]>;
 	class?: string;
 };
 

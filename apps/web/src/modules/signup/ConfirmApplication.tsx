@@ -1,31 +1,14 @@
-import { useSearchParams } from "@solidjs/router";
 import { useAction } from "convex-solidjs";
-import { createSignal, onMount, Match, Switch } from "solid-js";
+import { Match, Switch } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
-
-type Status = "loading" | "verified" | "already" | "expired" | "invalid";
+import { createLinkConfirmation } from "../../shared/linkConfirmation.ts";
 
 export function ConfirmApplication() {
-	const [params] = useSearchParams();
 	const confirm = useAction(api.applications.confirmApplication);
-	const [status, setStatus] = createSignal<Status>("loading");
-
-	onMount(() => {
-		void (async () => {
-			const token = typeof params.token === "string" ? params.token : "";
-			if (!token) {
-				setStatus("invalid");
-				return;
-			}
-			try {
-				const res = await confirm.mutateAsync({ token });
-				setStatus(res.status);
-			} catch {
-				setStatus("invalid");
-			}
-		})();
-	});
+	const { status } = createLinkConfirmation((args) =>
+		confirm.mutateAsync(args)
+	);
 
 	return (
 		<main>

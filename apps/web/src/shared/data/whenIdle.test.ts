@@ -10,18 +10,18 @@ afterEach(() => {
 it("falls back to a timer when the browser has no idle callback", () => {
 	vi.stubGlobal("requestIdleCallback", undefined);
 	vi.useFakeTimers();
-	const fn = vi.fn();
-	whenIdle(fn);
-	expect(fn).not.toHaveBeenCalled();
+	const callback = vi.fn();
+	whenIdle(callback);
+	expect(callback).not.toHaveBeenCalled();
 	vi.runAllTimers();
-	expect(fn).toHaveBeenCalledOnce();
+	expect(callback).toHaveBeenCalledOnce();
 });
 
 it("the fallback timer can be cancelled", () => {
 	vi.stubGlobal("requestIdleCallback", undefined);
 	vi.useFakeTimers();
-	const fn = vi.fn();
-	whenIdle(fn)();
+	const callback = vi.fn();
+	whenIdle(callback)();
 	vi.runAllTimers();
-	expect(fn).not.toHaveBeenCalled();
+	expect(callback).not.toHaveBeenCalled();
 });

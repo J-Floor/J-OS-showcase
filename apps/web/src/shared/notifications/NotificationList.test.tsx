@@ -24,8 +24,8 @@ const { head, clientQuery, markRead, markAllRead, navigate } = vi.hoisted(
 
 vi.mock("convex-solidjs", () => ({
 	useQuery: () => ({ data: () => head.data, error: () => head.error }),
-	useMutation: (fn: string) => ({
-		mutateAsync: fn === "markRead" ? markRead : markAllRead,
+	useMutation: (function_: string) => ({
+		mutateAsync: function_ === "markRead" ? markRead : markAllRead,
 	}),
 	useConvexClient: () => ({ query: clientQuery }),
 }));
@@ -52,14 +52,14 @@ const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 const TODAY_NOON = new Date().setHours(12, 0, 0, 0);
 
-function row(id: string, title: string, createdAt: number, read = false) {
+function row(id: string, title: string, createdAt: number, isRead = false) {
 	return {
 		_id: id,
 		title,
 		body: `${title} body`,
 		url: `/tasks?task=${id}`,
 		createdAt,
-		read,
+		read: isRead,
 	};
 }
 
@@ -70,8 +70,8 @@ const GUEST = row("n3", "Guest access ending soon", TODAY_NOON - DAY);
 /** The floor the client fetches, then each `listBefore` answer in order
  *  (an Error rejects). */
 function serve(floor: { since: number | null }, pages: unknown[] = []): void {
-	clientQuery.mockImplementation((fn: string) => {
-		if (fn === "firstPageFloor") return Promise.resolve(floor);
+	clientQuery.mockImplementation((function_: string) => {
+		if (function_ === "firstPageFloor") return Promise.resolve(floor);
 		const page = pages.shift();
 		return page instanceof Error
 			? Promise.reject(page)
@@ -92,7 +92,7 @@ function renderList(
 		return (
 			<NotificationList
 				inbox={inbox}
-				onClose={options.onClose ?? (() => undefined)}
+				onClose={options.onClose ?? (() => {})}
 			/>
 		);
 	}
@@ -117,9 +117,13 @@ test("groups rows under Today and Yesterday, newest first", () => {
 	serve({ since: null });
 	renderList();
 	expect(
-		screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)
+		screen
+			.getAllByRole("heading", { level: 3 })
+			.map((heading) => heading.textContent)
 	).toEqual(["Today", "Yesterday"]);
-	expect(screen.getAllByText(/ body$/).map((e) => e.textContent)).toEqual([
+	expect(
+		screen.getAllByText(/ body$/).map((element) => element.textContent)
+	).toEqual([
 		"New task assigned body",
 		"Demo Night starts soon body",
 		"Guest access ending soon body",
@@ -160,9 +164,7 @@ test("clicking a row closes the drawer, opens its page and marks it read", () =>
 
 test("a failed markRead still navigates, is logged, and leaves the row unread", async () => {
 	markRead.mockRejectedValueOnce(new Error("Not found"));
-	const error = vi
-		.spyOn(console, "error")
-		.mockImplementation(() => undefined);
+	const error = vi.spyOn(console, "error").mockImplementation(() => {});
 	head.data = [TASK];
 	serve({ since: null });
 	renderList();
@@ -235,7 +237,7 @@ test("the floor is read on the first open only, not at mount", async () => {
 	setOpen(false);
 	setOpen(true);
 	expect(
-		clientQuery.mock.calls.filter((c) => c[0] === "firstPageFloor")
+		clientQuery.mock.calls.filter((call) => call[0] === "firstPageFloor")
 	).toHaveLength(1);
 });
 
@@ -253,8 +255,8 @@ test("markAllRead marks every loaded row read at once and calls the mutation", (
 test("a floor fetch that fails says so, and the next open tries again", async () => {
 	head.data = [TASK];
 	let floorCalls = 0;
-	clientQuery.mockImplementation((fn: string) => {
-		if (fn !== "firstPageFloor")
+	clientQuery.mockImplementation((function_: string) => {
+		if (function_ !== "firstPageFloor")
 			return Promise.reject(new Error("unexpected"));
 		floorCalls += 1;
 		return floorCalls === 1
@@ -280,9 +282,7 @@ test("a floor fetch that fails says so, and the next open tries again", async ()
 
 test("a failed markAllRead puts the loaded rows back to unread", async () => {
 	markAllRead.mockRejectedValueOnce(new Error("refused"));
-	const error = vi
-		.spyOn(console, "error")
-		.mockImplementation(() => undefined);
+	const error = vi.spyOn(console, "error").mockImplementation(() => {});
 	head.data = [TASK, EVENT, GUEST];
 	serve({ since: null });
 	const exposed: { inbox?: Inbox } = {};
@@ -297,10 +297,8 @@ test("a failed markAllRead puts the loaded rows back to unread", async () => {
 });
 
 test("a failed markRead does not un-read a row a successful markAllRead covered", async () => {
-	const error = vi
-		.spyOn(console, "error")
-		.mockImplementation(() => undefined);
-	const rejecter: { run: (reason: Error) => void } = { run: () => undefined };
+	const error = vi.spyOn(console, "error").mockImplementation(() => {});
+	const rejecter: { run: (reason: Error) => void } = { run: () => {} };
 	markRead.mockImplementationOnce(
 		() =>
 			new Promise((_resolve, reject) => {
@@ -335,7 +333,7 @@ test("a refetch with a new row on top keeps the existing rows' DOM", () => {
 		markRead: vi.fn(),
 		markAllRead: vi.fn(),
 	} as unknown as Inbox;
-	render(() => <NotificationList inbox={inbox} onClose={() => undefined} />);
+	render(() => <NotificationList inbox={inbox} onClose={() => {}} />);
 	const task = rowOf("New task assigned");
 	const heading = screen.getByRole("heading", { name: "Today" });
 

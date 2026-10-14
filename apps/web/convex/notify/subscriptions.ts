@@ -49,23 +49,24 @@ function assertValidSubscription(args: {
 	}
 }
 
-async function trimToCap(ctx: MutationCtx, personId: Id<"people">) {
-	const rows = await ctx.db
+async function trimToCap(context: MutationCtx, personId: Id<"people">) {
+	const rows = await context.db
 		.query("pushSubscriptions")
-		.withIndex("by_person", (q) => q.eq("personId", personId))
+		.withIndex("by_person", (range) => range.eq("personId", personId))
 		.collect();
 	const excess = rows.length - MAX_SUBSCRIPTIONS_PER_PERSON;
 	if (excess <= 0) return;
 	const oldest = [...rows]
+		// eslint-disable-next-line id-length -- conventional comparator parameter names
 		.sort((a, b) => a.createdAt - b.createdAt)
 		.slice(0, excess);
-	for (const row of oldest) await ctx.db.delete(row._id);
+	for (const row of oldest) await context.db.delete(row._id);
 }
 
-async function byEndpoint(ctx: MutationCtx, endpoint: string) {
-	return ctx.db
+async function byEndpoint(context: MutationCtx, endpoint: string) {
+	return context.db
 		.query("pushSubscriptions")
-		.withIndex("by_endpoint", (q) => q.eq("endpoint", endpoint))
+		.withIndex("by_endpoint", (range) => range.eq("endpoint", endpoint))
 		.unique();
 }
 
@@ -85,12 +86,12 @@ export const subscribe = mutation({
 		auth: v.string(),
 		userAgent: v.string(),
 	},
-	handler: async (ctx, args): Promise<null> => {
-		const person = await requireRole(ctx, COMMUNITY_TIERS);
+	handler: async (context, args): Promise<null> => {
+		const person = await requireRole(context, COMMUNITY_TIERS);
 		assertValidSubscription(args);
-		const existing = await byEndpoint(ctx, args.endpoint);
+		const existing = await byEndpoint(context, args.endpoint);
 		if (existing) {
-			await ctx.db.patch(existing._id, {
+			await context.db.patch(existing._id, {
 				personId: person._id,
 				p256dh: args.p256dh,
 				auth: args.auth,
@@ -98,13 +99,13 @@ export const subscribe = mutation({
 				createdAt: Date.now(),
 			});
 		} else {
-			await ctx.db.insert("pushSubscriptions", {
+			await context.db.insert("pushSubscriptions", {
 				personId: person._id,
 				...args,
 				createdAt: Date.now(),
 			});
 		}
-		await trimToCap(ctx, person._id);
+		await trimToCap(context, person._id);
 		return null;
 	},
 });
@@ -113,21 +114,20 @@ export const subscribe = mutation({
  *  row: an endpoint is a capability URL, but ownership still gates deletion. */
 export const unsubscribe = mutation({
 	args: { endpoint: v.string() },
-	handler: async (ctx, { endpoint }): Promise<null> => {
-		const person = await personForCurrentUser(ctx);
-		if (!person) return null;
-		const row = await byEndpoint(ctx, endpoint);
-		if (row?.personId === person._id) await ctx.db.delete(row._id);
-		return null;
+	handler: async (context, { endpoint }): Promise<void> => {
+		const person = await personForCurrentUser(context);
+		if (!person) return;
+		const row = await byEndpoint(context, endpoint);
+		if (row?.personId === person._id) await context.db.delete(row._id);
 	},
 });
 
 /** The push service said this endpoint is gone (404/410): drop it. */
 export const removeByEndpoint = internalMutation({
 	args: { endpoint: v.string() },
-	handler: async (ctx, { endpoint }): Promise<null> => {
-		const row = await byEndpoint(ctx, endpoint);
-		if (row) await ctx.db.delete(row._id);
+	handler: async (context, { endpoint }): Promise<null> => {
+		const row = await byEndpoint(context, endpoint);
+		if (row) await context.db.delete(row._id);
 		return null;
 	},
 });

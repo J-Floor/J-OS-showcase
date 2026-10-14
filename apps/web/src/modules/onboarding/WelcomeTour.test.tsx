@@ -9,7 +9,7 @@ import { modules } from "../registry.ts";
 import { TOUR_STEPS, shouldStartTour } from "./WelcomeTour.tsx";
 
 test("tour has a welcome dialog, the two tab stops, and a finish", () => {
-	const ids = TOUR_STEPS.map((s) => s.id);
+	const ids = TOUR_STEPS.map((step) => step.id);
 	expect(ids[0]).toBe("welcome");
 	expect(ids).toContain("community");
 	expect(ids).toContain("space");
@@ -21,7 +21,7 @@ test("tour has a welcome dialog, the two tab stops, and a finish", () => {
 // markup and assert every tooltip anchor still resolves.
 test("every tooltip step targets a live sidebar nav element", () => {
 	document.body.innerHTML = modules
-		.map((m) => `<a id="nav-${m.id}"></a>`)
+		.map((entry) => `<a id="nav-${entry.id}"></a>`)
 		.join("");
 
 	for (const step of TOUR_STEPS) {

@@ -29,7 +29,7 @@ function query(read: () => unknown[] | undefined) {
 	return {
 		data: read,
 		isLoading: () => read() === undefined,
-		error: () => undefined,
+		error: () => {},
 		isStale: () => false,
 		refetch: () => {},
 	};
@@ -64,8 +64,8 @@ function tileValues(container: HTMLElement): Element[] {
 	return [...container.querySelectorAll("[data-metric-value]")];
 }
 
-function isSkeleton(el: Element): boolean {
-	return el.querySelector("[aria-hidden='true']") !== null;
+function isSkeleton(element: Element): boolean {
+	return element.querySelector("[aria-hidden='true']") !== null;
 }
 
 function chartFigure(caption: string): HTMLElement {
@@ -77,10 +77,12 @@ function chartFigure(caption: string): HTMLElement {
 test("rosters loading: every tile value and chart area is a skeleton, no empty copy", () => {
 	const { container } = render(() => <InsightsTab />);
 	expect(tileValues(container).length).toBeGreaterThan(0);
-	expect(tileValues(container).every(isSkeleton)).toBe(true);
+	expect(tileValues(container).every((element) => isSkeleton(element))).toBe(
+		true
+	);
 	const figures = screen.getAllByRole("figure");
 	expect(figures.length).toBeGreaterThan(0);
-	expect(figures.every(isSkeleton)).toBe(true);
+	expect(figures.every((element) => isSkeleton(element))).toBe(true);
 	for (const copy of EMPTY_COPY) {
 		expect(container).not.toHaveTextContent(copy);
 	}
@@ -90,8 +92,12 @@ test("one roster still loading: tiles and charts wait for it", () => {
 	rosters.members = [];
 	rosters.applications = [];
 	const { container } = render(() => <InsightsTab />);
-	expect(tileValues(container).every(isSkeleton)).toBe(true);
-	expect(screen.getAllByRole("figure").every(isSkeleton)).toBe(true);
+	expect(tileValues(container).every((element) => isSkeleton(element))).toBe(
+		true
+	);
+	expect(
+		screen.getAllByRole("figure").every((element) => isSkeleton(element))
+	).toBe(true);
 });
 
 test("board list loading: only the hosting chart waits", () => {
@@ -100,7 +106,9 @@ test("board list loading: only the hosting chart waits", () => {
 	rosters.applications = [];
 	rosters.boardLevel = undefined;
 	const { container } = render(() => <InsightsTab />);
-	expect(tileValues(container).some(isSkeleton)).toBe(false);
+	expect(tileValues(container).some((element) => isSkeleton(element))).toBe(
+		false
+	);
 	expect(isSkeleton(chartFigure("Who is hosting"))).toBe(true);
 	expect(isSkeleton(chartFigure("Applications received"))).toBe(false);
 });

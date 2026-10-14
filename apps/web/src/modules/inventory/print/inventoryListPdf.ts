@@ -38,14 +38,26 @@ const CONTENT_BOTTOM = 62.36;
 const HEADER_BASELINE = 779.53;
 const FOOTER_BASELINE = 26.37;
 
-const INK = rgb(0x1a / 255, 0x1a / 255, 0x1a / 255);
-const MUTED = rgb(0x66 / 255, 0x66 / 255, 0x66 / 255);
+const COLOR_CHANNEL_MAX = 255;
+const INK_LEVEL = 0x1a;
+const MUTED_LEVEL = 0x66;
+const INK = rgb(
+	INK_LEVEL / COLOR_CHANNEL_MAX,
+	INK_LEVEL / COLOR_CHANNEL_MAX,
+	INK_LEVEL / COLOR_CHANNEL_MAX
+);
+const MUTED = rgb(
+	MUTED_LEVEL / COLOR_CHANNEL_MAX,
+	MUTED_LEVEL / COLOR_CHANNEL_MAX,
+	MUTED_LEVEL / COLOR_CHANNEL_MAX
+);
 const META_SIZE = 9;
 const FOOTER_SIZE = 8;
 const CELL_SIZE = 9;
 const LINE_HEIGHT = 12;
 const ROW_PAD = 4;
 const COL_GAP = 8;
+const TEXT_BASELINE_LIFT = 3;
 
 const COLUMNS = [
 	{ header: "Asset tag", width: 80 },
@@ -76,20 +88,22 @@ export function inventoryListPdfFilename(now: Date): string {
 
 export async function generateInventoryListPdf(
 	items: InventoryListRow[],
-	opts: { now?: Date; assets: InventoryPdfAssets }
+	options: { now?: Date; assets: InventoryPdfAssets }
 ): Promise<Uint8Array> {
-	const now = opts.now ?? new Date();
+	const now = options.now ?? new Date();
 	const doc = await PDFDocument.create();
 	doc.setTitle("Inventory List");
 	doc.registerFontkit(fontkit);
 	const fonts: Fonts = {
-		body: await doc.embedFont(opts.assets.manropeRegular, { subset: true }),
-		bold: await doc.embedFont(opts.assets.manropeBold, { subset: true }),
-		mono: await doc.embedFont(opts.assets.azeretMonoRegular, {
+		body: await doc.embedFont(options.assets.manropeRegular, {
+			subset: true,
+		}),
+		bold: await doc.embedFont(options.assets.manropeBold, { subset: true }),
+		mono: await doc.embedFont(options.assets.azeretMonoRegular, {
 			subset: true,
 		}),
 	};
-	const [letterhead] = await doc.embedPdf(opts.assets.letterhead);
+	const [letterhead] = await doc.embedPdf(options.assets.letterhead);
 	const dateLabel = formatInventoryListDate(now);
 
 	function newPage(): PDFPage {
@@ -105,18 +119,18 @@ export async function generateInventoryListPdf(
 		const cells = cellLines(fonts.body, item);
 		const rowHeight =
 			ROW_PAD * 2 +
-			Math.max(...cells.map((c) => c.length), 1) * LINE_HEIGHT;
+			Math.max(...cells.map((cell) => cell.length), 1) * LINE_HEIGHT;
 		if (cursor - rowHeight < CONTENT_BOTTOM) {
 			page = newPage();
 			cursor = drawColumnHeaders(page, fonts.bold, CONTENT_TOP);
 		}
-		drawRow(page, fonts.body, cells, cursor, rowHeight);
+		drawRow(page, fonts.body, cells, { top: cursor, height: rowHeight });
 		cursor -= rowHeight;
 	}
 
 	const pages = doc.getPages();
-	pages.forEach((p, i) => {
-		drawPageNumber(p, fonts.mono, i + 1, pages.length);
+	pages.forEach((pdfPage, index) => {
+		drawPageNumber(pdfPage, fonts.mono, index + 1, pages.length);
 	});
 
 	return doc.save({ useObjectStreams: false });
@@ -129,26 +143,33 @@ function drawLetterhead(
 	dateLabel: string
 ): void {
 	page.drawPage(letterhead);
-	drawRightAligned(page, mono, dateLabel, META_SIZE, HEADER_BASELINE);
+	drawRightAligned(page, dateLabel, {
+		font: mono,
+		size: META_SIZE,
+		y: HEADER_BASELINE,
+	});
 }
 
 function drawPageNumber(
 	page: PDFPage,
 	mono: PDFFont,
-	n: number,
+	pageNumber: number,
 	total: number
 ): void {
-	const label = `Page ${String(n)} of ${String(total)}`;
-	drawRightAligned(page, mono, label, FOOTER_SIZE, FOOTER_BASELINE);
+	const label = `Page ${String(pageNumber)} of ${String(total)}`;
+	drawRightAligned(page, label, {
+		font: mono,
+		size: FOOTER_SIZE,
+		y: FOOTER_BASELINE,
+	});
 }
 
 function drawRightAligned(
 	page: PDFPage,
-	font: PDFFont,
 	text: string,
-	size: number,
-	y: number
+	style: { font: PDFFont; size: number; y: number }
 ): void {
+	const { font, size, y } = style;
 	page.drawText(text, {
 		x: CONTENT_RIGHT - font.widthOfTextAtSize(text, size),
 		y,
@@ -196,8 +217,8 @@ function cellLines(font: PDFFont, item: InventoryListRow): string[][] {
 		item.categoryName,
 		item.description ?? "",
 	];
-	return texts.map((text, i) =>
-		wrapText(font, text, CELL_SIZE, COLUMN_WIDTHS[i])
+	return texts.map((text, index) =>
+		wrapText(font, text, CELL_SIZE, COLUMN_WIDTHS[index])
 	);
 }
 
@@ -205,25 +226,29 @@ function drawRow(
 	page: PDFPage,
 	font: PDFFont,
 	cells: string[][],
-	top: number,
-	rowHeight: number
+	row: { top: number; height: number }
 ): void {
+	const { top, height: rowHeight } = row;
 	let x = CONTENT_LEFT;
-	for (let c = 0; c < cells.length; c++) {
-		const lines = cells[c];
-		for (let i = 0; i < lines.length; i++) {
-			const line = lines[i];
+	for (let cellIndex = 0; cellIndex < cells.length; cellIndex++) {
+		const lines = cells[cellIndex];
+		for (let index = 0; index < lines.length; index++) {
+			const line = lines[index];
 			if (line === "") continue;
 			page.drawText(line, {
 				x,
-				y: top - ROW_PAD - (i + 1) * LINE_HEIGHT + 3,
+				y:
+					top -
+					ROW_PAD -
+					(index + 1) * LINE_HEIGHT +
+					TEXT_BASELINE_LIFT,
 				size: CELL_SIZE,
 				font,
 				color: INK,
-				maxWidth: COLUMN_WIDTHS[c],
+				maxWidth: COLUMN_WIDTHS[cellIndex],
 			});
 		}
-		x += COLUMN_WIDTHS[c] + COL_GAP;
+		x += COLUMN_WIDTHS[cellIndex] + COL_GAP;
 	}
 	page.drawLine({
 		start: { x: CONTENT_LEFT, y: top - rowHeight },
@@ -252,15 +277,15 @@ function wrapText(
 	function pushLongWord(word: string): void {
 		let rest = word;
 		while (rest.length > 0) {
-			let i = rest.length;
+			let index = rest.length;
 			while (
-				i > 1 &&
-				font.widthOfTextAtSize(rest.slice(0, i), size) > maxWidth
+				index > 1 &&
+				font.widthOfTextAtSize(rest.slice(0, index), size) > maxWidth
 			) {
-				i -= 1;
+				index -= 1;
 			}
-			lines.push(rest.slice(0, i));
-			rest = rest.slice(i);
+			lines.push(rest.slice(0, index));
+			rest = rest.slice(index);
 		}
 	}
 	for (const word of words) {

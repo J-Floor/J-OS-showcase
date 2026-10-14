@@ -12,15 +12,19 @@ import type {
 /** Returns the human-readable label for a productStage enum value,
  *  falling back to the raw value when the entry is not found. */
 export function productStageLabel(stage: ProductStage | undefined): string {
-	if (stage == null) return "";
-	return productStageOptions.find((o) => o.value === stage)?.label ?? stage;
+	return stage === undefined
+		? ""
+		: (productStageOptions.find((option) => option.value === stage)
+				?.label ?? stage);
 }
 
 /** Returns the human-readable label for a fundingStage enum value,
  *  falling back to the raw value when the entry is not found. */
 export function fundingStageLabel(stage: FundingStage | undefined): string {
-	if (stage == null) return "";
-	return fundingStageOptions.find((o) => o.value === stage)?.label ?? stage;
+	return stage === undefined
+		? ""
+		: (fundingStageOptions.find((option) => option.value === stage)
+				?.label ?? stage);
 }
 
 /** Maps an array of vertical enum values to their labels (falling back to the
@@ -29,8 +33,14 @@ export function fundingStageLabel(stage: FundingStage | undefined): string {
 export function verticalsLabel(
 	values: readonly Vertical[] | undefined
 ): string {
-	if (!values || values.length === 0) return "";
-	return values
-		.map((v) => verticalOptions.find((o) => o.value === v)?.label ?? v)
-		.join(", ");
+	return !values || values.length === 0
+		? ""
+		: values
+				.map(
+					(vertical) =>
+						verticalOptions.find(
+							(option) => option.value === vertical
+						)?.label ?? vertical
+				)
+				.join(", ");
 }

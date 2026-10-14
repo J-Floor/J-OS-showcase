@@ -30,11 +30,8 @@ import {
 } from "./lib/confirmToken.ts";
 import { VERIFY_TTL_MS } from "./lib/constants.ts";
 import { sendEmail } from "./lib/email.ts";
-import {
-	normalizeEmail,
-	personByEmail,
-	validEmail,
-} from "./lib/emailAddress.ts";
+import { validEmail } from "./lib/emailAddress.ts";
+import { normalizeEmail, personByEmail } from "./lib/emailAddress.ts";
 import { legalEvents, stateOf } from "./lib/lifecycle.ts";
 import type { LifecycleEvent } from "./lib/lifecycleTypes.ts";
 import {
@@ -42,6 +39,7 @@ import {
 	rateLimiter,
 	sendEmailLimited,
 } from "./lib/rateLimit.ts";
+import type { ReapplyDecision } from "./lib/reapply.ts";
 import { reapplyDecision } from "./lib/reapply.ts";
 import { verifyRecaptchaToken } from "./lib/recaptcha.ts";
 import { BOARD_LEVEL } from "./lib/roles.ts";
@@ -85,6 +83,125 @@ const applicationInput = {
 	referral: v.optional(v.string()),
 };
 
+type ApplicationInputFields = {
+	firstName: string;
+	lastName: string;
+	email: string;
+	phone: string;
+	pastBuilt: string;
+	ventureName: string;
+	description: string;
+	productStage?: string;
+	fundingStage?: string;
+	vertical: string[];
+	teamSize: number;
+	links?: { label: string; url: string }[];
+	whyJoin: string;
+	referral?: string;
+};
+
+type CappedField =
+	| "firstName"
+	| "lastName"
+	| "ventureName"
+	| "phone"
+	| "email"
+	| "referral"
+	| "pastBuilt"
+	| "description"
+	| "whyJoin";
+
+const FIELD_LIMITS: readonly (readonly [CappedField, number])[] = [
+	["firstName", NAME_MAX],
+	["lastName", NAME_MAX],
+	["ventureName", VENTURE_NAME_MAX],
+	["phone", PHONE_MAX],
+	["email", EMAIL_MAX],
+	["referral", REFERRAL_MAX],
+	["pastBuilt", TEXT_MAX],
+	["description", TEXT_MAX],
+	["whyJoin", TEXT_MAX],
+];
+
+function failInvalidApplication(): never {
+	throw new Error("Invalid application input");
+}
+
+function isWithinLimit(value: string | undefined, max: number): boolean {
+	return (value?.length ?? 0) <= max;
+}
+
+// Pure, server-side guard for the public application path. Throws on any
+// violation so a forged or buggy client can't write malformed rows. Mirrors the
+// client-side form rules; called before any DB access in `insertApplication`.
+export function validateApplicationInput(fields: ApplicationInputFields): void {
+	if (!Number.isInteger(fields.teamSize) || fields.teamSize < 1)
+		failInvalidApplication();
+	if (!Array.isArray(fields.vertical) || fields.vertical.length < 1)
+		failInvalidApplication();
+
+	if (!validEmail(fields.email)) failInvalidApplication();
+
+	for (const [field, max] of FIELD_LIMITS) {
+		if (!isWithinLimit(fields[field], max)) failInvalidApplication();
+	}
+}
+
+type BlockedDecision = Extract<ReapplyDecision, { kind: "blocked" }>;
+
+type BlockedEmailInputs = {
+	greeting: string;
+	email: string;
+	urls: ReturnType<typeof emailUrls>;
+};
+
+type BlockedEmail = {
+	html: string;
+	text: string;
+	subject: string;
+	devLog: string;
+};
+
+const BLOCKED_EMAILS: Record<
+	BlockedDecision["reason"],
+	(decision: BlockedDecision, inputs: BlockedEmailInputs) => BlockedEmail
+> = {
+	active: (_decision, { greeting, email, urls }) => ({
+		...alreadyActive({
+			greeting,
+			signinUrl: urls.signinUrl,
+			logoUrl: urls.logoUrl,
+			privacyUrl: urls.privacyUrl,
+		}),
+		subject: "You already have access to J floor",
+		devLog: `[already-active] ${email}`,
+	}),
+	debounce: (decision, { email, urls }) => ({
+		...reapplyAfter({
+			until: formatEmailDate(decision.until ?? Date.now()),
+			logoUrl: urls.logoUrl,
+			privacyUrl: urls.privacyUrl,
+		}),
+		subject: "About your J floor application",
+		devLog: `[reapply-after] ${email}`,
+	}),
+	under_review: (_decision, { email, urls }) => ({
+		...alreadyUnderReview({
+			logoUrl: urls.logoUrl,
+			privacyUrl: urls.privacyUrl,
+		}),
+		subject: "Your J floor application is with the board",
+		devLog: `[already-under-review] ${email}`,
+	}),
+};
+
+function blockedApplicationEmail(
+	decision: BlockedDecision,
+	inputs: BlockedEmailInputs
+): BlockedEmail {
+	return BLOCKED_EMAILS[decision.reason](decision, inputs);
+}
+
 /**
  * The board's triage list.
  *
@@ -95,20 +212,20 @@ const applicationInput = {
  */
 export const list = query({
 	args: {},
-	handler: async (ctx) => {
-		await requireRole(ctx, BOARD_LEVEL);
+	handler: async (context) => {
+		await requireRole(context, BOARD_LEVEL);
 		// Verified only, by index: an unverified sign-up lies outside the
 		// range, so its insert does not re-run this query for every board
 		// session.
-		const prospects = await ctx.db
+		const prospects = await context.db
 			.query("people")
-			.withIndex("by_tier_and_verifiedAt", (q) =>
-				q.eq("tier", "prospect").gte("verifiedAt", 0)
+			.withIndex("by_tier_and_verifiedAt", (range) =>
+				range.eq("tier", "prospect").gte("verifiedAt", 0)
 			)
 			.collect();
 		// Same shape as the Members and Guests rosters: all three tabs read one
 		// table now, so they get one row type and share one detail drawer.
-		return withStatus(ctx, prospects);
+		return withStatus(context, prospects);
 	},
 });
 
@@ -125,30 +242,29 @@ export const list = query({
  */
 export const setScore = mutation({
 	args: { personId: v.id("people"), value: v.optional(v.number()) },
-	handler: async (ctx, { personId, value }) => {
-		await requireRole(ctx, BOARD_LEVEL);
-		const person = await ctx.db.get(personId);
+	handler: async (context, { personId, value }) => {
+		await requireRole(context, BOARD_LEVEL);
+		const person = await context.db.get(personId);
 		if (!person) throw new Error("Person not found");
 		const before = person.board?.score;
 		// Nothing to do when the value is unchanged (incl. clearing an already
 		// unscored person): no write, no audit row, no redundant SET_SCORE.
 		if (before === value) return null;
-		const actorId = await currentActorId(ctx);
-		await logFieldEdit(
-			ctx,
+		const actorId = await currentActorId(context);
+		await logFieldEdit(context, {
 			personId,
-			"board.score",
+			field: "board.score",
 			before,
-			value,
-			actorId
-		);
-		await ctx.db.patch(personId, {
+			after: value,
+			actorId,
+		});
+		await context.db.patch(personId, {
 			board: { ...(person.board ?? {}), score: value },
 		});
 		// Clearing is not a scoring event — only a real score drives the queue.
 		if (value !== undefined) {
 			await applyEventIfLegal(
-				ctx,
+				context,
 				personId,
 				{ type: "SET_SCORE" },
 				actorId
@@ -157,6 +273,26 @@ export const setScore = mutation({
 		return null;
 	},
 });
+
+type BoardDecision =
+	| { kind: "deny" }
+	| { kind: "member" }
+	| { kind: "guest"; until?: number; hostedById?: Id<"people"> };
+
+function eventForDecision(decision: BoardDecision): LifecycleEvent {
+	switch (decision.kind) {
+		case "deny":
+			return { type: "DENY" };
+		case "member":
+			return { type: "APPROVE_MEMBER" };
+		case "guest":
+			return {
+				type: "APPROVE_GUEST",
+				until: decision.until,
+				hostedById: decision.hostedById,
+			};
+	}
+}
 
 /**
  * The board's decision on a prospect: deny, approve as a member, or approve as
@@ -185,25 +321,20 @@ export const decide = mutation({
 			})
 		),
 	},
-	handler: async (ctx, { personId, decision }) => {
-		await requireRole(ctx, BOARD_LEVEL);
-		const event: LifecycleEvent =
-			decision.kind === "deny"
-				? { type: "DENY" }
-				: decision.kind === "member"
-					? { type: "APPROVE_MEMBER" }
-					: {
-							type: "APPROVE_GUEST",
-							until: decision.until,
-							hostedById: decision.hostedById,
-						};
-		await applyEvent(ctx, personId, event, await currentActorId(ctx));
+	handler: async (context, { personId, decision }) => {
+		await requireRole(context, BOARD_LEVEL);
+		await applyEvent(
+			context,
+			personId,
+			eventForDecision(decision),
+			await currentActorId(context)
+		);
 		// After the approval, so the audit row reads as a decision made about a
 		// guest rather than about an applicant. Same writer as the drawer's own
 		// control, so the trail is identical either way.
 		if (decision.kind === "guest" && decision.blockDoor === true) {
 			await applyDoorOverride(
-				ctx,
+				context,
 				personId,
 				"force_off",
 				"Approved without door access"
@@ -216,69 +347,24 @@ export const decide = mutation({
 /** Board undo for a mis-clicked deny: back into the queue, `deniedAt` cleared. */
 export const undeny = mutation({
 	args: { personId: v.id("people") },
-	handler: async (ctx, { personId }) => {
-		await requireRole(ctx, BOARD_LEVEL);
+	handler: async (context, { personId }) => {
+		await requireRole(context, BOARD_LEVEL);
 		await applyEvent(
-			ctx,
+			context,
 			personId,
 			{ type: "UNDENY" },
-			await currentActorId(ctx)
+			await currentActorId(context)
 		);
 		return null;
 	},
 });
 
-// Field shape the public submit collects, used by the pure validator below.
-type ApplicationInputFields = {
-	firstName: string;
-	lastName: string;
-	email: string;
-	phone: string;
-	pastBuilt: string;
-	ventureName: string;
-	description: string;
-	productStage?: string;
-	fundingStage?: string;
-	vertical: string[];
-	teamSize: number;
-	links?: { label: string; url: string }[];
-	whyJoin: string;
-	referral?: string;
-};
-
 type ApplicationConfirmStatus = Exclude<ConfirmStatus, "ended">;
-
-// Pure, server-side guard for the public application path. Throws on any
-// violation so a forged or buggy client can't write malformed rows. Mirrors the
-// client-side form rules; called before any DB access in `insertApplication`.
-export function validateApplicationInput(fields: ApplicationInputFields): void {
-	function fail(): never {
-		throw new Error("Invalid application input");
-	}
-	function capped(value: string | undefined, max: number): boolean {
-		return (value?.length ?? 0) <= max;
-	}
-
-	if (!Number.isInteger(fields.teamSize) || fields.teamSize < 1) fail();
-	if (!Array.isArray(fields.vertical) || fields.vertical.length < 1) fail();
-
-	if (!validEmail(fields.email)) fail();
-
-	if (!capped(fields.firstName, NAME_MAX)) fail();
-	if (!capped(fields.lastName, NAME_MAX)) fail();
-	if (!capped(fields.ventureName, VENTURE_NAME_MAX)) fail();
-	if (!capped(fields.phone, PHONE_MAX)) fail();
-	if (!capped(fields.email, EMAIL_MAX)) fail();
-	if (!capped(fields.referral, REFERRAL_MAX)) fail();
-	if (!capped(fields.pastBuilt, TEXT_MAX)) fail();
-	if (!capped(fields.description, TEXT_MAX)) fail();
-	if (!capped(fields.whyJoin, TEXT_MAX)) fail();
-}
 
 /** The one row the re-application decision needs for an email. */
 export const reapplyContext = internalQuery({
 	args: { email: v.string() },
-	handler: async (ctx, { email }) => personByEmail(ctx, email),
+	handler: async (context, { email }) => personByEmail(context, email),
 });
 
 /**
@@ -291,13 +377,13 @@ export const reapplyContext = internalQuery({
  */
 export const insertApplication = internalMutation({
 	args: { ...applicationInput, token: v.string() },
-	handler: async (ctx, args): Promise<Id<"people">> => {
+	handler: async (context, args): Promise<Id<"people">> => {
 		const { token, ...raw } = args;
 		const input = { ...raw, email: normalizeEmail(raw.email) };
 		validateApplicationInput(input);
 		const links = input.links ? assertSafeLinks(input.links) : undefined;
 
-		const existing = await personByEmail(ctx, input.email);
+		const existing = await personByEmail(context, input.email);
 		const decision = reapplyDecision(existing, Date.now());
 		if (decision.kind === "blocked") throw new Error("Cannot apply");
 
@@ -324,7 +410,7 @@ export const insertApplication = internalMutation({
 		};
 
 		if (existing && existing.stage !== "unverified") {
-			await issueToken(ctx, {
+			await issueToken(context, {
 				token,
 				purpose: "application",
 				personId: existing._id,
@@ -339,14 +425,14 @@ export const insertApplication = internalMutation({
 			// Re-application reuses the row: personEvents keeps every prior
 			// denial, approval and kick, the machine resets the score, and the
 			// board's written notes survive on purpose.
-			await ctx.db.patch(existing._id, {
+			await context.db.patch(existing._id, {
 				...fields,
 				verifiedAt: undefined,
 			});
-			await applyEvent(ctx, existing._id, { type: "REAPPLY" });
+			await applyEvent(context, existing._id, { type: "REAPPLY" });
 			personId = existing._id;
 		} else {
-			personId = await ctx.db.insert("people", {
+			personId = await context.db.insert("people", {
 				email: input.email,
 				tier: "prospect",
 				stage: "unverified",
@@ -357,13 +443,13 @@ export const insertApplication = internalMutation({
 				...fields,
 			});
 		}
-		await issueToken(ctx, {
+		await issueToken(context, {
 			token,
 			purpose: "application",
 			personId,
 			ttlMs: VERIFY_TTL_MS,
 		});
-		await scheduleLinkCheck(ctx, personId, links);
+		await scheduleLinkCheck(context, personId, links);
 		return personId;
 	},
 });
@@ -373,7 +459,7 @@ export const insertApplication = internalMutation({
 // fetch in the default runtime, so no "use node".
 export const submitApplication = action({
 	args: { ...applicationInput, token: v.string() },
-	handler: async (ctx, args): Promise<{ status: "pending" }> => {
+	handler: async (context, args): Promise<{ status: "pending" }> => {
 		// Distinct server-side error (not the generic bot message) so ops can
 		// diagnose a misconfigured deployment rather than seeing it surface as a
 		// user-facing verification failure.
@@ -385,7 +471,7 @@ export const submitApplication = action({
 		}
 		// Global cap after reCAPTCHA, so failed bots cannot spend it and lock
 		// real applicants out. Exhausted looks exactly like delivered (parity).
-		if (!(await mayPublicSubmit(ctx, "application"))) {
+		if (!(await mayPublicSubmit(context, "application"))) {
 			return { status: "pending" };
 		}
 		const fields = { ...typed, email: normalizeEmail(typed.email) };
@@ -395,7 +481,7 @@ export const submitApplication = action({
 		validateApplicationInput(fields);
 		if (fields.links) assertSafeLinks(fields.links);
 
-		const person = await ctx.runQuery(
+		const person = await context.runQuery(
 			internal.applications.reapplyContext,
 			{
 				email: fields.email,
@@ -410,46 +496,21 @@ export const submitApplication = action({
 		// response is the same for a member, a queued applicant and a stranger,
 		// so the form cannot be used to probe who is in.
 		if (decision.kind === "blocked") {
-			if (decision.reason === "active") {
-				const { html, text } = alreadyActive({
+			const { html, text, subject, devLog } = blockedApplicationEmail(
+				decision,
+				{
 					greeting,
-					signinUrl: urls.signinUrl,
-					logoUrl: urls.logoUrl,
-					privacyUrl: urls.privacyUrl,
-				});
-				await sendEmailLimited(ctx, {
-					to: fields.email,
-					subject: "You already have access to J floor",
-					html,
-					text,
-					devLog: `[already-active] ${fields.email}`,
-				});
-			} else if (decision.reason === "debounce") {
-				const { html, text } = reapplyAfter({
-					until: formatEmailDate(decision.until ?? Date.now()),
-					logoUrl: urls.logoUrl,
-					privacyUrl: urls.privacyUrl,
-				});
-				await sendEmailLimited(ctx, {
-					to: fields.email,
-					subject: "About your J floor application",
-					html,
-					text,
-					devLog: `[reapply-after] ${fields.email}`,
-				});
-			} else {
-				const { html, text } = alreadyUnderReview({
-					logoUrl: urls.logoUrl,
-					privacyUrl: urls.privacyUrl,
-				});
-				await sendEmailLimited(ctx, {
-					to: fields.email,
-					subject: "Your J floor application is with the board",
-					html,
-					text,
-					devLog: `[already-under-review] ${fields.email}`,
-				});
-			}
+					email: fields.email,
+					urls,
+				}
+			);
+			await sendEmailLimited(context, {
+				to: fields.email,
+				subject,
+				html,
+				text,
+				devLog,
+			});
 			return { status: "pending" };
 		}
 
@@ -458,13 +519,13 @@ export const submitApplication = action({
 		// re-submit, return the SAME neutral status the delivered path returns
 		// (enumeration parity) WITHOUT re-arming — so the last-delivered confirm
 		// link stays valid instead of being overwritten with no replacement sent.
-		const { ok: mayEmail } = await rateLimiter.limit(ctx, "sendEmail", {
+		const { ok: mayEmail } = await rateLimiter.limit(context, "sendEmail", {
 			key: fields.email,
 		});
 		if (!mayEmail) return { status: "pending" };
 
 		const confirmToken = newConfirmToken();
-		await ctx.runMutation(internal.applications.insertApplication, {
+		await context.runMutation(internal.applications.insertApplication, {
 			...fields,
 			token: confirmToken,
 		});
@@ -492,52 +553,57 @@ export const submitApplication = action({
 export const confirmApplicationByToken = internalMutation({
 	args: { token: v.string() },
 	handler: async (
-		ctx,
+		context,
 		{ token }
 	): Promise<{ status: ApplicationConfirmStatus }> => {
-		const r = await redeemToken(ctx, token, "application");
-		if (r.status !== "ok") return { status: r.status };
-		const person = await ctx.db.get(r.row.personId);
+		const redeemed = await redeemToken(context, token, "application");
+		if (redeemed.status !== "ok") return { status: redeemed.status };
+		const person = await context.db.get(redeemed.row.personId);
 		if (!person) return { status: "invalid" };
 		const now = Date.now();
-		if (r.row.payload) {
+		if (redeemed.row.payload) {
 			// The link was staged when REAPPLY was legal; the person may have moved
 			// since (e.g. became active). Applying would throw and roll back, so
 			// the dead link answers "invalid" instead.
 			if (!legalEvents(stateOf(person)).includes("REAPPLY")) {
 				return { status: "invalid" };
 			}
-			await ctx.db.patch(person._id, {
-				...r.row.payload,
+			await context.db.patch(person._id, {
+				...redeemed.row.payload,
 				verifiedAt: now,
 			});
-			await applyEvent(ctx, person._id, { type: "REAPPLY" });
+			await applyEvent(context, person._id, { type: "REAPPLY" });
 			await scheduleLinkCheck(
-				ctx,
+				context,
 				person._id,
-				r.row.payload.venture.links
+				redeemed.row.payload.venture.links
 			);
 		} else {
-			await ctx.db.patch(person._id, { verifiedAt: now });
+			await context.db.patch(person._id, { verifiedAt: now });
 		}
 		// An unconfirmed visitor who applied still has a live visitor token; settle it.
-		await settlePendingEvent(ctx, person._id);
+		await settlePendingEvent(context, person._id);
 		// A token migrated from a visitor's pending registration carries its event.
-		const event = r.row.eventId ? await ctx.db.get(r.row.eventId) : null;
+		const event = redeemed.row.eventId
+			? await context.db.get(redeemed.row.eventId)
+			: null;
 		if (eventLive(event, now)) {
-			await insertAttendanceOnce(ctx, person._id, event._id);
+			await insertAttendanceOnce(context, person._id, event._id);
 		}
 		// VERIFY_EMAIL's effects send the "we've received it" email and notify
 		// the board — this mutation does not send anything itself.
-		await applyEvent(ctx, person._id, { type: "VERIFY_EMAIL" });
+		await applyEvent(context, person._id, { type: "VERIFY_EMAIL" });
 		return { status: "verified" };
 	},
 });
 
 export const confirmApplication = action({
 	args: { token: v.string() },
-	handler: (ctx, { token }): Promise<{ status: ApplicationConfirmStatus }> =>
-		ctx.runMutation(internal.applications.confirmApplicationByToken, {
+	handler: (
+		context,
+		{ token }
+	): Promise<{ status: ApplicationConfirmStatus }> =>
+		context.runMutation(internal.applications.confirmApplicationByToken, {
 			token,
 		}),
 });

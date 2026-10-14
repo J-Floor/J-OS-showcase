@@ -20,25 +20,28 @@ const STATUS_COPY: Record<QrScanCode, string> = {
 const HINT = "Point the camera at the QR code";
 
 function messageFor(err: unknown): string {
-	if (err instanceof QrScanError) return STATUS_COPY[err.code];
-	return STATUS_COPY.unavailable;
+	return err instanceof QrScanError
+		? STATUS_COPY[err.code]
+		: STATUS_COPY.unavailable;
 }
 
-export function QrScannerDialog(props: {
+type ScannerProps = {
 	open: boolean;
-	onOpenChange: (open: boolean) => void;
 	onDetect: (raw: string) => void;
 	error?: string;
 	unknownTag?: string;
-	onAddUnknown?: () => void;
-	onCancelUnknown?: () => void;
-}): JSX.Element {
-	const [videoEl, setVideoEl] = createSignal<HTMLVideoElement>();
+};
+
+/** Runs the camera scan while the dialog is open (and not asking about an
+ *  unknown tag), and says what it is doing: the hint, a provided error, or
+ *  why the camera could not start. */
+function createQrScanStatus(props: ScannerProps) {
+	const [videoElement, setVideoElement] = createSignal<HTMLVideoElement>();
 	const [scanError, setScanError] = createSignal<unknown>();
 
 	createEffect(() => {
 		if (!props.open || props.unknownTag !== undefined) return;
-		const video = videoEl();
+		const video = videoElement();
 		if (video === undefined) return;
 		const onDetect = props.onDetect;
 		setScanError(undefined);
@@ -54,21 +57,34 @@ export function QrScannerDialog(props: {
 	function statusText(): string {
 		if (props.error !== undefined && props.error !== "") return props.error;
 		const err = scanError();
-		if (err !== undefined) return messageFor(err);
-		return HINT;
+		return err === undefined ? HINT : messageFor(err);
 	}
 
 	function statusTone(): "error" | undefined {
 		if (props.error !== undefined && props.error !== "") return "error";
-		if (scanError() !== undefined) return "error";
-		return undefined;
+		return scanError() === undefined ? undefined : "error";
 	}
+
+	return { setVideoElement, statusText, statusTone };
+}
+
+export function QrScannerDialog(props: {
+	open: boolean;
+	onOpenChange: (isOpen: boolean) => void;
+	onDetect: (raw: string) => void;
+	error?: string;
+	unknownTag?: string;
+	onAddUnknown?: () => void;
+	onCancelUnknown?: () => void;
+}): JSX.Element {
+	const { setVideoElement, statusText, statusTone } =
+		createQrScanStatus(props);
 
 	return (
 		<Dialog.Root
 			open={props.open}
-			onOpenChange={(d) => {
-				props.onOpenChange(d.open);
+			onOpenChange={(details) => {
+				props.onOpenChange(details.open);
 			}}
 		>
 			<Dialog.Content>
@@ -86,7 +102,7 @@ export function QrScannerDialog(props: {
 								</span>
 							</Dialog.Description>
 							<video
-								ref={setVideoEl}
+								ref={setVideoElement}
 								class={styles.video}
 								playsinline
 								muted

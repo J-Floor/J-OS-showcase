@@ -10,18 +10,18 @@ if (!(Element.prototype as { scrollTo?: unknown }).scrollTo) {
 	Element.prototype.scrollTo = () => {};
 }
 
-const opts = [
+const options = [
 	{ value: "a", title: "Alpha" },
 	{ value: "b", title: "Beta" },
 ];
 
 test("opens and selects an option", async () => {
-	let val: string[] = [];
+	let value: string[] = [];
 	render(() => (
 		<Select.Root
 			label="X"
-			options={opts}
-			onValueChange={(d) => (val = d.value)}
+			options={options}
+			onValueChange={(details) => (value = details.value)}
 		>
 			<Select.Content>
 				<Select.Option value="a" title="Alpha" />
@@ -33,6 +33,6 @@ test("opens and selects an option", async () => {
 	fireEvent.click(await screen.findByText("Beta"));
 	// zag commits the value asynchronously after the ITEM.CLICK transition.
 	await waitFor(() => {
-		expect(val).toEqual(["b"]);
+		expect(value).toEqual(["b"]);
 	});
 });

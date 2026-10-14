@@ -46,8 +46,8 @@ function person(over: Partial<Doc<"people">>): Doc<"people"> {
 		...over,
 	};
 }
-function codes(p: Doc<"people">, sigs: string[] = []) {
-	return violations(p, sigs, NOW).map((v) => v.code);
+function codes(fixture: Doc<"people">, sigs: string[] = []) {
+	return violations(fixture, sigs, NOW).map((violation) => violation.code);
 }
 
 describe("violations", () => {
@@ -89,8 +89,9 @@ describe("violations", () => {
 		).toEqual(["onboarding-blocked"]);
 	});
 	it("does not flag onboarding that still has a step to do", () => {
-		const { document: _document, ...rest } = STEPS;
-		void _document;
+		const rest = Object.fromEntries(
+			Object.entries(STEPS).filter(([id]) => id !== "document")
+		);
 		expect(
 			codes(
 				person({
@@ -166,20 +167,24 @@ describe("violations", () => {
 
 describe("duplicateEmails", () => {
 	it("flags both rows of a case-only duplicate", () => {
-		const a = person({
+		const upperCase = person({
 			_id: "a" as Id<"people">,
 			email: "Shane@example.com",
 		});
-		const b = person({
+		const lowerCase = person({
 			_id: "b" as Id<"people">,
 			email: "shane@example.com",
 		});
-		const c = person({
+		const other = person({
 			_id: "c" as Id<"people">,
 			email: "other@example.com",
 		});
-		const found = duplicateEmails([a, b, c]);
-		expect([...found.keys()].sort()).toEqual(["a", "b"]);
+		const found = duplicateEmails([upperCase, lowerCase, other]);
+		expect(
+			[...found.keys()].sort((first, second) =>
+				first.localeCompare(second)
+			)
+		).toEqual(["a", "b"]);
 		expect(found.get("a" as Id<"people">)?.code).toBe("duplicate-email");
 	});
 });
@@ -198,8 +203,142 @@ const LANDING_CODES: ReadonlySet<ViolationCode> = new Set<ViolationCode>([
 	"former-without-origin",
 ]);
 
+const BOOLS = [true, false];
+
+/**
+ * The row `applyEvent` would write, built from the facts the guard saw:
+ * steps from `selfStepsComplete` minus any step an effect re-opens, the
+ * target tier's agreement from `complianceMet`, `activatedAt` from
+ * `everActive` or the stamp a membership-active landing gets, and for a
+ * former row the tier `SET_FORMER` records (the one left, `fromTier`) or,
+ * with no such effect, the `formerOf` the facts carry.
+ */
+function landed(
+	next: StateId,
+	facts: Facts,
+	effects: Effect[],
+	fromTier?: Tier
+): { row: Doc<"people">; sigs: string[] } {
+	const [tier, stage] = next.split(".") as [Tier, Stage];
+	const reset = new Set<string>(
+		effects.flatMap((effect) =>
+			effect.type === "RESET_STEP" ? [effect.step] : []
+		)
+	);
+	const steps = facts.selfStepsComplete
+		? Object.fromEntries(
+				Object.entries(STEPS).filter(([id]) => !reset.has(id))
+			)
+		: {};
+	const variant = agreementVariantFor(tier);
+	const leaving = effects.find(
+		(effect): effect is Extract<Effect, { type: "SET_FORMER" }> =>
+			effect.type === "SET_FORMER"
+	);
+	const former =
+		tier === "former"
+			? {
+					formerOf: leaving
+						? fromTier && formerOfTier(fromTier)
+						: facts.formerOf,
+					formerReason: leaving?.reason ?? "kicked",
+				}
+			: {};
+	return {
+		row: person({
+			tier,
+			stage,
+			onboarding: { steps },
+			activatedAt:
+				facts.everActive || isMembershipActive(next) ? 1 : undefined,
+			...former,
+		}),
+		sigs: facts.complianceMet && variant ? [variant] : [],
+	};
+}
+
+const ALL_FACTS: Facts[] = BOOLS.flatMap((isComplianceMet) =>
+	BOOLS.flatMap((isSelfStepsComplete) =>
+		BOOLS.flatMap((isEverActive) =>
+			BOOLS.flatMap((isWindowOpen) =>
+				ACCESS_TIERS.map(
+					(formerOf): Facts => ({
+						verified: true,
+						complianceMet: isComplianceMet,
+						selfStepsComplete: isSelfStepsComplete,
+						everActive: isEverActive,
+						windowOpen: isWindowOpen,
+						formerOf,
+					})
+				)
+			)
+		)
+	)
+);
+
+function landingCodesOf(row: Doc<"people">, sigs: string[]): ViolationCode[] {
+	return violations(row, sigs, NOW)
+		.map((violation) => violation.code)
+		.filter((code) => LANDING_CODES.has(code));
+}
+
+// `loadFacts` reads compliance and steps against the target only for
+// SET_ROLE, RE_ADMIT and the two approvals; elsewhere the facts describe
+// the target only when both tiers share an agreement variant. What that
+// leaves out is PROMOTE_TO_MEMBER (guest facts, but it re-opens the
+// document step unconditionally) and REAPPLY (lands in a prospect state,
+// which has no activation guard to violate). KICK_OUT and MARK_LEFT land
+// in `former`, which has no activation guard either; what they must get
+// right is the origin, whatever the facts.
+function isDescribingTarget(
+	event: LifecycleEvent,
+	fromTier: Tier,
+	toTier: Tier
+): boolean {
+	return (
+		event.type === "KICK_OUT" ||
+		event.type === "MARK_LEFT" ||
+		event.type === "SET_ROLE" ||
+		event.type === "RE_ADMIT" ||
+		event.type === "APPROVE_GUEST" ||
+		event.type === "APPROVE_MEMBER" ||
+		agreementVariantFor(fromTier) === agreementVariantFor(toTier)
+	);
+}
+
+function expectCleanLanding(
+	from: StateId,
+	event: LifecycleEvent,
+	facts: Facts
+): void {
+	const rule = TABLE[from]?.[event.type];
+	if (!rule) return;
+	// A source row that is itself in violation proves nothing about the move.
+	const source = landed(from, facts, []);
+	if (landingCodesOf(source.row, source.sigs).length > 0) return;
+	if (rule.guard && !rule.guard(facts, event)) return;
+	const { next, effects } = reduce(from, event, facts);
+	if (next === from) return;
+	const fromTier = from.split(".")[0] as Tier;
+	const toTier = next.split(".")[0] as Tier;
+	if (!isDescribingTarget(event, fromTier, toTier)) return;
+	const target = landed(next, facts, effects, fromTier);
+	expect({
+		from,
+		event: event.type,
+		facts,
+		next,
+		codes: landingCodesOf(target.row, target.sigs),
+	}).toEqual({
+		from,
+		event: event.type,
+		facts,
+		next,
+		codes: [],
+	});
+}
+
 describe("the machine never lands a person in a violated state", () => {
-	const BOOLS = [true, false];
 	// IMPORT is excluded on purpose: it is the one rule that lands in active
 	// without the steps (a legacy import never did them), and its `hasSignature`
 	// is the importer's word, not a fact the guard reads.
@@ -220,149 +359,10 @@ describe("the machine never lands a person in a violated state", () => {
 		}
 	);
 
-	/**
-	 * The row `applyEvent` would write, built from the facts the guard saw:
-	 * steps from `selfStepsComplete` minus any step an effect re-opens, the
-	 * target tier's agreement from `complianceMet`, `activatedAt` from
-	 * `everActive` or the stamp a membership-active landing gets, and for a
-	 * former row the tier `SET_FORMER` records (the one left, `fromTier`) or,
-	 * with no such effect, the `formerOf` the facts carry.
-	 */
-	function landed(
-		next: StateId,
-		facts: Facts,
-		effects: Effect[],
-		fromTier?: Tier
-	): { row: Doc<"people">; sigs: string[] } {
-		const [tier, stage] = next.split(".") as [Tier, Stage];
-		const reset = new Set<string>(
-			effects.flatMap((e) => (e.type === "RESET_STEP" ? [e.step] : []))
-		);
-		const steps = facts.selfStepsComplete
-			? Object.fromEntries(
-					Object.entries(STEPS).filter(([id]) => !reset.has(id))
-				)
-			: {};
-		const variant = agreementVariantFor(tier);
-		const leaving = effects.find(
-			(e): e is Extract<Effect, { type: "SET_FORMER" }> =>
-				e.type === "SET_FORMER"
-		);
-		const former =
-			tier === "former"
-				? {
-						formerOf: leaving
-							? fromTier && formerOfTier(fromTier)
-							: facts.formerOf,
-						formerReason: leaving?.reason ?? "kicked",
-					}
-				: {};
-		return {
-			row: person({
-				tier,
-				stage,
-				onboarding: { steps },
-				activatedAt:
-					facts.everActive || isMembershipActive(next)
-						? 1
-						: undefined,
-				...former,
-			}),
-			sigs: facts.complianceMet && variant ? [variant] : [],
-		};
-	}
-
 	it("leaves no activation-guard violation on any landing whose facts describe the target", () => {
-		for (const from of ALL_STATES) {
-			const fromTier = from.split(".")[0] as Tier;
-			for (const event of EVENT_SAMPLES) {
-				const rule = TABLE[from]?.[event.type];
-				if (!rule) continue;
-				for (const complianceMet of BOOLS)
-					for (const selfStepsComplete of BOOLS)
-						for (const everActive of BOOLS)
-							for (const windowOpen of BOOLS)
-								for (const formerOf of ACCESS_TIERS) {
-									const facts: Facts = {
-										verified: true,
-										complianceMet,
-										selfStepsComplete,
-										everActive,
-										windowOpen,
-										formerOf,
-									};
-									// A source row that is itself in violation
-									// proves nothing about the move.
-									const source = landed(from, facts, []);
-									if (
-										violations(
-											source.row,
-											source.sigs,
-											NOW
-										).some((v) => LANDING_CODES.has(v.code))
-									)
-										continue;
-									if (rule.guard && !rule.guard(facts, event))
-										continue;
-									const { next, effects } = reduce(
-										from,
-										event,
-										facts
-									);
-									if (next === from) continue;
-									const toTier = next.split(".")[0] as Tier;
-									// `loadFacts` reads compliance and steps
-									// against the target only for SET_ROLE,
-									// RE_ADMIT and the two approvals; elsewhere
-									// the facts describe the target only when
-									// both tiers share an agreement variant.
-									// What that leaves out is PROMOTE_TO_MEMBER
-									// (guest facts, but it re-opens the document
-									// step unconditionally) and REAPPLY (lands in
-									// a prospect state, which has no activation
-									// guard to violate). KICK_OUT and MARK_LEFT
-									// land in `former`, which has no activation
-									// guard either; what they must get right is
-									// the origin, whatever the facts.
-									const describesTarget =
-										event.type === "KICK_OUT" ||
-										event.type === "MARK_LEFT" ||
-										event.type === "SET_ROLE" ||
-										event.type === "RE_ADMIT" ||
-										event.type === "APPROVE_GUEST" ||
-										event.type === "APPROVE_MEMBER" ||
-										agreementVariantFor(fromTier) ===
-											agreementVariantFor(toTier);
-									if (!describesTarget) continue;
-									const target = landed(
-										next,
-										facts,
-										effects,
-										fromTier
-									);
-									expect({
-										from,
-										event: event.type,
-										facts,
-										next,
-										codes: violations(
-											target.row,
-											target.sigs,
-											NOW
-										)
-											.map((v) => v.code)
-											.filter((c) =>
-												LANDING_CODES.has(c)
-											),
-									}).toEqual({
-										from,
-										event: event.type,
-										facts,
-										next,
-										codes: [],
-									});
-								}
-			}
-		}
+		for (const from of ALL_STATES)
+			for (const event of EVENT_SAMPLES)
+				for (const facts of ALL_FACTS)
+					expectCleanLanding(from, event, facts);
 	});
 });

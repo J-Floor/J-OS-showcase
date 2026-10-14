@@ -38,7 +38,7 @@ function List(props: {
 			<Query.Content of={props.data}>
 				{(rows) => (
 					<ul>
-						<For each={rows()}>{(r) => <li>{r.name}</li>}</For>
+						<For each={rows()}>{(row) => <li>{row.name}</li>}</For>
 						<li data-testid="content">{rows().length}</li>
 					</ul>
 				)}
@@ -83,9 +83,9 @@ describe("Query", () => {
 	});
 
 	it("null with Empty shows Empty; null without Empty renders nothing", () => {
-		const a = render(() => <List data={null} empty />);
+		const rendered = render(() => <List data={null} empty />);
 		expect(screen.getByText("nothing here")).toBeTruthy();
-		a.unmount();
+		rendered.unmount();
 		render(() => <List data={null} />);
 		expect(screen.queryByTestId("content")).toBeNull();
 	});
@@ -127,7 +127,7 @@ describe("Query", () => {
 			</Query.Root>
 		));
 		expect(screen.getByTestId("c").textContent).toBe("");
-		expect(screen.getByTestId("c").children.length).toBe(0);
+		expect(screen.getByTestId("c").children).toHaveLength(0);
 	});
 
 	it("Count updates when the array length changes", () => {

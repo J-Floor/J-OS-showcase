@@ -35,6 +35,86 @@ export type SelectedItemsRowProps<T> = {
 	class?: string;
 };
 
+/** How many of the most recent items fit the container's single line, given
+ *  the widths in the hidden copy of the full row. */
+function fitVisibleCount(
+	container: HTMLElement,
+	measured: HTMLElement,
+	itemCount: number
+): number {
+	// jsdom performs no layout, so `clientWidth`/`getBoundingClientRect`
+	// all read 0 there. Treat that as "cannot measure" and leave every
+	// item visible rather than collapsing the row to a single chip.
+	if (container.clientWidth === 0) return itemCount;
+
+	// The row's gap is folded into every width, and the container is
+	// grown by one gap so the trailing gap the last item does not have
+	// cancels.
+	const gap = Number.parseFloat(getComputedStyle(container).columnGap) || 0;
+	// The badge leads the hidden row, so the chips are everything after it.
+	const [badge, ...chips] = Array.from(measured.children);
+
+	const chipWidths = chips.map(
+		(chip) => chip.getBoundingClientRect().width + gap
+	);
+	const badgeWidth = badge.getBoundingClientRect().width + gap;
+
+	return fitSelectedItems(chipWidths, container.clientWidth + gap, badgeWidth)
+		.visibleCount;
+}
+
+/** The default chip for one selection, with its remove button. */
+function SelectedChip(props: {
+	label: string;
+	onRemove: () => void;
+}): JSX.Element {
+	return (
+		<Chip class={styles.selectedChip}>
+			<span class={styles.selectedChipLabel}>{props.label}</span>
+			<IconButton
+				tooltipLabel={`Remove ${props.label}`}
+				// Stop the click reaching the control (whose input opens the
+				// list) and remove just this selection.
+				onClick={(event) => {
+					event.preventDefault();
+					event.stopPropagation();
+					props.onRemove();
+				}}
+			>
+				{ICONS.close}
+			</IconButton>
+		</Chip>
+	);
+}
+
+/** Hidden copy of the full row: its children's widths are what the visible
+ *  row fits to. */
+function MeasureCopy<T>(props: {
+	items: T[];
+	renderItem: (item: T) => JSX.Element;
+	setElement: (element: HTMLDivElement) => void;
+}): JSX.Element {
+	return (
+		<div
+			ref={props.setElement}
+			aria-hidden="true"
+			class={styles.selectedMeasure}
+		>
+			<span class={styles.selectedOverflow}>
+				+{props.items.length - 1}
+			</span>
+			<For each={props.items}>
+				{(item) => <div>{props.renderItem(item)}</div>}
+			</For>
+		</div>
+	);
+}
+
+/** How many of the earlier items collapse into the `+X` badge. */
+function hiddenItemCount(itemCount: number, visibleCount: number): number {
+	return itemCount - Math.min(visibleCount, itemCount);
+}
+
 /**
  * The current selection, rendered on the control's single line.
  *
@@ -56,10 +136,9 @@ export type SelectedItemsRowProps<T> = {
 export function SelectedItemsRow<T>(
 	props: SelectedItemsRowProps<T>
 ): JSX.Element {
-	// eslint-disable-next-line no-unassigned-vars -- assigned by Solid's `ref={containerEl}` binding below, which the rule can't see
-	let containerEl: HTMLDivElement | undefined;
-	// eslint-disable-next-line no-unassigned-vars -- assigned by Solid's `ref={measureEl}` binding below, which the rule can't see
-	let measureEl: HTMLDivElement | undefined;
+	// eslint-disable-next-line no-unassigned-vars -- assigned by Solid's `ref={containerElement}` binding below, which the rule can't see
+	let containerElement: HTMLDivElement | undefined;
+	let measureElement: HTMLDivElement | undefined;
 
 	// Everything is visible until the first measurement, so the row does not
 	// flash a `+X` badge on mount. Read once as the signal's initial value,
@@ -68,37 +147,11 @@ export function SelectedItemsRow<T>(
 	const [visibleCount, setVisibleCount] = createSignal(props.items.length);
 
 	function measure(): void {
-		const container = containerEl;
-		const measured = measureEl;
+		const container = containerElement;
+		const measured = measureElement;
 		if (!container || !measured) return;
-
-		// jsdom performs no layout, so `clientWidth`/`getBoundingClientRect`
-		// all read 0 there. Treat that as "cannot measure" and leave every
-		// item visible rather than collapsing the row to a single chip.
-		if (container.clientWidth === 0) {
-			setVisibleCount(props.items.length);
-			return;
-		}
-
-		// The row's gap is folded into every width, and the container is
-		// grown by one gap so the trailing gap the last item does not have
-		// cancels.
-		const gap =
-			Number.parseFloat(getComputedStyle(container).columnGap) || 0;
-		// The badge leads the hidden row, so the chips are everything after it.
-		const [badge, ...chips] = Array.from(measured.children);
-
-		const chipWidths = chips.map(
-			(chip) => chip.getBoundingClientRect().width + gap
-		);
-		const badgeWidth = badge.getBoundingClientRect().width + gap;
-
 		setVisibleCount(
-			fitSelectedItems(
-				chipWidths,
-				container.clientWidth + gap,
-				badgeWidth
-			).visibleCount
+			fitVisibleCount(container, measured, props.items.length)
 		);
 	}
 
@@ -106,7 +159,7 @@ export function SelectedItemsRow<T>(
 	// removed item changes the widths without changing the container's.
 	createEffect(
 		on(
-			() => props.items.map(props.getValue).join(","),
+			() => props.items.map((item) => props.getValue(item)).join(","),
 			() => {
 				queueMicrotask(measure);
 			}
@@ -122,7 +175,7 @@ export function SelectedItemsRow<T>(
 			() => props.items.length > 0,
 			(hasItems) => {
 				if (!hasItems || typeof ResizeObserver === "undefined") return;
-				const container = containerEl;
+				const container = containerElement;
 				if (!container) return;
 
 				const observer = new ResizeObserver(measure);
@@ -134,16 +187,12 @@ export function SelectedItemsRow<T>(
 		)
 	);
 
-	function shown(): number {
-		return Math.min(visibleCount(), props.items.length);
-	}
-
 	function hiddenCount(): number {
-		return props.items.length - shown();
+		return hiddenItemCount(props.items.length, visibleCount());
 	}
 
 	function visibleItems(): T[] {
-		return props.items.slice(props.items.length - shown());
+		return props.items.slice(hiddenCount());
 	}
 
 	// Not a component: the row's own markup for one selection, rendered
@@ -153,48 +202,32 @@ export function SelectedItemsRow<T>(
 
 		const value = props.getValue(item);
 		return (
-			<Chip class={styles.selectedChip}>
-				<span class={styles.selectedChipLabel}>
-					{props.getLabel(item)}
-				</span>
-				<IconButton
-					tooltipLabel={`Remove ${props.getLabel(item)}`}
-					// Stop the click reaching the control (whose input opens the
-					// list) and remove just this selection.
-					onClick={(event) => {
-						event.preventDefault();
-						event.stopPropagation();
-						props.onRemove(value);
-					}}
-				>
-					{ICONS.close}
-				</IconButton>
-			</Chip>
+			<SelectedChip
+				label={props.getLabel(item)}
+				onRemove={() => {
+					props.onRemove(value);
+				}}
+			/>
 		);
 	}
 
 	return (
 		<Show when={props.items.length > 0}>
 			<div
-				ref={containerEl}
+				ref={containerElement}
 				class={clsx(styles.selectedItems, props.class)}
 			>
 				{/* Hidden copy of the full row: it is what the widths are read
 				    from, so a collapsed item can come back when the control
 				    grows. `visibility: hidden` (from `.selectedMeasure`) also
 				    keeps it out of the a11y tree and out of the tab order. */}
-				<div
-					ref={measureEl}
-					aria-hidden="true"
-					class={styles.selectedMeasure}
-				>
-					<span class={styles.selectedOverflow}>
-						+{props.items.length - 1}
-					</span>
-					<For each={props.items}>
-						{(item) => <div>{renderItem(item)}</div>}
-					</For>
-				</div>
+				<MeasureCopy
+					items={props.items}
+					renderItem={renderItem}
+					setElement={(element) => {
+						measureElement = element;
+					}}
+				/>
 				<Show when={hiddenCount() > 0}>
 					<span class={styles.selectedOverflow}>
 						+{hiddenCount()}

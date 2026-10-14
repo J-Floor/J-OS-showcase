@@ -37,8 +37,7 @@ export function OnboardingWizardView(props: {
 	}
 	function position() {
 		const id = currentId();
-		if (!id) return total();
-		return requiredSelfStepIds(tier()).indexOf(id) + 1;
+		return id ? requiredSelfStepIds(tier()).indexOf(id) + 1 : total();
 	}
 	return (
 		<Show

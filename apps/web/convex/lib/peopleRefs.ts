@@ -10,22 +10,22 @@ export const MAX_SCANNED_DOCS = 8000;
 
 /** True when a value of this shape can hold a person id. `any` counts: it
  *  could hold one, so a future `any` field cannot hide ids from the merge. */
-function holdsPeopleId(json: ValidatorJSON): boolean {
+function canHoldPeopleId(json: ValidatorJSON): boolean {
 	switch (json.type) {
 		case "any":
 			return true;
 		case "id":
 			return json.tableName === "people";
 		case "object":
-			return Object.values(json.value).some((f) =>
-				holdsPeopleId(f.fieldType)
+			return Object.values(json.value).some((field) =>
+				canHoldPeopleId(field.fieldType)
 			);
 		case "array":
-			return holdsPeopleId(json.value);
+			return canHoldPeopleId(json.value);
 		case "union":
-			return json.value.some(holdsPeopleId);
+			return json.value.some((member) => canHoldPeopleId(member));
 		case "record":
-			return holdsPeopleId(json.values.fieldType);
+			return canHoldPeopleId(json.values.fieldType);
 		default:
 			return false;
 	}
@@ -33,9 +33,9 @@ function holdsPeopleId(json: ValidatorJSON): boolean {
 
 /** Every table whose documents can hold a person id, read from the schema
  *  itself so a new reference field cannot be missed by the merge. */
-export function peopleRefTables(): string[] {
+export function peopleReferenceTables(): string[] {
 	return Object.entries(schema.tables)
-		.filter(([, table]) => holdsPeopleId(jsonOf(table)))
+		.filter(([, table]) => canHoldPeopleId(jsonOf(table)))
 		.map(([name]) => name);
 }
 
@@ -46,25 +46,31 @@ export function replacePersonId<T>(
 	dropId: string,
 	keepId: string
 ): { value: T; changed: boolean } {
-	let changed = false;
-	function walk(x: unknown): unknown {
-		if (x === dropId) {
-			changed = true;
+	let isChanged = false;
+	function walk(node: unknown): unknown {
+		if (node === dropId) {
+			isChanged = true;
 			return keepId;
 		}
-		if (Array.isArray(x)) {
-			const out = x.map(walk);
-			return x.includes(dropId)
-				? out.filter((v, i) => v !== keepId || out.indexOf(v) === i)
+		if (Array.isArray(node)) {
+			const out = node.map((item) => walk(item));
+			return node.includes(dropId)
+				? out.filter(
+						(entry, index) =>
+							entry !== keepId || out.indexOf(entry) === index
+					)
 				: out;
 		}
-		if (x !== null && typeof x === "object")
-			return Object.fromEntries(
-				Object.entries(x).map(([k, v]) => [k, walk(v)])
-			);
-		return x;
+		return node !== null && typeof node === "object"
+			? Object.fromEntries(
+					Object.entries(node).map(([key, child]) => [
+						key,
+						walk(child),
+					])
+				)
+			: node;
 	}
-	return { value: walk(value) as T, changed };
+	return { value: walk(value) as T, changed: isChanged };
 }
 
 /** Deep-remove a person id from a document value: an array drops the entry,
@@ -74,41 +80,41 @@ export function stripPersonId<T>(
 	value: T,
 	id: string
 ): { value: T; changed: boolean } {
-	let changed = false;
-	function walk(x: unknown): unknown {
-		if (Array.isArray(x))
-			return x
-				.filter((v) => {
-					if (v !== id) return true;
-					changed = true;
+	let isChanged = false;
+	function walk(node: unknown): unknown {
+		if (Array.isArray(node))
+			return node
+				.filter((entry) => {
+					if (entry !== id) return true;
+					isChanged = true;
 					return false;
 				})
-				.map(walk);
-		if (x !== null && typeof x === "object")
+				.map((item) => walk(item));
+		if (node !== null && typeof node === "object")
 			return Object.fromEntries(
-				Object.entries(x)
-					.filter(([, v]) => {
-						if (v !== id) return true;
-						changed = true;
+				Object.entries(node)
+					.filter(([, child]) => {
+						if (child !== id) return true;
+						isChanged = true;
 						return false;
 					})
-					.map(([k, v]) => [k, walk(v)])
+					.map(([key, child]) => [key, walk(child)])
 			);
-		return x;
+		return node;
 	}
-	return { value: walk(value) as T, changed };
+	return { value: walk(value) as T, changed: isChanged };
 }
 
 function jsonOf(table: { validator: unknown }): ValidatorJSON {
 	return (table.validator as { json: ValidatorJSON }).json;
 }
 
-export type RefLookup = { index: string; field: string };
+type ReferenceLookup = { index: string; field: string };
 
 /** How the merge finds the documents of one table that name a person: `index`
  *  is one lookup per listed field, `scan` reads the whole table. */
-export type RefPlan =
-	| { mode: "index"; lookups: RefLookup[] }
+type ReferencePlan =
+	| { mode: "index"; lookups: ReferenceLookup[] }
 	| { mode: "scan" };
 
 type PlannedTable = {
@@ -121,14 +127,16 @@ type PlannedTable = {
  * is a top-level id field that leads some index. A nested id, a union, or an
  * `any` anywhere in the table makes the plan a scan.
  */
-function planFor(table: PlannedTable): RefPlan {
+function planFor(table: PlannedTable): ReferencePlan {
 	const json = jsonOf(table);
 	if (json.type !== "object") return { mode: "scan" };
 	const indexes = table[" indexes"]();
-	const lookups: RefLookup[] = [];
+	const lookups: ReferenceLookup[] = [];
 	for (const [field, { fieldType }] of Object.entries(json.value)) {
-		if (!holdsPeopleId(fieldType)) continue;
-		const index = indexes.find((i) => i.fields[0] === field);
+		if (!canHoldPeopleId(fieldType)) continue;
+		const index = indexes.find(
+			(candidate) => candidate.fields[0] === field
+		);
 		if (fieldType.type !== "id" || !index) return { mode: "scan" };
 		lookups.push({ index: index.indexDescriptor, field });
 	}
@@ -136,10 +144,10 @@ function planFor(table: PlannedTable): RefPlan {
 }
 
 /** How each table that can hold a person id is searched. */
-export function peopleRefPlans(): Record<string, RefPlan> {
+export function peopleReferencePlans(): Record<string, ReferencePlan> {
 	const tables = schema.tables as Record<string, PlannedTable>;
 	return Object.fromEntries(
-		peopleRefTables().map((name) => [name, planFor(tables[name])])
+		peopleReferenceTables().map((name) => [name, planFor(tables[name])])
 	);
 }
 
@@ -147,7 +155,9 @@ export function peopleRefPlans(): Record<string, RefPlan> {
 type NamedIndexQuery = {
 	withIndex(
 		name: string,
-		range: (q: { eq(field: string, value: unknown): unknown }) => unknown
+		range: (range: {
+			eq(field: string, value: unknown): unknown;
+		}) => unknown
 	): { take(n: number): Promise<Doc<"people">[]> };
 };
 
@@ -189,38 +199,39 @@ export async function takeCharged<T>(
  * through its own id, so the table is never lost.
  */
 export async function documentsNaming(
-	ctx: QueryCtx,
+	context: QueryCtx,
 	personId: Id<"people">,
 	budget: ReadBudget = readBudget()
 ): Promise<{ problem: string } | { docs: Naming[] }> {
-	const docs = new Map<string, Naming>();
-	for (const [name, plan] of Object.entries(peopleRefPlans())) {
+	const documentsById = new Map<string, Naming>();
+	for (const [name, plan] of Object.entries(peopleReferencePlans())) {
 		const table = name as TableNames;
 		const reads =
 			plan.mode === "index"
 				? plan.lookups.map(({ index, field }) =>
 						(
-							ctx.db.query(
+							context.db.query(
 								table as "people"
 							) as unknown as NamedIndexQuery
-						).withIndex(index, (q) => q.eq(field, personId))
+						).withIndex(index, (range) => range.eq(field, personId))
 					)
-				: [ctx.db.query(table as "people")];
+				: [context.db.query(table as "people")];
 		for (const read of reads) {
 			const rows = await takeCharged(read, budget);
 			if (!rows) return { problem: overBudget(table) };
-			for (const doc of rows) docs.set(doc._id, { table, doc });
+			for (const doc of rows) documentsById.set(doc._id, { table, doc });
 		}
 	}
-	return { docs: [...docs.values()] };
+	return { docs: [...documentsById.values()] };
 }
 
 /** The dotted paths inside `value` that hold `id` (`assigneeIds.1`,
  *  `board.noteLog.0.authorId`). */
 export function pathsNaming(value: unknown, id: string, at = ""): string[] {
 	if (value === id) return [at];
-	if (value === null || typeof value !== "object") return [];
-	return Object.entries(value).flatMap(([k, v]) =>
-		pathsNaming(v, id, at ? `${at}.${k}` : k)
-	);
+	return value === null || typeof value !== "object"
+		? []
+		: Object.entries(value).flatMap(([key, child]) =>
+				pathsNaming(child, id, at ? `${at}.${key}` : key)
+			);
 }

@@ -42,8 +42,8 @@ describe("queryKeeper", () => {
 	});
 
 	it("prefetchSpec subscribes the spec's query with the row's args", () => {
-		const f = fakeClient();
-		bindQueryKeeper(f.client);
+		const fake = fakeClient();
+		bindQueryKeeper(fake.client);
 		prefetchSpec(
 			{
 				query: api.events.listEventAttendees,
@@ -51,7 +51,7 @@ describe("queryKeeper", () => {
 			},
 			"e1"
 		);
-		expect(f.onUpdate).toHaveBeenCalledWith(
+		expect(fake.onUpdate).toHaveBeenCalledWith(
 			api.events.listEventAttendees,
 			{ eventId: "e1" },
 			expect.any(Function),
@@ -67,48 +67,48 @@ describe("queryKeeper", () => {
 	});
 
 	it("ignores retain while inactive", () => {
-		const f = fakeClient();
-		bindQueryKeeper(f.client);
+		const fake = fakeClient();
+		bindQueryKeeper(fake.client);
 		setKeeperActive(false);
 		retain(api.events.listEvents, {}, LINGER_TTL);
-		expect(f.onUpdate).not.toHaveBeenCalled();
+		expect(fake.onUpdate).not.toHaveBeenCalled();
 		expect(keptCount()).toBe(0);
 	});
 
 	it("going inactive releases everything held", () => {
-		const f = fakeClient();
-		bindQueryKeeper(f.client);
+		const fake = fakeClient();
+		bindQueryKeeper(fake.client);
 		retain(api.events.listEvents, {}, LINGER_TTL);
 		setKeeperActive(false);
-		expect(f.unsubscribes[0]).toHaveBeenCalledTimes(1);
+		expect(fake.unsubscribes[0]).toHaveBeenCalledTimes(1);
 		expect(keptCount()).toBe(0);
 	});
 
 	it("subscribes once per key and releases after the ttl", () => {
-		const f = fakeClient();
-		bindQueryKeeper(f.client);
+		const fake = fakeClient();
+		bindQueryKeeper(fake.client);
 		retain(api.events.listEvents, {}, LINGER_TTL);
 		retain(api.events.listEvents, {}, LINGER_TTL);
-		expect(f.onUpdate).toHaveBeenCalledTimes(1);
+		expect(fake.onUpdate).toHaveBeenCalledTimes(1);
 		vi.advanceTimersByTime(LINGER_TTL);
-		expect(f.unsubscribes[0]).toHaveBeenCalledTimes(1);
+		expect(fake.unsubscribes[0]).toHaveBeenCalledTimes(1);
 		expect(keptCount()).toBe(0);
 	});
 
 	it("a second retain extends the hold, never shortens it", () => {
-		const f = fakeClient();
-		bindQueryKeeper(f.client);
+		const fake = fakeClient();
+		bindQueryKeeper(fake.client);
 		retain(api.events.listEvents, {}, LINGER_TTL);
 		prefetch(api.events.listEvents, {});
 		vi.advanceTimersByTime(PREFETCH_TTL);
-		expect(f.unsubscribes[0]).not.toHaveBeenCalled();
+		expect(fake.unsubscribes[0]).not.toHaveBeenCalled();
 		vi.advanceTimersByTime(LINGER_TTL - PREFETCH_TTL);
-		expect(f.unsubscribes[0]).toHaveBeenCalledTimes(1);
+		expect(fake.unsubscribes[0]).toHaveBeenCalledTimes(1);
 	});
 
 	it("different args are different keys", () => {
-		const f = fakeClient();
-		bindQueryKeeper(f.client);
+		const fake = fakeClient();
+		bindQueryKeeper(fake.client);
 		retain(
 			api.inventory.listItemsByType,
 			{ typeId: "a" as never },
@@ -119,38 +119,38 @@ describe("queryKeeper", () => {
 			{ typeId: "b" as never },
 			LINGER_TTL
 		);
-		expect(f.onUpdate).toHaveBeenCalledTimes(2);
+		expect(fake.onUpdate).toHaveBeenCalledTimes(2);
 	});
 
 	it("releases the least recently retained key past MAX_KEPT", () => {
-		const f = fakeClient();
-		bindQueryKeeper(f.client);
-		for (let i = 0; i <= MAX_KEPT; i++)
+		const fake = fakeClient();
+		bindQueryKeeper(fake.client);
+		for (let index = 0; index <= MAX_KEPT; index++)
 			retain(
 				api.inventory.listItemsByType,
-				{ typeId: String(i) as never },
+				{ typeId: String(index) as never },
 				LINGER_TTL
 			);
 		expect(keptCount()).toBe(MAX_KEPT);
-		expect(f.unsubscribes[0]).toHaveBeenCalledTimes(1);
+		expect(fake.unsubscribes[0]).toHaveBeenCalledTimes(1);
 	});
 
 	it("releaseAll and rebinding drop every subscription", () => {
-		const f = fakeClient();
-		bindQueryKeeper(f.client);
+		const fake = fakeClient();
+		bindQueryKeeper(fake.client);
 		retain(api.events.listEvents, {}, LINGER_TTL);
 		releaseAll();
-		expect(f.unsubscribes[0]).toHaveBeenCalledTimes(1);
+		expect(fake.unsubscribes[0]).toHaveBeenCalledTimes(1);
 		retain(api.events.listEvents, {}, LINGER_TTL);
 		bindQueryKeeper(undefined);
-		expect(f.unsubscribes[1]).toHaveBeenCalledTimes(1);
+		expect(fake.unsubscribes[1]).toHaveBeenCalledTimes(1);
 	});
 
 	it("skips a disabled client", () => {
-		const f = fakeClient();
-		(f.client as unknown as { disabled: boolean }).disabled = true;
-		bindQueryKeeper(f.client);
+		const fake = fakeClient();
+		(fake.client as unknown as { disabled: boolean }).disabled = true;
+		bindQueryKeeper(fake.client);
 		retain(api.events.listEvents, {}, LINGER_TTL);
-		expect(f.onUpdate).not.toHaveBeenCalled();
+		expect(fake.onUpdate).not.toHaveBeenCalled();
 	});
 });

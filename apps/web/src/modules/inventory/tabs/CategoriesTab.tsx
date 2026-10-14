@@ -19,13 +19,13 @@ export function CategoriesTab(props: {
 			columns={() => categoryColumns()}
 			selection={props.selection}
 			descriptor={categoryEntity}
-			renderDrawer={(d) => (
+			renderDrawer={(drawer) => (
 				<CategoryDrawer
-					open={d.open()}
-					onOpenChange={d.onOpenChange}
-					category={d.row()}
+					open={drawer.open()}
+					onOpenChange={drawer.onOpenChange}
+					category={drawer.row()}
 					loading={props.selection.loading()}
-					nav={d.nav}
+					nav={drawer.nav}
 				/>
 			)}
 		/>

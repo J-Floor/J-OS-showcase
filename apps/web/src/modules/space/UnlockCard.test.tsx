@@ -37,7 +37,7 @@ const {
 	 *  loading. `read` is pointed at a signal below, so the card re-renders
 	 *  when a test changes a row. */
 	const attemptRows: { read: (id: string) => unknown } = {
-		read: () => undefined,
+		read: () => {},
 	};
 	/** How many `doorLog.attempt` subscriptions are open: each `useQuery`
 	 *  opens one, its owner's cleanup closes it. */
@@ -63,34 +63,34 @@ vi.mock("convex-solidjs", async () => {
 		});
 	}
 	return {
-		useAction: (ref: Parameters<typeof getFunctionName>[0]) => ({
+		useAction: (reference: Parameters<typeof getFunctionName>[0]) => ({
 			mutate: vi.fn(),
 			mutateAsync:
 				{
 					"doorActions:lockDoor": lockAsync,
 					"doorActions:doorPosition": positionAsync,
-				}[getFunctionName(ref)] ?? mutateAsync,
+				}[getFunctionName(reference)] ?? mutateAsync,
 			isLoading: () => false,
-			data: () => undefined,
-			error: () => undefined,
+			data: () => {},
+			error: () => {},
 		}),
 		useQuery: (
-			ref: Parameters<typeof getFunctionName>[0],
+			reference: Parameters<typeof getFunctionName>[0],
 			args: unknown
 		) => {
-			const name = getFunctionName(ref);
+			const name = getFunctionName(reference);
 			if (name === "doorLog:attempt") openAttemptQuery();
 			return name === "doorLog:attempt"
 				? {
 						data: () =>
 							attemptRows.read((args as { id: string }).id),
 						isLoading: () => false,
-						error: () => undefined,
+						error: () => {},
 					}
 				: {
 						data: () => currentPerson.value,
 						isLoading: () => false,
-						error: () => undefined,
+						error: () => {},
 					};
 		},
 	};
@@ -545,7 +545,9 @@ test("an offline result shows its copy in the slot, and the button returns after
 });
 
 function spokenStatuses() {
-	return screen.queryAllByRole("status").filter((el) => el.textContent);
+	return screen
+		.queryAllByRole("status")
+		.filter((element) => element.textContent);
 }
 
 const REFRESH = "Check again";
@@ -618,7 +620,7 @@ test("the countdown never renders 0s, and the button is absent until durationMs 
 		});
 		await Promise.resolve();
 		observer.disconnect();
-		expect(seen.some((t) => t.includes("(0s)"))).toBe(false);
+		expect(seen.some((text) => text.includes("(0s)"))).toBe(false);
 		expect(screen.queryByText(/0s/)).not.toBeInTheDocument();
 	} finally {
 		vi.useRealTimers();

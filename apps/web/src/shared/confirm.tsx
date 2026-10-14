@@ -48,21 +48,21 @@ export function useConfirm(): Confirm {
  */
 export function ConfirmProvider(props: ParentProps): JSX.Element {
 	const [open, setOpen] = createSignal(false);
-	const [opts, setOpts] = createSignal<ConfirmOptions>({ title: "" });
-	let resolver: ((value: boolean) => void) | null = null;
-	let confirmRef: HTMLElement | undefined = undefined;
+	const [options, setOptions] = createSignal<ConfirmOptions>({ title: "" });
+	let resolver: ((isConfirmed: boolean) => void) | null = null;
+	let confirmReference: HTMLElement | undefined;
 
 	function confirm(options: ConfirmOptions): Promise<boolean> {
-		setOpts(options);
+		setOptions(options);
 		setOpen(true);
 		return new Promise<boolean>((resolve) => {
 			resolver = resolve;
 		});
 	}
 
-	function settle(value: boolean): void {
+	function settle(isConfirmed: boolean): void {
 		setOpen(false);
-		resolver?.(value);
+		resolver?.(isConfirmed);
 		resolver = null;
 	}
 
@@ -71,17 +71,17 @@ export function ConfirmProvider(props: ParentProps): JSX.Element {
 			{props.children}
 			<Dialog.Root
 				open={open()}
-				initialFocusEl={() => confirmRef ?? null}
-				onOpenChange={(d) => {
+				initialFocusEl={() => confirmReference ?? null}
+				onOpenChange={(details) => {
 					// Dismissing (Esc / backdrop / Cancel) counts as "no".
-					if (!d.open) settle(false);
+					if (!details.open) settle(false);
 				}}
 			>
 				<Dialog.Content>
-					<Dialog.Title>{opts().title}</Dialog.Title>
-					<Show when={opts().message}>
+					<Dialog.Title>{options().title}</Dialog.Title>
+					<Show when={options().message}>
 						<Dialog.Description>
-							{opts().message}
+							{options().message}
 						</Dialog.Description>
 					</Show>
 					<div class={styles.footer}>
@@ -106,9 +106,11 @@ export function ConfirmProvider(props: ParentProps): JSX.Element {
 						 * way.
 						 */}
 						<Button
-							ref={(el: HTMLElement) => (confirmRef = el)}
+							ref={(element: HTMLElement) =>
+								(confirmReference = element)
+							}
 							variant={
-								opts().tone === "danger"
+								options().tone === "danger"
 									? "secondary"
 									: "primary"
 							}
@@ -116,7 +118,7 @@ export function ConfirmProvider(props: ParentProps): JSX.Element {
 								settle(true);
 							}}
 						>
-							{opts().confirmLabel ?? "Confirm"}
+							{options().confirmLabel ?? "Confirm"}
 						</Button>
 					</div>
 				</Dialog.Content>

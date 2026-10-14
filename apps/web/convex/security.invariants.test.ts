@@ -49,7 +49,7 @@ const PUBLIC_ON_PURPOSE: Record<string, string> = {
 
 /** Calls that establish who the caller is (and, for requireRole, what they may do). */
 const GATE_CALL =
-	/\b(?:requireRole|personForCurrentUser)\(|\bctx\.auth\.getUserIdentity\(/;
+	/\b(?:requireRole|personForCurrentUser)\(|\b[A-Za-z_$][\w$]*\.auth\.getUserIdentity\(/;
 
 /** `export const name = builder(` (an optional type annotation allowed). */
 const PUBLIC_EXPORT =
@@ -81,9 +81,9 @@ const DOOR_FACTORY_IMPORTER = "lib/doorProviderEnv.ts";
 // Source reading and a minimal tokenizer
 // ---------------------------------------------------------------------------
 
-function listSourceFiles(dir: string): string[] {
-	return readdirSync(dir).flatMap((name) => {
-		const full = join(dir, name);
+function listSourceFiles(directory: string): string[] {
+	return readdirSync(directory).flatMap((name) => {
+		const full = join(directory, name);
 		if (name === "_generated") return [];
 		if (statSync(full).isDirectory()) return listSourceFiles(full);
 		const isSource =
@@ -104,28 +104,28 @@ function convexSources(): Sources {
 }
 
 function blank(text: string): string {
-	return text.replace(/[^\n]/g, " ");
+	return text.replaceAll(/[^\n]/g, " ");
 }
 
 /** Index just past the string, template or regex literal opening at `start`. */
-function literalEnd(src: string, start: number): number {
-	const quote = src.charAt(start);
-	let inClass = false;
-	for (let i = start + 1; i < src.length; i++) {
-		const c = src.charAt(i);
-		if (c === "\\") {
-			i++;
-		} else if (quote === "/" && c === "[") {
-			inClass = true;
-		} else if (quote === "/" && c === "]") {
-			inClass = false;
-		} else if (c === quote && !inClass) {
-			return i + 1;
-		} else if (c === "\n" && quote !== "`") {
-			return i;
+function literalEnd(source: string, start: number): number {
+	const quote = source.charAt(start);
+	let isInClass = false;
+	for (let index = start + 1; index < source.length; index++) {
+		const character = source.charAt(index);
+		if (character === "\\") {
+			index++;
+		} else if (quote === "/" && character === "[") {
+			isInClass = true;
+		} else if (quote === "/" && character === "]") {
+			isInClass = false;
+		} else if (character === quote && !isInClass) {
+			return index + 1;
+		} else if (character === "\n" && quote !== "`") {
+			return index;
 		}
 	}
-	return src.length;
+	return source.length;
 }
 
 /** Characters after which a `/` opens a regex literal rather than dividing. */
@@ -147,53 +147,53 @@ const REGEX_PRECEDERS = new Set([
 
 /**
  * The source with comments blanked out (same length, newlines kept so
- * offsets and line numbers still line up). With `keepStrings: false`, string,
+ * offsets and line numbers still line up). With `shouldKeepStrings: false`, string,
  * template and regex contents are blanked too, leaving only code: a gate named
  * in a comment or an error message does not count as a gate.
  */
-function scrub(src: string, keepStrings: boolean): string {
+function scrub(source: string, shouldKeepStrings: boolean): string {
 	let out = "";
 	let last = "";
-	let i = 0;
-	while (i < src.length) {
-		const c = src.charAt(i);
-		const next = src.charAt(i + 1);
-		let stop = i + 1;
-		if (c === "/" && next === "/") {
-			const newline = src.indexOf("\n", i);
-			stop = newline === -1 ? src.length : newline;
-			out += blank(src.slice(i, stop));
-		} else if (c === "/" && next === "*") {
-			const close = src.indexOf("*/", i + 2);
-			stop = close === -1 ? src.length : close + 2;
-			out += blank(src.slice(i, stop));
+	let index = 0;
+	while (index < source.length) {
+		const character = source.charAt(index);
+		const next = source.charAt(index + 1);
+		let stop = index + 1;
+		if (character === "/" && next === "/") {
+			const newline = source.indexOf("\n", index);
+			stop = newline === -1 ? source.length : newline;
+			out += blank(source.slice(index, stop));
+		} else if (character === "/" && next === "*") {
+			const close = source.indexOf("*/", index + 2);
+			stop = close === -1 ? source.length : close + 2;
+			out += blank(source.slice(index, stop));
 		} else if (
-			c === '"' ||
-			c === "'" ||
-			c === "`" ||
-			(c === "/" && REGEX_PRECEDERS.has(last))
+			character === '"' ||
+			character === "'" ||
+			character === "`" ||
+			(character === "/" && REGEX_PRECEDERS.has(last))
 		) {
-			stop = literalEnd(src, i);
-			const literal = src.slice(i, stop);
-			out += keepStrings
+			stop = literalEnd(source, index);
+			const literal = source.slice(index, stop);
+			out += shouldKeepStrings
 				? literal
-				: c + blank(literal.slice(1, -1)) + literal.slice(-1);
-			last = c;
+				: character + blank(literal.slice(1, -1)) + literal.slice(-1);
+			last = character;
 		} else {
-			out += c;
-			if (c.trim() !== "") last = c;
+			out += character;
+			if (character.trim() !== "") last = character;
 		}
-		i = stop;
+		index = stop;
 	}
 	return out;
 }
 
-function codeOf(src: string): string {
-	return scrub(src, false);
+function codeOf(source: string): string {
+	return scrub(source, false);
 }
 
-function lineOf(src: string, index: number): number {
-	return src.slice(0, index).split("\n").length;
+function lineOf(source: string, index: number): number {
+	return source.slice(0, index).split("\n").length;
 }
 
 /** Index of the bracket closing the one at `open` (same bracket type). */
@@ -201,12 +201,12 @@ function matchingClose(code: string, open: number): number {
 	const opener = code.charAt(open);
 	const closer = opener === "(" ? ")" : "}";
 	let depth = 0;
-	for (let i = open; i < code.length; i++) {
-		const c = code.charAt(i);
-		if (c === opener) depth++;
-		else if (c === closer) {
+	for (let index = open; index < code.length; index++) {
+		const character = code.charAt(index);
+		if (character === opener) depth++;
+		else if (character === closer) {
 			depth--;
-			if (depth === 0) return i;
+			if (depth === 0) return index;
 		}
 	}
 	return code.length;
@@ -218,18 +218,25 @@ const TYPE_BRACE_PRECEDERS = new Set(["<", ":", "|", "&", "(", ",", "="]);
 /** The body brace of a function whose parameter list closes at `paramsEnd`,
  *  skipping object types in the return annotation; -1 when it has none. */
 function bodyOpen(code: string, paramsEnd: number): number {
-	for (let i = paramsEnd + 1; i < code.length; i++) {
-		const c = code.charAt(i);
-		if (c === ";" || c === "=") return -1;
-		if (c !== "{") continue;
-		const before = code.slice(paramsEnd + 1, i).trimEnd();
-		if (!TYPE_BRACE_PRECEDERS.has(before.slice(-1))) return i;
-		i = matchingClose(code, i);
+	let index = paramsEnd + 1;
+	while (index < code.length) {
+		const character = code.charAt(index);
+		if (character === ";" || character === "=") return -1;
+		if (character !== "{") {
+			index++;
+			continue;
+		}
+		const before = code.slice(paramsEnd + 1, index).trimEnd();
+		if (!TYPE_BRACE_PRECEDERS.has(before.slice(-1))) return index;
+		index = matchingClose(code, index) + 1;
 	}
 	return -1;
 }
 
 type FunctionBlock = { name: string; start: number; end: number };
+
+const FUNCTION_DECLARATION = String.raw`\bfunction\s+(\w+)\s*(?:<[^>(]*>\s*)?\(`;
+const METHOD_DECLARATION = String.raw`^[\t ]*(?:async\s+)?(\w+)\s*\(`;
 
 const NOT_A_FUNCTION = new Set([
 	"if",
@@ -243,19 +250,22 @@ const NOT_A_FUNCTION = new Set([
 
 /**
  * Named functions in `code`: `function name(` declarations, and with
- * `withMethods` also object-literal methods (`name(…) {` at a line start).
+ * `shouldIncludeMethods` also object-literal methods (`name(…) {` at a line start).
  */
-function functionBlocks(code: string, withMethods: boolean): FunctionBlock[] {
-	const header = withMethods
-		? /\bfunction\s+(\w+)\s*(?:<[^>(]*>)?\s*\(|^[\t ]*(?:async\s+)?(\w+)\s*\(/gm
-		: /\bfunction\s+(\w+)\s*(?:<[^>(]*>)?\s*\(/g;
+function functionBlocks(
+	code: string,
+	shouldIncludeMethods: boolean
+): FunctionBlock[] {
+	const header = shouldIncludeMethods
+		? new RegExp(`${FUNCTION_DECLARATION}|${METHOD_DECLARATION}`, "gm")
+		: new RegExp(FUNCTION_DECLARATION, "g");
 	const blocks: FunctionBlock[] = [];
-	for (const m of code.matchAll(header)) {
-		const name = m[1] || m[2];
+	for (const match of code.matchAll(header)) {
+		const name = match[1] || match[2];
 		if (NOT_A_FUNCTION.has(name)) continue;
 		const open = bodyOpen(
 			code,
-			matchingClose(code, m.index + m[0].length - 1)
+			matchingClose(code, match.index + match[0].length - 1)
 		);
 		if (open === -1) continue;
 		blocks.push({ name, start: open, end: matchingClose(code, open) });
@@ -263,12 +273,21 @@ function functionBlocks(code: string, withMethods: boolean): FunctionBlock[] {
 	return blocks;
 }
 
+/** True when the identifier at `index` is the name in a `function name(`
+ *  declaration rather than a call. */
+function isFunctionDeclaration(code: string, index: number): boolean {
+	return code.slice(0, index).trimEnd().endsWith("function");
+}
+
 /** Names of the functions containing `index`, innermost first. */
 function enclosingFunctions(blocks: FunctionBlock[], index: number): string[] {
-	return blocks
-		.filter((b) => b.start < index && index < b.end)
-		.sort((a, b) => b.start - a.start)
-		.map((b) => b.name);
+	return (
+		blocks
+			.filter((block) => block.start < index && index < block.end)
+			// eslint-disable-next-line id-length -- conventional comparator parameter names
+			.sort((a, b) => b.start - a.start)
+			.map((block) => block.name)
+	);
 }
 
 /** The text of the builder call opening at `open`; throws if it runs into the
@@ -286,22 +305,23 @@ function callText(file: string, code: string, open: number): string {
 function relativeImports(
 	file: string,
 	code: string,
-	src: string
+	source: string
 ): Map<string, string> {
 	const out = new Map<string, string>();
-	for (const m of code.matchAll(
+	for (const match of code.matchAll(
 		/\bimport\s+(?:type\s+)?\{([^}]*)\}\s*from\s*"/g
 	)) {
-		const specStart = m.index + m[0].length;
-		const spec = src.slice(specStart, src.indexOf('"', specStart));
+		const specStart = match.index + match[0].length;
+		const spec = source.slice(specStart, source.indexOf('"', specStart));
 		if (!spec.startsWith(".")) continue;
 		const joined = posix.normalize(posix.join(posix.dirname(file), spec));
 		const target = joined.endsWith(".ts") ? joined : `${joined}.ts`;
-		for (const part of m[1].split(",")) {
+		const parts = match[1].split(",");
+		for (const part of parts) {
 			const [exported, local] = part
 				.replace(/^\s*type\s+/, "")
-				.split(/\s+as\s+/)
-				.map((s) => s.trim());
+				.split(/\bas\b/)
+				.map((segment) => segment.trim());
 			if (exported) out.set(local || exported, `${target}#${exported}`);
 		}
 	}
@@ -309,7 +329,7 @@ function relativeImports(
 }
 
 /** The `internal.a.b.name` reference for export `name` of `file`. */
-function internalRef(file: string, name: string): string {
+function internalReference(file: string, name: string): string {
 	return `internal.${file.replace(/\.ts$/, "").replaceAll("/", ".")}.${name}`;
 }
 
@@ -329,13 +349,17 @@ type GateIndex = {
 	imports: Map<string, Map<string, string>>;
 };
 
-function referencesGate(file: string, text: string, index: GateIndex): boolean {
+function doesReferenceGate(
+	file: string,
+	text: string,
+	index: GateIndex
+): boolean {
 	if (GATE_CALL.test(text)) return true;
-	for (const m of text.matchAll(/\binternal(?:\.\w+)+/g))
-		if (index.internals.has(m[0])) return true;
-	for (const m of text.matchAll(/\b\w+\b/g)) {
-		if (index.helpers.has(`${file}#${m[0]}`)) return true;
-		const imported = index.imports.get(file)?.get(m[0]);
+	for (const match of text.matchAll(/\binternal(?:\.\w+)+/g))
+		if (index.internals.has(match[0])) return true;
+	for (const match of text.matchAll(/\b\w+\b/g)) {
+		if (index.helpers.has(`${file}#${match[0]}`)) return true;
+		const imported = index.imports.get(file)?.get(match[0]);
 		if (imported !== undefined && index.helpers.has(imported)) return true;
 	}
 	return false;
@@ -360,35 +384,38 @@ function gateIndex(sources: Sources): GateIndex {
 		internal: boolean;
 		text: string;
 	}[] = [];
-	for (const [file, src] of sources) {
-		const code = codeOf(src);
-		index.imports.set(file, relativeImports(file, code, src));
-		for (const b of functionBlocks(code, false))
+	for (const [file, source] of sources) {
+		const code = codeOf(source);
+		index.imports.set(file, relativeImports(file, code, source));
+		for (const block of functionBlocks(code, false))
 			candidates.push({
 				file,
-				key: `${file}#${b.name}`,
+				key: `${file}#${block.name}`,
 				internal: false,
-				text: code.slice(b.start, b.end),
+				text: code.slice(block.start, block.end),
 			});
-		for (const m of code.matchAll(
+		for (const match of code.matchAll(
 			/^export const (\w+)\s*=\s*internal(?:Query|Mutation|Action)\(/gm
 		))
 			candidates.push({
 				file,
-				key: internalRef(file, m[1]),
+				key: internalReference(file, match[1]),
 				internal: true,
-				text: callText(file, code, m.index + m[0].length - 1),
+				text: callText(file, code, match.index + match[0].length - 1),
 			});
 	}
-	let changed = true;
-	while (changed) {
-		changed = false;
-		for (const c of candidates) {
-			const set = c.internal ? index.internals : index.helpers;
-			if (set.has(c.key) || !referencesGate(c.file, c.text, index))
+	let isChanged = true;
+	while (isChanged) {
+		isChanged = false;
+		for (const candidate of candidates) {
+			const set = candidate.internal ? index.internals : index.helpers;
+			if (
+				set.has(candidate.key) ||
+				!doesReferenceGate(candidate.file, candidate.text, index)
+			)
 				continue;
-			set.add(c.key);
-			changed = true;
+			set.add(candidate.key);
+			isChanged = true;
 		}
 	}
 	return index;
@@ -400,27 +427,27 @@ function publicFunctions(
 	sources: Sources
 ): { file: string; key: string; text: string }[] {
 	const out: { file: string; key: string; text: string }[] = [];
-	for (const [file, src] of sources) {
-		const code = codeOf(src);
+	for (const [file, source] of sources) {
+		const code = codeOf(source);
 		const exported = new Set<number>();
-		for (const m of code.matchAll(PUBLIC_EXPORT)) {
-			const open = m.index + m[0].length - 1;
+		for (const match of code.matchAll(PUBLIC_EXPORT)) {
+			const open = match.index + match[0].length - 1;
 			exported.add(open);
 			out.push({
 				file,
-				key: `${file}:${m[1]}`,
+				key: `${file}:${match[1]}`,
 				text: callText(file, code, open),
 			});
 		}
-		for (const m of code.matchAll(/\bhttpAction\(/g)) {
-			const open = m.index + m[0].length - 1;
+		for (const match of code.matchAll(/\bhttpAction\(/g)) {
+			const open = match.index + match[0].length - 1;
 			if (exported.has(open)) continue;
 			const path = [
-				...code.slice(0, m.index).matchAll(/\bpath:\s*([^,\n]+)/g),
+				...code.slice(0, match.index).matchAll(/\bpath:\s*([^,\n]+)/g),
 			].pop();
 			const route = path
 				? path[1].trim()
-				: `line ${String(lineOf(code, m.index))}`;
+				: `line ${String(lineOf(code, match.index))}`;
 			out.push({
 				file,
 				key: `${file}:route ${route}`,
@@ -439,25 +466,33 @@ function publicFunctions(
 function ungatedPublicFunctions(sources: Sources): string[] {
 	const index = gateIndex(sources);
 	return publicFunctions(sources)
-		.filter((f) => !referencesGate(f.file, f.text, index))
-		.map((f) => f.key);
+		.filter(
+			(publicFunction) =>
+				!doesReferenceGate(
+					publicFunction.file,
+					publicFunction.text,
+					index
+				)
+		)
+		.map((publicFunction) => publicFunction.key);
 }
 
 /** Value imports of a public builder from `_generated/server`, with the local
  *  name each is bound to. */
 function publicBuilderImports(
-	src: string
+	source: string
 ): { builder: string; local: string }[] {
 	const out: { builder: string; local: string }[] = [];
-	for (const m of src.matchAll(
+	for (const match of source.matchAll(
 		/\bimport\s+(type\s+)?\{([^}]*)\}\s*from\s*"(?:\.\.?\/)+_generated\/server"/g
 	)) {
-		if (m[1]) continue;
-		for (const part of m[2].split(",")) {
+		if (match[1]) continue;
+		const parts = match[2].split(",");
+		for (const part of parts) {
 			const [builder, local = builder] = part
 				.trim()
-				.split(/\s+as\s+/)
-				.map((s) => s.trim());
+				.split(/\bas\b/)
+				.map((segment) => segment.trim());
 			if (PUBLIC_BUILDER.test(builder)) out.push({ builder, local });
 		}
 	}
@@ -469,25 +504,26 @@ function publicBuilderImports(
  *  (a builder wrapped in a helper, or assigned and exported later). */
 function hiddenPublicBuilders(sources: Sources): string[] {
 	const out: string[] = [];
-	for (const [file, src] of sources) {
-		const code = codeOf(src);
+	for (const [file, source] of sources) {
+		const code = codeOf(source);
 		const exported = new Set(
 			[...code.matchAll(PUBLIC_EXPORT)].map(
-				(m) => m.index + m[0].length - 1
+				(match) => match.index + match[0].length - 1
 			)
 		);
-		for (const { builder, local } of publicBuilderImports(src)) {
+		for (const { builder, local } of publicBuilderImports(source)) {
 			if (builder === "httpAction") continue;
 			const call = new RegExp(
 				`(?<![\\w$.])${escapeRegExp(local)}\\(`,
 				"g"
 			);
-			for (const m of code.matchAll(call)) {
-				if (exported.has(m.index + m[0].length - 1)) continue;
+			const hiddenCalls = [...code.matchAll(call)].filter(
+				(match) => !exported.has(match.index + match[0].length - 1)
+			);
+			for (const match of hiddenCalls)
 				out.push(
-					`${file}:${String(lineOf(code, m.index))} calls ${builder} outside export const`
+					`${file}:${String(lineOf(code, match.index))} calls ${builder} outside export const`
 				);
-			}
 		}
 	}
 	return out;
@@ -499,11 +535,11 @@ function hiddenPublicBuilders(sources: Sources): string[] {
 
 function operatorModuleViolations(sources: Sources): string[] {
 	const out: string[] = [];
-	for (const [file, src] of sources) {
+	for (const [file, source] of sources) {
 		if (!OPERATOR_MODULE.test(posix.basename(file))) continue;
-		for (const m of codeOf(src).matchAll(PUBLIC_EXPORT))
-			out.push(`${file}:${m[1]} is a public ${m[2]}`);
-		for (const { builder } of publicBuilderImports(src))
+		for (const match of codeOf(source).matchAll(PUBLIC_EXPORT))
+			out.push(`${file}:${match[1]} is a public ${match[2]}`);
+		for (const { builder } of publicBuilderImports(source))
 			out.push(`${file} imports the public builder ${builder}`);
 	}
 	return out;
@@ -515,11 +551,13 @@ function operatorModuleViolations(sources: Sources): string[] {
 
 function tokenMintViolations(sources: Sources): string[] {
 	const out: string[] = [];
-	for (const [file, src] of sources) {
+	for (const [file, source] of sources) {
 		if (file === TOKEN_MINTER) continue;
-		const text = scrub(src, true);
-		for (const m of text.matchAll(/\.insert\(\s*["'`]confirmTokens["'`]/g))
-			out.push(`${file}:${String(lineOf(text, m.index))}`);
+		const text = scrub(source, true);
+		for (const match of text.matchAll(
+			/\.insert\(\s*["'`]confirmTokens["'`]/g
+		))
+			out.push(`${file}:${String(lineOf(text, match.index))}`);
 	}
 	return out;
 }
@@ -533,72 +571,83 @@ function tokenMintViolations(sources: Sources): string[] {
 /** Top-level statement starts (column 0), for "earlier in this function". */
 function topLevelStart(code: string, index: number): number {
 	let start = 0;
-	for (const m of code.matchAll(/^(?:export |async |function |const )/gm)) {
-		if (m.index > index) break;
-		start = m.index;
+	for (const match of code.matchAll(
+		/^(?:export |async |function |const )/gm
+	)) {
+		if (match.index > index) break;
+		start = match.index;
 	}
 	return start;
 }
 
-function adapterViolations(src: string): string[] {
+function adapterViolations(source: string): string[] {
 	const out: string[] = [];
-	const code = codeOf(src);
-	const text = scrub(src, true);
+	const code = codeOf(source);
+	const text = scrub(source, true);
 	const blocks = functionBlocks(code, true);
 	function at(index: number): string {
 		return `${DOOR_ADAPTER}:${String(lineOf(code, index))}`;
 	}
 
-	const switchFn = blocks.find((b) => b.name === "doorWritesEnabled");
+	const switchFunction = blocks.find(
+		(block) => block.name === "doorWritesEnabled"
+	);
 	if (
-		!switchFn ||
+		!switchFunction ||
 		!/process\.env\.NUKI_WRITE_ENABLED\s*===\s*"1"/.test(
-			text.slice(switchFn.start, switchFn.end)
+			text.slice(switchFunction.start, switchFunction.end)
 		)
 	)
 		out.push(
 			`${DOOR_ADAPTER}: doorWritesEnabled() must be process.env.NUKI_WRITE_ENABLED === "1"`
 		);
 
-	for (const m of text.matchAll(/\breq\(\s*deps\s*,\s*(?:"([A-Z]+)")?/g)) {
-		const method = m[1];
+	for (const match of text.matchAll(
+		/\brequest\(\s*deps\s*,\s*(?:"([A-Z]+)")?/g
+	)) {
+		const method = match[1];
 		if (!method) {
 			out.push(
-				`${at(m.index)}: request method is not a literal, so it cannot be checked`
+				`${at(match.index)}: request method is not a literal, so it cannot be checked`
 			);
 		} else if (method !== "GET") {
-			const fn = enclosingFunctions(blocks, m.index)[0];
-			if (!DOOR_WRITE_METHODS.includes(fn))
+			const function_ = enclosingFunctions(blocks, match.index)[0];
+			if (!DOOR_WRITE_METHODS.includes(function_))
 				out.push(
-					`${at(m.index)}: ${method} request in ${fn}; add it to DOOR_WRITE_METHODS so its call sites are checked`
+					`${at(match.index)}: ${method} request in ${function_}; add it to DOOR_WRITE_METHODS so its call sites are checked`
 				);
 		}
 	}
 
-	for (const m of code.matchAll(/\bfetch\(/g))
-		if (!enclosingFunctions(blocks, m.index).includes("req"))
+	for (const match of code.matchAll(/\bfetch\(/g))
+		if (!enclosingFunctions(blocks, match.index).includes("request"))
 			out.push(
-				`${at(m.index)}: fetch outside req(); every lock request must go through req()`
+				`${at(match.index)}: fetch outside request(); every lock request must go through request()`
 			);
 
-	const factory = blocks.find((b) => b.name === "doorProviderFromEnv");
+	const factory = blocks.find(
+		(block) => block.name === "doorProviderFromEnvironment"
+	);
 	const factoryBody = factory ? code.slice(factory.start, factory.end) : "";
 	const guard =
-		/if\s*\(\s*opts\.requireWrites\s*&&\s*!doorWritesEnabled\(\)\s*\)\s*throw\b/.exec(
+		/if\s*\(\s*options\.requireWrites\s*&&\s*!doorWritesEnabled\(\)\s*\)\s*throw\b/.exec(
 			factoryBody
 		);
 	const build = factoryBody.indexOf("nukiProvider(");
 	if (!guard || build === -1 || guard.index > build)
 		out.push(
-			`${DOOR_ADAPTER}: doorProviderFromEnv must throw when requireWrites is set and doorWritesEnabled() is false, before building the provider`
+			`${DOOR_ADAPTER}: doorProviderFromEnvironment must throw when requireWrites is set and doorWritesEnabled() is false, before building the provider`
 		);
 
-	for (const m of code.matchAll(/(?<!function\s+)\bnukiProvider\(/g))
+	for (const match of code.matchAll(/\bnukiProvider\(/g))
 		if (
-			!enclosingFunctions(blocks, m.index).includes("doorProviderFromEnv")
+			!isFunctionDeclaration(code, match.index) &&
+			!enclosingFunctions(blocks, match.index).includes(
+				"doorProviderFromEnvironment"
+			)
 		)
 			out.push(
-				`${at(m.index)}: nukiProvider built outside doorProviderFromEnv, past the write switch`
+				`${at(match.index)}: nukiProvider built outside doorProviderFromEnvironment, past the write switch`
 			);
 	return out;
 }
@@ -613,22 +662,21 @@ function doorWriteViolations(sources: Sources): string[] {
 		"g"
 	);
 
-	for (const [file, src] of sources) {
+	for (const [file, source] of sources) {
 		if (file === DOOR_ADAPTER) continue;
-		const code = codeOf(src);
-		const text = scrub(src, true);
+		const code = codeOf(source);
+		const text = scrub(source, true);
 
 		if (/\bNUKI_WRITE_ENABLED\b/.test(text))
 			out.push(
 				`${file}: reads NUKI_WRITE_ENABLED; only ${DOOR_ADAPTER} may, through doorWritesEnabled()`
 			);
 
-		for (const m of code.matchAll(
-			/(?<!function\s+)\bsetDoorProviderForTests\(/g
-		))
-			out.push(
-				`${file}:${String(lineOf(code, m.index))}: setDoorProviderForTests outside a test bypasses the write switch`
-			);
+		for (const match of code.matchAll(/\bsetDoorProviderForTests\(/g))
+			if (!isFunctionDeclaration(code, match.index))
+				out.push(
+					`${file}:${String(lineOf(code, match.index))}: setDoorProviderForTests outside a test bypasses the write switch`
+				);
 
 		if (
 			new RegExp(
@@ -638,7 +686,7 @@ function doorWriteViolations(sources: Sources): string[] {
 			out.push(
 				`${file}: namespace import of ${DOOR_ADAPTER}; import the names it needs`
 			);
-		for (const [local, target] of relativeImports(file, code, src)) {
+		for (const [local, target] of relativeImports(file, code, source)) {
 			const [targetFile, exported] = target.split("#");
 			if (targetFile !== DOOR_ADAPTER) continue;
 			if (DOOR_UNGATED_EXPORTS.includes(exported))
@@ -646,7 +694,7 @@ function doorWriteViolations(sources: Sources): string[] {
 					`${file}: imports ${exported} from ${DOOR_ADAPTER}, which skips the write switch; use doorProvider({ requireWrites: true })`
 				);
 			if (
-				exported === "doorProviderFromEnv" &&
+				exported === "doorProviderFromEnvironment" &&
 				file !== DOOR_FACTORY_IMPORTER
 			)
 				out.push(
@@ -655,21 +703,24 @@ function doorWriteViolations(sources: Sources): string[] {
 		}
 
 		const switchHelpers = functionBlocks(code, false)
-			.filter((b) =>
-				/\bdoorWritesEnabled\(/.test(code.slice(b.start, b.end))
+			.filter((block) =>
+				/\bdoorWritesEnabled\(/.test(code.slice(block.start, block.end))
 			)
-			.map((b) => b.name);
-		for (const m of code.matchAll(writeCall)) {
-			const before = code.slice(topLevelStart(code, m.index), m.index);
-			const gated =
+			.map((block) => block.name);
+		for (const match of code.matchAll(writeCall)) {
+			const before = code.slice(
+				topLevelStart(code, match.index),
+				match.index
+			);
+			const isGated =
 				/\brequireWrites:\s*true\b/.test(before) ||
 				/\bdoorWritesEnabled\(/.test(before) ||
-				switchHelpers.some((h) =>
-					new RegExp(`\\b${h}\\(`).test(before)
+				switchHelpers.some((helper) =>
+					new RegExp(`\\b${helper}\\(`).test(before)
 				);
-			if (!gated)
+			if (!isGated)
 				out.push(
-					`${file}:${String(lineOf(code, m.index))}: .${m[1]}() without the write switch; build the provider with doorProvider({ requireWrites: true }) or check doorWritesEnabled() first`
+					`${file}:${String(lineOf(code, match.index))}: .${match[1]}() without the write switch; build the provider with doorProvider({ requireWrites: true }) or check doorWritesEnabled() first`
 				);
 		}
 	}
@@ -727,8 +778,8 @@ describe("security invariants (convex/)", () => {
 
 	it("operator modules export only internal functions", () => {
 		expect(
-			[...sources.keys()].filter((f) =>
-				OPERATOR_MODULE.test(posix.basename(f))
+			[...sources.keys()].filter((file) =>
+				OPERATOR_MODULE.test(posix.basename(file))
 			)
 		).toEqual(
 			expect.arrayContaining([
@@ -801,7 +852,10 @@ describe("security invariants self-checks", () => {
 				`http.route({ path: SECRET_PATH, method: "GET", handler: httpAction(async () => new Response("ok")) });`,
 			],
 		]);
-		expect(ungatedPublicFunctions(sample).sort()).toEqual([
+		expect(
+			// eslint-disable-next-line id-length -- conventional comparator parameter names
+			ungatedPublicFunctions(sample).sort((a, b) => a.localeCompare(b))
+		).toEqual([
 			"http.ts:route SECRET_PATH",
 			"sample.ts:commented",
 			"sample.ts:leak",
@@ -828,7 +882,10 @@ describe("security invariants self-checks", () => {
 				].join("\n"),
 			],
 		]);
-		expect(hiddenPublicBuilders(sample).sort()).toEqual([
+		expect(
+			// eslint-disable-next-line id-length -- conventional comparator parameter names
+			hiddenPublicBuilders(sample).sort((a, b) => a.localeCompare(b))
+		).toEqual([
 			"sample.ts:3 calls mutation outside export const",
 			"sample.ts:6 calls query outside export const",
 		]);
@@ -876,28 +933,28 @@ describe("security invariants self-checks", () => {
 	describe("door writes", () => {
 		const adapter = [
 			`export function doorWritesEnabled(): boolean { return process.env.NUKI_WRITE_ENABLED === "1"; }`,
-			`async function req(deps: NukiDeps, method: string, path: string): Promise<unknown> {`,
+			`async function request(deps: NukiDeps, method: string, path: string): Promise<unknown> {`,
 			`	return send();`,
 			`	function send(): Promise<Response> { return deps.fetch(path, { method }); }`,
 			`}`,
 			`export async function revokeAuthIds(deps: NukiDeps, ids: string[]): Promise<void> {`,
-			`	await req(deps, "DELETE", "/smartlock/auth", ids);`,
+			`	await request(deps, "DELETE", "/smartlock/auth", ids);`,
 			`}`,
-			`export function doorProviderFromEnv(opts: { requireWrites: boolean }): DoorProvider {`,
-			`	if (opts.requireWrites && !doorWritesEnabled())`,
+			`export function doorProviderFromEnvironment(options: { requireWrites: boolean }): DoorProvider {`,
+			`	if (options.requireWrites && !doorWritesEnabled())`,
 			`		throw new Error("off");`,
 			`	return nukiProvider({ fetch, token: "t" }, []);`,
 			`}`,
 			`export function nukiProvider(deps: NukiDeps, lockIds: string[]): DoorProvider {`,
 			`	return {`,
 			`		async readModel(): Promise<{ ok: boolean }> {`,
-			`			return req(deps, "GET", "/smartlock");`,
+			`			return request(deps, "GET", "/smartlock");`,
 			`		},`,
 			`		revokeAuthIds(ids): Promise<void> {`,
 			`			return revokeAuthIds(deps, ids);`,
 			`		},`,
 			`		async actuate(slot, action): Promise<DoorActionResult> {`,
-			`			return req(deps, "POST", "/smartlock/1/action", {});`,
+			`			return request(deps, "POST", "/smartlock/1/action", {});`,
 			`		},`,
 			`	};`,
 			`}`,
@@ -914,7 +971,7 @@ describe("security invariants self-checks", () => {
 			`	await doorProvider({ requireWrites: false }).revokeAuthIds(["1"]);`,
 			`} });`,
 		].join("\n");
-		const factory = `import { doorProviderFromEnv } from "./nukiClient.ts";\nexport function doorProvider(opts) { return doorProviderFromEnv(opts); }`;
+		const factory = `import { doorProviderFromEnvironment } from "./nukiClient.ts";\nexport function doorProvider(opts) { return doorProviderFromEnvironment(opts); }`;
 
 		function withFiles(extra: Record<string, string>): Map<string, string> {
 			return new Map(
@@ -944,7 +1001,7 @@ describe("security invariants self-checks", () => {
 			const sample = withFiles({
 				[DOOR_ADAPTER]: adapter.replace(
 					"\t\tasync actuate(",
-					`\t\tasync grant(email): Promise<void> {\n\t\t\tawait req(deps, "PUT", "/smartlock/auth", { email });\n\t\t},\n\t\tasync actuate(`
+					`\t\tasync grant(email): Promise<void> {\n\t\t\tawait request(deps, "PUT", "/smartlock/auth", { email });\n\t\t},\n\t\tasync actuate(`
 				),
 			});
 			expect(doorWriteViolations(sample)).toEqual([
@@ -955,12 +1012,12 @@ describe("security invariants self-checks", () => {
 		it("flags a factory that builds the provider without the switch", () => {
 			const sample = withFiles({
 				[DOOR_ADAPTER]: adapter.replace(
-					'\tif (opts.requireWrites && !doorWritesEnabled())\n\t\tthrow new Error("off");\n',
+					'\tif (options.requireWrites && !doorWritesEnabled())\n\t\tthrow new Error("off");\n',
 					""
 				),
 			});
 			expect(doorWriteViolations(sample)).toEqual([
-				`${DOOR_ADAPTER}: doorProviderFromEnv must throw when requireWrites is set and doorWritesEnabled() is false, before building the provider`,
+				`${DOOR_ADAPTER}: doorProviderFromEnvironment must throw when requireWrites is set and doorWritesEnabled() is false, before building the provider`,
 			]);
 		});
 
@@ -971,7 +1028,7 @@ describe("security invariants self-checks", () => {
 					`const on = process.env.NUKI_WRITE_ENABLED;`,
 					`setDoorProviderForTests(fake);`,
 				].join("\n"),
-				"lib/occupancy/x.ts": `import { doorProviderFromEnv as make } from "../nukiClient.ts";`,
+				"lib/occupancy/x.ts": `import { doorProviderFromEnvironment as make } from "../nukiClient.ts";`,
 			});
 			expect(doorWriteViolations(sample)).toEqual([
 				`doorRevoke.ts: reads NUKI_WRITE_ENABLED; only ${DOOR_ADAPTER} may, through doorWritesEnabled()`,

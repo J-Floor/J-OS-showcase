@@ -34,7 +34,7 @@ export type TooltipProps = {
 	 */
 	asChild?: TooltipTriggerProps["asChild"];
 	/** Ref forwarded to the content element. */
-	ref?: HTMLDivElement | ((el: HTMLDivElement) => void);
+	ref?: HTMLDivElement | ((element: HTMLDivElement) => void);
 } & Omit<TooltipRootProps, "ids" | "children"> &
 	WithPartClasses<"content" | "positioner">;
 

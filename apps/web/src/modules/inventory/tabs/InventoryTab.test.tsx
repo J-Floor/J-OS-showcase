@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import type { JfColumnDef } from "@j-os/design-system";
+import type { JfColumnDefinition } from "@j-os/design-system";
 import {
 	MemoryRouter,
 	Route,
@@ -27,7 +27,7 @@ import { itemTypeEntity } from "../entity.ts";
 
 import { InventoryTab } from "./InventoryTab.tsx";
 
-const prefetch = vi.fn<(...a: unknown[]) => void>();
+const prefetch = vi.fn<(...args: unknown[]) => void>();
 vi.mock("../../../shared/data/queryKeeper.ts", async (orig) => ({
 	...(await orig<typeof import("../../../shared/data/queryKeeper.ts")>()),
 	prefetchSpec: (
@@ -50,7 +50,7 @@ if (!("ResizeObserver" in globalThis)) {
 
 type Row = { _id: string; name: string };
 
-const COLUMNS: JfColumnDef<Row>[] = [
+const COLUMNS: JfColumnDefinition<Row>[] = [
 	{ accessorKey: "name", header: "Name", dataType: "string" },
 ];
 
@@ -59,12 +59,26 @@ type Bag = {
 	search?: () => string;
 };
 
+function drawerText(
+	drawer: {
+		open: () => boolean;
+		row: () => Row | undefined;
+		initialAssetTag: () => string | undefined;
+	},
+	selectedId: string | undefined
+): string {
+	if (!drawer.open()) return "closed";
+	return selectedId !== undefined && drawer.row() === undefined
+		? `drawer:loading:${selectedId}`
+		: `drawer:${drawer.row()?._id ?? "new"}:${drawer.initialAssetTag() ?? ""}`;
+}
+
 // Renders InventoryTab driven by a REAL createEntitySelection (not a signal
 // mock), so the URL-keyed open/close path — the surface where the C1 self-reopen
 // bug lived — is exercised end to end. `bag.search` mirrors the router's
 // reactive location because a `setSearchParams` write goes through
 // `startTransition` and lags `MemoryHistory.get()`.
-function renderHarness(opts?: {
+function renderHarness(options?: {
 	rows?: () => Row[] | undefined;
 	history?: ReturnType<typeof createMemoryHistory>;
 	newItemAssetTag?: () => string | undefined;
@@ -76,7 +90,7 @@ function renderHarness(opts?: {
 	}) => JSX.Element;
 	renderDrawer?: (args: {
 		open: () => boolean;
-		onOpenChange: (open: boolean) => void;
+		onOpenChange: (isOpen: boolean) => void;
 		row: () => Row | undefined;
 		initialAssetTag: () => string | undefined;
 		nav: {
@@ -88,7 +102,7 @@ function renderHarness(opts?: {
 	}) => JSX.Element;
 }): Bag {
 	const bag: Bag = {};
-	const rows = opts?.rows ?? (() => [] as Row[]);
+	const rows = options?.rows ?? (() => [] as Row[]);
 	function Harness() {
 		const sel = createEntitySelection<Row>({ rows, param: "item" });
 		bag.sel = sel;
@@ -99,21 +113,14 @@ function renderHarness(opts?: {
 				data={rows}
 				columns={() => COLUMNS}
 				selection={sel}
-				descriptor={opts?.descriptor}
-				newItemAssetTag={opts?.newItemAssetTag}
-				enableRowSelection={opts?.enableRowSelection}
-				batchActions={opts?.batchActions}
+				descriptor={options?.descriptor}
+				newItemAssetTag={options?.newItemAssetTag}
+				enableRowSelection={options?.enableRowSelection}
+				batchActions={options?.batchActions}
 				renderDrawer={
-					opts?.renderDrawer ??
-					((d) => (
-						<div>
-							{d.open()
-								? sel.selectedId() !== undefined &&
-									d.row() === undefined
-									? `drawer:loading:${sel.selectedId()}`
-									: `drawer:${d.row()?._id ?? "new"}:${d.initialAssetTag() ?? ""}`
-								: "closed"}
-						</div>
+					options?.renderDrawer ??
+					((drawer) => (
+						<div>{drawerText(drawer, sel.selectedId())}</div>
 					))
 				}
 			/>
@@ -121,7 +128,7 @@ function renderHarness(opts?: {
 	}
 	render(() => (
 		<AbilityProvider role="board">
-			<MemoryRouter history={opts?.history}>
+			<MemoryRouter history={options?.history}>
 				<Route path="*" component={Harness} />
 			</MemoryRouter>
 		</AbilityProvider>
@@ -196,9 +203,9 @@ test("keeps the same drawer dialog node across a data() refetch while open", asy
 	const [rows, setRows] = createSignal<Row[]>([{ _id: "i1", name: "Chair" }]);
 	renderHarness({
 		rows,
-		renderDrawer: (d) => (
-			<Show when={d.open()}>
-				<div role="dialog">{d.row()?.name ?? "new"}</div>
+		renderDrawer: (drawer) => (
+			<Show when={drawer.open()}>
+				<div role="dialog">{drawer.row()?.name ?? "new"}</div>
 			</Show>
 		),
 	}).sel?.openRow({ _id: "i1", name: "Chair" });
@@ -224,14 +231,14 @@ test("closing the drawer keeps it closed across a later refetch (no self-reopen)
 	const bag = renderHarness({
 		rows,
 		history,
-		renderDrawer: (d) => (
+		renderDrawer: (drawer) => (
 			<div>
-				<Show when={d.open()}>
+				<Show when={drawer.open()}>
 					<span role="dialog">open</span>
 				</Show>
 				<button
 					onClick={() => {
-						d.onOpenChange(false);
+						drawer.onOpenChange(false);
 					}}
 				>
 					close-drawer
@@ -276,7 +283,9 @@ test("row selection adds a checkbox column and header select-all", async () => {
 	renderHarness({
 		rows: () => THREE_ROWS,
 		enableRowSelection: true,
-		batchActions: (p) => <span>{`sel:${String(p.selectedCount)}`}</span>,
+		batchActions: (batch) => (
+			<span>{`sel:${String(batch.selectedCount)}`}</span>
+		),
 	});
 	const checks = await screen.findAllByRole("checkbox");
 	// Header select-all plus one per row.
@@ -287,7 +296,9 @@ test("header select-all checks every visible row and shows the batch bar", async
 	renderHarness({
 		rows: () => THREE_ROWS,
 		enableRowSelection: true,
-		batchActions: (p) => <span>{`sel:${String(p.selectedCount)}`}</span>,
+		batchActions: (batch) => (
+			<span>{`sel:${String(batch.selectedCount)}`}</span>
+		),
 	});
 	const checks = await screen.findAllByRole("checkbox");
 	fireEvent.click(checks[0]);
@@ -306,7 +317,9 @@ test("clicking a row checkbox does not open the drawer", async () => {
 	renderHarness({
 		rows: () => THREE_ROWS,
 		enableRowSelection: true,
-		batchActions: (p) => <span>{`sel:${String(p.selectedCount)}`}</span>,
+		batchActions: (batch) => (
+			<span>{`sel:${String(batch.selectedCount)}`}</span>
+		),
 	});
 	expect(screen.getByText("closed")).toBeInTheDocument();
 	const checks = await screen.findAllByRole("checkbox");
@@ -326,7 +339,7 @@ test("shows a table skeleton while data is undefined, real rows once loaded", as
 
 	setRows([{ _id: "i1", name: "Chair" }]);
 	await waitFor(() => expect(screen.getByText("Chair")).toBeInTheDocument());
-	expect(document.querySelectorAll("[data-skeleton-row]").length).toBe(0);
+	expect(document.querySelectorAll("[data-skeleton-row]")).toHaveLength(0);
 });
 
 test("hovering an item-type row prefetches its items with the drawer's args", () => {

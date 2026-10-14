@@ -17,9 +17,9 @@ type Tester = ReturnType<typeof createTester>;
 
 // Raw inserts on purpose: they bypass every writer's normalization, which is
 // exactly how the rows this migration exists for were written.
-async function seedPerson(t: Tester, email: string) {
-	return t.run((ctx) =>
-		ctx.db.insert("people", {
+async function seedPerson(backend: Tester, email: string) {
+	return backend.run((context) =>
+		context.db.insert("people", {
 			email,
 			firstName: "Case",
 			lastName: "Person",
@@ -32,14 +32,16 @@ async function seedPerson(t: Tester, email: string) {
 
 describe("migrateEmailCase", () => {
 	it("lowercases non-canonical emails, leaves canonical rows alone, and is a no-op on re-run", async () => {
-		const t = createTester();
-		const mixed = await seedPerson(t, "Ada@Example.COM");
-		const padded = await seedPerson(t, "  grace@example.com ");
-		const canonical = await seedPerson(t, "alan@example.com");
-		const before = await t.run((ctx) => ctx.db.get(canonical));
+		const backend = createTester();
+		const mixed = await seedPerson(backend, "Ada@Example.COM");
+		const padded = await seedPerson(backend, "  grace@example.com ");
+		const canonical = await seedPerson(backend, "alan@example.com");
+		const before = await backend.run((context) =>
+			context.db.get(canonical)
+		);
 
 		expect(
-			await t.query(internal.migrations.previewEmailCase, {})
+			await backend.query(internal.migrations.previewEmailCase, {})
 		).toMatchObject({
 			nonCanonical: [
 				{ _id: mixed, email: "Ada@Example.COM" },
@@ -48,34 +50,38 @@ describe("migrateEmailCase", () => {
 			isDone: true,
 		});
 		expect(
-			await t.mutation(internal.migrations.migrateEmailCase, {})
+			await backend.mutation(internal.migrations.migrateEmailCase, {})
 		).toEqual({ peoplePatched: 2, collisions: 0, isDone: true });
 
-		expect((await t.run((ctx) => ctx.db.get(mixed)))?.email).toBe(
-			"ada@example.com"
+		const mixedRow = await backend.run((context) => context.db.get(mixed));
+		expect(mixedRow?.email).toBe("ada@example.com");
+		const paddedRow = await backend.run((context) =>
+			context.db.get(padded)
 		);
-		expect((await t.run((ctx) => ctx.db.get(padded)))?.email).toBe(
-			"grace@example.com"
-		);
-		expect(await t.run((ctx) => ctx.db.get(canonical))).toEqual(before);
+		expect(paddedRow?.email).toBe("grace@example.com");
+		expect(
+			await backend.run((context) => context.db.get(canonical))
+		).toEqual(before);
 
 		expect(
-			await t.mutation(internal.migrations.migrateEmailCase, {})
+			await backend.mutation(internal.migrations.migrateEmailCase, {})
 		).toEqual({ peoplePatched: 0, collisions: 0, isDone: true });
 		expect(
-			await t.query(internal.migrations.previewEmailCase, {})
+			await backend.query(internal.migrations.previewEmailCase, {})
 		).toMatchObject({ nonCanonical: [], isDone: true });
 	});
 
 	it("skips and counts a row whose canonical email another person holds", async () => {
-		const t = createTester();
-		const holder = await seedPerson(t, "ada@example.com");
-		const clash = await seedPerson(t, "Ada@example.com");
-		const loner = await seedPerson(t, "Grace@example.com");
-		const clashBefore = await t.run((ctx) => ctx.db.get(clash));
+		const backend = createTester();
+		const holder = await seedPerson(backend, "ada@example.com");
+		const clash = await seedPerson(backend, "Ada@example.com");
+		const loner = await seedPerson(backend, "Grace@example.com");
+		const clashBefore = await backend.run((context) =>
+			context.db.get(clash)
+		);
 
 		expect(
-			await t.query(internal.migrations.findEmailCollisions, {})
+			await backend.query(internal.migrations.findEmailCollisions, {})
 		).toEqual([
 			{
 				email: "ada@example.com",
@@ -86,48 +92,51 @@ describe("migrateEmailCase", () => {
 			},
 		]);
 		expect(
-			await t.mutation(internal.migrations.migrateEmailCase, {})
+			await backend.mutation(internal.migrations.migrateEmailCase, {})
 		).toEqual({ peoplePatched: 1, collisions: 1, isDone: true });
 
-		expect(await t.run((ctx) => ctx.db.get(clash))).toEqual(clashBefore);
-		expect((await t.run((ctx) => ctx.db.get(loner)))?.email).toBe(
-			"grace@example.com"
+		expect(await backend.run((context) => context.db.get(clash))).toEqual(
+			clashBefore
 		);
-		const ada = await t.run((ctx) =>
-			ctx.db
+		const lonerRow = await backend.run((context) => context.db.get(loner));
+		expect(lonerRow?.email).toBe("grace@example.com");
+		const ada = await backend.run((context) =>
+			context.db
 				.query("people")
-				.withIndex("by_email", (q) => q.eq("email", "ada@example.com"))
+				.withIndex("by_email", (range) =>
+					range.eq("email", "ada@example.com")
+				)
 				.collect()
 		);
-		expect(ada.map((p) => p._id)).toEqual([holder]);
+		expect(ada.map((person) => person._id)).toEqual([holder]);
 		expect(
-			await t.query(internal.migrations.previewEmailCase, {})
+			await backend.query(internal.migrations.previewEmailCase, {})
 		).toMatchObject({ nonCanonical: [{ _id: clash }] });
 	});
 
 	it("counts the second of two variants that only collide with each other", async () => {
-		const t = createTester();
-		const first = await seedPerson(t, "Ada@example.com");
-		const second = await seedPerson(t, "ADA@example.com");
+		const backend = createTester();
+		const first = await seedPerson(backend, "Ada@example.com");
+		const second = await seedPerson(backend, "ADA@example.com");
 
 		expect(
-			await t.mutation(internal.migrations.migrateEmailCase, {})
+			await backend.mutation(internal.migrations.migrateEmailCase, {})
 		).toEqual({ peoplePatched: 1, collisions: 1, isDone: true });
-		expect((await t.run((ctx) => ctx.db.get(first)))?.email).toBe(
-			"ada@example.com"
+		const firstRow = await backend.run((context) => context.db.get(first));
+		expect(firstRow?.email).toBe("ada@example.com");
+		const secondRow = await backend.run((context) =>
+			context.db.get(second)
 		);
-		expect((await t.run((ctx) => ctx.db.get(second)))?.email).toBe(
-			"ADA@example.com"
-		);
+		expect(secondRow?.email).toBe("ADA@example.com");
 	});
 
 	it("walks every page by scheduling itself", async () => {
-		const t = createTester();
+		const backend = createTester();
 		const total = 250;
-		await t.run(async (ctx) => {
-			for (let i = 0; i < total; i++) {
-				await ctx.db.insert("people", {
-					email: `Paged${String(i)}@Example.com`,
+		await backend.run(async (context) => {
+			for (let index = 0; index < total; index++) {
+				await context.db.insert("people", {
+					email: `Paged${String(index)}@Example.com`,
 					firstName: "Paged",
 					lastName: "Person",
 					tier: "visitor",
@@ -138,8 +147,11 @@ describe("migrateEmailCase", () => {
 		});
 
 		let first: unknown;
-		await runAndCollectLogs(t, async () => {
-			first = await t.mutation(internal.migrations.migrateEmailCase, {});
+		await runAndCollectLogs(backend, async () => {
+			first = await backend.mutation(
+				internal.migrations.migrateEmailCase,
+				{}
+			);
 		});
 		expect(first).toEqual({
 			peoplePatched: 100,
@@ -147,36 +159,40 @@ describe("migrateEmailCase", () => {
 			isDone: false,
 		});
 
-		const people = await t.run((ctx) => ctx.db.query("people").collect());
+		const people = await backend.run((context) =>
+			context.db.query("people").collect()
+		);
 		expect(people).toHaveLength(total);
 		expect(
-			people.filter((p) => p.email !== normalizeEmail(p.email))
+			people.filter(
+				(person) => person.email !== normalizeEmail(person.email)
+			)
 		).toEqual([]);
 	});
 });
 
 describe("backfillActivatedAt", () => {
 	it("stamps active rows from stageSince and others from their history", async () => {
-		const t = convexTest(schema, modules);
-		const ids = await t.run(async (ctx) => {
+		const backend = convexTest(schema, modules);
+		const ids = await backend.run(async (context) => {
 			const base = {
 				firstName: "X",
 				lastName: "Y",
 				stageSince: 100,
 			} as const;
-			const active = await ctx.db.insert("people", {
+			const active = await context.db.insert("people", {
 				...base,
 				email: "a@example.com",
 				tier: "member",
 				stage: "active",
 			});
-			const expired = await ctx.db.insert("people", {
+			const expired = await context.db.insert("people", {
 				...base,
 				email: "e@example.com",
 				tier: "guest",
 				stage: "expired",
 			});
-			await ctx.db.insert("personEvents", {
+			await context.db.insert("personEvents", {
 				personId: expired,
 				at: 50,
 				kind: "transition",
@@ -184,13 +200,13 @@ describe("backfillActivatedAt", () => {
 				from: "guest.onboarding",
 				to: "guest.active",
 			});
-			const neverActive = await ctx.db.insert("people", {
+			const neverActive = await context.db.insert("people", {
 				...base,
 				email: "n@example.com",
 				tier: "guest",
 				stage: "expired",
 			});
-			const former = await ctx.db.insert("people", {
+			const former = await context.db.insert("people", {
 				...base,
 				email: "f@example.com",
 				tier: "former",
@@ -198,7 +214,7 @@ describe("backfillActivatedAt", () => {
 				formerOf: "member",
 				formerReason: "left",
 			});
-			await ctx.db.insert("personEvents", {
+			await context.db.insert("personEvents", {
 				personId: former,
 				at: 70,
 				kind: "transition",
@@ -206,7 +222,7 @@ describe("backfillActivatedAt", () => {
 				from: "member.onboarding",
 				to: "member.active",
 			});
-			const leftEarly = await ctx.db.insert("people", {
+			const leftEarly = await context.db.insert("people", {
 				...base,
 				email: "l@example.com",
 				tier: "former",
@@ -214,7 +230,7 @@ describe("backfillActivatedAt", () => {
 				formerOf: "member",
 				formerReason: "left",
 			});
-			await ctx.db.insert("personEvents", {
+			await context.db.insert("personEvents", {
 				personId: leftEarly,
 				at: 60,
 				kind: "transition",
@@ -222,7 +238,7 @@ describe("backfillActivatedAt", () => {
 				from: "member.onboarding",
 				to: "former.active",
 			});
-			const prospect = await ctx.db.insert("people", {
+			const prospect = await context.db.insert("people", {
 				...base,
 				email: "p@example.com",
 				tier: "prospect",
@@ -237,11 +253,12 @@ describe("backfillActivatedAt", () => {
 				prospect,
 			};
 		});
-		await t.mutation(internal.migrations.backfillActivatedAt, {});
+		await backend.mutation(internal.migrations.backfillActivatedAt, {});
 		function get(id: Id<"people">) {
-			return t.run(
-				async (ctx) => (await ctx.db.get(id))?.activatedAt ?? null
-			);
+			return backend.run(async (context) => {
+				const row = await context.db.get(id);
+				return row?.activatedAt ?? null;
+			});
 		}
 		expect(await get(ids.active)).toBe(100);
 		expect(await get(ids.expired)).toBe(50);
@@ -254,9 +271,9 @@ describe("backfillActivatedAt", () => {
 
 describe("repairGuestWithoutAgreement", () => {
 	it("moves an active guest with no guest agreement to onboarding with the document step re-opened, audited", async () => {
-		const t = createTester();
-		const id = await t.run(async (ctx) => {
-			const pid = await ctx.db.insert("people", {
+		const backend = createTester();
+		const id = await backend.run(async (context) => {
+			const pid = await context.db.insert("people", {
 				email: "m@example.com",
 				firstName: "M",
 				lastName: "A",
@@ -275,7 +292,7 @@ describe("repairGuestWithoutAgreement", () => {
 					boardSteps: { whatsapp: { completedAt: 1 } },
 				},
 			});
-			await ctx.db.insert("signatures", {
+			await context.db.insert("signatures", {
 				personId: pid,
 				email: "m@example.com",
 				variant: "member",
@@ -286,25 +303,28 @@ describe("repairGuestWithoutAgreement", () => {
 			});
 			return pid;
 		});
-		await t.mutation(internal.migrations.repairGuestWithoutAgreement, {
-			personId: id,
-		});
-		await t.run(async (ctx) => {
-			const row = await ctx.db.get(id);
+		await backend.mutation(
+			internal.migrations.repairGuestWithoutAgreement,
+			{
+				personId: id,
+			}
+		);
+		await backend.run(async (context) => {
+			const row = await context.db.get(id);
 			expect(row?.stage).toBe("onboarding");
 			// The wizard must have the agreement left to ask for.
-			expect(Object.keys(row?.onboarding?.steps ?? {}).sort()).toEqual([
-				"rules",
-				"visit",
-				"welcome",
-			]);
+			expect(
+				// eslint-disable-next-line id-length -- conventional comparator parameter names
+				Object.keys(row?.onboarding?.steps ?? {}).sort((a, b) =>
+					a.localeCompare(b)
+				)
+			).toEqual(["rules", "visit", "welcome"]);
 			expect(row?.onboarding?.boardSteps).toEqual({
 				whatsapp: { completedAt: 1 },
 			});
-			const ev = (await ctx.db.query("personEvents").collect()).find(
-				(e) => e.event === "REPAIR"
-			);
-			expect(ev).toMatchObject({
+			const events = await context.db.query("personEvents").collect();
+			const event = events.find((item) => item.event === "REPAIR");
+			expect(event).toMatchObject({
 				kind: "transition",
 				from: "guest.active",
 				to: "guest.onboarding",
@@ -313,9 +333,9 @@ describe("repairGuestWithoutAgreement", () => {
 	});
 
 	it("refuses a guest who has the guest agreement", async () => {
-		const t = createTester();
-		const id = await t.run(async (ctx) => {
-			const pid = await ctx.db.insert("people", {
+		const backend = createTester();
+		const id = await backend.run(async (context) => {
+			const pid = await context.db.insert("people", {
 				email: "ok@example.com",
 				firstName: "O",
 				lastName: "K",
@@ -324,7 +344,7 @@ describe("repairGuestWithoutAgreement", () => {
 				stageSince: 1,
 				activatedAt: 1,
 			});
-			await ctx.db.insert("signatures", {
+			await context.db.insert("signatures", {
 				personId: pid,
 				email: "ok@example.com",
 				variant: "guest",
@@ -336,7 +356,7 @@ describe("repairGuestWithoutAgreement", () => {
 			return pid;
 		});
 		await expect(
-			t.mutation(internal.migrations.repairGuestWithoutAgreement, {
+			backend.mutation(internal.migrations.repairGuestWithoutAgreement, {
 				personId: id,
 			})
 		).rejects.toThrow();

@@ -28,7 +28,7 @@ export function lockHealthSummary(health: DoorHealth): LockHealthSummary {
 	const value = `${String(health.configured - offline.length)}/${String(health.configured)}`;
 	if (offline.length === 0)
 		return { value, detail: "Every door is online.", tone: "neutral" };
-	const names = offline.map((l) => l.name).join(", ");
+	const names = offline.map((lock) => lock.name).join(", ");
 	return {
 		value,
 		detail: `${names} offline — the app can't reach it right now.`,

@@ -12,8 +12,8 @@ export type Wifi = { ssid: string; password: string };
  * `confirmVisitor` result. There is no fallback: a deployment with no row
  * has no Wi-Fi to hand out until the board sets it (or the dev seed runs).
  */
-export async function readWifi(db: DatabaseReader): Promise<Wifi> {
-	const row = await db.query("wifiConfig").first();
+export async function readWifi(database: DatabaseReader): Promise<Wifi> {
+	const row = await database.query("wifiConfig").first();
 	if (!row) throw new ConvexError("Wi-Fi not configured");
 	return { ssid: row.ssid, password: row.password };
 }

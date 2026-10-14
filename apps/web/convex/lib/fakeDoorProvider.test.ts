@@ -25,7 +25,7 @@ describe("FakeDoorProvider", () => {
 	it("carries authIds set on a fixture identity through readModel", async () => {
 		// The revoke paths read identity.authIds off the model; the fake must
 		// return whatever a fixture puts there verbatim (no logic of its own).
-		const p = new FakeDoorProvider({
+		const provider = new FakeDoorProvider({
 			...base(),
 			identities: [
 				{
@@ -38,7 +38,7 @@ describe("FakeDoorProvider", () => {
 				},
 			],
 		});
-		const model = await p.readModel();
+		const model = await provider.readModel();
 		expect(model.identities[0].authIds).toEqual([
 			{ lockId: "lock-downstairs", authId: "a1" },
 			{ lockId: "lock-upstairs", authId: "a2" },
@@ -72,7 +72,7 @@ describe("FakeDoorProvider.actuate", () => {
 
 describe("FakeDoorProvider.revokeAuthIds", () => {
 	it("removes a revoked auth from the identities", async () => {
-		const p = new FakeDoorProvider({
+		const provider = new FakeDoorProvider({
 			...base(),
 			identities: [
 				{
@@ -85,12 +85,12 @@ describe("FakeDoorProvider.revokeAuthIds", () => {
 				},
 			],
 		});
-		await p.revokeAuthIds(["a1"]);
-		const model = await p.readModel();
+		await provider.revokeAuthIds(["a1"]);
+		const model = await provider.readModel();
 		expect(model.identities[0].authIds).toEqual([
 			{ lockId: "lock-upstairs", authId: "a2" },
 		]);
-		expect(p.calls.revokes).toEqual([["a1"]]);
+		expect(provider.calls.revokes).toEqual([["a1"]]);
 	});
 });
 

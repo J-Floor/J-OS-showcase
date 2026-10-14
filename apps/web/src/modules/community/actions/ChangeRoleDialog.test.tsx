@@ -30,6 +30,10 @@ if (!("ResizeObserver" in globalThis)) {
 
 afterEach(cleanup);
 
+function alphabetical(first: string, second: string) {
+	return first.localeCompare(second);
+}
+
 function setup(states: string[] = ["member.active"]) {
 	const onMove = vi.fn();
 	render(() => (
@@ -48,13 +52,15 @@ function clickSegmentItem(value: string) {
 	// Ark renders ItemHiddenInput as a radio <input>; click it to trigger the
 	// zag radio-group machine. getByRole("radio") guarantees it's an input.
 	const radios = screen.getAllByRole<HTMLInputElement>("radio");
-	const radio = radios.find((r) => r.value === value);
+	const radio = radios.find((candidate) => candidate.value === value);
 	if (!radio) throw new Error(`radio for "${value}" not found`);
 	fireEvent.click(radio);
 }
 
 function values() {
-	return screen.getAllByRole<HTMLInputElement>("radio").map((r) => r.value);
+	return screen
+		.getAllByRole<HTMLInputElement>("radio")
+		.map((radio) => radio.value);
 }
 
 /**
@@ -86,8 +92,10 @@ describe("ChangeRoleDialog", () => {
 		//   ONBOARDING_PROGRESSED, KICK_OUT, MARK_LEFT, SET_ROLE,
 		//   GRANT_CORE, PROMOTE_TO_BOARD
 		setup(["member.active"]);
-		expect(values().sort()).toEqual(
-			["admin", "board", "core", "kick", "left", "staff"].sort()
+		expect(values().sort(alphabetical)).toEqual(
+			["admin", "board", "core", "kick", "left", "staff"].sort(
+				alphabetical
+			)
 		);
 		// "member" is suppressed: they are already there.
 		// EXTEND_WINDOW and RE_ADMIT are not edges from member.active.
@@ -98,8 +106,10 @@ describe("ChangeRoleDialog", () => {
 		// Every role destination is reachable via SET_ROLE; KICK_OUT and
 		// MARK_LEFT are not edges from former.active at all.
 		setup(["former.active"]);
-		expect(values().sort()).toEqual(
-			["admin", "board", "core", "member", "readmit", "staff"].sort()
+		expect(values().sort(alphabetical)).toEqual(
+			["admin", "board", "core", "member", "readmit", "staff"].sort(
+				alphabetical
+			)
 		);
 		expect(values()).not.toContain("kick");
 		expect(values()).not.toContain("left");
@@ -111,8 +121,10 @@ describe("ChangeRoleDialog", () => {
 		// it carrying a target tier: without them board.active has no
 		// non-destructive exit.
 		setup(["board.active"]);
-		expect(values().sort()).toEqual(
-			["admin", "core", "kick", "left", "member", "staff"].sort()
+		expect(values().sort(alphabetical)).toEqual(
+			["admin", "core", "kick", "left", "member", "staff"].sort(
+				alphabetical
+			)
 		);
 		expect(values()).not.toContain("board");
 	});
@@ -190,7 +202,7 @@ describe("ChangeRoleDialog", () => {
 		expect(
 			screen
 				.getAllByRole<HTMLInputElement>("radio")
-				.find((r) => r.checked)
+				.find((radio) => radio.checked)
 		).toBeUndefined();
 		fireEvent.click(screen.getByRole("button", { name: /change role/i }));
 		expect(onMove).not.toHaveBeenCalled();
@@ -210,41 +222,21 @@ describe("ChangeRoleDialog", () => {
 		});
 	});
 
-	it("falls back to SET_ROLE, carrying the target tier, when the specific event is illegal", async () => {
-		// Same destination as the previous test, different origin: GRANT_CORE is
-		// not an edge from board.active, so the row degrades to SET_ROLE and the
-		// tier travels in the payload.
-		const { onMove } = setup(["board.active"]);
-		clickSegmentItem("core");
+	// When the specific event is illegal (GRANT_CORE is not an edge from
+	// board.active) or does not exist, the row degrades to SET_ROLE and the
+	// target tier travels in the payload.
+	it.each([
+		{ from: "board.active", target: "core" },
+		{ from: "member.active", target: "staff" },
+		{ from: "board.active", target: "member" },
+	])("moves $from to $target through SET_ROLE", async ({ from, target }) => {
+		const { onMove } = setup([from]);
+		clickSegmentItem(target);
 		await clickChangeRole();
 		await waitFor(() => {
 			expect(onMove).toHaveBeenCalledWith({
 				kind: "role",
-				tier: "core",
-			});
-		});
-	});
-
-	it("makes a member staff through SET_ROLE", async () => {
-		const { onMove } = setup(["member.active"]);
-		clickSegmentItem("staff");
-		await clickChangeRole();
-		await waitFor(() => {
-			expect(onMove).toHaveBeenCalledWith({
-				kind: "role",
-				tier: "staff",
-			});
-		});
-	});
-
-	it("demotes a board member to plain member through SET_ROLE", async () => {
-		const { onMove } = setup(["board.active"]);
-		clickSegmentItem("member");
-		await clickChangeRole();
-		await waitFor(() => {
-			expect(onMove).toHaveBeenCalledWith({
-				kind: "role",
-				tier: "member",
+				tier: target,
 			});
 		});
 	});
@@ -338,15 +330,15 @@ const EXCLUDED_FROM_DIALOG: string[] = [
 
 describe("MOVES catalogue vs. the machine's full event set", () => {
 	it("accounts for every event in ALL_EVENTS — in a MOVES `via` list, or in the documented exclusion set, with no overlap", () => {
-		const covered = [...new Set(MOVES.flatMap((m) => [...m.via]))];
-		expect([...covered, ...EXCLUDED_FROM_DIALOG].sort()).toEqual(
-			[...ALL_EVENTS].sort()
-		);
+		const covered = [...new Set(MOVES.flatMap((move) => [...move.via]))];
+		expect(
+			[...covered, ...EXCLUDED_FROM_DIALOG].sort(alphabetical)
+		).toEqual([...ALL_EVENTS].sort(alphabetical));
 		// A drift guard that's satisfied by double-counting an event on both
 		// sides isn't a guard at all.
-		expect(covered.filter((e) => EXCLUDED_FROM_DIALOG.includes(e))).toEqual(
-			[]
-		);
+		expect(
+			covered.filter((event) => EXCLUDED_FROM_DIALOG.includes(event))
+		).toEqual([]);
 	});
 });
 
@@ -356,7 +348,9 @@ describe("destination labels match the roster's own vocabulary", () => {
 		// the destination by the name the table gave it. "Core" was reported
 		// missing while on screen the whole time, because the roster calls that
 		// group "Core members".
-		const labels = Object.fromEntries(MOVES.map((m) => [m.value, m.label]));
+		const labels = Object.fromEntries(
+			MOVES.map((move) => [move.value, move.label])
+		);
 		expect(labels.core).toBe("Core member");
 		expect(labels.left).toBe("Alumni");
 	});

@@ -72,21 +72,21 @@ describe("preserveAsZoned", () => {
 		// the IXDTF round-trip ever dropped them, every preserved row would
 		// falsely show up as "changed" the next time recomputeEpochs runs.
 		const ms = Date.UTC(2026, 8, 20, 14, 37, 22, 123);
-		const v = preserveAsZoned(ms, ZURICH);
-		expect(v.utc).toBe(ms);
-		expect(utcFromLocal(v.local)).toBe(ms);
+		const zoned = preserveAsZoned(ms, ZURICH);
+		expect(zoned.utc).toBe(ms);
+		expect(utcFromLocal(zoned.local)).toBe(ms);
 	});
 	it("yields a parseable IXDTF string", () => {
-		const v = preserveAsZoned(Date.UTC(2026, 8, 20), ZURICH);
-		expect(() => utcFromLocal(v.local)).not.toThrow();
+		const zoned = preserveAsZoned(Date.UTC(2026, 8, 20), ZURICH);
+		expect(() => utcFromLocal(zoned.local)).not.toThrow();
 	});
 });
 
 // --- Steps 2-5: convex-test (logic only, see file-top note) ----------------
 
-async function makeCreator(t: ReturnType<typeof convexTest>) {
-	return t.run(async (ctx) =>
-		ctx.db.insert("people", {
+async function makeCreator(backend: ReturnType<typeof convexTest>) {
+	return backend.run(async (context) =>
+		context.db.insert("people", {
 			email: "board@example.com",
 			firstName: "Board",
 			lastName: "Member",
@@ -99,10 +99,10 @@ async function makeCreator(t: ReturnType<typeof convexTest>) {
 
 describe("runTimezoneMigration", () => {
 	it("re-means a 00:00:01-Zurich guest expiry +~24h", async () => {
-		const t = convexTest(schema, modules);
+		const backend = convexTest(schema, modules);
 		const accessUntil = composeExpiry("2026-09-17", ZURICH)!.utc; // 18th 00:00:01 Zurich
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const id = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "guest@example.com",
 				firstName: "Guest",
 				lastName: "One",
@@ -113,13 +113,13 @@ describe("runTimezoneMigration", () => {
 			})
 		);
 
-		const result = await t.mutation(
+		const result = await backend.mutation(
 			internal.migrateEventTimes.runTimezoneMigration,
 			{}
 		);
 		expect(result.guests).toHaveLength(1);
 
-		const person = await t.run(async (ctx) => ctx.db.get(id));
+		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person!.accessUntilLocal).toBeDefined();
 		expect(person!.accessUntil).toBe(accessUntil + DAY_MS);
 		expect(
@@ -128,12 +128,12 @@ describe("runTimezoneMigration", () => {
 	});
 
 	it("schedules a fresh windowExpired job at the new accessUntil for a re-meaned future guest", async () => {
-		const t = convexTest(schema, modules);
+		const backend = convexTest(schema, modules);
 		// A future legacy expiry so the re-meaned instant is still in the
 		// future too (2100 keeps this far from any "now" flakiness).
 		const accessUntil = composeExpiry("2100-09-17", ZURICH)!.utc; // -> 18th 00:00:01 Zurich
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const id = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "future-guest@example.com",
 				firstName: "Future",
 				lastName: "Guest",
@@ -144,9 +144,12 @@ describe("runTimezoneMigration", () => {
 			})
 		);
 
-		await t.mutation(internal.migrateEventTimes.runTimezoneMigration, {});
+		await backend.mutation(
+			internal.migrateEventTimes.runTimezoneMigration,
+			{}
+		);
 
-		const person = await t.run(async (ctx) => ctx.db.get(id));
+		const person = await backend.run(async (context) => context.db.get(id));
 		const expectedNewAccessUntil = accessUntil + DAY_MS;
 		expect(person!.accessUntil).toBe(expectedNewAccessUntil);
 
@@ -154,8 +157,8 @@ describe("runTimezoneMigration", () => {
 		// _scheduled_functions rather than running them — assert the job's
 		// name, args, AND scheduled time so this actually pins the new instant
 		// rather than merely "some job got scheduled".
-		const jobs = await t.run((ctx) =>
-			ctx.db.system.query("_scheduled_functions").collect()
+		const jobs = await backend.run((context) =>
+			context.db.system.query("_scheduled_functions").collect()
 		);
 		expect(jobs).toHaveLength(1);
 		expect(jobs[0].name).toBe("lifecycle:windowExpired");
@@ -164,11 +167,11 @@ describe("runTimezoneMigration", () => {
 	});
 
 	it("preserves an arbitrary now+90*DAY-style guest expiry: accessUntilLocal set, accessUntil UNCHANGED", async () => {
-		const t = convexTest(schema, modules);
+		const backend = convexTest(schema, modules);
 		const BASE = Date.UTC(2026, 0, 1, 12, 0, 0);
 		const accessUntil = BASE + 90 * DAY_MS;
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const id = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "seed-guest@example.com",
 				firstName: "Seed",
 				lastName: "Guest",
@@ -179,9 +182,12 @@ describe("runTimezoneMigration", () => {
 			})
 		);
 
-		await t.mutation(internal.migrateEventTimes.runTimezoneMigration, {});
+		await backend.mutation(
+			internal.migrateEventTimes.runTimezoneMigration,
+			{}
+		);
 
-		const person = await t.run(async (ctx) => ctx.db.get(id));
+		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person!.accessUntilLocal).toBeDefined();
 		expect(person!.accessUntil).toBe(accessUntil);
 	});
@@ -189,11 +195,11 @@ describe("runTimezoneMigration", () => {
 
 describe("previewTimezoneMigration / verifyTimezoneMigration", () => {
 	it("flags a preserved foreign-browser guest expiry as suspicious, a seed one as not", async () => {
-		const t = convexTest(schema, modules);
+		const backend = convexTest(schema, modules);
 		// Foreign-browser legacy: 01:00:01 Zurich — preserved (not the native
 		// 00:00:01 re-mean shape), and surfaced for human review.
-		await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "london@example.com",
 				firstName: "London",
 				lastName: "Guest",
@@ -204,8 +210,8 @@ describe("previewTimezoneMigration / verifyTimezoneMigration", () => {
 			})
 		);
 		// Seed shape: arbitrary instant, preserved, NOT suspicious.
-		await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "seed@example.com",
 				firstName: "Seed",
 				lastName: "Guest",
@@ -216,12 +222,16 @@ describe("previewTimezoneMigration / verifyTimezoneMigration", () => {
 			})
 		);
 
-		const preview = await t.query(
+		const preview = await backend.query(
 			internal.migrateEventTimes.previewTimezoneMigration,
 			{}
 		);
-		const london = preview.guests.find((g) => g.name.includes("London"))!;
-		const seed = preview.guests.find((g) => g.name.includes("Seed"))!;
+		const london = preview.guests.find((guest) =>
+			guest.name.includes("London")
+		)!;
+		const seed = preview.guests.find((guest) =>
+			guest.name.includes("Seed")
+		)!;
 		expect(london.classification).toBe("preserve");
 		expect(london.suspicious).toBe(true);
 		expect(seed.classification).toBe("preserve");
@@ -231,16 +241,16 @@ describe("previewTimezoneMigration / verifyTimezoneMigration", () => {
 
 describe("recomputeEpochs / previewRecompute", () => {
 	it("fixes a stale-offset event field and leaves an already-correct field alone", async () => {
-		const t = convexTest(schema, modules);
-		const createdBy = await makeCreator(t);
+		const backend = convexTest(schema, modules);
+		const createdBy = await makeCreator(backend);
 		// A July date (CEST, +02:00) but with a STALE +01:00 offset baked into
 		// the stored IXDTF — the exact shape recomputeZoned exists to fix (see
 		// lib/time.ts's own verified comment on recomputeZoned).
 		const staleLocal = "2026-07-15T03:00:00+01:00[Europe/Zurich]";
 		const staleStoredEpoch = Date.UTC(2026, 6, 15, 2, 0); // matches the STALE +01:00 math
 		const correctEnd = composeZoned("2026-07-15", "17:00", ZURICH);
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("events", {
+		const id = await backend.run(async (context) =>
+			context.db.insert("events", {
 				name: "Stale Offset Event",
 				startsAt: staleStoredEpoch,
 				startsAtLocal: staleLocal,
@@ -251,20 +261,20 @@ describe("recomputeEpochs / previewRecompute", () => {
 			})
 		);
 
-		const preview = await t.query(
+		const preview = await backend.query(
 			internal.migrateEventTimes.previewRecompute,
 			{}
 		);
 		expect(preview.events).toHaveLength(1);
 		expect(preview.events[0].field).toBe("startsAt");
 
-		const result = await t.mutation(
+		const result = await backend.mutation(
 			internal.migrateEventTimes.recomputeEpochs,
 			{}
 		);
 		expect(result.changed).toBe(1);
 
-		const event = await t.run(async (ctx) => ctx.db.get(id));
+		const event = await backend.run(async (context) => context.db.get(id));
 		// Corrected to the CURRENT (+02:00) offset -> 01:00 UTC, not 02:00.
 		expect(event!.startsAt).toBe(Date.UTC(2026, 6, 15, 1, 0));
 		expect(event!.startsAtLocal).toContain("+02:00");
@@ -274,12 +284,12 @@ describe("recomputeEpochs / previewRecompute", () => {
 	});
 
 	it("is a true no-op on an already-correct row: 0 changed, done:true (after both phases)", async () => {
-		const t = convexTest(schema, modules);
-		const createdBy = await makeCreator(t);
+		const backend = convexTest(schema, modules);
+		const createdBy = await makeCreator(backend);
 		const starts = composeZoned("2026-09-20", "00:01", ZURICH);
 		const ends = composeZoned("2026-09-20", "23:59", ZURICH);
-		await t.run(async (ctx) =>
-			ctx.db.insert("events", {
+		await backend.run(async (context) =>
+			context.db.insert("events", {
 				name: "Correct Event",
 				startsAt: starts.utc,
 				startsAtLocal: starts.local,
@@ -290,7 +300,7 @@ describe("recomputeEpochs / previewRecompute", () => {
 			})
 		);
 
-		const preview = await t.query(
+		const preview = await backend.query(
 			internal.migrateEventTimes.previewRecompute,
 			{}
 		);
@@ -299,14 +309,14 @@ describe("recomputeEpochs / previewRecompute", () => {
 		// Exactly one `.paginate()` call per invocation (see the comment on
 		// `recomputeEpochs`), so finishing the events phase always hands off
 		// to people on a SEPARATE call, even when nothing needs to change.
-		const first = await t.mutation(
+		const first = await backend.mutation(
 			internal.migrateEventTimes.recomputeEpochs,
 			{}
 		);
 		expect(first.changed).toBe(0);
 		expect(first.done).toBe(false);
 
-		const second = await t.mutation(
+		const second = await backend.mutation(
 			internal.migrateEventTimes.recomputeEpochs,
 			{
 				cursor: first.cursor,
@@ -317,12 +327,12 @@ describe("recomputeEpochs / previewRecompute", () => {
 	});
 
 	it("also recomputes a guest accessUntilLocal, paging from events into people across TWO calls", async () => {
-		const t = convexTest(schema, modules);
-		const createdBy = await makeCreator(t);
+		const backend = convexTest(schema, modules);
+		const createdBy = await makeCreator(backend);
 		const staleLocal = "2026-07-15T03:00:00+01:00[Europe/Zurich]";
 		const staleStoredEpoch = Date.UTC(2026, 6, 15, 2, 0);
-		await t.run(async (ctx) =>
-			ctx.db.insert("events", {
+		await backend.run(async (context) =>
+			context.db.insert("events", {
 				name: "Stale Event",
 				startsAt: staleStoredEpoch,
 				startsAtLocal: staleLocal,
@@ -333,8 +343,8 @@ describe("recomputeEpochs / previewRecompute", () => {
 			})
 		);
 		const guestStaleEpoch = Date.UTC(2026, 6, 20, 2, 0);
-		const guestId = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const guestId = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "stale-guest@example.com",
 				firstName: "Stale",
 				lastName: "Guest",
@@ -349,7 +359,7 @@ describe("recomputeEpochs / previewRecompute", () => {
 		// First call: events phase only (one `.paginate()` call) — the sole
 		// event is stale, so it is fixed; `done` stays false because the
 		// people phase has not run yet.
-		const first = await t.mutation(
+		const first = await backend.mutation(
 			internal.migrateEventTimes.recomputeEpochs,
 			{}
 		);
@@ -358,7 +368,7 @@ describe("recomputeEpochs / previewRecompute", () => {
 		expect(first.cursor).toBeDefined();
 
 		// Second call, threading the returned cursor: people phase only.
-		const second = await t.mutation(
+		const second = await backend.mutation(
 			internal.migrateEventTimes.recomputeEpochs,
 			{
 				cursor: first.cursor,
@@ -367,20 +377,22 @@ describe("recomputeEpochs / previewRecompute", () => {
 		expect(second.done).toBe(true);
 		expect(second.changed).toBe(1);
 
-		const guest = await t.run(async (ctx) => ctx.db.get(guestId));
+		const guest = await backend.run(async (context) =>
+			context.db.get(guestId)
+		);
 		expect(guest!.accessUntilLocal).toContain("+02:00");
 		expect(guest!.accessUntil).not.toBe(guestStaleEpoch);
 	});
 
 	it("limit:1 truncates mid-events-phase and returns a cursor to resume from", async () => {
-		const t = convexTest(schema, modules);
-		const createdBy = await makeCreator(t);
+		const backend = convexTest(schema, modules);
+		const createdBy = await makeCreator(backend);
 		const staleLocal = "2026-07-15T03:00:00+01:00[Europe/Zurich]";
 		const staleStoredEpoch = Date.UTC(2026, 6, 15, 2, 0);
-		for (let i = 0; i < 2; i++) {
-			await t.run(async (ctx) =>
-				ctx.db.insert("events", {
-					name: `Stale ${String(i)}`,
+		for (let index = 0; index < 2; index++) {
+			await backend.run(async (context) =>
+				context.db.insert("events", {
+					name: `Stale ${String(index)}`,
 					startsAt: staleStoredEpoch,
 					startsAtLocal: staleLocal,
 					endsAt: staleStoredEpoch + DAY_MS,
@@ -391,7 +403,7 @@ describe("recomputeEpochs / previewRecompute", () => {
 			);
 		}
 
-		const first = await t.mutation(
+		const first = await backend.mutation(
 			internal.migrateEventTimes.recomputeEpochs,
 			{ limit: 1 }
 		);
@@ -399,7 +411,7 @@ describe("recomputeEpochs / previewRecompute", () => {
 		expect(first.changed).toBe(1);
 		expect(first.cursor).toBeDefined();
 
-		const second = await t.mutation(
+		const second = await backend.mutation(
 			internal.migrateEventTimes.recomputeEpochs,
 			{
 				limit: 1,
@@ -410,13 +422,13 @@ describe("recomputeEpochs / previewRecompute", () => {
 	});
 
 	it("reschedules a windowExpired job at the new instant when a guest epoch moves forward into the future", async () => {
-		const t = convexTest(schema, modules);
+		const backend = convexTest(schema, modules);
 		// A far-future stale-offset guest expiry so the recomputed epoch is
 		// still in the future too (2100 keeps this far from any "now" flakiness).
 		const staleLocal = "2100-07-15T03:00:00+01:00[Europe/Zurich]";
 		const staleStoredEpoch = Date.UTC(2100, 6, 15, 2, 0); // matches the STALE +01:00 math
-		const guestId = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const guestId = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "future-stale-guest@example.com",
 				firstName: "Future",
 				lastName: "Stale",
@@ -430,19 +442,21 @@ describe("recomputeEpochs / previewRecompute", () => {
 
 		// First call: events phase (empty table, still costs one call per the
 		// two-phase contract). Second call: people phase, where the guest lives.
-		const first = await t.mutation(
+		const first = await backend.mutation(
 			internal.migrateEventTimes.recomputeEpochs,
 			{}
 		);
 		expect(first.done).toBe(false);
-		const second = await t.mutation(
+		const second = await backend.mutation(
 			internal.migrateEventTimes.recomputeEpochs,
 			{ cursor: first.cursor }
 		);
 		expect(second.done).toBe(true);
 		expect(second.changed).toBe(1);
 
-		const guest = await t.run(async (ctx) => ctx.db.get(guestId));
+		const guest = await backend.run(async (context) =>
+			context.db.get(guestId)
+		);
 		const newAccessUntil = guest!.accessUntil;
 		expect(newAccessUntil).not.toBe(staleStoredEpoch);
 
@@ -450,8 +464,8 @@ describe("recomputeEpochs / previewRecompute", () => {
 		// job's name, args, AND scheduled time so this pins the NEW instant
 		// (per apps/web/AGENTS.md: asserting only that a job exists doesn't prove it's
 		// the right one).
-		const jobs = await t.run((ctx) =>
-			ctx.db.system.query("_scheduled_functions").collect()
+		const jobs = await backend.run((context) =>
+			context.db.system.query("_scheduled_functions").collect()
 		);
 		expect(jobs).toHaveLength(1);
 		expect(jobs[0].name).toBe("lifecycle:windowExpired");
@@ -460,10 +474,10 @@ describe("recomputeEpochs / previewRecompute", () => {
 	});
 
 	it("previewRecompute reports eventsTruncated/guestsTruncated: false when the raw take() is under the cap", async () => {
-		const t = convexTest(schema, modules);
-		const createdBy = await makeCreator(t);
-		await t.run(async (ctx) =>
-			ctx.db.insert("events", {
+		const backend = convexTest(schema, modules);
+		const createdBy = await makeCreator(backend);
+		await backend.run(async (context) =>
+			context.db.insert("events", {
 				name: "Untouched",
 				startsAt: composeZoned("2026-09-20", "00:01", ZURICH).utc,
 				startsAtLocal: composeZoned("2026-09-20", "00:01", ZURICH)
@@ -475,7 +489,7 @@ describe("recomputeEpochs / previewRecompute", () => {
 			})
 		);
 
-		const preview = await t.query(
+		const preview = await backend.query(
 			internal.migrateEventTimes.previewRecompute,
 			{}
 		);
@@ -489,14 +503,14 @@ describe("recomputeEpochs / previewRecompute", () => {
 		// array in the response stays empty — this is exactly the fixture that
 		// proves the flag reads the raw take() length, not `eventRows.length`
 		// (a filtered-length implementation would report false here).
-		const t = convexTest(schema, modules);
-		const createdBy = await makeCreator(t);
+		const backend = convexTest(schema, modules);
+		const createdBy = await makeCreator(backend);
 		const starts = composeZoned("2026-09-20", "00:01", ZURICH);
 		const ends = composeZoned("2026-09-20", "23:59", ZURICH);
-		await t.run(async (ctx) => {
-			for (let i = 0; i < 1000; i++) {
-				await ctx.db.insert("events", {
-					name: `Correct ${String(i)}`,
+		await backend.run(async (context) => {
+			for (let index = 0; index < 1000; index++) {
+				await context.db.insert("events", {
+					name: `Correct ${String(index)}`,
 					startsAt: starts.utc,
 					startsAtLocal: starts.local,
 					endsAt: ends.utc,
@@ -507,7 +521,7 @@ describe("recomputeEpochs / previewRecompute", () => {
 			}
 		});
 
-		const preview = await t.query(
+		const preview = await backend.query(
 			internal.migrateEventTimes.previewRecompute,
 			{}
 		);

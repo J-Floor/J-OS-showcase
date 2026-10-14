@@ -7,7 +7,7 @@ import {
 import { convexToJson, type Value } from "convex/values";
 import { createSignal, untrack } from "solid-js";
 
-export const LINGER_TTL = 5 * 60_000;
+export const LINGER_TTL = 300_000;
 export const PREFETCH_TTL = 60_000;
 export const MAX_KEPT = 50;
 
@@ -37,9 +37,9 @@ export function bindQueryKeeper(next: ConvexClient | undefined): void {
 }
 
 /** The keeper holds nothing unless a session is known; going inactive drops everything. */
-export function setKeeperActive(next: boolean): void {
-	setActive(next);
-	if (!next) releaseAll();
+export function setKeeperActive(isActive: boolean): void {
+	setActive(isActive);
+	if (!isActive) releaseAll();
 }
 
 /** Whether the keeper holds anything. Reactive. */
@@ -87,8 +87,8 @@ export function retain<Q extends FunctionReference<"query">>(
 	const unsubscribe = client.onUpdate(
 		query,
 		args,
-		() => undefined,
-		() => undefined
+		() => {},
+		() => {}
 	);
 	kept.set(key, {
 		unsubscribe,

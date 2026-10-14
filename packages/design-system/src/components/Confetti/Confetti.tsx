@@ -18,13 +18,13 @@ export type ConfettiProps = {
  * ```
  */
 export function Confetti(props: ConfettiProps): JSX.Element {
-	let ref: HTMLSpanElement | undefined;
+	let reference: HTMLSpanElement | undefined;
 	return (
 		<span
-			ref={(el) => (ref = el)}
+			ref={(element) => (reference = element)}
 			class={styles.origin}
 			onClick={() => {
-				fireConfetti(ref);
+				fireConfetti(reference);
 			}}
 		>
 			{props.children}

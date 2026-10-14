@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@solidjs/testing-library";
 
 import { Table } from "./Table.tsx";
-import type { JfColumnDef } from "./types.ts";
+import type { JfColumnDefinition } from "./types.ts";
 
 // jsdom workarounds for ark/zag (Tooltip) used by header buttons.
 if (!(Element.prototype as { scrollTo?: unknown }).scrollTo) {
@@ -13,7 +13,7 @@ if (!(Element.prototype as { hasPointerCapture?: unknown }).hasPointerCapture) {
 
 type Row = { name: string; score: number };
 
-const columns: JfColumnDef<Row>[] = [
+const columns: JfColumnDefinition<Row>[] = [
 	{ accessorKey: "name", header: "Name", dataType: "string" },
 	{ accessorKey: "score", header: () => "Points", dataType: "number" },
 ];

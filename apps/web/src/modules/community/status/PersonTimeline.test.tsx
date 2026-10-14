@@ -15,7 +15,7 @@ vi.mock("convex-solidjs", () => ({
 	useQuery: () => ({
 		data: () => queryDataRef.current,
 		isLoading: () => false,
-		error: () => undefined,
+		error: () => {},
 	}),
 }));
 

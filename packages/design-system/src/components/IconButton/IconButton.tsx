@@ -1,6 +1,6 @@
 import type { Hotkey, Modifier } from "@tanstack/solid-hotkeys";
 import clsx from "clsx";
-import { type JSX, Show, splitProps } from "solid-js";
+import { type Accessor, type JSX, Show, splitProps } from "solid-js";
 
 import { type TriggerProps } from "../../utils/triggerProps.ts";
 import { Badge } from "../Badge/Badge.tsx";
@@ -15,6 +15,8 @@ import styles from "./IconButton.module.scss";
 
 /** The tooltip trigger prop the wrapping `<span>` hands down to the button. */
 type TooltipTriggerProps = { "aria-describedby"?: string };
+
+type ShortcutHint = Hotkey | Modifier;
 
 export type IconButtonProps = {
 	/** Accessible label shown in the tooltip (and the button's accessible name). */
@@ -32,7 +34,7 @@ export type IconButtonProps = {
 	 * modifier — the peek toggle, which the Alt key doubles for. Display only; a
 	 * bare modifier does not register a binding.
 	 */
-	shortcut?: Hotkey | Modifier;
+	shortcut?: ShortcutHint;
 	/** Material Symbols ligature name (e.g. "add", "delete"). */
 	children: string;
 	/**
@@ -57,6 +59,91 @@ export type IconButtonProps = {
 	 */
 	badgeLabel?: string;
 } & BaseButtonProps;
+
+/** The glyph (or spinner), the peek-shortcut chip and the corner badge. */
+function ButtonContent(props: {
+	isLoading: boolean | undefined;
+	icon: string;
+	peekedShortcut: ShortcutHint | undefined;
+	badge: string | undefined;
+}): JSX.Element {
+	return (
+		<>
+			<Show when={props.isLoading} fallback={<Icon>{props.icon}</Icon>}>
+				<Spinner />
+			</Show>
+			<Show when={props.peekedShortcut} keyed>
+				{(shortcut) => (
+					<Kbd shortcut={shortcut} class={styles.peekBadge} />
+				)}
+			</Show>
+			<Show when={props.badge}>
+				{(text) => (
+					<span class={styles.badge} aria-hidden="true" data-badge="">
+						<Badge status="info" class={styles.badgePill}>
+							{text()}
+						</Badge>
+					</span>
+				)}
+			</Show>
+		</>
+	);
+}
+
+/** The tooltip text, with the shortcut's chip beside it when there is one. */
+function TooltipLabel(props: {
+	label: string;
+	shortcut: ShortcutHint | undefined;
+}): JSX.Element {
+	return (
+		<Show when={props.shortcut} fallback={props.label} keyed>
+			{(shortcut) => (
+				<>
+					{props.label} <Kbd shortcut={shortcut} />
+				</>
+			)}
+		</Show>
+	);
+}
+
+/** The button's accessible name: the label, plus the badge's meaning while a
+ *  badge shows. */
+function accessibleName(
+	local: Pick<IconButtonProps, "tooltipLabel" | "badge" | "badgeLabel">
+): string {
+	return local.badge && local.badgeLabel
+		? `${local.tooltipLabel}, ${local.badgeLabel}`
+		: local.tooltipLabel;
+}
+
+/** A button slotted into the tooltip's trigger: straight onto the button, or,
+ *  when an outer machine owns the button, onto a wrapping span. */
+function renderTooltipTrigger(
+	tooltipProps: Accessor<object>,
+	external: TriggerProps | undefined,
+	button: (triggerProps?: TriggerProps, extra?: object) => JSX.Element
+): JSX.Element {
+	if (!external) {
+		return button(tooltipProps());
+	}
+	// The span never takes focus, but zag's Solid normalizer binds
+	// the tooltip's focus/blur as bubbling focusin/focusout, so the
+	// button's focus still reaches it. The description belongs on the
+	// focused element, so hand it down to the button.
+	function tip(): TooltipTriggerProps {
+		return tooltipProps();
+	}
+	const inner = button(external, {
+		get "aria-describedby"() {
+			return tip()["aria-describedby"];
+		},
+	});
+	return (
+		<span {...tooltipProps()} class={styles.tooltipTrigger}>
+			{inner}
+		</span>
+	);
+}
 
 /**
  * A round, icon-only button with a tooltip label.
@@ -100,45 +187,8 @@ export function IconButton(props: IconButtonProps): JSX.Element {
 	// roster chip stays in the roster and a drawer chip stays in the drawer, with
 	// no portal, no z-index war and nothing to overlap. Bare (loading/disabled)
 	// buttons show none: a chip for a key that will not fire only misleads.
-	function peekShortcut(): Hotkey | Modifier | undefined {
+	function peekShortcut(): ShortcutHint | undefined {
 		return peek.peeking() && !bare() ? local.shortcut : undefined;
-	}
-
-	function accessibleName(): string {
-		return local.badge && local.badgeLabel
-			? `${local.tooltipLabel}, ${local.badgeLabel}`
-			: local.tooltipLabel;
-	}
-
-	function content(): JSX.Element {
-		return (
-			<>
-				<Show
-					when={local.isLoading}
-					fallback={<Icon>{local.children}</Icon>}
-				>
-					<Spinner />
-				</Show>
-				<Show when={peekShortcut()} keyed>
-					{(shortcut) => (
-						<Kbd shortcut={shortcut} class={styles.peekBadge} />
-					)}
-				</Show>
-				<Show when={local.badge}>
-					{(text) => (
-						<span
-							class={styles.badge}
-							aria-hidden="true"
-							data-badge=""
-						>
-							<Badge status="info" class={styles.badgePill}>
-								{text()}
-							</Badge>
-						</span>
-					)}
-				</Show>
-			</>
-		);
 	}
 
 	// The button carries ONE trigger's props: the external ones when given (so
@@ -174,10 +224,15 @@ export function IconButton(props: IconButtonProps): JSX.Element {
 				{...reasonProps}
 				isLoading={local.isLoading}
 				class={clsx(styles.iconButton, local.class)}
-				aria-label={accessibleName()}
+				aria-label={accessibleName(local)}
 				onClick={local.onClick}
 			>
-				{content()}
+				<ButtonContent
+					isLoading={local.isLoading}
+					icon={local.children}
+					peekedShortcut={peekShortcut()}
+					badge={local.badge}
+				/>
 			</BaseButton>
 		);
 	}
@@ -197,44 +252,18 @@ export function IconButton(props: IconButtonProps): JSX.Element {
 		<Show when={!bare()} fallback={button(local.triggerProps)}>
 			<Tooltip
 				tooltipContent={
-					<Show
-						when={local.shortcut}
-						fallback={local.tooltipLabel}
-						keyed
-					>
-						{(shortcut) => (
-							<>
-								{local.tooltipLabel} <Kbd shortcut={shortcut} />
-							</>
-						)}
-					</Show>
+					<TooltipLabel
+						label={local.tooltipLabel}
+						shortcut={local.shortcut}
+					/>
 				}
-				asChild={(tooltipProps) => {
-					const external = local.triggerProps;
-					if (!external) {
-						return button(tooltipProps() as TriggerProps);
-					}
-					// The span never takes focus, but zag's Solid normalizer binds
-					// the tooltip's focus/blur as bubbling focusin/focusout, so the
-					// button's focus still reaches it. The description belongs on the
-					// focused element, so hand it down to the button.
-					function tip(): TooltipTriggerProps {
-						return tooltipProps() as TooltipTriggerProps;
-					}
-					const inner = button(external, {
-						get "aria-describedby"() {
-							return tip()["aria-describedby"];
-						},
-					});
-					return (
-						<span
-							{...(tooltipProps() as object)}
-							class={styles.tooltipTrigger}
-						>
-							{inner}
-						</span>
-					);
-				}}
+				asChild={(tooltipProps) =>
+					renderTooltipTrigger(
+						tooltipProps,
+						local.triggerProps,
+						button
+					)
+				}
 			/>
 		</Show>
 	);

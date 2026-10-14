@@ -10,32 +10,34 @@ const modules = import.meta.glob("./**/*.*s");
 
 describe("seed.run", () => {
 	it("gives every seeded board person a tier/stage", async () => {
-		const t = convexTest(schema, modules);
-		await t.mutation(internal.seed.run, {});
+		const backend = convexTest(schema, modules);
+		await backend.mutation(internal.seed.run, {});
 
-		const board = await t.run((ctx) =>
-			ctx.db
+		const board = await backend.run((context) =>
+			context.db
 				.query("people")
-				.withIndex("by_tier_and_formerOf", (q) => q.eq("tier", "board"))
+				.withIndex("by_tier_and_formerOf", (range) =>
+					range.eq("tier", "board")
+				)
 				.collect()
 		);
 		// 4 fixed board fixtures; no `boardEmail` arg here.
 		expect(board).toHaveLength(4);
-		for (const b of board) {
-			expect(b.stage).toBe("active");
-			expect(b.stageSince).toBeTypeOf("number");
+		for (const member of board) {
+			expect(member.stage).toBe("active");
+			expect(member.stageSince).toBeTypeOf("number");
 		}
 	});
 
 	it("lands a `person`-less entry (e.g. a denied application) as a prospect, not a typeless row", async () => {
-		const t = convexTest(schema, modules);
-		await t.mutation(internal.seed.run, {});
+		const backend = convexTest(schema, modules);
+		await backend.mutation(internal.seed.run, {});
 
-		const dennis = await t.run((ctx) =>
-			ctx.db
+		const dennis = await backend.run((context) =>
+			context.db
 				.query("people")
-				.withIndex("by_email", (q) =>
-					q.eq("email", "dennis@jfloor.test")
+				.withIndex("by_email", (range) =>
+					range.eq("email", "dennis@jfloor.test")
 				)
 				.unique()
 		);
@@ -43,14 +45,14 @@ describe("seed.run", () => {
 	});
 
 	it("demotes the kicked-out fixture to `former`, keeping who they were and why", async () => {
-		const t = convexTest(schema, modules);
-		await t.mutation(internal.seed.run, {});
+		const backend = convexTest(schema, modules);
+		await backend.mutation(internal.seed.run, {});
 
-		const seymour = await t.run((ctx) =>
-			ctx.db
+		const seymour = await backend.run((context) =>
+			context.db
 				.query("people")
-				.withIndex("by_email", (q) =>
-					q.eq("email", "seymour@jfloor.test")
+				.withIndex("by_email", (range) =>
+					range.eq("email", "seymour@jfloor.test")
 				)
 				.unique()
 		);
@@ -70,29 +72,29 @@ describe("seed.run", () => {
 		// though never denied. This predates the tier/stage rewrite (the old
 		// `applications` insert never set `deniedAt` either); fixed here because
 		// moving these rows onto `people` is the natural point to close it.
-		const t = convexTest(schema, modules);
-		await t.mutation(internal.seed.run, {});
+		const backend = convexTest(schema, modules);
+		await backend.mutation(internal.seed.run, {});
 
 		for (const email of [
 			"dennis@jfloor.test",
 			"charles@jfloor.test",
 			"joan@jfloor.test",
 		]) {
-			const person = await t.run((ctx) =>
-				ctx.db
+			const person = await backend.run((context) =>
+				context.db
 					.query("people")
-					.withIndex("by_email", (q) => q.eq("email", email))
+					.withIndex("by_email", (range) => range.eq("email", email))
 					.unique()
 			);
 			expect(person?.stage).toBe("denied");
 			expect(person?.deniedAt).toBeTypeOf("number");
 		}
 
-		const dennis = await t.run((ctx) =>
-			ctx.db
+		const dennis = await backend.run((context) =>
+			context.db
 				.query("people")
-				.withIndex("by_email", (q) =>
-					q.eq("email", "dennis@jfloor.test")
+				.withIndex("by_email", (range) =>
+					range.eq("email", "dennis@jfloor.test")
 				)
 				.unique()
 		);
@@ -103,52 +105,55 @@ describe("seed.run", () => {
 	});
 
 	it("returns a `people` total with no duplicate/second key and no `applications` count", async () => {
-		const t = convexTest(schema, modules);
-		const result = await t.mutation(internal.seed.run, {});
+		const backend = convexTest(schema, modules);
+		const result = await backend.mutation(internal.seed.run, {});
 
 		expect(result).not.toHaveProperty("applications");
-		const allPeople = await t.run((ctx) =>
-			ctx.db.query("people").collect()
+		const allPeople = await backend.run((context) =>
+			context.db.query("people").collect()
 		);
 		expect(result.people).toBe(allPeople.length);
 	});
 
 	it("seeds the wifiConfig singleton with the dev placeholder, idempotently", async () => {
-		const t = convexTest(schema, modules);
-		await t.mutation(internal.seed.run, {});
+		const backend = convexTest(schema, modules);
+		await backend.mutation(internal.seed.run, {});
 
-		const rowsAfterFirst = await t.run((ctx) =>
-			ctx.db.query("wifiConfig").collect()
+		const rowsAfterFirst = await backend.run((context) =>
+			context.db.query("wifiConfig").collect()
 		);
 		expect(rowsAfterFirst).toHaveLength(1);
 		expect(rowsAfterFirst[0]).toMatchObject({ ssid: "J floor (dev)" });
 
 		// Re-running (a reseed) must not insert a second row.
-		await t.mutation(internal.seed.run, {});
-		const rowsAfterSecond = await t.run((ctx) =>
-			ctx.db.query("wifiConfig").collect()
+		await backend.mutation(internal.seed.run, {});
+		const rowsAfterSecond = await backend.run((context) =>
+			context.db.query("wifiConfig").collect()
 		);
 		expect(rowsAfterSecond).toHaveLength(1);
 		expect(rowsAfterSecond[0]._id).toBe(rowsAfterFirst[0]._id);
 	});
 
 	it("seeds a small inventory so the board page is not empty", async () => {
-		const t = convexTest(schema, modules);
-		await t.mutation(internal.seed.run, {});
+		const backend = convexTest(schema, modules);
+		await backend.mutation(internal.seed.run, {});
 
 		const [categories, types, items] = await Promise.all([
-			t.run((ctx) => ctx.db.query("itemCategories").collect()),
-			t.run((ctx) => ctx.db.query("itemTypes").collect()),
-			t.run((ctx) => ctx.db.query("items").collect()),
+			backend.run((context) =>
+				context.db.query("itemCategories").collect()
+			),
+			backend.run((context) => context.db.query("itemTypes").collect()),
+			backend.run((context) => context.db.query("items").collect()),
 		]);
-		expect(categories.map((c) => c.name).sort()).toEqual([
-			"AV",
-			"Furniture",
-			"Kitchen",
-		]);
+		expect(
+			categories
+				.map((category) => category.name)
+				// eslint-disable-next-line id-length -- conventional comparator parameter names
+				.sort((a, b) => a.localeCompare(b))
+		).toEqual(["AV", "Furniture", "Kitchen"]);
 		expect(types.length).toBeGreaterThanOrEqual(4);
 		expect(items.length).toBeGreaterThanOrEqual(4);
-		expect(items.every((i) => /^[A-Z][0-9]{5}$/.test(i.assetTag))).toBe(
+		expect(items.every((item) => /^[A-Z]\d{5}$/.test(item.assetTag))).toBe(
 			true
 		);
 	});
@@ -156,9 +161,9 @@ describe("seed.run", () => {
 
 describe("seed.clearAll", () => {
 	it("wipes people, signatures, personEvents and purgeLog, not just people/applications", async () => {
-		const t = convexTest(schema, modules);
-		const personId = await t.run((ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const personId = await backend.run((context) =>
+			context.db.insert("people", {
 				email: "leftover@example.com",
 				firstName: "Left",
 				lastName: "Over",
@@ -167,15 +172,15 @@ describe("seed.clearAll", () => {
 				stageSince: Date.now(),
 			})
 		);
-		await t.run(async (ctx) => {
-			await ctx.db.insert("personEvents", {
+		await backend.run(async (context) => {
+			await context.db.insert("personEvents", {
 				personId,
 				at: Date.now(),
 				kind: "transition",
 				event: "IMPORT",
 			});
-			await ctx.db.insert("purgeLog", { at: Date.now(), count: 1 });
-			await ctx.db.insert("signatures", {
+			await context.db.insert("purgeLog", { at: Date.now(), count: 1 });
+			await context.db.insert("signatures", {
 				personId,
 				email: "leftover@example.com",
 				variant: "member",
@@ -187,13 +192,15 @@ describe("seed.clearAll", () => {
 			});
 		});
 
-		await t.mutation(internal.seed.clearAll, {});
+		await backend.mutation(internal.seed.clearAll, {});
 
 		const [people, events, logs, sigs] = await Promise.all([
-			t.run((ctx) => ctx.db.query("people").collect()),
-			t.run((ctx) => ctx.db.query("personEvents").collect()),
-			t.run((ctx) => ctx.db.query("purgeLog").collect()),
-			t.run((ctx) => ctx.db.query("signatures").collect()),
+			backend.run((context) => context.db.query("people").collect()),
+			backend.run((context) =>
+				context.db.query("personEvents").collect()
+			),
+			backend.run((context) => context.db.query("purgeLog").collect()),
+			backend.run((context) => context.db.query("signatures").collect()),
 		]);
 		expect(people).toHaveLength(0);
 		expect(events).toHaveLength(0);
@@ -202,27 +209,29 @@ describe("seed.clearAll", () => {
 	});
 
 	it("wipes inventory categories, types, and items", async () => {
-		const t = convexTest(schema, modules);
-		await t.run(async (ctx) => {
-			const categoryId = await ctx.db.insert("itemCategories", {
+		const backend = convexTest(schema, modules);
+		await backend.run(async (context) => {
+			const categoryId = await context.db.insert("itemCategories", {
 				name: "Leftover",
 			});
-			const typeId = await ctx.db.insert("itemTypes", {
+			const typeId = await context.db.insert("itemTypes", {
 				name: "Thing",
 				categoryId,
 			});
-			await ctx.db.insert("items", {
+			await context.db.insert("items", {
 				typeId,
 				assetTag: "Z00001",
 			});
 		});
 
-		await t.mutation(internal.seed.clearAll, {});
+		await backend.mutation(internal.seed.clearAll, {});
 
 		const [categories, types, items] = await Promise.all([
-			t.run((ctx) => ctx.db.query("itemCategories").collect()),
-			t.run((ctx) => ctx.db.query("itemTypes").collect()),
-			t.run((ctx) => ctx.db.query("items").collect()),
+			backend.run((context) =>
+				context.db.query("itemCategories").collect()
+			),
+			backend.run((context) => context.db.query("itemTypes").collect()),
+			backend.run((context) => context.db.query("items").collect()),
 		]);
 		expect(categories).toHaveLength(0);
 		expect(types).toHaveLength(0);

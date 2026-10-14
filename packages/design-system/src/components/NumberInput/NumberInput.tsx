@@ -2,6 +2,7 @@ import {
 	NumberInput as ArkNumberInput,
 	type NumberInputRootProps,
 	type NumberInputInputProps,
+	type UseNumberInputContext,
 } from "@ark-ui/solid/number-input";
 import { type JSX, Show, mergeProps } from "solid-js";
 
@@ -39,7 +40,7 @@ export type NumberInputProps = PropsWithDisabling<
 			/** Maximum value; a string is parsed to a number (throws on NaN). */
 			max?: string | number;
 			/** Ref forwarded to the underlying input element. */
-			ref?: HTMLInputElement | ((el: HTMLInputElement) => void);
+			ref?: HTMLInputElement | ((element: HTMLInputElement) => void);
 		}
 >;
 
@@ -60,6 +61,56 @@ function parseBound(
 	return parsed;
 }
 
+/** The button that empties the field, shown only while it has a value. */
+function ClearButton(props: {
+	context: UseNumberInputContext;
+	isDisabled: boolean | undefined;
+}): JSX.Element {
+	return (
+		<Show when={!props.context().empty && !props.isDisabled}>
+			<IconButton
+				class={styles.clearTrigger}
+				tooltipLabel="Clear"
+				onClick={() => {
+					props.context().clearValue();
+				}}
+			>
+				{ICONS.close}
+			</IconButton>
+		</Show>
+	);
+}
+
+/** The decrement and increment buttons. */
+function StepControls(): JSX.Element {
+	return (
+		<ArkNumberInput.Control class={styles.control}>
+			<ArkNumberInput.DecrementTrigger
+				asChild={(arkProps) => (
+					<IconButton
+						tooltipLabel="Decrement"
+						disabledReason="Minimum allowed value reached"
+						triggerProps={arkProps() as TriggerProps}
+					>
+						remove
+					</IconButton>
+				)}
+			/>
+			<ArkNumberInput.IncrementTrigger
+				asChild={(arkProps) => (
+					<IconButton
+						tooltipLabel="Increment"
+						disabledReason="Maximum allowed value reached"
+						triggerProps={arkProps() as TriggerProps}
+					>
+						{ICONS.add}
+					</IconButton>
+				)}
+			/>
+		</ArkNumberInput.Control>
+	);
+}
+
 /**
  * Numeric input: `MakeField` (label/helper/error) wrapping `@ark-ui/solid`
  * `NumberInput`, with increment/decrement triggers, an optional scrubber and
@@ -78,7 +129,7 @@ function parseBound(
  * MakeDisablable) for free — no hand-rolled trigger button.
  */
 export function NumberInput(props: NumberInputProps): JSX.Element {
-	let inputEl: HTMLInputElement | undefined;
+	let inputElement: HTMLInputElement | undefined;
 
 	// Consumer-only props (handled here) vs. everything forwarded to ark Root.
 	const [own, rest] = splitArkProps(props, [
@@ -109,14 +160,14 @@ export function NumberInput(props: NumberInputProps): JSX.Element {
 		},
 	});
 
-	function setRef(el: HTMLInputElement) {
-		inputEl = el;
-		const ref = own.ref;
-		if (typeof ref === "function") ref(el);
+	function setReference(element: HTMLInputElement) {
+		inputElement = element;
+		const reference = own.ref;
+		if (typeof reference === "function") reference(element);
 	}
 
 	function handleWrapperClick() {
-		inputEl?.focus();
+		inputElement?.focus();
 	}
 
 	return (
@@ -133,58 +184,19 @@ export function NumberInput(props: NumberInputProps): JSX.Element {
 					<Show when={own.leadingIconName}>
 						{(name) => <Icon class={styles.icon}>{name()}</Icon>}
 					</Show>
-					<ArkNumberInput.Input ref={setRef} />
+					<ArkNumberInput.Input ref={setReference} />
 					<Show when={own.allowClearing}>
 						<ArkNumberInput.Context>
 							{(context) => (
-								<Show
-									when={
-										!context().empty &&
-										!makeFieldProps.disabled
-									}
-								>
-									<IconButton
-										class={styles.clearTrigger}
-										tooltipLabel="Clear"
-										onClick={() => {
-											context().clearValue();
-										}}
-									>
-										{ICONS.close}
-									</IconButton>
-								</Show>
+								<ClearButton
+									context={context}
+									isDisabled={makeFieldProps.disabled}
+								/>
 							)}
 						</ArkNumberInput.Context>
 					</Show>
 					<Show when={!own.onlyAllowTyping}>
-						<ArkNumberInput.Control class={styles.control}>
-							<ArkNumberInput.DecrementTrigger
-								asChild={(arkProps) => (
-									<IconButton
-										tooltipLabel="Decrement"
-										disabledReason="Minimum allowed value reached"
-										triggerProps={
-											arkProps() as TriggerProps
-										}
-									>
-										remove
-									</IconButton>
-								)}
-							/>
-							<ArkNumberInput.IncrementTrigger
-								asChild={(arkProps) => (
-									<IconButton
-										tooltipLabel="Increment"
-										disabledReason="Maximum allowed value reached"
-										triggerProps={
-											arkProps() as TriggerProps
-										}
-									>
-										{ICONS.add}
-									</IconButton>
-								)}
-							/>
-						</ArkNumberInput.Control>
+						<StepControls />
 					</Show>
 				</div>
 			</ArkNumberInput.Root>

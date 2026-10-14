@@ -53,8 +53,8 @@ export type DoorTarget =
 
 export const doorTargetFor = internalQuery({
 	args: { personId: v.id("people") },
-	handler: async (ctx, { personId }): Promise<DoorTarget> => {
-		const person = await ctx.db.get(personId);
+	handler: async (context, { personId }): Promise<DoorTarget> => {
+		const person = await context.db.get(personId);
 		if (!person) return { status: "not_found" };
 		return {
 			status: "target",
@@ -75,16 +75,16 @@ const WRITES_DISABLED =
  * which every deployment holding the token shares; an injected test provider
  * is not that account, so it is let through. Production never injects one.
  */
-function revokeAllowed(): boolean {
+function isRevokeAllowed(): boolean {
 	return injectedDoorProvider() !== undefined || doorWritesEnabled();
 }
 
 async function recordAuthLog(
-	ctx: ActionCtx,
+	context: ActionCtx,
 	rows: Infer<typeof doorLogRecordRow>[]
 ): Promise<void> {
 	if (rows.length === 0) return;
-	await ctx.runMutation(internal.doorLog.record, { rows });
+	await context.runMutation(internal.doorLog.record, { rows });
 }
 
 /**
@@ -102,12 +102,13 @@ function managedAuthsOf(
 ): { lockId: string; authId: string }[] {
 	return model.identities
 		.filter(
-			(i) =>
-				matchesStrictly(i, target) &&
+			(identity) =>
+				matchesStrictly(identity, target) &&
 				(spareEmail === undefined ||
-					normalizeEmail(i.email) !== normalizeEmail(spareEmail))
+					normalizeEmail(identity.email) !==
+						normalizeEmail(spareEmail))
 		)
-		.flatMap((i) => i.authIds ?? []);
+		.flatMap((identity) => identity.authIds ?? []);
 }
 
 /** What `revokeUnlessBreakGlass` did (or didn't do) for one person. */
@@ -153,31 +154,34 @@ export const revokeUnlessBreakGlass = internalAction({
 		spareEmail: v.optional(v.string()),
 	},
 	handler: async (
-		ctx,
+		context,
 		{ personId, trigger, detail, spareEmail }
 	): Promise<RevokeUnlessBreakGlassResult> => {
-		if (!revokeAllowed()) {
+		if (!isRevokeAllowed()) {
 			// eslint-disable-next-line no-console -- the only trace of a revoke this deployment deliberately skipped
 			console.warn("doorRevoke.revokeUnlessBreakGlass:", WRITES_DISABLED);
 			return { outcome: "disabled" };
 		}
-		const target = await ctx.runQuery(internal.doorRevoke.doorTargetFor, {
-			personId,
-		});
+		const target = await context.runQuery(
+			internal.doorRevoke.doorTargetFor,
+			{
+				personId,
+			}
+		);
 		if (target.status === "not_found") return { outcome: "not_found" };
 		if (target.keepsBreakGlass)
 			return { outcome: "kept", email: target.email };
 
 		// NOT write-gated here: `revokeUnlessBreakGlass` already checked
-		// `revokeAllowed()` before reaching this (see {@link revokeAllowed}).
+		// `isRevokeAllowed()` before reaching this (see {@link isRevokeAllowed}).
 		const provider = doorProvider({ requireWrites: false });
 		const model = await provider.readModel();
 		const auths = managedAuthsOf(model, target, spareEmail);
 		if (auths.length === 0)
 			return { outcome: "revoked", email: target.email, revoked: 0 };
 
-		await provider.revokeAuthIds(auths.map((a) => a.authId));
-		await recordAuthLog(ctx, [
+		await provider.revokeAuthIds(auths.map((auth) => auth.authId));
+		await recordAuthLog(context, [
 			{
 				operation: "revoke",
 				trigger,
@@ -186,7 +190,7 @@ export const revokeUnlessBreakGlass = internalAction({
 				name: target.name,
 				personId,
 				lockNames: lockNamesFromModel(model, [
-					...new Set(auths.map((a) => a.lockId)),
+					...new Set(auths.map((auth) => auth.lockId)),
 				]),
 				outcome: "ok",
 			},

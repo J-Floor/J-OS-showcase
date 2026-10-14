@@ -10,7 +10,7 @@ import type { JSX } from "solid-js";
 import { AbilityProvider } from "../../../lib/ability.tsx";
 import { createEntitySelection } from "../../../shared/entity/createEntitySelection.ts";
 
-import type { PersonRef, PersonSelection } from "./TabProps.ts";
+import type { PersonReference, PersonSelection } from "./TabProps.ts";
 
 /**
  * Renders a roster tab the way the page does: inside a router, handed the
@@ -25,18 +25,18 @@ import type { PersonRef, PersonSelection } from "./TabProps.ts";
  */
 export function renderWithSelection(
 	ui: (selection: PersonSelection) => JSX.Element,
-	opts?: { path?: string }
+	options?: { path?: string }
 ) {
 	const history = createMemoryHistory();
 	history.set({
-		value: opts?.path ?? "/community",
+		value: options?.path ?? "/community",
 		scroll: false,
 		replace: true,
 	});
 	let location: ReturnType<typeof useLocation> | undefined;
 	function Page() {
-		const selection = createEntitySelection<PersonRef>({
-			rows: () => undefined,
+		const selection = createEntitySelection<PersonReference>({
+			rows: () => {},
 			param: "person",
 		});
 		location = useLocation();

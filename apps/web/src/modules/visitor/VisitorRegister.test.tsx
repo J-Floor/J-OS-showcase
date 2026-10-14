@@ -20,7 +20,7 @@ let eventData: {
 vi.mock("convex-solidjs", () => ({
 	useQuery: () => ({
 		data: () => eventData,
-		error: () => undefined,
+		error: () => {},
 		isLoading: () => false,
 	}),
 	useAction: () => ({ mutateAsync }),
@@ -34,8 +34,12 @@ let sessionState: {
 	isPending: boolean;
 } = { data: null, isPending: false };
 
+function currentSession() {
+	return sessionState;
+}
+
 vi.mock("../../lib/auth.ts", () => ({
-	authClient: { useSession: () => () => sessionState },
+	authClient: { useSession: () => currentSession },
 }));
 
 import { VisitorRegister } from "./VisitorRegister.tsx";
@@ -119,8 +123,8 @@ test("shows an ended state and no form when the event has ended", () => {
 
 test('shows an ended state after registerVisitor returns status "ended"', async () => {
 	(window as { grecaptcha?: unknown }).grecaptcha = {
-		ready: (cb: () => void) => {
-			cb();
+		ready: (callback: () => void) => {
+			callback();
 		},
 		execute: () => Promise.resolve("token"),
 	};

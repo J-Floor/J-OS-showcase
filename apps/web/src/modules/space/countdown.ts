@@ -1,4 +1,4 @@
-const DAY_MS = 86_400_000;
+import { DAY_MS } from "../../../convex/lib/constants.ts";
 
 /** Whole days remaining until `accessUntil` (epoch ms), floored at 0. */
 export function daysLeft(accessUntil: number, now: number): number {

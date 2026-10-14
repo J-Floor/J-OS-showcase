@@ -122,12 +122,13 @@ const verticalOptionsUnordered: VerticalOption[] = [
 	{ value: "other", label: "Other" },
 ];
 
+/* eslint-disable id-length -- conventional comparator parameter names */
 /** Alphabetical by label, but "Other" always sorts last as a catch-all. */
 function byVerticalLabel(a: VerticalOption, b: VerticalOption): number {
 	if (a.value === "other") return 1;
-	if (b.value === "other") return -1;
-	return a.label.localeCompare(b.label);
+	return b.value === "other" ? -1 : a.label.localeCompare(b.label);
 }
+/* eslint-enable id-length -- conventional comparator parameter names */
 
 /** The verticals as shown to users: sorted by label, "Other" pinned last. */
 export const verticalOptions: VerticalOption[] = [

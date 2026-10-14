@@ -47,14 +47,14 @@ function fakeSubscription(key: number[] = [1, 2, 3]) {
 	};
 }
 
-function installPush(opts: {
+function installPush(options: {
 	permission: NotificationPermission;
 	request?: NotificationPermission;
 	existing?: ReturnType<typeof fakeSubscription> | null;
 }) {
 	const created = fakeSubscription();
 	const pushManager = {
-		getSubscription: vi.fn(() => Promise.resolve(opts.existing ?? null)),
+		getSubscription: vi.fn(() => Promise.resolve(options.existing ?? null)),
 		// eslint-disable-next-line @typescript-eslint/no-unused-vars -- typed args let toHaveBeenCalledWith see the call shape
 		subscribe: vi.fn((..._args: unknown[]) => Promise.resolve(created)),
 	};
@@ -67,9 +67,9 @@ function installPush(opts: {
 	// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- stand-in for the PushManager global, only its presence matters
 	vi.stubGlobal("PushManager", class {});
 	vi.stubGlobal("Notification", {
-		permission: opts.permission,
+		permission: options.permission,
 		requestPermission: vi.fn(() =>
-			Promise.resolve(opts.request ?? opts.permission)
+			Promise.resolve(options.request ?? options.permission)
 		),
 	});
 	return { pushManager, created };
@@ -209,7 +209,7 @@ describe("disablePush, resyncPush, pushSubscribed", () => {
 		try {
 			const existing = fakeSubscription();
 			installPush({ permission: "granted", existing });
-			mutation.mockImplementationOnce(() => new Promise(() => undefined));
+			mutation.mockImplementationOnce(() => new Promise(() => {}));
 			const result = expect(disablePush()).rejects.toThrow(
 				/did not confirm in time/
 			);

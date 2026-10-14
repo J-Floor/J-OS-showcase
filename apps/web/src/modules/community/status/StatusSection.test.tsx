@@ -27,8 +27,11 @@ const extendWindow = vi.fn().mockResolvedValue(undefined);
 vi.mock("../actions/triage.ts", () => ({
 	useTriage: () => ({ extendWindow }),
 }));
+function answerYes() {
+	return Promise.resolve(true);
+}
 vi.mock("../../../shared/confirm.tsx", () => ({
-	useConfirm: () => () => Promise.resolve(true),
+	useConfirm: () => answerYes,
 }));
 const agreementQuery = vi.fn().mockResolvedValue("https://files.example/a.pdf");
 vi.mock("convex-solidjs", () => ({

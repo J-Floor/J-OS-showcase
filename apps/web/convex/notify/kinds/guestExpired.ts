@@ -9,10 +9,10 @@ import { noticeEmail } from "./noticeEmail.ts";
 const payload = v.object({ guestId: v.id("people"), guestName: v.string() });
 
 function copy(
-	p: Infer<typeof payload>,
-	r: Recipient
+	details: Infer<typeof payload>,
+	recipient: Recipient
 ): { title: string; body: string; url: string } {
-	if (r.personId === p.guestId) {
+	if (recipient.personId === details.guestId) {
 		return {
 			title: "Your guest access has ended",
 			body: "Your guest access to the J floor has ended. Ask your host if you need more time.",
@@ -21,8 +21,8 @@ function copy(
 	}
 	return {
 		title: "Guest access ended",
-		body: `${p.guestName}'s guest access has ended.`,
-		url: personUrl(p.guestId),
+		body: `${details.guestName}'s guest access has ended.`,
+		url: personUrl(details.guestId),
 	};
 }
 
@@ -31,10 +31,13 @@ function copy(
 export const guestExpired = defineKind({
 	category: "guests",
 	payload,
-	audience: (ctx, { guestId }) =>
-		guestAudience(ctx, guestId, { guest: "always" }),
-	push: (p, r) => ({ ...copy(p, r), tag: `guest-${p.guestId}-expired` }),
-	email: (p, r) => {
-		return noticeEmail(copy(p, r));
+	audience: (context, { guestId }) =>
+		guestAudience(context, guestId, { guest: "always" }),
+	push: (details, recipient) => ({
+		...copy(details, recipient),
+		tag: `guest-${details.guestId}-expired`,
+	}),
+	email: (details, recipient) => {
+		return noticeEmail(copy(details, recipient));
 	},
 });

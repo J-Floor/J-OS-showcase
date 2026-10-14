@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 
 import { internal } from "../_generated/api";
-import { internalMutation } from "../_generated/server";
+import { internalMutation, type MutationCtx } from "../_generated/server";
 import { isLiveStage } from "../lib/derive.ts";
 
 import { scheduleEventReminders } from "./eventReminders.ts";
@@ -18,6 +18,68 @@ export type BackfillPage = {
 	done: boolean;
 };
 
+type PageOutcome = {
+	isDone: boolean;
+	continueCursor: string;
+	scheduled: number;
+};
+
+async function scheduleEventsPage(
+	context: MutationCtx,
+	cursor: string | null,
+	now: number
+): Promise<PageOutcome> {
+	const page = await context.db
+		.query("events")
+		.paginate({ numItems: BACKFILL_BATCH, cursor });
+	let scheduled = 0;
+	for (const event of page.page) {
+		if (event.startsAt <= now || event.reminderJobIds !== undefined)
+			continue;
+		await scheduleEventReminders(context, event, now);
+		scheduled += 1;
+	}
+	return {
+		isDone: page.isDone,
+		continueCursor: page.continueCursor,
+		scheduled,
+	};
+}
+
+async function scheduleGuestsPage(
+	context: MutationCtx,
+	cursor: string | null,
+	now: number
+): Promise<PageOutcome> {
+	const page = await context.db
+		.query("people")
+		.withIndex("by_tier_and_formerOf", (range) => range.eq("tier", "guest"))
+		.paginate({ numItems: BACKFILL_BATCH, cursor });
+	let scheduled = 0;
+	for (const guest of page.page) {
+		if (!isLiveStage(guest.stage)) continue;
+		const { accessUntil } = guest;
+		if (
+			accessUntil === undefined ||
+			accessUntil - THREE_DAYS <= now ||
+			guest.guestExpiryRemindedFor === accessUntil
+		)
+			continue;
+		await scheduleGuestExpiringSoon(
+			context,
+			guest._id,
+			accessUntil,
+			undefined
+		);
+		scheduled += 1;
+	}
+	return {
+		isDone: page.isDone,
+		continueCursor: page.continueCursor,
+		scheduled,
+	};
+}
+
 /** One-off, run once per deployment after the notifications feature ships:
  *  schedules the reminders for events and guests that predate it. Kick it off
  *  with `{}`; it walks events, then guests, one page per run, rescheduling
@@ -33,67 +95,35 @@ export const scheduleExisting = internalMutation({
 		phase: v.optional(v.union(v.literal("events"), v.literal("guests"))),
 		cursor: v.optional(v.union(v.string(), v.null())),
 	},
-	handler: async (ctx, args): Promise<BackfillPage> => {
+	handler: async (context, args): Promise<BackfillPage> => {
 		const phase: Phase = args.phase ?? "events";
 		const cursor = args.cursor ?? null;
 		const now = Date.now();
-		let events = 0;
-		let guests = 0;
-		let isDone: boolean;
-		let continueCursor: string;
+		const page =
+			phase === "events"
+				? await scheduleEventsPage(context, cursor, now)
+				: await scheduleGuestsPage(context, cursor, now);
+		const events = phase === "events" ? page.scheduled : 0;
+		const guests = phase === "guests" ? page.scheduled : 0;
 
-		if (phase === "events") {
-			const page = await ctx.db
-				.query("events")
-				.paginate({ numItems: BACKFILL_BATCH, cursor });
-			for (const event of page.page) {
-				if (event.startsAt <= now) continue;
-				if (event.reminderJobIds !== undefined) continue;
-				await scheduleEventReminders(ctx, event, now);
-				events += 1;
-			}
-			({ isDone, continueCursor } = page);
-		} else {
-			const page = await ctx.db
-				.query("people")
-				.withIndex("by_tier_and_formerOf", (q) => q.eq("tier", "guest"))
-				.paginate({ numItems: BACKFILL_BATCH, cursor });
-			for (const guest of page.page) {
-				if (!isLiveStage(guest.stage)) continue;
-				const { accessUntil } = guest;
-				if (accessUntil == null || accessUntil - THREE_DAYS <= now)
-					continue;
-				if (guest.guestExpiryRemindedFor === accessUntil) continue;
-				await scheduleGuestExpiringSoon(
-					ctx,
-					guest._id,
-					accessUntil,
-					undefined,
-					now
-				);
-				guests += 1;
-			}
-			({ isDone, continueCursor } = page);
-		}
-
-		if (!isDone)
-			await ctx.scheduler.runAfter(
+		if (!page.isDone)
+			await context.scheduler.runAfter(
 				0,
 				internal.notify.backfill.scheduleExisting,
-				{ phase, cursor: continueCursor }
+				{ phase, cursor: page.continueCursor }
 			);
 		else if (phase === "events")
-			await ctx.scheduler.runAfter(
+			await context.scheduler.runAfter(
 				0,
 				internal.notify.backfill.scheduleExisting,
 				{ phase: "guests", cursor: null }
 			);
 
-		const done = isDone && phase === "guests";
+		const isFinished = page.isDone && phase === "guests";
 		// eslint-disable-next-line no-console -- per-page progress of a one-off migration, read from the Convex logs
 		console.log(
-			`[notify:backfill] ${phase} page: ${String(events)} event(s), ${String(guests)} guest(s) scheduled${done ? "; done" : ""}`
+			`[notify:backfill] ${phase} page: ${String(events)} event(s), ${String(guests)} guest(s) scheduled${isFinished ? "; done" : ""}`
 		);
-		return { phase, events, guests, done };
+		return { phase, events, guests, done: isFinished };
 	},
 });

@@ -19,7 +19,7 @@ type T = TestConvex<typeof schema>;
 // Fake timers keep those callbacks from ever firing; the tests run jobs by hand.
 beforeEach(() => {
 	vi.useFakeTimers();
-	vi.spyOn(console, "log").mockImplementation(() => undefined);
+	vi.spyOn(console, "log").mockImplementation(() => {});
 });
 afterEach(() => {
 	vi.clearAllTimers();
@@ -27,36 +27,43 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-async function allJobs(t: T) {
-	return t.run((ctx) =>
-		ctx.db.system.query("_scheduled_functions").collect()
+async function allJobs(backend: T) {
+	return backend.run((context) =>
+		context.db.system.query("_scheduled_functions").collect()
 	);
 }
 
-async function jobNames(t: T, prefix: string) {
-	return (await allJobs(t)).filter((j) => j.name.startsWith(prefix));
+async function jobNames(backend: T, prefix: string) {
+	const jobs = await allJobs(backend);
+	return jobs.filter((job) => job.name.startsWith(prefix));
 }
 
 /** Kick the backfill off with `{}`, then run each self-scheduled continuation
  *  by hand (running every scheduled job would also fire the reminders it just
  *  scheduled), summing the per-page counts. Jobs left by an earlier run are
  *  not replayed. */
-async function runBackfill(t: T) {
+async function runBackfill(backend: T) {
 	const total = { events: 0, guests: 0, pages: 0 };
 	const ran = new Set<string>();
-	for (const job of await allJobs(t)) ran.add(job._id);
-	let page = await t.mutation(internal.notify.backfill.scheduleExisting, {});
+	const existingJobs = await allJobs(backend);
+	for (const job of existingJobs) ran.add(job._id);
+	let page = await backend.mutation(
+		internal.notify.backfill.scheduleExisting,
+		{}
+	);
 	for (;;) {
 		total.events += page.events;
 		total.guests += page.guests;
 		total.pages += 1;
-		const next = (await allJobs(t)).find(
-			(j) =>
-				j.name === "notify/backfill:scheduleExisting" && !ran.has(j._id)
+		const jobs = await allJobs(backend);
+		const next = jobs.find(
+			(job) =>
+				job.name === "notify/backfill:scheduleExisting" &&
+				!ran.has(job._id)
 		);
 		if (!next) break;
 		ran.add(next._id);
-		page = await t.mutation(
+		page = await backend.mutation(
 			internal.notify.backfill.scheduleExisting,
 			next.args[0] as {
 				phase: "events" | "guests";
@@ -69,7 +76,7 @@ async function runBackfill(t: T) {
 }
 
 async function insertPerson(
-	t: T,
+	backend: T,
 	email: string,
 	fields: {
 		tier: "guest" | "member";
@@ -78,8 +85,8 @@ async function insertPerson(
 		guestExpiryRemindedFor?: number;
 	}
 ) {
-	return t.run((ctx) =>
-		ctx.db.insert("people", {
+	return backend.run((context) =>
+		context.db.insert("people", {
 			email,
 			firstName: email,
 			lastName: "",
@@ -91,15 +98,15 @@ async function insertPerson(
 }
 
 async function insertEvent(
-	t: T,
+	backend: T,
 	createdBy: Id<"people">,
 	startsAt: number,
 	extra: {
 		reminderJobIds?: { startingSoon?: Id<"_scheduled_functions"> };
 	} = {}
 ) {
-	return t.run((ctx) =>
-		ctx.db.insert("events", {
+	return backend.run((context) =>
+		context.db.insert("events", {
 			name: "Demo",
 			startsAt,
 			endsAt: startsAt + 2 * HOUR,
@@ -114,14 +121,14 @@ async function insertEvent(
 
 describe("notify backfill", () => {
 	it("schedules future events without reminders only", async () => {
-		const t = convexTest(schema, modules);
-		const owner = await insertPerson(t, "o@example.com", {
+		const backend = convexTest(schema, modules);
+		const owner = await insertPerson(backend, "o@example.com", {
 			tier: "member",
 		});
-		const future = await insertEvent(t, owner, Date.now() + 2 * DAY);
-		const past = await insertEvent(t, owner, Date.now() - 2 * DAY);
-		const jobId = await t.run((ctx) =>
-			ctx.scheduler.runAfter(
+		const future = await insertEvent(backend, owner, Date.now() + 2 * DAY);
+		const past = await insertEvent(backend, owner, Date.now() - 2 * DAY);
+		const jobId = await backend.run((context) =>
+			context.scheduler.runAfter(
 				DAY,
 				internal.notify.eventReminders.startingSoon,
 				{
@@ -130,76 +137,78 @@ describe("notify backfill", () => {
 				}
 			)
 		);
-		const done = await insertEvent(t, owner, Date.now() + 3 * DAY, {
+		const done = await insertEvent(backend, owner, Date.now() + 3 * DAY, {
 			reminderJobIds: { startingSoon: jobId },
 		});
-		const empty = await insertEvent(t, owner, Date.now() + 4 * DAY, {
+		const empty = await insertEvent(backend, owner, Date.now() + 4 * DAY, {
 			reminderJobIds: {},
 		});
 
-		const result = await runBackfill(t);
+		const result = await runBackfill(backend);
 
 		expect(result.events).toBe(1);
-		const rows = await t.run(async (ctx) => ({
-			future: await ctx.db.get(future),
-			past: await ctx.db.get(past),
-			done: await ctx.db.get(done),
-			empty: await ctx.db.get(empty),
+		const rows = await backend.run(async (context) => ({
+			future: await context.db.get(future),
+			past: await context.db.get(past),
+			done: await context.db.get(done),
+			empty: await context.db.get(empty),
 		}));
 		expect(rows.future?.reminderJobIds?.startingSoon).toBeDefined();
 		expect(rows.future?.reminderJobIds?.endingSoon).toBeDefined();
 		expect(rows.past?.reminderJobIds).toBeUndefined();
 		expect(rows.done?.reminderJobIds).toEqual({ startingSoon: jobId });
 		expect(rows.empty?.reminderJobIds).toEqual({});
-		expect(await jobNames(t, "notify/eventReminders:")).toHaveLength(3);
+		expect(await jobNames(backend, "notify/eventReminders:")).toHaveLength(
+			3
+		);
 	});
 
 	it("schedules expiring-soon only for eligible guests", async () => {
-		const t = convexTest(schema, modules);
+		const backend = convexTest(schema, modules);
 		const now = Date.now();
 		const ten = now + 10 * DAY;
-		await insertPerson(t, "a@example.com", {
+		await insertPerson(backend, "a@example.com", {
 			tier: "guest",
 			accessUntil: ten,
 		});
-		await insertPerson(t, "b@example.com", {
+		await insertPerson(backend, "b@example.com", {
 			tier: "guest",
 			accessUntil: now + 2 * DAY,
 		});
-		await insertPerson(t, "c@example.com", {
+		await insertPerson(backend, "c@example.com", {
 			tier: "guest",
 			stage: "expired",
 			accessUntil: ten,
 		});
-		await insertPerson(t, "d@example.com", {
+		await insertPerson(backend, "d@example.com", {
 			tier: "member",
 			accessUntil: ten,
 		});
-		await insertPerson(t, "e@example.com", {
+		await insertPerson(backend, "e@example.com", {
 			tier: "guest",
 			accessUntil: ten,
 			guestExpiryRemindedFor: ten,
 		});
 
-		const result = await runBackfill(t);
+		const result = await runBackfill(backend);
 
 		expect(result.guests).toBe(1);
-		const jobs = await jobNames(t, "notify/guests:");
+		const jobs = await jobNames(backend, "notify/guests:");
 		expect(jobs).toHaveLength(1);
 		expect(jobs[0]?.scheduledTime).toBe(ten - 3 * DAY);
 	});
 
 	it("pages through events and guests bigger than one batch", async () => {
-		const t = convexTest(schema, modules);
-		const owner = await insertPerson(t, "o@example.com", {
+		const backend = convexTest(schema, modules);
+		const owner = await insertPerson(backend, "o@example.com", {
 			tier: "member",
 		});
 		const count = BACKFILL_BATCH + 1;
 		const until = Date.now() + 10 * DAY;
-		await t.run(async (ctx) => {
-			for (let i = 0; i < count; i++) {
-				await ctx.db.insert("events", {
-					name: `E${String(i)}`,
+		await backend.run(async (context) => {
+			for (let index = 0; index < count; index++) {
+				await context.db.insert("events", {
+					name: `E${String(index)}`,
 					startsAt: Date.now() + 2 * DAY,
 					endsAt: Date.now() + 2 * DAY + 2 * HOUR,
 					startsAtLocal: "x",
@@ -207,8 +216,8 @@ describe("notify backfill", () => {
 					createdBy: owner,
 					createdAt: Date.now(),
 				});
-				await ctx.db.insert("people", {
-					email: `g${String(i)}@example.com`,
+				await context.db.insert("people", {
+					email: `g${String(index)}@example.com`,
 					firstName: "G",
 					lastName: "",
 					tier: "guest",
@@ -219,42 +228,46 @@ describe("notify backfill", () => {
 			}
 		});
 
-		const result = await runBackfill(t);
+		const result = await runBackfill(backend);
 
 		expect(result.events).toBe(count);
 		expect(result.guests).toBe(count);
 		expect(result.pages).toBeGreaterThanOrEqual(4);
-		expect(await jobNames(t, "notify/guests:")).toHaveLength(count);
+		expect(await jobNames(backend, "notify/guests:")).toHaveLength(count);
 	});
 
 	it("a re-run skips events, and a duplicate guest job sends only one reminder", async () => {
-		const t = convexTest(schema, modules);
-		const owner = await insertPerson(t, "o@example.com", {
+		const backend = convexTest(schema, modules);
+		const owner = await insertPerson(backend, "o@example.com", {
 			tier: "member",
 		});
-		await insertEvent(t, owner, Date.now() + 2 * DAY);
-		await insertPerson(t, "g@example.com", {
+		await insertEvent(backend, owner, Date.now() + 2 * DAY);
+		await insertPerson(backend, "g@example.com", {
 			tier: "guest",
 			accessUntil: Date.now() + 10 * DAY,
 		});
 
-		const first = await runBackfill(t);
-		const second = await runBackfill(t);
+		const first = await runBackfill(backend);
+		const second = await runBackfill(backend);
 
 		expect(first).toMatchObject({ events: 1, guests: 1 });
 		expect(second).toMatchObject({ events: 0, guests: 1 });
-		expect(await jobNames(t, "notify/eventReminders:")).toHaveLength(2);
-		const reminders = await jobNames(t, "notify/guests:");
+		expect(await jobNames(backend, "notify/eventReminders:")).toHaveLength(
+			2
+		);
+		const reminders = await jobNames(backend, "notify/guests:");
 		expect(reminders).toHaveLength(2);
 
 		for (const job of reminders)
-			await t.mutation(
+			await backend.mutation(
 				internal.notify.guests.expiringSoon,
 				job.args[0] as { personId: Id<"people">; accessUntil: number }
 			);
 
-		const sent = (await jobNames(t, "notify/dispatch:run")).filter(
-			(j) => (j.args[0] as { kind: string }).kind === "guestExpiringSoon"
+		const dispatchJobs = await jobNames(backend, "notify/dispatch:run");
+		const sent = dispatchJobs.filter(
+			(job) =>
+				(job.args[0] as { kind: string }).kind === "guestExpiringSoon"
 		);
 		expect(sent).toHaveLength(1);
 	});

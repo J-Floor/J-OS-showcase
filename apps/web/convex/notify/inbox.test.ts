@@ -4,9 +4,10 @@ import { describe, expect, it } from "vitest";
 import { runAndCollectLogs } from "../../test-stubs/runAndCollectLogs.ts";
 import { api, internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
+import { NINETY_DAYS } from "../lib/constants.ts";
 import schema from "../schema.ts";
 
-import { appPath, MARK_ALL_BATCH, NINETY_DAYS, PURGE_BATCH } from "./inbox.ts";
+import { appPath, MARK_ALL_BATCH, PURGE_BATCH } from "./inbox.ts";
 
 const modules = import.meta.glob("/convex/**/*.*s");
 const NOW = Date.now();
@@ -15,12 +16,12 @@ const DAY = 86_400_000;
 type T = ReturnType<typeof convexTest>;
 
 async function seedPerson(
-	t: T,
+	backend: T,
 	email: string,
 	tier: "member" | "former" = "member"
 ): Promise<Id<"people">> {
-	return t.run((ctx) =>
-		ctx.db.insert("people", {
+	return backend.run((context) =>
+		context.db.insert("people", {
 			email,
 			firstName: email.split("@")[0],
 			lastName: "X",
@@ -33,24 +34,24 @@ async function seedPerson(
 
 /** `count` rows for one person, newest first from `at`, one millisecond apart. */
 async function seedRows(
-	t: T,
+	backend: T,
 	personId: Id<"people">,
 	count: number,
 	options: { at?: number; readAt?: number; title?: string } = {}
 ): Promise<Id<"notifications">[]> {
 	const at = options.at ?? NOW;
 	const title = options.title ?? "row";
-	return t.run(async (ctx) => {
+	return backend.run(async (context) => {
 		const ids: Id<"notifications">[] = [];
-		for (let i = 0; i < count; i++) {
+		for (let index = 0; index < count; index++) {
 			ids.push(
-				await ctx.db.insert("notifications", {
+				await context.db.insert("notifications", {
 					personId,
 					kind: "taskAssigned",
-					title: `${title} ${String(i)}`,
+					title: `${title} ${String(index)}`,
 					body: "Wire it",
 					url: "/tasks",
-					createdAt: at - i,
+					createdAt: at - index,
 					readAt: options.readAt,
 				})
 			);
@@ -75,16 +76,16 @@ describe("appPath", () => {
 
 describe("record", () => {
 	it("writes one unread row per entry, all with one createdAt", async () => {
-		const t = convexTest(schema, modules);
-		const ada = await seedPerson(t, "ada@jfloor.test");
-		const bob = await seedPerson(t, "bob@jfloor.test");
+		const backend = convexTest(schema, modules);
+		const ada = await seedPerson(backend, "ada@jfloor.test");
+		const bob = await seedPerson(backend, "bob@jfloor.test");
 		const message = {
 			title: "Upstairs lock is offline.",
 			body: "Check the lock.",
 			url: "/space?tab=diagnostics",
 		};
 
-		await t.mutation(internal.notify.inbox.record, {
+		await backend.mutation(internal.notify.inbox.record, {
 			kind: "doorAlert",
 			rows: [
 				{ personId: ada, ...message },
@@ -92,26 +93,32 @@ describe("record", () => {
 			],
 		});
 
-		const rows = await t.run((ctx) =>
-			ctx.db.query("notifications").collect()
+		const rows = await backend.run((context) =>
+			context.db.query("notifications").collect()
 		);
-		expect(rows.map((r) => r.personId).sort()).toEqual([ada, bob].sort());
+		// eslint-disable-next-line id-length -- conventional comparator parameter names
+		const expectedIds = [ada, bob].sort((a, b) => a.localeCompare(b));
+		const gotIds = rows
+			.map((row) => row.personId)
+			// eslint-disable-next-line id-length -- conventional comparator parameter names
+			.sort((a, b) => a.localeCompare(b));
+		expect(gotIds).toEqual(expectedIds);
 		for (const row of rows) {
 			expect(row).toMatchObject({ kind: "doorAlert", ...message });
 			expect(row.readAt).toBeUndefined();
 		}
-		expect(new Set(rows.map((r) => r.createdAt)).size).toBe(1);
+		expect(new Set(rows.map((row) => row.createdAt)).size).toBe(1);
 	});
 });
 
 describe("reading the history", () => {
 	it("pages a 120-row history newest first, 50 at a time, without gaps or repeats", async () => {
-		const t = convexTest(schema, modules);
-		const ada = await seedPerson(t, "ada@jfloor.test");
-		const bob = await seedPerson(t, "bob@jfloor.test");
-		await seedRows(t, ada, 120, { title: "ada" });
-		await seedRows(t, bob, 5, { title: "bob" });
-		const asAda = t.withIdentity({ email: "ada@jfloor.test" });
+		const backend = convexTest(schema, modules);
+		const ada = await seedPerson(backend, "ada@jfloor.test");
+		const bob = await seedPerson(backend, "bob@jfloor.test");
+		await seedRows(backend, ada, 120, { title: "ada" });
+		await seedRows(backend, bob, 5, { title: "bob" });
+		const asAda = backend.withIdentity({ email: "ada@jfloor.test" });
 
 		const { since } = await asAda.query(
 			api.notify.inbox.firstPageFloor,
@@ -134,22 +141,22 @@ describe("reading the history", () => {
 		expect(second.page).toHaveLength(20);
 		expect(second.isDone).toBe(true);
 		const all = [...head, ...first.page, ...second.page];
-		expect(all.map((r) => r.createdAt)).toEqual(
-			Array.from({ length: 120 }, (_, i) => NOW - i)
+		expect(all.map((row) => row.createdAt)).toEqual(
+			Array.from({ length: 120 }, (_, index) => NOW - index)
 		);
-		expect(new Set(all.map((r) => r._id)).size).toBe(120);
-		expect(all.every((r) => r.title.startsWith("ada "))).toBe(true);
+		expect(new Set(all.map((row) => row._id)).size).toBe(120);
+		expect(all.every((row) => row.title.startsWith("ada "))).toBe(true);
 	});
 
 	it("rows sharing the floor's createdAt all land in the head, none dropped or repeated below", async () => {
-		const t = convexTest(schema, modules);
-		const ada = await seedPerson(t, "ada@jfloor.test");
+		const backend = convexTest(schema, modules);
+		const ada = await seedPerson(backend, "ada@jfloor.test");
 		const floorAt = NOW - 49;
-		await seedRows(t, ada, 49, { title: "above" });
-		for (let i = 0; i < 4; i++)
-			await seedRows(t, ada, 1, { at: floorAt, title: "tie" });
-		await seedRows(t, ada, 10, { at: floorAt - 1, title: "below" });
-		const asAda = t.withIdentity({ email: "ada@jfloor.test" });
+		await seedRows(backend, ada, 49, { title: "above" });
+		for (let index = 0; index < 4; index++)
+			await seedRows(backend, ada, 1, { at: floorAt, title: "tie" });
+		await seedRows(backend, ada, 10, { at: floorAt - 1, title: "below" });
+		const asAda = backend.withIdentity({ email: "ada@jfloor.test" });
 
 		const { since } = await asAda.query(
 			api.notify.inbox.firstPageFloor,
@@ -163,18 +170,18 @@ describe("reading the history", () => {
 			paginationOpts: { numItems: 50, cursor: null },
 		});
 
-		expect(head.filter((r) => r.createdAt === floorAt)).toHaveLength(4);
-		expect(older.page.every((r) => r.createdAt < floorAt)).toBe(true);
+		expect(head.filter((row) => row.createdAt === floorAt)).toHaveLength(4);
+		expect(older.page.every((row) => row.createdAt < floorAt)).toBe(true);
 		const all = [...head, ...older.page];
 		expect(all).toHaveLength(63);
-		expect(new Set(all.map((r) => r._id)).size).toBe(63);
+		expect(new Set(all.map((row) => row._id)).size).toBe(63);
 	});
 
 	it("a history of 50 or fewer has no floor and comes back whole, as InboxRows", async () => {
-		const t = convexTest(schema, modules);
-		const ada = await seedPerson(t, "ada@jfloor.test");
-		await seedRows(t, ada, 2, { title: "ada" });
-		const asAda = t.withIdentity({ email: "ada@jfloor.test" });
+		const backend = convexTest(schema, modules);
+		const ada = await seedPerson(backend, "ada@jfloor.test");
+		await seedRows(backend, ada, 2, { title: "ada" });
+		const asAda = backend.withIdentity({ email: "ada@jfloor.test" });
 
 		expect(await asAda.query(api.notify.inbox.firstPageFloor, {})).toEqual({
 			since: null,
@@ -203,20 +210,20 @@ describe("reading the history", () => {
 	});
 
 	it("unreadCount counts only the caller's unread rows and stops reading past the cap", async () => {
-		const t = convexTest(schema, modules);
-		const ada = await seedPerson(t, "ada@jfloor.test");
-		const bob = await seedPerson(t, "bob@jfloor.test");
-		await seedRows(t, ada, 2);
-		await seedRows(t, ada, 3, { at: NOW - 10, readAt: NOW });
-		await seedRows(t, bob, 150);
+		const backend = convexTest(schema, modules);
+		const ada = await seedPerson(backend, "ada@jfloor.test");
+		const bob = await seedPerson(backend, "bob@jfloor.test");
+		await seedRows(backend, ada, 2);
+		await seedRows(backend, ada, 3, { at: NOW - 10, readAt: NOW });
+		await seedRows(backend, bob, 150);
 
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: "ada@jfloor.test" })
 				.query(api.notify.inbox.unreadCount, {})
 		).toBe(2);
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: "bob@jfloor.test" })
 				.query(api.notify.inbox.unreadCount, {})
 		).toBe(100);
@@ -225,76 +232,78 @@ describe("reading the history", () => {
 
 describe("read state", () => {
 	it("markRead marks the caller's own row read", async () => {
-		const t = convexTest(schema, modules);
-		const ada = await seedPerson(t, "ada@jfloor.test");
-		const [id] = await seedRows(t, ada, 1);
-		const asAda = t.withIdentity({ email: "ada@jfloor.test" });
+		const backend = convexTest(schema, modules);
+		const ada = await seedPerson(backend, "ada@jfloor.test");
+		const [id] = await seedRows(backend, ada, 1);
+		const asAda = backend.withIdentity({ email: "ada@jfloor.test" });
 
 		await asAda.mutation(api.notify.inbox.markRead, { id });
 
-		const row = await t.run((ctx) => ctx.db.get(id));
+		const row = await backend.run((context) => context.db.get(id));
 		expect(row?.readAt).toBeTypeOf("number");
 		expect(await asAda.query(api.notify.inbox.unreadCount, {})).toBe(0);
-		expect(
-			(await asAda.query(api.notify.inbox.listSince, { since: null }))[0]
-				.read
-		).toBe(true);
+		const [first] = await asAda.query(api.notify.inbox.listSince, {
+			since: null,
+		});
+		expect(first.read).toBe(true);
 	});
 
 	it("markRead keeps an existing readAt", async () => {
-		const t = convexTest(schema, modules);
-		const ada = await seedPerson(t, "ada@jfloor.test");
-		const [id] = await seedRows(t, ada, 1, { readAt: NOW - 1000 });
+		const backend = convexTest(schema, modules);
+		const ada = await seedPerson(backend, "ada@jfloor.test");
+		const [id] = await seedRows(backend, ada, 1, { readAt: NOW - 1000 });
 
-		await t
+		await backend
 			.withIdentity({ email: "ada@jfloor.test" })
 			.mutation(api.notify.inbox.markRead, { id });
 
-		expect((await t.run((ctx) => ctx.db.get(id)))?.readAt).toBe(NOW - 1000);
+		const row = await backend.run((context) => context.db.get(id));
+		expect(row?.readAt).toBe(NOW - 1000);
 	});
 
 	it("markRead refuses another person's row", async () => {
-		const t = convexTest(schema, modules);
-		await seedPerson(t, "ada@jfloor.test");
-		const bob = await seedPerson(t, "bob@jfloor.test");
-		const [id] = await seedRows(t, bob, 1);
+		const backend = convexTest(schema, modules);
+		await seedPerson(backend, "ada@jfloor.test");
+		const bob = await seedPerson(backend, "bob@jfloor.test");
+		const [id] = await seedRows(backend, bob, 1);
 
 		await expect(
-			t
+			backend
 				.withIdentity({ email: "ada@jfloor.test" })
 				.mutation(api.notify.inbox.markRead, { id })
 		).rejects.toThrow(/Forbidden/);
-		expect((await t.run((ctx) => ctx.db.get(id)))?.readAt).toBeUndefined();
+		const row = await backend.run((context) => context.db.get(id));
+		expect(row?.readAt).toBeUndefined();
 	});
 
 	it("markRead on a row that is gone throws Not found", async () => {
-		const t = convexTest(schema, modules);
-		const ada = await seedPerson(t, "ada@jfloor.test");
-		const [id] = await seedRows(t, ada, 1);
-		await t.run((ctx) => ctx.db.delete(id));
+		const backend = convexTest(schema, modules);
+		const ada = await seedPerson(backend, "ada@jfloor.test");
+		const [id] = await seedRows(backend, ada, 1);
+		await backend.run((context) => context.db.delete(id));
 
 		await expect(
-			t
+			backend
 				.withIdentity({ email: "ada@jfloor.test" })
 				.mutation(api.notify.inbox.markRead, { id })
 		).rejects.toThrow(/Not found/);
 	});
 
 	it("markAllRead clears more than one batch through its scheduled continuation, and only the caller's", async () => {
-		const t = convexTest(schema, modules);
-		const ada = await seedPerson(t, "ada@jfloor.test");
-		const bob = await seedPerson(t, "bob@jfloor.test");
-		await seedRows(t, ada, MARK_ALL_BATCH + 1);
-		await seedRows(t, bob, 1);
-		const asAda = t.withIdentity({ email: "ada@jfloor.test" });
+		const backend = convexTest(schema, modules);
+		const ada = await seedPerson(backend, "ada@jfloor.test");
+		const bob = await seedPerson(backend, "bob@jfloor.test");
+		await seedRows(backend, ada, MARK_ALL_BATCH + 1);
+		await seedRows(backend, bob, 1);
+		const asAda = backend.withIdentity({ email: "ada@jfloor.test" });
 
-		await runAndCollectLogs(t, () =>
+		await runAndCollectLogs(backend, () =>
 			asAda.mutation(api.notify.inbox.markAllRead, {})
 		);
 
 		expect(await asAda.query(api.notify.inbox.unreadCount, {})).toBe(0);
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: "bob@jfloor.test" })
 				.query(api.notify.inbox.unreadCount, {})
 		).toBe(1);
@@ -303,10 +312,14 @@ describe("read state", () => {
 
 describe("access", () => {
 	it("every public function rejects a caller outside the community tiers", async () => {
-		const t = convexTest(schema, modules);
-		const former = await seedPerson(t, "former@jfloor.test", "former");
-		const [id] = await seedRows(t, former, 1);
-		const asFormer = t.withIdentity({ email: "former@jfloor.test" });
+		const backend = convexTest(schema, modules);
+		const former = await seedPerson(
+			backend,
+			"former@jfloor.test",
+			"former"
+		);
+		const [id] = await seedRows(backend, former, 1);
+		const asFormer = backend.withIdentity({ email: "former@jfloor.test" });
 
 		// Thunks, not promises: each call starts only when awaited, so no
 		// rejection goes unhandled while an earlier one is checked.
@@ -329,34 +342,34 @@ describe("access", () => {
 
 describe("purgeExpired", () => {
 	it("deletes rows older than 90 days across more than one batch and keeps newer ones", async () => {
-		const t = convexTest(schema, modules);
-		const ada = await seedPerson(t, "ada@jfloor.test");
-		await seedRows(t, ada, PURGE_BATCH + 1, {
+		const backend = convexTest(schema, modules);
+		const ada = await seedPerson(backend, "ada@jfloor.test");
+		await seedRows(backend, ada, PURGE_BATCH + 1, {
 			at: NOW - NINETY_DAYS - DAY,
 			title: "old",
 		});
-		await seedRows(t, ada, 1, {
+		await seedRows(backend, ada, 1, {
 			at: NOW - NINETY_DAYS + DAY,
 			title: "kept",
 		});
 
-		await runAndCollectLogs(t, () =>
-			t.mutation(internal.notify.inbox.purgeExpired, {})
+		await runAndCollectLogs(backend, () =>
+			backend.mutation(internal.notify.inbox.purgeExpired, {})
 		);
 
-		const left = await t.run((ctx) =>
-			ctx.db.query("notifications").collect()
+		const left = await backend.run((context) =>
+			context.db.query("notifications").collect()
 		);
-		expect(left.map((r) => r.title)).toEqual(["kept 0"]);
+		expect(left.map((row) => row.title)).toEqual(["kept 0"]);
 	});
 
 	it("reports how many rows one run deleted", async () => {
-		const t = convexTest(schema, modules);
-		const ada = await seedPerson(t, "ada@jfloor.test");
-		await seedRows(t, ada, 2, { at: NOW - NINETY_DAYS - DAY });
+		const backend = convexTest(schema, modules);
+		const ada = await seedPerson(backend, "ada@jfloor.test");
+		await seedRows(backend, ada, 2, { at: NOW - NINETY_DAYS - DAY });
 
 		expect(
-			await t.mutation(internal.notify.inbox.purgeExpired, {})
+			await backend.mutation(internal.notify.inbox.purgeExpired, {})
 		).toEqual({ deleted: 2 });
 	});
 });

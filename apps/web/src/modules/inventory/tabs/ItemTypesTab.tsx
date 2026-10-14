@@ -20,14 +20,14 @@ export function ItemTypesTab(props: {
 			columns={() => itemTypeColumns(types.data() ?? [])}
 			selection={props.selection}
 			descriptor={itemTypeEntity}
-			renderDrawer={(d) => (
+			renderDrawer={(drawer) => (
 				<ItemTypeDrawer
-					open={d.open()}
-					onOpenChange={d.onOpenChange}
-					itemType={d.row()}
+					open={drawer.open()}
+					onOpenChange={drawer.onOpenChange}
+					itemType={drawer.row()}
 					categories={categories.data() ?? []}
 					loading={props.selection.loading()}
-					nav={d.nav}
+					nav={drawer.nav}
 				/>
 			)}
 		/>

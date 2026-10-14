@@ -1,7 +1,7 @@
 import { QrCode } from "@ark-ui/solid/qr-code";
 import { IconButton } from "@j-os/design-system";
-import { createSignal, onCleanup } from "solid-js";
 
+import { createCopyFeedback } from "../../shared/createCopyFeedback.ts";
 import { ICONS } from "../../shared/icons.ts";
 
 import { wifiQrPayload } from "./wifi.ts";
@@ -18,25 +18,11 @@ export type WifiContentProps = {
  * caller resolves the credentials (e.g. `WifiCard` via `api.wifi.get`).
  */
 export function WifiContent(props: WifiContentProps) {
-	// Flips to true right after a successful copy, so the button briefly shows
-	// a tick/"Copied" instead of the copy icon. Cleared on a timer.
-	const [copied, setCopied] = createSignal(false);
-	let resetTimer: ReturnType<typeof setTimeout> | undefined;
-	onCleanup(() => {
-		clearTimeout(resetTimer);
-	});
-
-	function copyPassword(): void {
-		// The password is never shown on screen (only dots) — copying it
-		// straight to the clipboard is how you get it onto a device without
-		// revealing it.
-		void navigator.clipboard.writeText(props.password);
-		setCopied(true);
-		clearTimeout(resetTimer);
-		resetTimer = setTimeout(() => {
-			setCopied(false);
-		}, 1500);
-	}
+	// The password is never shown on screen (only dots) — copying it straight
+	// to the clipboard is how you get it onto a device without revealing it.
+	const { copied, copy: copyPassword } = createCopyFeedback(
+		() => props.password
+	);
 
 	return (
 		<div class={styles.codes}>

@@ -14,6 +14,6 @@ test("renders the requested number of rows, cycling widths", () => {
 	render(() => <SkeletonList rows={5} />);
 	const widths = Array.from(
 		screen.getByRole("status").querySelectorAll("[data-width]")
-	).map((el) => el.getAttribute("data-width"));
+	).map((element) => element.getAttribute("data-width"));
 	expect(widths).toEqual(["long", "medium", "short", "long", "medium"]);
 });

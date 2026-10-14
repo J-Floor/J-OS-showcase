@@ -26,13 +26,11 @@ export function pushSupport(): PushSupport {
 		!isStandalone()
 	)
 		return "ios";
-	if (
-		!("serviceWorker" in navigator) ||
+	return !("serviceWorker" in navigator) ||
 		typeof PushManager === "undefined" ||
 		typeof Notification === "undefined"
-	)
-		return "unsupported";
-	return Notification.permission;
+		? "unsupported"
+		: Notification.permission;
 }
 
 function vapidPublicKey(): string | undefined {
@@ -45,18 +43,27 @@ export function pushConfigured(): boolean {
 	return vapidPublicKey() !== undefined;
 }
 
+const BASE64_GROUP_LENGTH = 4;
+
 /** `applicationServerKey` wants raw bytes; VAPID keys travel as base64url. */
 export function base64UrlToBytes(value: string): Uint8Array<ArrayBuffer> {
-	const padded = value + "=".repeat((4 - (value.length % 4)) % 4);
-	const raw = atob(padded.replace(/-/g, "+").replace(/_/g, "/"));
+	const padded =
+		value +
+		"=".repeat(
+			(BASE64_GROUP_LENGTH - (value.length % BASE64_GROUP_LENGTH)) %
+				BASE64_GROUP_LENGTH
+		);
+	const raw = atob(padded.replaceAll("-", "+").replaceAll("_", "/"));
 	const bytes = new Uint8Array(raw.length);
-	for (let i = 0; i < raw.length; i += 1) bytes[i] = raw.charCodeAt(i);
+	for (let index = 0; index < raw.length; index += 1)
+		bytes[index] = raw.charCodeAt(index);
 	return bytes;
 }
 
 async function registration(): Promise<ServiceWorkerRegistration | undefined> {
-	if (!("serviceWorker" in navigator)) return undefined;
-	return navigator.serviceWorker.getRegistration();
+	return "serviceWorker" in navigator
+		? navigator.serviceWorker.getRegistration()
+		: undefined;
 }
 
 async function currentSubscription(): Promise<PushSubscription | null> {
@@ -98,7 +105,10 @@ function sameKey(subscription: PushSubscription, key: Uint8Array): boolean {
 	const existing = subscription.options.applicationServerKey;
 	if (!existing) return false;
 	const bytes = new Uint8Array(existing);
-	return bytes.length === key.length && bytes.every((b, i) => b === key[i]);
+	return (
+		bytes.length === key.length &&
+		bytes.every((byte, index) => byte === key[index])
+	);
 }
 
 /** The subscription for the current VAPID key: reuse the existing one, or

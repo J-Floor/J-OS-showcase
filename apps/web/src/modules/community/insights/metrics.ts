@@ -1,6 +1,7 @@
 import type { ChartDatum } from "@j-os/design-system";
 
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
+import { DAY_MS, DAYS_PER_WEEK } from "../../../../convex/lib/constants.ts";
 import {
 	doorOpensFor,
 	type PersonStatus,
@@ -27,8 +28,7 @@ export type PersonRow = Doc<"people"> & {
 	hasAgreement: boolean;
 };
 
-export const DAY_MS = 86_400_000;
-const WEEK_MS = 7 * DAY_MS;
+const WEEK_MS = DAYS_PER_WEEK * DAY_MS;
 /** How far ahead "expiring soon" looks. Two weeks is roughly the notice a board
  *  member needs to have the conversation before the door shuts. */
 export const EXPIRY_HORIZON_DAYS = 14;
@@ -62,41 +62,45 @@ export type Headline = {
 	tone?: "neutral" | "warning" | "error";
 };
 
-/**
- * The counts that belong on tiles rather than in charts.
- *
- * A single number is not a chart — plotting "17 guests" as one bar tells you
- * less than the word "17" does, and costs a legend to read.
- */
-export function headlines(
+function headlineGroups(
 	members: PersonRow[],
 	guests: PersonRow[],
 	applications: PersonRow[],
 	now: number
-): Headline[] {
-	const activeMembers = members.filter((p) => isMember(p) && isActive(p));
-	const onboardingMembers = members.filter(
-		(p) => isMember(p) && isOnboarding(p)
+) {
+	const activeMembers = members.filter(
+		(person) => isMember(person) && isActive(person)
 	);
-	const activeGuests = guests.filter((p) => isGuest(p) && isActive(p));
+	const onboardingMembers = members.filter(
+		(person) => isMember(person) && isOnboarding(person)
+	);
+	const activeGuests = guests.filter(
+		(person) => isGuest(person) && isActive(person)
+	);
 	const onboardingGuests = guests.filter(
-		(p) => isGuest(p) && isOnboarding(p)
+		(person) => isGuest(person) && isOnboarding(person)
 	);
 	const currentGuests = [...activeGuests, ...onboardingGuests];
 
-	const expiringSoon = currentGuests.filter((p) => {
-		const until = p.accessUntil;
-		if (until === undefined) return false;
-		return until > now && until <= now + EXPIRY_HORIZON_DAYS * DAY_MS;
+	const expiringSoon = currentGuests.filter((person) => {
+		const until = person.accessUntil;
+		return until === undefined
+			? false
+			: until > now && until <= now + EXPIRY_HORIZON_DAYS * DAY_MS;
 	});
-	const openEnded = currentGuests.filter((p) => p.accessUntil === undefined);
+	const openEnded = currentGuests.filter(
+		(person) => person.accessUntil === undefined
+	);
 	const hostless = currentGuests.filter(
-		(p) => p.hostedById === undefined && p.hostedBy === undefined
+		(person) =>
+			person.hostedById === undefined && person.hostedBy === undefined
 	);
 
 	const everyone = [...members, ...guests];
 	const stalled = everyone.filter(
-		(p) => isOnboarding(p) && p.status.sinceDays > STALLED_ONBOARDING_DAYS
+		(person) =>
+			isOnboarding(person) &&
+			person.status.sinceDays > STALLED_ONBOARDING_DAYS
 	);
 	/**
 	 * People who can open the door today and have signed nothing.
@@ -111,20 +115,54 @@ export function headlines(
 	 * building, right now, with nothing on file.
 	 */
 	const missingAgreement = everyone.filter(
-		(p) =>
-			!p.hasAgreement &&
-			isActive(p) &&
-			(p.tier === "guest" || p.tier === "member" || p.tier === "core") &&
-			doorOpensFor(p, now)
+		(person) =>
+			!person.hasAgreement &&
+			isActive(person) &&
+			(person.tier === "guest" ||
+				person.tier === "member" ||
+				person.tier === "core") &&
+			doorOpensFor(person, now)
 	);
 	const doorBlocked = everyone.filter(
-		(p) => p.door?.override === "force_off" && p.tier !== "former"
+		(person) =>
+			person.door?.override === "force_off" && person.tier !== "former"
 	);
 
-	const unscored = applications.filter((p) => p.board?.score === undefined);
-	const scored = applications.filter(
-		(p) => p.board?.score !== undefined && p.stage !== "denied"
+	const unscored = applications.filter(
+		(person) => person.board?.score === undefined
 	);
+	const scored = applications.filter(
+		(person) =>
+			person.board?.score !== undefined && person.stage !== "denied"
+	);
+
+	return {
+		activeMembers,
+		onboardingMembers,
+		activeGuests,
+		onboardingGuests,
+		expiringSoon,
+		openEnded,
+		hostless,
+		stalled,
+		missingAgreement,
+		doorBlocked,
+		unscored,
+		scored,
+	};
+}
+
+type HeadlineGroups = ReturnType<typeof headlineGroups>;
+
+function rosterHeadlines(groups: HeadlineGroups): Headline[] {
+	const {
+		activeMembers,
+		onboardingMembers,
+		activeGuests,
+		onboardingGuests,
+		expiringSoon,
+		openEnded,
+	} = groups;
 
 	return [
 		{
@@ -157,6 +195,20 @@ export function headlines(
 			value: openEnded.length,
 			detail: "No end date set",
 		},
+	];
+}
+
+function attentionHeadlines(groups: HeadlineGroups): Headline[] {
+	const {
+		hostless,
+		stalled,
+		missingAgreement,
+		doorBlocked,
+		unscored,
+		scored,
+	} = groups;
+
+	return [
 		{
 			id: "toScore",
 			label: "To score",
@@ -201,6 +253,22 @@ export function headlines(
 }
 
 /**
+ * The counts that belong on tiles rather than in charts.
+ *
+ * A single number is not a chart — plotting "17 guests" as one bar tells you
+ * less than the word "17" does, and costs a legend to read.
+ */
+export function headlines(
+	members: PersonRow[],
+	guests: PersonRow[],
+	applications: PersonRow[],
+	now: number
+): Headline[] {
+	const groups = headlineGroups(members, guests, applications, now);
+	return [...rosterHeadlines(groups), ...attentionHeadlines(groups)];
+}
+
+/**
  * The subtitle under a roster headline: the two parts that make it up.
  *
  * Both numbers, spelled out, because a "+34" under a headline of 93 reads as
@@ -209,16 +277,19 @@ export function headlines(
  * checked at a glance, and there is nothing left to infer.
  */
 function rosterSplit(active: number, onboarding: number): string {
-	if (onboarding === 0) return "All active";
-	return `${String(active)} active · ${String(onboarding)} still onboarding`;
+	return onboarding === 0
+		? "All active"
+		: `${String(active)} active · ${String(onboarding)} still onboarding`;
 }
 
 /** `YYYY-MM` for an instant, in local time — the board reads these in its own
  *  calendar, not UTC's. */
 function monthKey(at: number): string {
-	const d = new Date(at);
-	return `${String(d.getFullYear())}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+	const date = new Date(at);
+	return `${String(date.getFullYear())}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
+
+const YEARS_PER_CENTURY = 100;
 
 const MONTH_NAMES = [
 	"Jan",
@@ -243,17 +314,17 @@ function recentMonths(
 	const out: { key: string; label: string }[] = [];
 	const cursor = new Date(now);
 	cursor.setDate(1);
-	for (let i = count - 1; i >= 0; i--) {
-		const d = new Date(cursor);
-		d.setMonth(d.getMonth() - i);
+	for (let index = count - 1; index >= 0; index--) {
+		const date = new Date(cursor);
+		date.setMonth(date.getMonth() - index);
 		out.push({
-			key: monthKey(d.getTime()),
+			key: monthKey(date.getTime()),
 			// The year appears on January only: repeating it on all twelve
 			// labels crowds the axis to say one thing.
 			label:
-				d.getMonth() === 0
-					? `${MONTH_NAMES[0]} ${String(d.getFullYear() % 100)}`
-					: (MONTH_NAMES[d.getMonth()] ?? ""),
+				date.getMonth() === 0
+					? `${MONTH_NAMES[0]} ${String(date.getFullYear() % YEARS_PER_CENTURY)}`
+					: (MONTH_NAMES[date.getMonth()] ?? ""),
 		});
 	}
 	return out;
@@ -278,9 +349,9 @@ export function applicationsPerMonth(
 		const key = monthKey(at);
 		buckets.set(key, (buckets.get(key) ?? 0) + 1);
 	}
-	return recentMonths(now, months).map((m) => ({
-		month: m.label,
-		applications: buckets.get(m.key) ?? 0,
+	return recentMonths(now, months).map((month) => ({
+		month: month.label,
+		applications: buckets.get(month.key) ?? 0,
 	}));
 }
 
@@ -298,12 +369,16 @@ export function joinsPerMonth(
 	now: number,
 	months = 12
 ): ChartDatum[] {
-	const memberBuckets = countByMonth(members.filter(isMember));
-	const guestBuckets = countByMonth(guests.filter(isGuest));
-	return recentMonths(now, months).map((m) => ({
-		month: m.label,
-		members: memberBuckets.get(m.key) ?? 0,
-		guests: guestBuckets.get(m.key) ?? 0,
+	const memberBuckets = countByMonth(
+		members.filter((person) => isMember(person))
+	);
+	const guestBuckets = countByMonth(
+		guests.filter((person) => isGuest(person))
+	);
+	return recentMonths(now, months).map((month) => ({
+		month: month.label,
+		members: memberBuckets.get(month.key) ?? 0,
+		guests: guestBuckets.get(month.key) ?? 0,
 	}));
 }
 
@@ -331,14 +406,14 @@ export function expiryRunway(
 	weeks = 12
 ): ChartDatum[] {
 	const rows: ChartDatum[] = [];
-	for (let i = 0; i < weeks; i++) {
-		const from = now + i * WEEK_MS;
+	for (let index = 0; index < weeks; index++) {
+		const from = now + index * WEEK_MS;
 		const to = from + WEEK_MS;
 		rows.push({
-			week: i === 0 ? "This week" : `+${String(i)}w`,
-			expiring: guests.filter((p) => {
-				if (!isGuest(p)) return false;
-				const until = p.accessUntil;
+			week: index === 0 ? "This week" : `+${String(index)}w`,
+			expiring: guests.filter((person) => {
+				if (!isGuest(person)) return false;
+				const until = person.accessUntil;
 				return until !== undefined && until >= from && until < to;
 			}).length,
 		});
@@ -373,10 +448,13 @@ export function hostLoad(
 			"Unassigned";
 		counts.set(name, (counts.get(name) ?? 0) + 1);
 	}
-	return [...counts.entries()]
-		.sort((a, b) => b[1] - a[1])
-		.slice(0, limit)
-		.map(([host, guestCount]) => ({ host, guests: guestCount }));
+	return (
+		[...counts.entries()]
+			// eslint-disable-next-line id-length -- conventional comparator parameter names
+			.sort((a, b) => b[1] - a[1])
+			.slice(0, limit)
+			.map(([host, guestCount]) => ({ host, guests: guestCount }))
+	);
 }
 
 /** What the community is building, busiest first. Counts a person once per
@@ -385,12 +463,16 @@ export function verticalMix(all: PersonRow[], limit = 6): ChartDatum[] {
 	const counts = new Map<string, number>();
 	for (const person of all) {
 		if (person.tier === "former" || person.tier === "prospect") continue;
-		for (const vertical of person.vertical ?? []) {
+		const picked = person.vertical ?? [];
+		for (const vertical of picked) {
 			counts.set(vertical, (counts.get(vertical) ?? 0) + 1);
 		}
 	}
-	return [...counts.entries()]
-		.sort((a, b) => b[1] - a[1])
-		.slice(0, limit)
-		.map(([vertical, people]) => ({ vertical, people }));
+	return (
+		[...counts.entries()]
+			// eslint-disable-next-line id-length -- conventional comparator parameter names
+			.sort((a, b) => b[1] - a[1])
+			.slice(0, limit)
+			.map(([vertical, people]) => ({ vertical, people }))
+	);
 }

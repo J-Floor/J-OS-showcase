@@ -46,7 +46,7 @@ test("swallows a rejected preload", async () => {
 
 test("descriptorModule finds the module by route", () => {
 	expect(descriptorModule({ route: "/events" })).toBe(
-		modules.find((m) => m.id === "events")
+		modules.find((entry) => entry.id === "events")
 	);
 	expect(descriptorModule({ route: "/nope" })).toBeUndefined();
 });

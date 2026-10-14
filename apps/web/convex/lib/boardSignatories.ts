@@ -38,5 +38,5 @@ export function boardSignatories(): Signatory[] {
 	}
 	if (!Array.isArray(parsed) || parsed.length === 0)
 		throw new Error(NOT_CONFIGURED);
-	return parsed.map(parseSignatory);
+	return parsed.map((entry) => parseSignatory(entry));
 }

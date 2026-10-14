@@ -12,7 +12,7 @@ const [open, setOpen] = createSignal(false);
  *  "Manage notifications" link, which opens Categories. */
 const [tab, setTab] = createSignal<NotificationsTab>("inbox");
 
-export const notificationsOpen = open;
+export const isNotificationsOpen = open;
 export const notificationsTab = tab;
 
 export function openNotifications(
@@ -22,6 +22,6 @@ export function openNotifications(
 	setOpen(true);
 }
 
-export function setNotificationsOpen(value: boolean): void {
-	setOpen(value);
+export function setNotificationsOpen(isOpen: boolean): void {
+	setOpen(isOpen);
 }

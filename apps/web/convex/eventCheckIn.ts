@@ -24,13 +24,13 @@ type InviteConfirmStatus = Exclude<ConfirmStatus, "already">;
  */
 export const checkInToEvent = mutation({
 	args: { eventId: v.id("events") },
-	handler: async (ctx, { eventId }): Promise<{ ok: boolean }> => {
-		const person = await requireRole(ctx, COMMUNITY_TIERS);
-		const event = await ctx.db.get(eventId);
+	handler: async (context, { eventId }): Promise<{ ok: boolean }> => {
+		const person = await requireRole(context, COMMUNITY_TIERS);
+		const event = await context.db.get(eventId);
 		if (event === null) throw new Error("Event not found");
 		// Hard stop, no grace.
 		if (!eventLive(event, Date.now())) throw new Error("Event has ended");
-		await insertAttendanceOnce(ctx, person._id, eventId);
+		await insertAttendanceOnce(context, person._id, eventId);
 		return { ok: true };
 	},
 });
@@ -50,20 +50,22 @@ export const checkInToEvent = mutation({
 export const confirmEventInviteByToken = internalMutation({
 	args: { token: v.string() },
 	handler: async (
-		ctx,
+		context,
 		{ token }
 	): Promise<{ status: InviteConfirmStatus }> => {
-		const r = await redeemToken(ctx, token, "eventInvite");
-		if (r.status === "invalid" || r.status === "already")
+		const redeemed = await redeemToken(context, token, "eventInvite");
+		if (redeemed.status === "invalid" || redeemed.status === "already")
 			return { status: "invalid" };
-		if (r.status === "expired") return { status: "expired" };
+		if (redeemed.status === "expired") return { status: "expired" };
 		// Hard stop, no grace: the invite's event has ended or was deleted.
-		const event = r.row.eventId ? await ctx.db.get(r.row.eventId) : null;
+		const event = redeemed.row.eventId
+			? await context.db.get(redeemed.row.eventId)
+			: null;
 		if (!eventLive(event, Date.now())) return { status: "ended" };
-		const person = await ctx.db.get(r.row.personId);
+		const person = await context.db.get(redeemed.row.personId);
 		if (person === null || person.tier === "former")
 			return { status: "invalid" };
-		await insertAttendanceOnce(ctx, person._id, event._id);
+		await insertAttendanceOnce(context, person._id, event._id);
 		return { status: "verified" };
 	},
 });
@@ -71,18 +73,21 @@ export const confirmEventInviteByToken = internalMutation({
 export const confirmEventInvite = action({
 	args: { token: v.string() },
 	handler: async (
-		ctx,
+		context,
 		{ token }
 	): Promise<{
 		status: InviteConfirmStatus;
 		wifi?: Wifi;
 	}> => {
-		const res = await ctx.runMutation(
+		const result = await context.runMutation(
 			internal.eventCheckIn.confirmEventInviteByToken,
 			{ token }
 		);
-		if (res.status === "verified")
-			return { ...res, wifi: await ctx.runQuery(internal.wifi.read, {}) };
-		return res;
+		return result.status === "verified"
+			? {
+					...result,
+					wifi: await context.runQuery(internal.wifi.read, {}),
+				}
+			: result;
 	},
 });

@@ -39,10 +39,10 @@ if (typeof window !== "undefined") {
  */
 export function isStandalone(): boolean {
 	if (typeof window === "undefined") return false;
-	const iosStandalone =
+	const isIosStandalone =
 		(navigator as Navigator & { standalone?: boolean }).standalone === true;
 	return (
-		iosStandalone ||
+		isIosStandalone ||
 		(typeof window.matchMedia === "function" &&
 			window.matchMedia("(display-mode: standalone)").matches)
 	);
@@ -51,7 +51,7 @@ export function isStandalone(): boolean {
 /** The captured install prompt, or undefined until the browser offers one. */
 export const installPrompt = deferred;
 /** True once the app reports itself installed (via the `appinstalled` event). */
-export const appInstalled = installed;
+export const isAppInstalled = installed;
 
 /** Fire the captured prompt (a one-shot; dropped afterwards). */
 export async function runInstallPrompt(): Promise<void> {
@@ -110,9 +110,9 @@ export function installMethod(
 	if (!userAgent.includes("Android")) return "none";
 	if (userAgent.includes("SamsungBrowser/")) return "samsung";
 	if (userAgent.includes("Firefox/")) return "firefox";
-	const firesPrompt =
+	const isFiresPrompt =
 		userAgent.includes("EdgA/") ||
 		(userAgent.includes("Chrome/") &&
 			!/OPR\/|YaBrowser\/|UCBrowser\//.test(userAgent));
-	return firesPrompt ? "none" : "other-android";
+	return isFiresPrompt ? "none" : "other-android";
 }

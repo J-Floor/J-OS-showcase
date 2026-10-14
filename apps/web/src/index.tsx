@@ -45,6 +45,8 @@ function Root(props: ParentProps) {
 	);
 }
 
+const PRELOAD_RELOAD_COOLDOWN_MS = 10_000;
+
 // PWA `registerType: 'autoUpdate'` purges old precaches on a new deploy. A tab
 // left open across that deploy can then fail to `import()` a page chunk it
 // has not visited yet (the file the browser/SW cached is gone), which Vite
@@ -56,7 +58,7 @@ window.addEventListener("vite:preloadError", () => {
 	const key = "jf:lastPreloadErrorReload";
 	try {
 		const last = Number(sessionStorage.getItem(key) ?? "0");
-		if (Date.now() - last < 10_000) return;
+		if (Date.now() - last < PRELOAD_RELOAD_COOLDOWN_MS) return;
 		sessionStorage.setItem(key, String(Date.now()));
 	} catch {
 		// sessionStorage unavailable (private mode / blocked) — there is no

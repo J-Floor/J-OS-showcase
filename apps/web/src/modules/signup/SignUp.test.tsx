@@ -53,8 +53,8 @@ test("after submit, the pending screen says the email explains what to do for so
 	locationState = null;
 	mutateAsync.mockResolvedValue({ status: "pending" });
 	window.grecaptcha = {
-		ready: (cb) => {
-			cb();
+		ready: (callback) => {
+			callback();
 		},
 		execute: () => Promise.resolve("captcha-token"),
 	};

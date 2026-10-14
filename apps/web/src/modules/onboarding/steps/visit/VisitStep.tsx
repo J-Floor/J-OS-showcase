@@ -1,4 +1,5 @@
 import { Button, Icon, Skeleton } from "@j-os/design-system";
+import type { FunctionReturnType } from "convex/server";
 import { Show } from "solid-js";
 
 import { api } from "../../../../../convex/_generated/api";
@@ -10,6 +11,68 @@ import styles from "./VisitStep.module.scss";
 
 const STREET_ADDRESS = "Josefstrasse 206, 8005 Zürich";
 const MAPS_URL = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(STREET_ADDRESS)}`;
+
+type OnboardingHost = FunctionReturnType<
+	typeof api.onboarding.getOnboardingHost
+>;
+
+/** The WhatsApp button: a message to the guest's host when they have one with
+ *  a phone, else the group invite; a skeleton while the host loads. */
+function WhatsAppAction(props: {
+	host: OnboardingHost | undefined;
+	inviteUrl: string | null | undefined;
+}) {
+	return (
+		<Show
+			when={props.host !== undefined}
+			fallback={
+				<div role="status" aria-label="Loading" data-invite-skeleton="">
+					<Skeleton class={styles.buttonSkeleton} />
+				</div>
+			}
+		>
+			<Show
+				when={props.host?.phone}
+				fallback={
+					<Show when={props.inviteUrl}>
+						{(url) => (
+							<Button
+								variant="secondary"
+								onClick={() => {
+									window.open(
+										url(),
+										"_blank",
+										"noopener,noreferrer"
+									);
+								}}
+							>
+								Message us on WhatsApp
+							</Button>
+						)}
+					</Show>
+				}
+			>
+				{(phone) => (
+					<Button
+						variant="secondary"
+						onClick={() => {
+							// wa.me wants the international number with no
+							// "+", spaces or punctuation. Opens a WhatsApp
+							// chat with the host — no spam phone calls.
+							window.open(
+								`https://wa.me/${phone().replaceAll(/\D/g, "")}`,
+								"_blank",
+								"noopener,noreferrer"
+							);
+						}}
+					>
+						Message {props.host?.name} on WhatsApp
+					</Button>
+				)}
+			</Show>
+		</Show>
+	);
+}
 
 /**
  * Onboarding step 7 (last): the "come by" screen. Shows the J floor address and
@@ -34,8 +97,8 @@ export function VisitStep(props: OnboardingStepProps) {
 						when={host.data()}
 						fallback="If you've never been to the space, for a smooth start reach out to one of our board members via WhatsApp. They will welcome you to the space and answer any questions you may have."
 					>
-						{(h) =>
-							`If you've never been to the space, for a smooth start reach out to your host ${h().name} via WhatsApp the first time you come. They will welcome you to the space and answer any questions you may have.`
+						{(knownHost) =>
+							`If you've never been to the space, for a smooth start reach out to your host ${knownHost().name} via WhatsApp the first time you come. They will welcome you to the space and answer any questions you may have.`
 						}
 					</Show>
 				</Show>
@@ -49,58 +112,7 @@ export function VisitStep(props: OnboardingStepProps) {
 					<Icon>home_pin</Icon>
 					View on Maps
 				</Button>
-				<Show
-					when={host.data() !== undefined}
-					fallback={
-						<div
-							role="status"
-							aria-label="Loading"
-							data-invite-skeleton=""
-						>
-							<Skeleton class={styles.buttonSkeleton} />
-						</div>
-					}
-				>
-					<Show
-						when={host.data()?.phone}
-						fallback={
-							<Show when={invite.data()}>
-								{(url) => (
-									<Button
-										variant="secondary"
-										onClick={() => {
-											window.open(
-												url(),
-												"_blank",
-												"noopener,noreferrer"
-											);
-										}}
-									>
-										Message us on WhatsApp
-									</Button>
-								)}
-							</Show>
-						}
-					>
-						{(phone) => (
-							<Button
-								variant="secondary"
-								onClick={() => {
-									// wa.me wants the international number with no
-									// "+", spaces or punctuation. Opens a WhatsApp
-									// chat with the host — no spam phone calls.
-									window.open(
-										`https://wa.me/${phone().replace(/\D/g, "")}`,
-										"_blank",
-										"noopener,noreferrer"
-									);
-								}}
-							>
-								Message {host.data()?.name} on WhatsApp
-							</Button>
-						)}
-					</Show>
-				</Show>
+				<WhatsAppAction host={host.data()} inviteUrl={invite.data()} />
 			</div>
 			<StepActions>
 				<Button onClick={() => void props.onComplete()}>Finish</Button>

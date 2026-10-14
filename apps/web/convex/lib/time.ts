@@ -9,6 +9,7 @@ import {
 /** The one site today. Multi-site later: supply per-site (it already lives inside each IXDTF value). */
 export const SITE_TIMEZONE = "Europe/Zurich";
 const LOCALE = "en-GB";
+export const ISO_DATE_LENGTH = 10;
 
 /** A zoned value: IXDTF source of truth + cached UTC epoch (ms). */
 export type ZonedValue = {
@@ -16,16 +17,16 @@ export type ZonedValue = {
 	utc: number;
 };
 
-export function pad(n: number): string {
-	return String(n).padStart(2, "0");
+export function pad(value: number): string {
+	return String(value).padStart(2, "0");
 }
 
 /** The zoned wall-clock a UTC epoch (ms) lands on, observed at `timeZone`. */
 export function zonedFromEpoch(ms: number, timeZone: string): ZonedDateTime {
 	return parseAbsolute(new Date(ms).toISOString(), timeZone);
 }
-function zdtToValue(z: ZonedDateTime): ZonedValue {
-	return { local: z.toString(), utc: z.toDate().getTime() };
+function zdtToValue(zoned: ZonedDateTime): ZonedValue {
+	return { local: zoned.toString(), utc: zoned.toDate().getTime() };
 }
 // Parse a stored IXDTF string, tolerant of a tzdata rule change.
 // `parseZonedDateTime` honours the embedded offset exactly — which correctly
@@ -51,10 +52,14 @@ export function composeZoned(
 	timeHHMM: string,
 	timeZone: string
 ): ZonedValue {
-	const [y, m, d] = dateIso.split("-").map(Number);
-	const [h, min] = timeHHMM.split(":").map(Number);
+	const [year, month, day] = dateIso.split("-").map(Number);
+	const [hour, min] = timeHHMM.split(":").map(Number);
 	return zdtToValue(
-		toZoned(new CalendarDateTime(y, m, d, h, min), timeZone, "compatible")
+		toZoned(
+			new CalendarDateTime(year, month, day, hour, min),
+			timeZone,
+			"compatible"
+		)
 	);
 }
 /** Cached epoch from a stored IXDTF string. */
@@ -68,24 +73,24 @@ export function zonedLocalFromEpoch(ms: number, timeZone: string): string {
 	return zonedFromEpoch(ms, timeZone).toString();
 }
 export function zonedDate(local: string): string {
-	const z = parseLocalLoose(local);
-	return `${z.year}-${pad(z.month)}-${pad(z.day)}`;
+	const zoned = parseLocalLoose(local);
+	return `${zoned.year}-${pad(zoned.month)}-${pad(zoned.day)}`;
 }
 export function zonedTime(local: string): string {
-	const z = parseLocalLoose(local);
-	return `${pad(z.hour)}:${pad(z.minute)}`;
+	const zoned = parseLocalLoose(local);
+	return `${pad(zoned.hour)}:${pad(zoned.minute)}`;
 }
 export function formatZoned(local: string): string {
-	const z = parseLocalLoose(local);
+	const zoned = parseLocalLoose(local);
 	return new Intl.DateTimeFormat(LOCALE, {
 		day: "2-digit",
 		month: "short",
 		year: "numeric",
 		hour: "2-digit",
 		minute: "2-digit",
-		timeZone: z.timeZone,
+		timeZone: zoned.timeZone,
 		timeZoneName: "short",
-	}).format(z.toDate());
+	}).format(zoned.toDate());
 }
 /** Re-derive cached epoch + refreshed IXDTF from the stored wall-clock+zone under
  * CURRENT tzdata, discarding any stale embedded offset. The recompute core.
@@ -104,9 +109,9 @@ export function composeExpiry(
 	timeZone: string
 ): ZonedValue | null {
 	if (!iso) return null;
-	const [y, m, d] = iso.split("-").map(Number);
+	const [year, month, day] = iso.split("-").map(Number);
 	const start = toZoned(
-		new CalendarDateTime(y, m, d, 0, 0, 1),
+		new CalendarDateTime(year, month, day, 0, 0, 1),
 		timeZone,
 		"compatible"
 	);
@@ -114,12 +119,12 @@ export function composeExpiry(
 }
 /** Inverse: the chosen day shown in the field = the day BEFORE the instant's zone-day. */
 export function expiryChosenIso(local: string): string {
-	const z = parseLocalLoose(local).add({ days: -1 });
-	return `${z.year}-${pad(z.month)}-${pad(z.day)}`;
+	const zoned = parseLocalLoose(local).add({ days: -1 });
+	return `${zoned.year}-${pad(zoned.month)}-${pad(zoned.day)}`;
 }
 export function minExpiryIso(timeZone: string): string {
-	const z = zonedFromEpoch(Date.now(), timeZone);
-	return `${z.year}-${pad(z.month)}-${pad(z.day)}`;
+	const zoned = zonedFromEpoch(Date.now(), timeZone);
+	return `${zoned.year}-${pad(zoned.month)}-${pad(zoned.day)}`;
 }
 /** The chosen access-END day (YYYY-MM-DD) to DISPLAY for a guest, given the
  *  stored expiry. Three cases, because legacy/seed rows are not the new
@@ -138,19 +143,29 @@ export function guestChosenIso(
 	tz: string
 ): string {
 	if (local === undefined) return zonedDate(zonedLocalFromEpoch(epoch, tz));
-	const z = parseLocalLoose(local);
-	if (z.hour === 0 && z.minute === 0 && z.second === 1)
-		return expiryChosenIso(local);
-	return zonedDate(local);
+	const zoned = parseLocalLoose(local);
+	return zoned.hour === 0 && zoned.minute === 0 && zoned.second === 1
+		? expiryChosenIso(local)
+		: zonedDate(local);
 }
 
-const ZONE_SUFFIX = /\[([^\]]+)\]$/;
+/** The text of a trailing `[Zone]`: from the first `[` after the last earlier
+ *  `]`, up to the final `]`. Undefined when the value does not end that way. */
+function zoneSuffix(local: string): string | undefined {
+	if (!local.endsWith("]")) return undefined;
+	const body = local.slice(0, -1);
+	const open = body.indexOf("[", body.lastIndexOf("]") + 1);
+	return open === -1 || open + 1 === body.length
+		? undefined
+		: body.slice(open + 1);
+}
 
 /** The IANA zone from an IXDTF value's trailing `[Zone]`. Throws if absent. */
 export function zonedTimeZoneName(local: string): string {
-	const m = ZONE_SUFFIX.exec(local);
-	if (!m) throw new Error(`Not an IXDTF zoned value: ${local}`);
-	return m[1];
+	const zone = zoneSuffix(local);
+	if (zone === undefined)
+		throw new Error(`Not an IXDTF zoned value: ${local}`);
+	return zone;
 }
 
 // --- Date-only (unchanged behaviour; dedup) -------------------------------
@@ -160,7 +175,9 @@ export function isoToUtcMidnight(iso: string | null): number | undefined {
 	return Number.isNaN(ms) ? undefined : ms;
 }
 export function utcMidnightToIso(ms: number | undefined): string | undefined {
-	return ms == null ? undefined : new Date(ms).toISOString().slice(0, 10);
+	return ms === undefined
+		? undefined
+		: new Date(ms).toISOString().slice(0, ISO_DATE_LENGTH);
 }
 const FMT_SHORT = new Intl.DateTimeFormat(LOCALE, {
 	day: "2-digit",
@@ -175,8 +192,8 @@ const FMT_LONG = new Intl.DateTimeFormat(LOCALE, {
 	timeZone: "UTC",
 });
 export function formatDateOnly(ms: number | undefined): string {
-	return ms == null ? "" : FMT_SHORT.format(new Date(ms));
+	return ms === undefined ? "" : FMT_SHORT.format(new Date(ms));
 }
 export function formatDateOnlyLong(ms: number | undefined): string {
-	return ms == null ? "" : FMT_LONG.format(new Date(ms));
+	return ms === undefined ? "" : FMT_LONG.format(new Date(ms));
 }

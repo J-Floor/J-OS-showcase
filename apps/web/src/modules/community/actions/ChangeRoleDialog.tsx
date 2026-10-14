@@ -16,7 +16,7 @@ export type { RoleMove } from "./roleMoves.ts";
  */
 export function ChangeRoleDialog(props: {
 	open: boolean;
-	onOpenChange: (open: boolean) => void;
+	onOpenChange: (isOpen: boolean) => void;
 	/** Machine state of every selected row. */
 	states: StateId[];
 	count: number;
@@ -25,8 +25,8 @@ export function ChangeRoleDialog(props: {
 	return (
 		<Dialog.Root
 			open={props.open}
-			onOpenChange={(d) => {
-				props.onOpenChange(d.open);
+			onOpenChange={(details) => {
+				props.onOpenChange(details.open);
 			}}
 		>
 			<Dialog.Content>

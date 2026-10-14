@@ -5,6 +5,7 @@ import { buildLinks, normalizeUrl } from "./links.ts";
 describe("normalizeUrl", () => {
 	it("prefixes bare hosts with https and leaves schemes alone", () => {
 		expect(normalizeUrl("x.dev")).toBe("https://x.dev");
+		// eslint-disable-next-line sonarjs/no-clear-text-protocols -- pins that a scheme the user typed, even http, is kept as typed
 		expect(normalizeUrl("http://x.dev")).toBe("http://x.dev");
 		expect(normalizeUrl("  ")).toBe("");
 	});

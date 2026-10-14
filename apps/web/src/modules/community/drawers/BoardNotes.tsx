@@ -11,6 +11,39 @@ import { noteAuthor } from "../noteAuthor.ts";
 
 import styles from "./BoardNotes.module.scss";
 
+type NoteLogEntry = NonNullable<
+	NonNullable<Doc<"people">["board"]>["noteLog"]
+>[number];
+
+/** One note: its author's avatar and name (skeletons while the board list
+ *  loads), when it was written, and the text. */
+function NoteEntry(props: { entry: NoteLogEntry; author: string | undefined }) {
+	return (
+		<li class={styles.entry}>
+			<Show
+				when={props.author}
+				fallback={<Skeleton class={styles.avatarSkeleton} />}
+			>
+				{(name) => <Avatar name={name()} class={styles.avatar} />}
+			</Show>
+			<div class={styles.entryBody}>
+				<div class={styles.meta}>
+					<span class={styles.author}>
+						<Show
+							when={props.author}
+							fallback={<Skeleton width="short" />}
+						>
+							{(name) => name()}
+						</Show>
+					</span>
+					<span class={styles.time}>{formatAgo(props.entry.at)}</span>
+				</div>
+				<p class={styles.text}>{props.entry.text}</p>
+			</div>
+		</li>
+	);
+}
+
 /**
  * The board's notes on a person, as an attributed thread: who wrote each note
  * and when, oldest first, with a composer to add another. Replaces the single
@@ -41,51 +74,15 @@ export function BoardNotes(props: { person: Doc<"people"> }) {
 			>
 				<ul class={styles.thread}>
 					<For each={notes()}>
-						{(entry) => {
-							function author(): string | undefined {
-								return noteAuthor(
+						{(entry) => (
+							<NoteEntry
+								entry={entry}
+								author={noteAuthor(
 									boardLevel.data(),
 									entry.authorId
-								);
-							}
-							return (
-								<li class={styles.entry}>
-									<Show
-										when={author()}
-										fallback={
-											<Skeleton
-												class={styles.avatarSkeleton}
-											/>
-										}
-									>
-										{(name) => (
-											<Avatar
-												name={name()}
-												class={styles.avatar}
-											/>
-										)}
-									</Show>
-									<div class={styles.entryBody}>
-										<div class={styles.meta}>
-											<span class={styles.author}>
-												<Show
-													when={author()}
-													fallback={
-														<Skeleton width="short" />
-													}
-												>
-													{(name) => name()}
-												</Show>
-											</span>
-											<span class={styles.time}>
-												{formatAgo(entry.at)}
-											</span>
-										</div>
-										<p class={styles.text}>{entry.text}</p>
-									</div>
-								</li>
-							);
-						}}
+								)}
+							/>
+						)}
 					</For>
 				</ul>
 			</Show>

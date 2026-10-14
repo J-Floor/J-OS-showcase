@@ -1,11 +1,11 @@
 import { createRoot, createSignal } from "solid-js";
 
 import { columnMeta, createTable } from "./hooks.ts";
-import type { JfColumnDef } from "./types.ts";
+import type { JfColumnDefinition } from "./types.ts";
 
 type Row = { state: string; name: string };
 
-const columns: JfColumnDef<Row>[] = [
+const columns: JfColumnDefinition<Row>[] = [
 	{ accessorKey: "state", header: "State", dataType: "string" },
 	{ accessorKey: "name", header: "Name", dataType: "string" },
 ];
@@ -31,12 +31,12 @@ test("groupBy hides the grouped column and keeps a flat row model", () => {
 		// via columnVisibility (its value becomes each group's header).
 		const rows = table.getRowModel().rows;
 		expect(rows.length).toBe(3);
-		expect(rows.some((r) => r.getIsGrouped())).toBe(false);
+		expect(rows.some((row) => row.getIsGrouped())).toBe(false);
 
 		// Grouped column is hidden; leaf rows still carry its value so Table.Root
 		// can bucket them into "pending" and "denied" groups.
 		expect(table.getColumn("state")?.getIsVisible()).toBe(false);
-		const groupValues = new Set(rows.map((r) => r.getValue("state")));
+		const groupValues = new Set(rows.map((row) => row.getValue("state")));
 		expect(groupValues).toEqual(new Set(["pending", "denied"]));
 
 		dispose();

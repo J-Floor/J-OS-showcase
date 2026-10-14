@@ -37,14 +37,14 @@ export function OccupancyCard() {
 	}
 	// `null` = no reading (the active provider returned no reading) → "Unknown".
 	function fill() {
-		const a = answer();
-		return a?.enabled && a.count !== null
-			? occupancyFill(a.count, a.capacity)
+		const reading = answer();
+		return reading?.enabled && reading.count !== null
+			? occupancyFill(reading.count, reading.capacity)
 			: null;
 	}
 
 	let id: ReturnType<typeof setInterval> | undefined;
-	let disposed = false;
+	let isDisposed = false;
 
 	function stopPolling() {
 		clearInterval(id);
@@ -52,7 +52,7 @@ export function OccupancyCard() {
 	}
 
 	function ensurePolling() {
-		if (id === undefined && !disposed) {
+		if (id === undefined && !isDisposed) {
 			id = setInterval(() => void refresh(), POLL_INTERVAL_MS);
 		}
 	}
@@ -64,13 +64,13 @@ export function OccupancyCard() {
 	async function refresh() {
 		const seq = ++latestSeq;
 		try {
-			const r = await occ.mutate({});
+			const result = await occ.mutate({});
 			// An answer landing after unmount (e.g. mid sign-out) is dropped.
-			if (seq !== latestSeq || disposed) return;
-			setAnswer(r);
-			rememberAnswer(ANSWER_KEY, r);
+			if (seq !== latestSeq || isDisposed) return;
+			setAnswer(result);
+			rememberAnswer(ANSWER_KEY, result);
 			// Only an explicit "disabled" answer stops polling.
-			if (r.enabled) ensurePolling();
+			if (result.enabled) ensurePolling();
 			else stopPolling();
 		} catch {
 			if (seq !== latestSeq) return;
@@ -82,7 +82,7 @@ export function OccupancyCard() {
 
 	onMount(() => {
 		onCleanup(() => {
-			disposed = true;
+			isDisposed = true;
 			stopPolling();
 		});
 		void refresh();

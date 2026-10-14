@@ -47,7 +47,7 @@ let attendeesData: typeof attendees | undefined = attendees;
 vi.mock("convex-solidjs", () => ({
 	useQuery: () => ({
 		data: () => attendeesData,
-		error: () => undefined,
+		error: () => {},
 		isLoading: () => false,
 	}),
 	useMutation: () => ({ mutateAsync }),
@@ -247,11 +247,11 @@ function propertyRowValue(labelText: string): HTMLElement {
 }
 
 function adjustSegment(
-	el: HTMLElement,
+	element: HTMLElement,
 	key: "ArrowUp" | "ArrowDown" = "ArrowUp"
 ): void {
-	el.focus();
-	fireEvent.keyDown(el, { key });
+	element.focus();
+	fireEvent.keyDown(element, { key });
 }
 
 test("create: default start/end times (00:01 / 23:59) compose as Europe/Zurich instants", async () => {

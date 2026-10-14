@@ -30,7 +30,7 @@ test("renders the icon glyph", () => {
 		</PropertyRow>
 	));
 	// Icon renders a span[data-icon] containing the ligature name as text
-	const iconEl = document.querySelector("[data-icon]");
-	expect(iconEl).toBeInTheDocument();
-	expect(iconEl?.textContent).toBe("flag");
+	const iconElement = document.querySelector("[data-icon]");
+	expect(iconElement).toBeInTheDocument();
+	expect(iconElement?.textContent).toBe("flag");
 });

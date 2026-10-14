@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-	ipCheckEnabled,
-	ipInCidrs,
+	isIpCheckEnabled,
+	isIpInCidrs,
 	mintPresenceToken,
 	parseCidrs,
 	PRESENCE_TTL_MS,
@@ -13,6 +13,13 @@ import {
 
 const SECRET = "test-secret";
 const NOW = 1_800_000_000_000;
+const IPV4_MAPPED_PREFIX = "::ffff:";
+
+function request(headers: Record<string, string>): Request {
+	return new Request("https://example.convex.site/door/presence", {
+		headers,
+	});
+}
 
 describe("parseCidrs", () => {
 	it("splits, trims and drops empties", () => {
@@ -26,40 +33,46 @@ describe("parseCidrs", () => {
 	});
 });
 
-describe("ipInCidrs", () => {
+describe("isIpInCidrs", () => {
 	it("matches an exact IPv4 address", () => {
-		expect(ipInCidrs("203.0.113.42", ["203.0.113.42"])).toBe(true);
-		expect(ipInCidrs("203.0.113.43", ["203.0.113.42"])).toBe(false);
+		expect(isIpInCidrs("203.0.113.42", ["203.0.113.42"])).toBe(true);
+		expect(isIpInCidrs("203.0.113.43", ["203.0.113.42"])).toBe(false);
 	});
 	it("matches an IPv4 CIDR", () => {
-		expect(ipInCidrs("10.1.2.3", ["10.0.0.0/8"])).toBe(true);
-		expect(ipInCidrs("198.51.100.3", ["10.0.0.0/8"])).toBe(false);
+		expect(isIpInCidrs("192.0.2.3", ["192.0.2.0/24"])).toBe(true);
+		expect(isIpInCidrs("198.51.100.3", ["192.0.2.0/24"])).toBe(false);
 	});
 	it("matches an IPv6 prefix, including :: compression", () => {
-		expect(ipInCidrs("2001:db8:1:2::1", ["2001:db8:1:2::/64"])).toBe(true);
-		expect(ipInCidrs("2001:db8:1:3::1", ["2001:db8:1:2::/64"])).toBe(false);
+		expect(isIpInCidrs("2001:db8:1:2::1", ["2001:db8:1:2::/64"])).toBe(
+			true
+		);
+		expect(isIpInCidrs("2001:db8:1:3::1", ["2001:db8:1:2::/64"])).toBe(
+			false
+		);
 	});
 	it("treats an IPv4-mapped IPv6 address as IPv4", () => {
-		expect(ipInCidrs("::ffff:10.0.0.5", ["10.0.0.0/24"])).toBe(true);
+		expect(
+			isIpInCidrs(`${IPV4_MAPPED_PREFIX}203.0.113.5`, ["203.0.113.0/24"])
+		).toBe(true);
 	});
 	it("never matches across families", () => {
-		expect(ipInCidrs("10.0.0.1", ["::/0"])).toBe(false);
-		expect(ipInCidrs("::1", ["0.0.0.0/0"])).toBe(false);
+		expect(isIpInCidrs("192.0.2.1", ["::/0"])).toBe(false);
+		expect(isIpInCidrs("::1", ["0.0.0.0/0"])).toBe(false);
 	});
 	it("rejects malformed input instead of matching", () => {
-		expect(ipInCidrs("not-an-ip", ["0.0.0.0/0"])).toBe(false);
-		expect(ipInCidrs("10.0.0.1", ["10.0.0.0/99"])).toBe(false);
-		expect(ipInCidrs("1:2:3:4:5:6:7:8:9", ["::/0"])).toBe(false);
-		expect(ipInCidrs("256.0.0.1", ["0.0.0.0/0"])).toBe(false);
+		expect(isIpInCidrs("not-an-ip", ["0.0.0.0/0"])).toBe(false);
+		expect(isIpInCidrs("192.0.2.1", ["192.0.2.0/99"])).toBe(false);
+		expect(isIpInCidrs("1:2:3:4:5:6:7:8:9", ["::/0"])).toBe(false);
+		expect(isIpInCidrs("256.0.0.1", ["0.0.0.0/0"])).toBe(false);
 	});
 	it("rejects a CIDR with a malformed prefix instead of matching", () => {
-		expect(ipInCidrs("198.51.100.8", ["203.0.113.4/"])).toBe(false);
-		expect(ipInCidrs("2001:db8::1", ["2001:db8::/"])).toBe(false);
-		expect(ipInCidrs("10.0.0.1", ["10.0.0.0/8/8"])).toBe(false);
-		expect(ipInCidrs("10.0.0.1", ["10.0.0.0/ 8"])).toBe(false);
+		expect(isIpInCidrs("198.51.100.8", ["203.0.113.4/"])).toBe(false);
+		expect(isIpInCidrs("2001:db8::1", ["2001:db8::/"])).toBe(false);
+		expect(isIpInCidrs("192.0.2.1", ["192.0.2.0/24/8"])).toBe(false);
+		expect(isIpInCidrs("192.0.2.1", ["192.0.2.0/ 8"])).toBe(false);
 	});
 	it("is false for an empty CIDR set", () => {
-		expect(ipInCidrs("10.0.0.1", [])).toBe(false);
+		expect(isIpInCidrs("192.0.2.1", [])).toBe(false);
 	});
 });
 
@@ -84,9 +97,9 @@ describe("presence token", () => {
 		const token = await mintPresenceToken(SECRET, NOW);
 		const [, sig] = token.split(".");
 		const forged = btoa(JSON.stringify({ exp: NOW + 10 ** 9 }))
-			.replace(/\+/g, "-")
-			.replace(/\//g, "_")
-			.replace(/=+$/, "");
+			.replaceAll("+", "-")
+			.replaceAll("/", "_")
+			.replace(/={1,2}$/, "");
 		expect(await verifyPresenceToken(SECRET, `${forged}.${sig}`, NOW)).toBe(
 			false
 		);
@@ -106,16 +119,18 @@ describe("presence token", () => {
 describe("presenceResponse", () => {
 	const cidrs = ["203.0.113.0/24"];
 	it("mints a verifiable token for an on-site IP", async () => {
-		const res = await presenceResponse({
+		const response = await presenceResponse({
 			clientIp: "203.0.113.7",
 			buildingCidrs: cidrs,
 			secret: SECRET,
 			ipCheck: true,
 			nowMs: NOW,
 		});
-		expect(res.status).toBe(200);
-		if (res.status !== 200) throw new Error("expected 200");
-		expect(await verifyPresenceToken(SECRET, res.token, NOW)).toBe(true);
+		expect(response.status).toBe(200);
+		if (response.status !== 200) throw new Error("expected 200");
+		expect(await verifyPresenceToken(SECRET, response.token, NOW)).toBe(
+			true
+		);
 	});
 	it("403s an off-site IP", async () => {
 		expect(
@@ -165,87 +180,83 @@ describe("presenceResponse", () => {
 
 describe("presenceHttpResponse", () => {
 	const SITE_URL = "https://app.thejfloor.com";
-	const env = {
+	const environment = {
 		buildingIp: "203.0.113.0/24",
 		secret: SECRET,
 		siteUrl: SITE_URL,
 		ipCheck: undefined,
 	};
 
-	function req(headers: Record<string, string>): Request {
-		return new Request("https://example.convex.site/door/presence", {
-			headers,
-		});
-	}
-
 	it("mints a verifiable token when cf-connecting-ip is on-site", async () => {
-		const res = await presenceHttpResponse(
-			req({ "cf-connecting-ip": "203.0.113.7" }),
-			env,
+		const response = await presenceHttpResponse(
+			request({ "cf-connecting-ip": "203.0.113.7" }),
+			environment,
 			NOW
 		);
-		expect(res.status).toBe(200);
-		const body = (await res.json()) as { token: string };
+		expect(response.status).toBe(200);
+		const body = (await response.json()) as { token: string };
 		expect(await verifyPresenceToken(SECRET, body.token, NOW)).toBe(true);
 	});
 
 	it("403s an on-site x-forwarded-for when cf-connecting-ip is off-site — only cf-connecting-ip is trusted", async () => {
-		const res = await presenceHttpResponse(
-			req({
+		const response = await presenceHttpResponse(
+			request({
 				"x-forwarded-for": "203.0.113.7",
 				"cf-connecting-ip": "198.51.100.1",
 			}),
-			env,
+			environment,
 			NOW
 		);
-		expect(res.status).toBe(403);
+		expect(response.status).toBe(403);
 	});
 
 	it("403s an on-site x-forwarded-for with no cf-connecting-ip at all", async () => {
-		const res = await presenceHttpResponse(
-			req({ "x-forwarded-for": "203.0.113.7" }),
-			env,
+		const response = await presenceHttpResponse(
+			request({ "x-forwarded-for": "203.0.113.7" }),
+			environment,
 			NOW
 		);
-		expect(res.status).toBe(403);
+		expect(response.status).toBe(403);
 	});
 
 	it("sets CORS to the site URL and disables caching", async () => {
-		const res = await presenceHttpResponse(
-			req({ "cf-connecting-ip": "203.0.113.7" }),
-			env,
+		const response = await presenceHttpResponse(
+			request({ "cf-connecting-ip": "203.0.113.7" }),
+			environment,
 			NOW
 		);
-		expect(res.headers.get("Access-Control-Allow-Origin")).toBe(SITE_URL);
-		expect(res.headers.get("Cache-Control")).toBe("no-store");
+		expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
+			SITE_URL
+		);
+		expect(response.headers.get("Cache-Control")).toBe("no-store");
 	});
 });
 
-describe("ipCheckEnabled", () => {
+describe("isIpCheckEnabled", () => {
 	it("is on unless explicitly turned off", () => {
-		expect(ipCheckEnabled(undefined)).toBe(true);
-		expect(ipCheckEnabled("")).toBe(true);
-		expect(ipCheckEnabled("on")).toBe(true);
-		expect(ipCheckEnabled("0")).toBe(true);
-		expect(ipCheckEnabled("false")).toBe(true);
-		expect(ipCheckEnabled("OFF")).toBe(true);
-		expect(ipCheckEnabled("off")).toBe(false);
+		expect(isIpCheckEnabled(undefined)).toBe(true);
+		expect(isIpCheckEnabled("")).toBe(true);
+		expect(isIpCheckEnabled("on")).toBe(true);
+		expect(isIpCheckEnabled("0")).toBe(true);
+		expect(isIpCheckEnabled("false")).toBe(true);
+		expect(isIpCheckEnabled("OFF")).toBe(true);
+		expect(isIpCheckEnabled("off")).toBe(false);
 	});
 });
 
 describe("building-IP check turned off", () => {
 	it("mints a token for any client IP, or none", async () => {
 		for (const clientIp of ["198.51.100.1", null]) {
-			const res = await presenceResponse({
+			const response = await presenceResponse({
 				clientIp,
 				buildingCidrs: [],
 				secret: SECRET,
 				ipCheck: false,
 				nowMs: NOW,
 			});
-			expect(res.status).toBe(200);
-			if (res.status !== 200) throw new Error("expected 200");
-			expect(await verifyPresenceToken(SECRET, res.token, NOW)).toBe(
+			expect(response.status).toBe(200);
+			if (response.status !== 200) throw new Error("expected 200");
+			expect(await verifyPresenceToken(SECRET, response.token, NOW)).toBe(
 				true
 			);
 		}
@@ -264,7 +275,7 @@ describe("building-IP check turned off", () => {
 	});
 
 	it("the route honours DOOR_PRESENCE_IP_CHECK=off", async () => {
-		const res = await presenceHttpResponse(
+		const response = await presenceHttpResponse(
 			new Request("https://example.convex.site/door/presence"),
 			{
 				buildingIp: undefined,
@@ -274,8 +285,8 @@ describe("building-IP check turned off", () => {
 			},
 			NOW
 		);
-		expect(res.status).toBe(200);
-		const body = (await res.json()) as { token: string };
+		expect(response.status).toBe(200);
+		const body = (await response.json()) as { token: string };
 		expect(await verifyPresenceToken(SECRET, body.token, NOW)).toBe(true);
 	});
 });

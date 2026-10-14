@@ -13,7 +13,7 @@ export const eventStartingSoon = defineKind({
 		name: v.string(),
 		startsAtLocal: v.string(),
 	}),
-	audience: (ctx) => communityIds(ctx),
+	audience: (context) => communityIds(context),
 	push: ({ eventId, name, startsAtLocal }) => ({
 		title: `${name} starts soon`,
 		body: `Starts at ${zonedTime(startsAtLocal)}.`,

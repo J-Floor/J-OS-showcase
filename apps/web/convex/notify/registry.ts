@@ -10,7 +10,7 @@ import { lifecycleAlert } from "./kinds/lifecycleAlert.ts";
 import { newApplication } from "./kinds/newApplication.ts";
 import { projectAssigned } from "./kinds/projectAssigned.ts";
 import { taskAssigned } from "./kinds/taskAssigned.ts";
-import type { AnyKindDef } from "./types.ts";
+import type { AnyKindDefinition } from "./types.ts";
 
 /** Every notification kind. Adding one = one file in `kinds/` + one entry
  *  here; {@link kindValidator} follows. */
@@ -40,6 +40,6 @@ export const kindValidator = v.union(
 
 /** The definition behind a kind name, with its payload widened. Callers are
  *  typed at `notify`, so dispatch can treat every kind alike. */
-export function kindDef(kind: KindName): AnyKindDef {
+export function kindDefinition(kind: KindName): AnyKindDefinition {
 	return KINDS[kind];
 }

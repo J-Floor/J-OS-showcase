@@ -121,9 +121,7 @@ const applicantRows = [
  * to it is silently ignored.
  */
 const shared = vi.hoisted(() => ({
-	setLoaded: (value: boolean): void => {
-		void value;
-	},
+	setLoaded: vi.fn() as (isLoaded: boolean) => void,
 	/** Whether the Applications roster holds the two applicants below. Off by
 	 *  default so the tests that name a member or guest keep an empty pipeline. */
 	applicants: false,
@@ -141,7 +139,7 @@ vi.mock("./data/communityData.tsx", async () => {
 		return () => ({
 			data: () => (loaded() ? data() : undefined),
 			isLoading: () => !loaded(),
-			error: () => undefined,
+			error: () => {},
 			isStale: () => false,
 			refetch: () => {},
 		});
@@ -156,7 +154,7 @@ vi.mock("../../shared/data/boardLevel.tsx", () => ({
 	useBoardLevel: () => ({
 		data: () => [],
 		isLoading: () => false,
-		error: () => undefined,
+		error: () => {},
 		isStale: () => false,
 		refetch: () => {},
 	}),
@@ -165,13 +163,13 @@ vi.mock("./actions/ExportActions.tsx", () => ({
 	ExportActions: () => <div>export-actions</div>,
 }));
 vi.mock("convex-solidjs", () => ({
-	useQuery: () => ({ data: () => undefined, isLoading: () => false }),
+	useQuery: () => ({ data: () => {}, isLoading: () => false }),
 	useConvexClient: () => ({ query: vi.fn(() => Promise.resolve(null)) }),
 	useMutation: () => ({
 		mutateAsync: () => Promise.resolve(),
 		mutate: vi.fn(),
-		data: () => undefined,
-		error: () => undefined,
+		data: () => {},
+		error: () => {},
 		isLoading: () => false,
 		reset: vi.fn(),
 	}),
@@ -282,6 +280,22 @@ test("a tab picked while the link is still loading is not overruled by it", asyn
 	expect(url()).not.toContain("person=");
 });
 
+/** A link to the person, standing in for the palette entry that opens them. */
+function Elsewhere() {
+	const navigate = useNavigate();
+	return (
+		<button
+			type="button"
+			onClick={() => {
+				// Exactly what the palette does on select.
+				navigate("/community?person=p1");
+			}}
+		>
+			go
+		</button>
+	);
+}
+
 /** The router as the app really has it: the community console is ONE route
  *  among others, so following a link from elsewhere MOUNTS it, rather than it
  *  already being on screen with the link in the URL. Every test above starts at
@@ -289,20 +303,6 @@ test("a tab picked while the link is still loading is not overruled by it", asyn
 function renderApp(start: string) {
 	const history = createMemoryHistory();
 	history.set({ value: start, scroll: false, replace: true });
-	function Elsewhere() {
-		const navigate = useNavigate();
-		return (
-			<button
-				type="button"
-				onClick={() => {
-					// Exactly what the palette does on select.
-					navigate("/community?person=p1");
-				}}
-			>
-				go
-			</button>
-		);
-	}
 	const result = render(() => (
 		<MemoryRouter history={history}>
 			<Route path="/tasks" component={Elsewhere} />
@@ -326,19 +326,6 @@ test("Back from a link followed in from another page lands on the person's tab",
 	// the tab the page moved the person to, or Back closes the drawer onto
 	// Applications instead of the roster they were found in.
 	window.history.replaceState(null, "", "/tasks");
-	function Elsewhere() {
-		const navigate = useNavigate();
-		return (
-			<button
-				type="button"
-				onClick={() => {
-					navigate("/community?person=p1");
-				}}
-			>
-				go
-			</button>
-		);
-	}
 	// Code-split exactly as `communityModule` does: the page mounts after the
 	// router has settled, so its effects run on a URL that is already final.
 	const LazyCommunity = lazyPage(() => Promise.resolve(CommunityPage));
@@ -548,15 +535,15 @@ test("Next in the drawer does not stack history: one Back closes it", async () =
 	expect(url()).not.toContain("person=");
 });
 
-describe("Enter on the roster", () => {
-	function focusedGrid(): HTMLElement | null {
-		const active = document.activeElement;
-		return active instanceof HTMLElement &&
-			active.getAttribute("role") === "grid"
-			? active
-			: null;
-	}
+function focusedGrid(): HTMLElement | null {
+	const active = document.activeElement;
+	return active instanceof HTMLElement &&
+		active.getAttribute("role") === "grid"
+		? active
+		: null;
+}
 
+describe("Enter on the roster", () => {
 	test("opens the first row of a tab just switched to", async () => {
 		const { url } = renderAtPath("/community?tab=guests");
 		await waitFor(() => {

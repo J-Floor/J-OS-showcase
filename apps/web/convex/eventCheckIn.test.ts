@@ -18,9 +18,9 @@ type Tester = ReturnType<typeof createTester>;
 
 const BOARD_EMAIL = "boss@example.com";
 
-async function seedBoard(t: Tester) {
-	const boardId = await t.run(async (ctx) =>
-		ctx.db.insert("people", {
+async function seedBoard(backend: Tester) {
+	const boardId = await backend.run(async (context) =>
+		context.db.insert("people", {
 			email: BOARD_EMAIL,
 			firstName: "Boss",
 			lastName: "",
@@ -29,11 +29,11 @@ async function seedBoard(t: Tester) {
 			stageSince: Date.now(),
 		})
 	);
-	return { boardId, asBoard: t.withIdentity({ email: BOARD_EMAIL }) };
+	return { boardId, asBoard: backend.withIdentity({ email: BOARD_EMAIL }) };
 }
 
-async function seedEvent(t: Tester) {
-	const { asBoard } = await seedBoard(t);
+async function seedEvent(backend: Tester) {
+	const { asBoard } = await seedBoard(backend);
 	return asBoard.mutation(api.events.createEvent, {
 		name: "Hack Night",
 		startsAtLocal: zonedLocalFromEpoch(Date.now(), SITE_TIMEZONE),
@@ -46,8 +46,8 @@ async function seedEvent(t: Tester) {
 
 // Boundary-pinned per the endsAt hard-stop spec: endsAt = now - 1000 is
 // unambiguously in the past.
-async function seedEndedEvent(t: Tester) {
-	const { asBoard } = await seedBoard(t);
+async function seedEndedEvent(backend: Tester) {
+	const { asBoard } = await seedBoard(backend);
 	return asBoard.mutation(api.events.createEvent, {
 		name: "Ended Hack Night",
 		startsAtLocal: zonedLocalFromEpoch(Date.now() - 200_000, SITE_TIMEZONE),
@@ -57,16 +57,16 @@ async function seedEndedEvent(t: Tester) {
 
 describe("confirmEventInvite", () => {
 	it("confirmEventInvite dedup-inserts attendance and consumes the invite token", async () => {
-		const t = createTester();
-		await t.run((ctx) =>
-			ctx.db.insert("wifiConfig", {
+		const backend = createTester();
+		await backend.run((context) =>
+			context.db.insert("wifiConfig", {
 				ssid: "Test Net",
 				password: "test-wifi-password",
 			})
 		);
-		const eventId = await seedEvent(t);
-		const personId = await t.run((ctx) =>
-			ctx.db.insert("people", {
+		const eventId = await seedEvent(backend);
+		const personId = await backend.run((context) =>
+			context.db.insert("people", {
 				email: "m@example.org",
 				firstName: "M",
 				lastName: "X",
@@ -75,8 +75,8 @@ describe("confirmEventInvite", () => {
 				stageSince: Date.now(),
 			})
 		);
-		await t.run((ctx) =>
-			issueToken(ctx, {
+		await backend.run((context) =>
+			issueToken(context, {
 				token: "inv",
 				purpose: "eventInvite",
 				personId,
@@ -85,50 +85,62 @@ describe("confirmEventInvite", () => {
 			})
 		);
 
-		const res = await t.action(api.eventCheckIn.confirmEventInvite, {
-			token: "inv",
-		});
+		const result = await backend.action(
+			api.eventCheckIn.confirmEventInvite,
+			{
+				token: "inv",
+			}
+		);
 
-		expect(res.status).toBe("verified");
-		expect(res.wifi).toEqual({
+		expect(result.status).toBe("verified");
+		expect(result.wifi).toEqual({
 			ssid: "Test Net",
 			password: "test-wifi-password",
 		});
-		const attendance = await t.run((ctx) =>
-			ctx.db
+		const attendance = await backend.run((context) =>
+			context.db
 				.query("eventAttendance")
-				.withIndex("by_person", (q) => q.eq("personId", personId))
+				.withIndex("by_person", (range) =>
+					range.eq("personId", personId)
+				)
 				.collect()
 		);
-		expect(attendance.filter((a) => a.eventId === eventId)).toHaveLength(1);
-		const invites = await t.run((ctx) =>
-			ctx.db.query("confirmTokens").collect()
+		expect(
+			attendance.filter((row) => row.eventId === eventId)
+		).toHaveLength(1);
+		const invites = await backend.run((context) =>
+			context.db.query("confirmTokens").collect()
 		);
 		expect(invites).toHaveLength(1);
 		expect(invites[0].consumedAt).toBeTypeOf("number");
 
 		// A second confirm on the (now-deleted) invite must not throw or double
 		// the attendance row.
-		const second = await t.action(api.eventCheckIn.confirmEventInvite, {
-			token: "inv",
-		});
+		const second = await backend.action(
+			api.eventCheckIn.confirmEventInvite,
+			{
+				token: "inv",
+			}
+		);
 		expect(second.status).toBe("invalid");
-		const attendance2 = await t.run((ctx) =>
-			ctx.db
+		const attendance2 = await backend.run((context) =>
+			context.db
 				.query("eventAttendance")
-				.withIndex("by_person", (q) => q.eq("personId", personId))
+				.withIndex("by_person", (range) =>
+					range.eq("personId", personId)
+				)
 				.collect()
 		);
-		expect(attendance2.filter((a) => a.eventId === eventId)).toHaveLength(
-			1
-		);
+		expect(
+			attendance2.filter((row) => row.eventId === eventId)
+		).toHaveLength(1);
 	});
 
 	it("confirmEventInvite returns expired for an invite past its expiry, without inserting attendance", async () => {
-		const t = createTester();
-		const eventId = await seedEvent(t);
-		const personId = await t.run((ctx) =>
-			ctx.db.insert("people", {
+		const backend = createTester();
+		const eventId = await seedEvent(backend);
+		const personId = await backend.run((context) =>
+			context.db.insert("people", {
 				email: "m2@example.org",
 				firstName: "M2",
 				lastName: "X",
@@ -137,8 +149,8 @@ describe("confirmEventInvite", () => {
 				stageSince: Date.now(),
 			})
 		);
-		await t.run((ctx) =>
-			issueToken(ctx, {
+		await backend.run((context) =>
+			issueToken(context, {
 				token: "stale-inv",
 				purpose: "eventInvite",
 				personId,
@@ -147,29 +159,34 @@ describe("confirmEventInvite", () => {
 			})
 		);
 
-		const res = await t.action(api.eventCheckIn.confirmEventInvite, {
-			token: "stale-inv",
-		});
+		const result = await backend.action(
+			api.eventCheckIn.confirmEventInvite,
+			{
+				token: "stale-inv",
+			}
+		);
 
-		expect(res).toEqual({ status: "expired" });
-		const attendance = await t.run((ctx) =>
-			ctx.db
+		expect(result).toEqual({ status: "expired" });
+		const attendance = await backend.run((context) =>
+			context.db
 				.query("eventAttendance")
-				.withIndex("by_person", (q) => q.eq("personId", personId))
+				.withIndex("by_person", (range) =>
+					range.eq("personId", personId)
+				)
 				.collect()
 		);
 		expect(attendance).toHaveLength(0);
-		const invites = await t.run((ctx) =>
-			ctx.db.query("confirmTokens").collect()
+		const invites = await backend.run((context) =>
+			context.db.query("confirmTokens").collect()
 		);
 		expect(invites).toHaveLength(1);
 	});
 
 	it("confirmEventInvite returns ended and writes no attendance when the invite's event has ended", async () => {
-		const t = createTester();
-		const eventId = await seedEndedEvent(t);
-		const personId = await t.run((ctx) =>
-			ctx.db.insert("people", {
+		const backend = createTester();
+		const eventId = await seedEndedEvent(backend);
+		const personId = await backend.run((context) =>
+			context.db.insert("people", {
 				email: "ended-invite@example.org",
 				firstName: "E",
 				lastName: "I",
@@ -178,8 +195,8 @@ describe("confirmEventInvite", () => {
 				stageSince: Date.now(),
 			})
 		);
-		await t.run((ctx) =>
-			issueToken(ctx, {
+		await backend.run((context) =>
+			issueToken(context, {
 				token: "ended-inv",
 				purpose: "eventInvite",
 				personId,
@@ -188,25 +205,30 @@ describe("confirmEventInvite", () => {
 			})
 		);
 
-		const res = await t.action(api.eventCheckIn.confirmEventInvite, {
-			token: "ended-inv",
-		});
+		const result = await backend.action(
+			api.eventCheckIn.confirmEventInvite,
+			{
+				token: "ended-inv",
+			}
+		);
 
-		expect(res).toEqual({ status: "ended" });
-		const attendance = await t.run((ctx) =>
-			ctx.db
+		expect(result).toEqual({ status: "ended" });
+		const attendance = await backend.run((context) =>
+			context.db
 				.query("eventAttendance")
-				.withIndex("by_person", (q) => q.eq("personId", personId))
+				.withIndex("by_person", (range) =>
+					range.eq("personId", personId)
+				)
 				.collect()
 		);
 		expect(attendance).toHaveLength(0);
 	});
 
 	it("confirmEventInvite returns ended, without Wi-Fi, when the invite's event was deleted", async () => {
-		const t = createTester();
-		const eventId = await seedEvent(t);
-		const personId = await t.run((ctx) =>
-			ctx.db.insert("people", {
+		const backend = createTester();
+		const eventId = await seedEvent(backend);
+		const personId = await backend.run((context) =>
+			context.db.insert("people", {
 				email: "deleted-event@example.org",
 				firstName: "D",
 				lastName: "E",
@@ -215,8 +237,8 @@ describe("confirmEventInvite", () => {
 				stageSince: Date.now(),
 			})
 		);
-		await t.run((ctx) =>
-			issueToken(ctx, {
+		await backend.run((context) =>
+			issueToken(context, {
 				token: "deleted-inv",
 				purpose: "eventInvite",
 				personId,
@@ -224,20 +246,23 @@ describe("confirmEventInvite", () => {
 				ttlMs: 60_000,
 			})
 		);
-		await t.run((ctx) => ctx.db.delete(eventId));
+		await backend.run((context) => context.db.delete(eventId));
 
-		const res = await t.action(api.eventCheckIn.confirmEventInvite, {
-			token: "deleted-inv",
-		});
+		const result = await backend.action(
+			api.eventCheckIn.confirmEventInvite,
+			{
+				token: "deleted-inv",
+			}
+		);
 
-		expect(res).toEqual({ status: "ended" });
+		expect(result).toEqual({ status: "ended" });
 	});
 
 	it("a kicked person's invite is refused", async () => {
-		const t = createTester();
-		const eventId = await seedEvent(t);
-		const personId = await t.run((ctx) =>
-			ctx.db.insert("people", {
+		const backend = createTester();
+		const eventId = await seedEvent(backend);
+		const personId = await backend.run((context) =>
+			context.db.insert("people", {
 				email: "k@example.com",
 				firstName: "K",
 				lastName: "",
@@ -246,8 +271,8 @@ describe("confirmEventInvite", () => {
 				stageSince: 0,
 			})
 		);
-		await t.run((ctx) =>
-			issueToken(ctx, {
+		await backend.run((context) =>
+			issueToken(context, {
 				token: "inv",
 				purpose: "eventInvite",
 				personId,
@@ -255,29 +280,34 @@ describe("confirmEventInvite", () => {
 				ttlMs: 1000,
 			})
 		);
-		const res = await t.mutation(
+		const result = await backend.mutation(
 			internal.eventCheckIn.confirmEventInviteByToken,
 			{ token: "inv" }
 		);
-		expect(res.status).toBe("invalid");
+		expect(result.status).toBe("invalid");
 		expect(
-			await t.run((ctx) => ctx.db.query("eventAttendance").collect())
+			await backend.run((context) =>
+				context.db.query("eventAttendance").collect()
+			)
 		).toHaveLength(0);
 	});
 
 	it("confirmEventInvite returns invalid for an unknown token", async () => {
-		const t = createTester();
-		const res = await t.action(api.eventCheckIn.confirmEventInvite, {
-			token: "does-not-exist",
-		});
-		expect(res).toEqual({ status: "invalid" });
+		const backend = createTester();
+		const result = await backend.action(
+			api.eventCheckIn.confirmEventInvite,
+			{
+				token: "does-not-exist",
+			}
+		);
+		expect(result).toEqual({ status: "invalid" });
 	});
 
 	it("confirmEventInvite whose person was purged returns invalid and writes no attendance", async () => {
-		const t = createTester();
-		const eventId = await seedEvent(t);
-		const personId = await t.run((ctx) =>
-			ctx.db.insert("people", {
+		const backend = createTester();
+		const eventId = await seedEvent(backend);
+		const personId = await backend.run((context) =>
+			context.db.insert("people", {
 				email: "gone@example.org",
 				firstName: "Gone",
 				lastName: "Prospect",
@@ -286,8 +316,8 @@ describe("confirmEventInvite", () => {
 				stageSince: Date.now(),
 			})
 		);
-		await t.run((ctx) =>
-			issueToken(ctx, {
+		await backend.run((context) =>
+			issueToken(context, {
 				token: "orphan-inv",
 				purpose: "eventInvite",
 				personId,
@@ -298,15 +328,18 @@ describe("confirmEventInvite", () => {
 		// purgeUnverified deleted the prospect between registration and this
 		// click, leaving an invite whose personId now dangles. Recording
 		// attendance for a person who no longer exists must not happen.
-		await t.run((ctx) => ctx.db.delete(personId));
+		await backend.run((context) => context.db.delete(personId));
 
-		const res = await t.action(api.eventCheckIn.confirmEventInvite, {
-			token: "orphan-inv",
-		});
+		const result = await backend.action(
+			api.eventCheckIn.confirmEventInvite,
+			{
+				token: "orphan-inv",
+			}
+		);
 
-		expect(res).toEqual({ status: "invalid" });
-		const attendance = await t.run((ctx) =>
-			ctx.db.query("eventAttendance").collect()
+		expect(result).toEqual({ status: "invalid" });
+		const attendance = await backend.run((context) =>
+			context.db.query("eventAttendance").collect()
 		);
 		expect(attendance).toHaveLength(0);
 	});
@@ -314,11 +347,11 @@ describe("confirmEventInvite", () => {
 
 describe("checkInToEvent", () => {
 	it("an entitled authed identity checking in produces exactly one attendance row", async () => {
-		const t = createTester();
-		const eventId = await seedEvent(t);
+		const backend = createTester();
+		const eventId = await seedEvent(backend);
 		const email = "member@example.org";
-		const personId = await t.run((ctx) =>
-			ctx.db.insert("people", {
+		const personId = await backend.run((context) =>
+			context.db.insert("people", {
 				email,
 				firstName: "Mem",
 				lastName: "Ber",
@@ -327,7 +360,7 @@ describe("checkInToEvent", () => {
 				stageSince: Date.now(),
 			})
 		);
-		const asMember = t.withIdentity({ email });
+		const asMember = backend.withIdentity({ email });
 
 		const result = await asMember.mutation(
 			api.eventCheckIn.checkInToEvent,
@@ -337,10 +370,12 @@ describe("checkInToEvent", () => {
 		);
 
 		expect(result).toEqual({ ok: true });
-		const rows = await t.run((ctx) =>
-			ctx.db
+		const rows = await backend.run((context) =>
+			context.db
 				.query("eventAttendance")
-				.withIndex("by_person", (q) => q.eq("personId", personId))
+				.withIndex("by_person", (range) =>
+					range.eq("personId", personId)
+				)
 				.collect()
 		);
 		expect(rows).toHaveLength(1);
@@ -348,11 +383,11 @@ describe("checkInToEvent", () => {
 	});
 
 	it("checking in twice stays at exactly one attendance row (dedup via insertAttendanceOnce)", async () => {
-		const t = createTester();
-		const eventId = await seedEvent(t);
+		const backend = createTester();
+		const eventId = await seedEvent(backend);
 		const email = "member2@example.org";
-		const personId = await t.run((ctx) =>
-			ctx.db.insert("people", {
+		const personId = await backend.run((context) =>
+			context.db.insert("people", {
 				email,
 				firstName: "Mem",
 				lastName: "Two",
@@ -361,26 +396,28 @@ describe("checkInToEvent", () => {
 				stageSince: Date.now(),
 			})
 		);
-		const asMember = t.withIdentity({ email });
+		const asMember = backend.withIdentity({ email });
 
 		await asMember.mutation(api.eventCheckIn.checkInToEvent, { eventId });
 		await asMember.mutation(api.eventCheckIn.checkInToEvent, { eventId });
 
-		const rows = await t.run((ctx) =>
-			ctx.db
+		const rows = await backend.run((context) =>
+			context.db
 				.query("eventAttendance")
-				.withIndex("by_person", (q) => q.eq("personId", personId))
+				.withIndex("by_person", (range) =>
+					range.eq("personId", personId)
+				)
 				.collect()
 		);
 		expect(rows).toHaveLength(1);
 	});
 
 	it("throws for a not-entitled authed identity (e.g. expired access) and writes no attendance", async () => {
-		const t = createTester();
-		const eventId = await seedEvent(t);
+		const backend = createTester();
+		const eventId = await seedEvent(backend);
 		const email = "expired@example.org";
-		await t.run((ctx) =>
-			ctx.db.insert("people", {
+		await backend.run((context) =>
+			context.db.insert("people", {
 				email,
 				firstName: "Ex",
 				lastName: "Pired",
@@ -389,23 +426,23 @@ describe("checkInToEvent", () => {
 				stageSince: Date.now(),
 			})
 		);
-		const asExpired = t.withIdentity({ email });
+		const asExpired = backend.withIdentity({ email });
 
 		await expect(
 			asExpired.mutation(api.eventCheckIn.checkInToEvent, { eventId })
 		).rejects.toThrow("Access expired or revoked");
-		const rows = await t.run((ctx) =>
-			ctx.db.query("eventAttendance").collect()
+		const rows = await backend.run((context) =>
+			context.db.query("eventAttendance").collect()
 		);
 		expect(rows).toHaveLength(0);
 	});
 
 	it("refuses a staff person and writes no attendance", async () => {
-		const t = createTester();
-		const eventId = await seedEvent(t);
+		const backend = createTester();
+		const eventId = await seedEvent(backend);
 		const email = "staff@example.org";
-		await t.run((ctx) =>
-			ctx.db.insert("people", {
+		await backend.run((context) =>
+			context.db.insert("people", {
 				email,
 				firstName: "Sta",
 				lastName: "Ff",
@@ -414,36 +451,36 @@ describe("checkInToEvent", () => {
 				stageSince: Date.now(),
 			})
 		);
-		const asStaff = t.withIdentity({ email });
+		const asStaff = backend.withIdentity({ email });
 
 		await expect(
 			asStaff.mutation(api.eventCheckIn.checkInToEvent, { eventId })
 		).rejects.toThrow("Forbidden");
-		const rows = await t.run((ctx) =>
-			ctx.db.query("eventAttendance").collect()
+		const rows = await backend.run((context) =>
+			context.db.query("eventAttendance").collect()
 		);
 		expect(rows).toHaveLength(0);
 	});
 
 	it("throws for an unauthenticated caller and writes no attendance", async () => {
-		const t = createTester();
-		const eventId = await seedEvent(t);
+		const backend = createTester();
+		const eventId = await seedEvent(backend);
 
 		await expect(
-			t.mutation(api.eventCheckIn.checkInToEvent, { eventId })
+			backend.mutation(api.eventCheckIn.checkInToEvent, { eventId })
 		).rejects.toThrow("Not authenticated");
-		const rows = await t.run((ctx) =>
-			ctx.db.query("eventAttendance").collect()
+		const rows = await backend.run((context) =>
+			context.db.query("eventAttendance").collect()
 		);
 		expect(rows).toHaveLength(0);
 	});
 
 	it("throws Event has ended for an event past its endsAt and writes no attendance", async () => {
-		const t = createTester();
-		const eventId = await seedEndedEvent(t);
+		const backend = createTester();
+		const eventId = await seedEndedEvent(backend);
 		const email = "member-ended@example.org";
-		await t.run((ctx) =>
-			ctx.db.insert("people", {
+		await backend.run((context) =>
+			context.db.insert("people", {
 				email,
 				firstName: "Mem",
 				lastName: "Ended",
@@ -452,24 +489,24 @@ describe("checkInToEvent", () => {
 				stageSince: Date.now(),
 			})
 		);
-		const asMember = t.withIdentity({ email });
+		const asMember = backend.withIdentity({ email });
 
 		await expect(
 			asMember.mutation(api.eventCheckIn.checkInToEvent, { eventId })
 		).rejects.toThrow("Event has ended");
-		const rows = await t.run((ctx) =>
-			ctx.db.query("eventAttendance").collect()
+		const rows = await backend.run((context) =>
+			context.db.query("eventAttendance").collect()
 		);
 		expect(rows).toHaveLength(0);
 	});
 
 	it("throws Event not found for a deleted/nonexistent event and writes no attendance", async () => {
-		const t = createTester();
-		const eventId = await seedEvent(t);
-		await t.run((ctx) => ctx.db.delete(eventId));
+		const backend = createTester();
+		const eventId = await seedEvent(backend);
+		await backend.run((context) => context.db.delete(eventId));
 		const email = "member3@example.org";
-		await t.run((ctx) =>
-			ctx.db.insert("people", {
+		await backend.run((context) =>
+			context.db.insert("people", {
 				email,
 				firstName: "Mem",
 				lastName: "Three",
@@ -478,13 +515,13 @@ describe("checkInToEvent", () => {
 				stageSince: Date.now(),
 			})
 		);
-		const asMember = t.withIdentity({ email });
+		const asMember = backend.withIdentity({ email });
 
 		await expect(
 			asMember.mutation(api.eventCheckIn.checkInToEvent, { eventId })
 		).rejects.toThrow("Event not found");
-		const rows = await t.run((ctx) =>
-			ctx.db.query("eventAttendance").collect()
+		const rows = await backend.run((context) =>
+			context.db.query("eventAttendance").collect()
 		);
 		expect(rows).toHaveLength(0);
 	});

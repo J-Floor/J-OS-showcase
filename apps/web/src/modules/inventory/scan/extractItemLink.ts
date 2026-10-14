@@ -21,7 +21,7 @@ export function extractItemLink(raw: string): ItemLinkResolution {
 		// A relative deep link (no origin) parses fine against a dummy base;
 		// an absolute one ignores the base entirely. Either way, pull `item`
 		// from the query string when present.
-		const url = new URL(raw, "http://placeholder.invalid");
+		const url = new URL(raw, "https://placeholder.invalid");
 		const item = url.searchParams.get("item");
 		if (item !== null) candidate = item;
 	} catch {

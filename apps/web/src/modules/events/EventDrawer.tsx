@@ -1,51 +1,33 @@
 import {
 	Accordion,
-	Avatar,
 	Button,
-	DatePicker,
 	Drawer,
-	EditableText,
 	Icon,
-	Input,
 	PropertyRow,
-	Query,
-	TimePicker,
 } from "@j-os/design-system";
 import { useMutation } from "convex-solidjs";
-import { For, Show, createEffect, createSignal, on } from "solid-js";
+import { Show, createEffect, createSignal, on, type Accessor } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
-import {
-	SITE_TIMEZONE,
-	type ZonedValue,
-	composeZoned,
-	formatZoned,
-	zonedDate,
-	zonedTime,
-} from "../../../convex/lib/time.ts";
-import { NAME_MAX } from "../../../convex/lib/validate.ts";
 import { Can, useAbility } from "../../lib/ability.tsx";
 import { useConfirm } from "../../shared/confirm.tsx";
 import { useQuery } from "../../shared/data/useQuery.ts";
-import { EntityQrBlock } from "../../shared/entity/EntityQr.tsx";
 import { ICONS } from "../../shared/icons.ts";
 import { EditToggle } from "../community/drawers/EditToggle.tsx";
 
-import { eventsEntity } from "./entity.ts";
+import {
+	EventCreateForm,
+	createEventCreateForm,
+	type EventCreateFormState,
+} from "./EventCreateForm.tsx";
+import {
+	EventAdminItems,
+	EventDetailsItem,
+	type Attendee,
+} from "./EventDetails.tsx";
 import styles from "./EventDrawer.module.scss";
 import { eventAttendeesQuery } from "./queries.ts";
-
-/** The zoned IXDTF source for an event's start/end. Required on the schema (the
- *  prod backfill populated every row and `createEvent` always writes both), so
- *  these are plain field reads — named for the call sites that compose/display
- *  them below. */
-function startLocal(event: Doc<"events">): string {
-	return event.startsAtLocal;
-}
-function endLocal(event: Doc<"events">): string {
-	return event.endsAtLocal;
-}
 
 /**
  * Placeholder field layout passed to `Drawer.Body`'s `skeleton` while
@@ -77,6 +59,150 @@ function EventFieldsPlaceholder() {
 	);
 }
 
+const ALL_SECTIONS = ["details", "visitor", "attendees"];
+
+/** The title, the edit toggle (an existing event, board/admin) and the
+ *  close button. */
+function EventDrawerHeader(props: {
+	event?: Doc<"events">;
+	loading?: boolean;
+	isOpen: boolean;
+	canManage: boolean;
+	isEditing: boolean;
+	onToggleEditing: () => void;
+}) {
+	return (
+		<Drawer.Header>
+			<Drawer.Title loading={props.loading}>
+				{props.event ? props.event.name : "New event"}
+			</Drawer.Title>
+			<Drawer.HeaderActions>
+				<Show
+					when={
+						!props.loading &&
+						props.event !== undefined &&
+						props.canManage
+					}
+				>
+					<EditToggle
+						editing={props.isEditing}
+						enabled={props.isOpen}
+						onToggle={props.onToggleEditing}
+					/>
+				</Show>
+				<Drawer.Close />
+			</Drawer.HeaderActions>
+		</Drawer.Header>
+	);
+}
+
+/** An existing event's accordion: its details for anyone, the QR and
+ *  attendees for the board. */
+function EventDetailAccordion(props: {
+	event: Accessor<Doc<"events">>;
+	isEditing: Accessor<boolean>;
+	canManage: boolean;
+	attendees: Accessor<Attendee[] | undefined>;
+	openSections: string[];
+	onOpenSectionsChange: (sections: string[]) => void;
+}) {
+	return (
+		<Accordion.Root
+			multiple
+			value={props.openSections}
+			onValueChange={(details) => {
+				props.onOpenSectionsChange(details.value);
+			}}
+		>
+			<EventDetailsItem event={props.event} isEditing={props.isEditing} />
+			<Show when={props.canManage}>
+				<EventAdminItems
+					event={props.event}
+					attendees={props.attendees}
+				/>
+			</Show>
+		</Accordion.Root>
+	);
+}
+
+/** The drawer's footer: Delete on an existing event (board/admin), Create
+ *  on the create form. Nothing while the row is still loading. */
+function EventDrawerFooter(props: {
+	event?: Doc<"events">;
+	loading?: boolean;
+	canManage: boolean;
+	form: EventCreateFormState;
+	onClose: () => void;
+}) {
+	const deleteEvent = useMutation(api.events.deleteEvent);
+	const confirm = useConfirm();
+
+	async function remove(event: Doc<"events">): Promise<void> {
+		const isOk = await confirm({
+			title: "Delete event?",
+			message: "This removes the event and its attendance records.",
+			confirmLabel: "Delete",
+			tone: "danger",
+		});
+		if (!isOk) return;
+		await deleteEvent.mutateAsync({ eventId: event._id });
+		props.onClose();
+	}
+
+	return (
+		<Show when={!props.loading}>
+			<Show
+				when={props.event === undefined}
+				fallback={
+					<Show when={props.canManage && props.event} keyed>
+						{(event) => (
+							<Drawer.Footer>
+								<Button
+									variant="tertiary"
+									onClick={() => remove(event)}
+								>
+									<Icon>{ICONS.delete}</Icon> Delete event
+								</Button>
+							</Drawer.Footer>
+						)}
+					</Show>
+				}
+			>
+				<Can I="create" the="Events">
+					<Drawer.Footer>
+						<Button
+							type="submit"
+							form="event-create-form"
+							disabled={!props.form.canSubmit()}
+							disabledReason={props.form.disabledReason()}
+							isLoading={props.form.submitting()}
+						>
+							Create
+						</Button>
+					</Drawer.Footer>
+				</Can>
+			</Show>
+		</Show>
+	);
+}
+
+/** Who registered for the open event: the board's list, so the query runs
+ *  only for an existing event and a viewer who can manage events. Never
+ *  shows the previous event's list while the next one loads. */
+function useEventAttendees(
+	event: () => Doc<"events"> | undefined,
+	canManage: () => boolean
+) {
+	return useQuery(
+		eventAttendeesQuery.query,
+		() => eventAttendeesQuery.args(event()?._id as Id<"events">),
+		() => ({
+			enabled: event() !== undefined && canManage(),
+			keepPreviousData: false,
+		})
+	);
+}
+
 /**
  * One drawer for creating and viewing/editing an event, styled like the
  * community person drawer: an accordion of `PropertyRow`s, a padlock
@@ -94,7 +220,7 @@ function EventFieldsPlaceholder() {
  */
 export function EventDrawer(props: {
 	open: boolean;
-	onOpenChange: (open: boolean) => void;
+	onOpenChange: (isOpen: boolean) => void;
 	event?: Doc<"events">;
 	/** True when the drawer is open for a real row (`selectedId()` set) whose
 	 *  data hasn't loaded yet — distinct from create, where there is no id at
@@ -106,34 +232,18 @@ export function EventDrawer(props: {
 		return ability().can("manage", "Events");
 	}
 
-	const createEvent = useMutation(api.events.createEvent);
-	const updateEvent = useMutation(api.events.updateEvent);
-	const deleteEvent = useMutation(api.events.deleteEvent);
-	const confirm = useConfirm();
+	const form = createEventCreateForm({
+		onCreated: () => {
+			props.onOpenChange(false);
+		},
+	});
 
-	const attendees = useQuery(
-		eventAttendeesQuery.query,
-		() => eventAttendeesQuery.args(props.event?._id as Id<"events">),
-		() => ({
-			enabled: props.event !== undefined && canManage(),
-			keepPreviousData: false,
-		})
-	);
+	const attendees = useEventAttendees(() => props.event, canManage);
 
 	const [editing, setEditing] = createSignal(false);
-	const [name, setName] = createSignal("");
-	const [startsAt, setStartsAt] = createSignal<string | null>(null);
-	const [endsAt, setEndsAt] = createSignal<string | null>(null);
-	const [startTime, setStartTime] = createSignal("00:01");
-	const [endTime, setEndTime] = createSignal("23:59");
-	const [submitting, setSubmitting] = createSignal(false);
 	// Controlled + onValueChange so the sections actually collapse (matches
 	// community's PersonDetail). A bare `value` with no setter pins them open.
-	const [openSections, setOpenSections] = createSignal([
-		"details",
-		"visitor",
-		"attendees",
-	]);
+	const [openSections, setOpenSections] = createSignal(ALL_SECTIONS);
 
 	// Fresh create form + locked fields on a drawer OPEN or a switch to a
 	// different event — keyed on `open` + the event id, NOT the event object, so
@@ -142,119 +252,24 @@ export function EventDrawer(props: {
 	createEffect(
 		on(
 			() => [props.open, props.event?._id] as const,
-			([open]) => {
-				if (!open) return;
+			([isOpen]) => {
+				if (!isOpen) return;
 				setEditing(false);
-				if (props.event === undefined) {
-					setName("");
-					setStartsAt(null);
-					setEndsAt(null);
-					setStartTime("00:01");
-					setEndTime("23:59");
-				}
+				if (props.event === undefined) form.reset();
 			}
 		)
 	);
 
-	/**
-	 * Composes the create form's date + time signals into Zurich-zoned
-	 * instants, or `null` while either date is unset. Reads the signals
-	 * directly (not memoised) so callers stay reactive when called from a
-	 * tracked scope, matching the previous `dateTimeToMs`-per-call style.
-	 */
-	function composedRange(): { start: ZonedValue; end: ZonedValue } | null {
-		const sd = startsAt();
-		const ed = endsAt();
-		if (sd === null || ed === null) return null;
-		return {
-			start: composeZoned(sd, startTime(), SITE_TIMEZONE),
-			end: composeZoned(ed, endTime(), SITE_TIMEZONE),
-		};
-	}
-
-	function canSubmit(): boolean {
-		if (name().trim() === "") return false;
-		const range = composedRange();
-		return range !== null && range.start.utc <= range.end.utc;
-	}
-
-	/**
-	 * The create button's disabled explanation. `canSubmit` above returns
-	 * false both when name/dates are missing AND when a fully-specified
-	 * start/end is inverted (start after end) — those need distinct copy, or
-	 * the missing-fields message reads as false once both dates are set.
-	 */
-	function disabledReason(): string {
-		if (name().trim() === "") return "Add a name and both dates first";
-		const range = composedRange();
-		if (range === null) return "Add a name and both dates first";
-		if (range.start.utc > range.end.utc)
-			return "The start must be on or before the end.";
-		return "Add a name and both dates first";
-	}
-
-	async function submit(): Promise<void> {
-		const range = composedRange();
-		if (
-			name().trim() === "" ||
-			range === null ||
-			range.start.utc > range.end.utc ||
-			submitting()
-		)
-			return;
-		setSubmitting(true);
-		try {
-			await createEvent.mutateAsync({
-				name: name().trim(),
-				startsAtLocal: range.start.local,
-				endsAtLocal: range.end.local,
-			});
-			props.onOpenChange(false);
-		} finally {
-			setSubmitting(false);
-		}
-	}
-
-	function onSubmit(e: SubmitEvent): void {
-		e.preventDefault();
-		void submit();
-	}
-
-	async function remove(event: Doc<"events">): Promise<void> {
-		const ok = await confirm({
-			title: "Delete event?",
-			message: "This removes the event and its attendance records.",
-			confirmLabel: "Delete",
-			tone: "danger",
-		});
-		if (!ok) return;
-		await deleteEvent.mutateAsync({ eventId: event._id });
-		props.onOpenChange(false);
-	}
-
 	return (
 		<Drawer.Root open={props.open} onOpenChange={props.onOpenChange}>
-			<Drawer.Header>
-				<Drawer.Title loading={props.loading}>
-					{props.event ? props.event.name : "New event"}
-				</Drawer.Title>
-				<Drawer.HeaderActions>
-					<Show
-						when={
-							!props.loading &&
-							props.event !== undefined &&
-							canManage()
-						}
-					>
-						<EditToggle
-							editing={editing()}
-							enabled={props.open}
-							onToggle={() => setEditing((e) => !e)}
-						/>
-					</Show>
-					<Drawer.Close />
-				</Drawer.HeaderActions>
-			</Drawer.Header>
+			<EventDrawerHeader
+				event={props.event}
+				loading={props.loading}
+				isOpen={props.open}
+				canManage={canManage()}
+				isEditing={editing()}
+				onToggleEditing={() => setEditing((current) => !current)}
+			/>
 
 			<Drawer.Body
 				loading={props.loading}
@@ -264,390 +279,32 @@ export function EventDrawer(props: {
 					when={props.event}
 					fallback={
 						<Can I="create" the="Events">
-							<form
-								id="event-create-form"
-								class={styles.form}
-								onSubmit={onSubmit}
-							>
-								<Input
-									label="Name"
-									maxLength={NAME_MAX}
-									required
-									value={name()}
-									onInput={(e) => {
-										setName(e.currentTarget.value);
-									}}
-								/>
-								<div class={styles.fieldRow}>
-									<DatePicker
-										label="Starts"
-										value={startsAt()}
-										onValueChange={setStartsAt}
-									/>
-									<TimePicker
-										label="Start time (Zurich)"
-										value={startTime()}
-										onValueChange={(v) => {
-											setStartTime(v ?? "00:01");
-										}}
-									/>
-								</div>
-								<div class={styles.fieldRow}>
-									<DatePicker
-										label="Ends"
-										value={endsAt()}
-										onValueChange={setEndsAt}
-									/>
-									<TimePicker
-										label="End time (Zurich)"
-										value={endTime()}
-										onValueChange={(v) => {
-											setEndTime(v ?? "23:59");
-										}}
-									/>
-								</div>
-								<p class={styles.hint}>
-									Times are Europe/Zurich (the space),
-									wherever you're editing from.
-								</p>
-							</form>
+							<EventCreateForm form={form} />
 						</Can>
 					}
 				>
 					{(event) => (
-						<Accordion.Root
-							multiple
-							value={openSections()}
-							onValueChange={(details) => {
-								setOpenSections(details.value);
-							}}
-						>
-							<Accordion.Item value="details">
-								<Accordion.ItemTitle>
-									Details
-								</Accordion.ItemTitle>
-								<Accordion.ItemContent>
-									<div class={styles.section}>
-										<PropertyRow
-											icon={ICONS.name}
-											label="Name"
-										>
-											<Show
-												when={editing()}
-												fallback={
-													<span>{event().name}</span>
-												}
-											>
-												<EditableText
-													value={event().name}
-													maxLength={NAME_MAX}
-													onCommit={(v) => {
-														void updateEvent.mutateAsync(
-															{
-																eventId:
-																	event()._id,
-																name: v,
-															}
-														);
-													}}
-												/>
-											</Show>
-										</PropertyRow>
-										<PropertyRow
-											icon={ICONS.start}
-											label="Starts"
-										>
-											<Show
-												when={editing()}
-												fallback={
-													<span>
-														{formatZoned(
-															startLocal(event())
-														)}
-													</span>
-												}
-											>
-												<div class={styles.fieldRow}>
-													<DatePicker
-														value={zonedDate(
-															startLocal(event())
-														)}
-														onValueChange={(
-															iso
-														) => {
-															if (!iso) return;
-															const composed =
-																composeZoned(
-																	iso,
-																	zonedTime(
-																		startLocal(
-																			event()
-																		)
-																	),
-																	SITE_TIMEZONE
-																);
-															if (
-																composed.utc <=
-																event().endsAt
-															)
-																void updateEvent.mutateAsync(
-																	{
-																		eventId:
-																			event()
-																				._id,
-																		startsAtLocal:
-																			composed.local,
-																	}
-																);
-														}}
-													/>
-													<TimePicker
-														label="Start time (Zurich)"
-														value={zonedTime(
-															startLocal(event())
-														)}
-														onValueChange={(
-															time
-														) => {
-															if (!time) return;
-															const composed =
-																composeZoned(
-																	zonedDate(
-																		startLocal(
-																			event()
-																		)
-																	),
-																	time,
-																	SITE_TIMEZONE
-																);
-															if (
-																composed.utc <=
-																event().endsAt
-															)
-																void updateEvent.mutateAsync(
-																	{
-																		eventId:
-																			event()
-																				._id,
-																		startsAtLocal:
-																			composed.local,
-																	}
-																);
-														}}
-													/>
-												</div>
-											</Show>
-										</PropertyRow>
-										<PropertyRow
-											icon={ICONS.end}
-											label="Ends"
-										>
-											<Show
-												when={editing()}
-												fallback={
-													<span>
-														{formatZoned(
-															endLocal(event())
-														)}
-													</span>
-												}
-											>
-												<div class={styles.fieldRow}>
-													<DatePicker
-														value={zonedDate(
-															endLocal(event())
-														)}
-														onValueChange={(
-															iso
-														) => {
-															if (!iso) return;
-															const composed =
-																composeZoned(
-																	iso,
-																	zonedTime(
-																		endLocal(
-																			event()
-																		)
-																	),
-																	SITE_TIMEZONE
-																);
-															if (
-																composed.utc >=
-																event().startsAt
-															)
-																void updateEvent.mutateAsync(
-																	{
-																		eventId:
-																			event()
-																				._id,
-																		endsAtLocal:
-																			composed.local,
-																	}
-																);
-														}}
-													/>
-													<TimePicker
-														label="End time (Zurich)"
-														value={zonedTime(
-															endLocal(event())
-														)}
-														onValueChange={(
-															time
-														) => {
-															if (!time) return;
-															const composed =
-																composeZoned(
-																	zonedDate(
-																		endLocal(
-																			event()
-																		)
-																	),
-																	time,
-																	SITE_TIMEZONE
-																);
-															if (
-																composed.utc >=
-																event().startsAt
-															)
-																void updateEvent.mutateAsync(
-																	{
-																		eventId:
-																			event()
-																				._id,
-																		endsAtLocal:
-																			composed.local,
-																	}
-																);
-														}}
-													/>
-												</div>
-											</Show>
-										</PropertyRow>
-									</div>
-								</Accordion.ItemContent>
-							</Accordion.Item>
-
-							<Show when={canManage()}>
-								<Accordion.Item value="visitor">
-									<Accordion.ItemTitle>
-										QR &amp; link
-									</Accordion.ItemTitle>
-									<Accordion.ItemContent>
-										<EntityQrBlock
-											{...eventsEntity.qr!(event())}
-										/>
-									</Accordion.ItemContent>
-								</Accordion.Item>
-
-								<Query.Root data={attendees.data()}>
-									<Accordion.Item value="attendees">
-										<Accordion.ItemTitle
-											subtitle={<Query.Count />}
-										>
-											Attendees
-										</Accordion.ItemTitle>
-										<Accordion.ItemContent>
-											<div class={styles.section}>
-												<Query.Empty>
-													<p class={styles.empty}>
-														No one has registered
-														yet.
-													</p>
-												</Query.Empty>
-												<Query.Content
-													of={attendees.data()}
-												>
-													{(rows) => (
-														<ul
-															class={
-																styles.attendees
-															}
-														>
-															<For each={rows()}>
-																{(a) => (
-																	<li
-																		class={
-																			styles.attendee
-																		}
-																	>
-																		<Avatar
-																			name={
-																				a.name
-																			}
-																		/>
-																		<div
-																			class={
-																				styles.who
-																			}
-																		>
-																			<span
-																				class={
-																					styles.attendeeName
-																				}
-																			>
-																				{
-																					a.name
-																				}
-																			</span>
-																			<span
-																				class={
-																					styles.attendeeEmail
-																				}
-																			>
-																				{
-																					a.email
-																				}
-																			</span>
-																		</div>
-																	</li>
-																)}
-															</For>
-														</ul>
-													)}
-												</Query.Content>
-											</div>
-										</Accordion.ItemContent>
-									</Accordion.Item>
-								</Query.Root>
-							</Show>
-						</Accordion.Root>
+						<EventDetailAccordion
+							event={event}
+							isEditing={editing}
+							canManage={canManage()}
+							attendees={() => attendees.data()}
+							openSections={openSections()}
+							onOpenSectionsChange={setOpenSections}
+						/>
 					)}
 				</Show>
 			</Drawer.Body>
 
-			<Show when={!props.loading}>
-				<Show
-					when={props.event === undefined}
-					fallback={
-						<Show when={canManage() && props.event} keyed>
-							{(event) => (
-								<Drawer.Footer>
-									<Button
-										variant="tertiary"
-										onClick={() => remove(event)}
-									>
-										<Icon>{ICONS.delete}</Icon> Delete event
-									</Button>
-								</Drawer.Footer>
-							)}
-						</Show>
-					}
-				>
-					<Can I="create" the="Events">
-						<Drawer.Footer>
-							<Button
-								type="submit"
-								form="event-create-form"
-								disabled={!canSubmit()}
-								disabledReason={disabledReason()}
-								isLoading={submitting()}
-							>
-								Create
-							</Button>
-						</Drawer.Footer>
-					</Can>
-				</Show>
-			</Show>
+			<EventDrawerFooter
+				event={props.event}
+				loading={props.loading}
+				canManage={canManage()}
+				form={form}
+				onClose={() => {
+					props.onOpenChange(false);
+				}}
+			/>
 		</Drawer.Root>
 	);
 }

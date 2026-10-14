@@ -20,6 +20,42 @@ const UP = FAKE_SLOT_LOCK_IDS.upstairs;
 const DN = FAKE_SLOT_LOCK_IDS.downstairs;
 const ANY_ID: unknown = expect.any(String);
 
+function fake(isOnline = true) {
+	const provider = new FakeDoorProvider({
+		identities: [],
+		locks: [
+			{ lockId: DN, name: "J Floor City - Downstairs" },
+			{ lockId: UP, name: "J Floor City - Upstairs" },
+		],
+	});
+	if (!isOnline) for (const id of [DN, UP]) provider.offline.add(id);
+	return provider;
+}
+
+async function logRows(backend: TestConvex<typeof schema>) {
+	return backend.run(async (context) =>
+		context.db.query("doorLog").collect()
+	);
+}
+
+async function runPolls(backend: TestConvex<typeof schema>, ms: number) {
+	for (let elapsed = 0; elapsed < ms; elapsed += CONFIRM_POLL_MS) {
+		vi.advanceTimersByTime(CONFIRM_POLL_MS);
+		await backend.finishInProgressScheduledFunctions();
+	}
+}
+
+async function scheduledJobs(backend: TestConvex<typeof schema>) {
+	return backend.run(async (context) =>
+		context.db.system.query("_scheduled_functions").collect()
+	);
+}
+
+async function firstLogRow(backend: TestConvex<typeof schema>) {
+	const rows = await logRows(backend);
+	return rows[0];
+}
+
 describe("unlockDoor", () => {
 	const BOARD = "board@example.com";
 	const SECRET = "presence-secret";
@@ -37,23 +73,11 @@ describe("unlockDoor", () => {
 		vi.restoreAllMocks();
 	});
 
-	function fake(online = true) {
-		const provider = new FakeDoorProvider({
-			identities: [],
-			locks: [
-				{ lockId: DN, name: "J Floor City - Downstairs" },
-				{ lockId: UP, name: "J Floor City - Upstairs" },
-			],
-		});
-		if (!online) for (const id of [DN, UP]) provider.offline.add(id);
-		return provider;
-	}
-
 	async function setup(tier = "board", extra: Record<string, unknown> = {}) {
 		vi.stubEnv("DOOR_PRESENCE_SECRET", SECRET);
-		const t = convexTest(schema, modules);
-		await t.run(async (ctx) => {
-			await ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		await backend.run(async (context) => {
+			await context.db.insert("people", {
 				email: BOARD,
 				firstName: "Bo",
 				lastName: "Ard",
@@ -63,27 +87,23 @@ describe("unlockDoor", () => {
 				...extra,
 			} as never);
 		});
-		return t;
-	}
-
-	async function logRows(t: TestConvex<typeof schema>) {
-		return t.run(async (ctx) => ctx.db.query("doorLog").collect());
+		return backend;
 	}
 
 	it("opens the door and logs it", async () => {
-		const t = await setup();
+		const backend = await setup();
 		const provider = fake();
 		setDoorProviderForTests(provider);
 		const requestedAt = Date.now();
 		const presence = await mintPresenceToken(SECRET, requestedAt);
-		const outcome = await t
+		const outcome = await backend
 			.withIdentity({ email: BOARD })
 			.action(api.doorActions.unlockDoor, {
 				lock: "downstairs",
 				presence,
 			});
 		expect(provider.calls.actuations).toEqual([["downstairs", "unlock"]]);
-		const rows = await logRows(t);
+		const rows = await logRows(backend);
 		expect(rows).toHaveLength(1);
 		expect(outcome).toEqual({ status: "ok", attemptId: rows[0]._id });
 		expect(rows[0]).toMatchObject({
@@ -105,12 +125,12 @@ describe("unlockDoor", () => {
 	it.each(["member", "core", "guest"])(
 		"opens the door for an active %s — app unlock is for everyone the door is open for",
 		async (tier) => {
-			const t = await setup(tier);
+			const backend = await setup(tier);
 			const provider = fake();
 			setDoorProviderForTests(provider);
 			const presence = await mintPresenceToken(SECRET, Date.now());
 			expect(
-				await t
+				await backend
 					.withIdentity({ email: BOARD })
 					.action(api.doorActions.unlockDoor, {
 						lock: "downstairs",
@@ -124,14 +144,14 @@ describe("unlockDoor", () => {
 	);
 
 	it("refuses a member the board has shut out (force_off) without actuating", async () => {
-		const t = await setup("member", {
+		const backend = await setup("member", {
 			door: { override: "force_off", reason: "under review" },
 		});
 		const provider = fake();
 		setDoorProviderForTests(provider);
 		const presence = await mintPresenceToken(SECRET, Date.now());
 		await expect(
-			t
+			backend
 				.withIdentity({ email: BOARD })
 				.action(api.doorActions.unlockDoor, {
 					lock: "upstairs",
@@ -142,7 +162,7 @@ describe("unlockDoor", () => {
 	});
 
 	it("refuses a guest whose access has expired without actuating", async () => {
-		const t = await setup("guest", {
+		const backend = await setup("guest", {
 			stage: "expired",
 			accessUntil: Date.now() - 1000,
 		});
@@ -150,7 +170,7 @@ describe("unlockDoor", () => {
 		setDoorProviderForTests(provider);
 		const presence = await mintPresenceToken(SECRET, Date.now());
 		await expect(
-			t
+			backend
 				.withIdentity({ email: BOARD })
 				.action(api.doorActions.unlockDoor, {
 					lock: "downstairs",
@@ -161,12 +181,12 @@ describe("unlockDoor", () => {
 	});
 
 	it("refuses a forged presence token without actuating", async () => {
-		const t = await setup();
+		const backend = await setup();
 		const provider = fake();
 		setDoorProviderForTests(provider);
 		const presence = await mintPresenceToken("wrong-secret", Date.now());
 		await expect(
-			t
+			backend
 				.withIdentity({ email: BOARD })
 				.action(api.doorActions.unlockDoor, {
 					lock: "upstairs",
@@ -177,12 +197,12 @@ describe("unlockDoor", () => {
 	});
 
 	it("refuses an expired presence token", async () => {
-		const t = await setup();
+		const backend = await setup();
 		const provider = fake();
 		setDoorProviderForTests(provider);
 		const presence = await mintPresenceToken(SECRET, Date.now() - 60_000);
 		await expect(
-			t
+			backend
 				.withIdentity({ email: BOARD })
 				.action(api.doorActions.unlockDoor, {
 					lock: "upstairs",
@@ -193,11 +213,11 @@ describe("unlockDoor", () => {
 	});
 
 	it("refuses when unlock is not configured", async () => {
-		const t = await setup();
+		const backend = await setup();
 		vi.stubEnv("DOOR_PRESENCE_SECRET", "");
 		setDoorProviderForTests(fake());
 		await expect(
-			t
+			backend
 				.withIdentity({ email: BOARD })
 				.action(api.doorActions.unlockDoor, {
 					lock: "upstairs",
@@ -207,12 +227,12 @@ describe("unlockDoor", () => {
 	});
 
 	it("reports an offline lock and logs a failure", async () => {
-		const t = await setup();
+		const backend = await setup();
 		const provider = fake(false);
 		setDoorProviderForTests(provider);
 		const presence = await mintPresenceToken(SECRET, Date.now());
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: BOARD })
 				.action(api.doorActions.unlockDoor, {
 					lock: "upstairs",
@@ -220,7 +240,7 @@ describe("unlockDoor", () => {
 				})
 		).toEqual({ status: "offline" });
 		expect(provider.calls.actuations).toEqual([]);
-		expect((await logRows(t))[0]).toMatchObject({
+		expect(await firstLogRow(backend)).toMatchObject({
 			operation: "unlock",
 			outcome: "failed",
 			slot: "upstairs",
@@ -230,13 +250,13 @@ describe("unlockDoor", () => {
 	});
 
 	it("reports a busy lock as busy and logs it as busy, not failed", async () => {
-		const t = await setup();
+		const backend = await setup();
 		const provider = fake();
 		provider.busyLocks.add(DN);
 		setDoorProviderForTests(provider);
 		const presence = await mintPresenceToken(SECRET, Date.now());
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: BOARD })
 				.action(api.doorActions.unlockDoor, {
 					lock: "downstairs",
@@ -244,7 +264,7 @@ describe("unlockDoor", () => {
 				})
 		).toEqual({ status: "busy" });
 		expect(provider.calls.actuations).toEqual([]);
-		expect((await logRows(t))[0]).toMatchObject({
+		expect(await firstLogRow(backend)).toMatchObject({
 			operation: "unlock",
 			outcome: "busy",
 			slot: "downstairs",
@@ -252,11 +272,11 @@ describe("unlockDoor", () => {
 	});
 
 	it("debounces a second tap on the SAME door within the debounce window", async () => {
-		const t = await setup();
+		const backend = await setup();
 		const provider = fake();
 		setDoorProviderForTests(provider);
 		const presence = await mintPresenceToken(SECRET, Date.now());
-		const as = t.withIdentity({ email: BOARD });
+		const as = backend.withIdentity({ email: BOARD });
 		await as.action(api.doorActions.unlockDoor, {
 			lock: "downstairs",
 			presence,
@@ -268,18 +288,19 @@ describe("unlockDoor", () => {
 			})
 		).toEqual({ status: "debounced" });
 		expect(provider.calls.actuations).toEqual([["downstairs", "unlock"]]);
-		expect(await logRows(t)).toHaveLength(1);
+		expect(await logRows(backend)).toHaveLength(1);
 	});
 
 	async function seedOkRow(
-		t: TestConvex<typeof schema>,
+		backend: TestConvex<typeof schema>,
 		extra: { at: number; durationMs?: number }
 	) {
-		await t.run(async (ctx) => {
-			const person = (await ctx.db.query("people").collect()).find(
-				(p) => p.email === BOARD
+		await backend.run(async (context) => {
+			const people = await context.db.query("people").collect();
+			const person = people.find(
+				(candidate) => candidate.email === BOARD
 			);
-			await ctx.db.insert("doorLog", {
+			await context.db.insert("doorLog", {
 				trigger: "app",
 				email: BOARD,
 				name: "Bo Ard",
@@ -294,13 +315,13 @@ describe("unlockDoor", () => {
 	}
 
 	it("lets a repeat tap through once the last action's durationMs has passed", async () => {
-		const t = await setup();
+		const backend = await setup();
 		const provider = fake();
 		setDoorProviderForTests(provider);
 		const presence = await mintPresenceToken(SECRET, Date.now());
-		await seedOkRow(t, { at: Date.now() - 4_000, durationMs: 3_000 });
+		await seedOkRow(backend, { at: Date.now() - 4_000, durationMs: 3_000 });
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: BOARD })
 				.action(api.doorActions.unlockDoor, {
 					lock: "downstairs",
@@ -311,13 +332,13 @@ describe("unlockDoor", () => {
 	});
 
 	it("still debounces a repeat tap inside the last action's durationMs", async () => {
-		const t = await setup();
+		const backend = await setup();
 		const provider = fake();
 		setDoorProviderForTests(provider);
 		const presence = await mintPresenceToken(SECRET, Date.now());
-		await seedOkRow(t, { at: Date.now() - 2_000, durationMs: 3_000 });
+		await seedOkRow(backend, { at: Date.now() - 2_000, durationMs: 3_000 });
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: BOARD })
 				.action(api.doorActions.unlockDoor, {
 					lock: "downstairs",
@@ -328,13 +349,13 @@ describe("unlockDoor", () => {
 	});
 
 	it("does not debounce after an ok row without a durationMs", async () => {
-		const t = await setup();
+		const backend = await setup();
 		const provider = fake();
 		setDoorProviderForTests(provider);
 		const presence = await mintPresenceToken(SECRET, Date.now());
-		await seedOkRow(t, { at: Date.now() - 1 });
+		await seedOkRow(backend, { at: Date.now() - 1 });
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: BOARD })
 				.action(api.doorActions.unlockDoor, {
 					lock: "downstairs",
@@ -344,11 +365,11 @@ describe("unlockDoor", () => {
 	});
 
 	it("does not debounce a different door within the same window", async () => {
-		const t = await setup();
+		const backend = await setup();
 		const provider = fake();
 		setDoorProviderForTests(provider);
 		const presence = await mintPresenceToken(SECRET, Date.now());
-		const as = t.withIdentity({ email: BOARD });
+		const as = backend.withIdentity({ email: BOARD });
 		expect(
 			await as.action(api.doorActions.unlockDoor, {
 				lock: "downstairs",
@@ -365,25 +386,25 @@ describe("unlockDoor", () => {
 			["downstairs", "unlock"],
 			["upstairs", "unlock"],
 		]);
-		expect(await logRows(t)).toHaveLength(2);
+		expect(await logRows(backend)).toHaveLength(2);
 	});
 
 	it("logs a thrown provider failure and rethrows", async () => {
-		const t = await setup();
+		const backend = await setup();
 		const provider = fake();
 		provider.actuate = () =>
 			Promise.reject(new Error("the provider said 503"));
 		setDoorProviderForTests(provider);
 		const presence = await mintPresenceToken(SECRET, Date.now());
 		await expect(
-			t
+			backend
 				.withIdentity({ email: BOARD })
 				.action(api.doorActions.unlockDoor, {
 					lock: "upstairs",
 					presence,
 				})
 		).rejects.toThrow(/503/);
-		expect((await logRows(t))[0]).toMatchObject({
+		expect(await firstLogRow(backend)).toMatchObject({
 			operation: "unlock",
 			outcome: "failed",
 			slot: "upstairs",
@@ -393,12 +414,12 @@ describe("unlockDoor", () => {
 	});
 
 	it("lockDoor locks the upstairs door and logs a lock row", async () => {
-		const t = await setup();
+		const backend = await setup();
 		const provider = fake();
 		setDoorProviderForTests(provider);
 		const presence = await mintPresenceToken(SECRET, Date.now());
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: BOARD })
 				.action(api.doorActions.lockDoor, {
 					lock: "upstairs",
@@ -406,7 +427,7 @@ describe("unlockDoor", () => {
 				})
 		).toEqual({ status: "ok", attemptId: ANY_ID });
 		expect(provider.calls.actuations).toEqual([["upstairs", "lock"]]);
-		const rows = await logRows(t);
+		const rows = await logRows(backend);
 		expect(rows).toHaveLength(1);
 		expect(rows[0]).toMatchObject({
 			operation: "lock",
@@ -420,11 +441,11 @@ describe("unlockDoor", () => {
 	});
 
 	it("a successful lock or unlock drops the door's cached position, so the next read goes to the provider", async () => {
-		const t = await setup();
+		const backend = await setup();
 		const provider = fake();
 		setDoorProviderForTests(provider);
 		provider.setPosition("upstairs", "locked");
-		const as = t.withIdentity({ email: BOARD });
+		const as = backend.withIdentity({ email: BOARD });
 		await as.action(api.doorActions.doorPosition, { lock: "upstairs" });
 		expect(provider.calls.positions).toEqual(["upstairs"]);
 		const presence = await mintPresenceToken(SECRET, Date.now());
@@ -432,8 +453,8 @@ describe("unlockDoor", () => {
 			lock: "upstairs",
 			presence,
 		});
-		const rows = await t.run(async (ctx) =>
-			ctx.db.query("doorPositionCache").collect()
+		const rows = await backend.run(async (context) =>
+			context.db.query("doorPositionCache").collect()
 		);
 		expect(rows).toEqual([]);
 		provider.setPosition("upstairs", "unlocked");
@@ -444,41 +465,45 @@ describe("unlockDoor", () => {
 	});
 
 	it("lockDoor refuses a door that cannot lock (downstairs) before touching the provider", async () => {
-		const t = await setup();
+		const backend = await setup();
 		const provider = fake();
 		setDoorProviderForTests(provider);
 		const presence = await mintPresenceToken(SECRET, Date.now());
 		await expect(
-			t.withIdentity({ email: BOARD }).action(api.doorActions.lockDoor, {
-				lock: "downstairs",
-				presence,
-			})
+			backend
+				.withIdentity({ email: BOARD })
+				.action(api.doorActions.lockDoor, {
+					lock: "downstairs",
+					presence,
+				})
 		).rejects.toThrow(/This door locks by itself/);
 		expect(provider.calls.actuations).toEqual([]);
-		expect(await logRows(t)).toHaveLength(0);
+		expect(await logRows(backend)).toHaveLength(0);
 	});
 
 	it("lockDoor refuses a forged presence token without actuating", async () => {
-		const t = await setup();
+		const backend = await setup();
 		const provider = fake();
 		setDoorProviderForTests(provider);
 		const presence = await mintPresenceToken("wrong-secret", Date.now());
 		await expect(
-			t.withIdentity({ email: BOARD }).action(api.doorActions.lockDoor, {
-				lock: "upstairs",
-				presence,
-			})
+			backend
+				.withIdentity({ email: BOARD })
+				.action(api.doorActions.lockDoor, {
+					lock: "upstairs",
+					presence,
+				})
 		).rejects.toThrow(/Wi-Fi/);
 		expect(provider.calls.actuations).toEqual([]);
 	});
 
 	it("lockDoor locks upstairs for a member", async () => {
-		const t = await setup("member");
+		const backend = await setup("member");
 		const provider = fake();
 		setDoorProviderForTests(provider);
 		const presence = await mintPresenceToken(SECRET, Date.now());
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: BOARD })
 				.action(api.doorActions.lockDoor, {
 					lock: "upstairs",
@@ -489,28 +514,30 @@ describe("unlockDoor", () => {
 	});
 
 	it("lockDoor refuses a member the board has shut out (force_off) without actuating", async () => {
-		const t = await setup("member", {
+		const backend = await setup("member", {
 			door: { override: "force_off", reason: "under review" },
 		});
 		const provider = fake();
 		setDoorProviderForTests(provider);
 		const presence = await mintPresenceToken(SECRET, Date.now());
 		await expect(
-			t.withIdentity({ email: BOARD }).action(api.doorActions.lockDoor, {
-				lock: "upstairs",
-				presence,
-			})
+			backend
+				.withIdentity({ email: BOARD })
+				.action(api.doorActions.lockDoor, {
+					lock: "upstairs",
+					presence,
+				})
 		).rejects.toThrow(/not available/);
 		expect(provider.calls.actuations).toEqual([]);
 	});
 
 	it("lockDoor reports an offline lock and logs a failed lock row", async () => {
-		const t = await setup();
+		const backend = await setup();
 		const provider = fake(false);
 		setDoorProviderForTests(provider);
 		const presence = await mintPresenceToken(SECRET, Date.now());
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: BOARD })
 				.action(api.doorActions.lockDoor, {
 					lock: "upstairs",
@@ -518,7 +545,7 @@ describe("unlockDoor", () => {
 				})
 		).toEqual({ status: "offline" });
 		expect(provider.calls.actuations).toEqual([]);
-		expect((await logRows(t))[0]).toMatchObject({
+		expect(await firstLogRow(backend)).toMatchObject({
 			operation: "lock",
 			outcome: "failed",
 			slot: "upstairs",
@@ -527,11 +554,11 @@ describe("unlockDoor", () => {
 	});
 
 	it("debounces a repeat LOCK on the same door within the debounce window", async () => {
-		const t = await setup();
+		const backend = await setup();
 		const provider = fake();
 		setDoorProviderForTests(provider);
 		const presence = await mintPresenceToken(SECRET, Date.now());
-		const as = t.withIdentity({ email: BOARD });
+		const as = backend.withIdentity({ email: BOARD });
 		await as.action(api.doorActions.lockDoor, {
 			lock: "upstairs",
 			presence,
@@ -543,15 +570,15 @@ describe("unlockDoor", () => {
 			})
 		).toEqual({ status: "debounced" });
 		expect(provider.calls.actuations).toEqual([["upstairs", "lock"]]);
-		expect(await logRows(t)).toHaveLength(1);
+		expect(await logRows(backend)).toHaveLength(1);
 	});
 
 	it("does not debounce a lock right after an unlock of the same door", async () => {
-		const t = await setup();
+		const backend = await setup();
 		const provider = fake();
 		setDoorProviderForTests(provider);
 		const presence = await mintPresenceToken(SECRET, Date.now());
-		const as = t.withIdentity({ email: BOARD });
+		const as = backend.withIdentity({ email: BOARD });
 		expect(
 			await as.action(api.doorActions.unlockDoor, {
 				lock: "upstairs",
@@ -576,23 +603,25 @@ describe("unlockDoor", () => {
 			["upstairs", "lock"],
 			["upstairs", "unlock"],
 		]);
-		expect(await logRows(t)).toHaveLength(3);
+		expect(await logRows(backend)).toHaveLength(3);
 	});
 
 	it("lockDoor logs a thrown provider failure as a lock row and rethrows", async () => {
-		const t = await setup();
+		const backend = await setup();
 		const provider = fake();
 		provider.actuate = () =>
 			Promise.reject(new Error("the provider said 503"));
 		setDoorProviderForTests(provider);
 		const presence = await mintPresenceToken(SECRET, Date.now());
 		await expect(
-			t.withIdentity({ email: BOARD }).action(api.doorActions.lockDoor, {
-				lock: "upstairs",
-				presence,
-			})
+			backend
+				.withIdentity({ email: BOARD })
+				.action(api.doorActions.lockDoor, {
+					lock: "upstairs",
+					presence,
+				})
 		).rejects.toThrow(/503/);
-		expect((await logRows(t))[0]).toMatchObject({
+		expect(await firstLogRow(backend)).toMatchObject({
 			operation: "lock",
 			outcome: "failed",
 			slot: "upstairs",
@@ -604,31 +633,19 @@ describe("unlockDoor", () => {
 	 *  step at a time, the way test-stubs/runAndCollectLogs.ts drains jobs.
 	 *  Never `vi.runAllTimers()`: each poll schedules the next only once its
 	 *  mutation commits, so it would fire the timeout first. */
-	async function runPolls(t: TestConvex<typeof schema>, ms: number) {
-		for (let elapsed = 0; elapsed < ms; elapsed += CONFIRM_POLL_MS) {
-			vi.advanceTimersByTime(CONFIRM_POLL_MS);
-			await t.finishInProgressScheduledFunctions();
-		}
-	}
 
 	async function unlock(
-		t: TestConvex<typeof schema>,
+		backend: TestConvex<typeof schema>,
 		lock: "downstairs" | "upstairs"
 	) {
 		const presence = await mintPresenceToken(SECRET, Date.now());
-		return t
+		return backend
 			.withIdentity({ email: BOARD })
 			.action(api.doorActions.unlockDoor, { lock, presence });
 	}
 
-	async function scheduledJobs(t: TestConvex<typeof schema>) {
-		return t.run(async (ctx) =>
-			ctx.db.system.query("_scheduled_functions").collect()
-		);
-	}
-
 	it("confirms an unlock when the door reacts, then stops reading the door", async () => {
-		const t = await setup();
+		const backend = await setup();
 		const provider = fake();
 		provider.queuePositions("downstairs", [
 			"locked",
@@ -637,33 +654,33 @@ describe("unlockDoor", () => {
 		]);
 		setDoorProviderForTests(provider);
 		const requestedAt = Date.now();
-		const outcome = await unlock(t, "downstairs");
-		const [accepted] = await logRows(t);
+		const outcome = await unlock(backend, "downstairs");
+		const [accepted] = await logRows(backend);
 		expect(outcome).toEqual({ status: "ok", attemptId: accepted._id });
 		expect(accepted).toMatchObject({ actuation: "accepted", requestedAt });
-		await runPolls(t, 2 * CONFIRM_POLL_MS);
-		expect((await logRows(t))[0]).toMatchObject({
+		await runPolls(backend, 2 * CONFIRM_POLL_MS);
+		expect(await firstLogRow(backend)).toMatchObject({
 			actuation: "actuated",
 			requestedAt,
 			actuatedAt: requestedAt + 2 * CONFIRM_POLL_MS,
 		});
-		await runPolls(t, CONFIRM_WINDOW_MS);
+		await runPolls(backend, CONFIRM_WINDOW_MS);
 		expect(provider.calls.positions).toEqual(["downstairs", "downstairs"]);
-		expect((await logRows(t))[0]).toMatchObject({
+		expect(await firstLogRow(backend)).toMatchObject({
 			actuation: "actuated",
 			actuatedAt: requestedAt + 2 * CONFIRM_POLL_MS,
 		});
 	});
 
 	it("marks an unlock unconfirmed when the door never reacts within the window", async () => {
-		const t = await setup();
+		const backend = await setup();
 		const provider = fake();
 		provider.setPosition("downstairs", "locked");
 		setDoorProviderForTests(provider);
 		const requestedAt = Date.now();
-		await unlock(t, "downstairs");
-		await runPolls(t, CONFIRM_WINDOW_MS);
-		const [row] = await logRows(t);
+		await unlock(backend, "downstairs");
+		await runPolls(backend, CONFIRM_WINDOW_MS);
+		const [row] = await logRows(backend);
 		expect(row).toMatchObject({ actuation: "unconfirmed", requestedAt });
 		expect(row.actuatedAt).toBeUndefined();
 		expect(provider.calls.positions).toHaveLength(
@@ -672,7 +689,7 @@ describe("unlockDoor", () => {
 	});
 
 	it("keeps polling through a failed and an offline read, and confirms a later reaction", async () => {
-		const t = await setup();
+		const backend = await setup();
 		const provider = fake();
 		provider.queuePositions("downstairs", [
 			"locked",
@@ -690,35 +707,35 @@ describe("unlockDoor", () => {
 		setDoorProviderForTests(provider);
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 		const requestedAt = Date.now();
-		await unlock(t, "downstairs");
-		await runPolls(t, 4 * CONFIRM_POLL_MS);
+		await unlock(backend, "downstairs");
+		await runPolls(backend, 4 * CONFIRM_POLL_MS);
 		expect(warn).toHaveBeenCalledWith(
 			expect.stringContaining("read failed")
 		);
-		expect((await logRows(t))[0]).toMatchObject({
+		expect(await firstLogRow(backend)).toMatchObject({
 			actuation: "actuated",
 			actuatedAt: requestedAt + 4 * CONFIRM_POLL_MS,
 		});
 	});
 
 	it("an unlock sent to a door that already reads unlocked is actuated at once and polls nothing", async () => {
-		const t = await setup();
+		const backend = await setup();
 		const provider = fake();
 		provider.setPosition("upstairs", "unlocked");
 		setDoorProviderForTests(provider);
 		const requestedAt = Date.now();
-		await unlock(t, "upstairs");
-		expect((await logRows(t))[0]).toMatchObject({
+		await unlock(backend, "upstairs");
+		expect(await firstLogRow(backend)).toMatchObject({
 			actuation: "actuated",
 			requestedAt,
 			actuatedAt: requestedAt,
 		});
-		expect(await scheduledJobs(t)).toEqual([]);
+		expect(await scheduledJobs(backend)).toEqual([]);
 		expect(provider.calls.positions).toEqual([]);
 	});
 
 	it("an unlock sent to a door that relocks by itself, still reading unlocked, waits for a reading of its own", async () => {
-		const t = await setup();
+		const backend = await setup();
 		const provider = fake();
 		provider.queuePositions("downstairs", [
 			"unlocked",
@@ -727,22 +744,24 @@ describe("unlockDoor", () => {
 		]);
 		setDoorProviderForTests(provider);
 		const requestedAt = Date.now();
-		await unlock(t, "downstairs");
-		expect((await logRows(t))[0]).toMatchObject({
+		await unlock(backend, "downstairs");
+		expect(await firstLogRow(backend)).toMatchObject({
 			actuation: "accepted",
 			requestedAt,
 		});
-		await runPolls(t, 2 * CONFIRM_POLL_MS);
-		expect((await logRows(t))[0]).toMatchObject({ actuation: "accepted" });
-		await runPolls(t, CONFIRM_POLL_MS);
-		expect((await logRows(t))[0]).toMatchObject({
+		await runPolls(backend, 2 * CONFIRM_POLL_MS);
+		expect(await firstLogRow(backend)).toMatchObject({
+			actuation: "accepted",
+		});
+		await runPolls(backend, CONFIRM_POLL_MS);
+		expect(await firstLogRow(backend)).toMatchObject({
 			actuation: "actuated",
 			actuatedAt: requestedAt + 3 * CONFIRM_POLL_MS,
 		});
 	});
 
 	it("an accepted unlock whose attempt row cannot be written still reports ok, with no attempt to follow", async () => {
-		const t = await setup();
+		const backend = await setup();
 		const provider = fake();
 		const actuate = provider.actuate.bind(provider);
 		provider.actuate = async (slot, action) => {
@@ -754,7 +773,7 @@ describe("unlockDoor", () => {
 		};
 		setDoorProviderForTests(provider);
 		const error = vi.spyOn(console, "error").mockImplementation(() => {});
-		expect(await unlock(t, "downstairs")).toEqual({
+		expect(await unlock(backend, "downstairs")).toEqual({
 			status: "ok",
 			attemptId: null,
 		});
@@ -762,8 +781,8 @@ describe("unlockDoor", () => {
 		expect(error).toHaveBeenCalledWith(
 			expect.stringContaining("audit row lost")
 		);
-		expect(await logRows(t)).toEqual([]);
-		expect(await scheduledJobs(t)).toEqual([]);
+		expect(await logRows(backend)).toEqual([]);
+		expect(await scheduledJobs(backend)).toEqual([]);
 	});
 
 	const REFUSALS: [string, (provider: FakeDoorProvider) => void][] = [
@@ -791,22 +810,35 @@ describe("unlockDoor", () => {
 	it.each(REFUSALS)(
 		"a %s refusal's row carries no attempt and schedules nothing",
 		async (label, arrange) => {
-			const t = await setup();
+			const backend = await setup();
 			const provider = fake();
 			arrange(provider);
 			setDoorProviderForTests(provider);
-			const run = unlock(t, "downstairs");
+			const run = unlock(backend, "downstairs");
 			await (label === "thrown"
 				? expect(run).rejects.toThrow(/503/)
 				: expect(run).resolves.toEqual({ status: label }));
-			const [row] = await logRows(t);
+			const [row] = await logRows(backend);
 			expect(row).not.toHaveProperty("actuation");
 			expect(row).not.toHaveProperty("requestedAt");
 			expect(row).not.toHaveProperty("actuatedAt");
-			expect(await scheduledJobs(t)).toEqual([]);
+			expect(await scheduledJobs(backend)).toEqual([]);
 		}
 	);
 });
+
+function fakeWithLockedUpstairs() {
+	const provider = new FakeDoorProvider({
+		identities: [],
+		locks: [
+			{ lockId: DN, name: "J Floor City - Downstairs" },
+			{ lockId: UP, name: "J Floor City - Upstairs" },
+		],
+	});
+	provider.setPosition("upstairs", "locked");
+	setDoorProviderForTests(provider);
+	return provider;
+}
 
 describe("doorPosition", () => {
 	const BOARD = "board@example.com";
@@ -819,23 +851,10 @@ describe("doorPosition", () => {
 		vi.restoreAllMocks();
 	});
 
-	function fake() {
-		const provider = new FakeDoorProvider({
-			identities: [],
-			locks: [
-				{ lockId: DN, name: "J Floor City - Downstairs" },
-				{ lockId: UP, name: "J Floor City - Upstairs" },
-			],
-		});
-		provider.setPosition("upstairs", "locked");
-		setDoorProviderForTests(provider);
-		return provider;
-	}
-
 	async function setup(fields: Record<string, unknown> = {}) {
-		const t = convexTest(schema, modules);
-		await t.run(async (ctx) => {
-			await ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		await backend.run(async (context) => {
+			await context.db.insert("people", {
 				email: BOARD,
 				firstName: "Bo",
 				lastName: "Ard",
@@ -845,12 +864,12 @@ describe("doorPosition", () => {
 				...fields,
 			} as never);
 		});
-		return t.withIdentity({ email: BOARD });
+		return backend.withIdentity({ email: BOARD });
 	}
 
 	it("refuses the downstairs door, whose position is not shown", async () => {
 		const as = await setup();
-		const provider = fake();
+		const provider = fakeWithLockedUpstairs();
 		await expect(
 			as.action(api.doorActions.doorPosition, { lock: "downstairs" })
 		).rejects.toThrow(/This door's position is not shown/);
@@ -862,7 +881,7 @@ describe("doorPosition", () => {
 			tier: "member",
 			door: { override: "force_off", reason: "under review" },
 		});
-		const provider = fake();
+		const provider = fakeWithLockedUpstairs();
 		await expect(
 			as.action(api.doorActions.doorPosition, { lock: "upstairs" })
 		).rejects.toThrow(/not available for your account/i);
@@ -871,7 +890,7 @@ describe("doorPosition", () => {
 
 	it("reads the provider once, then serves the cache within the TTL", async () => {
 		const as = await setup();
-		const provider = fake();
+		const provider = fakeWithLockedUpstairs();
 		expect(
 			await as.action(api.doorActions.doorPosition, { lock: "upstairs" })
 		).toBe("locked");
@@ -886,7 +905,7 @@ describe("doorPosition", () => {
 		vi.useFakeTimers({ toFake: ["Date"] });
 		vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
 		const as = await setup();
-		const provider = fake();
+		const provider = fakeWithLockedUpstairs();
 		await as.action(api.doorActions.doorPosition, { lock: "upstairs" });
 		vi.setSystemTime(new Date("2026-01-01T00:00:04Z"));
 		provider.setPosition("upstairs", "unlocked");
@@ -903,7 +922,7 @@ describe("doorPosition", () => {
 		vi.useFakeTimers({ toFake: ["Date"] });
 		vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
 		const as = await setup();
-		const provider = fake();
+		const provider = fakeWithLockedUpstairs();
 		await as.action(api.doorActions.doorPosition, { lock: "upstairs" });
 		vi.setSystemTime(new Date("2026-01-01T00:00:06Z"));
 		provider.setPosition("upstairs", "unlocked");
@@ -920,7 +939,7 @@ describe("doorPosition", () => {
 		vi.useFakeTimers({ toFake: ["Date"] });
 		vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
 		const as = await setup();
-		const provider = fake();
+		const provider = fakeWithLockedUpstairs();
 		await as.action(api.doorActions.doorPosition, { lock: "upstairs" });
 		vi.setSystemTime(new Date("2026-01-01T00:00:16Z"));
 		provider.setPosition("upstairs", "unlocked");
@@ -931,11 +950,11 @@ describe("doorPosition", () => {
 	});
 
 	it("still returns the position when the cache write fails", async () => {
-		const provider = fake();
-		const t = convexTest(schema, modules);
+		const provider = fakeWithLockedUpstairs();
+		const backend = convexTest(schema, modules);
 		const error = vi.spyOn(console, "error").mockImplementation(() => {});
-		await t.run(async (ctx) => {
-			await ctx.db.insert("people", {
+		await backend.run(async (context) => {
+			await context.db.insert("people", {
 				email: BOARD,
 				firstName: "Bo",
 				lastName: "Ard",
@@ -945,14 +964,14 @@ describe("doorPosition", () => {
 			} as never);
 			// Two rows for one slot make the cache upsert's `.unique()` throw.
 			for (const checkedAt of [1, 2])
-				await ctx.db.insert("doorPositionCache", {
+				await context.db.insert("doorPositionCache", {
 					slot: "upstairs",
 					position: "unlocked",
 					checkedAt,
 				});
 		});
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: BOARD })
 				.action(api.doorActions.doorPosition, {
 					lock: "upstairs",
@@ -966,6 +985,33 @@ describe("doorPosition", () => {
 	});
 });
 
+function recordFetch(): { calls: string[] } {
+	const calls: string[] = [];
+	vi.stubGlobal("fetch", (input: string, init?: RequestInit) => {
+		calls.push(`${init?.method ?? "GET"} ${input}`);
+		return Promise.reject(
+			new Error("the lock provider must not be called")
+		);
+	});
+	return { calls };
+}
+
+async function boardMember(): Promise<ReturnType<typeof convexTest>> {
+	vi.stubEnv("DOOR_PRESENCE_SECRET", "presence-secret");
+	const backend = convexTest(schema, modules);
+	await backend.run(async (context) => {
+		await context.db.insert("people", {
+			email: EMAIL,
+			firstName: "Ada",
+			lastName: "",
+			tier: "board",
+			stage: "active",
+			stageSince: Date.now(),
+		});
+	});
+	return backend;
+}
+
 /**
  * A door action writes to the real lock account. With no test provider
  * injected and door writes not opted in (the test process never opts in), it
@@ -978,39 +1024,12 @@ describe("door actions without a test provider while door writes are disabled", 
 		vi.unstubAllGlobals();
 	});
 
-	function recordFetch(): { calls: string[] } {
-		const calls: string[] = [];
-		vi.stubGlobal("fetch", (input: string, init?: RequestInit) => {
-			calls.push(`${init?.method ?? "GET"} ${input}`);
-			return Promise.reject(
-				new Error("the lock provider must not be called")
-			);
-		});
-		return { calls };
-	}
-
-	async function boardMember(): Promise<ReturnType<typeof convexTest>> {
-		vi.stubEnv("DOOR_PRESENCE_SECRET", "presence-secret");
-		const t = convexTest(schema, modules);
-		await t.run(async (ctx) => {
-			await ctx.db.insert("people", {
-				email: EMAIL,
-				firstName: "Ada",
-				lastName: "",
-				tier: "board",
-				stage: "active",
-				stageSince: Date.now(),
-			});
-		});
-		return t;
-	}
-
 	it("unlockDoor refuses and calls the provider not at all", async () => {
-		const t = await boardMember();
+		const backend = await boardMember();
 		const { calls } = recordFetch();
 		const presence = await mintPresenceToken("presence-secret", Date.now());
 		await expect(
-			t
+			backend
 				.withIdentity({ email: EMAIL })
 				.action(api.doorActions.unlockDoor, {
 					lock: "downstairs",
@@ -1021,18 +1040,26 @@ describe("door actions without a test provider while door writes are disabled", 
 	});
 
 	it("lockDoor refuses and calls the provider not at all", async () => {
-		const t = await boardMember();
+		const backend = await boardMember();
 		const { calls } = recordFetch();
 		const presence = await mintPresenceToken("presence-secret", Date.now());
 		await expect(
-			t.withIdentity({ email: EMAIL }).action(api.doorActions.lockDoor, {
-				lock: "upstairs",
-				presence,
-			})
+			backend
+				.withIdentity({ email: EMAIL })
+				.action(api.doorActions.lockDoor, {
+					lock: "upstairs",
+					presence,
+				})
 		).rejects.toThrow(/Door writes are disabled on this deployment/);
 		expect(calls).toEqual([]);
 	});
 });
+
+function emptyFake() {
+	const provider = new FakeDoorProvider({ identities: [], locks: [] });
+	setDoorProviderForTests(provider);
+	return provider;
+}
 
 describe("pollActuation", () => {
 	const T0 = Date.UTC(2026, 9, 8, 12, 0);
@@ -1049,9 +1076,9 @@ describe("pollActuation", () => {
 	});
 
 	async function acceptedAttempt() {
-		const t = convexTest(schema, modules);
-		const id = await t.run(async (ctx) => {
-			const personId = await ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const id = await backend.run(async (context) => {
+			const personId = await context.db.insert("people", {
 				email: EMAIL,
 				firstName: "Ada",
 				lastName: "",
@@ -1059,7 +1086,7 @@ describe("pollActuation", () => {
 				stage: "active",
 				stageSince: T0,
 			});
-			return ctx.db.insert("doorLog", {
+			return context.db.insert("doorLog", {
 				at: T0,
 				operation: "unlock",
 				trigger: "app",
@@ -1075,38 +1102,34 @@ describe("pollActuation", () => {
 				requestedAt: T0,
 			});
 		});
-		return { t, id };
-	}
-
-	function emptyFake() {
-		const provider = new FakeDoorProvider({ identities: [], locks: [] });
-		setDoorProviderForTests(provider);
-		return provider;
+		return { backend, id };
 	}
 
 	it("reads the door once and marks the attempt actuated when it reacted", async () => {
-		const { t, id } = await acceptedAttempt();
+		const { backend, id } = await acceptedAttempt();
 		const provider = emptyFake();
 		provider.setPosition("downstairs", "unlocking");
-		await t.action(internal.doorActions.pollActuation, {
+		await backend.action(internal.doorActions.pollActuation, {
 			id,
 			slot: "downstairs",
 			action: "unlock",
 			positionBefore: "locked",
 		});
 		expect(provider.calls.positions).toEqual(["downstairs"]);
-		expect(await t.run(async (ctx) => ctx.db.get(id))).toMatchObject({
+		expect(
+			await backend.run(async (context) => context.db.get(id))
+		).toMatchObject({
 			actuation: "actuated",
 			actuatedAt: T0,
 		});
 	});
 
 	it("takes a failed read as no information and polls again", async () => {
-		const { t, id } = await acceptedAttempt();
+		const { backend, id } = await acceptedAttempt();
 		const provider = emptyFake();
 		provider.position = () => Promise.reject(new Error("read failed"));
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-		await t.action(internal.doorActions.pollActuation, {
+		await backend.action(internal.doorActions.pollActuation, {
 			id,
 			slot: "downstairs",
 			action: "unlock",
@@ -1115,11 +1138,13 @@ describe("pollActuation", () => {
 		expect(warn).toHaveBeenCalledWith(
 			expect.stringContaining("read failed")
 		);
-		expect(await t.run(async (ctx) => ctx.db.get(id))).toMatchObject({
+		expect(
+			await backend.run(async (context) => context.db.get(id))
+		).toMatchObject({
 			actuation: "accepted",
 		});
-		const jobs = await t.run(async (ctx) =>
-			ctx.db.system.query("_scheduled_functions").collect()
+		const jobs = await backend.run(async (context) =>
+			context.db.system.query("_scheduled_functions").collect()
 		);
 		expect(jobs.map((job) => job.name)).toEqual([
 			"doorActions:pollActuation",

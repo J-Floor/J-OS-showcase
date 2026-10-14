@@ -14,14 +14,14 @@ const { currentPerson } = vi.hoisted(() => ({
 vi.mock("convex-solidjs", () => ({
 	useQuery: () => ({
 		data: () => currentPerson.value,
-		error: () => undefined,
+		error: () => {},
 		isLoading: () => false,
 	}),
 	useAction: () => ({
 		mutate: vi.fn(),
 		isLoading: () => false,
-		data: () => undefined,
-		error: () => undefined,
+		data: () => {},
+		error: () => {},
 	}),
 }));
 

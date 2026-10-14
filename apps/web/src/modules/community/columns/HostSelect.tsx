@@ -1,7 +1,9 @@
 import { Select, Skeleton } from "@j-os/design-system";
-import { For, Show, createMemo } from "solid-js";
+import { Show, createMemo } from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
+import { displayName } from "../../../../convex/lib/names.ts";
+import { SelectOptionList } from "../../../shared/components/SelectOptionList.tsx";
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
 
 /** Picker for a guest's "hosted by" board member. Options are the active BOARD
@@ -25,10 +27,10 @@ export function HostSelect(props: {
 
 	const options = createMemo(() =>
 		(boardLevel.data() ?? [])
-			.filter((s) => s.tier === "board")
-			.map((s) => ({
-				value: s._id,
-				title: `${s.firstName} ${s.lastName}`.trim(),
+			.filter((member) => member.tier === "board")
+			.map((member) => ({
+				value: member._id,
+				title: displayName(member),
 			}))
 	);
 
@@ -45,19 +47,13 @@ export function HostSelect(props: {
 				allowClearing
 				options={options()}
 				value={props.value ? [props.value] : []}
-				onValueChange={(d) => {
+				onValueChange={(details) => {
 					props.onCommit(
-						(d.value[0] as Id<"people"> | undefined) ?? null
+						(details.value[0] as Id<"people"> | undefined) ?? null
 					);
 				}}
 			>
-				<Select.Content>
-					<For each={options()}>
-						{(o) => (
-							<Select.Option value={o.value} title={o.title} />
-						)}
-					</For>
-				</Select.Content>
+				<SelectOptionList options={options()} />
 			</Select.Root>
 		</Show>
 	);

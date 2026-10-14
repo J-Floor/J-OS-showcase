@@ -36,7 +36,7 @@ export function createDoorAttempt(): DoorAttemptWatch {
 		DoorAttemptView | null | undefined
 	> | null>(null);
 	let dispose: (() => void) | undefined;
-	let closed = false;
+	let isClosed = false;
 
 	function stop() {
 		dispose?.();
@@ -46,7 +46,7 @@ export function createDoorAttempt(): DoorAttemptWatch {
 
 	function watch(id: Id<"doorLog">) {
 		stop();
-		if (closed) return;
+		if (isClosed) return;
 		createRoot((disposeRoot) => {
 			dispose = disposeRoot;
 			const attempt = useQuery(
@@ -59,7 +59,7 @@ export function createDoorAttempt(): DoorAttemptWatch {
 	}
 
 	onCleanup(() => {
-		closed = true;
+		isClosed = true;
 		stop();
 	});
 

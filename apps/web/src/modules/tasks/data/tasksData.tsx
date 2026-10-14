@@ -1,7 +1,7 @@
 import { useMutation } from "convex-solidjs";
 
 import { api } from "../../../../convex/_generated/api";
-import type { Doc, Id } from "../../../../convex/_generated/dataModel";
+import type { Doc } from "../../../../convex/_generated/dataModel";
 import type { BoardLevelPerson } from "../../../../convex/lib/personViews.ts";
 import { useQuery } from "../../../shared/data/useQuery.ts";
 
@@ -19,28 +19,43 @@ export function useCurrentPerson() {
 	return useQuery(api.people.getCurrentPerson, {});
 }
 
-export function useTaskActions() {
-	const create = useMutation(api.tasks.create);
-	const update = useMutation(api.tasks.update);
-	const remove = useMutation(api.tasks.remove);
+type Mutation<Args, Result> = { mutate: (args: Args) => Promise<Result> };
+
+/** One table's create / update / remove, each a plain call. */
+function tableActions<
+	CreateArgs,
+	CreateResult,
+	UpdateArgs,
+	UpdateResult,
+	RemoveId,
+	RemoveResult,
+>(
+	create: Mutation<CreateArgs, CreateResult>,
+	update: Mutation<UpdateArgs, UpdateResult>,
+	remove: Mutation<{ id: RemoveId }, RemoveResult>
+) {
 	return {
-		create: (args: Parameters<typeof create.mutate>[0]) =>
-			create.mutate(args),
-		update: (args: Parameters<typeof update.mutate>[0]) =>
-			update.mutate(args),
-		remove: (id: Id<"tasks">) => remove.mutate({ id }),
+		create: (args: CreateArgs) => create.mutate(args),
+		update: (args: UpdateArgs) => update.mutate(args),
+		remove: (id: RemoveId) => remove.mutate({ id }),
 	};
 }
 
-export function useProjectActions() {
-	const create = useMutation(api.projects.create);
-	const update = useMutation(api.projects.update);
-	const remove = useMutation(api.projects.remove);
-	return {
-		create: (args: Parameters<typeof create.mutate>[0]) =>
-			create.mutate(args),
-		update: (args: Parameters<typeof update.mutate>[0]) =>
-			update.mutate(args),
-		remove: (id: Id<"projects">) => remove.mutate({ id }),
-	};
+export function useTaskActions() {
+	return tableActions(
+		useMutation(api.tasks.create),
+		useMutation(api.tasks.update),
+		useMutation(api.tasks.remove)
+	);
 }
+
+export function useProjectActions() {
+	return tableActions(
+		useMutation(api.projects.create),
+		useMutation(api.projects.update),
+		useMutation(api.projects.remove)
+	);
+}
+
+export type TaskActions = ReturnType<typeof useTaskActions>;
+export type ProjectActions = ReturnType<typeof useProjectActions>;

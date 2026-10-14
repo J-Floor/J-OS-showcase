@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { type JfColumnDef } from "@j-os/design-system";
+import { type JfColumnDefinition } from "@j-os/design-system";
 import { expect, test } from "vitest";
 
 import { actionsColumnSize } from "../../community/columns/RowActions.tsx";
@@ -35,12 +35,12 @@ test("item columns expose type and category as enum filters", () => {
 	const columns = itemColumns([...rows] as unknown as Parameters<
 		typeof itemColumns
 	>[0]);
-	const type = columns.find((c) => c.header === "Type") as JfColumnDef<
-		Record<string, unknown>
-	>;
+	const type = columns.find(
+		(column) => column.header === "Type"
+	) as JfColumnDefinition<Record<string, unknown>>;
 	const category = columns.find(
-		(c) => c.header === "Category"
-	) as JfColumnDef<Record<string, unknown>>;
+		(column) => column.header === "Category"
+	) as JfColumnDefinition<Record<string, unknown>>;
 	expect(type.dataType).toBe("enum");
 	expect(type.enumOptions).toEqual([
 		{ label: "Chair", value: "Chair" },
@@ -60,7 +60,9 @@ test("free-text descriptions share the leftover width instead of growing to fit"
 	const types = itemTypeColumns([]);
 	const categories = categoryColumns();
 	for (const columns of [items, types, categories]) {
-		expect(columns.find((c) => c.id === "description")).toMatchObject({
+		expect(
+			columns.find((column) => column.id === "description")
+		).toMatchObject({
 			size: DESCRIPTION_SIZE,
 			measureText: false,
 		});
@@ -68,7 +70,7 @@ test("free-text descriptions share the leftover width instead of growing to fit"
 });
 
 test("the item actions column is a display column with a fixed width", () => {
-	const actions = itemColumns([]).find((c) => c.id === "actions");
+	const actions = itemColumns([]).find((column) => column.id === "actions");
 	expect(actions?.size).toBe(actionsColumnSize(2));
 	expect(actions).not.toHaveProperty("dataType");
 	expect(actions).not.toHaveProperty("enableSorting");

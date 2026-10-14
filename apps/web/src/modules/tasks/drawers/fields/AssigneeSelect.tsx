@@ -1,8 +1,11 @@
 import { Select, type SelectItem } from "@j-os/design-system";
-import { For, type JSX } from "solid-js";
+import type { JSX } from "solid-js";
 
 import type { Id } from "../../../../../convex/_generated/dataModel";
+import { SelectOptionList } from "../../../../shared/components/SelectOptionList.tsx";
 import type { Person } from "../../data/tasksData.tsx";
+
+import { personOptions } from "./personOptions.ts";
 
 export function AssigneeSelect(props: {
 	people: Person[];
@@ -10,10 +13,7 @@ export function AssigneeSelect(props: {
 	onChange: (ids: Id<"people">[]) => void;
 }): JSX.Element {
 	function options(): SelectItem[] {
-		return props.people.map((p) => ({
-			value: p._id,
-			title: `${p.firstName} ${p.lastName}`,
-		}));
+		return personOptions(props.people);
 	}
 	return (
 		<Select.Root
@@ -22,15 +22,11 @@ export function AssigneeSelect(props: {
 			value={props.value}
 			placeholder="Add assignees…"
 			sameWidth
-			onValueChange={(d) => {
-				props.onChange(d.value as Id<"people">[]);
+			onValueChange={(details) => {
+				props.onChange(details.value as Id<"people">[]);
 			}}
 		>
-			<Select.Content>
-				<For each={options()}>
-					{(o) => <Select.Option value={o.value} title={o.title} />}
-				</For>
-			</Select.Content>
+			<SelectOptionList options={options()} />
 		</Select.Root>
 	);
 }

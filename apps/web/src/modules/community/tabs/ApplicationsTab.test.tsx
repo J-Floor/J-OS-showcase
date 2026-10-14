@@ -57,15 +57,15 @@ vi.mock("../columns/applicationColumns.tsx", async () => {
 					{ value: "queue", label: "Queue" },
 					{ value: "denied", label: "Denied" },
 				],
-				accessorFn: (r: {
+				accessorFn: (row: {
 					stage?: string;
 					board?: { score?: number };
-				}) =>
-					r.stage === "denied"
-						? "denied"
-						: r.board?.score != null
-							? "queue"
-							: "toScore",
+				}) => {
+					if (row.stage === "denied") return "denied";
+					return typeof row.board?.score === "number"
+						? "queue"
+						: "toScore";
+				},
 			},
 			{ accessorKey: "name", header: "Name", dataType: "string" },
 			{
@@ -74,7 +74,7 @@ vi.mock("../columns/applicationColumns.tsx", async () => {
 				dataType: "string",
 			},
 		],
-		CurrentPersonContext: createContext(() => undefined),
+		CurrentPersonContext: createContext(() => {}),
 	};
 });
 
@@ -82,15 +82,15 @@ vi.mock("../columns/applicationColumns.tsx", async () => {
 // CurrentPersonContext; that needs a ConvexProvider we don't mount here. Stub the
 // hook to a no-data accessor so the table renders without the Convex client.
 vi.mock("convex-solidjs", () => ({
-	useQuery: () => ({ data: () => undefined }),
+	useQuery: () => ({ data: () => {} }),
 	// The shared drawer opens mutations of its own (the board's door override,
 	// the onboarding step "Done" button); this tab used to render a drawer that
 	// had none.
 	useMutation: () => ({
 		mutateAsync: () => Promise.resolve(),
 		mutate: vi.fn(),
-		data: () => undefined,
-		error: () => undefined,
+		data: () => {},
+		error: () => {},
 		isLoading: () => false,
 		reset: vi.fn(),
 	}),
@@ -170,7 +170,7 @@ const rows = [
 vi.mock("../data/useApplications.ts", () => ({
 	useApplications: () => ({
 		data: () => rows,
-		error: () => undefined,
+		error: () => {},
 		isLoading: () => false,
 		isStale: () => false,
 		refetch: () => {},
@@ -365,14 +365,14 @@ describe("ApplicationsTab", () => {
 		// Scope the "no inputs" check to the Ark Dialog content panel so we don't
 		// accidentally pick up table inputs or Ark UI internals. Ark renders
 		// Dialog.Content with data-scope="dialog" data-part="content".
-		const dialogEl = document.querySelector<HTMLElement>(
+		const dialogElement = document.querySelector<HTMLElement>(
 			'[data-scope="dialog"][data-part="content"]'
 		);
-		expect(dialogEl).not.toBeNull();
+		expect(dialogElement).not.toBeNull();
 		// Read-only means the PROFILE is display-only. Two always-available
 		// controls remain regardless of edit mode: the footer score field and the
 		// board-notes composer. Assert those are the only editables.
-		const scope = dialogEl ?? document.body;
+		const scope = dialogElement ?? document.body;
 		// Two: the footer score field and the notes composer. One of them is the
 		// composer; the other is the score number input.
 		const editables = [...scope.querySelectorAll("input, textarea")];
@@ -407,20 +407,20 @@ describe("ApplicationsTab", () => {
 		const allDialogContents = document.querySelectorAll<HTMLElement>(
 			'[data-scope="dialog"][data-part="content"]'
 		);
-		const drawerContent = Array.from(allDialogContents).find((el) =>
-			el.textContent.includes("grace@example.com")
+		const drawerContent = Array.from(allDialogContents).find((element) =>
+			element.textContent.includes("grace@example.com")
 		);
 		expect(drawerContent).not.toBeUndefined();
 
 		// Both arrows render in the drawer header
-		const prevBtn = within(drawerContent ?? document.body).getByRole(
+		const prevButton = within(drawerContent ?? document.body).getByRole(
 			"button",
 			{
 				name: /previous/i,
 				hidden: true,
 			}
 		);
-		const nextBtn = within(drawerContent ?? document.body).getByRole(
+		const nextButton = within(drawerContent ?? document.body).getByRole(
 			"button",
 			{
 				name: /next/i,
@@ -428,17 +428,17 @@ describe("ApplicationsTab", () => {
 			}
 		);
 		// Previous button should be disabled (first row in list)
-		expect(prevBtn).toBeDisabled();
+		expect(prevButton).toBeDisabled();
 
 		// `onDisplayedRowsChange` fires via a reactive effect once the table renders;
 		// wait for it to propagate so the nav has the full list and Next is enabled.
 		await waitFor(() => {
-			expect(nextBtn).not.toBeDisabled();
+			expect(nextButton).not.toBeDisabled();
 		});
 
 		// Click Next → drawer should now show the second displayed row's email
 		// ("To score"'s Grace → Queue's Ada, ahead of the Denied group).
-		fireEvent.click(nextBtn);
+		fireEvent.click(nextButton);
 		// Assert inside THIS drawer panel: earlier tests in this file leave their
 		// own portalled drawers (also showing Ada) in the document, so a global
 		// query would pass whether or not Next actually advanced.

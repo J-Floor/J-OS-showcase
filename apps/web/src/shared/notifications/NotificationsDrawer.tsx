@@ -18,6 +18,16 @@ function isNotificationsTab(value: string): value is NotificationsTab {
 	return tabs.includes(value);
 }
 
+function InboxLoading(): JSX.Element {
+	return (
+		<div class={styles.loading} role="status" aria-label="Loading">
+			<Skeleton width="long" />
+			<Skeleton width="medium" />
+			<Skeleton width="short" />
+		</div>
+	);
+}
+
 /**
  * The Notifications drawer: this device's push switch, always in view, then
  * the Inbox and Categories tabs. Each open lands on the tab it asks for. Only
@@ -26,7 +36,7 @@ function isNotificationsTab(value: string): value is NotificationsTab {
 export function NotificationsDrawer(props: {
 	open: boolean;
 	tab: NotificationsTab;
-	onOpenChange: (open: boolean) => void;
+	onOpenChange: (isOpen: boolean) => void;
 }): JSX.Element {
 	const inbox = useInbox(() => props.open);
 	const unread = useUnreadBadge();
@@ -85,17 +95,7 @@ export function NotificationsDrawer(props: {
 					<Tabs.Content value="inbox">
 						<Show
 							when={inbox.rows() !== undefined || inbox.failed()}
-							fallback={
-								<div
-									class={styles.loading}
-									role="status"
-									aria-label="Loading"
-								>
-									<Skeleton width="long" />
-									<Skeleton width="medium" />
-									<Skeleton width="short" />
-								</div>
-							}
+							fallback={<InboxLoading />}
 						>
 							<NotificationList
 								inbox={inbox}

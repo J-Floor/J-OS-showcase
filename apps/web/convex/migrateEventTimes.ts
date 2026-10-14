@@ -42,6 +42,7 @@ import {
 	zonedLocalFromEpoch,
 } from "./lib/time.ts";
 
+const MINUTES_PER_HALF_HOUR = 30;
 /** Rows processed per bounded call, when the caller does not override. */
 const DEFAULT_LIMIT = 100;
 /** Read-only preview/verify caps — generous since these never write. */
@@ -52,8 +53,8 @@ const RECOMPUTE_PREVIEW_LIMIT = 1000;
 
 /** A UI-created guest expiry: exactly 00:00:01 wall-clock in the site zone. */
 export function isLegacyExpiry(ms: number, tz: string): boolean {
-	const z = zonedFromEpoch(ms, tz);
-	return z.hour === 0 && z.minute === 0 && z.second === 1;
+	const zoned = zonedFromEpoch(ms, tz);
+	return zoned.hour === 0 && zoned.minute === 0 && zoned.second === 1;
 }
 
 /** A preserved guest expiry whose wall-clock still looks like a FOREIGN-browser
@@ -67,8 +68,12 @@ export function isLegacyExpiry(ms: number, tz: string): boolean {
  *  is why these are surfaced for a human to re-set via the picker, not
  *  auto-corrected). */
 export function isSuspiciousGuestExpiry(ms: number, tz: string): boolean {
-	const z = zonedFromEpoch(ms, tz);
-	return z.second === 1 && z.minute % 30 === 0 && z.hour !== 0;
+	const zoned = zonedFromEpoch(ms, tz);
+	return (
+		zoned.second === 1 &&
+		zoned.minute % MINUTES_PER_HALF_HOUR === 0 &&
+		zoned.hour !== 0
+	);
 }
 
 /** Attach a zone IXDTF to an existing instant WITHOUT changing it. */
@@ -80,31 +85,51 @@ export function preserveAsZoned(ms: number, tz: string): ZonedValue {
  *  is the instant's OWN zone day (a 00:00:01 Zurich epoch's day, not the day
  *  before), matching `expiryFromIso`'s convention. */
 export function remeanGuestExpiry(ms: number, tz: string): ZonedValue {
-	const z = zonedFromEpoch(ms, tz);
+	const zoned = zonedFromEpoch(ms, tz);
 	// composeExpiry never returns null for a non-null iso.
 	return composeExpiry(
-		`${String(z.year)}-${pad(z.month)}-${pad(z.day)}`,
+		`${String(zoned.year)}-${pad(zoned.month)}-${pad(zoned.day)}`,
 		tz
 	)!;
 }
 
 function hhmmss(ms: number, tz: string): string {
-	const z = zonedFromEpoch(ms, tz);
-	return `${pad(z.hour)}:${pad(z.minute)}:${pad(z.second)}`;
+	const zoned = zonedFromEpoch(ms, tz);
+	return `${pad(zoned.hour)}:${pad(zoned.minute)}:${pad(zoned.second)}`;
 }
 
 // --- Candidate selection (shrinks as `*Local` gets populated) -------------
 
+/** Moves a guest's expiry to `next` and arms a precise windowExpired job at
+ *  the new instant when it is still ahead. */
+async function moveGuestExpiry(
+	context: MutationCtx,
+	personId: Id<"people">,
+	next: ZonedValue
+): Promise<void> {
+	await context.db.patch(personId, {
+		accessUntil: next.utc,
+		accessUntilLocal: next.local,
+	});
+	if (next.utc > Date.now()) {
+		await context.scheduler.runAt(
+			next.utc,
+			internal.lifecycle.windowExpired,
+			{ personId }
+		);
+	}
+}
+
 async function guestsNeedingWork(
-	ctx: QueryCtx,
+	context: QueryCtx,
 	limit: number
 ): Promise<Doc<"people">[]> {
-	return ctx.db
+	return context.db
 		.query("people")
-		.filter((q) =>
-			q.and(
-				q.neq(q.field("accessUntil"), undefined),
-				q.eq(q.field("accessUntilLocal"), undefined)
+		.filter((expression) =>
+			expression.and(
+				expression.neq(expression.field("accessUntil"), undefined),
+				expression.eq(expression.field("accessUntilLocal"), undefined)
 			)
 		)
 		.take(limit);
@@ -114,13 +139,13 @@ async function guestsNeedingWork(
 
 export const previewTimezoneMigration = internalQuery({
 	args: {},
-	handler: async (ctx) => {
-		const guests = await guestsNeedingWork(ctx, PREVIEW_LIMIT);
+	handler: async (context) => {
+		const guests = await guestsNeedingWork(context, PREVIEW_LIMIT);
 		const guestRows = guests.map((person) => {
 			// guaranteed by guestsNeedingWork's filter
 			const ms = person.accessUntil!;
-			const legacy = isLegacyExpiry(ms, SITE_TIMEZONE);
-			const proposed = legacy
+			const isLegacy = isLegacyExpiry(ms, SITE_TIMEZONE);
+			const proposed = isLegacy
 				? remeanGuestExpiry(ms, SITE_TIMEZONE)
 				: preserveAsZoned(ms, SITE_TIMEZONE);
 			return {
@@ -134,13 +159,13 @@ export const previewTimezoneMigration = internalQuery({
 					),
 					zonedTime: hhmmss(ms, SITE_TIMEZONE),
 				},
-				classification: legacy ? "legacyExpiry" : "preserve",
+				classification: isLegacy ? "legacyExpiry" : "preserve",
 				// A preserved row whose wall-clock fingerprints a foreign-browser
 				// legacy expiry — surfaced for a human to re-set via the picker
 				// if the intended day is known. Never re-meaned automatically
 				// (that would extend door access).
 				suspicious:
-					!legacy && isSuspiciousGuestExpiry(ms, SITE_TIMEZONE),
+					!isLegacy && isSuspiciousGuestExpiry(ms, SITE_TIMEZONE),
 				proposed: {
 					accessUntilLocal: proposed.local,
 					accessUntil: proposed.utc,
@@ -160,22 +185,18 @@ export const previewTimezoneMigration = internalQuery({
 
 export const runTimezoneMigration = internalMutation({
 	args: { limit: v.optional(v.number()) },
-	handler: async (ctx, { limit }) => {
+	handler: async (context, { limit }) => {
 		const cap = limit ?? DEFAULT_LIMIT;
 
-		const guests = await guestsNeedingWork(ctx, cap);
+		const guests = await guestsNeedingWork(context, cap);
 		const guestResults = [];
 		for (const person of guests) {
 			const ms = person.accessUntil!; // guaranteed by the filter
-			const legacy = isLegacyExpiry(ms, SITE_TIMEZONE);
-			const next = legacy
+			const isLegacy = isLegacyExpiry(ms, SITE_TIMEZONE);
+			const next = isLegacy
 				? remeanGuestExpiry(ms, SITE_TIMEZONE)
 				: preserveAsZoned(ms, SITE_TIMEZONE);
-			if (legacy) {
-				await ctx.db.patch(person._id, {
-					accessUntil: next.utc,
-					accessUntilLocal: next.local,
-				});
+			if (isLegacy) {
 				// The old windowExpired job (if any) was scheduled at the OLD
 				// instant — re-meaning the expiry orphans it (it fires as a
 				// no-op against the now-later accessUntil). Schedule a fresh
@@ -183,15 +204,9 @@ export const runTimezoneMigration = internalMutation({
 				// exact instead of falling back to the nightly sweep cron. Only
 				// for re-meaned (legacyExpiry) guests — a `preserve` guest keeps
 				// its instant and its existing job unchanged.
-				if (next.utc > Date.now()) {
-					await ctx.scheduler.runAt(
-						next.utc,
-						internal.lifecycle.windowExpired,
-						{ personId: person._id }
-					);
-				}
+				await moveGuestExpiry(context, person._id, next);
 			} else {
-				await ctx.db.patch(person._id, {
+				await context.db.patch(person._id, {
 					accessUntilLocal: next.local,
 				});
 			}
@@ -208,7 +223,7 @@ export const runTimezoneMigration = internalMutation({
 
 		// Own writes are visible within the same transaction, so this peek
 		// reflects post-patch state: `done` is exact, not a heuristic.
-		const guestsLeft = await guestsNeedingWork(ctx, 1);
+		const guestsLeft = await guestsNeedingWork(context, 1);
 		return {
 			done: guestsLeft.length === 0,
 			guests: guestResults,
@@ -220,10 +235,13 @@ export const runTimezoneMigration = internalMutation({
 
 export const verifyTimezoneMigration = internalQuery({
 	args: {},
-	handler: async (ctx) => {
-		const guests = await guestsNeedingWork(ctx, PREVIEW_LIMIT);
+	handler: async (context) => {
+		const guests = await guestsNeedingWork(context, PREVIEW_LIMIT);
 		return {
-			guests: guests.map((p) => ({ id: p._id, name: displayName(p) })),
+			guests: guests.map((guest) => ({
+				id: guest._id,
+				name: displayName(guest),
+			})),
 		};
 	},
 });
@@ -249,14 +267,14 @@ function decodeCursor(raw: string | undefined): {
 	cursor: string | null;
 } {
 	if (raw === undefined) return { phase: "events", cursor: null };
-	const sep = raw.indexOf(":");
-	const phase = raw.slice(0, sep) as RecomputePhase;
-	const rest = raw.slice(sep + 1);
+	const separator = raw.indexOf(":");
+	const phase = raw.slice(0, separator) as RecomputePhase;
+	const rest = raw.slice(separator + 1);
 	return { phase, cursor: rest === "" ? null : rest };
 }
 
-async function recomputeEventEpoch(
-	ctx: MutationCtx,
+async function didChangeEventEpoch(
+	context: MutationCtx,
 	event: Doc<"events">
 ): Promise<boolean> {
 	const patch: {
@@ -275,37 +293,29 @@ async function recomputeEventEpoch(
 		patch.endsAt = nextEnd.utc;
 		patch.endsAtLocal = nextEnd.local;
 	}
-	const changed = Object.keys(patch).length > 0;
-	if (changed) await ctx.db.patch(event._id, patch);
-	return changed;
+	const isChanged = Object.keys(patch).length > 0;
+	if (isChanged) await context.db.patch(event._id, patch);
+	return isChanged;
 }
 
-async function recomputeGuestEpoch(
-	ctx: MutationCtx,
+async function didChangeGuestEpoch(
+	context: MutationCtx,
 	person: Doc<"people">
 ): Promise<boolean> {
 	if (person.accessUntilLocal === undefined) return false;
 	const next = recomputeZoned(person.accessUntilLocal);
 	if (next.utc === person.accessUntil) return false;
-	await ctx.db.patch(person._id, {
-		accessUntil: next.utc,
-		accessUntilLocal: next.local,
-	});
 	// A tzdata recompute that shifts the cached epoch orphans the old
 	// windowExpired job (scheduled at the previous instant); a later new instant
 	// would then no-op and door revocation would slip to the nightly sweep.
 	// Re-arm a precise expiry at the new instant, as the backfill does.
-	if (next.utc > Date.now()) {
-		await ctx.scheduler.runAt(next.utc, internal.lifecycle.windowExpired, {
-			personId: person._id,
-		});
-	}
+	await moveGuestExpiry(context, person._id, next);
 	return true;
 }
 
 export const recomputeEpochs = internalMutation({
 	args: { limit: v.optional(v.number()), cursor: v.optional(v.string()) },
-	handler: async (ctx, { limit, cursor }) => {
+	handler: async (context, { limit, cursor }) => {
 		const cap = limit ?? DEFAULT_LIMIT;
 		const start = decodeCursor(cursor);
 
@@ -320,12 +330,12 @@ export const recomputeEpochs = internalMutation({
 		// elsewhere, so it is not worth risking on a proc that runs rarely and
 		// unsupervised against prod data.
 		if (start.phase === "events") {
-			const page = await ctx.db
+			const page = await context.db
 				.query("events")
 				.paginate({ cursor: start.cursor, numItems: cap });
 			let changed = 0;
 			for (const event of page.page) {
-				if (await recomputeEventEpoch(ctx, event)) changed++;
+				if (await didChangeEventEpoch(context, event)) changed++;
 			}
 			if (!page.isDone) {
 				return {
@@ -342,12 +352,12 @@ export const recomputeEpochs = internalMutation({
 			};
 		}
 
-		const peoplePage = await ctx.db
+		const peoplePage = await context.db
 			.query("people")
 			.paginate({ cursor: start.cursor, numItems: cap });
 		let changed = 0;
 		for (const person of peoplePage.page) {
-			if (await recomputeGuestEpoch(ctx, person)) changed++;
+			if (await didChangeGuestEpoch(context, person)) changed++;
 		}
 
 		return {
@@ -365,8 +375,8 @@ export const recomputeEpochs = internalMutation({
  *  paginated (nothing here writes, so there is no convergence requirement). */
 export const previewRecompute = internalQuery({
 	args: {},
-	handler: async (ctx) => {
-		const events = await ctx.db
+	handler: async (context) => {
+		const events = await context.db
 			.query("events")
 			.take(RECOMPUTE_PREVIEW_LIMIT);
 		const eventRows: {
@@ -402,7 +412,7 @@ export const previewRecompute = internalQuery({
 			}
 		}
 
-		const people = await ctx.db
+		const people = await context.db
 			.query("people")
 			.take(RECOMPUTE_PREVIEW_LIMIT);
 		const guestRows: {

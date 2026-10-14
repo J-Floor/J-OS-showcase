@@ -142,7 +142,7 @@ export {
 } from "./components/SignaturePad/SignaturePad.tsx";
 export type {
 	ColumnSize,
-	JfColumnDef,
+	JfColumnDefinition,
 	DataType,
 	EnumOption,
 	EnumValue,

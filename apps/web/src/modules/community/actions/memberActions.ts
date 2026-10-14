@@ -1,8 +1,10 @@
+import { displayName } from "../../../../convex/lib/names.ts";
 import { useConfirm } from "../../../shared/confirm.tsx";
 import { ICONS } from "../../../shared/icons.ts";
 import type { MemberRow } from "../columns/memberColumns.tsx";
 import { useOpenAgreement } from "../openAgreement.ts";
 
+import { agreementAction } from "./agreementAction.ts";
 import type { ActionDescriptor } from "./shortcuts.ts";
 import { useTriage } from "./triage.ts";
 
@@ -19,7 +21,7 @@ import { useTriage } from "./triage.ts";
  * `loading`, not just `hasAgreement`: a click already in flight must disable
  * the button too, or a second click opens a second blank tab.
  */
-export function useMemberActions(opts: {
+export function useMemberActions(options: {
 	onChangeRole: (person: MemberRow) => void;
 	group: (person: MemberRow) => string;
 }): { actions: () => ActionDescriptor<MemberRow>[] } {
@@ -27,15 +29,11 @@ export function useMemberActions(opts: {
 	const confirm = useConfirm();
 	const agreement = useOpenAgreement();
 
-	function fullName(person: MemberRow): string {
-		return `${person.firstName} ${person.lastName}`.trim();
-	}
-
 	async function kickOut(person: MemberRow): Promise<void> {
 		if (
 			await confirm({
 				title: "Kick out?",
-				message: `Revoke ${fullName(person)}'s access? They'll be moved to Kicked out, keeping their whole history.`,
+				message: `Revoke ${displayName(person)}'s access? They'll be moved to Kicked out, keeping their whole history.`,
 				confirmLabel: "Kick out",
 				tone: "danger",
 			})
@@ -53,7 +51,7 @@ export function useMemberActions(opts: {
 				scope: "members",
 				can: () => true,
 				run: (person) => {
-					opts.onChangeRole(person);
+					options.onChangeRole(person);
 				},
 			},
 			{
@@ -62,27 +60,11 @@ export function useMemberActions(opts: {
 				icon: ICONS.kickOut,
 				hotkey: "K",
 				scope: "members",
-				can: (person) => opts.group(person) !== "kicked_out",
+				can: (person) => options.group(person) !== "kicked_out",
 				disabledReason: () => "Already kicked out",
 				run: (person) => kickOut(person),
 			},
-			{
-				id: "agreement",
-				label: "View agreement",
-				icon: ICONS.agreement,
-				hotkey: "A",
-				scope: "members",
-				can: (person) => person.hasAgreement && !agreement.loading(),
-				// The two reasons AgreementButton has always given, kept apart:
-				// "there is none" and "one is on its way" are different answers.
-				disabledReason: (person) =>
-					person.hasAgreement
-						? "Opening…"
-						: "No signed agreement on file",
-				run: (person) => {
-					agreement.open(person._id);
-				},
-			},
+			agreementAction(agreement, "members"),
 		];
 	}
 

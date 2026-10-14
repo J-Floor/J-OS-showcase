@@ -22,7 +22,7 @@ import styles from "./Drawer.module.scss";
 /** Lets a deferred `Body` tell `Root` its children just mounted, so Root can
  *  hand focus to `initialFocusEl`. That element did not exist when Ark ran its
  *  own initial focus, because the body was still a skeleton then. */
-const BodyReady = createContext<() => void>(() => undefined);
+const BodyReady = createContext<() => void>(() => {});
 
 /**
  * Right-side slide-in panel built directly on Ark Dialog (the design-system
@@ -37,7 +37,7 @@ const BodyReady = createContext<() => void>(() => undefined);
  */
 function Root(props: {
 	open: boolean;
-	onOpenChange: (open: boolean) => void;
+	onOpenChange: (isOpen: boolean) => void;
 	/** Element to focus when the drawer opens (e.g. a title field). Defaults to
 	 *  the content panel itself. */
 	initialFocusEl?: () => HTMLElement | null;
@@ -62,7 +62,7 @@ function Root(props: {
 	 * case waits, and only until the end of the current task, by which point
 	 * the track effect has run and recorded `false`.
 	 */
-	const openAtMount = untrack(() => props.open);
+	const isOpenAtMount = untrack(() => props.open);
 	const [settled, setSettled] = createSignal(false);
 	/**
 	 * The panel focuses ITSELF when it opens, not the first thing inside it.
@@ -77,7 +77,7 @@ function Root(props: {
 	 *
 	 * An explicit `initialFocusEl` (to drop the caret in a field, say) still wins.
 	 */
-	let contentEl: HTMLElement | null = null;
+	let contentElement: HTMLElement | null = null;
 	onMount(() => {
 		const timer = setTimeout(() => {
 			setSettled(true);
@@ -87,7 +87,7 @@ function Root(props: {
 		});
 	});
 	function open(): boolean {
-		return props.open && (openAtMount || settled());
+		return props.open && (isOpenAtMount || settled());
 	}
 	/** A deferred `Body`'s children mounted after Ark's own initial focus ran
 	 *  against a skeleton. Re-apply `initialFocusEl` now that the real target
@@ -96,23 +96,25 @@ function Root(props: {
 	 *  yanked back. */
 	function onBodyReady(): void {
 		const target = props.initialFocusEl?.();
-		if (target && document.activeElement === contentEl) target.focus();
+		if (target && document.activeElement === contentElement) target.focus();
 	}
 	return (
 		<BodyReady.Provider value={onBodyReady}>
 			<Dialog.Root
 				open={open()}
-				onOpenChange={(d) => {
-					props.onOpenChange(d.open);
+				onOpenChange={(details) => {
+					props.onOpenChange(details.open);
 				}}
 				// A deferred `Body` means an `initialFocusEl` target (a field inside
 				// it) may not exist yet when Ark runs this on mount — `()=>null`
 				// makes Ark's focus-trap throw internally (it treats `null`, unlike
 				// `undefined`, as "specified but invalid") and land nowhere. Falling
-				// back to `contentEl` per call keeps Ark's own initial focus on the
+				// back to `contentElement` per call keeps Ark's own initial focus on the
 				// panel in that case, which `onBodyReady` below checks for before
 				// re-applying the real target once it mounts.
-				initialFocusEl={() => props.initialFocusEl?.() ?? contentEl}
+				initialFocusEl={() =>
+					props.initialFocusEl?.() ?? contentElement
+				}
 				// Content builds on first open. No `unmountOnExit`: the close is a CSS
 				// transition, which unmounting would cut off.
 				lazyMount
@@ -129,8 +131,8 @@ function Root(props: {
 							// those shortcuts fire; real inputs inside it are still caught, so
 							// typing a field never triggers one.
 							data-shortcut-surface="true"
-							ref={(el: HTMLElement) => {
-								contentEl = el;
+							ref={(element: HTMLElement) => {
+								contentElement = element;
 							}}
 						>
 							{props.children}
@@ -180,6 +182,8 @@ function HeaderActions(props: { children: JSX.Element }): JSX.Element {
 	return <div class={styles.headerActions}>{props.children}</div>;
 }
 
+const DEFAULT_SKELETON_ROWS = 6;
+
 /** Generic manual-mode fallback: label/value placeholder bars in the
  *  `PropertyRow` rhythm, used when a surface hasn't given `Body` a shaped
  *  `skeleton` of its own. `data-drawer-skeleton` is the variant-agnostic
@@ -193,14 +197,18 @@ function BodySkeleton(props: { rows?: number }): JSX.Element {
 			aria-label="Loading"
 			data-drawer-skeleton=""
 		>
-			<Index each={Array.from({ length: props.rows ?? 6 })}>
-				{(_, i) => (
+			<Index
+				each={Array.from({
+					length: props.rows ?? DEFAULT_SKELETON_ROWS,
+				})}
+			>
+				{(_, index) => (
 					<div
 						class={styles.bodySkeletonRow}
 						data-drawer-skeleton-row=""
 					>
 						<Skeleton width="short" />
-						<Skeleton width={i % 2 === 0 ? "long" : "medium"} />
+						<Skeleton width={index % 2 === 0 ? "long" : "medium"} />
 					</div>
 				)}
 			</Index>
@@ -243,9 +251,9 @@ function Body(props: {
 	skeleton?: JSX.Element;
 }): JSX.Element {
 	const ready = useContext(BodyReady);
-	function Mounted(p: { children: JSX.Element }): JSX.Element {
+	function Mounted(mountedProps: { children: JSX.Element }): JSX.Element {
 		onMount(ready);
-		return <>{p.children}</>;
+		return <>{mountedProps.children}</>;
 	}
 	function fallback(): JSX.Element {
 		// Read once: at the call site `skeleton` compiles to a getter that
@@ -287,9 +295,9 @@ function Footer(props: { children: JSX.Element }): JSX.Element {
 function Close(): JSX.Element {
 	return (
 		<Dialog.CloseTrigger
-			asChild={(p) => (
+			asChild={(triggerProps) => (
 				<IconButton
-					{...(p() as object)}
+					{...(triggerProps() as object)}
 					tooltipLabel="Close"
 					shortcut="Escape"
 				>

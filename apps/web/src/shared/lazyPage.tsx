@@ -34,9 +34,9 @@ export function lazyPage(load: () => Promise<Component>): LazyPage {
 				cached = Loaded;
 				return Loaded;
 			},
-			(e: unknown) => {
+			(reason: unknown) => {
 				inflight = undefined;
-				throw e;
+				throw reason;
 			}
 		);
 		return inflight;
@@ -70,13 +70,13 @@ export function lazyPage(load: () => Promise<Component>): LazyPage {
 					// during a render computation (not the promise callback above)
 					// and reaches the route's <AppErrorBoundary>.
 					<Show when={error()} fallback={<PageSkeleton />}>
-						{(e) => {
-							throw e();
+						{(failure) => {
+							throw failure();
 						}}
 					</Show>
 				}
 			>
-				{(C) => <Dynamic component={C()} />}
+				{(Component) => <Dynamic component={Component()} />}
 			</Show>
 		);
 	}

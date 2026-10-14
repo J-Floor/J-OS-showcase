@@ -111,11 +111,11 @@ export function AbilityProvider(props: {
 }
 
 export function useAbility(): Accessor<AppAbility> {
-	const ctx = useContext(AbilityContext);
-	if (!ctx) {
+	const context = useContext(AbilityContext);
+	if (!context) {
 		throw new Error("useAbility must be used within an <AbilityProvider>");
 	}
-	return ctx;
+	return context;
 }
 
 /**
@@ -135,7 +135,7 @@ export function Can(props: {
 	const ability = useAbility();
 	function allowed(): boolean {
 		const subject = props.a ?? props.an ?? props.the;
-		return subject != null && ability().can(props.I, subject);
+		return subject !== undefined && ability().can(props.I, subject);
 	}
 	return (
 		<Show when={allowed()} fallback={props.fallback}>

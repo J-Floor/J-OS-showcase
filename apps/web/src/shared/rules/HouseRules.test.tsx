@@ -9,12 +9,15 @@ afterEach(cleanup);
 
 test("renders every section heading and one card per rule", () => {
 	render(() => <HouseRules query="" />);
-	for (const s of RULES) {
+	for (const section of RULES) {
 		expect(
-			screen.getByRole("heading", { name: s.heading })
+			screen.getByRole("heading", { name: section.heading })
 		).toBeInTheDocument();
 	}
-	const total = RULES.reduce((n, s) => n + s.rules.length, 0);
+	const total = RULES.reduce(
+		(count, section) => count + section.rules.length,
+		0
+	);
 	expect(screen.getAllByRole("listitem")).toHaveLength(total);
 });
 

@@ -11,7 +11,7 @@ import { vi } from "vitest";
 // dynamic import vite transforms on first use) can outlast that on a busy CI
 // runner. Awaiting the in-flight functions has no such budget.
 export async function runAndCollectLogs(
-	t: ReturnType<typeof convexTest>,
+	backend: ReturnType<typeof convexTest>,
 	action: () => Promise<unknown>
 ): Promise<string[]> {
 	vi.useFakeTimers();
@@ -20,9 +20,11 @@ export async function runAndCollectLogs(
 		await action();
 		do {
 			vi.runAllTimers();
-			await t.finishInProgressScheduledFunctions();
+			await backend.finishInProgressScheduledFunctions();
 		} while (vi.getTimerCount() > 0);
-		return logSpy.mock.calls.map((c) => c.map((a) => String(a)).join(" "));
+		return logSpy.mock.calls.map((call) =>
+			call.map((argument) => String(argument)).join(" ")
+		);
 	} finally {
 		logSpy.mockRestore();
 		vi.useRealTimers();

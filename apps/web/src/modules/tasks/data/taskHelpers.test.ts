@@ -19,16 +19,15 @@ const TASKS = [
 ];
 
 test("filterTasksByAssignee: 'all' keeps every task", () => {
-	expect(filterTasksByAssignee(TASKS, "all", "p1").map((t) => t._id)).toEqual(
-		["t1", "t2", "t3"]
-	);
+	expect(
+		filterTasksByAssignee(TASKS, "all", "p1").map((task) => task._id)
+	).toEqual(["t1", "t2", "t3"]);
 });
 
 test("filterTasksByAssignee: 'me' keeps tasks for the current person", () => {
-	expect(filterTasksByAssignee(TASKS, "me", "p2").map((t) => t._id)).toEqual([
-		"t1",
-		"t2",
-	]);
+	expect(
+		filterTasksByAssignee(TASKS, "me", "p2").map((task) => task._id)
+	).toEqual(["t1", "t2"]);
 });
 
 test("filterTasksByAssignee: 'me' with no current person matches nothing", () => {
@@ -36,9 +35,9 @@ test("filterTasksByAssignee: 'me' with no current person matches nothing", () =>
 });
 
 test("filterTasksByAssignee: a person id keeps that person's tasks", () => {
-	expect(filterTasksByAssignee(TASKS, "p1", "p2").map((t) => t._id)).toEqual([
-		"t1",
-	]);
+	expect(
+		filterTasksByAssignee(TASKS, "p1", "p2").map((task) => task._id)
+	).toEqual(["t1"]);
 });
 
 test("isoToMs / msToIso round-trip a date", () => {
@@ -64,11 +63,16 @@ test("formatDate renders the stored UTC day (no off-by-one in any zone)", () => 
 });
 
 test("sortColumn: due dates ascending, undated last, then creation", () => {
-	const a = { dueDate: 200, _creationTime: 1 };
-	const b = { dueDate: 100, _creationTime: 2 };
-	const c = { _creationTime: 3 };
-	const d = { _creationTime: 0 };
-	expect(sortColumn([a, b, c, d])).toEqual([b, a, d, c]);
+	const dueLate = { dueDate: 200, _creationTime: 1 };
+	const dueSoon = { dueDate: 100, _creationTime: 2 };
+	const undatedNew = { _creationTime: 3 };
+	const undatedOld = { _creationTime: 0 };
+	expect(sortColumn([dueLate, dueSoon, undatedNew, undatedOld])).toEqual([
+		dueSoon,
+		dueLate,
+		undatedOld,
+		undatedNew,
+	]);
 });
 
 test("name + project lookups", () => {

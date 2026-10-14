@@ -11,14 +11,19 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
+function ContentPage() {
+	return <p>Page content</p>;
+}
+
+function CachedPage() {
+	return <p>Cached content</p>;
+}
+
 test("shows PageSkeleton until the loader resolves, then renders the page", async () => {
 	let resolveLoad!: (c: Component) => void;
 	const promise = new Promise<Component>((resolve) => {
 		resolveLoad = resolve;
 	});
-	function Page() {
-		return <p>Page content</p>;
-	}
 	const LazyPage = lazyPage(() => promise);
 
 	render(() => <LazyPage />);
@@ -28,19 +33,16 @@ test("shows PageSkeleton until the loader resolves, then renders the page", asyn
 	).toBeGreaterThan(0);
 	expect(screen.queryByText("Page content")).toBeNull();
 
-	resolveLoad(Page);
+	resolveLoad(ContentPage);
 
 	await waitFor(() => {
 		expect(screen.getByText("Page content")).toBeInTheDocument();
 	});
-	expect(document.querySelectorAll("[data-skeleton-row]").length).toBe(0);
+	expect(document.querySelectorAll("[data-skeleton-row]")).toHaveLength(0);
 });
 
 test("a second mount after load renders the page synchronously, no skeleton", async () => {
-	function Page() {
-		return <p>Cached content</p>;
-	}
-	const LazyPage = lazyPage(() => Promise.resolve(Page));
+	const LazyPage = lazyPage(() => Promise.resolve(CachedPage));
 
 	const first = render(() => <LazyPage />);
 	await waitFor(() => {
@@ -53,8 +55,8 @@ test("a second mount after load renders the page synchronously, no skeleton", as
 	// must be present on the very next synchronous read.
 	expect(second.getByText("Cached content")).toBeInTheDocument();
 	expect(
-		second.container.querySelectorAll("[data-skeleton-row]").length
-	).toBe(0);
+		second.container.querySelectorAll("[data-skeleton-row]")
+	).toHaveLength(0);
 });
 
 test("a rejected loader reaches an ErrorBoundary fallback", async () => {
@@ -83,14 +85,12 @@ test("a rejected loader reaches an ErrorBoundary fallback", async () => {
 // This test fails if `LazyPage`'s render is wrapped in `<Suspense>` (checked
 // manually while writing this test, then reverted).
 test("a resource refetch inside the page does not replace the page's DOM", async () => {
-	let refetch!: () => void;
+	let refetch!: ReturnType<typeof createResource<string>>[1]["refetch"];
 	function Page() {
 		const [data, { refetch: doRefetch }] = createResource(() =>
 			Promise.resolve("v1")
 		);
-		refetch = () => {
-			void doRefetch();
-		};
+		refetch = doRefetch;
 		return (
 			<div>
 				<input aria-label="focus target" />
@@ -109,7 +109,7 @@ test("a resource refetch inside the page does not replace the page's DOM", async
 	input.focus();
 	expect(document.activeElement).toBe(input);
 
-	refetch();
+	await refetch();
 	await waitFor(() => {
 		expect(screen.getByText("v1")).toBeInTheDocument();
 	});

@@ -272,6 +272,15 @@ export const signatureVariant = v.union(
 	v.literal("guest")
 );
 
+/** A project's editable fields: what `projects.create` takes and the table holds. */
+export const projectFields = {
+	name: v.string(),
+	description: v.optional(v.string()),
+	leaderId: v.optional(v.id("people")),
+	startDate: v.optional(v.number()),
+	endDate: v.optional(v.number()),
+};
+
 export default defineSchema({
 	people: defineTable({
 		// email is the unique identity; the name pair is display-only.
@@ -451,11 +460,7 @@ export default defineSchema({
 		sourceUrl: v.optional(v.string()),
 	}).index("by_person", ["personId"]),
 	projects: defineTable({
-		name: v.string(),
-		description: v.optional(v.string()),
-		leaderId: v.optional(v.id("people")),
-		startDate: v.optional(v.number()),
-		endDate: v.optional(v.number()),
+		...projectFields,
 		// Optional so erasing the creator (`purge.purgeEmail`) keeps the row.
 		createdBy: v.optional(v.id("people")),
 	}),

@@ -11,7 +11,7 @@ function createFakeSelf(options: { active: boolean; clients: FakeClient[] }) {
 		registration: { active: options.active ? {} : null },
 		clients: { claim, matchAll },
 	});
-	// eslint-disable-next-line @typescript-eslint/no-implied-eval, @typescript-eslint/no-unsafe-call -- evaluating the worker script against a fake `self` is the point of this test
+	// eslint-disable-next-line sonarjs/code-eval, @typescript-eslint/no-implied-eval, @typescript-eslint/no-unsafe-call -- evaluating the worker script against a fake `self` is the point of this test
 	new Function("self", source)(self);
 	return { self, claim, matchAll };
 }
@@ -34,11 +34,11 @@ function fakeClient(url: string): FakeClient {
 
 describe("reload-sw.js", () => {
 	it("navigates every window client to its own url after claiming them on an update", async () => {
-		const a = fakeClient("https://app.test/community");
-		const b = fakeClient("https://app.test/tasks?id=1");
+		const first = fakeClient("https://app.test/community");
+		const second = fakeClient("https://app.test/tasks?id=1");
 		const { self, claim, matchAll } = createFakeSelf({
 			active: true,
-			clients: [a, b],
+			clients: [first, second],
 		});
 
 		await runLifecycle(self);
@@ -47,29 +47,36 @@ describe("reload-sw.js", () => {
 		expect(claim.mock.invocationCallOrder[0]).toBeLessThan(
 			matchAll.mock.invocationCallOrder[0]
 		);
-		expect(a.navigate).toHaveBeenCalledWith("https://app.test/community");
-		expect(b.navigate).toHaveBeenCalledWith("https://app.test/tasks?id=1");
+		expect(first.navigate).toHaveBeenCalledWith(
+			"https://app.test/community"
+		);
+		expect(second.navigate).toHaveBeenCalledWith(
+			"https://app.test/tasks?id=1"
+		);
 	});
 
 	it("navigates nothing on a first install", async () => {
-		const a = fakeClient("https://app.test/");
+		const first = fakeClient("https://app.test/");
 		const { self, claim, matchAll } = createFakeSelf({
 			active: false,
-			clients: [a],
+			clients: [first],
 		});
 
 		await runLifecycle(self);
 
 		expect(claim).not.toHaveBeenCalled();
 		expect(matchAll).not.toHaveBeenCalled();
-		expect(a.navigate).not.toHaveBeenCalled();
+		expect(first.navigate).not.toHaveBeenCalled();
 	});
 
 	it("survives a browser that rejects navigate()", async () => {
-		const a = fakeClient("https://app.test/");
-		a.navigate.mockRejectedValue(new TypeError("not allowed"));
-		const b = fakeClient("https://app.test/space");
-		const { self } = createFakeSelf({ active: true, clients: [a, b] });
+		const first = fakeClient("https://app.test/");
+		first.navigate.mockRejectedValue(new TypeError("not allowed"));
+		const second = fakeClient("https://app.test/space");
+		const { self } = createFakeSelf({
+			active: true,
+			clients: [first, second],
+		});
 
 		const unhandled = vi.fn();
 		process.on("unhandledRejection", unhandled);
@@ -80,15 +87,15 @@ describe("reload-sw.js", () => {
 		} finally {
 			process.off("unhandledRejection", unhandled);
 		}
-		expect(b.navigate).toHaveBeenCalled();
+		expect(second.navigate).toHaveBeenCalled();
 	});
 
 	it("does not wait for navigations to settle, so activation cannot deadlock on them", async () => {
-		const a = fakeClient("https://app.test/");
-		a.navigate.mockReturnValue(new Promise(() => {}));
-		const { self } = createFakeSelf({ active: true, clients: [a] });
+		const first = fakeClient("https://app.test/");
+		first.navigate.mockReturnValue(new Promise(() => {}));
+		const { self } = createFakeSelf({ active: true, clients: [first] });
 
 		await expect(runLifecycle(self)).resolves.toBeUndefined();
-		expect(a.navigate).toHaveBeenCalledWith("https://app.test/");
+		expect(first.navigate).toHaveBeenCalledWith("https://app.test/");
 	});
 });

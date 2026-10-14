@@ -52,6 +52,24 @@ function waitFrame(signal: AbortSignal): Promise<void> {
 	});
 }
 
+/** Reports the first non-empty code in the current frame, if any. A frame
+ *  that cannot be read yet is skipped. */
+async function reportFirstCode(
+	detector: InstanceType<BarcodeDetectorCtor>,
+	video: QrVideo,
+	onDetect: (raw: string) => void
+): Promise<void> {
+	try {
+		const codes = await detector.detect(video);
+		if (codes.length > 0) {
+			const value = codes[0].rawValue;
+			if (value !== "") onDetect(value);
+		}
+	} catch {
+		// Video may not be ready on the first frames.
+	}
+}
+
 /**
  * Stream the rear camera into `video` and call `onDetect` with each QR payload
  * until `signal` aborts. Stops every media track on abort.
@@ -109,15 +127,7 @@ export async function startQrScan(
 
 	const detector = new Detector({ formats: ["qr_code"] });
 	while (!isAborted()) {
-		try {
-			const codes = await detector.detect(video);
-			if (codes.length > 0) {
-				const value = codes[0].rawValue;
-				if (value !== "") onDetect(value);
-			}
-		} catch {
-			// Video may not be ready on the first frames.
-		}
+		await reportFirstCode(detector, video, onDetect);
 		await waitFrame(signal);
 	}
 }

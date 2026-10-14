@@ -24,19 +24,19 @@ export type SendEmailArgs = {
  * Resolves `true` when the email was sent or only logged (no provider), and
  * `false` when the provider rejected it. Callers that don't care may ignore it.
  */
-export async function sendEmail(opts: SendEmailArgs): Promise<boolean> {
+export async function sendEmail(options: SendEmailArgs): Promise<boolean> {
 	const apiKey = process.env.RESEND_API_KEY;
 	if (!apiKey) {
 		// eslint-disable-next-line no-console -- no provider configured: surface in the Convex logs
 		console.log(
 			process.env.EMAIL_DEV_LOG === "1"
-				? opts.devLog
-				: `[email] not sent (no RESEND_API_KEY) to ${opts.to}: ${opts.subject}`
+				? options.devLog
+				: `[email] not sent (no RESEND_API_KEY) to ${options.to}: ${options.subject}`
 		);
 		return true;
 	}
 	const from = process.env.EMAIL_FROM ?? "J floor <onboarding@resend.dev>";
-	const res = await fetch("https://api.resend.com/emails", {
+	const response = await fetch("https://api.resend.com/emails", {
 		method: "POST",
 		headers: {
 			Authorization: `Bearer ${apiKey}`,
@@ -44,19 +44,19 @@ export async function sendEmail(opts: SendEmailArgs): Promise<boolean> {
 		},
 		body: JSON.stringify({
 			from,
-			to: opts.to,
-			subject: opts.subject,
-			html: opts.html,
-			...(opts.text ? { text: opts.text } : {}),
-			...(opts.attachments?.length
-				? { attachments: opts.attachments }
+			to: options.to,
+			subject: options.subject,
+			html: options.html,
+			...(options.text ? { text: options.text } : {}),
+			...(options.attachments?.length
+				? { attachments: options.attachments }
 				: {}),
 		}),
 	});
-	if (!res.ok) {
+	if (!response.ok) {
 		// eslint-disable-next-line no-console -- surface delivery failures in the Convex logs
 		console.error(
-			`[email] Resend failed (${String(res.status)}) to ${opts.to}: ${opts.subject}`
+			`[email] Resend failed (${String(response.status)}) to ${options.to}: ${options.subject}`
 		);
 		return false;
 	}

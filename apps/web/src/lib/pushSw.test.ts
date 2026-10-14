@@ -34,6 +34,7 @@ beforeEach(() => {
 		clients: { matchAll, openWindow },
 		location: { origin: ORIGIN },
 	};
+	// eslint-disable-next-line sonarjs/code-eval -- evaluating the worker script against a fake `self` is the point of this test
 	runInNewContext(SCRIPT, { self: fakeSelf, URL, String });
 });
 
@@ -43,8 +44,8 @@ function waitUntilOf(): {
 } {
 	let pending: Promise<unknown> = Promise.resolve();
 	const event: Record<string, unknown> = {
-		waitUntil: (p: Promise<unknown>) => {
-			pending = p;
+		waitUntil: (promise: Promise<unknown>) => {
+			pending = promise;
 		},
 	};
 	return { event, done: () => pending };
@@ -106,14 +107,14 @@ describe("push handler", () => {
 	});
 });
 
-describe("notificationclick handler", () => {
-	async function click(url: unknown) {
-		const { event, done } = waitUntilOf();
-		event.notification = { close: vi.fn(), data: { url } };
-		handlers.get("notificationclick")?.(event);
-		await done();
-	}
+async function click(url: unknown) {
+	const { event, done } = waitUntilOf();
+	event.notification = { close: vi.fn(), data: { url } };
+	handlers.get("notificationclick")?.(event);
+	await done();
+}
 
+describe("notificationclick handler", () => {
 	test("opens a same-origin target", async () => {
 		await click("/tasks?x=1");
 		expect(openWindow).toHaveBeenCalledWith(`${ORIGIN}/tasks?x=1`);
@@ -125,7 +126,7 @@ describe("notificationclick handler", () => {
 	});
 
 	test("falls back to the root for an unparseable url", async () => {
-		await click("http://[bad");
+		await click("https://[bad");
 		expect(openWindow).toHaveBeenCalledWith(`${ORIGIN}/`);
 	});
 

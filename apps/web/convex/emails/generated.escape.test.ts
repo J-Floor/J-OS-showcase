@@ -22,9 +22,9 @@ function hostileProps(): Record<string, unknown> {
 }
 
 describe("every generated email template escapes hostile values", () => {
-	const templates = Object.entries(modules).map(([path, mod]) => {
+	const templates = Object.entries(modules).map(([path, module_]) => {
 		const name = path.replace(/^.*\//, "").replace(/\.ts$/, "");
-		return [name, mod[name] as Template] as const;
+		return [name, module_[name] as Template] as const;
 	});
 
 	it("finds the templates", () => {
@@ -36,7 +36,8 @@ describe("every generated email template escapes hostile values", () => {
 		expect(html).not.toContain("<script>");
 		expect(html).not.toContain(`"'&`);
 		expect(html).toContain(ESCAPED);
-		for (const tag of html.match(/<[a-zA-Z][^>]*>/g) ?? []) {
+		const tags = html.match(/<[a-zA-Z][^>]*>/g) ?? [];
+		for (const tag of tags) {
 			expect(tag.split('"').length % 2).toBe(1);
 		}
 		expect(text).not.toContain("&lt;");

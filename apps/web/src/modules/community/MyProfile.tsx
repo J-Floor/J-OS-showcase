@@ -1,8 +1,10 @@
 import { Input, PropertyRow, Query, SkeletonList } from "@j-os/design-system";
+import type { FunctionReturnType } from "convex/server";
 import { useMutation } from "convex-solidjs";
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, For, Show, type Accessor } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
+import { MAX_LINKS } from "../../../convex/lib/safeUrl.ts";
 import { useQuery } from "../../shared/data/useQuery.ts";
 import { ICONS } from "../../shared/icons.ts";
 import { buildLinks } from "../signup/links.ts";
@@ -10,7 +12,7 @@ import { buildLinks } from "../signup/links.ts";
 import styles from "./MyProfile.module.scss";
 import {
 	CompanyField,
-	DescriptionField,
+	DescriptionRow,
 	FundingStageField,
 	PhoneField,
 	ProductStageField,
@@ -18,7 +20,21 @@ import {
 	VerticalField,
 } from "./ProfileFields.tsx";
 
+const LINK_SLOTS = [...Array.from({ length: MAX_LINKS }).keys()];
+const OPTIONAL_LINK_SLOTS = LINK_SLOTS.slice(1);
 const PROFILE_SKELETON_ROWS = 6;
+
+type CurrentPerson = NonNullable<
+	FunctionReturnType<typeof api.people.getCurrentPerson>
+>;
+
+// A `type="tel"`/text input isn't sanitised by the browser (tel only hints
+// the mobile keypad), so drop anything that isn't a phone character before
+// saving — `+`, digits, spaces, hyphens, parens, matching the lenient
+// `isValidPhone` rule the sign-up form validates against.
+function sanitizePhone(value: string): string {
+	return value.replaceAll(/[^\d+()\s-]/g, "");
+}
 
 /**
  * A non-board member's own editable profile. Reads the caller's live row from
@@ -34,13 +50,6 @@ export function MyProfile() {
 	function patch(fields: Record<string, unknown>): void {
 		void update.mutateAsync(fields);
 	}
-	// A `type="tel"`/text input isn't sanitised by the browser (tel only hints
-	// the mobile keypad), so drop anything that isn't a phone character before
-	// saving — `+`, digits, spaces, hyphens, parens, matching the lenient
-	// `isValidPhone` rule the sign-up form validates against.
-	function sanitizePhone(value: string): string {
-		return value.replace(/[^\d+()\s-]/g, "");
-	}
 	return (
 		<Query.Root data={me.data()}>
 			<Query.Skeleton>
@@ -50,71 +59,83 @@ export function MyProfile() {
 				<p>No profile found.</p>
 			</Query.Empty>
 			<Query.Content of={me.data()}>
-				{(p) => (
-					<div class={styles.form}>
-						<PropertyRow icon={ICONS.email} label="Email">
-							<span>{p().email}</span>
-						</PropertyRow>
-						<PropertyRow icon={ICONS.name} label="Name">
-							<span>
-								{`${p().firstName} ${p().lastName}`.trim()}
-							</span>
-						</PropertyRow>
-						<PhoneField
-							value={p().phone}
-							onCommit={(v) => {
-								patch({ phone: sanitizePhone(v) });
-							}}
-						/>
-						<CompanyField
-							label="Company"
-							value={p().venture?.name}
-							onCommit={(v) => {
-								patch({ ventureName: v });
-							}}
-						/>
-						<DescriptionField
-							value={p().venture?.description}
-							onCommit={(v) => {
-								patch({ description: v });
-							}}
-						/>
-						<VerticalField
-							value={p().vertical}
-							onCommit={(v) => {
-								patch({ vertical: v });
-							}}
-						/>
-						<ProductStageField
-							value={p().venture?.productStage}
-							onCommit={(v) => {
-								patch({ productStage: v });
-							}}
-						/>
-						<FundingStageField
-							value={p().venture?.fundingStage}
-							onCommit={(v) => {
-								patch({ fundingStage: v });
-							}}
-						/>
-						<TeamSizeField
-							value={p().venture?.teamSize}
-							onCommit={(v) => {
-								patch({ teamSize: v });
-							}}
-						/>
-						<PropertyRow icon={ICONS.link} label="Links">
-							<LinksEditor
-								initial={p().venture?.links ?? []}
-								onSave={(links) => {
-									patch({ links });
-								}}
-							/>
-						</PropertyRow>
-					</div>
-				)}
+				{(person) => <ProfileForm person={person} onPatch={patch} />}
 			</Query.Content>
 		</Query.Root>
+	);
+}
+
+/** The member's profile fields, each saved on commit through `onPatch`. Takes
+ *  the person as an accessor so a query push updates the fields in place. */
+function ProfileForm(props: {
+	person: Accessor<CurrentPerson>;
+	onPatch: (fields: Record<string, unknown>) => void;
+}) {
+	function person() {
+		return props.person();
+	}
+	return (
+		<div class={styles.form}>
+			<PropertyRow icon={ICONS.email} label="Email">
+				<span>{person().email}</span>
+			</PropertyRow>
+			<PropertyRow icon={ICONS.name} label="Name">
+				<span>
+					{`${person().firstName} ${person().lastName}`.trim()}
+				</span>
+			</PropertyRow>
+			<PhoneField
+				value={person().phone}
+				onCommit={(value) => {
+					props.onPatch({ phone: sanitizePhone(value) });
+				}}
+			/>
+			<CompanyField
+				label="Company"
+				value={person().venture?.name}
+				onCommit={(value) => {
+					props.onPatch({ ventureName: value });
+				}}
+			/>
+			<DescriptionRow
+				value={person().venture?.description}
+				onCommit={(value) => {
+					props.onPatch({ description: value });
+				}}
+			/>
+			<VerticalField
+				value={person().vertical}
+				onCommit={(value) => {
+					props.onPatch({ vertical: value });
+				}}
+			/>
+			<ProductStageField
+				value={person().venture?.productStage}
+				onCommit={(value) => {
+					props.onPatch({ productStage: value });
+				}}
+			/>
+			<FundingStageField
+				value={person().venture?.fundingStage}
+				onCommit={(value) => {
+					props.onPatch({ fundingStage: value });
+				}}
+			/>
+			<TeamSizeField
+				value={person().venture?.teamSize}
+				onCommit={(value) => {
+					props.onPatch({ teamSize: value });
+				}}
+			/>
+			<PropertyRow icon={ICONS.link} label="Links">
+				<LinksEditor
+					initial={person().venture?.links ?? []}
+					onSave={(links) => {
+						props.onPatch({ links });
+					}}
+				/>
+			</PropertyRow>
+		</div>
 	);
 }
 
@@ -132,12 +153,12 @@ function LinksEditor(props: {
 	initial: { label: string; url: string }[];
 	onSave: (links: { label: string; url: string }[]) => void;
 }) {
-	const seed = [0, 1, 2, 3].map((i) => props.initial[i]?.url ?? "");
+	const seed = LINK_SLOTS.map((index) => props.initial[index]?.url ?? "");
 	const [slots, setSlots] = createSignal<string[]>(seed);
-	function setSlot(i: number, value: string): void {
+	function setSlot(index: number, value: string): void {
 		setSlots((prev) => {
 			const next = [...prev];
-			next[i] = value;
+			next[index] = value;
 			return next;
 		});
 	}
@@ -152,21 +173,21 @@ function LinksEditor(props: {
 				placeholder="https://…"
 				leadingIconName={ICONS.link}
 				value={slots()[0]}
-				onValueChange={(e) => {
-					setSlot(0, e.currentTarget.value);
+				onValueChange={(event) => {
+					setSlot(0, event.currentTarget.value);
 				}}
 				onBlur={commit}
 			/>
-			<For each={[1, 2, 3]}>
-				{(i) => (
-					<Show when={slots()[i - 1].trim() !== ""}>
+			<For each={OPTIONAL_LINK_SLOTS}>
+				{(index) => (
+					<Show when={slots()[index - 1].trim() !== ""}>
 						<Input
 							type="url"
 							placeholder="https://… (optional)"
 							leadingIconName={ICONS.link}
-							value={slots()[i]}
-							onValueChange={(e) => {
-								setSlot(i, e.currentTarget.value);
+							value={slots()[index]}
+							onValueChange={(event) => {
+								setSlot(index, event.currentTarget.value);
 							}}
 							onBlur={commit}
 						/>

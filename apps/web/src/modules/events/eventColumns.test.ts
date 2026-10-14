@@ -12,7 +12,9 @@ const event = { startsAt: STARTS, endsAt: ENDS } as Doc<"events">;
 
 function column(key: string) {
 	return eventColumns().find(
-		(c) => (c.id ?? (c as { accessorKey?: string }).accessorKey) === key
+		(candidate) =>
+			(candidate.id ??
+				(candidate as { accessorKey?: string }).accessorKey) === key
 	);
 }
 

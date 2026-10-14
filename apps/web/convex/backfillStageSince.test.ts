@@ -23,14 +23,14 @@ const STAMP = 1_785_680_094_061;
 const DAY_MS = 86_400_000;
 
 async function seed(
-	t: Harness,
+	backend: Harness,
 	// Typed, not `Record<string, unknown>`: spreading an index signature into
 	// `insert` widens the whole document to `any`, and every read of it
 	// downstream stops being checked.
 	over: Partial<WithoutSystemFields<Doc<"people">>> = {}
 ): Promise<Id<"people">> {
-	const id: unknown = await t.run(async (ctx) =>
-		ctx.db.insert("people", {
+	const id: unknown = await backend.run(async (context) =>
+		context.db.insert("people", {
 			email: "grace@example.com",
 			firstName: "Grace",
 			lastName: "Hopper",
@@ -43,9 +43,9 @@ async function seed(
 	return id as Id<"people">;
 }
 
-async function stageSince(t: Harness, id: Id<"people">): Promise<number> {
-	const person = (await t.run(
-		async (ctx): Promise<unknown> => ctx.db.get(id)
+async function stageSince(backend: Harness, id: Id<"people">): Promise<number> {
+	const person = (await backend.run(
+		async (context): Promise<unknown> => context.db.get(id)
 	)) as Doc<"people"> | null;
 	if (person === null) throw new Error("person vanished");
 	return person.stageSince;
@@ -53,11 +53,11 @@ async function stageSince(t: Harness, id: Id<"people">): Promise<number> {
 
 describe("backfillStageSince", () => {
 	it("uses the event that put them in the state they are in", async () => {
-		const t = convexTest(schema, modules);
-		const id = await seed(t);
+		const backend = convexTest(schema, modules);
+		const id = await seed(backend);
 		const entered = STAMP - 40 * DAY_MS;
-		await t.run(async (ctx) => {
-			await ctx.db.insert("personEvents", {
+		await backend.run(async (context) => {
+			await context.db.insert("personEvents", {
 				personId: id,
 				at: entered,
 				kind: "transition",
@@ -68,7 +68,7 @@ describe("backfillStageSince", () => {
 			// a field. Taking the most recent event would date them from this
 			// instead, which is why the entering event has to win outright
 			// rather than merely tie.
-			await ctx.db.insert("personEvents", {
+			await context.db.insert("personEvents", {
 				personId: id,
 				at: STAMP - 3 * DAY_MS,
 				kind: "field_edit",
@@ -76,20 +76,20 @@ describe("backfillStageSince", () => {
 			});
 		});
 
-		await t.mutation(internal.backfillStageSince.run, {});
+		await backend.mutation(internal.backfillStageSince.run, {});
 
-		expect(await stageSince(t, id)).toBe(entered);
+		expect(await stageSince(backend, id)).toBe(entered);
 	});
 
 	it("falls back to the latest event for a state entered without one", async () => {
 		// `prospect.queued` is the case this exists for: you join the queue by
 		// verifying your email, so no event names the queue as its target and
 		// the verification is the moment they entered it.
-		const t = convexTest(schema, modules);
-		const id = await seed(t, { tier: "prospect", stage: "queued" });
+		const backend = convexTest(schema, modules);
+		const id = await seed(backend, { tier: "prospect", stage: "queued" });
 		const verified = STAMP - 12 * DAY_MS;
-		await t.run(async (ctx) => {
-			await ctx.db.insert("personEvents", {
+		await backend.run(async (context) => {
+			await context.db.insert("personEvents", {
 				personId: id,
 				at: verified,
 				kind: "transition",
@@ -98,44 +98,47 @@ describe("backfillStageSince", () => {
 			});
 		});
 
-		await t.mutation(internal.backfillStageSince.run, {});
+		await backend.mutation(internal.backfillStageSince.run, {});
 
-		expect(await stageSince(t, id)).toBe(verified);
+		expect(await stageSince(backend, id)).toBe(verified);
 	});
 
 	it("falls back to the dates on the row when there is no history at all", async () => {
-		const t = convexTest(schema, modules);
+		const backend = convexTest(schema, modules);
 		const verifiedAt = STAMP - 5 * DAY_MS;
-		const id = await seed(t, {
+		const id = await seed(backend, {
 			verifiedAt,
 			submittedAt: STAMP - 6 * DAY_MS,
 		});
 
-		await t.mutation(internal.backfillStageSince.run, {});
+		await backend.mutation(internal.backfillStageSince.run, {});
 
-		expect(await stageSince(t, id)).toBe(verifiedAt);
+		expect(await stageSince(backend, id)).toBe(verifiedAt);
 	});
 
 	it("leaves a row it knows nothing about, rather than restamping it", async () => {
 		// Nothing to recover FROM. Writing the cutover instant back over itself
 		// would claim a fact we do not have — and would leave the row matching
 		// the batch filter forever.
-		const t = convexTest(schema, modules);
-		const id = await seed(t);
+		const backend = convexTest(schema, modules);
+		const id = await seed(backend);
 
-		const result = await t.mutation(internal.backfillStageSince.run, {});
+		const result = await backend.mutation(
+			internal.backfillStageSince.run,
+			{}
+		);
 
 		expect(result).toMatchObject({ written: 0, unknown: 1 });
-		expect(await stageSince(t, id)).toBe(STAMP);
+		expect(await stageSince(backend, id)).toBe(STAMP);
 	});
 
 	it("never dates someone later than the cutover that stamped them", async () => {
 		// A future `stageSince` reads as a negative age, which `daysInStage`
 		// floors to 0 — the very "Today" this migration exists to remove.
-		const t = convexTest(schema, modules);
-		const id = await seed(t);
-		await t.run(async (ctx) => {
-			await ctx.db.insert("personEvents", {
+		const backend = convexTest(schema, modules);
+		const id = await seed(backend);
+		await backend.run(async (context) => {
+			await context.db.insert("personEvents", {
 				personId: id,
 				at: STAMP + 30 * DAY_MS,
 				kind: "transition",
@@ -144,17 +147,17 @@ describe("backfillStageSince", () => {
 			});
 		});
 
-		await t.mutation(internal.backfillStageSince.run, {});
+		await backend.mutation(internal.backfillStageSince.run, {});
 
-		expect(await stageSince(t, id)).toBe(STAMP);
+		expect(await stageSince(backend, id)).toBe(STAMP);
 	});
 
 	it("leaves a person whose stageSince is already real", async () => {
-		const t = convexTest(schema, modules);
+		const backend = convexTest(schema, modules);
 		const real = STAMP - 3 * DAY_MS;
-		const id = await seed(t, { stageSince: real });
-		await t.run(async (ctx) => {
-			await ctx.db.insert("personEvents", {
+		const id = await seed(backend, { stageSince: real });
+		await backend.run(async (context) => {
+			await context.db.insert("personEvents", {
 				personId: id,
 				at: STAMP - 99 * DAY_MS,
 				kind: "transition",
@@ -163,16 +166,16 @@ describe("backfillStageSince", () => {
 			});
 		});
 
-		await t.mutation(internal.backfillStageSince.run, {});
+		await backend.mutation(internal.backfillStageSince.run, {});
 
-		expect(await stageSince(t, id)).toBe(real);
+		expect(await stageSince(backend, id)).toBe(real);
 	});
 
 	it("does nothing the second time", async () => {
-		const t = convexTest(schema, modules);
-		const id = await seed(t);
-		await t.run(async (ctx) => {
-			await ctx.db.insert("personEvents", {
+		const backend = convexTest(schema, modules);
+		const id = await seed(backend);
+		await backend.run(async (context) => {
+			await context.db.insert("personEvents", {
 				personId: id,
 				at: STAMP - 7 * DAY_MS,
 				kind: "transition",
@@ -181,8 +184,11 @@ describe("backfillStageSince", () => {
 			});
 		});
 
-		await t.mutation(internal.backfillStageSince.run, {});
-		const second = await t.mutation(internal.backfillStageSince.run, {});
+		await backend.mutation(internal.backfillStageSince.run, {});
+		const second = await backend.mutation(
+			internal.backfillStageSince.run,
+			{}
+		);
 
 		expect(second.written).toBe(0);
 	});

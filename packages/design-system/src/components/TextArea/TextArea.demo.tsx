@@ -2,7 +2,7 @@ import { createSignal } from "solid-js";
 
 import { TextArea } from "@j-os/design-system";
 
-import type { Demo } from "../../../demo/types.ts";
+import { FIELD_STATE_CONTROLS, type Demo } from "../../../demo/types.ts";
 
 function TextAreaDemo(props: {
 	label: string;
@@ -51,10 +51,7 @@ export default {
 		placeholder: { type: "text", default: "Add a description…" },
 		helperText: { type: "text", default: "Markdown is supported." },
 		errorText: { type: "text", default: "This field is required." },
-		invalid: { type: "boolean", default: false },
-		required: { type: "boolean", default: false },
-		disabled: { type: "boolean", default: false },
-		readOnly: { type: "boolean", default: false },
+		...FIELD_STATE_CONTROLS,
 	},
 	presets: {
 		Error: { invalid: true },

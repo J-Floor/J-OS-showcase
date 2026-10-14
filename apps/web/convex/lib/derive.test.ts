@@ -9,7 +9,7 @@ import {
 	keepsBreakGlassKey,
 	isLiveStage,
 	personStatus,
-	windowOpen,
+	isWindowOpen,
 	type LifecyclePerson,
 } from "./derive.ts";
 
@@ -84,15 +84,17 @@ describe("compliance", () => {
 	});
 });
 
-describe("windowOpen", () => {
+describe("isWindowOpen", () => {
 	it("is open when there is no window at all", () => {
-		expect(windowOpen(person(), NOW)).toBe(true);
+		expect(isWindowOpen(person(), NOW)).toBe(true);
 	});
 
 	it("is closed before the window starts and after it ends", () => {
-		expect(windowOpen(person({ accessFrom: NOW + DAY }), NOW)).toBe(false);
-		expect(windowOpen(person({ accessUntil: NOW - 1 }), NOW)).toBe(false);
-		expect(windowOpen(person({ accessUntil: NOW }), NOW)).toBe(false);
+		expect(isWindowOpen(person({ accessFrom: NOW + DAY }), NOW)).toBe(
+			false
+		);
+		expect(isWindowOpen(person({ accessUntil: NOW - 1 }), NOW)).toBe(false);
+		expect(isWindowOpen(person({ accessUntil: NOW }), NOW)).toBe(false);
 	});
 });
 
@@ -171,7 +173,7 @@ describe("personStatus", () => {
 		const status = personStatus(person({ stage: "onboarding" }), [], NOW);
 		// The agreement, and the board's own outstanding to-do. No tier, no
 		// stage — those are the group header's job.
-		expect(status.flags.map((f) => f.id)).toEqual([
+		expect(status.flags.map((flag) => flag.id)).toEqual([
 			"agreement_missing",
 			"board_task_pending",
 		]);
@@ -194,7 +196,7 @@ describe("personStatus", () => {
 
 	it("still reports tier, stage and door as FACTS, for the drawer", () => {
 		const status = personStatus(person(), ["member"], NOW);
-		expect(status.facts.map((f) => f.id)).toEqual([
+		expect(status.facts.map((fact) => fact.id)).toEqual([
 			"role",
 			"state",
 			"since",
@@ -210,7 +212,9 @@ describe("personStatus", () => {
 		// No end date, so no line about one. A member's access does not expire,
 		// and "Access until —" on every settled row is the kind of permanently
 		// empty line that teaches the reader to skip the section.
-		expect(status.facts.map((f) => f.id)).not.toContain("access_until");
+		expect(status.facts.map((fact) => fact.id)).not.toContain(
+			"access_until"
+		);
 	});
 
 	it("reports the end of a window only for the people who have one", () => {
@@ -225,14 +229,14 @@ describe("personStatus", () => {
 	});
 
 	it("names the board member who suspended the door when it knows them", () => {
-		const p = person({
+		const fixture = person({
 			door: { override: "force_off", reason: "under review" },
 		});
 		expect(
-			personStatus(p, ["member"], NOW, "Sara Kim").flags
+			personStatus(fixture, ["member"], NOW, "Sara Kim").flags
 		).toContainEqual({ id: "door_suspended", actorName: "Sara Kim" });
 		// Unresolved: the flag still fires, and the UI words the fallback.
-		expect(personStatus(p, ["member"], NOW).flags).toContainEqual({
+		expect(personStatus(fixture, ["member"], NOW).flags).toContainEqual({
 			id: "door_suspended",
 			actorName: undefined,
 		});
@@ -246,14 +250,14 @@ describe("personStatus", () => {
 		// read first and believed. `memberGroup`/`guestStatus` now split alumni
 		// out, so the flag has nothing left to correct.
 		for (const reason of ["left", "kicked"] as const) {
-			const p = person({
+			const fixture = person({
 				tier: "former",
 				stage: "active",
 				formerReason: reason,
 			});
-			expect(personStatus(p, [], NOW).flags).toEqual([]);
+			expect(personStatus(fixture, [], NOW).flags).toEqual([]);
 			// The drawer still spells it out, since no heading is beside it.
-			expect(personStatus(p, [], NOW).facts).toContainEqual({
+			expect(personStatus(fixture, [], NOW).facts).toContainEqual({
 				id: "former",
 				reason,
 			});
@@ -268,15 +272,15 @@ describe("personStatus", () => {
 		const readmitted = settled({ formerReason: "kicked" });
 		const status = personStatus(readmitted, ["member"], NOW);
 		expect(status.flags).toEqual([]);
-		expect(status.facts.map((f) => f.id)).not.toContain("former");
+		expect(status.facts.map((fact) => fact.id)).not.toContain("former");
 	});
 
 	it("lists an open board task, with its id, for someone in onboarding — and it never blocks them", () => {
-		const p = person({
+		const fixture = person({
 			stage: "onboarding",
 			onboarding: { steps: {}, boardSteps: {} },
 		});
-		const status = personStatus(p, ["member"], NOW);
+		const status = personStatus(fixture, ["member"], NOW);
 		expect(status.boardTasks).toContainEqual({
 			id: "whatsapp",
 			label: "Add to WhatsApp group",
@@ -286,18 +290,18 @@ describe("personStatus", () => {
 		expect(status.flags).toEqual([
 			{ id: "board_task_pending", step: "whatsapp" },
 		]);
-		expect(access(p, NOW)).toBe("granted");
+		expect(access(fixture, NOW)).toBe("granted");
 	});
 
 	it("clears the board task once the board member has completed it", () => {
-		const p = person({
+		const fixture = person({
 			stage: "onboarding",
 			onboarding: {
 				steps: {},
 				boardSteps: { whatsapp: { completedAt: NOW } },
 			},
 		});
-		expect(personStatus(p, ["member"], NOW).boardTasks).toEqual([]);
+		expect(personStatus(fixture, ["member"], NOW).boardTasks).toEqual([]);
 	});
 
 	it("keeps the board task open after activation until it is ticked", () => {
@@ -329,13 +333,13 @@ describe("personStatus", () => {
 	});
 
 	it("has nothing outstanding for a fully compliant active member", () => {
-		const p = person({
+		const fixture = person({
 			onboarding: {
 				steps: {},
 				boardSteps: { whatsapp: { completedAt: NOW } },
 			},
 		});
-		const status = personStatus(p, ["member"], NOW);
+		const status = personStatus(fixture, ["member"], NOW);
 		expect(status.flags).toEqual([]);
 		expect(status.boardTasks).toEqual([]);
 		expect(status.tone).toBe("success");
@@ -440,8 +444,8 @@ describe("doorOpensFor", () => {
 			false,
 		],
 		["a former member", person({ tier: "former", stage: "active" }), false],
-	])("%s", (_label, p, expected) => {
-		expect(doorOpensFor(p, NOW)).toBe(expected);
+	])("%s", (_label, fixture, expected) => {
+		expect(doorOpensFor(fixture, NOW)).toBe(expected);
 	});
 
 	it("opens for an active member and stays shut for a force_off", () => {

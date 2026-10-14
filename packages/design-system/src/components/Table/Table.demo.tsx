@@ -1,7 +1,7 @@
 import { Show, createSignal, type JSX } from "solid-js";
 import { Button, Icon, Table } from "@j-os/design-system";
 
-import type { JfColumnDef } from "@j-os/design-system";
+import type { JfColumnDefinition } from "@j-os/design-system";
 
 import type { Demo } from "../../../demo/types.ts";
 
@@ -12,7 +12,7 @@ type Entry = { id: string; batch: string };
 const ENDLESS_CHUNK = 50;
 const ENDLESS_MAX = 500;
 
-const endlessColumns: JfColumnDef<Entry>[] = [
+const endlessColumns: JfColumnDefinition<Entry>[] = [
 	{
 		id: "batch",
 		header: "Batch",
@@ -64,7 +64,7 @@ type Person = {
  *  share of the rest), `"content"`, a fixed width, and a floor with a weight
  *  for free text that should wrap rather than grow. The role column stores
  *  keys and shows (and is sized by) its option labels. */
-const columns: JfColumnDef<Person>[] = [
+const columns: JfColumnDefinition<Person>[] = [
 	{ accessorKey: "name", header: "Name", dataType: "string" },
 	{
 		accessorKey: "role",

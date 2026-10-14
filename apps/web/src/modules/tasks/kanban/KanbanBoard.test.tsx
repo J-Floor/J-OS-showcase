@@ -16,7 +16,7 @@ beforeAll(() => {
 
 vi.mock("convex-solidjs", () => ({
 	useMutation: () => ({ mutate: vi.fn().mockResolvedValue(undefined) }),
-	useQuery: () => ({ data: () => undefined }),
+	useQuery: () => ({ data: () => {} }),
 }));
 
 import { KanbanBoard } from "./KanbanBoard.tsx";
@@ -48,7 +48,7 @@ test("tasks empty: counts read 0 and no skeletons", () => {
 	const { container } = board([]);
 	expect(container.querySelectorAll("[data-skeleton-list]")).toHaveLength(0);
 	const zeros = [...container.querySelectorAll("header span")].filter(
-		(s) => s.textContent.trim() === "0"
+		(element) => element.textContent.trim() === "0"
 	);
 	expect(zeros).toHaveLength(3);
 });

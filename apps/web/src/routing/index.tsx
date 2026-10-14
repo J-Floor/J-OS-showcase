@@ -43,17 +43,17 @@ export function ModuleRoutes() {
 	// from the sidebar.
 	return (
 		<For each={modules}>
-			{(m) => (
+			{(entry) => (
 				<Route
-					path={m.path}
-					info={{ title: m.label }}
+					path={entry.path}
+					info={{ title: entry.label }}
 					component={() => {
-						const View = m.view;
+						const View = entry.view;
 						return (
 							<AppErrorBoundary>
 								<Can
 									I="view"
-									the={m.subject}
+									the={entry.subject}
 									fallback={<NoAccess />}
 								>
 									<View />
@@ -67,9 +67,11 @@ export function ModuleRoutes() {
 	);
 }
 
+const SPLASH_MIN_MS = 900;
+
 // Routes worth remembering as a landing target. `/` and `/signin` are excluded
 // so we never redirect into a loop or away from a signed-out user.
-const MODULE_PATHS = new Set(modules.map((m) => m.path));
+const MODULE_PATHS = new Set(modules.map((entry) => entry.path));
 
 /**
  * Index route (`/`): send the user to the last module route they viewed,
@@ -107,8 +109,8 @@ export function PageTitleTracker() {
 	const matches = useCurrentMatches();
 	createEffect(() => {
 		const title = matches()
-			.map((m) => m.route.info?.title as string | undefined)
-			.filter((t): t is string => Boolean(t))
+			.map((entry) => entry.route.info?.title as string | undefined)
+			.filter((candidate): candidate is string => Boolean(candidate))
 			.at(-1);
 		document.title = title ? `${APP_NAME} | ${title}` : APP_NAME;
 	});
@@ -125,7 +127,7 @@ export function LastPathTracker() {
 	createEffect(() => {
 		const path = location.pathname;
 		if (MODULE_PATHS.has(path))
-			void setLastPath.mutateAsync({ path }).catch(() => undefined);
+			void setLastPath.mutateAsync({ path }).catch(() => {});
 	});
 	return null;
 }
@@ -150,22 +152,25 @@ export function RoleGate(props: ParentProps) {
 	// starts when the splash first mounts (app start).
 	const [minElapsed, setMinElapsed] = createSignal(false);
 	onMount(() => {
-		const timer = setTimeout(() => setMinElapsed(true), 900);
+		const timer = setTimeout(() => setMinElapsed(true), SPLASH_MIN_MS);
 		onCleanup(() => {
 			clearTimeout(timer);
 		});
 	});
 
 	function showSplash(): boolean {
-		if (session().isPending || ottPending()) return true;
-		if (!session().data) return false; // signed out → redirect, no splash hold
-		// Signed in: keep the splash until both queries' first result AND the
-		// minimum animation time. `keepPreviousData` keeps `data()` defined across
-		// later refetches, so this never re-splashes mid-session (e.g. on nav).
+		// Signed out → redirect, no splash hold. Signed in: keep the splash
+		// until both queries' first result AND the minimum animation time.
+		// The `useQuery` wrapper's default `keepPreviousData` keeps `data()`
+		// defined across later refetches, so this never re-splashes
+		// mid-session (e.g. on nav).
 		return (
-			role.data() === undefined ||
-			onboarding.data() === undefined ||
-			!minElapsed()
+			session().isPending ||
+			ottPending() ||
+			(Boolean(session().data) &&
+				(role.data() === undefined ||
+					onboarding.data() === undefined ||
+					!minElapsed()))
 		);
 	}
 

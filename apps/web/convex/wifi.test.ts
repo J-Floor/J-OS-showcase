@@ -9,9 +9,9 @@ const modules = import.meta.glob("./**/*.*s");
 const MEMBER_EMAIL = "member@example.com";
 const BOARD_EMAIL = "board@example.com";
 
-async function seedMember(t: ReturnType<typeof convexTest>) {
-	await t.run((ctx) =>
-		ctx.db.insert("people", {
+async function seedMember(backend: ReturnType<typeof convexTest>) {
+	await backend.run((context) =>
+		context.db.insert("people", {
 			email: MEMBER_EMAIL,
 			firstName: "Mem",
 			lastName: "Ber",
@@ -20,12 +20,12 @@ async function seedMember(t: ReturnType<typeof convexTest>) {
 			stageSince: Date.now(),
 		})
 	);
-	return t.withIdentity({ email: MEMBER_EMAIL });
+	return backend.withIdentity({ email: MEMBER_EMAIL });
 }
 
-async function seedBoard(t: ReturnType<typeof convexTest>) {
-	await t.run((ctx) =>
-		ctx.db.insert("people", {
+async function seedBoard(backend: ReturnType<typeof convexTest>) {
+	await backend.run((context) =>
+		context.db.insert("people", {
 			email: BOARD_EMAIL,
 			firstName: "Board",
 			lastName: "Member",
@@ -34,23 +34,23 @@ async function seedBoard(t: ReturnType<typeof convexTest>) {
 			stageSince: Date.now(),
 		})
 	);
-	return t.withIdentity({ email: BOARD_EMAIL });
+	return backend.withIdentity({ email: BOARD_EMAIL });
 }
 
 describe("wifi.get", () => {
 	it("throws when no wifiConfig row has been written", async () => {
-		const t = convexTest(schema, modules);
-		const asMember = await seedMember(t);
+		const backend = convexTest(schema, modules);
+		const asMember = await seedMember(backend);
 		await expect(asMember.query(api.wifi.get, {})).rejects.toThrow(
 			"Wi-Fi not configured"
 		);
 	});
 
 	it("returns the wifiConfig row when one has been written", async () => {
-		const t = convexTest(schema, modules);
-		const asMember = await seedMember(t);
-		await t.run((ctx) =>
-			ctx.db.insert("wifiConfig", {
+		const backend = convexTest(schema, modules);
+		const asMember = await seedMember(backend);
+		await backend.run((context) =>
+			context.db.insert("wifiConfig", {
 				ssid: "Custom SSID",
 				password: "custom-pass",
 			})
@@ -65,24 +65,26 @@ describe("wifi.get", () => {
 	});
 
 	it("rejects an unauthenticated caller", async () => {
-		const t = convexTest(schema, modules);
-		await expect(t.query(api.wifi.get, {})).rejects.toThrow(
+		const backend = convexTest(schema, modules);
+		await expect(backend.query(api.wifi.get, {})).rejects.toThrow(
 			"Not authenticated"
 		);
 	});
 
 	it("rejects a signed-in identity with no person row (open sign-up)", async () => {
-		const t = convexTest(schema, modules);
-		const asStranger = t.withIdentity({ email: "stranger@example.com" });
+		const backend = convexTest(schema, modules);
+		const asStranger = backend.withIdentity({
+			email: "stranger@example.com",
+		});
 		await expect(asStranger.query(api.wifi.get, {})).rejects.toThrow(
 			"Forbidden"
 		);
 	});
 
 	it("rejects a visitor tier (registration-only, no space access)", async () => {
-		const t = convexTest(schema, modules);
-		await t.run((ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		await backend.run((context) =>
+			context.db.insert("people", {
 				email: "vera@example.com",
 				firstName: "Vera",
 				lastName: "Visitor",
@@ -91,7 +93,7 @@ describe("wifi.get", () => {
 				stageSince: Date.now(),
 			})
 		);
-		const asVisitor = t.withIdentity({ email: "vera@example.com" });
+		const asVisitor = backend.withIdentity({ email: "vera@example.com" });
 		await expect(asVisitor.query(api.wifi.get, {})).rejects.toThrow(
 			"Forbidden"
 		);
@@ -100,8 +102,8 @@ describe("wifi.get", () => {
 
 describe("wifi.update", () => {
 	it("rejects a non-board caller (requireRole)", async () => {
-		const t = convexTest(schema, modules);
-		const asMember = await seedMember(t);
+		const backend = convexTest(schema, modules);
+		const asMember = await seedMember(backend);
 		await expect(
 			asMember.mutation(api.wifi.update, {
 				ssid: "New SSID",
@@ -111,8 +113,8 @@ describe("wifi.update", () => {
 	});
 
 	it("rejects an empty ssid after trim", async () => {
-		const t = convexTest(schema, modules);
-		const asBoard = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const asBoard = await seedBoard(backend);
 		await expect(
 			asBoard.mutation(api.wifi.update, {
 				ssid: "   ",
@@ -122,8 +124,8 @@ describe("wifi.update", () => {
 	});
 
 	it("rejects an empty password after trim", async () => {
-		const t = convexTest(schema, modules);
-		const asBoard = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const asBoard = await seedBoard(backend);
 		await expect(
 			asBoard.mutation(api.wifi.update, {
 				ssid: "New SSID",
@@ -133,8 +135,8 @@ describe("wifi.update", () => {
 	});
 
 	it("upserts the singleton row, and get reflects it after", async () => {
-		const t = convexTest(schema, modules);
-		const asBoard = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const asBoard = await seedBoard(backend);
 
 		await asBoard.mutation(api.wifi.update, {
 			ssid: "First SSID",
@@ -155,7 +157,9 @@ describe("wifi.update", () => {
 			ssid: "Second SSID",
 			password: "second-pass",
 		});
-		const rows = await t.run((ctx) => ctx.db.query("wifiConfig").collect());
+		const rows = await backend.run((context) =>
+			context.db.query("wifiConfig").collect()
+		);
 		expect(rows).toHaveLength(1);
 	});
 
@@ -163,8 +167,8 @@ describe("wifi.update", () => {
 		// A WPA passphrase may legitimately contain leading/trailing spaces;
 		// update validates it is non-blank but must NOT trim what it stores. If a
 		// future change trims args.password, this goes red.
-		const t = convexTest(schema, modules);
-		const asBoard = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const asBoard = await seedBoard(backend);
 		await asBoard.mutation(api.wifi.update, {
 			ssid: "Spaced SSID",
 			password: "  pass with spaces  ",
@@ -176,8 +180,8 @@ describe("wifi.update", () => {
 	});
 
 	it("rejects an over-long ssid and password", async () => {
-		const t = convexTest(schema, modules);
-		const asBoard = await seedBoard(t);
+		const backend = convexTest(schema, modules);
+		const asBoard = await seedBoard(backend);
 		await expect(
 			asBoard.mutation(api.wifi.update, {
 				ssid: "s".repeat(65),

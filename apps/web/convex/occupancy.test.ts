@@ -7,16 +7,16 @@ import schema from "./schema.ts";
 const modules = import.meta.glob("./**/*.*s");
 
 it("refuses a caller with no app role", async () => {
-	const t = convexTest(schema, modules);
-	await expect(t.action(api.occupancy.current, {})).rejects.toThrow(
+	const backend = convexTest(schema, modules);
+	await expect(backend.action(api.occupancy.current, {})).rejects.toThrow(
 		/Forbidden/
 	);
 });
 
 it("answers a member", async () => {
-	const t = convexTest(schema, modules);
-	await t.run((ctx) =>
-		ctx.db.insert("people", {
+	const backend = convexTest(schema, modules);
+	await backend.run((context) =>
+		context.db.insert("people", {
 			email: "mem@example.com",
 			firstName: "Mem",
 			lastName: "",
@@ -25,7 +25,7 @@ it("answers a member", async () => {
 			stageSince: Date.now(),
 		})
 	);
-	const occ = await t
+	const occ = await backend
 		.withIdentity({ email: "mem@example.com" })
 		.action(api.occupancy.current, {});
 	// No provider is active: occupancy is disabled, not unknown.
@@ -33,9 +33,9 @@ it("answers a member", async () => {
 });
 
 it("refuses staff: occupancy is for the community", async () => {
-	const t = convexTest(schema, modules);
-	await t.run((ctx) =>
-		ctx.db.insert("people", {
+	const backend = convexTest(schema, modules);
+	await backend.run((context) =>
+		context.db.insert("people", {
 			email: "staff@example.com",
 			firstName: "Sta",
 			lastName: "",
@@ -45,7 +45,7 @@ it("refuses staff: occupancy is for the community", async () => {
 		})
 	);
 	await expect(
-		t
+		backend
 			.withIdentity({ email: "staff@example.com" })
 			.action(api.occupancy.current, {})
 	).rejects.toThrow(/Forbidden/);

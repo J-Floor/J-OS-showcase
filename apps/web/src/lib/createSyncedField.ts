@@ -18,6 +18,8 @@ export type SyncedField<T> = {
 	flush: () => void;
 };
 
+const DEFAULT_DEBOUNCE_MS = 400;
+
 export type SyncedFieldOptions<T> = {
 	/** The authoritative value from the backend (e.g. a query accessor). */
 	remote: Accessor<T>;
@@ -53,32 +55,36 @@ export type SyncedFieldOptions<T> = {
  * (no locks, no CRDT).
  */
 export function createSyncedField<T>(
-	opts: SyncedFieldOptions<T>
+	options: SyncedFieldOptions<T>
 ): SyncedField<T> {
-	const equals = opts.equals ?? ((a: T, b: T) => Object.is(a, b));
-	const debounceMs = opts.debounceMs ?? 400;
+	const isEqual =
+		options.equals ?? ((left: T, right: T) => Object.is(left, right));
+	const debounceMs = options.debounceMs ?? DEFAULT_DEBOUNCE_MS;
 
-	const [local, setLocal] = createSignal<T>(untrack(opts.remote));
+	const [local, setLocal] = createSignal<T>(untrack(options.remote));
 	// Last server value we reconciled against (see the doc comment).
-	let synced: T = untrack(opts.remote);
+	let synced: T = untrack(options.remote);
 
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let pending: { value: T } | undefined;
 
 	function clearTimer(): void {
-		if (timer !== undefined) {
-			clearTimeout(timer);
-			timer = undefined;
+		if (timer === undefined) {
+			return;
 		}
+
+		clearTimeout(timer);
+		timer = undefined;
 	}
 
 	function flush(): void {
 		clearTimer();
-		if (pending) {
-			const value = pending.value;
-			pending = undefined;
-			opts.write(value);
+		if (!pending) {
+			return;
 		}
+		const value = pending.value;
+		pending = undefined;
+		options.write(value);
 	}
 
 	function set(value: T): void {
@@ -96,12 +102,12 @@ export function createSyncedField<T>(
 	// pending for the previous record and snap to the new remote value. Read
 	// `remote` untracked so this effect depends only on `key`.
 	createEffect(
-		on(opts.key, () => {
+		on(options.key, () => {
 			clearTimer();
 			pending = undefined;
-			const r = untrack(opts.remote);
-			synced = r;
-			setLocal(() => r);
+			const remoteValue = untrack(options.remote);
+			synced = remoteValue;
+			setLocal(() => remoteValue);
 		})
 	);
 
@@ -109,12 +115,12 @@ export function createSyncedField<T>(
 	// value); hold the user's in-flight edit otherwise.
 	createEffect(
 		on(
-			opts.remote,
-			(r) => {
-				if (equals(untrack(local), synced)) {
-					setLocal(() => r);
+			options.remote,
+			(remoteValue) => {
+				if (isEqual(untrack(local), synced)) {
+					setLocal(() => remoteValue);
 				}
-				synced = r;
+				synced = remoteValue;
 			},
 			{ defer: true }
 		)
@@ -129,8 +135,11 @@ export function createSyncedField<T>(
 /** Shallow element-wise array equality, for `createSyncedField`'s `equals` on
  * array-valued fields (e.g. a list of assignee ids). */
 export function shallowArrayEquals<T>(
-	a: readonly T[],
-	b: readonly T[]
+	left: readonly T[],
+	right: readonly T[]
 ): boolean {
-	return a.length === b.length && a.every((x, i) => x === b[i]);
+	return (
+		left.length === right.length &&
+		left.every((item, index) => item === right[index])
+	);
 }

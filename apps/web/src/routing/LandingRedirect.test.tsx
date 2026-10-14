@@ -15,7 +15,7 @@ vi.mock("convex-solidjs", () => ({
 vi.mock("../lib/convex.ts", () => ({
 	convex: {},
 	ottPending: () => false,
-	bindConvexAuth: () => undefined,
+	bindConvexAuth: () => {},
 }));
 vi.mock("../lib/auth.ts", () => ({ authClient: {} }));
 

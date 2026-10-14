@@ -10,7 +10,7 @@ import styles from "./Tabs.module.scss";
  * (`get`/`set`), so `Tabs` itself stays router-agnostic. `K` is the union of
  * valid tab values, so `fallback`/`keys`/`set` are all checked against it.
  */
-export type TabsUrlParam<K extends string = string> = {
+type TabsUrlParameter<K extends string = string> = {
 	/** Reads the current raw param value (a router getter). A repeated param
 	 * (`string[]`) or absent param falls back. */
 	get: () => string | string[] | undefined;
@@ -23,21 +23,21 @@ export type TabsUrlParam<K extends string = string> = {
 };
 
 function Root<K extends string = string>(
-	props: ArkTabs.RootProps & { value?: K; urlParam?: TabsUrlParam<K> }
+	props: ArkTabs.RootProps & { value?: K; urlParam?: TabsUrlParameter<K> }
 ) {
 	const [local, rest] = splitProps(props, ["urlParam"]);
 
 	// With `urlParam`, the active tab is derived from the URL and writes flow
 	// back through the injected setter. Without it, behave as a plain Ark Root.
 	function value(): string | undefined {
-		const urlParam = local.urlParam;
-		if (!urlParam) return rest.value ?? undefined;
-		const current = urlParam.get();
+		const urlParameter = local.urlParam;
+		if (!urlParameter) return rest.value ?? undefined;
+		const current = urlParameter.get();
 		return typeof current === "string" &&
-			(!urlParam.keys ||
-				(urlParam.keys as readonly string[]).includes(current))
+			(!urlParameter.keys ||
+				(urlParameter.keys as readonly string[]).includes(current))
 			? current
-			: urlParam.fallback;
+			: urlParameter.fallback;
 	}
 
 	return (

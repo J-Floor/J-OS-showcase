@@ -79,6 +79,41 @@ export type ItemTitleProps = Omit<ArkAccordion.ItemTriggerProps, "children"> & {
 		"itemTrigger" | "itemIndicator" | "itemTitle" | "itemSubtitle"
 	>;
 
+type TitleTextProps = Pick<
+	ItemTitleProps,
+	"children" | "subtitle" | "class" | "classOverride"
+>;
+
+/** The title, or the title over its subtitle. */
+function TitleText(props: { local: TitleTextProps }): JSX.Element {
+	return (
+		<Show
+			when={props.local.subtitle}
+			fallback={
+				<span
+					class={clsx(
+						getPartStyles(styles, props.local, "itemTitle"),
+						props.local.class
+					)}
+				>
+					{props.local.children}
+				</span>
+			}
+		>
+			<span class={clsx(styles.itemHeader, props.local.class)}>
+				<span class={getPartStyles(styles, props.local, "itemTitle")}>
+					{props.local.children}
+				</span>
+				<span
+					class={getPartStyles(styles, props.local, "itemSubtitle")}
+				>
+					{props.local.subtitle}
+				</span>
+			</span>
+		</Show>
+	);
+}
+
 function ItemTitle(props: ItemTitleProps): JSX.Element {
 	const [local, triggerRest] = splitProps(props, [
 		"children",
@@ -120,49 +155,7 @@ function ItemTitle(props: ItemTitleProps): JSX.Element {
 											: ICONS.expandAll}
 									</Icon>
 								</ArkAccordion.ItemIndicator>
-								<Show
-									when={local.subtitle}
-									fallback={
-										<span
-											class={clsx(
-												getPartStyles(
-													styles,
-													local,
-													"itemTitle"
-												),
-												local.class
-											)}
-										>
-											{local.children}
-										</span>
-									}
-								>
-									<span
-										class={clsx(
-											styles.itemHeader,
-											local.class
-										)}
-									>
-										<span
-											class={getPartStyles(
-												styles,
-												local,
-												"itemTitle"
-											)}
-										>
-											{local.children}
-										</span>
-										<span
-											class={getPartStyles(
-												styles,
-												local,
-												"itemSubtitle"
-											)}
-										>
-											{local.subtitle}
-										</span>
-									</span>
-								</Show>
+								<TitleText local={local} />
 								<Show when={local.shortcut} keyed>
 									{(shortcut) => (
 										<Kbd

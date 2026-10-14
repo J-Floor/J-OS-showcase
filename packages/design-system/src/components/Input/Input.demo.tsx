@@ -1,6 +1,6 @@
 import { Input } from "@j-os/design-system";
 
-import type { Demo } from "../../../demo/types.ts";
+import { FIELD_STATE_CONTROLS, type Demo } from "../../../demo/types.ts";
 
 export default {
 	title: "Input",
@@ -23,10 +23,7 @@ export default {
 		helperText: { type: "text", default: "We'll never share it." },
 		errorText: { type: "text", default: "That email looks invalid." },
 		leadingIconName: { type: "text", default: "mail" },
-		invalid: { type: "boolean", default: false },
-		required: { type: "boolean", default: false },
-		disabled: { type: "boolean", default: false },
-		readOnly: { type: "boolean", default: false },
+		...FIELD_STATE_CONTROLS,
 	},
 	presets: {
 		Error: { invalid: true },

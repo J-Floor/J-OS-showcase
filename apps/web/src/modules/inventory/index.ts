@@ -12,7 +12,7 @@ export const inventoryModule: ModuleManifest = {
 	subject: "Inventory",
 	// Code-split: the page and everything only it imports load on first visit.
 	view: lazyPage(() =>
-		import("./InventoryPage.tsx").then((m) => m.InventoryPage)
+		import("./InventoryPage.tsx").then((loaded) => loaded.InventoryPage)
 	),
 	prefetch: () => {
 		prefetch(api.inventory.listItems, {});

@@ -7,6 +7,8 @@ import type { Person, Project, Task } from "../data/tasksData.tsx";
 
 import styles from "./TaskCard.module.scss";
 
+const CLICK_SLOP_PX = 5;
+
 export function TaskCard(props: {
 	task: Task;
 	people: Person[];
@@ -32,12 +34,16 @@ export function TaskCard(props: {
 	// pointer moved more than a few px between down and up.
 	let downX = 0;
 	let downY = 0;
-	function onPointerDown(e: PointerEvent) {
-		downX = e.clientX;
-		downY = e.clientY;
+	function onPointerDown(event: PointerEvent) {
+		downX = event.clientX;
+		downY = event.clientY;
 	}
-	function onClick(e: MouseEvent) {
-		if (Math.hypot(e.clientX - downX, e.clientY - downY) > 5) return;
+	function onClick(event: MouseEvent) {
+		if (
+			Math.hypot(event.clientX - downX, event.clientY - downY) >
+			CLICK_SLOP_PX
+		)
+			return;
 		props.onClick();
 	}
 
@@ -60,12 +66,12 @@ export function TaskCard(props: {
 						<Icon>{ICONS.assignees}</Icon>
 						<span>
 							<For each={names()}>
-								{(n) => (
+								{(name) => (
 									<>
-										<span>{n}</span>
+										<span>{name}</span>
 										<Show
 											when={
-												names().indexOf(n) !==
+												names().indexOf(name) !==
 												names().length - 1
 											}
 										>

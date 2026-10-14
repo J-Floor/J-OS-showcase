@@ -58,7 +58,7 @@ export type InputProps = PropsWithDisabling<
  * forwarded to `Field.Input`. `type="number"` is excluded — use `NumberInput`.
  */
 export function Input(props: InputProps): JSX.Element {
-	let inputEl: HTMLInputElement | undefined;
+	let inputElement: HTMLInputElement | undefined;
 
 	// Consumer-only props (+ the props we handle ourselves) vs. the rest.
 	const [own, rest] = splitArkProps(props, [
@@ -90,14 +90,14 @@ export function Input(props: InputProps): JSX.Element {
 		own.onValueChange?.(event);
 	}
 
-	function setRef(el: HTMLInputElement) {
-		inputEl = el;
-		const ref = props.ref;
-		if (typeof ref === "function") ref(el);
+	function setReference(element: HTMLInputElement) {
+		inputElement = element;
+		const reference = props.ref;
+		if (typeof reference === "function") reference(element);
 	}
 
 	function handleWrapperClick() {
-		inputEl?.focus();
+		inputElement?.focus();
 	}
 
 	return (
@@ -113,7 +113,7 @@ export function Input(props: InputProps): JSX.Element {
 				<Field.Input
 					{...inputForward}
 					onInput={handleInput}
-					ref={setRef}
+					ref={setReference}
 				/>
 				<Show when={own.trailing}>
 					{(trailing) => (

@@ -1,28 +1,37 @@
+// jscpd:ignore-start -- an import block: the module system and import-x/order fix its shape, and projects.ts needs the same dependencies
 import { v } from "convex/values";
 
 import type { Id } from "./_generated/dataModel";
-import { mutation, query } from "./_generated/server";
-import type { MutationCtx } from "./_generated/server";
+import { mutation, query, type MutationCtx } from "./_generated/server";
 import { requireRole } from "./lib/authGuard.ts";
 import { BOARD_LEVEL } from "./lib/roles.ts";
-import { assertLen, NAME_MAX, TEXT_MAX } from "./lib/validate.ts";
+import { assertLength, NAME_MAX, TEXT_MAX } from "./lib/validate.ts";
 import { notify } from "./notify/notify.ts";
 import { taskStatus } from "./schema.ts";
+// jscpd:ignore-end
 
 // Notify everyone newly added to a task's assignees (skipping the actor, who
 // doesn't need to be told about their own action).
 async function notifyNewTaskAssignees(
-	ctx: MutationCtx,
-	taskId: Id<"tasks">,
-	title: string,
-	before: readonly Id<"people">[],
-	after: readonly Id<"people">[],
-	actorId: Id<"people">
+	context: MutationCtx,
+	{
+		taskId,
+		title,
+		before,
+		after,
+		actorId,
+	}: {
+		taskId: Id<"tasks">;
+		title: string;
+		before: readonly Id<"people">[];
+		after: readonly Id<"people">[];
+		actorId: Id<"people">;
+	}
 ): Promise<void> {
 	const had = new Set<string>(before);
 	for (const assigneeId of after) {
 		if (had.has(assigneeId) || assigneeId === actorId) continue;
-		await notify(ctx, "taskAssigned", {
+		await notify(context, "taskAssigned", {
 			assigneeId,
 			taskId,
 			taskTitle: title,
@@ -32,11 +41,11 @@ async function notifyNewTaskAssignees(
 
 export const list = query({
 	args: {},
-	handler: async (ctx) => {
+	handler: async (context) => {
 		// Core members can view and manage the Tasks board
 		// (create/update/remove) alongside the board.
-		await requireRole(ctx, [...BOARD_LEVEL, "core"]);
-		return ctx.db.query("tasks").collect();
+		await requireRole(context, [...BOARD_LEVEL, "core"]);
+		return context.db.query("tasks").collect();
 	},
 });
 
@@ -49,12 +58,12 @@ export const create = mutation({
 		projectId: v.optional(v.id("projects")),
 		dueDate: v.optional(v.number()),
 	},
-	handler: async (ctx, args) => {
-		const person = await requireRole(ctx, [...BOARD_LEVEL, "core"]);
-		assertLen(args.title, NAME_MAX, "Title");
-		assertLen(args.description, TEXT_MAX, "Description");
+	handler: async (context, args) => {
+		const person = await requireRole(context, [...BOARD_LEVEL, "core"]);
+		assertLength(args.title, NAME_MAX, "Title");
+		assertLength(args.description, TEXT_MAX, "Description");
 		const assigneeIds = args.assigneeIds ?? [];
-		const id = await ctx.db.insert("tasks", {
+		const id = await context.db.insert("tasks", {
 			title: args.title,
 			description: args.description,
 			status: args.status ?? "backlog",
@@ -63,14 +72,13 @@ export const create = mutation({
 			dueDate: args.dueDate,
 			createdBy: person._id,
 		});
-		await notifyNewTaskAssignees(
-			ctx,
-			id,
-			args.title,
-			[],
-			assigneeIds,
-			person._id
-		);
+		await notifyNewTaskAssignees(context, {
+			taskId: id,
+			title: args.title,
+			before: [],
+			after: assigneeIds,
+			actorId: person._id,
+		});
 		return id;
 	},
 });
@@ -85,29 +93,28 @@ export const update = mutation({
 		projectId: v.optional(v.union(v.id("projects"), v.null())),
 		dueDate: v.optional(v.union(v.number(), v.null())),
 	},
-	handler: async (ctx, { id, ...patch }) => {
-		const person = await requireRole(ctx, [...BOARD_LEVEL, "core"]);
-		assertLen(patch.title, NAME_MAX, "Title");
-		assertLen(patch.description, TEXT_MAX, "Description");
+	handler: async (context, { id, ...patch }) => {
+		const person = await requireRole(context, [...BOARD_LEVEL, "core"]);
+		assertLength(patch.title, NAME_MAX, "Title");
+		assertLength(patch.description, TEXT_MAX, "Description");
 		// null clears an optional field; undefined leaves it untouched.
 		const clean: Record<string, unknown> = {};
-		for (const [k, val] of Object.entries(patch)) {
-			clean[k] = val ?? undefined;
+		for (const [key, value] of Object.entries(patch)) {
+			clean[key] = value ?? undefined;
 		}
 		// Capture the prior assignees BEFORE patching so we can email only the
 		// people newly added in this update.
 		const prior =
-			patch.assigneeIds !== undefined ? await ctx.db.get(id) : null;
-		await ctx.db.patch(id, clean);
+			patch.assigneeIds === undefined ? null : await context.db.get(id);
+		await context.db.patch(id, clean);
 		if (patch.assigneeIds !== undefined && prior) {
-			await notifyNewTaskAssignees(
-				ctx,
-				id,
-				(clean.title as string | undefined) ?? prior.title,
-				prior.assigneeIds,
-				patch.assigneeIds,
-				person._id
-			);
+			await notifyNewTaskAssignees(context, {
+				taskId: id,
+				title: (clean.title as string | undefined) ?? prior.title,
+				before: prior.assigneeIds,
+				after: patch.assigneeIds,
+				actorId: person._id,
+			});
 		}
 		return null;
 	},
@@ -115,9 +122,9 @@ export const update = mutation({
 
 export const remove = mutation({
 	args: { id: v.id("tasks") },
-	handler: async (ctx, { id }) => {
-		await requireRole(ctx, [...BOARD_LEVEL, "core"]);
-		await ctx.db.delete(id);
+	handler: async (context, { id }) => {
+		await requireRole(context, [...BOARD_LEVEL, "core"]);
+		await context.db.delete(id);
 		return null;
 	},
 });

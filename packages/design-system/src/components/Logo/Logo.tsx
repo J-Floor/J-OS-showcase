@@ -17,6 +17,99 @@ export type LogoProps = {
 	class?: string;
 };
 
+/** The clip reference an animated mark masks itself with. */
+function clipReference(
+	isAnimated: boolean | undefined,
+	clipId: string
+): string | undefined {
+	return isAnimated ? `url(#${clipId})` : undefined;
+}
+
+/** The framed full lockup. */
+function FullMark(props: {
+	isAnimated: boolean | undefined;
+	clipId: string;
+}): JSX.Element {
+	return (
+		<svg
+			class={styles.svg}
+			viewBox="0 0 132 296"
+			fill="currentColor"
+			xmlns="http://www.w3.org/2000/svg"
+		>
+			<Show when={props.isAnimated}>
+				<defs>
+					<clipPath id={props.clipId}>
+						{/* Grows up from the bottom (see .clip). Static
+					    full size is the reduced-motion / no-anim
+					    fallback so the mark stays visible. */}
+						<rect
+							class={styles.clip}
+							x="0"
+							y="0"
+							width="132"
+							height="296"
+						/>
+					</clipPath>
+				</defs>
+			</Show>
+			<g clip-path={clipReference(props.isAnimated, props.clipId)}>
+				<path d="M83.8954 81.3962C83.8954 91.2205 78.1666 96.5217 66.7092 96.5217H47.3256V89.1004H66.7869C71.4954 89.1004 74.0071 86.3433 74.0071 81.8906V54.6098H53.9954V47.1884H83.8954V81.3962Z" />
+				<path
+					fill-rule="evenodd"
+					clip-rule="evenodd"
+					d="M125.099 0.00837862C128.509 0.180634 131.221 2.99195 131.221 6.43478V289.565C131.221 293.008 128.509 295.819 125.099 295.992L124.767 296H6.45349C3.00065 296 0.181159 293.296 0.00840298 289.896L0 289.565V6.43478C0 2.88095 2.88933 6.9094e-08 6.45349 0H124.767L125.099 0.00837862ZM9.68023 286.348H121.541V9.65217H9.68023V286.348Z"
+				/>
+			</g>
+			{/* The growing box's top edge: a full-width bar that rises
+		    with the reveal (see .topEdge); rests over the frame's
+		    own top border at the end. */}
+			<Show when={props.isAnimated}>
+				<rect
+					class={styles.topEdge}
+					x="0"
+					y="0"
+					width="132"
+					height="9.68"
+				/>
+			</Show>
+		</svg>
+	);
+}
+
+/** The standalone J mark. */
+function Monogram(props: {
+	isAnimated: boolean | undefined;
+	clipId: string;
+}): JSX.Element {
+	return (
+		<svg
+			class={styles.svg}
+			viewBox="0 0 60 60"
+			fill="currentColor"
+			xmlns="http://www.w3.org/2000/svg"
+		>
+			<Show when={props.isAnimated}>
+				<defs>
+					<clipPath id={props.clipId}>
+						<rect
+							class={styles.clipSquare}
+							x="0"
+							y="0"
+							width="60"
+							height="60"
+						/>
+					</clipPath>
+				</defs>
+			</Show>
+			<path
+				clip-path={clipReference(props.isAnimated, props.clipId)}
+				d="M47.9995 39.2078C47.9995 49.0321 42.2707 54.3333 30.8133 54.3333H11.4297V46.912H30.891C35.5995 46.912 38.1113 44.1549 38.1113 39.7022V12.4214H18.0996V5H47.9995V39.2078Z"
+			/>
+		</svg>
+	);
+}
+
 /**
  * The J floor brand mark, inlined as SVG so it themes with `currentColor`: the
  * root sets `color` (a token by default) and the paths fill from it, so the
@@ -35,9 +128,6 @@ export function Logo(props: LogoProps): JSX.Element {
 	function labelled() {
 		return Boolean(props.title);
 	}
-	function clip() {
-		return props.animated ? `url(#${clipId})` : undefined;
-	}
 	return (
 		<span
 			class={props.class ? `${styles.root} ${props.class}` : styles.root}
@@ -48,75 +138,10 @@ export function Logo(props: LogoProps): JSX.Element {
 			<Show
 				when={(props.variant ?? "logo") === "monogram"}
 				fallback={
-					<svg
-						class={styles.svg}
-						viewBox="0 0 132 296"
-						fill="currentColor"
-						xmlns="http://www.w3.org/2000/svg"
-					>
-						<Show when={props.animated}>
-							<defs>
-								<clipPath id={clipId}>
-									{/* Grows up from the bottom (see .clip). Static
-									    full size is the reduced-motion / no-anim
-									    fallback so the mark stays visible. */}
-									<rect
-										class={styles.clip}
-										x="0"
-										y="0"
-										width="132"
-										height="296"
-									/>
-								</clipPath>
-							</defs>
-						</Show>
-						<g clip-path={clip()}>
-							<path d="M83.8954 81.3962C83.8954 91.2205 78.1666 96.5217 66.7092 96.5217H47.3256V89.1004H66.7869C71.4954 89.1004 74.0071 86.3433 74.0071 81.8906V54.6098H53.9954V47.1884H83.8954V81.3962Z" />
-							<path
-								fill-rule="evenodd"
-								clip-rule="evenodd"
-								d="M125.099 0.00837862C128.509 0.180634 131.221 2.99195 131.221 6.43478V289.565C131.221 293.008 128.509 295.819 125.099 295.992L124.767 296H6.45349C3.00065 296 0.181159 293.296 0.00840298 289.896L0 289.565V6.43478C0 2.88095 2.88933 6.9094e-08 6.45349 0H124.767L125.099 0.00837862ZM9.68023 286.348H121.541V9.65217H9.68023V286.348Z"
-							/>
-						</g>
-						{/* The growing box's top edge: a full-width bar that rises
-						    with the reveal (see .topEdge); rests over the frame's
-						    own top border at the end. */}
-						<Show when={props.animated}>
-							<rect
-								class={styles.topEdge}
-								x="0"
-								y="0"
-								width="132"
-								height="9.68"
-							/>
-						</Show>
-					</svg>
+					<FullMark isAnimated={props.animated} clipId={clipId} />
 				}
 			>
-				<svg
-					class={styles.svg}
-					viewBox="0 0 60 60"
-					fill="currentColor"
-					xmlns="http://www.w3.org/2000/svg"
-				>
-					<Show when={props.animated}>
-						<defs>
-							<clipPath id={clipId}>
-								<rect
-									class={styles.clipSquare}
-									x="0"
-									y="0"
-									width="60"
-									height="60"
-								/>
-							</clipPath>
-						</defs>
-					</Show>
-					<path
-						clip-path={clip()}
-						d="M47.9995 39.2078C47.9995 49.0321 42.2707 54.3333 30.8133 54.3333H11.4297V46.912H30.891C35.5995 46.912 38.1113 44.1549 38.1113 39.7022V12.4214H18.0996V5H47.9995V39.2078Z"
-					/>
-				</svg>
+				<Monogram isAnimated={props.animated} clipId={clipId} />
 			</Show>
 		</span>
 	);

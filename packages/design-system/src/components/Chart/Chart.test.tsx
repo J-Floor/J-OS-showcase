@@ -99,7 +99,7 @@ describe("Chart", () => {
 				xKey="month"
 				series={[{ key: "a" }]}
 				label="Joins"
-				format={(v) => `${String(v)} people`}
+				format={(value) => `${String(value)} people`}
 			/>
 		));
 		expect(screen.getByRole("table")).toHaveTextContent("2 people");

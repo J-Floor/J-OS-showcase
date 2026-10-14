@@ -19,11 +19,13 @@ describe("dayLabel", () => {
 	});
 
 	it("gives older days a dated label, one per day", () => {
-		const a = dayLabel(new Date(2026, 8, 30, 1).getTime(), now);
-		const b = dayLabel(new Date(2026, 8, 30, 23).getTime(), now);
-		expect(a).toBe(b);
-		expect(a).not.toBe("Yesterday");
-		expect(a).not.toBe(dayLabel(new Date(2026, 8, 29).getTime(), now));
+		const earlyLabel = dayLabel(new Date(2026, 8, 30, 1).getTime(), now);
+		const lateLabel = dayLabel(new Date(2026, 8, 30, 23).getTime(), now);
+		expect(earlyLabel).toBe(lateLabel);
+		expect(earlyLabel).not.toBe("Yesterday");
+		expect(earlyLabel).not.toBe(
+			dayLabel(new Date(2026, 8, 29).getTime(), now)
+		);
 	});
 });
 

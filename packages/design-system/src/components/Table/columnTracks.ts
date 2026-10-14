@@ -37,40 +37,29 @@ const FILLER_TRACK = "minmax(0, 1fr)";
  * zero: `grid-template-columns` is a single declaration, and one invalid
  * track invalidates the whole value.
  */
-function clampPx(n: number): number | undefined {
-	if (!Number.isFinite(n)) return undefined;
-	return n < 0 ? 0 : n;
+function clampPx(pixels: number): number | undefined {
+	if (!Number.isFinite(pixels)) return undefined;
+	return pixels < 0 ? 0 : pixels;
 }
 
-/** One column's authored size, given its content width, as a grid track. */
-export function resolveTrack(
-	size: ColumnSize | undefined,
-	content: number,
-	contentCss = `${String(content)}px`
-): ResolvedTrack {
-	if (size === undefined) {
-		return {
-			css: `minmax(${contentCss}, 1fr)`,
-			floor: content,
-			flexible: true,
-		};
-	}
-	if (size === "content") {
-		return { css: contentCss, floor: content, flexible: false };
-	}
-	if (typeof size === "number") {
-		const fixed = clampPx(size);
-		return fixed === undefined
-			? resolveTrack(undefined, content, contentCss)
-			: { css: `${String(fixed)}px`, floor: fixed, flexible: false };
-	}
+type BoundedSize = Exclude<ColumnSize, number | "content" | undefined>;
 
-	const min =
-		size.min === "content"
-			? content
-			: size.min === undefined
-				? undefined
-				: clampPx(size.min);
+/** A bound's floor in px: `"content"` is the measured content width. */
+function resolveFloor(
+	min: BoundedSize["min"],
+	content: number
+): number | undefined {
+	if (min === "content") return content;
+	return min === undefined ? undefined : clampPx(min);
+}
+
+/** A `{ min, max, weight }` size as a grid track. */
+function resolveBoundedTrack(
+	size: BoundedSize,
+	content: number,
+	contentCss: string
+): ResolvedTrack {
+	const min = resolveFloor(size.min, content);
 	const max = size.max === undefined ? undefined : clampPx(size.max);
 	const weight = size.weight ?? 1;
 
@@ -102,11 +91,38 @@ export function resolveTrack(
 	};
 }
 
+/** One column's authored size, given its content width, as a grid track. */
+export function resolveTrack(
+	size: ColumnSize | undefined,
+	content: number,
+	contentCss = `${String(content)}px`
+): ResolvedTrack {
+	if (size === undefined) {
+		return {
+			css: `minmax(${contentCss}, 1fr)`,
+			floor: content,
+			flexible: true,
+		};
+	}
+	if (size === "content") {
+		return { css: contentCss, floor: content, flexible: false };
+	}
+	if (typeof size === "number") {
+		const fixed = clampPx(size);
+		return fixed === undefined
+			? resolveTrack(undefined, content, contentCss)
+			: { css: `${String(fixed)}px`, floor: fixed, flexible: false };
+	}
+
+	return resolveBoundedTrack(size, content, contentCss);
+}
+
 /** Whether a column's track depends on its measured content width. */
 export function usesContent(size: ColumnSize | undefined): boolean {
 	if (size === undefined || size === "content") return true;
-	if (typeof size === "number") return clampPx(size) === undefined;
-	return size.min === "content";
+	return typeof size === "number"
+		? clampPx(size) === undefined
+		: size.min === "content";
 }
 
 /**

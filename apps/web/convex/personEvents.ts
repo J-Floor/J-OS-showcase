@@ -2,7 +2,7 @@ import { v } from "convex/values";
 
 import { query } from "./_generated/server";
 import { requireRole } from "./lib/authGuard.ts";
-import { displayName } from "./lib/names.ts";
+import { withActorNames } from "./lib/names.ts";
 import { BOARD_LEVEL } from "./lib/roles.ts";
 
 /** How many of a person's newest `doorLog` rows the timeline reads. A daily
@@ -25,17 +25,19 @@ const DOOR_ACTION_LIMIT = 100;
  */
 export const listForPerson = query({
 	args: { personId: v.id("people") },
-	handler: async (ctx, { personId }) => {
-		await requireRole(ctx, BOARD_LEVEL);
-		const events = await ctx.db
+	handler: async (context, { personId }) => {
+		await requireRole(context, BOARD_LEVEL);
+		const events = await context.db
 			.query("personEvents")
-			.withIndex("by_person", (q) => q.eq("personId", personId))
+			.withIndex("by_person", (range) => range.eq("personId", personId))
 			.collect();
 		// Grants and revokes share this index; they are dropped here, after
 		// the read, not indexed out (so they count toward the cap).
-		const authLog = await ctx.db
+		const authLog = await context.db
 			.query("doorLog")
-			.withIndex("by_personId_and_at", (q) => q.eq("personId", personId))
+			.withIndex("by_personId_and_at", (range) =>
+				range.eq("personId", personId)
+			)
 			.order("desc")
 			.take(DOOR_ACTION_LIMIT);
 		const doorActions = authLog.filter(
@@ -55,22 +57,10 @@ export const listForPerson = query({
 				actorId: row.actorId,
 			})),
 		];
-		const names = new Map<string, string>();
-		return Promise.all(
-			rows
-				.sort((a, b) => b.at - a.at)
-				.map(async (row) => {
-					if (row.actorId === undefined)
-						return { ...row, actorName: undefined };
-					const cached = names.get(row.actorId);
-					if (cached !== undefined)
-						return { ...row, actorName: cached };
-					const actor = await ctx.db.get(row.actorId);
-					if (!actor) return { ...row, actorName: undefined };
-					const actorName = displayName(actor);
-					names.set(row.actorId, actorName);
-					return { ...row, actorName };
-				})
+		return withActorNames(
+			context,
+			// eslint-disable-next-line id-length -- conventional comparator parameter names
+			rows.toSorted((a, b) => b.at - a.at)
 		);
 	},
 });

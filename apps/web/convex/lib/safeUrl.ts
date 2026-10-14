@@ -1,7 +1,7 @@
-const MAX_LINKS = 4;
+export const MAX_LINKS = 4;
 const MAX_URL_LENGTH = 2000;
 const MAX_LABEL_LENGTH = 200;
-const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
+const URL_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 
 /**
  * A link an applicant typed, as the board may click it: scheme defaulted to
@@ -11,7 +11,7 @@ const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 export function normalizeHttpUrl(url: string): string | null {
 	const trimmed = url.trim();
 	if (trimmed === "") return null;
-	const withScheme = HAS_SCHEME.test(trimmed)
+	const withScheme = URL_SCHEME.test(trimmed)
 		? trimmed
 		: `https://${trimmed}`;
 	let parsed: URL;
@@ -20,9 +20,9 @@ export function normalizeHttpUrl(url: string): string | null {
 	} catch {
 		return null;
 	}
-	if (parsed.protocol !== "http:" && parsed.protocol !== "https:")
-		return null;
-	return parsed.href;
+	return parsed.protocol === "http:" || parsed.protocol === "https:"
+		? parsed.href
+		: null;
 }
 
 /**

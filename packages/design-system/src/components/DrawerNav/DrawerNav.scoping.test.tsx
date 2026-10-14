@@ -3,7 +3,7 @@ import { Show, createSignal } from "solid-js";
 import { expect, test, vi } from "vitest";
 
 import { Table } from "../Table/Table.tsx";
-import type { JfColumnDef } from "../Table/types.ts";
+import type { JfColumnDefinition } from "../Table/types.ts";
 
 import { DrawerNav } from "./DrawerNav.tsx";
 
@@ -16,7 +16,7 @@ import { DrawerNav } from "./DrawerNav.tsx";
  */
 
 type Row = { _id: string; name: string };
-const columns: JfColumnDef<Row>[] = [
+const columns: JfColumnDefinition<Row>[] = [
 	{ accessorKey: "name", header: "Name", dataType: "string" },
 ];
 const data: Row[] = [

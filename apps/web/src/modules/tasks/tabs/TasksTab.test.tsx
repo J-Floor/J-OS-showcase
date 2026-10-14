@@ -11,7 +11,7 @@ const { taskRows, kanbanTasks } = vi.hoisted(() => ({
 vi.mock("../data/tasksData.tsx", () => ({
 	useTasks: () => ({ data: () => taskRows.current }),
 	useProjects: () => ({ data: () => [] }),
-	useCurrentPerson: () => ({ data: () => undefined }),
+	useCurrentPerson: () => ({ data: () => {} }),
 }));
 vi.mock("../../../shared/data/boardLevel.tsx", () => ({
 	useBoardLevel: () => ({ data: () => [] }),
@@ -43,7 +43,7 @@ function renderTab() {
 						requestNew={() => 0}
 						assigneeFilter={() => "all"}
 						active={() => true}
-						onNeedTab={() => undefined}
+						onNeedTab={() => {}}
 					/>
 				)}
 			/>

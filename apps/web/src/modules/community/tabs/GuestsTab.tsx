@@ -44,12 +44,12 @@ export function GuestsTab(props: TabProps): JSX.Element {
 			groupBy="guestStatus"
 			initialColumnSorting={[{ id: "joinedAt", desc: true }]}
 			actions={guestActions.actions}
-			batchActions={(p) => {
+			batchActions={(batch) => {
 				// Kick out only applies to still-active guests (expired ones
 				// already lost access); hide it when none qualify.
 				function stillActive() {
-					return p.selectedRows.filter(
-						(r) => guestStatus(r) === "active"
+					return batch.selectedRows.filter(
+						(row) => guestStatus(row) === "active"
 					);
 				}
 				return (
@@ -68,10 +68,10 @@ export function GuestsTab(props: TabProps): JSX.Element {
 												tone: "danger",
 											})
 										)
-											await p.runBatch(
+											await batch.runBatch(
 												rows,
 												triage.kickOut,
-												p.clearSelection
+												batch.clearSelection
 											);
 									})();
 								}}
@@ -82,7 +82,7 @@ export function GuestsTab(props: TabProps): JSX.Element {
 						<Button
 							onClick={() => {
 								void (async () => {
-									const rows = p.selectedRows;
+									const rows = batch.selectedRows;
 									if (
 										await confirm({
 											title: "Upgrade to member?",
@@ -90,10 +90,10 @@ export function GuestsTab(props: TabProps): JSX.Element {
 											confirmLabel: "Upgrade",
 										})
 									)
-										await p.runBatch(
+										await batch.runBatch(
 											rows,
 											triage.upgradeToMember,
-											p.clearSelection
+											batch.clearSelection
 										);
 								})();
 							}}

@@ -39,25 +39,25 @@ const [head, setHead] = createSignal<Row[] | undefined>([]);
 
 vi.mock("convex-solidjs", () => ({
 	useQuery: (
-		_ref: unknown,
+		_reference: unknown,
 		args: () => unknown,
 		options: () => { enabled: boolean }
 	) => ({
 		data: () => {
-			if (!options().enabled) return undefined;
+			if (!options().enabled) return;
 			state.headArgs.push(args());
 			return head();
 		},
 		error: () => state.headError,
 	}),
 	useConvexClient: () => ({
-		query: (ref: string, args: unknown) => {
-			if (ref === "firstPageFloor") {
+		query: (reference: string, args: unknown) => {
+			if (reference === "firstPageFloor") {
 				state.floorCalls++;
-				const fail = state.floorFailures > 0;
-				if (fail) state.floorFailures--;
+				const isFail = state.floorFailures > 0;
+				if (isFail) state.floorFailures--;
 				return (state.floorGate ?? Promise.resolve()).then(() => {
-					if (fail) throw new Error("boom");
+					if (isFail) throw new Error("boom");
 					return state.floor;
 				});
 			}
@@ -91,13 +91,13 @@ function page(rows: Row[], continueCursor: string, isDone: boolean) {
 let dispose: (() => void) | undefined;
 
 function mount(options: { start?: () => boolean } = {}): FlooredLog<Row> {
-	const start = options.start ?? (() => true);
-	return createRoot((d) => {
-		dispose = d;
+	const shouldStart = options.start ?? (() => true);
+	return createRoot((disposeRoot) => {
+		dispose = disposeRoot;
 		return useFlooredLog<Row>({
 			queries: QUERIES,
 			pageSize: PAGE_SIZE,
-			start,
+			start: shouldStart,
 		});
 	});
 }
@@ -121,7 +121,7 @@ afterEach(() => {
 describe("mergeRows", () => {
 	it("keeps order and drops rows present in both lists", () => {
 		const merged = mergeRows([row("a"), row("b")], [row("b"), row("c")]);
-		expect(merged.map((r) => r._id)).toEqual(["a", "b", "c"]);
+		expect(merged.map((entry) => entry._id)).toEqual(["a", "b", "c"]);
 	});
 });
 
@@ -136,7 +136,7 @@ describe("useFlooredLog", () => {
 
 		setStart(true);
 		await waitFor(() => {
-			expect(log.rows()?.map((r) => r._id)).toEqual(["a"]);
+			expect(log.rows()?.map((entry) => entry._id)).toEqual(["a"]);
 		});
 		expect(state.headArgs.at(-1)).toEqual({ since: 100 });
 		expect(log.canLoadMore()).toBe(true);
@@ -153,9 +153,14 @@ describe("useFlooredLog", () => {
 		});
 
 		await log.loadMore();
-		expect(log.rows()?.map((r) => r._id)).toEqual(["a", "b", "c"]);
+		expect(log.rows()?.map((entry) => entry._id)).toEqual(["a", "b", "c"]);
 		await log.loadMore();
-		expect(log.rows()?.map((r) => r._id)).toEqual(["a", "b", "c", "d"]);
+		expect(log.rows()?.map((entry) => entry._id)).toEqual([
+			"a",
+			"b",
+			"c",
+			"d",
+		]);
 		expect(state.listBefore).toHaveBeenNthCalledWith(1, {
 			before: 100,
 			paginationOpts: { numItems: PAGE_SIZE, cursor: null },
@@ -194,7 +199,7 @@ describe("useFlooredLog", () => {
 
 		gate.open?.();
 		await waitFor(() => {
-			expect(log.rows()?.map((r) => r._id)).toEqual(["a", "o"]);
+			expect(log.rows()?.map((entry) => entry._id)).toEqual(["a", "o"]);
 		});
 		expect(state.listBefore).toHaveBeenCalledTimes(1);
 	});
@@ -212,7 +217,7 @@ describe("useFlooredLog", () => {
 		setStart(false);
 		setStart(true);
 		await waitFor(() => {
-			expect(log.rows()?.map((r) => r._id)).toEqual(["a"]);
+			expect(log.rows()?.map((entry) => entry._id)).toEqual(["a"]);
 		});
 		expect(log.failed()).toBe(false);
 		expect(state.floorCalls).toBe(2);
@@ -241,7 +246,7 @@ describe("useFlooredLog", () => {
 		expect(log.loading()).toBe(false);
 		await log.loadMore();
 		expect(log.loadFailed()).toBe(false);
-		expect(log.rows()?.map((r) => r._id)).toEqual(["a", "o"]);
+		expect(log.rows()?.map((entry) => entry._id)).toEqual(["a", "o"]);
 		expect(state.listBefore).toHaveBeenLastCalledWith({
 			before: 100,
 			paginationOpts: { numItems: PAGE_SIZE, cursor: null },

@@ -1,3 +1,4 @@
+import type { WithoutSystemFields } from "convex/server";
 import { ConvexError, v } from "convex/values";
 
 import { internal } from "./_generated/api";
@@ -9,7 +10,7 @@ import {
 	mutation,
 	query,
 } from "./_generated/server";
-import type { QueryCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { confirmEmailChange as confirmEmailChangeEmail } from "./emails/generated/confirmEmailChange.ts";
 import { emailChanged } from "./emails/generated/emailChanged.ts";
 import { confirmUrl, emailUrls } from "./emails/urls.ts";
@@ -46,6 +47,7 @@ import { displayName } from "./lib/names.ts";
 import { BOARD_STEPS } from "./lib/onboardingSteps.ts";
 import {
 	documentsNaming,
+	type Naming,
 	overBudget,
 	pathsNaming,
 	readBudget,
@@ -68,7 +70,7 @@ import {
 	REFERRAL_MAX,
 	TEXT_MAX,
 	VENTURE_NAME_MAX,
-	assertLen,
+	assertLength,
 } from "./lib/validate.ts";
 import {
 	applyEvent,
@@ -79,12 +81,53 @@ import {
 import { scheduleLinkCheck } from "./linkSafety.ts";
 import { fundingStage, productStage, vertical } from "./schema.ts";
 
+/** The document's own fields, without Convex's `_id` and `_creationTime`. */
+export function withoutSystemFields(
+	doc: Doc<"people">
+): WithoutSystemFields<Doc<"people">> {
+	return Object.fromEntries(
+		Object.entries(doc).filter(
+			([key]) => key !== "_id" && key !== "_creationTime"
+		)
+	) as WithoutSystemFields<Doc<"people">>;
+}
+
 // Internal: lets a scheduled approval action read the committed person row to
 // choose the member/guest email variant (and the guest window).
 export const getPersonByEmail = internalQuery({
 	args: { email: v.string() },
-	handler: async (ctx, { email }) => personByEmail(ctx, email),
+	handler: async (context, { email }) => personByEmail(context, email),
 });
+
+/** One person's own records in full, where else they are named, and a
+ *  download URL for each signed agreement PDF. */
+async function exportDocuments(
+	context: QueryCtx,
+	person: Doc<"people">,
+	documents: Naming[]
+) {
+	const records: Record<string, unknown[]> = {};
+	const references: { table: string; id: string; field: string }[] = [];
+	const agreementPdfs: { signatureId: string; url: string | null }[] = [];
+	for (const { table, doc } of documents) {
+		if (doc._id === person._id) continue;
+		if (!ownedBy(doc, person._id)) {
+			for (const field of pathsNaming(doc, person._id))
+				references.push({ table, id: doc._id, field });
+			continue;
+		}
+		const tableRecords = records[table] ?? [];
+		tableRecords.push(doc);
+		records[table] = tableRecords;
+		const { fileId } = doc as unknown as Partial<Doc<"signatures">>;
+		if (table === "signatures" && fileId)
+			agreementPdfs.push({
+				signatureId: doc._id,
+				url: await context.storage.getUrl(fileId),
+			});
+	}
+	return { person, records, references, agreementPdfs };
+}
 
 /**
  * Everything held about one person, for an access request (nDSG art. 25).
@@ -101,49 +144,31 @@ export const getPersonByEmail = internalQuery({
  */
 export const exportPerson = internalQuery({
 	args: { email: v.string() },
-	handler: async (ctx, { email }) => {
+	handler: async (context, { email }) => {
 		const budget = readBudget();
-		const rows = await takeCharged(peopleByEmail(ctx, email), budget);
+		const rows = await takeCharged(peopleByEmail(context, email), budget);
 		if (!rows) throw new Error(overBudget("people"));
 		const used = new Set<string>();
 		const people = [];
 		for (const person of rows) {
-			const scan = await documentsNaming(ctx, person._id, budget);
+			const scan = await documentsNaming(context, person._id, budget);
 			if ("problem" in scan) throw new Error(scan.problem);
 			for (const address of addressesOf(person, scan.docs))
 				used.add(address);
-			const records: Record<string, unknown[]> = {};
-			const references = [];
-			const agreementPdfs = [];
-			for (const { table, doc } of scan.docs) {
-				if (doc._id === person._id) continue;
-				if (!ownedBy(doc, person._id)) {
-					for (const field of pathsNaming(doc, person._id))
-						references.push({ table, id: doc._id, field });
-					continue;
-				}
-				(records[table] ??= []).push(doc);
-				const { fileId } = doc as unknown as Partial<Doc<"signatures">>;
-				if (table === "signatures" && fileId)
-					agreementPdfs.push({
-						signatureId: doc._id,
-						url: await ctx.storage.getUrl(fileId),
-					});
-			}
-			people.push({ person, records, references, agreementPdfs });
+			people.push(await exportDocuments(context, person, scan.docs));
 		}
 		const own = await addressesHeldBy(
-			ctx,
+			context,
 			[...used],
-			new Set(rows.map((p) => p._id)),
+			new Set(rows.map((row) => row._id)),
 			budget
 		);
 		if ("problem" in own) throw new Error(own.problem);
-		const door = await legacyDoorRows(ctx, own.addresses, budget);
+		const door = await legacyDoorRows(context, own.addresses, budget);
 		if ("problem" in door) throw new Error(door.problem);
 		const auth = [];
 		for (const address of own.addresses)
-			auth.push({ address, ...(await authRecordsFor(ctx, address)) });
+			auth.push({ address, ...(await authRecordsFor(context, address)) });
 		return {
 			people,
 			addresses: own.addresses,
@@ -155,25 +180,23 @@ export const exportPerson = internalQuery({
 
 export const getCurrentRole = query({
 	args: {},
-	handler: async (ctx) => {
-		const person = await personForCurrentUser(ctx);
+	handler: async (context) => {
+		const person = await personForCurrentUser(context);
 		// Prospects, former people and visitors are not access tiers, and an
 		// expired or not-yet-started window reads as no access — matching
 		// requireRole. (Visitors are registration-only: no sign-in, no web app.)
-		if (
-			!person ||
-			!isAccessTier(person.tier) ||
-			!entitled(person, Date.now())
-		)
-			return "none";
-		return person.tier;
+		return person &&
+			isAccessTier(person.tier) &&
+			entitled(person, Date.now())
+			? person.tier
+			: "none";
 	},
 });
 
 export const getCurrentPerson = query({
 	args: {},
-	handler: async (ctx) => {
-		const person = await requireRole(ctx, ACCESS_TIERS);
+	handler: async (context) => {
+		const person = await requireRole(context, ACCESS_TIERS);
 		return selfView(person);
 	},
 });
@@ -198,13 +221,13 @@ export const addDirect = internalMutation({
 		lastName: v.string(),
 		tier: roleTier,
 	},
-	handler: async (ctx, { email, firstName, lastName, tier }) => {
+	handler: async (context, { email, firstName, lastName, tier }) => {
 		const normalized = normalizeEmail(email);
 		if (!validEmail(normalized)) throw new ConvexError(EMAIL_INVALID);
-		const existing = await personByEmail(ctx, normalized);
+		const existing = await personByEmail(context, normalized);
 		const personId =
 			existing?._id ??
-			(await ctx.db.insert("people", {
+			(await context.db.insert("people", {
 				email: normalized,
 				firstName,
 				lastName,
@@ -215,7 +238,7 @@ export const addDirect = internalMutation({
 				door: { override: "none" },
 			}));
 		try {
-			await applyEvent(ctx, personId, { type: "SET_ROLE", tier });
+			await applyEvent(context, personId, { type: "SET_ROLE", tier });
 		} catch (err) {
 			if (!(err instanceof IllegalTransitionError)) throw err;
 			throw new ConvexError(
@@ -233,20 +256,21 @@ export const addDirect = internalMutation({
 // roster subscription.
 export const setLastPath = mutation({
 	args: { path: v.string() },
-	handler: async (ctx, { path }) => {
+	handler: async (context, { path }) => {
 		if (!isModulePath(path)) return;
-		const person = await requireRole(ctx, ACCESS_TIERS);
-		await setPersonLastPath(ctx, person._id, path);
+		const person = await requireRole(context, ACCESS_TIERS);
+		await setPersonLastPath(context, person._id, path);
 	},
 });
 
 /** The caller's last-viewed module route, or null. Read by `/` only. */
 export const getLastPath = query({
 	args: {},
-	handler: async (ctx) => {
-		const person = await personForCurrentUser(ctx);
+	handler: async (context) => {
+		const person = await personForCurrentUser(context);
 		if (!person) return null;
-		return (await personStateOf(ctx, person._id))?.lastPath ?? null;
+		const state = await personStateOf(context, person._id);
+		return state?.lastPath ?? null;
 	},
 });
 
@@ -257,14 +281,108 @@ export const getLastPath = query({
  * would log a spurious edit. Shallow-compares arrays; falls back to `===` for
  * everything else.
  */
-function sameValue(before: unknown, after: unknown): boolean {
-	if (Array.isArray(before) && Array.isArray(after)) {
-		return (
-			before.length === after.length &&
-			before.every((v, i) => v === after[i])
-		);
+function isSameValue(before: unknown, after: unknown): boolean {
+	return Array.isArray(before) && Array.isArray(after)
+		? before.length === after.length &&
+				before.every((item, index) => item === after[index])
+		: before === after;
+}
+
+/** Log every changed top-level field to the timeline, then write them. */
+async function applyFieldEdits(
+	context: MutationCtx,
+	person: Doc<"people">,
+	edits: Partial<Doc<"people">>,
+	actorId: Id<"people"> | undefined
+): Promise<void> {
+	for (const [field, after] of Object.entries(edits)) {
+		const before = (person as Record<string, unknown>)[field];
+		// `logFieldEdit` is scalars-only and compares with `===` — an array
+		// (only `vertical` reaches this loop as one) is never `===` its own
+		// re-selected content, so re-saving the SAME verticals would log a
+		// spurious edit on every save without this shallow check.
+		if (isSameValue(before, after)) continue;
+		await logFieldEdit(context, {
+			personId: person._id,
+			field,
+			before,
+			after,
+			actorId,
+		});
 	}
-	return before === after;
+	if (Object.keys(edits).length > 0)
+		await context.db.patch(person._id, edits);
+}
+
+/** Log every venture field that was passed, and return what to merge into the
+ *  person's venture. */
+async function logVentureEdits(
+	context: MutationCtx,
+	person: Doc<"people">,
+	edits: Record<string, unknown>,
+	actorId: Id<"people"> | undefined
+): Promise<Record<string, unknown>> {
+	// A plain, explicitly-typed copy of the "before" values: indexing THIS
+	// with a computed key needs no assertion under either tsconfig, unlike
+	// indexing `person.venture` directly (its schema-derived object type has
+	// no index signature).
+	const ventureBefore: Record<string, unknown> = {
+		...(person.venture ?? {}),
+	};
+	const venturePatch: Record<string, unknown> = {};
+	for (const [key, after] of Object.entries(edits)) {
+		if (after === undefined) continue;
+		await logFieldEdit(context, {
+			personId: person._id,
+			field: `venture.${key}`,
+			before: ventureBefore[key],
+			after,
+			actorId,
+		});
+		venturePatch[key] = after;
+	}
+	return venturePatch;
+}
+
+/** Merge a venture patch into the person's venture, when there is one. */
+async function patchVenture(
+	context: MutationCtx,
+	person: Doc<"people">,
+	venturePatch: Record<string, unknown>
+): Promise<void> {
+	if (Object.keys(venturePatch).length === 0) return;
+	await context.db.patch(person._id, {
+		venture: { ...(person.venture ?? {}), ...venturePatch },
+	});
+}
+
+/**
+ * Resolve a requested email change: supersede any change still waiting on its
+ * link, and return the new address to confirm, or undefined when there is
+ * nothing to change.
+ *
+ * Email is the identity key (`by_email` + `.unique()` in requireRole and
+ * personForCurrentUser). A duplicate would lock two people out at once, and a
+ * typo locks the person out: their next sign-in finds nobody. An email that
+ * only differs from the stored one by case or spacing is unchanged and left
+ * alone, so a legacy malformed one still saves and a case-only duplicate is
+ * left for `migrateEmailCase` to report.
+ */
+async function resolveEmailChange(
+	context: MutationCtx,
+	person: Doc<"people">,
+	requested: string | undefined
+): Promise<string | undefined> {
+	if (requested === undefined) return undefined;
+	const newEmail = normalizeEmail(requested);
+	// Any email edit supersedes a change still waiting on its link: a new
+	// address replaces it, and re-entering the stored one withdraws it.
+	await revokeTokens(context, person._id, "emailChange");
+	if (newEmail === normalizeEmail(person.email)) return undefined;
+	if (!validEmail(newEmail)) throw new ConvexError(EMAIL_INVALID);
+	const clash = await personByEmail(context, newEmail);
+	if (clash) throw new ConvexError(EMAIL_IN_USE);
+	return newEmail;
 }
 
 /**
@@ -307,16 +425,20 @@ export const update = mutation({
 		productStage: v.optional(productStage),
 		fundingStage: v.optional(fundingStage),
 	},
-	handler: async (ctx, args): Promise<{ emailChange: "pending" } | null> => {
-		await requireRole(ctx, BOARD_LEVEL);
-		assertLen(args.phone, PHONE_MAX, "Phone");
-		assertLen(args.ventureName, VENTURE_NAME_MAX, "Venture name");
-		assertLen(args.description, TEXT_MAX, "Description");
-		assertLen(args.whyJoin, TEXT_MAX, "Why join");
-		assertLen(args.pastBuilt, TEXT_MAX, "Past built");
-		assertLen(args.referral, REFERRAL_MAX, "Referral");
+	handler: async (
+		context,
+		args
+	): Promise<{ emailChange: "pending" } | null> => {
+		await requireRole(context, BOARD_LEVEL);
+		assertLength(args.phone, PHONE_MAX, "Phone");
+		assertLength(args.ventureName, VENTURE_NAME_MAX, "Venture name");
+		assertLength(args.description, TEXT_MAX, "Description");
+		assertLength(args.whyJoin, TEXT_MAX, "Why join");
+		assertLength(args.pastBuilt, TEXT_MAX, "Past built");
+		assertLength(args.referral, REFERRAL_MAX, "Referral");
 		const {
 			id,
+			email,
 			ventureName,
 			description,
 			whyJoin,
@@ -327,87 +449,39 @@ export const update = mutation({
 			fundingStage: nextFundingStage,
 			...top
 		} = args;
-		if (top.email !== undefined) top.email = normalizeEmail(top.email);
-		const person = await ctx.db.get(id);
+		const person = await context.db.get(id);
 		if (!person) throw new Error("Person not found");
-		const actorId = await currentActorId(ctx);
+		const actorId = await currentActorId(context);
+		const newEmail = await resolveEmailChange(context, person, email);
 
-		// Any email edit supersedes a change still waiting on its link: a new
-		// address replaces it, and re-entering the stored one withdraws it.
-		if (top.email !== undefined) await revokeTokens(ctx, id, "emailChange");
-
-		// Email is the identity key (`by_email` + `.unique()` in requireRole and
-		// personForCurrentUser). A duplicate would lock two people out at once,
-		// and a typo locks the person out: their next sign-in finds nobody. An
-		// email that only differs from the stored one by case or spacing is
-		// unchanged and left alone, so a legacy malformed one still saves and
-		// a case-only duplicate is left for `migrateEmailCase` to report.
-		if (
-			top.email !== undefined &&
-			top.email === normalizeEmail(person.email)
-		)
-			delete top.email;
-		const newEmail = top.email;
-		delete top.email;
-		if (newEmail !== undefined) {
-			if (!validEmail(newEmail)) throw new ConvexError(EMAIL_INVALID);
-			const clash = await personByEmail(ctx, newEmail);
-			if (clash) throw new ConvexError(EMAIL_IN_USE);
-		}
-
-		for (const [field, after] of Object.entries(top)) {
-			const before = (person as Record<string, unknown>)[field];
-			// `logFieldEdit` is scalars-only and compares with `===` — an array
-			// (only `vertical` reaches this loop as one) is never `===` its own
-			// re-selected content, so re-saving the SAME verticals would log a
-			// spurious edit on every save without this shallow check.
-			if (sameValue(before, after)) continue;
-			await logFieldEdit(ctx, id, field, before, after, actorId);
-		}
-		if (Object.keys(top).length > 0) await ctx.db.patch(id, top);
-
-		const ventureEdits: Record<string, unknown> = {
-			name: ventureName,
-			description,
-			whyJoin,
-			pastBuilt,
-			referral,
-			teamSize,
-			productStage: nextProductStage,
-			fundingStage: nextFundingStage,
-		};
-		// A plain, explicitly-typed copy of the "before" values: indexing THIS
-		// with a computed key needs no assertion under either tsconfig, unlike
-		// indexing `person.venture` directly (its schema-derived object type has
-		// no index signature).
-		const ventureBefore: Record<string, unknown> = {
-			...(person.venture ?? {}),
-		};
-		const venturePatch: Record<string, unknown> = {};
-		for (const [key, after] of Object.entries(ventureEdits)) {
-			if (after === undefined) continue;
-			await logFieldEdit(
-				ctx,
-				id,
-				`venture.${key}`,
-				ventureBefore[key],
-				after,
-				actorId
-			);
-			venturePatch[key] = after;
-		}
-		if (Object.keys(venturePatch).length > 0) {
-			await ctx.db.patch(id, {
-				venture: { ...(person.venture ?? {}), ...venturePatch },
-			});
-		}
+		await applyFieldEdits(context, person, top, actorId);
+		const venturePatch = await logVentureEdits(
+			context,
+			person,
+			{
+				name: ventureName,
+				description,
+				whyJoin,
+				pastBuilt,
+				referral,
+				teamSize,
+				productStage: nextProductStage,
+				fundingStage: nextFundingStage,
+			},
+			actorId
+		);
+		await patchVenture(context, person, venturePatch);
 
 		if (newEmail === undefined) return null;
-		await ctx.scheduler.runAfter(0, internal.people.sendEmailChangeLink, {
-			personId: id,
-			newEmail,
-			actorId,
-		});
+		await context.scheduler.runAfter(
+			0,
+			internal.people.sendEmailChangeLink,
+			{
+				personId: id,
+				newEmail,
+				actorId,
+			}
+		);
 		return { emailChange: "pending" };
 	},
 });
@@ -424,13 +498,13 @@ export const sendEmailChangeLink = internalAction({
 		newEmail: v.string(),
 		actorId: v.optional(v.id("people")),
 	},
-	handler: async (ctx, { personId, newEmail, actorId }) => {
+	handler: async (context, { personId, newEmail, actorId }) => {
 		const token = newConfirmToken();
-		const issued = await ctx.runMutation(
+		const isIssued = await context.runMutation(
 			internal.people.issueEmailChangeToken,
 			{ personId, newEmail, token, actorId }
 		);
-		if (!issued) return;
+		if (!isIssued) return;
 		const { html, text } = confirmEmailChangeEmail({
 			confirmUrl: confirmUrl("emailChange", token),
 			logoUrl: emailUrls().logoUrl,
@@ -453,9 +527,9 @@ export const issueEmailChangeToken = internalMutation({
 		token: v.string(),
 		actorId: v.optional(v.id("people")),
 	},
-	handler: async (ctx, args): Promise<boolean> => {
-		if (!(await ctx.db.get(args.personId))) return false;
-		await issueToken(ctx, {
+	handler: async (context, args): Promise<boolean> => {
+		if (!(await context.db.get(args.personId))) return false;
+		await issueToken(context, {
 			token: args.token,
 			purpose: "emailChange",
 			personId: args.personId,
@@ -471,12 +545,12 @@ export const issueEmailChangeToken = internalMutation({
 export const pendingEmailChange = query({
 	args: { personId: v.id("people") },
 	handler: async (
-		ctx,
+		context,
 		{ personId }
 	): Promise<{ newEmail: string } | null> => {
-		await requireRole(ctx, BOARD_LEVEL);
+		await requireRole(context, BOARD_LEVEL);
 		const rows = await liveTokens(
-			ctx.db,
+			context.db,
 			personId,
 			"emailChange",
 			Date.now()
@@ -489,9 +563,9 @@ export const pendingEmailChange = query({
 /** Board-only: withdraw a person's pending email change; its link stops working. */
 export const cancelEmailChange = mutation({
 	args: { personId: v.id("people") },
-	handler: async (ctx, { personId }) => {
-		await requireRole(ctx, BOARD_LEVEL);
-		await revokeTokens(ctx, personId, "emailChange");
+	handler: async (context, { personId }) => {
+		await requireRole(context, BOARD_LEVEL);
+		await revokeTokens(context, personId, "emailChange");
 	},
 });
 
@@ -505,34 +579,36 @@ export type EmailChangeStatus = "verified" | "invalid" | "expired" | "taken";
  */
 export const confirmEmailChange = mutation({
 	args: { token: v.string() },
-	handler: async (ctx, { token }): Promise<{ status: EmailChangeStatus }> => {
-		const r = await redeemRow(
-			ctx,
-			await tokenRow(ctx.db, token),
+	handler: async (
+		context,
+		{ token }
+	): Promise<{ status: EmailChangeStatus }> => {
+		const redeemed = await redeemRow(
+			context,
+			await tokenRow(context.db, token),
 			"emailChange"
 		);
-		if (r.status === "invalid") return { status: "invalid" };
-		const newEmail = r.row.newEmail;
-		const person = await ctx.db.get(r.row.personId);
+		if (redeemed.status === "invalid") return { status: "invalid" };
+		const newEmail = redeemed.row.newEmail;
+		const person = await context.db.get(redeemed.row.personId);
 		if (!person || newEmail === undefined) return { status: "invalid" };
-		if (r.status === "already")
+		if (redeemed.status === "already")
 			return {
 				status: person.email === newEmail ? "verified" : "invalid",
 			};
-		if (r.status === "expired") return { status: "expired" };
-		const clash = await personByEmail(ctx, newEmail);
+		if (redeemed.status === "expired") return { status: "expired" };
+		const clash = await personByEmail(context, newEmail);
 		if (clash && clash._id !== person._id) return { status: "taken" };
 		const oldEmail = person.email;
-		await logFieldEdit(
-			ctx,
-			person._id,
-			"email",
-			oldEmail,
-			newEmail,
-			r.row.actorId
-		);
-		await ctx.db.patch(person._id, { email: newEmail });
-		await ctx.scheduler.runAfter(
+		await logFieldEdit(context, {
+			personId: person._id,
+			field: "email",
+			before: oldEmail,
+			after: newEmail,
+			actorId: redeemed.row.actorId,
+		});
+		await context.db.patch(person._id, { email: newEmail });
+		await context.scheduler.runAfter(
 			0,
 			internal.people.sendEmailChangedNotice,
 			{
@@ -547,7 +623,7 @@ export const confirmEmailChange = mutation({
 /** Tells the old address that the sign-in address moved. */
 export const sendEmailChangedNotice = internalAction({
 	args: { oldEmail: v.string(), newEmail: v.string() },
-	handler: async (_ctx, { oldEmail, newEmail }) => {
+	handler: async (_context, { oldEmail, newEmail }) => {
 		const { html, text } = emailChanged({
 			newEmail,
 			logoUrl: emailUrls().logoUrl,
@@ -588,14 +664,14 @@ export const updateOwnProfile = mutation({
 			v.array(v.object({ label: v.string(), url: v.string() }))
 		),
 	},
-	handler: async (ctx, args) => {
+	handler: async (context, args) => {
 		// Same gate as `getCurrentPerson`: only a real, entitled access-tier
 		// person (guest/member/core/board/admin/staff) — NOT a prospect or former
 		// member, whom `entitled` alone does not exclude (see getCurrentRole).
-		const person = await requireRole(ctx, ACCESS_TIERS);
-		assertLen(args.phone, PHONE_MAX, "Phone");
-		assertLen(args.ventureName, VENTURE_NAME_MAX, "Venture name");
-		assertLen(args.description, TEXT_MAX, "Description");
+		const person = await requireRole(context, ACCESS_TIERS);
+		assertLength(args.phone, PHONE_MAX, "Phone");
+		assertLength(args.ventureName, VENTURE_NAME_MAX, "Venture name");
+		assertLength(args.description, TEXT_MAX, "Description");
 
 		const {
 			ventureName,
@@ -606,48 +682,28 @@ export const updateOwnProfile = mutation({
 			links,
 			...top
 		} = args;
-		const actorId = await currentActorId(ctx);
+		const actorId = await currentActorId(context);
 
-		for (const [field, after] of Object.entries(top)) {
-			const before = (person as Record<string, unknown>)[field];
-			if (sameValue(before, after)) continue;
-			await logFieldEdit(ctx, person._id, field, before, after, actorId);
-		}
-		if (Object.keys(top).length > 0) await ctx.db.patch(person._id, top);
+		await applyFieldEdits(context, person, top, actorId);
 
-		const ventureScalars: Record<string, unknown> = {
-			name: ventureName,
-			description,
-			teamSize,
-			productStage: nextProductStage,
-			fundingStage: nextFundingStage,
-		};
-		const ventureBefore: Record<string, unknown> = {
-			...(person.venture ?? {}),
-		};
-		const venturePatch: Record<string, unknown> = {};
-		for (const [key, after] of Object.entries(ventureScalars)) {
-			if (after === undefined) continue;
-			await logFieldEdit(
-				ctx,
-				person._id,
-				`venture.${key}`,
-				ventureBefore[key],
-				after,
-				actorId
-			);
-			venturePatch[key] = after;
-		}
+		const venturePatch = await logVentureEdits(
+			context,
+			person,
+			{
+				name: ventureName,
+				description,
+				teamSize,
+				productStage: nextProductStage,
+				fundingStage: nextFundingStage,
+			},
+			actorId
+		);
 		if (links !== undefined) {
 			venturePatch.links = assertSafeLinks(links);
 		}
 
-		if (Object.keys(venturePatch).length > 0) {
-			await ctx.db.patch(person._id, {
-				venture: { ...(person.venture ?? {}), ...venturePatch },
-			});
-		}
-		await scheduleLinkCheck(ctx, person._id, links);
+		await patchVenture(context, person, venturePatch);
+		await scheduleLinkCheck(context, person._id, links);
 		return null;
 	},
 });
@@ -660,16 +716,16 @@ export const updateOwnProfile = mutation({
  */
 export const addNote = mutation({
 	args: { id: v.id("people"), text: v.string() },
-	handler: async (ctx, { id, text }) => {
-		await requireRole(ctx, BOARD_LEVEL);
-		assertLen(text, TEXT_MAX, "Note");
+	handler: async (context, { id, text }) => {
+		await requireRole(context, BOARD_LEVEL);
+		assertLength(text, TEXT_MAX, "Note");
 		const trimmed = text.trim();
 		if (trimmed === "") return null;
-		const person = await ctx.db.get(id);
+		const person = await context.db.get(id);
 		if (!person) throw new Error("Person not found");
-		const actorId = await currentActorId(ctx);
+		const actorId = await currentActorId(context);
 		const board = person.board ?? {};
-		await ctx.db.patch(id, {
+		await context.db.patch(id, {
 			board: {
 				...board,
 				noteLog: [
@@ -693,13 +749,13 @@ export const addNote = mutation({
  */
 export const setGuestAccess = mutation({
 	args: { id: v.id("people"), expiresAt: v.number() },
-	handler: async (ctx, { id, expiresAt }) => {
-		await requireRole(ctx, BOARD_LEVEL);
+	handler: async (context, { id, expiresAt }) => {
+		await requireRole(context, BOARD_LEVEL);
 		await applyEvent(
-			ctx,
+			context,
 			id,
 			{ type: "EXTEND_WINDOW", until: expiresAt },
-			await currentActorId(ctx)
+			await currentActorId(context)
 		);
 		return null;
 	},
@@ -715,11 +771,11 @@ export const setHost = mutation({
 		id: v.id("people"),
 		hostedById: v.optional(v.union(v.id("people"), v.null())),
 	},
-	handler: async (ctx, { id, hostedById }) => {
-		await requireRole(ctx, BOARD_LEVEL);
-		const person = await ctx.db.get(id);
+	handler: async (context, { id, hostedById }) => {
+		await requireRole(context, BOARD_LEVEL);
+		const person = await context.db.get(id);
 		if (!person) throw new Error("Person not found");
-		const actorId = await currentActorId(ctx);
+		const actorId = await currentActorId(context);
 
 		const patch: Partial<Doc<"people">> = {};
 		if (hostedById !== undefined) {
@@ -727,24 +783,22 @@ export const setHost = mutation({
 			// Setting a host id clears the legacy display-name fallback: the id
 			// is canonical.
 			patch.hostedBy = undefined;
-			await logFieldEdit(
-				ctx,
-				id,
-				"hostedById",
-				person.hostedById,
-				patch.hostedById,
-				actorId
-			);
-			await logFieldEdit(
-				ctx,
-				id,
-				"hostedBy",
-				person.hostedBy,
-				undefined,
-				actorId
-			);
+			await logFieldEdit(context, {
+				personId: id,
+				field: "hostedById",
+				before: person.hostedById,
+				after: patch.hostedById,
+				actorId,
+			});
+			await logFieldEdit(context, {
+				personId: id,
+				field: "hostedBy",
+				before: person.hostedBy,
+				after: undefined,
+				actorId,
+			});
 		}
-		await ctx.db.patch(id, patch);
+		await context.db.patch(id, patch);
 		return null;
 	},
 });
@@ -760,13 +814,17 @@ function latestSignature<
 	S extends { signedAt: number; fileId?: unknown; sourceUrl?: string },
 >(signatures: S[]): S | undefined {
 	const latest = signatures.reduce<S | undefined>(
-		(acc, s) => (acc === undefined || s.signedAt > acc.signedAt ? s : acc),
+		(accumulator, signature) =>
+			accumulator === undefined ||
+			signature.signedAt > accumulator.signedAt
+				? signature
+				: accumulator,
 		undefined
 	);
 	if (latest === undefined) return undefined;
-	return latest.fileId !== undefined || latest.sourceUrl !== undefined
-		? latest
-		: undefined;
+	return latest.fileId === undefined && latest.sourceUrl === undefined
+		? undefined
+		: latest;
 }
 
 /** A roster row: the person, their status readout, and whether the "view
@@ -798,14 +856,16 @@ export type PersonRow = Doc<"people"> & {
  * tab's row does not re-run them.
  */
 export async function peopleByTiers(
-	ctx: QueryCtx,
+	context: QueryCtx,
 	tiers: readonly Doc<"people">["tier"][]
 ): Promise<Doc<"people">[]> {
 	const groups = await Promise.all(
 		tiers.map((tier) =>
-			ctx.db
+			context.db
 				.query("people")
-				.withIndex("by_tier_and_formerOf", (q) => q.eq("tier", tier))
+				.withIndex("by_tier_and_formerOf", (range) =>
+					range.eq("tier", tier)
+				)
 				.collect()
 		)
 	);
@@ -815,15 +875,15 @@ export async function peopleByTiers(
 /** Former people who held one of the given tiers. `undefined` reads former
  *  rows with no `formerOf`. */
 async function formerPeople(
-	ctx: QueryCtx,
+	context: QueryCtx,
 	formerOf: readonly Doc<"people">["formerOf"][]
 ): Promise<Doc<"people">[]> {
 	const groups = await Promise.all(
 		formerOf.map((of) =>
-			ctx.db
+			context.db
 				.query("people")
-				.withIndex("by_tier_and_formerOf", (q) =>
-					q.eq("tier", "former").eq("formerOf", of)
+				.withIndex("by_tier_and_formerOf", (range) =>
+					range.eq("tier", "former").eq("formerOf", of)
 				)
 				.collect()
 		)
@@ -832,7 +892,7 @@ async function formerPeople(
 }
 
 export async function withStatus(
-	ctx: QueryCtx,
+	context: QueryCtx,
 	rows: Doc<"people">[]
 ): Promise<PersonRow[]> {
 	const now = Date.now();
@@ -841,7 +901,7 @@ export async function withStatus(
 			const signedVariants = person.signedVariants ?? [];
 			const actorId = person.door?.byId;
 			const actor =
-				actorId === undefined ? null : await ctx.db.get(actorId);
+				actorId === undefined ? null : await context.db.get(actorId);
 			return {
 				...person,
 				status: personStatus(
@@ -863,13 +923,13 @@ export async function withStatus(
  */
 export const listMembers = query({
 	args: {},
-	handler: async (ctx) => {
-		await requireRole(ctx, BOARD_LEVEL);
+	handler: async (context) => {
+		await requireRole(context, BOARD_LEVEL);
 		const rows = [
-			...(await peopleByTiers(ctx, ROLE_TIERS)),
-			...(await formerPeople(ctx, [...ROLE_TIERS, undefined])),
+			...(await peopleByTiers(context, ROLE_TIERS)),
+			...(await formerPeople(context, [...ROLE_TIERS, undefined])),
 		];
-		return withStatus(ctx, rows);
+		return withStatus(context, rows);
 	},
 });
 
@@ -879,19 +939,21 @@ export const listMembers = query({
 // isBoardLevel). Any signed-in person, staff included, may read it.
 export const listBoardContacts = query({
 	args: {},
-	handler: async (ctx) => {
-		await requireRole(ctx, ACCESS_TIERS);
+	handler: async (context) => {
+		await requireRole(context, ACCESS_TIERS);
 		const now = Date.now();
 		// `tier === "board"`, NOT isBoardLevel: admins share board-level
 		// permissions but are not on the board, and this is the member-facing
 		// board directory.
-		const people = await peopleByTiers(ctx, ["board"]);
+		const people = await peopleByTiers(context, ["board"]);
 		return people
-			.filter((p) => p.tier === "board" && entitled(p, now))
-			.map((p) => ({
-				firstName: p.firstName,
-				lastName: p.lastName,
-				phone: p.phone,
+			.filter(
+				(person) => person.tier === "board" && entitled(person, now)
+			)
+			.map((person) => ({
+				firstName: person.firstName,
+				lastName: person.lastName,
+				phone: person.phone,
 			}));
 	},
 });
@@ -899,13 +961,13 @@ export const listBoardContacts = query({
 /** The Guests tab: guests at any stage, plus former guests. */
 export const listGuests = query({
 	args: {},
-	handler: async (ctx) => {
-		await requireRole(ctx, BOARD_LEVEL);
+	handler: async (context) => {
+		await requireRole(context, BOARD_LEVEL);
 		const rows = [
-			...(await peopleByTiers(ctx, ["guest"])),
-			...(await formerPeople(ctx, ["guest"])),
+			...(await peopleByTiers(context, ["guest"])),
+			...(await formerPeople(context, ["guest"])),
 		];
-		return withStatus(ctx, rows);
+		return withStatus(context, rows);
 	},
 });
 
@@ -914,13 +976,15 @@ export const listGuests = query({
 // see the Tasks board) but the list itself stays board-level only.
 export const listBoardLevel = query({
 	args: {},
-	handler: async (ctx) => {
-		await requireRole(ctx, [...BOARD_LEVEL, "core"]);
+	handler: async (context) => {
+		await requireRole(context, [...BOARD_LEVEL, "core"]);
 		const now = Date.now();
-		const people = await peopleByTiers(ctx, BOARD_LEVEL);
+		const people = await peopleByTiers(context, BOARD_LEVEL);
 		return people
-			.filter((p) => isBoardLevel(p.tier) && entitled(p, now))
-			.map(boardLevelView);
+			.filter(
+				(person) => isBoardLevel(person.tier) && entitled(person, now)
+			)
+			.map((person) => boardLevelView(person));
 	},
 });
 
@@ -931,13 +995,13 @@ export const listBoardLevel = query({
  */
 export const kickOut = mutation({
 	args: { id: v.id("people") },
-	handler: async (ctx, { id }) => {
-		await requireRole(ctx, BOARD_LEVEL);
+	handler: async (context, { id }) => {
+		await requireRole(context, BOARD_LEVEL);
 		await applyEvent(
-			ctx,
+			context,
 			id,
 			{ type: "KICK_OUT" },
-			await currentActorId(ctx)
+			await currentActorId(context)
 		);
 		return null;
 	},
@@ -950,13 +1014,13 @@ export const kickOut = mutation({
  */
 export const upgradeGuestToMember = mutation({
 	args: { id: v.id("people") },
-	handler: async (ctx, { id }) => {
-		await requireRole(ctx, BOARD_LEVEL);
+	handler: async (context, { id }) => {
+		await requireRole(context, BOARD_LEVEL);
 		await applyEvent(
-			ctx,
+			context,
 			id,
 			{ type: "PROMOTE_TO_MEMBER" },
-			await currentActorId(ctx)
+			await currentActorId(context)
 		);
 		return null;
 	},
@@ -969,22 +1033,22 @@ export const upgradeGuestToMember = mutation({
  */
 export const completeBoardStep = mutation({
 	args: { personId: v.id("people"), stepId: v.string() },
-	handler: async (ctx, { personId, stepId }) => {
-		await requireRole(ctx, BOARD_LEVEL);
+	handler: async (context, { personId, stepId }) => {
+		await requireRole(context, BOARD_LEVEL);
 		if (!BOARD_STEPS.some((step) => step.id === stepId)) {
 			throw new Error(`Unknown board step: ${stepId}`);
 		}
-		const person = await ctx.db.get(personId);
+		const person = await context.db.get(personId);
 		if (!person) throw new Error("Person not found");
-		const actorId = await currentActorId(ctx);
+		const actorId = await currentActorId(context);
 		const boardSteps = {
 			...(person.onboarding?.boardSteps ?? {}),
 			[stepId]: { completedAt: Date.now(), byId: actorId },
 		};
-		await ctx.db.patch(personId, {
+		await context.db.patch(personId, {
 			onboarding: { ...(person.onboarding ?? { steps: {} }), boardSteps },
 		});
-		await ctx.db.insert("personEvents", {
+		await context.db.insert("personEvents", {
 			personId,
 			at: Date.now(),
 			actorId,
@@ -1005,7 +1069,7 @@ export const completeBoardStep = mutation({
 export const markBoardStepDone = internalMutation({
 	args: { stepId: v.string(), emails: v.array(v.string()) },
 	handler: async (
-		ctx,
+		context,
 		{ stepId, emails }
 	): Promise<{
 		marked: string[];
@@ -1021,7 +1085,7 @@ export const markBoardStepDone = internalMutation({
 		};
 		const now = Date.now();
 		for (const email of emails) {
-			const person = await personByEmail(ctx, email);
+			const person = await personByEmail(context, email);
 			if (!person) {
 				result.unknown.push(email);
 				continue;
@@ -1031,13 +1095,13 @@ export const markBoardStepDone = internalMutation({
 				result.alreadyDone.push(email);
 				continue;
 			}
-			await ctx.db.patch(person._id, {
+			await context.db.patch(person._id, {
 				onboarding: {
 					...(person.onboarding ?? { steps: {} }),
 					boardSteps: { ...done, [stepId]: { completedAt: now } },
 				},
 			});
-			await ctx.db.insert("personEvents", {
+			await context.db.insert("personEvents", {
 				personId: person._id,
 				at: now,
 				kind: "board_task",
@@ -1049,6 +1113,38 @@ export const markBoardStepDone = internalMutation({
 	},
 });
 
+/** Clear one person's board step and the timeline row it wrote, unless a board
+ *  member ticked it themselves. */
+async function unmarkBoardStep(
+	context: MutationCtx,
+	person: Doc<"people">,
+	stepId: string
+): Promise<"unmarked" | "notDone" | "keptByBoard"> {
+	const done = person.onboarding?.boardSteps ?? {};
+	if (!(stepId in done)) return "notDone";
+	if (done[stepId].byId) return "keptByBoard";
+	await context.db.patch(person._id, {
+		onboarding: {
+			...(person.onboarding ?? { steps: {} }),
+			boardSteps: Object.fromEntries(
+				Object.entries(done).filter(([id]) => id !== stepId)
+			),
+		},
+	});
+	const events = await context.db
+		.query("personEvents")
+		.withIndex("by_person", (range) => range.eq("personId", person._id))
+		.collect();
+	for (const event of events)
+		if (
+			event.kind === "board_task" &&
+			event.meta === stepId &&
+			event.actorId === undefined
+		)
+			await context.db.delete(event._id);
+	return "unmarked";
+}
+
 /**
  * Undo {@link markBoardStepDone} for these people: clear the step and the
  * timeline row it wrote, so the board task is open again. Only a tick with no
@@ -1058,7 +1154,7 @@ export const markBoardStepDone = internalMutation({
 export const unmarkBoardStepDone = internalMutation({
 	args: { stepId: v.string(), emails: v.array(v.string()) },
 	handler: async (
-		ctx,
+		context,
 		{ stepId, emails }
 	): Promise<{
 		unmarked: string[];
@@ -1075,40 +1171,13 @@ export const unmarkBoardStepDone = internalMutation({
 			unknown: [] as string[],
 		};
 		for (const email of emails) {
-			const person = await personByEmail(ctx, email);
+			const person = await personByEmail(context, email);
 			if (!person) {
 				result.unknown.push(email);
 				continue;
 			}
-			const done = person.onboarding?.boardSteps ?? {};
-			if (!(stepId in done)) {
-				result.notDone.push(email);
-				continue;
-			}
-			if (done[stepId].byId) {
-				result.keptByBoard.push(email);
-				continue;
-			}
-			await ctx.db.patch(person._id, {
-				onboarding: {
-					...(person.onboarding ?? { steps: {} }),
-					boardSteps: Object.fromEntries(
-						Object.entries(done).filter(([id]) => id !== stepId)
-					),
-				},
-			});
-			const events = await ctx.db
-				.query("personEvents")
-				.withIndex("by_person", (q) => q.eq("personId", person._id))
-				.collect();
-			for (const e of events)
-				if (
-					e.kind === "board_task" &&
-					e.meta === stepId &&
-					e.actorId === undefined
-				)
-					await ctx.db.delete(e._id);
-			result.unmarked.push(email);
+			const outcome = await unmarkBoardStep(context, person, stepId);
+			result[outcome].push(email);
 		}
 		return result;
 	},
@@ -1121,20 +1190,19 @@ export const unmarkBoardStepDone = internalMutation({
  */
 export const logWifiOpen = mutation({
 	args: {},
-	handler: async (ctx) => {
-		const person = await requireRole(ctx, ACCESS_TIERS);
-		const events = await ctx.db
+	handler: async (context) => {
+		const person = await requireRole(context, ACCESS_TIERS);
+		const events = await context.db
 			.query("personEvents")
-			.withIndex("by_person", (q) => q.eq("personId", person._id))
+			.withIndex("by_person", (range) => range.eq("personId", person._id))
 			.collect();
-		if (events.some((e) => e.kind === "wifi")) return null;
-		await ctx.db.insert("personEvents", {
+		if (events.some((event) => event.kind === "wifi")) return;
+		await context.db.insert("personEvents", {
 			personId: person._id,
 			at: Date.now(),
 			actorId: person._id,
 			kind: "wifi",
 		});
-		return null;
 	},
 });
 
@@ -1143,16 +1211,17 @@ export const logWifiOpen = mutation({
 // `sourceUrl`. Returns null when the person has no signature on file.
 export const getAgreementUrl = query({
 	args: { personId: v.id("people") },
-	handler: async (ctx, { personId }) => {
-		await requireRole(ctx, BOARD_LEVEL);
-		const sigs = await ctx.db
+	handler: async (context, { personId }) => {
+		await requireRole(context, BOARD_LEVEL);
+		const sigs = await context.db
 			.query("signatures")
-			.withIndex("by_person", (q) => q.eq("personId", personId))
+			.withIndex("by_person", (range) => range.eq("personId", personId))
 			.collect();
 		const latest = latestSignature(sigs);
 		if (!latest) return null;
-		if (latest.fileId) return await ctx.storage.getUrl(latest.fileId);
-		return latest.sourceUrl ?? null;
+		return latest.fileId
+			? await context.storage.getUrl(latest.fileId)
+			: (latest.sourceUrl ?? null);
 	},
 });
 
@@ -1162,11 +1231,11 @@ export const getAgreementUrl = query({
 // reference.
 export const attendedEvents = query({
 	args: { personId: v.id("people") },
-	handler: async (ctx, { personId }) => {
-		await requireRole(ctx, BOARD_LEVEL);
-		const rows = await ctx.db
+	handler: async (context, { personId }) => {
+		await requireRole(context, BOARD_LEVEL);
+		const rows = await context.db
 			.query("eventAttendance")
-			.withIndex("by_person", (q) => q.eq("personId", personId))
+			.withIndex("by_person", (range) => range.eq("personId", personId))
 			.collect();
 		const out: {
 			eventId: Id<"events">;
@@ -1174,7 +1243,7 @@ export const attendedEvents = query({
 			confirmedAt: number;
 		}[] = [];
 		for (const row of rows) {
-			const event = await ctx.db.get(row.eventId);
+			const event = await context.db.get(row.eventId);
 			if (event !== null)
 				out.push({
 					eventId: row.eventId,
@@ -1193,9 +1262,9 @@ export const attendedEvents = query({
  */
 export const callerInCommunity = internalQuery({
 	args: {},
-	handler: async (ctx): Promise<boolean> => {
+	handler: async (context): Promise<boolean> => {
 		try {
-			await requireRole(ctx, COMMUNITY_TIERS);
+			await requireRole(context, COMMUNITY_TIERS);
 			return true;
 		} catch {
 			return false;

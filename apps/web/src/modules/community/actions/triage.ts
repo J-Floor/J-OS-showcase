@@ -31,11 +31,16 @@ export function useTriage() {
 			personId: Id<"people">,
 			until: number | undefined,
 			hostedById: Id<"people">,
-			blockDoor: boolean
+			shouldBlockDoor: boolean
 		) =>
 			decide.mutate({
 				personId,
-				decision: { kind: "guest", until, hostedById, blockDoor },
+				decision: {
+					kind: "guest",
+					until,
+					hostedById,
+					blockDoor: shouldBlockDoor,
+				},
 			}),
 		undeny: (personId: Id<"people">) => undeny.mutate({ personId }),
 		kickOut: (personId: Id<"people">) =>

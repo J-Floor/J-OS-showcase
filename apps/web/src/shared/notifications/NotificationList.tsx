@@ -20,18 +20,41 @@ function groupByDay(rows: InboxRow[], now: number): Map<string, InboxRow[]> {
 	return groups;
 }
 
-function sameRow(a: InboxRow, b: InboxRow): boolean {
+function sameRow(left: InboxRow, right: InboxRow): boolean {
 	return (
-		a.title === b.title &&
-		a.body === b.body &&
-		a.url === b.url &&
-		a.createdAt === b.createdAt &&
-		a.read === b.read
+		left.title === right.title &&
+		left.body === right.body &&
+		left.url === right.url &&
+		left.createdAt === right.createdAt &&
+		left.read === right.read
 	);
 }
 
 function rowClass(row: InboxRow): string {
 	return row.read ? styles.row : `${styles.row} ${styles.unread}`;
+}
+
+function NotificationRow(props: {
+	row: InboxRow;
+	onOpen: (row: InboxRow) => void;
+}): JSX.Element {
+	return (
+		<List.Item
+			class={rowClass(props.row)}
+			onClick={() => {
+				props.onOpen(props.row);
+			}}
+		>
+			<List.ItemTitle class={styles.title}>
+				{props.row.title}
+			</List.ItemTitle>
+			<List.ItemDescription wrap>{props.row.body}</List.ItemDescription>
+			<span class={styles.time}>{formatAgo(props.row.createdAt)}</span>
+			<Show when={!props.row.read}>
+				<span class={styles.srOnly}>Unread</span>
+			</Show>
+		</List.Item>
+	);
 }
 
 /**
@@ -48,7 +71,8 @@ export function NotificationList(props: {
 	// live head refetches.
 	const rows = createMemo<Map<string, InboxRow>>((previous) => {
 		const next = new Map<string, InboxRow>();
-		for (const row of props.inbox.rows() ?? []) {
+		const inboxRows = props.inbox.rows() ?? [];
+		for (const row of inboxRows) {
 			const prior = previous.get(row._id);
 			next.set(row._id, prior && sameRow(prior, row) ? prior : row);
 		}
@@ -90,35 +114,10 @@ export function NotificationList(props: {
 									<List.Root class={styles.group}>
 										<For each={groups().get(day)}>
 											{(row) => (
-												<List.Item
-													class={rowClass(row)}
-													onClick={() => {
-														open(row);
-													}}
-												>
-													<List.ItemTitle
-														class={styles.title}
-													>
-														{row.title}
-													</List.ItemTitle>
-													<List.ItemDescription wrap>
-														{row.body}
-													</List.ItemDescription>
-													<span class={styles.time}>
-														{formatAgo(
-															row.createdAt
-														)}
-													</span>
-													<Show when={!row.read}>
-														<span
-															class={
-																styles.srOnly
-															}
-														>
-															Unread
-														</span>
-													</Show>
-												</List.Item>
+												<NotificationRow
+													row={row}
+													onOpen={open}
+												/>
 											)}
 										</For>
 									</List.Root>

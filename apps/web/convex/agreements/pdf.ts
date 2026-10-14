@@ -5,21 +5,24 @@ import { PDFDocument, rgb } from "pdf-lib";
 import { FIELD_COORDS, type Variant } from "./coords.ts";
 import { MANROPE_REGULAR_BASE64 } from "./generated/fonts.ts";
 
-const MAX_SIG_BYTES = 512 * 1024;
+const MAX_SIG_BYTES = 524_288;
+const BASE64_BYTES_PER_GROUP = 3;
+const BASE64_CHARS_PER_GROUP = 4;
 const MAX_SIG_DATA_URL_LENGTH =
-	"data:image/png;base64,".length + Math.ceil(MAX_SIG_BYTES / 3) * 4;
+	"data:image/png;base64,".length +
+	Math.ceil(MAX_SIG_BYTES / BASE64_BYTES_PER_GROUP) * BASE64_CHARS_PER_GROUP;
 
 function base64ToBytes(b64: string): Uint8Array {
-	return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+	return Uint8Array.from(atob(b64), (character) => character.charCodeAt(0));
 }
 
 /** Decode + validate a PNG data URL (size-capped). Throws otherwise. */
 export function validatePngDataUrl(dataUrl: string): Uint8Array {
 	if (dataUrl.length > MAX_SIG_DATA_URL_LENGTH)
 		throw new Error("Signature image is too large");
-	const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
-	if (!m) throw new Error("Signature must be a PNG data URL");
-	const bytes = base64ToBytes(m[1]);
+	const match = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
+	if (!match) throw new Error("Signature must be a PNG data URL");
+	const bytes = base64ToBytes(match[1]);
 	if (bytes.byteLength === 0 || bytes.byteLength > MAX_SIG_BYTES) {
 		throw new Error("Signature image is empty or too large");
 	}
@@ -28,7 +31,7 @@ export function validatePngDataUrl(dataUrl: string): Uint8Array {
 
 export async function drawSignedPdf(
 	templateBytes: Uint8Array,
-	opts: {
+	options: {
 		variant: Variant;
 		name: string;
 		company: string;
@@ -50,37 +53,45 @@ export async function drawSignedPdf(
 	// grows past two pages.
 	const pages = doc.getPages();
 	const page = pages[pages.length - 1];
-	const c = FIELD_COORDS[opts.variant];
+	const coords = FIELD_COORDS[options.variant];
 	const black = rgb(0, 0, 0);
 	// Refuse rather than stamp blank boxes for characters the font lacks.
-	function put(label: string, t: string, at: { x: number; y: number }): void {
-		for (const ch of t) {
+	function put(
+		label: string,
+		text: string,
+		at: { x: number; y: number }
+	): void {
+		for (const ch of text) {
 			if (!printable.has(ch.codePointAt(0) ?? 0)) {
 				throw new Error(
 					`${label} contains characters the agreement cannot print`
 				);
 			}
 		}
-		page.drawText(t, { x: at.x, y: at.y, size: 11, font, color: black });
+		page.drawText(text, { x: at.x, y: at.y, size: 11, font, color: black });
 	}
 
-	put("Name", opts.name, c.name);
-	put("Company", opts.company, c.company);
-	put("Email", opts.email, c.email);
-	put("Date", opts.date, c.date);
-	for (let i = 0; i < Math.min(opts.board.length, c.board.length); i++) {
-		const b = opts.board[i];
-		const box = c.board[i];
+	put("Name", options.name, coords.name);
+	put("Company", options.company, coords.company);
+	put("Email", options.email, coords.email);
+	put("Date", options.date, coords.date);
+	for (
+		let index = 0;
+		index < Math.min(options.board.length, coords.board.length);
+		index++
+	) {
+		const signatory = options.board[index];
+		const box = coords.board[index];
 		// Board column has its own Name field AND a separate Signature field —
 		// always type the name + role + date (the signing date, same as the
 		// applicant's); add the signature image in its own field when present
 		// (left blank there otherwise).
-		const member = `Board member ${String(i + 1)}`;
-		put(`${member} name`, b.name, box.name);
-		put(`${member} role`, b.role, box.role);
-		put("Date", opts.date, box.date);
-		if (b.signaturePng) {
-			const bpng = await doc.embedPng(b.signaturePng);
+		const member = `Board member ${String(index + 1)}`;
+		put(`${member} name`, signatory.name, box.name);
+		put(`${member} role`, signatory.role, box.role);
+		put("Date", options.date, box.date);
+		if (signatory.signaturePng) {
+			const bpng = await doc.embedPng(signatory.signaturePng);
 			const bfit = Math.min(
 				box.signature.w / bpng.width,
 				box.signature.h / bpng.height
@@ -98,15 +109,15 @@ export async function drawSignedPdf(
 	// preserving the drawn PNG's aspect ratio — forcing both dimensions would
 	// stretch a square-ish pad drawing into the wide cell and distort it.
 	// Omitted for the unsigned preview (fields only).
-	if (opts.signaturePng) {
-		const png = await doc.embedPng(opts.signaturePng);
+	if (options.signaturePng) {
+		const png = await doc.embedPng(options.signaturePng);
 		const fit = Math.min(
-			c.signature.w / png.width,
-			c.signature.h / png.height
+			coords.signature.w / png.width,
+			coords.signature.h / png.height
 		);
 		page.drawImage(png, {
-			x: c.signature.x,
-			y: c.signature.y,
+			x: coords.signature.x,
+			y: coords.signature.y,
 			width: png.width * fit,
 			height: png.height * fit,
 		});

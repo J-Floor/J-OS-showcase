@@ -174,7 +174,7 @@ const TEMPLATES: Entry[] = [
 
 function sentinel(field: string): string {
 	// eslint-disable-next-line no-restricted-syntax -- builds a sentinel token, not UI text
-	return `__JF_${field.replace(/[A-Z]/g, (c) => `_${c}`).toUpperCase()}__`;
+	return `__JF_${field.replaceAll(/[A-Z]/g, "_$&").toUpperCase()}__`;
 }
 
 function header(): string {
@@ -186,47 +186,67 @@ function constName(field: string, part: "HTML" | "TEXT"): string {
 	return `${field.toUpperCase()}_${part}`;
 }
 
+function propertyType(field: string, list: ListField | undefined): string {
+	if (!list) return `\t${field}: string;`;
+	const members = list.item.map((key) => `${key}: string`).join("; ");
+	return `\t${field}: { ${members} }[];`;
+}
+
+// One-pass replace so a value containing `{key}` is never re-substituted.
+function listExpression(
+	field: string,
+	list: ListField,
+	isEscaped: boolean
+): string {
+	const keys = list.item.join("|");
+	const value = isEscaped ? "escapeHtml(item[key])" : "item[key]";
+	const template = constName(field, isEscaped ? "HTML" : "TEXT");
+	return `${field}.map((item) => ${template}.replaceAll(/\\{(${keys})\\}/g, (_, key: keyof (typeof ${field})[number]) => ${value})).join("")`;
+}
+
+function replacementExpression(
+	field: string,
+	list: ListField | undefined,
+	isHtml: boolean
+): string {
+	if (list) return listExpression(field, list, isHtml);
+	return isHtml ? `escapeHtml(${field})` : field;
+}
+
+function substitution(
+	field: string,
+	list: ListField | undefined,
+	isHtml: boolean
+): string {
+	const replacement = replacementExpression(field, list, isHtml);
+	return `\t\t.split(${JSON.stringify(sentinel(field))}).join(${replacement})`;
+}
+
+function listConstSource(field: string, list: ListField): string {
+	const html = `const ${constName(field, "HTML")} = ${JSON.stringify(list.html)};`;
+	const text = `const ${constName(field, "TEXT")} = ${JSON.stringify(list.text)};`;
+	return `${html}\n${text}\n`;
+}
+
 function moduleSource(entry: Entry, html: string, text: string): string {
 	const lists = entry.listFields ?? {};
 	const propsType = entry.fields
-		.map((f) => {
-			const list = lists[f];
-			return list
-				? `\t${f}: { ${list.item.map((k) => `${k}: string`).join("; ")} }[];`
-				: `\t${f}: string;`;
-		})
+		.map((field) => propertyType(field, lists[field]))
 		.join("\n");
 	const destructured = `{ ${entry.fields.join(", ")} }`;
 	const listConsts = entry.fields
-		.flatMap((f) => {
-			const list = lists[f];
-			return list
-				? [
-						`const ${constName(f, "HTML")} = ${JSON.stringify(list.html)};\nconst ${constName(f, "TEXT")} = ${JSON.stringify(list.text)};\n`,
-					]
-				: [];
+		.flatMap((field) => {
+			const list = lists[field];
+			return list ? [listConstSource(field, list)] : [];
 		})
 		.join("\n");
-	// One-pass replace so a value containing `{key}` is never re-substituted.
-	function listExpr(f: string, list: ListField, escape: boolean): string {
-		const keys = list.item.join("|");
-		const value = escape ? "escapeHtml(item[k])" : "item[k]";
-		const tpl = constName(f, escape ? "HTML" : "TEXT");
-		return `${f}.map((item) => ${tpl}.replace(/\\{(${keys})\\}/g, (_, k: keyof (typeof ${f})[number]) => ${value})).join("")`;
-	}
 	// HTML substitution escapes values; the plain-text substitution uses raw
 	// values (entity-encoding would corrupt the text part).
 	const htmlSubs = entry.fields
-		.map((f) => {
-			const list = lists[f];
-			return `\t\t.split(${JSON.stringify(sentinel(f))}).join(${list ? listExpr(f, list, true) : `escapeHtml(${f})`})`;
-		})
+		.map((field) => substitution(field, lists[field], true))
 		.join("\n");
 	const textSubs = entry.fields
-		.map((f) => {
-			const list = lists[f];
-			return `\t\t.split(${JSON.stringify(sentinel(f))}).join(${list ? listExpr(f, list, false) : f})`;
-		})
+		.map((field) => substitution(field, lists[field], false))
 		.join("\n");
 	return `${header()}import { escapeHtml } from "../escape.ts";
 
@@ -248,65 +268,76 @@ ${textSubs},
 `;
 }
 
-function cap(s: string): string {
+function cap(text: string): string {
 	// eslint-disable-next-line no-restricted-syntax -- builds an identifier, not UI text
-	return s.charAt(0).toUpperCase() + s.slice(1);
+	return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+async function renderEntry(entry: Entry, temporary: string): Promise<string> {
+	const results = await compile({
+		files: [resolve(ROOT, entry.file)],
+		hashFiles: false,
+		outDir: temporary,
+	});
+	const [compiled] = results;
+	const module_ = (await import(pathToFileURL(compiled.path).href)) as {
+		Template: (props: Record<string, string>) => unknown;
+	};
+	const sentinels = Object.fromEntries(
+		entry.fields.map((field) => [field, sentinel(field)])
+	);
+	const html = await render(module_.Template(sentinels) as never, {
+		inlineCss: true,
+	});
+	const text = await render(module_.Template(sentinels) as never, {
+		plainText: true,
+	});
+	// Assert every declared sentinel survived rendering somewhere.
+	for (const field of entry.fields) {
+		const placeholder = sentinel(field);
+		if (!html.includes(placeholder) && !text.includes(placeholder)) {
+			throw new Error(
+				`[email:build] ${entry.name}: sentinel ${placeholder} missing from rendered output`
+			);
+		}
+	}
+	return moduleSource(entry, html, text);
+}
+
+async function writeEntry(entry: Entry, source: string): Promise<void> {
+	await writeFile(resolve(OUT_DIR, `${entry.name}.ts`), source, "utf8");
+
+	console.log(`[email:build] wrote ${entry.name}.ts`);
+}
+
+async function isEntryStale(entry: Entry, source: string): Promise<boolean> {
+	const current = await readFile(
+		resolve(OUT_DIR, `${entry.name}.ts`),
+		"utf8"
+	).catch(() => "");
+	if (current === source) return false;
+
+	console.error(`[email:check] ${entry.name}.ts is stale — run email:build`);
+	return true;
 }
 
 async function main(): Promise<void> {
-	const check = process.argv.includes("--check");
-	const tmp = await mkdtemp(join(tmpdir(), "jfemail-"));
-	let failed = false;
+	const isCheck = process.argv.includes("--check");
+	const temporary = await mkdtemp(join(tmpdir(), "jfemail-"));
+	let isFailed = false;
 	try {
 		for (const entry of TEMPLATES) {
-			const results = await compile({
-				files: [resolve(ROOT, entry.file)],
-				hashFiles: false,
-				outDir: tmp,
-			});
-			const [compiled] = results;
-			const mod = (await import(pathToFileURL(compiled.path).href)) as {
-				Template: (props: Record<string, string>) => unknown;
-			};
-			const sentinels = Object.fromEntries(
-				entry.fields.map((f) => [f, sentinel(f)])
-			);
-			const html = await render(mod.Template(sentinels) as never, {
-				inlineCss: true,
-			});
-			const text = await render(mod.Template(sentinels) as never, {
-				plainText: true,
-			});
-			// Assert every declared sentinel survived rendering somewhere.
-			for (const f of entry.fields) {
-				const s = sentinel(f);
-				if (!html.includes(s) && !text.includes(s)) {
-					throw new Error(
-						`[email:build] ${entry.name}: sentinel ${s} missing from rendered output`
-					);
-				}
+			const source = await renderEntry(entry, temporary);
+			if (!isCheck) {
+				await writeEntry(entry, source);
+				continue;
 			}
-			const source = moduleSource(entry, html, text);
-			const target = resolve(OUT_DIR, `${entry.name}.ts`);
-			if (check) {
-				const current = await readFile(target, "utf8").catch(() => "");
-				if (current !== source) {
-					failed = true;
-
-					console.error(
-						`[email:check] ${entry.name}.ts is stale — run email:build`
-					);
-				}
-			} else {
-				await writeFile(target, source, "utf8");
-
-				console.log(`[email:build] wrote ${entry.name}.ts`);
-			}
+			if (await isEntryStale(entry, source)) isFailed = true;
 		}
 	} finally {
-		await rm(tmp, { recursive: true, force: true });
+		await rm(temporary, { recursive: true, force: true });
 	}
-	if (failed) process.exit(1);
+	if (isFailed) process.exit(1);
 }
 
 await main();

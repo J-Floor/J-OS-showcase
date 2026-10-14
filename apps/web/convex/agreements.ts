@@ -21,20 +21,41 @@ import { boardSignatories } from "./lib/boardSignatories.ts";
 import { sendEmail } from "./lib/email.ts";
 
 /**
+ * Decode the template from base64 (stored in templates.ts as bytesBase64).
+ * Buffer.from avoids the stack-overflow risk of spreading a large typed
+ * array into String.fromCharCode before btoa.
+ */
+function templateBytes(variant: keyof typeof TEMPLATES): Uint8Array {
+	const templateBuffer = Buffer.from(
+		TEMPLATES[variant].bytesBase64,
+		"base64"
+	);
+	return new Uint8Array(
+		templateBuffer.buffer,
+		templateBuffer.byteOffset,
+		templateBuffer.byteLength
+	);
+}
+
+/**
  * Operator CLI: upload one board member's handwriting PNG. The PNG lives in
  * file storage, never in the repository or the static host:
  *   bunx convex run agreements:setBoardSignature '{"slug":"<slug>","dataUrl":"data:image/png;base64,…"}' --prod
  */
 export const setBoardSignature = internalAction({
 	args: { slug: v.string(), dataUrl: v.string() },
-	handler: async (ctx, { slug, dataUrl }): Promise<null> => {
-		if (!boardSignatories().some((b) => b.signatureSlug === slug))
+	handler: async (context, { slug, dataUrl }): Promise<null> => {
+		if (
+			!boardSignatories().some(
+				(signatory) => signatory.signatureSlug === slug
+			)
+		)
 			throw new Error(`Unknown signatory slug: ${slug}`);
 		const png = validatePngDataUrl(dataUrl);
-		const fileId = await ctx.storage.store(
+		const fileId = await context.storage.store(
 			new Blob([png as unknown as ArrayBuffer], { type: "image/png" })
 		);
-		await ctx.runMutation(
+		await context.runMutation(
 			internal.agreementsInternal.upsertBoardSignature,
 			{ slug, fileId }
 		);
@@ -49,43 +70,36 @@ export const setBoardSignature = internalAction({
 // ---------------------------------------------------------------------------
 export const signAgreement = action({
 	args: { signaturePng: v.string() },
-	handler: async (ctx, { signaturePng }): Promise<null> => {
-		const ctxData = await ctx.runQuery(
+	handler: async (context, { signaturePng }): Promise<null> => {
+		const contextData = await context.runQuery(
 			internal.agreementsInternal.signingContext,
 			{}
 		);
-		if (!ctxData) throw new Error("No onboarding in progress.");
-		if (ctxData.alreadySigned) {
+		if (!contextData) throw new Error("No onboarding in progress.");
+		if (contextData.alreadySigned) {
 			throw new Error("Agreement already signed.");
 		}
-		const { personId, email, name, company, variant } = ctxData;
+		const { personId, email, name, company, variant } = contextData;
 
 		const png = validatePngDataUrl(signaturePng);
 
-		// Decode the template from base64 (stored in templates.ts as bytesBase64).
-		// Buffer.from avoids the stack-overflow risk of spreading a large typed
-		// array into String.fromCharCode before btoa.
-		const templateBuf = Buffer.from(
-			TEMPLATES[variant].bytesBase64,
-			"base64"
-		);
-		const template = new Uint8Array(
-			templateBuf.buffer,
-			templateBuf.byteOffset,
-			templateBuf.byteLength
-		);
+		const template = templateBytes(variant);
 
-		const files = await ctx.runQuery(
+		const files = await context.runQuery(
 			internal.agreementsInternal.boardSignatureFiles,
 			{}
 		);
 		const board = await Promise.all(
-			boardSignatories().map(async (b) => {
-				const file = files.find((f) => f.slug === b.signatureSlug);
-				const blob = file ? await ctx.storage.get(file.fileId) : null;
+			boardSignatories().map(async (signatory) => {
+				const file = files.find(
+					(candidate) => candidate.slug === signatory.signatureSlug
+				);
+				const blob = file
+					? await context.storage.get(file.fileId)
+					: null;
 				return {
-					name: b.name,
-					role: b.role,
+					name: signatory.name,
+					role: signatory.role,
 					signaturePng: blob
 						? new Uint8Array(await blob.arrayBuffer())
 						: undefined,
@@ -108,13 +122,13 @@ export const signAgreement = action({
 		// re-serialize the PDF after this point.
 		const pdf = await sealPdf(drawn);
 
-		const fileId = await ctx.storage.store(
+		const fileId = await context.storage.store(
 			new Blob([pdf as unknown as ArrayBuffer], {
 				type: "application/pdf",
 			})
 		);
 
-		await ctx.runMutation(internal.agreementsInternal.recordSignature, {
+		await context.runMutation(internal.agreementsInternal.recordSignature, {
 			personId,
 			email,
 			variant,
@@ -162,7 +176,7 @@ export const signAgreement = action({
 export const verifyAgreement = action({
 	args: { personId: v.id("people") },
 	handler: async (
-		ctx,
+		context,
 		{ personId }
 	): Promise<{
 		ok: boolean;
@@ -170,12 +184,12 @@ export const verifyAgreement = action({
 		actualHash?: string;
 		certFingerprint?: string;
 	}> => {
-		const rec = await ctx.runQuery(
+		const rec = await context.runQuery(
 			internal.agreementsInternal.signatureForVerification,
 			{ personId }
 		);
 		if (!rec?.signedPdfHash) return { ok: false };
-		const blob = await ctx.storage.get(rec.fileId);
+		const blob = await context.storage.get(rec.fileId);
 		if (!blob) return { ok: false, recordedHash: rec.signedPdfHash };
 		const bytes = new Uint8Array(await blob.arrayBuffer());
 		const actualHash = sha256Hex(bytes);
@@ -196,23 +210,15 @@ export const verifyAgreement = action({
 // ---------------------------------------------------------------------------
 export const previewAgreement = action({
 	args: {},
-	handler: async (ctx): Promise<string | null> => {
-		const ctxData = await ctx.runQuery(
+	handler: async (context): Promise<string | null> => {
+		const contextData = await context.runQuery(
 			internal.agreementsInternal.signingContext,
 			{}
 		);
-		if (!ctxData) return null;
-		const { email, name, company, variant } = ctxData;
+		if (!contextData) return null;
+		const { email, name, company, variant } = contextData;
 
-		const templateBuf = Buffer.from(
-			TEMPLATES[variant].bytesBase64,
-			"base64"
-		);
-		const template = new Uint8Array(
-			templateBuf.buffer,
-			templateBuf.byteOffset,
-			templateBuf.byteLength
-		);
+		const template = templateBytes(variant);
 
 		// Preview fills only the applicant's own fields + date — the board
 		// countersignature block stays blank (it's stamped at sign time).

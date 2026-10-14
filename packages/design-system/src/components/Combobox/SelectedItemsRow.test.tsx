@@ -14,8 +14,8 @@ describe("SelectedItemsRow", () => {
 		render(() => (
 			<SelectedItemsRow
 				items={items}
-				getValue={(i) => i.value}
-				getLabel={(i) => i.label}
+				getValue={(option) => option.value}
+				getLabel={(option) => option.label}
 				onRemove={() => {}}
 			/>
 		));
@@ -28,7 +28,7 @@ describe("SelectedItemsRow", () => {
 		const { container } = render(() => (
 			<SelectedItemsRow
 				items={[]}
-				getValue={(i: { value: string }) => i.value}
+				getValue={(option: { value: string }) => option.value}
 				getLabel={() => ""}
 				onRemove={() => {}}
 			/>
@@ -41,8 +41,8 @@ describe("SelectedItemsRow", () => {
 		render(() => (
 			<SelectedItemsRow
 				items={items}
-				getValue={(i) => i.value}
-				getLabel={(i) => i.label}
+				getValue={(option) => option.value}
+				getLabel={(option) => option.label}
 				onRemove={onRemove}
 			/>
 		));

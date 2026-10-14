@@ -26,14 +26,14 @@ vi.mock("convex-solidjs", () => {
 		useQuery: () => ({
 			data: () => ({ person: state.person }),
 			isLoading: () => false,
-			error: () => undefined,
+			error: () => {},
 		}),
 		useMutation: () => ({
 			mutate: mutateAsync,
 			mutateAsync,
 			isLoading: () => false,
-			data: () => undefined,
-			error: () => undefined,
+			data: () => {},
+			error: () => {},
 			reset: vi.fn(),
 		}),
 	};
@@ -95,14 +95,14 @@ test("shows to a guest inside their access window", async () => {
 test("never shows to someone the door is closed to", async () => {
 	state.person = { ...OPEN_DOOR_MEMBER, door: { override: "force_off" } };
 	render(() => <DoorsIntro />);
-	await new Promise((r) => setTimeout(r, 0));
+	await new Promise((resolve) => setTimeout(resolve, 0));
 	expect(screen.queryByText("Getting in")).toBeNull();
 });
 
 test("never shows again once seen", async () => {
 	state.person = { ...OPEN_DOOR_MEMBER, doorsIntroSeenAt: 1 };
 	render(() => <DoorsIntro />);
-	await new Promise((r) => setTimeout(r, 0));
+	await new Promise((resolve) => setTimeout(resolve, 0));
 	expect(screen.queryByText("Getting in")).toBeNull();
 });
 
@@ -130,7 +130,7 @@ test("Escape closes it for this session without marking it seen", async () => {
 	render(() => <DoorsIntro />);
 	await screen.findByRole("dialog");
 	// zag registers its Escape listener on the document after mount.
-	await new Promise((r) => setTimeout(r, 50));
+	await new Promise((resolve) => setTimeout(resolve, 50));
 	fireEvent.keyDown(document.activeElement ?? document.body, {
 		key: "Escape",
 	});

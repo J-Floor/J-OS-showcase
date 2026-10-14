@@ -14,7 +14,7 @@
 		"typecheck": "tsc -b --noEmit",
 		"test": "vitest run",
 		"lint": "bun run lint:logic && bun run lint:style",
-		"lint:logic": "eslint \"src/**/*.{ts,tsx}\" \"convex/**/*.ts\" \"emails/**/*.{ts,tsx}\" \"agreements/**/*.ts\" --cache --max-warnings 0",
+		"lint:logic": "eslint \"src/**/*.{ts,tsx}\" \"convex/**/*.ts\" \"emails/**/*.{ts,tsx}\" \"agreements/**/*.ts\" \"test-stubs/**/*.ts\" --cache --max-warnings 0",
 		"lint:style": "stylelint \"src/**/*.scss\" --cache --allow-empty-input --max-warnings 0",
 		"lint:style:ci": "bun run lint:style --custom-formatter @csstools/stylelint-formatter-github",
 		"format": "prettier --write \"{src,convex,emails,agreements}/**/*.{ts,tsx,css,scss}\" --ignore-path ../../.prettierignore",

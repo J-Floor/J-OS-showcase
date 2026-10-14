@@ -28,34 +28,34 @@ const payload = v.union(
 type Payload = Infer<typeof payload>;
 
 function copy(
-	p: Payload,
-	r: Recipient
+	details: Payload,
+	recipient: Recipient
 ): { title: string; body: string; url: string } {
-	const isGuest = r.personId === p.guestId;
-	if (p.change === "extended") {
+	const isGuest = recipient.personId === details.guestId;
+	if (details.change === "extended") {
 		return isGuest
 			? {
 					title: "Your guest access was extended",
-					body: `You now have access until ${p.untilDate}.`,
+					body: `You now have access until ${details.untilDate}.`,
 					url: spaceUrl(),
 				}
 			: {
-					title: `${p.guestName}'s access was extended`,
-					body: `${p.guestName}'s guest access now runs until ${p.untilDate}.`,
-					url: personUrl(p.guestId),
+					title: `${details.guestName}'s access was extended`,
+					body: `${details.guestName}'s guest access now runs until ${details.untilDate}.`,
+					url: personUrl(details.guestId),
 				};
 	}
-	if (p.change === "shortened") {
+	if (details.change === "shortened") {
 		return isGuest
 			? {
 					title: "Your guest access was shortened",
-					body: `Your guest access now ends on ${p.untilDate}.`,
+					body: `Your guest access now ends on ${details.untilDate}.`,
 					url: spaceUrl(),
 				}
 			: {
-					title: `${p.guestName}'s access was shortened`,
-					body: `${p.guestName}'s guest access now ends on ${p.untilDate}.`,
-					url: personUrl(p.guestId),
+					title: `${details.guestName}'s access was shortened`,
+					body: `${details.guestName}'s guest access now ends on ${details.untilDate}.`,
+					url: personUrl(details.guestId),
 				};
 	}
 	return isGuest
@@ -65,21 +65,26 @@ function copy(
 				url: homeUrl(),
 			}
 		: {
-				title: `${p.guestName} is now a member`,
-				body: `${p.guestName} was upgraded from guest to member.`,
-				url: personUrl(p.guestId),
+				title: `${details.guestName} is now a member`,
+				body: `${details.guestName} was upgraded from guest to member.`,
+				url: personUrl(details.guestId),
 			};
 }
 
 export const guestAccessChanged = defineKind({
 	category: "guests",
 	payload,
-	audience: (ctx, { guestId }) =>
-		guestAudience(ctx, guestId, { guest: "entitled" }),
-	push: (p, r) => ({ ...copy(p, r), tag: `guest-${p.guestId}-access` }),
-	email: (p, r) => {
+	audience: (context, { guestId }) =>
+		guestAudience(context, guestId, { guest: "entitled" }),
+	push: (details, recipient) => ({
+		...copy(details, recipient),
+		tag: `guest-${details.guestId}-access`,
+	}),
+	email: (details, recipient) => {
 		// The lifecycle already mails the guest `memberUpgrade` for this event.
-		if (p.change === "upgraded" && r.personId === p.guestId) return null;
-		return noticeEmail(copy(p, r));
+		return details.change === "upgraded" &&
+			recipient.personId === details.guestId
+			? null
+			: noticeEmail(copy(details, recipient));
 	},
 });

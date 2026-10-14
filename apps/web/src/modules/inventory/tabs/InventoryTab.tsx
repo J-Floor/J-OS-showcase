@@ -1,20 +1,21 @@
 import {
 	Table,
 	type BatchActionsRenderProps,
-	type JfColumnDef,
+	type JfColumnDefinition,
 } from "@j-os/design-system";
 import { Show, createSignal, type JSX } from "solid-js";
 
 import { createDrawerNav } from "../../../lib/createDrawerNav.ts";
 import type { EntitySelection } from "../../../shared/entity/createEntitySelection.ts";
 import type { EntityDescriptor } from "../../../shared/entity/entityDescriptor.ts";
+import type { DrawerNavState } from "../../../shared/entity/EntityDrawerHeader.tsx";
 import { useRowPrefetch } from "../../../shared/entity/useRowPrefetch.ts";
 
 export function InventoryTab<
 	Row extends Record<string, unknown> & { _id: string },
 >(props: {
 	data: () => Row[] | undefined;
-	columns: () => JfColumnDef<Row>[];
+	columns: () => JfColumnDefinition<Row>[];
 	/** Drawer open/close/current-row/URL state — the single source of truth,
 	 *  created once per tab in `InventoryPage`. Replaces the old internal
 	 *  open/editingId signals and the `requestNew`/`requestOpenItem` nonces. */
@@ -31,15 +32,10 @@ export function InventoryTab<
 	batchActions?: (props: BatchActionsRenderProps<Row>) => JSX.Element;
 	renderDrawer: (args: {
 		open: () => boolean;
-		onOpenChange: (open: boolean) => void;
+		onOpenChange: (isOpen: boolean) => void;
 		row: () => Row | undefined;
 		initialAssetTag: () => string | undefined;
-		nav: {
-			hasPrev: () => boolean;
-			hasNext: () => boolean;
-			onPrev: () => void;
-			onNext: () => void;
-		};
+		nav: DrawerNavState;
 	}) => JSX.Element;
 }): JSX.Element {
 	const [displayed, setDisplayed] = createSignal<Row[]>([]);
@@ -66,11 +62,11 @@ export function InventoryTab<
 	// eslint-disable-next-line solid/reactivity -- intentional single call outside a tracked scope; the callback takes accessors, so no reactive read happens here
 	const drawer = props.renderDrawer({
 		open: () => props.selection.open(),
-		onOpenChange: (v) => {
+		onOpenChange: (isOpen) => {
 			// The drawer only ever asks to close (it has no self-open trigger);
 			// closing must go through the selection so it clears selectedId and
 			// the URL param — otherwise the row lingers and re-opens on refetch.
-			if (!v) props.selection.close();
+			if (!isOpen) props.selection.close();
 		},
 		row: () => props.selection.selected(),
 		initialAssetTag: () =>
@@ -103,7 +99,7 @@ export function InventoryTab<
 			>
 				<Show when={props.enableRowSelection}>
 					<Table.BatchActions<Row>>
-						{(p) => props.batchActions?.(p) ?? null}
+						{(batch) => props.batchActions?.(batch) ?? null}
 					</Table.BatchActions>
 				</Show>
 			</Table.Root>

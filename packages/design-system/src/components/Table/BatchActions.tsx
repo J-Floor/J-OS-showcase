@@ -57,21 +57,21 @@ export type BatchActionsProps<Data extends Record<string, unknown>> = {
 function BatchActionsComponent<Data extends Record<string, unknown>>(
 	props: BatchActionsProps<Data>
 ): JSX.Element {
-	const ctx = useContext(BatchActionsContext);
+	const context = useContext(BatchActionsContext);
 	// eslint-disable-next-line solid/components-return-once -- context is always provided by Table.Root at mount; the guard only handles misuse
-	if (!ctx) return null;
-	const t = ctx.table as TanTable<Data>;
-	const rowSelection = ctx.rowSelection;
+	if (!context) return null;
+	const table = context.table as TanTable<Data>;
+	const rowSelection = context.rowSelection;
 
 	function selectedCount(): number {
 		return Object.values(rowSelection()).filter(Boolean).length;
 	}
 	function selectedRows(): Data[] {
-		return t.getSelectedRowModel().rows.map((r) => r.original);
+		return table.getSelectedRowModel().rows.map((row) => row.original);
 	}
 
 	function clearSelection() {
-		t.resetRowSelection();
+		table.resetRowSelection();
 	}
 
 	function content(): JSX.Element {
@@ -88,7 +88,7 @@ function BatchActionsComponent<Data extends Record<string, unknown>>(
 					return selectedCount();
 				},
 				clearSelection,
-				table: t,
+				table,
 			});
 		}
 		return children;

@@ -27,26 +27,26 @@ const SECRET_FIELDS = [
 
 function redact(row: AuthRow): AuthRow {
 	return Object.fromEntries(
-		Object.entries(row).filter(([k]) => !SECRET_FIELDS.includes(k))
+		Object.entries(row).filter(([key]) => !SECRET_FIELDS.includes(key))
 	);
 }
 
 async function authUser(
-	ctx: QueryCtx | MutationCtx,
+	context: QueryCtx | MutationCtx,
 	email: string
 ): Promise<AuthUser | null> {
-	return (await ctx.runQuery(components.betterAuth.adapter.findOne, {
+	return (await context.runQuery(components.betterAuth.adapter.findOne, {
 		model: "user",
 		where: [{ field: "email", value: normalizeEmail(email) }],
 	})) as AuthUser | null;
 }
 
 async function rowsOf(
-	ctx: QueryCtx,
+	context: QueryCtx,
 	model: "session" | "account",
 	userId: string
 ): Promise<AuthRow[]> {
-	const { page } = (await ctx.runQuery(
+	const { page } = (await context.runQuery(
 		components.betterAuth.adapter.findMany,
 		{
 			model,
@@ -54,29 +54,29 @@ async function rowsOf(
 			paginationOpts: { cursor: null, numItems: AUTH_PAGE },
 		}
 	)) as { page: AuthRow[] };
-	return page.map(redact);
+	return page.map((row) => redact(row));
 }
 
 /** The sign-in records held for `email`, secrets left out. */
-export async function authRecordsFor(ctx: QueryCtx, email: string) {
-	const user = await authUser(ctx, email);
+export async function authRecordsFor(context: QueryCtx, email: string) {
+	const user = await authUser(context, email);
 	if (!user) return { user: null, sessions: [], accounts: [] };
 	return {
 		user,
-		sessions: await rowsOf(ctx, "session", user._id),
-		accounts: await rowsOf(ctx, "account", user._id),
+		sessions: await rowsOf(context, "session", user._id),
+		accounts: await rowsOf(context, "account", user._id),
 	};
 }
 
 /** Delete every auth row matching `input`, page by page. */
 async function deleteAll(
-	ctx: MutationCtx,
+	context: MutationCtx,
 	input: DeleteInput
 ): Promise<number> {
 	let deleted = 0;
 	let cursor: string | null = null;
 	for (;;) {
-		const page = (await ctx.runMutation(
+		const page = (await context.runMutation(
 			components.betterAuth.adapter.deleteMany,
 			{ input, paginationOpts: { cursor, numItems: AUTH_PAGE } }
 		)) as { count: number; isDone: boolean; continueCursor: string };
@@ -92,19 +92,19 @@ async function deleteAll(
  * per-address rate-limit buckets keyed on it. Returns how many auth rows went.
  */
 export async function eraseAuthRecords(
-	ctx: MutationCtx,
+	context: MutationCtx,
 	email: string
 ): Promise<number> {
 	const address = normalizeEmail(email);
 	let deleted = 0;
-	const user = await authUser(ctx, address);
+	const user = await authUser(context, address);
 	if (user) {
 		for (const model of ["session", "account"] as const)
-			deleted += await deleteAll(ctx, {
+			deleted += await deleteAll(context, {
 				model,
 				where: [{ field: "userId", value: user._id }],
 			});
-		deleted += await deleteAll(ctx, {
+		deleted += await deleteAll(context, {
 			model: "user",
 			where: [{ field: "_id", value: user._id }],
 		});
@@ -112,7 +112,7 @@ export async function eraseAuthRecords(
 	// Live links only: `expiresAt` bounds the read through its index, where
 	// matching on `value` alone would scan the whole table. An expired link
 	// that was never used still holds the address until Better Auth drops it.
-	deleted += await deleteAll(ctx, {
+	deleted += await deleteAll(context, {
 		model: "verification",
 		where: [
 			{ field: "expiresAt", operator: "gt", value: Date.now() },
@@ -126,6 +126,6 @@ export async function eraseAuthRecords(
 		],
 	});
 	for (const name of ["sendEmail", "magicLinkAddress"] as const)
-		await rateLimiter.reset(ctx, name, { key: address });
+		await rateLimiter.reset(context, name, { key: address });
 	return deleted;
 }

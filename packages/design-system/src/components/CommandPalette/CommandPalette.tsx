@@ -1,15 +1,7 @@
-import { Combobox, createListCollection } from "@ark-ui/solid/combobox";
-import { createHotkey, type Hotkey } from "@tanstack/solid-hotkeys";
+import { Combobox } from "@ark-ui/solid/combobox";
+import { type Hotkey } from "@tanstack/solid-hotkeys";
 import clsx from "clsx";
-import {
-	For,
-	Show,
-	createEffect,
-	createMemo,
-	createSignal,
-	onCleanup,
-	type JSX,
-} from "solid-js";
+import { For, Show, createSignal, type JSX } from "solid-js";
 
 import { ICONS } from "../../icons.ts";
 import { Dialog } from "../Dialog/Dialog.tsx";
@@ -19,11 +11,14 @@ import { Kbd } from "../Kbd/Kbd.tsx";
 import { ClearSearchButton } from "../SearchInput/ClearSearchButton.tsx";
 
 import {
-	addRecent,
-	readRecents,
-	scoreMatch,
-	writeRecents,
-} from "./CommandPalette.helpers.ts";
+	createHighlight,
+	createHighlightIntent,
+	createOpenHotkey,
+	createPaletteResults,
+	createRecents,
+	resetOnOpen,
+	type PaletteGroup,
+} from "./CommandPalette.hooks.ts";
 import styles from "./CommandPalette.module.scss";
 
 /** One thing the palette can take you to or do. */
@@ -65,7 +60,7 @@ export type CommandPaletteItem = {
 
 export type CommandPaletteProps = {
 	open: boolean;
-	onOpenChange: (open: boolean) => void;
+	onOpenChange: (isOpen: boolean) => void;
 	items: CommandPaletteItem[];
 	placeholder?: string;
 	/** Shown when nothing matches. @default "No matches." */
@@ -91,9 +86,129 @@ export type CommandPaletteProps = {
 };
 
 const DEFAULT_SHORTCUT: Hotkey = "Mod+K";
-const HIGHLIGHT_INTENT_MS = 120;
 
-const RECENT_GROUP = "Recent";
+/** The search input with its icon and, once there is a query, a clear button. */
+function SearchField(props: {
+	placeholder: string | undefined;
+	hasQuery: boolean;
+	setInput: (element: HTMLInputElement) => void;
+	onClear: () => void;
+}): JSX.Element {
+	return (
+		<Combobox.Control class={styles.control}>
+			<Icon class={styles.searchIcon}>{ICONS.search}</Icon>
+			{/* NO `autofocus`. The palette stays mounted while closed
+		    (an overlay cannot gate its own mount), so this input is in
+		    the DOM from first paint — and `autofocus` fires on mount,
+		    not on open, so it stole focus into the closed, invisible
+		    palette on every page load. Focus trapped there, every
+		    keystroke went to this hidden combobox: the roster's arrow
+		    keys never focused a row and Alt-to-peek did nothing. Focus
+		    on OPEN is handled by `initialFocusEl` on `Dialog.Root`
+		    above, which is why the attribute was only ever redundant. */}
+			<Combobox.Input
+				class={styles.input}
+				placeholder={props.placeholder ?? "Search…"}
+				ref={props.setInput}
+			/>
+			{/* Only once there is something to clear: a permanent X
+		    on an empty field is a button that does nothing.
+
+		    NOT `Combobox.ClearTrigger`, which is tied to the
+		    SELECTED value and renders itself `hidden` whenever
+		    there isn't one — a palette closes on select and so
+		    never holds a selection, leaving the trigger invisible
+		    forever. What wants clearing here is the query. */}
+			<Show when={props.hasQuery}>
+				<ClearSearchButton onClear={props.onClear} />
+			</Show>
+		</Combobox.Control>
+	);
+}
+
+/** The grouped rows, or the empty message when nothing matched. */
+function PaletteGroups(props: {
+	groups: PaletteGroup[];
+	search: string;
+	emptyMessage: string | undefined;
+}): JSX.Element {
+	return (
+		<Show
+			when={props.groups.length > 0}
+			fallback={
+				<p class={styles.empty}>
+					{props.emptyMessage ?? "No matches."}
+				</p>
+			}
+		>
+			<For each={props.groups}>
+				{(group) => (
+					<Combobox.ItemGroup class={styles.group}>
+						<Combobox.ItemGroupLabel class={styles.groupLabel}>
+							{group.name}
+							{/* Says what was left out, so a capped
+											    group reads as "keep typing" rather
+											    than "that's everyone". In the label,
+											    not a row of its own: everything
+											    inside a listbox should be an option
+											    you can land on. */}
+							<Show when={group.total > group.items.length}>
+								<span class={styles.groupCount}>
+									{group.items.length} of {group.total}
+								</span>
+							</Show>
+						</Combobox.ItemGroupLabel>
+						<For each={group.items}>
+							{(item) => (
+								<Combobox.Item item={item} class={styles.item}>
+									<Show when={item.icon}>
+										{(icon) => (
+											<Icon class={styles.itemIcon}>
+												{icon()}
+											</Icon>
+										)}
+									</Show>
+									<span class={styles.itemText}>
+										<Combobox.ItemText>
+											{/* Shows WHY a row
+															    matched, which is
+															    what makes a long
+															    list scannable. */}
+											<Highlight
+												query={props.search}
+												text={item.label}
+											/>
+										</Combobox.ItemText>
+										<Show when={item.detail}>
+											{(detail) => (
+												<span class={styles.itemDetail}>
+													{detail()}
+												</span>
+											)}
+										</Show>
+									</span>
+								</Combobox.Item>
+							)}
+						</For>
+					</Combobox.ItemGroup>
+				)}
+			</For>
+		</Show>
+	);
+}
+
+/** The key hints along the bottom. */
+function PaletteFooter(props: { shortcut: Hotkey }): JSX.Element {
+	return (
+		<footer class={styles.footer}>
+			<Kbd shortcut="ArrowUp" />
+			<Kbd shortcut="ArrowDown">to move</Kbd>
+			<Kbd shortcut="Enter">to open</Kbd>
+			<Kbd shortcut={props.shortcut}>to search</Kbd>
+			<Kbd shortcut="Escape">to close</Kbd>
+		</footer>
+	);
+}
 
 /**
  * Search-everything dialog: type, arrow through the results, Enter to go.
@@ -112,16 +227,8 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
 	const [search, setSearch] = createSignal("");
 	// Clearing puts the caret back where the typing happens; a cleared field you
 	// then have to click into is worse than no button at all.
-	let inputRef: HTMLInputElement | undefined = undefined;
-	const [recents, setRecents] = createSignal<string[]>([]);
-
-	function maxRecents(): number {
-		return props.maxRecents ?? 5;
-	}
-
-	function maxPerGroup(): number {
-		return props.maxPerGroup ?? 8;
-	}
+	let inputReference: HTMLInputElement | undefined;
+	const { recents, setRecents, select } = createRecents(props);
 
 	function shortcut(): Hotkey {
 		return props.shortcut ?? DEFAULT_SHORTCUT;
@@ -130,204 +237,18 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
 	// The binding lives with the component that owns the hint. The library
 	// requires every unnamed modifier to be ABSENT, so this does not also fire
 	// on Ctrl+Shift+K and steal the browser's console.
-	createHotkey(
-		() => shortcut(),
-		(event) => {
-			event.preventDefault();
-			props.onOpenChange(!props.open);
-		},
-		// The palette is a modifier combo (`Mod+K`) and must open from anywhere,
-		// including while a text field has focus — the raw listener it replaced
-		// did. The library's `ignoreInputs` default (true) would swallow it in
-		// exactly those fields, so turn it off.
-		() => ({ ignoreInputs: false })
+	createOpenHotkey(props, shortcut);
+
+	resetOnOpen(props, setSearch, setRecents);
+
+	const { groups, visible, collection } = createPaletteResults(
+		props,
+		search,
+		recents
 	);
-
-	// Read on open, not on mount: another tab may have added to the list, and
-	// the palette is cheap to re-read.
-	createEffect(() => {
-		if (!props.open) return;
-		setSearch("");
-		const key = props.recentsKey;
-		setRecents(key === undefined ? [] : readRecents(key));
-	});
-
-	function searching(): boolean {
-		return search().trim() !== "";
-	}
-
-	/**
-	 * Matching items, best first. A blank search keeps the caller's order —
-	 * `scoreMatch` gives everything 1, and a stable sort leaves them be — and
-	 * shows only the fixed destinations, since `searchOnly` items are what you
-	 * go looking for rather than what you browse.
-	 */
-	const ranked = createMemo(() => {
-		const term = search();
-		const open = searching();
-		return props.items
-			.filter((item) => open || item.searchOnly !== true)
-			.map((item, index) => ({
-				item,
-				index,
-				score: scoreMatch(item.label, term, item.keywords),
-			}))
-			.filter((scored) => scored.score > 0)
-			.sort((a, b) => b.score - a.score || a.index - b.index)
-			.map((scored) => scored.item);
-	});
-
-	/**
-	 * What was used last, shown only on a blank search. Once you have typed
-	 * something you are looking for that thing, not for your own history — and
-	 * a Recent copy of an item that also matches would list it twice.
-	 */
-	const recentItems = createMemo(() => {
-		if (searching() || props.recentsKey === undefined) return [];
-		const byValue = new Map(props.items.map((i) => [i.value, i]));
-		return recents()
-			.map((value) => byValue.get(value))
-			.filter((item): item is CommandPaletteItem => item !== undefined)
-			.slice(0, maxRecents());
-	});
-
-	/**
-	 * Groups in first-seen order, with Recent pinned to the top, each capped at
-	 * `maxPerGroup` and carrying its full count so the heading can own up to what
-	 * it left out.
-	 *
-	 * A recent is the SAME item as its entry further down, so it is removed from
-	 * its own group rather than shown twice. Ark keys rows by value: a duplicate
-	 * would highlight both copies at once, and arrowing down would appear to
-	 * stall as the highlight moved between two identical rows.
-	 */
-	const groups = createMemo(() => {
-		const recentValues = recentItems();
-		const pinned = new Set(recentValues.map((item) => item.value));
-		const all = [
-			...recentValues,
-			...ranked().filter((i) => !pinned.has(i.value)),
-		];
-
-		const out: {
-			name: string;
-			items: CommandPaletteItem[];
-			total: number;
-		}[] = [];
-		const byName = new Map<string, (typeof out)[number]>();
-		for (const item of all) {
-			const name = pinned.has(item.value) ? RECENT_GROUP : item.group;
-			let bucket = byName.get(name);
-			if (!bucket) {
-				bucket = { name, items: [], total: 0 };
-				byName.set(name, bucket);
-				out.push(bucket);
-			}
-			bucket.total++;
-			if (bucket.items.length < maxPerGroup()) bucket.items.push(item);
-		}
-		return out;
-	});
-
-	/**
-	 * Every row actually on screen, in the order the keyboard walks it.
-	 *
-	 * Derived from the CAPPED groups, not from the full match list: Ark drives
-	 * the highlight off the collection, so an item the collection knows about but
-	 * the list never rendered is a stop the arrow keys make on nothing.
-	 */
-	const visible = createMemo(() => groups().flatMap((group) => group.items));
-
-	// One flat collection, in the same order as the groups above, so arrowing
-	// down moves the highlight the way the eye reads.
-	const collection = createMemo(() =>
-		createListCollection({
-			items: visible(),
-			itemToValue: (item) => item.value,
-			itemToString: (item) => item.label,
-		})
-	);
-
-	/**
-	 * The first row is highlighted, so Enter opens the obvious answer without
-	 * arrowing to it first — the whole point of typing into a palette. Ark has
-	 * no `autoHighlight` in this version, so the highlight is controlled here
-	 * and re-pointed at the top of the list whenever the list changes.
-	 */
-	const [highlighted, setHighlighted] = createSignal<string | null>(null);
-	createEffect(() => {
-		setHighlighted(visible().at(0)?.value ?? null);
-	});
-
-	createEffect(() => {
-		const value = highlighted();
-		if (value === null || search() === "") return;
-		const item = visible().find((each) => each.value === value);
-		if (!item?.onHighlight) return;
-		const timer = setTimeout(() => {
-			item.onHighlight?.();
-		}, HIGHLIGHT_INTENT_MS);
-		onCleanup(() => {
-			clearTimeout(timer);
-		});
-	});
-
-	/**
-	 * Keep the highlighted row on screen.
-	 *
-	 * zag scrolls it itself — but only inside `Combobox.Content`, and this
-	 * palette renders `Combobox.List` (see the note at the list below). Its
-	 * helper bails on a missing root element rather than falling back to the
-	 * nearest scroller, so arrowing past the bottom row silently moved the
-	 * highlight off-screen and the list never followed.
-	 *
-	 * `block: "nearest"` scrolls only when the row is actually out of view, so
-	 * hovering — which also moves the highlight — never yanks the list.
-	 *
-	 * The first row is special-cased to a plain `scrollTop = 0`, for two
-	 * reasons. It is more correct — a heading sits above that row and is not
-	 * part of it, so `scrollIntoView` will happily leave it clipped. And it is
-	 * measurement-free: asked to scroll the first row into view while the
-	 * dialog was still animating in, the browser measured a rect that the
-	 * animation had displaced and scrolled the list by that displacement,
-	 * opening the palette already scrolled past its own first result. Only on
-	 * the first open after a reload, and only with enough results to scroll —
-	 * which is why it showed up in production and not on a dev roster.
-	 */
-	let listRef: HTMLElement | undefined = undefined;
-	createEffect(() => {
-		const value = highlighted();
-		if (value === null) return;
-		const isFirst = visible().at(0)?.value === value;
-		// Deferred: when the highlight moves because the LIST changed, the row
-		// it points at is rendered by the same pass this effect runs in, and is
-		// not in the DOM yet when the effect fires.
-		queueMicrotask(() => {
-			if (!listRef) return;
-			if (isFirst) {
-				listRef.scrollTop = 0;
-				return;
-			}
-			const row = listRef.querySelector(
-				`[role="option"][data-value="${CSS.escape(value)}"]`
-			);
-			// jsdom does no layout and ships no `scrollIntoView`, so a test
-			// environment must not be the thing that throws here.
-			if (typeof row?.scrollIntoView === "function")
-				row.scrollIntoView({ block: "nearest" });
-		});
-	});
-
-	function select(item: CommandPaletteItem): void {
-		const key = props.recentsKey;
-		if (key !== undefined) {
-			const next = addRecent(recents(), item.value, maxRecents());
-			setRecents(next);
-			writeRecents(key, next);
-		}
-		props.onOpenChange(false);
-		item.onSelect();
-	}
+	const { highlighted, setHighlighted, setListReference } =
+		createHighlight(visible);
+	createHighlightIntent(highlighted, search, visible);
 
 	return (
 		<Dialog.Root
@@ -344,7 +265,7 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
 			// input, and only on open — an `autofocus` attribute on the field
 			// fired on mount instead (the palette is mounted while closed) and
 			// stole focus into the hidden box, so it was removed.
-			initialFocusEl={() => inputRef ?? null}
+			initialFocusEl={() => inputReference ?? null}
 		>
 			<Dialog.Content
 				class={clsx(styles.dialog, props.class)}
@@ -393,45 +314,23 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
 					// nothing. `onSelect` fires on every pick.
 					onSelect={(details) => {
 						const item = props.items.find(
-							(i) => i.value === details.itemValue
+							(option) => option.value === details.itemValue
 						);
 						if (item) select(item);
 					}}
 					class={styles.combobox}
 				>
-					<Combobox.Control class={styles.control}>
-						<Icon class={styles.searchIcon}>{ICONS.search}</Icon>
-						{/* NO `autofocus`. The palette stays mounted while closed
-					    (an overlay cannot gate its own mount), so this input is in
-					    the DOM from first paint — and `autofocus` fires on mount,
-					    not on open, so it stole focus into the closed, invisible
-					    palette on every page load. Focus trapped there, every
-					    keystroke went to this hidden combobox: the roster's arrow
-					    keys never focused a row and Alt-to-peek did nothing. Focus
-					    on OPEN is handled by `initialFocusEl` on `Dialog.Root`
-					    above, which is why the attribute was only ever redundant. */}
-						<Combobox.Input
-							class={styles.input}
-							placeholder={props.placeholder ?? "Search…"}
-							ref={(el: HTMLInputElement) => (inputRef = el)}
-						/>
-						{/* Only once there is something to clear: a permanent X
-					    on an empty field is a button that does nothing.
-
-					    NOT `Combobox.ClearTrigger`, which is tied to the
-					    SELECTED value and renders itself `hidden` whenever
-					    there isn't one — a palette closes on select and so
-					    never holds a selection, leaving the trigger invisible
-					    forever. What wants clearing here is the query. */}
-						<Show when={search() !== ""}>
-							<ClearSearchButton
-								onClear={() => {
-									setSearch("");
-									inputRef?.focus();
-								}}
-							/>
-						</Show>
-					</Combobox.Control>
+					<SearchField
+						placeholder={props.placeholder}
+						hasQuery={search() !== ""}
+						setInput={(element) => {
+							inputReference = element;
+						}}
+						onClear={() => {
+							setSearch("");
+							inputReference?.focus();
+						}}
+					/>
 					{/* `Combobox.List`, not `Combobox.Content`. Content is a
 				    dismissable LAYER, and nested inside the dialog's layer it is
 				    never the topmost one — Ark marks it `pointer-events: none`,
@@ -440,102 +339,15 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
 				    the dialog already owns dismissal. */}
 					<Combobox.List
 						class={styles.content}
-						ref={(el: HTMLElement) => (listRef = el)}
+						ref={setListReference}
 					>
-						<Show
-							when={groups().length > 0}
-							fallback={
-								<p class={styles.empty}>
-									{props.emptyMessage ?? "No matches."}
-								</p>
-							}
-						>
-							<For each={groups()}>
-								{(group) => (
-									<Combobox.ItemGroup class={styles.group}>
-										<Combobox.ItemGroupLabel
-											class={styles.groupLabel}
-										>
-											{group.name}
-											{/* Says what was left out, so a capped
-										    group reads as "keep typing" rather
-										    than "that's everyone". In the label,
-										    not a row of its own: everything
-										    inside a listbox should be an option
-										    you can land on. */}
-											<Show
-												when={
-													group.total >
-													group.items.length
-												}
-											>
-												<span class={styles.groupCount}>
-													{group.items.length} of{" "}
-													{group.total}
-												</span>
-											</Show>
-										</Combobox.ItemGroupLabel>
-										<For each={group.items}>
-											{(item) => (
-												<Combobox.Item
-													item={item}
-													class={styles.item}
-												>
-													<Show when={item.icon}>
-														{(icon) => (
-															<Icon
-																class={
-																	styles.itemIcon
-																}
-															>
-																{icon()}
-															</Icon>
-														)}
-													</Show>
-													<span
-														class={styles.itemText}
-													>
-														<Combobox.ItemText>
-															{/* Shows WHY a row
-														    matched, which is
-														    what makes a long
-														    list scannable. */}
-															<Highlight
-																query={search()}
-																text={
-																	item.label
-																}
-															/>
-														</Combobox.ItemText>
-														<Show
-															when={item.detail}
-														>
-															{(detail) => (
-																<span
-																	class={
-																		styles.itemDetail
-																	}
-																>
-																	{detail()}
-																</span>
-															)}
-														</Show>
-													</span>
-												</Combobox.Item>
-											)}
-										</For>
-									</Combobox.ItemGroup>
-								)}
-							</For>
-						</Show>
+						<PaletteGroups
+							groups={groups()}
+							search={search()}
+							emptyMessage={props.emptyMessage}
+						/>
 					</Combobox.List>
-					<footer class={styles.footer}>
-						<Kbd shortcut="ArrowUp" />
-						<Kbd shortcut="ArrowDown">to move</Kbd>
-						<Kbd shortcut="Enter">to open</Kbd>
-						<Kbd shortcut={shortcut()}>to search</Kbd>
-						<Kbd shortcut="Escape">to close</Kbd>
-					</footer>
+					<PaletteFooter shortcut={shortcut()} />
 				</Combobox.Root>
 			</Dialog.Content>
 		</Dialog.Root>

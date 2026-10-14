@@ -14,15 +14,15 @@ import { mayMagicLink } from "./lib/rateLimit.ts";
 
 const siteUrl = process.env.SITE_URL!;
 
-const THIRTY_DAYS = 60 * 60 * 24 * 30;
+const THIRTY_DAYS = 2_592_000;
 
 export const authComponent = createClient<DataModel>(components.betterAuth);
 
-export function createAuth(ctx: GenericCtx<DataModel>) {
+export function createAuth(context: GenericCtx<DataModel>) {
 	return betterAuth({
 		baseURL: process.env.CONVEX_SITE_URL,
 		trustedOrigins: [siteUrl],
-		database: authComponent.adapter(ctx),
+		database: authComponent.adapter(context),
 		session: { expiresIn: THIRTY_DAYS },
 		plugins: [
 			crossDomain({ siteUrl }),
@@ -30,14 +30,14 @@ export function createAuth(ctx: GenericCtx<DataModel>) {
 			magicLink({
 				storeToken: "hashed",
 				sendMagicLink: async ({ email, url }) => {
-					if (!("runMutation" in ctx)) {
+					if (!("runMutation" in context)) {
 						throw new Error(
 							"sendMagicLink needs an action context"
 						);
 					}
 					// Exhausted → send nothing; Better Auth still answers
 					// success, so the endpoint stays non-enumerable.
-					if (!(await mayMagicLink(ctx, email))) return;
+					if (!(await mayMagicLink(context, email))) return;
 					const { logoUrl } = emailUrls();
 					const { html, text } = magicLinkEmail({ url, logoUrl });
 					await sendEmail({
@@ -55,5 +55,5 @@ export function createAuth(ctx: GenericCtx<DataModel>) {
 
 export const getCurrentUser = query({
 	args: {},
-	handler: async (ctx) => authComponent.getAuthUser(ctx),
+	handler: async (context) => authComponent.getAuthUser(context),
 });

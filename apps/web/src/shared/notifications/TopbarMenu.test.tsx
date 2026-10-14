@@ -30,8 +30,11 @@ vi.mock("../../../convex/_generated/api", () => ({
 	api: { notify: { inbox: { unreadCount: "unreadCount" } } },
 }));
 vi.mock("../../lib/push.ts", () => ({ disablePush }));
+function noSession() {
+	return { data: null };
+}
 vi.mock("../../lib/auth.ts", () => ({
-	authClient: { signOut, useSession: () => () => ({ data: null }) },
+	authClient: { signOut, useSession: () => noSession },
 }));
 vi.mock("@solidjs/router", () => ({ useNavigate: () => navigate }));
 
@@ -39,7 +42,7 @@ import { AbilityProvider } from "../../lib/ability.tsx";
 import { ConfirmProvider } from "../confirm.tsx";
 
 import {
-	notificationsOpen,
+	isNotificationsOpen,
 	setNotificationsOpen,
 } from "./notificationsState.ts";
 import {
@@ -64,21 +67,21 @@ function actions() {
 }
 
 test("each menu item runs its own action", () => {
-	const a = actions();
-	runTopbarAction("notifications", a);
-	expect(a.openNotifications).toHaveBeenCalledOnce();
-	runTopbarAction("theme", a);
-	expect(a.toggleTheme).toHaveBeenCalledOnce();
-	runTopbarAction("signout", a);
-	expect(a.signOut).toHaveBeenCalledOnce();
+	const mockActions = actions();
+	runTopbarAction("notifications", mockActions);
+	expect(mockActions.openNotifications).toHaveBeenCalledOnce();
+	runTopbarAction("theme", mockActions);
+	expect(mockActions.toggleTheme).toHaveBeenCalledOnce();
+	runTopbarAction("signout", mockActions);
+	expect(mockActions.signOut).toHaveBeenCalledOnce();
 });
 
 test("an unknown value does nothing", () => {
-	const a = actions();
-	runTopbarAction("nope", a);
-	expect(a.openNotifications).not.toHaveBeenCalled();
-	expect(a.toggleTheme).not.toHaveBeenCalled();
-	expect(a.signOut).not.toHaveBeenCalled();
+	const mockActions = actions();
+	runTopbarAction("nope", mockActions);
+	expect(mockActions.openNotifications).not.toHaveBeenCalled();
+	expect(mockActions.toggleTheme).not.toHaveBeenCalled();
+	expect(mockActions.signOut).not.toHaveBeenCalled();
 });
 
 test("renders one kebab trigger labelled More", () => {
@@ -99,7 +102,7 @@ test("the bell opens the notifications drawer", () => {
 		</JFloorProvider>
 	));
 	fireEvent.click(screen.getByRole("button", { name: "Notifications" }));
-	expect(notificationsOpen()).toBe(true);
+	expect(isNotificationsOpen()).toBe(true);
 });
 
 test("opening the menu lists its items, and Notifications opens the drawer", async () => {
@@ -125,7 +128,7 @@ test("opening the menu lists its items, and Notifications opens the drawer", asy
 	fireEvent.pointerUp(item, { button: 0, pointerType: "mouse" });
 	fireEvent.click(item);
 	await waitFor(() => {
-		expect(notificationsOpen()).toBe(true);
+		expect(isNotificationsOpen()).toBe(true);
 	});
 });
 

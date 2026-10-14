@@ -33,25 +33,25 @@ export function ItemsTab(props: {
 		rows: Item[],
 		clearSelection: () => void
 	): Promise<void> {
-		const ok = await confirm({
+		const isOk = await confirm({
 			title: `Delete ${String(rows.length)} item(s)?`,
 			message: "This can't be undone.",
 			confirmLabel: "Delete",
 			tone: "danger",
 		});
-		if (!ok) return;
+		if (!isOk) return;
 		for (const row of rows) {
 			await actions.remove(row._id);
 		}
 		clearSelection();
 	}
 
-	function batchActions(p: BatchActionsRenderProps<Item>): JSX.Element {
+	function batchActions(batch: BatchActionsRenderProps<Item>): JSX.Element {
 		return (
 			<>
 				<Button
 					onClick={() => {
-						const selected = p.selectedRows;
+						const selected = batch.selectedRows;
 						void printInventoryList(selected);
 					}}
 				>
@@ -60,8 +60,8 @@ export function ItemsTab(props: {
 				<Button
 					variant="secondary"
 					onClick={() => {
-						const selected = p.selectedRows;
-						void deleteRows(selected, p.clearSelection);
+						const selected = batch.selectedRows;
+						void deleteRows(selected, batch.clearSelection);
 					}}
 				>
 					<Icon>{ICONS.delete}</Icon> Delete
@@ -78,16 +78,16 @@ export function ItemsTab(props: {
 			newItemAssetTag={props.newItemAssetTag}
 			enableRowSelection
 			batchActions={batchActions}
-			renderDrawer={(d) => (
+			renderDrawer={(drawer) => (
 				<ItemDrawer
-					open={d.open()}
-					onOpenChange={d.onOpenChange}
-					item={d.row()}
+					open={drawer.open()}
+					onOpenChange={drawer.onOpenChange}
+					item={drawer.row()}
 					itemTypes={types.data() ?? []}
 					items={items.data() ?? []}
-					initialAssetTag={d.initialAssetTag()}
+					initialAssetTag={drawer.initialAssetTag()}
 					loading={props.selection.loading()}
-					nav={d.nav}
+					nav={drawer.nav}
 				/>
 			)}
 		/>

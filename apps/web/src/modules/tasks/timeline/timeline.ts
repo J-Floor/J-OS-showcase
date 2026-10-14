@@ -1,13 +1,16 @@
+import { DAY_MS, DAYS_PER_WEEK } from "../../../../convex/lib/constants.ts";
 import type { Project } from "../data/tasksData.tsx";
 
 export type ViewMode = "day" | "week" | "month";
 
-const DAY = 86_400_000;
+const DAYS_PER_LEAP_YEAR = 366;
+const MAX_RANGE_YEARS = 6;
+const SATURDAY = 6;
 
 // Hard cap on how many days the timeline will ever lay out, so a pathological
 // project (e.g. a 4000-year span from a fat-fingered date) can't generate
 // millions of tick/month nodes and lock up the page.
-const MAX_RANGE_DAYS = 366 * 6;
+const MAX_RANGE_DAYS = DAYS_PER_LEAP_YEAR * MAX_RANGE_YEARS;
 
 /** Pixels per day at each zoom level. */
 export const DAY_WIDTH: Record<ViewMode, number> = {
@@ -31,7 +34,7 @@ export const TICK_ROW_HEIGHT = 26;
 export const HEADER_HEIGHT = MONTH_BAND_HEIGHT + TICK_ROW_HEIGHT;
 
 export type TimelineBar = {
-	id: string;
+	id: Project["_id"];
 	name: string;
 	/** Days from the timeline's left edge to the bar's start. */
 	offset: number;
@@ -73,28 +76,33 @@ export type Timeline = {
 
 // Storage uses UTC-midnight ms, so every boundary is computed in UTC.
 function startOfWeek(value: number): number {
-	const dow = (new Date(value).getUTCDay() + 6) % 7; // Monday = 0
-	return value - dow * DAY;
+	const dow =
+		(new Date(value).getUTCDay() + DAYS_PER_WEEK - 1) % DAYS_PER_WEEK; // Monday = 0
+	return value - dow * DAY_MS;
 }
 function startOfMonth(value: number): number {
-	const d = new Date(value);
-	return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
+	const date = new Date(value);
+	return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1);
 }
 /** First day of the month `n` months from the month containing `value`. */
-function addMonths(value: number, n: number): number {
-	const d = new Date(value);
-	return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1);
+function addMonths(value: number, months: number): number {
+	const date = new Date(value);
+	return Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1);
 }
 function startOfDay(value: number): number {
-	const d = new Date(value);
-	return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+	const date = new Date(value);
+	return Date.UTC(
+		date.getUTCFullYear(),
+		date.getUTCMonth(),
+		date.getUTCDate()
+	);
 }
 function diffDays(from: number, to: number): number {
-	return Math.round((to - from) / DAY);
+	return Math.round((to - from) / DAY_MS);
 }
 function isWeekend(value: number): boolean {
 	const dow = new Date(value).getUTCDay();
-	return dow === 0 || dow === 6;
+	return dow === 0 || dow === SATURDAY;
 }
 
 const MONTH_FMT = new Intl.DateTimeFormat("en-GB", {
@@ -111,138 +119,179 @@ const WEEK_FMT = new Intl.DateTimeFormat("en-GB", {
 type DatedProject = Project & { startDate: number; endDate: number };
 
 function datedProjects(projects: readonly Project[]): DatedProject[] {
-	return projects
-		.filter(
-			(p): p is DatedProject =>
-				p.startDate != null &&
-				p.endDate != null &&
-				p.endDate >= p.startDate
-		)
-		.sort((a, b) => a.startDate - b.startDate);
+	return (
+		projects
+			.filter(
+				(project): project is DatedProject =>
+					project.startDate !== undefined &&
+					project.endDate !== undefined &&
+					project.endDate >= project.startDate
+			)
+			// eslint-disable-next-line id-length -- conventional comparator parameter names
+			.sort((a, b) => a.startDate - b.startDate)
+	);
 }
 
 /** Projects that cannot be drawn as bars (a missing or inverted endpoint). */
 export function undatedProjects(projects: readonly Project[]): Project[] {
 	return projects.filter(
-		(p) =>
-			p.startDate == null || p.endDate == null || p.endDate < p.startDate
+		(project) =>
+			project.startDate === undefined ||
+			project.endDate === undefined ||
+			project.endDate < project.startDate
 	);
 }
 
-/** Turn projects + zoom into render-ready geometry. `today` is passed in (not
- * read from the clock) so callers control it and tests stay deterministic.
- * `padBefore`/`padAfter` add extra units (weeks for day/week, months for month)
- * beyond the data on each side — the view grows these to fake infinite scroll.
- * Returns null when there is nothing to plot. */
-export function buildTimeline(
-	projects: readonly Project[],
+/** The laid-out range as UTC-midnight ms, both ends inclusive. */
+type Range = { start: number; end: number };
+
+/** The range the timeline lays out: the data extent, clamped to a window
+ *  around `today`, snapped to whole weeks/months, padded for scroll room, and
+ *  capped. */
+function visibleRange(
+	dated: DatedProject[],
 	mode: ViewMode,
 	today: number,
-	padBefore = 0,
-	padAfter = 0
-): Timeline | null {
-	const dated = datedProjects(projects);
-	if (dated.length === 0) return null;
-
+	pad: { before: number; after: number }
+): Range {
 	// Clamp the data extent to a window around today before deriving the range, so
 	// one pathological project (e.g. a start in year 202) can't drag the whole
 	// axis 1800 years away from the projects that matter. Such a bar still renders
 	// (clamped to the canvas), it just doesn't dictate the viewport.
-	const halfWindow = (MAX_RANGE_DAYS / 2) * DAY;
+	const halfWindow = (MAX_RANGE_DAYS / 2) * DAY_MS;
 	function clampToWindow(value: number): number {
 		return Math.min(
 			Math.max(value, today - halfWindow),
 			today + halfWindow
 		);
 	}
-	const minStart = clampToWindow(Math.min(...dated.map((p) => p.startDate)));
-	const maxEnd = clampToWindow(Math.max(...dated.map((p) => p.endDate)));
+	const minStart = clampToWindow(
+		Math.min(...dated.map((project) => project.startDate))
+	);
+	const maxEnd = clampToWindow(
+		Math.max(...dated.map((project) => project.endDate))
+	);
 
 	// Snap the visible range to whole weeks/months so gridlines fall on clean
 	// boundaries; the base trailing pad keeps the last bar off the edge, and the
 	// pad params add scroll room on top.
-	let rangeStart: number;
-	let rangeEnd: number;
+	let start: number;
+	let end: number;
 	if (mode === "month") {
-		rangeStart = addMonths(startOfMonth(minStart), -padBefore);
-		rangeEnd = addMonths(startOfMonth(maxEnd), padAfter + 1) - DAY;
+		start = addMonths(startOfMonth(minStart), -pad.before);
+		end = addMonths(startOfMonth(maxEnd), pad.after + 1) - DAY_MS;
 	} else {
-		rangeStart = startOfWeek(minStart) - padBefore * 7 * DAY;
-		rangeEnd = startOfWeek(maxEnd) + (padAfter + 1) * 7 * DAY - DAY;
+		start = startOfWeek(minStart) - pad.before * DAYS_PER_WEEK * DAY_MS;
+		end =
+			startOfWeek(maxEnd) +
+			(pad.after + 1) * DAYS_PER_WEEK * DAY_MS -
+			DAY_MS;
 	}
 
 	// Clamp the laid-out span so a pathological project can't blow up the node
 	// count. Bars past the cap stay positioned (offset/span keep their real
 	// values) but the grid only renders ticks/months within the cap.
-	const cap = rangeStart + (MAX_RANGE_DAYS - 1) * DAY;
-	if (rangeEnd > cap) rangeEnd = cap;
+	const cap = start + (MAX_RANGE_DAYS - 1) * DAY_MS;
+	return { start, end: Math.min(end, cap) };
+}
 
-	const totalDays = diffDays(rangeStart, rangeEnd) + 1;
-	const dayWidth = DAY_WIDTH[mode];
-
-	const bars: TimelineBar[] = dated.map((p) => ({
-		id: p._id,
-		name: p.name,
-		offset: diffDays(rangeStart, p.startDate),
-		span: diffDays(p.startDate, p.endDate) + 1,
-		startMs: p.startDate,
-		endMs: p.endDate,
-		leaderId: p.leaderId,
-	}));
-
+/** One cell per calendar month in range. */
+function monthSegments(range: Range): TimelineSegment[] {
 	const months: TimelineSegment[] = [];
 	for (
-		let cur = startOfMonth(rangeStart);
-		cur <= rangeEnd;
-		cur = addMonths(cur, 1)
+		let current = startOfMonth(range.start);
+		current <= range.end;
+		current = addMonths(current, 1)
 	) {
-		const segStart = Math.max(cur, rangeStart);
-		const segEnd = Math.min(addMonths(cur, 1) - DAY, rangeEnd);
+		const segStart = Math.max(current, range.start);
+		const segEnd = Math.min(addMonths(current, 1) - DAY_MS, range.end);
 		months.push({
-			key: String(cur),
-			label: MONTH_FMT.format(new Date(cur)),
-			offset: diffDays(rangeStart, segStart),
+			key: String(current),
+			label: MONTH_FMT.format(new Date(current)),
+			offset: diffDays(range.start, segStart),
 			span: diffDays(segStart, segEnd) + 1,
 		});
 	}
+	return months;
+}
 
+/** The bottom axis: a cell per day (day mode) or per week start (week mode);
+ *  none in month mode. */
+function tickSegments(
+	mode: ViewMode,
+	range: Range,
+	totalDays: number
+): TimelineSegment[] {
 	const ticks: TimelineSegment[] = [];
 	if (mode === "day") {
-		for (let d = 0; d < totalDays; d++) {
-			const at = rangeStart + d * DAY;
+		for (let dayIndex = 0; dayIndex < totalDays; dayIndex++) {
+			const at = range.start + dayIndex * DAY_MS;
 			ticks.push({
 				key: String(at),
 				label: String(new Date(at).getUTCDate()),
-				offset: d,
+				offset: dayIndex,
 				span: 1,
 				weekend: isWeekend(at),
 			});
 		}
 	} else if (mode === "week") {
-		for (let at = rangeStart; at <= rangeEnd; at += 7 * DAY) {
-			const offset = diffDays(rangeStart, at);
+		for (
+			let at = range.start;
+			at <= range.end;
+			at += DAYS_PER_WEEK * DAY_MS
+		) {
+			const offset = diffDays(range.start, at);
 			ticks.push({
 				key: String(at),
 				label: WEEK_FMT.format(new Date(at)),
 				offset,
-				span: Math.min(7, totalDays - offset),
+				span: Math.min(DAYS_PER_WEEK, totalDays - offset),
 			});
 		}
 	}
+	return ticks;
+}
+
+/** Turn projects + zoom into render-ready geometry. `today` is passed in (not
+ * read from the clock) so callers control it and tests stay deterministic.
+ * `pad.before`/`pad.after` add extra units (weeks for day/week, months for
+ * month) beyond the data on each side — the view grows these to fake infinite
+ * scroll. Returns null when there is nothing to plot. */
+export function buildTimeline(
+	projects: readonly Project[],
+	mode: ViewMode,
+	today: number,
+	pad: { before: number; after: number } = { before: 0, after: 0 }
+): Timeline | null {
+	const dated = datedProjects(projects);
+	if (dated.length === 0) return null;
+
+	const range = visibleRange(dated, mode, today, pad);
+	const totalDays = diffDays(range.start, range.end) + 1;
+
+	const bars: TimelineBar[] = dated.map((project) => ({
+		id: project._id,
+		name: project.name,
+		offset: diffDays(range.start, project.startDate),
+		span: diffDays(project.startDate, project.endDate) + 1,
+		startMs: project.startDate,
+		endMs: project.endDate,
+		leaderId: project.leaderId,
+	}));
 
 	const todayDay = startOfDay(today);
 	const todayOffset =
-		todayDay >= rangeStart && todayDay <= rangeEnd
-			? diffDays(rangeStart, todayDay)
+		todayDay >= range.start && todayDay <= range.end
+			? diffDays(range.start, todayDay)
 			: null;
 
 	return {
 		bars,
-		months,
-		ticks,
+		months: monthSegments(range),
+		ticks: tickSegments(mode, range, totalDays),
 		totalDays,
-		dayWidth,
+		dayWidth: DAY_WIDTH[mode],
 		todayOffset,
-		rangeStartMs: rangeStart,
+		rangeStartMs: range.start,
 	};
 }

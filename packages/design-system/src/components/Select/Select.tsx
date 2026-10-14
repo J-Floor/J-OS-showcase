@@ -2,6 +2,7 @@ import {
 	Select as ArkSelect,
 	type SelectRootProps as ArkSelectRootProps,
 	createListCollection,
+	type UseSelectContext,
 } from "@ark-ui/solid/select";
 import clsx from "clsx";
 import { type JSX, Show, splitProps } from "solid-js";
@@ -50,6 +51,36 @@ export type SelectRootProps = PropsWithDisabling<
 		>
 >;
 
+/** The clear button and the open/closed chevron inside the trigger. */
+function TriggerAdornments(props: {
+	context: UseSelectContext<unknown>;
+	allowClearing: boolean | undefined;
+}): JSX.Element {
+	return (
+		<>
+			<Show
+				when={props.context().value.length > 0 && props.allowClearing}
+			>
+				<Tooltip
+					tooltipContent="Clear value"
+					class={styles.clearTrigger}
+					aria-label="Clear value"
+					onClick={() => {
+						props.context().clearValue();
+					}}
+				>
+					<Icon>{ICONS.close}</Icon>
+				</Tooltip>
+			</Show>
+			<ArkSelect.Indicator class={styles.icon}>
+				<Icon>
+					{props.context().open ? ICONS.collapseAll : ICONS.expandAll}
+				</Icon>
+			</ArkSelect.Indicator>
+		</>
+	);
+}
+
 /**
  * Select field. Ported from EmboUI's Select with the J-OS design-system
  * conventions: ark's `Select.*` is never exposed; the compound wrappers
@@ -74,8 +105,8 @@ export type SelectRootProps = PropsWithDisabling<
  * ```
  */
 function Root(props: SelectRootProps): JSX.Element {
-	// eslint-disable-next-line no-unassigned-vars -- assigned by Solid's `ref={triggerEl}` binding below, which the rule can't see
-	let triggerEl: HTMLButtonElement | undefined;
+	// eslint-disable-next-line no-unassigned-vars -- assigned by Solid's `ref={triggerElement}` binding below, which the rule can't see
+	let triggerElement: HTMLButtonElement | undefined;
 
 	const [own, rest] = splitArkProps(props, [
 		"options",
@@ -101,7 +132,7 @@ function Root(props: SelectRootProps): JSX.Element {
 	}
 
 	function focusTrigger(): void {
-		triggerEl?.focus();
+		triggerElement?.focus();
 	}
 
 	return (
@@ -122,7 +153,7 @@ function Root(props: SelectRootProps): JSX.Element {
 			>
 				<ArkSelect.Control>
 					<ArkSelect.Trigger
-						ref={triggerEl}
+						ref={triggerElement}
 						class={styles.inputWrapper}
 					>
 						<ArkSelect.ValueText
@@ -131,32 +162,10 @@ function Root(props: SelectRootProps): JSX.Element {
 						/>
 						<ArkSelect.Context>
 							{(context) => (
-								<>
-									<Show
-										when={
-											context().value.length > 0 &&
-											own.allowClearing
-										}
-									>
-										<Tooltip
-											tooltipContent="Clear value"
-											class={styles.clearTrigger}
-											aria-label="Clear value"
-											onClick={() => {
-												context().clearValue();
-											}}
-										>
-											<Icon>{ICONS.close}</Icon>
-										</Tooltip>
-									</Show>
-									<ArkSelect.Indicator class={styles.icon}>
-										<Icon>
-											{context().open
-												? ICONS.collapseAll
-												: ICONS.expandAll}
-										</Icon>
-									</ArkSelect.Indicator>
-								</>
+								<TriggerAdornments
+									context={context}
+									allowClearing={own.allowClearing}
+								/>
 							)}
 						</ArkSelect.Context>
 					</ArkSelect.Trigger>

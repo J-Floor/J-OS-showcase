@@ -6,6 +6,9 @@
 /** One wide-format row: the x value plus one column per series. */
 export type ChartDatum = Record<string, number | string>;
 
+/** The identity colour slots, handed out in order. */
+type IdentitySlot = 1 | 2 | 3 | 4;
+
 /** How a series is painted, and which identity it carries. */
 export type ChartSeries = {
 	/** The column in `data` this series plots. */
@@ -18,10 +21,26 @@ export type ChartSeries = {
 	 * `negative` / `neutral`) for a series whose VALUE carries the meaning.
 	 * Defaults to the slot matching the series' position.
 	 */
-	colour?: 1 | 2 | 3 | 4 | "positive" | "negative" | "neutral";
+	colour?: IdentitySlot | "positive" | "negative" | "neutral";
 	/** Series sharing a `stack` are stacked on top of each other. */
 	stack?: string;
 };
+
+const DECIMAL_BASE = 10;
+const QUARTER_DECADE = 2.5;
+const HALF_DECADE = 5;
+const NICE_MULTIPLIERS = [1, 2, QUARTER_DECADE, HALF_DECADE, DECIMAL_BASE];
+const MILLION = 1_000_000;
+const TEN_THOUSAND = 10_000;
+const THOUSAND = 1000;
+
+/** The smallest of 1/2/2.5/5/10 that is at least `normalised` (1 up to 10). */
+function niceMultiplier(normalised: number): number {
+	return (
+		NICE_MULTIPLIERS.find((multiplier) => normalised <= multiplier) ??
+		NICE_MULTIPLIERS[NICE_MULTIPLIERS.length - 1]
+	);
+}
 
 /**
  * A "nice" upper bound and the ticks to go with it.
@@ -38,31 +57,22 @@ export function niceScale(
 	// An all-zero series still needs an axis; 0–1 is the smallest honest one.
 	if (!Number.isFinite(max) || max <= 0) return { max: 1, ticks: [0, 1] };
 	const raw = max / maxTicks;
-	const magnitude = 10 ** Math.floor(Math.log10(raw));
+	const magnitude = DECIMAL_BASE ** Math.floor(Math.log10(raw));
 	const normalised = raw / magnitude;
-	const step =
-		(normalised <= 1
-			? 1
-			: normalised <= 2
-				? 2
-				: normalised <= 2.5
-					? 2.5
-					: normalised <= 5
-						? 5
-						: 10) * magnitude;
+	const step = niceMultiplier(normalised) * magnitude;
 	const top = Math.ceil(max / step) * step;
 	const ticks: number[] = [];
 	// Accumulating `step` would drift on 2.5-sized steps; multiply instead.
-	for (let i = 0; i * step <= top + step / 2; i++) ticks.push(i * step);
+	for (let index = 0; index * step <= top + step / 2; index++)
+		ticks.push(index * step);
 	return { max: top, ticks };
 }
 
 /** A number as it appears on an axis: compact above 10k, plain below. */
 export function axisLabel(value: number): string {
 	const abs = Math.abs(value);
-	if (abs >= 1_000_000) return `${trim(value / 1_000_000)}M`;
-	if (abs >= 10_000) return `${trim(value / 1000)}k`;
-	return trim(value);
+	if (abs >= MILLION) return `${trim(value / MILLION)}M`;
+	return abs >= TEN_THOUSAND ? `${trim(value / THOUSAND)}k` : trim(value);
 }
 
 function trim(value: number): string {
@@ -85,12 +95,12 @@ export function stackRows(
 ): { base: number; top: number }[][] {
 	return data.map((row) => {
 		const runningByStack = new Map<string, number>();
-		return series.map((s) => {
-			const value = numberAt(row, s.key);
-			if (s.stack === undefined) return { base: 0, top: value };
-			const base = runningByStack.get(s.stack) ?? 0;
+		return series.map((entry) => {
+			const value = numberAt(row, entry.key);
+			if (entry.stack === undefined) return { base: 0, top: value };
+			const base = runningByStack.get(entry.stack) ?? 0;
 			const top = base + value;
-			runningByStack.set(s.stack, top);
+			runningByStack.set(entry.stack, top);
 			return { base, top };
 		});
 	});

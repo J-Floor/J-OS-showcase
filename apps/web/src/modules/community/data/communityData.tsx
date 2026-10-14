@@ -56,14 +56,14 @@ export function CommunityDataProvider(props: {
 // subscription → no flash), otherwise fall back to subscribing directly (e.g.
 // outside the provider). Signature unchanged from the old per-hook files.
 export function useApplications() {
-	const ctx = useContext(CommunityDataContext);
-	return ctx ? ctx.applications : applicationsQuery();
+	const context = useContext(CommunityDataContext);
+	return context ? context.applications : applicationsQuery();
 }
 export function useMembers() {
-	const ctx = useContext(CommunityDataContext);
-	return ctx ? ctx.members : membersQuery();
+	const context = useContext(CommunityDataContext);
+	return context ? context.members : membersQuery();
 }
 export function useGuests() {
-	const ctx = useContext(CommunityDataContext);
-	return ctx ? ctx.guests : guestsQuery();
+	const context = useContext(CommunityDataContext);
+	return context ? context.guests : guestsQuery();
 }

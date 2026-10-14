@@ -6,6 +6,8 @@ import eslintConfigPrettier from "eslint-config-prettier";
 import { createTypeScriptImportResolver } from "eslint-import-resolver-typescript";
 import eslintPluginImport from "eslint-plugin-import-x";
 import eslintPluginSolid from "eslint-plugin-solid";
+import eslintPluginSonar from "eslint-plugin-sonarjs";
+import eslintPluginUnicorn from "eslint-plugin-unicorn";
 import eslintPluginUnusedImports from "eslint-plugin-unused-imports";
 import { globalIgnores } from "eslint/config";
 import tseslint from "typescript-eslint";
@@ -204,15 +206,119 @@ export default tseslint.config(
     },
   },
 
+  eslintPluginSonar.configs.recommended,
+  {
+    rules: {
+      // Solid props are read-only proxies already; Readonly<> adds noise.
+      "sonarjs/prefer-read-only-props": "off",
+      complexity: ["error", 10],
+      "max-depth": ["error", 3],
+      "max-lines-per-function": [
+        "error",
+        { max: 80, skipBlankLines: true, skipComments: true },
+      ],
+      "max-lines": [
+        "error",
+        { max: 400, skipBlankLines: true, skipComments: true },
+      ],
+      "max-params": ["error", 4],
+      "no-nested-ternary": "error",
+      eqeqeq: "error",
+      "id-length": [
+        "error",
+        { min: 2, properties: "never", exceptions: ["_", "x", "y"] },
+      ],
+      "@typescript-eslint/no-magic-numbers": [
+        "error",
+        {
+          ignore: [0, 1, -1, 2],
+          ignoreArrayIndexes: true,
+          ignoreDefaultValues: true,
+          enforceConst: true,
+          ignoreNumericLiteralTypes: true,
+          ignoreEnums: true,
+          ignoreReadonlyClassProperties: true,
+          ignoreTypeIndexes: true,
+        },
+      ],
+    },
+  },
+  {
+    plugins: { unicorn: eslintPluginUnicorn },
+    rules: {
+      "unicorn/prefer-combined-guards": "error",
+      "unicorn/no-array-callback-reference": "error",
+      "unicorn/prefer-string-replace-all": "error",
+      "unicorn/consistent-function-scoping": "error",
+      "unicorn/no-negated-condition": "error",
+      "unicorn/no-useless-undefined": "error",
+      "unicorn/no-unreadable-for-of-expression": "error",
+      "unicorn/prefer-early-return": "error",
+      "unicorn/no-declarations-before-early-exit": "error",
+      "unicorn/no-break-in-nested-loop": "error",
+      "unicorn/no-await-expression-member": "error",
+      "unicorn/prefer-ternary": "error",
+      // Boolean variables need an is/has/can… prefix. Functions that return a
+      // boolean keep verb names (`sendEmail`, `passesRecaptcha`); only a
+      // non-boolean function wearing a boolean prefix is flagged. `confirm`
+      // holds the `useConfirm()` prompt function, whose Promise<boolean>
+      // result the rule misreads as a boolean value.
+      "unicorn/consistent-boolean-name": [
+        "error",
+        { checkFunctions: "prohibit", ignore: ["^confirm$"] },
+      ],
+      "unicorn/name-replacements": [
+        "error",
+        {
+          checkProperties: false,
+          // File names are not checked: under convex/ a file name is an API
+          // path (`api.applications.*`, `bunx convex run dev:*`), and
+          // component files mirror their component name.
+          checkFilenames: false,
+          replacements: {
+            props: false,
+            args: false,
+            params: false,
+            err: false,
+            prev: false,
+            deps: false,
+            doc: false,
+            // unicorn maps these full words to their abbreviations.
+            application: false,
+            applications: false,
+            configuration: false,
+          },
+          allowList: {
+            Doc: true,
+            QueryCtx: true,
+            MutationCtx: true,
+            ActionCtx: true,
+          },
+        },
+      ],
+    },
+  },
+
   {
     // Test files mock observer APIs (ResizeObserver/IntersectionObserver) with
     // empty observe/unobserve/disconnect methods — legitimately empty.
-    files: ["**/*.test.{ts,tsx}", "**/vitest.setup.{ts,tsx}", "**/test/**"],
+    files: [
+      "**/*.test.{ts,tsx}",
+      "**/vitest.setup.{ts,tsx}",
+      "**/test/**",
+      "**/test-stubs/**",
+    ],
     rules: {
       "@typescript-eslint/no-empty-function": [
         "error",
         { allow: ["arrowFunctions", "methods"] },
       ],
+      "@typescript-eslint/no-magic-numbers": "off",
+      "max-lines-per-function": "off",
+      "max-lines": "off",
+      complexity: "off",
+      "sonarjs/cognitive-complexity": "off",
+      "max-params": "off",
     },
   },
 

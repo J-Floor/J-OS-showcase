@@ -54,8 +54,8 @@ function createPresence(): [Accessor<boolean>, () => void] {
 		// eslint-disable-next-line solid/reactivity -- an accessor handed to context
 		() => count() > 0,
 		() => {
-			setCount((c) => c + 1);
-			onCleanup(() => setCount((c) => c - 1));
+			setCount((current) => current + 1);
+			onCleanup(() => setCount((current) => current - 1));
 		},
 	];
 }

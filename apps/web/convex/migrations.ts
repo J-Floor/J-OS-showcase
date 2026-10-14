@@ -1,7 +1,13 @@
+import type { PaginationResult } from "convex/server";
 import { v } from "convex/values";
 
 import { internal } from "./_generated/api";
-import { internalMutation, internalQuery } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
+import {
+	internalMutation,
+	internalQuery,
+	type QueryCtx,
+} from "./_generated/server";
 import { compliance } from "./lib/derive.ts";
 import {
 	groupByNormalizedEmail,
@@ -35,13 +41,16 @@ const CORRECT = 1767139200000; // 2025-12-31 00:00:00 UTC (intended)
 /** Read-only: how many rows still carry the wrong 2026-12-31 constant. */
 export const previewYearFix = internalQuery({
 	args: {},
-	handler: async (ctx) => {
-		const people = await ctx.db.query("people").collect();
-		const signatures = await ctx.db.query("signatures").collect();
+	handler: async (context) => {
+		const people = await context.db.query("people").collect();
+		const signatures = await context.db.query("signatures").collect();
 		return {
-			peopleAffected: people.filter((p) => p.accessFrom === WRONG).length,
-			signaturesAffected: signatures.filter((s) => s.signedAt === WRONG)
-				.length,
+			peopleAffected: people.filter(
+				(person) => person.accessFrom === WRONG
+			).length,
+			signaturesAffected: signatures.filter(
+				(signature) => signature.signedAt === WRONG
+			).length,
 		};
 	},
 });
@@ -53,18 +62,20 @@ export const previewYearFix = internalQuery({
  */
 export const fixImportYear = internalMutation({
 	args: {},
-	handler: async (ctx) => {
+	handler: async (context) => {
 		let peoplePatched = 0;
-		for (const p of await ctx.db.query("people").collect()) {
-			if (p.accessFrom === WRONG) {
-				await ctx.db.patch(p._id, { accessFrom: CORRECT });
+		const people = await context.db.query("people").collect();
+		for (const person of people) {
+			if (person.accessFrom === WRONG) {
+				await context.db.patch(person._id, { accessFrom: CORRECT });
 				peoplePatched++;
 			}
 		}
 		let signaturesPatched = 0;
-		for (const s of await ctx.db.query("signatures").collect()) {
-			if (s.signedAt === WRONG) {
-				await ctx.db.patch(s._id, { signedAt: CORRECT });
+		const signatures = await context.db.query("signatures").collect();
+		for (const signature of signatures) {
+			if (signature.signedAt === WRONG) {
+				await context.db.patch(signature._id, { signedAt: CORRECT });
 				signaturesPatched++;
 			}
 		}
@@ -82,21 +93,31 @@ export const fixImportYear = internalMutation({
 
 const MIGRATION_PAGE_SIZE = 100;
 
+/** One cursor page of `people`; a missing cursor starts at the beginning. */
+async function peoplePage(
+	context: QueryCtx,
+	cursor: string | null | undefined
+): Promise<PaginationResult<Doc<"people">>> {
+	return await context.db.query("people").paginate({
+		cursor: cursor ?? null,
+		numItems: MIGRATION_PAGE_SIZE,
+	});
+}
+
 /**
  * Read-only: the people on this page whose email is not in canonical form.
  * Pass `continueCursor` back as `cursor` until `isDone`.
  */
 export const previewEmailCase = internalQuery({
 	args: { cursor: v.optional(v.union(v.string(), v.null())) },
-	handler: async (ctx, { cursor }) => {
-		const page = await ctx.db.query("people").paginate({
-			cursor: cursor ?? null,
-			numItems: MIGRATION_PAGE_SIZE,
-		});
+	handler: async (context, { cursor }) => {
+		const page = await peoplePage(context, cursor);
 		return {
 			nonCanonical: page.page
-				.filter((p) => p.email !== normalizeEmail(p.email))
-				.map((p) => ({ _id: p._id, email: p.email })),
+				.filter(
+					(person) => person.email !== normalizeEmail(person.email)
+				)
+				.map((person) => ({ _id: person._id, email: person.email })),
 			isDone: page.isDone,
 			continueCursor: page.continueCursor,
 		};
@@ -113,13 +134,16 @@ export const previewEmailCase = internalQuery({
  */
 export const findEmailCollisions = internalQuery({
 	args: {},
-	handler: async (ctx) => {
+	handler: async (context) => {
 		const groups = groupByNormalizedEmail(
-			await ctx.db.query("people").collect()
+			await context.db.query("people").collect()
 		);
 		return [...groups].map(([email, people]) => ({
 			email,
-			people: people.map((p) => ({ _id: p._id, email: p.email })),
+			people: people.map((person) => ({
+				_id: person._id,
+				email: person.email,
+			})),
 		}));
 	},
 });
@@ -136,28 +160,25 @@ export const findEmailCollisions = internalQuery({
  */
 export const migrateEmailCase = internalMutation({
 	args: { cursor: v.optional(v.union(v.string(), v.null())) },
-	handler: async (ctx, { cursor }) => {
-		const page = await ctx.db.query("people").paginate({
-			cursor: cursor ?? null,
-			numItems: MIGRATION_PAGE_SIZE,
-		});
+	handler: async (context, { cursor }) => {
+		const page = await peoplePage(context, cursor);
 		let peoplePatched = 0;
 		let collisions = 0;
-		for (const p of page.page) {
-			const email = normalizeEmail(p.email);
-			if (email === p.email) continue;
+		for (const person of page.page) {
+			const email = normalizeEmail(person.email);
+			if (email === person.email) continue;
 			// `.first()`, not `.unique()`: exact duplicates may already exist,
 			// and a throw here would stop the whole scheduled chain.
-			const holder = await peopleByEmail(ctx, email).first();
+			const holder = await peopleByEmail(context, email).first();
 			if (holder !== null) {
 				collisions++;
 				continue;
 			}
-			await ctx.db.patch(p._id, { email });
+			await context.db.patch(person._id, { email });
 			peoplePatched++;
 		}
 		if (!page.isDone) {
-			await ctx.scheduler.runAfter(
+			await context.scheduler.runAfter(
 				0,
 				internal.migrations.migrateEmailCase,
 				{ cursor: page.continueCursor }
@@ -176,9 +197,10 @@ export const migrateEmailCase = internalMutation({
  */
 export const backfillActivatedAt = internalMutation({
 	args: {},
-	handler: async (ctx): Promise<{ set: number }> => {
+	handler: async (context): Promise<{ set: number }> => {
 		let set = 0;
-		for (const person of await ctx.db.query("people").collect()) {
+		const people = await context.db.query("people").collect();
+		for (const person of people) {
 			if (person.activatedAt !== undefined) continue;
 			let at: number | undefined;
 			if (isMembershipActive(stateOf(person))) {
@@ -187,22 +209,25 @@ export const backfillActivatedAt = internalMutation({
 				person.tier === "former" ||
 				(person.tier === "guest" && person.stage === "expired")
 			) {
-				const events = await ctx.db
+				const events = await context.db
 					.query("personEvents")
-					.withIndex("by_person", (q) => q.eq("personId", person._id))
+					.withIndex("by_person", (range) =>
+						range.eq("personId", person._id)
+					)
 					.collect();
 				at = events
+					// eslint-disable-next-line id-length -- conventional comparator parameter names
 					.toSorted((a, b) => a.at - b.at)
 					.find(
-						(e) =>
-							e.kind === "transition" &&
-							e.to !== undefined &&
-							isStateId(e.to) &&
-							isMembershipActive(e.to)
+						(event) =>
+							event.kind === "transition" &&
+							event.to !== undefined &&
+							isStateId(event.to) &&
+							isMembershipActive(event.to)
 					)?.at;
 			}
 			if (at === undefined) continue;
-			await ctx.db.patch(person._id, { activatedAt: at });
+			await context.db.patch(person._id, { activatedAt: at });
 			set += 1;
 		}
 		return { set };
@@ -216,18 +241,18 @@ export const backfillActivatedAt = internalMutation({
  */
 export const repairGuestWithoutAgreement = internalMutation({
 	args: { personId: v.id("people") },
-	handler: async (ctx, { personId }) => {
-		const person = await ctx.db.get(personId);
+	handler: async (context, { personId }) => {
+		const person = await context.db.get(personId);
 		if (person?.tier !== "guest" || person.stage !== "active")
 			throw new Error("Not an active guest.");
-		const sigs = await ctx.db
+		const sigs = await context.db
 			.query("signatures")
-			.withIndex("by_person", (q) => q.eq("personId", personId))
+			.withIndex("by_person", (range) => range.eq("personId", personId))
 			.collect();
 		if (
 			compliance(
 				person,
-				sigs.map((s) => s.variant)
+				sigs.map((signature) => signature.variant)
 			) === "met"
 		)
 			throw new Error("This guest has a guest agreement.");
@@ -235,12 +260,12 @@ export const repairGuestWithoutAgreement = internalMutation({
 		// Written outside applyEvent on purpose: the machine has no active-to-onboarding edge.
 		// The document step re-opens too, or a guest who ticked it signing
 		// another agreement would have nothing left to sign.
-		await ctx.db.patch(personId, {
+		await context.db.patch(personId, {
 			stage: "onboarding",
 			stageSince: now,
 			onboarding: onboardingWithoutStep(person.onboarding, "document"),
 		});
-		await ctx.db.insert("personEvents", {
+		await context.db.insert("personEvents", {
 			personId,
 			at: now,
 			kind: "transition",

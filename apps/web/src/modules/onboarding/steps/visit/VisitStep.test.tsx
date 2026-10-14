@@ -16,8 +16,8 @@ const { hostMock, inviteMock } = vi.hoisted(() => ({
 vi.mock("convex-solidjs", async () => {
 	const { getFunctionName } = await import("convex/server");
 	return {
-		useQuery: (ref: Parameters<typeof getFunctionName>[0]) =>
-			getFunctionName(ref) === "onboarding:whatsappInvite"
+		useQuery: (reference: Parameters<typeof getFunctionName>[0]) =>
+			getFunctionName(reference) === "onboarding:whatsappInvite"
 				? inviteMock()
 				: hostMock(),
 	};
@@ -106,7 +106,7 @@ test("opens a maps search for the street address shown on the step", () => {
 });
 
 test("shows a skeleton, not the generic board-member copy, while the host loads", () => {
-	hostMock.mockReturnValueOnce({ data: () => undefined });
+	hostMock.mockReturnValueOnce({ data: () => {} });
 	const { container } = render(() => (
 		<VisitStep person={person} onComplete={() => Promise.resolve()} />
 	));
@@ -133,7 +133,7 @@ test("names the host once loaded, and falls back to generic copy for none", () =
 });
 
 test("shows a button skeleton, not the invite button, while the host loads", () => {
-	hostMock.mockReturnValueOnce({ data: () => undefined });
+	hostMock.mockReturnValueOnce({ data: () => {} });
 	inviteMock.mockReturnValueOnce({
 		data: () => "https://chat.whatsapp.com/EXAMPLEINVITE",
 	});

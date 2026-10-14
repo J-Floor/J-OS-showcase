@@ -30,7 +30,7 @@ export const lifecycleAlert = defineKind({
 		),
 		tag: v.string(),
 	}),
-	audience: (ctx) => boardIds(ctx),
+	audience: (context) => boardIds(context),
 	push: ({ headline, items, tag }) => ({
 		title: headline,
 		body:
@@ -43,11 +43,11 @@ export const lifecycleAlert = defineKind({
 	email: ({ headline, items }) => {
 		const { html, text } = boardLifecycleAlert({
 			headline,
-			rows: items.map((i) => ({
-				name: i.name,
-				url: personUrl(i.personId),
-				code: i.code,
-				detail: i.detail,
+			rows: items.map((item) => ({
+				name: item.name,
+				url: personUrl(item.personId),
+				code: item.code,
+				detail: item.detail,
 			})),
 			communityUrl: communityUrl(),
 			manageUrl: manageNotificationsUrl(),

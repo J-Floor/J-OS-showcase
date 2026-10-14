@@ -1,6 +1,7 @@
 import type { FunctionReturnType } from "convex/server";
 
 import type { api } from "../../../convex/_generated/api";
+import { MS_PER_SECOND } from "../../shared/time.ts";
 
 /** One door-log row as the log queries return it. */
 export type LogRow = FunctionReturnType<typeof api.doorLog.listSince>[number];
@@ -17,7 +18,7 @@ export function toDoorText(
 		case "actuated":
 			return row.actuatedAt === undefined || row.requestedAt === undefined
 				? ""
-				: `${((row.actuatedAt - row.requestedAt) / 1000).toFixed(1)}s`;
+				: `${((row.actuatedAt - row.requestedAt) / MS_PER_SECOND).toFixed(1)}s`;
 		case "unconfirmed":
 			return "No response";
 		case "accepted":

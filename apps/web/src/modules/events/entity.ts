@@ -37,8 +37,9 @@ export const eventsEntity: EntityDescriptor<Doc<"events">> = {
 	label: (row) => row.name,
 	detail: (row) => dateFormat.format(new Date(row.startsAt)),
 	ability: { action: "view", subject: "Events" },
-	prefetch: (row, can) => {
-		if (can("manage", "Events")) prefetchSpec(eventAttendeesQuery, row._id);
+	prefetch: (row, canPerform) => {
+		if (canPerform("manage", "Events"))
+			prefetchSpec(eventAttendeesQuery, row._id);
 	},
 	qr: (row) => ({
 		url: visitorUrl(row._id),

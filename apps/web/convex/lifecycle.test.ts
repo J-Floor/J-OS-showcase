@@ -14,9 +14,9 @@ const modules = import.meta.glob("./**/*.*s");
 const DAY = 86_400_000;
 
 async function setup() {
-	const t = convexTest(schema, modules);
-	const boardId = await t.run(async (ctx) =>
-		ctx.db.insert("people", {
+	const backend = convexTest(schema, modules);
+	const boardId = await backend.run(async (context) =>
+		context.db.insert("people", {
 			email: "board@example.com",
 			firstName: "Bo",
 			lastName: "Ard",
@@ -26,18 +26,18 @@ async function setup() {
 		})
 	);
 	return {
-		t,
-		asBoard: t.withIdentity({ email: "board@example.com" }),
+		backend,
+		asBoard: backend.withIdentity({ email: "board@example.com" }),
 		boardId,
 	};
 }
 
 async function insertProspect(
-	t: TestConvex<typeof schema>,
+	backend: TestConvex<typeof schema>,
 	stage: "unverified" | "verified"
 ) {
-	return t.run(async (ctx) =>
-		ctx.db.insert("people", {
+	return backend.run(async (context) =>
+		context.db.insert("people", {
 			email: "ada@example.com",
 			firstName: "Ada",
 			lastName: "Lovelace",
@@ -50,11 +50,13 @@ async function insertProspect(
 	);
 }
 
-async function eventsFor(t: TestConvex<typeof schema>, personId: string) {
-	return t.run(async (ctx) =>
-		ctx.db
+async function eventsFor(backend: TestConvex<typeof schema>, personId: string) {
+	return backend.run(async (context) =>
+		context.db
 			.query("personEvents")
-			.withIndex("by_person", (q) => q.eq("personId", personId as never))
+			.withIndex("by_person", (range) =>
+				range.eq("personId", personId as never)
+			)
 			.collect()
 	);
 }
@@ -75,16 +77,16 @@ async function eventsFor(t: TestConvex<typeof schema>, personId: string) {
  * (`[{ email: "..." }]`, not `{ email: "..." }`), which is convex-test's own
  * storage shape, not anything this codebase controls.
  */
-async function scheduledJobs(t: TestConvex<typeof schema>) {
-	return t.run((ctx) =>
-		ctx.db.system.query("_scheduled_functions").collect()
+async function scheduledJobs(backend: TestConvex<typeof schema>) {
+	return backend.run((context) =>
+		context.db.system.query("_scheduled_functions").collect()
 	);
 }
 
 describe("transition", () => {
 	it("moves a verified prospect to guest onboarding, opens the window and records the host", async () => {
-		const { t, asBoard, boardId } = await setup();
-		const id = await insertProspect(t, "verified");
+		const { backend, asBoard, boardId } = await setup();
+		const id = await insertProspect(backend, "verified");
 		const until = Date.now() + 30 * DAY;
 
 		await asBoard.mutation(api.lifecycle.transition, {
@@ -92,7 +94,7 @@ describe("transition", () => {
 			event: { type: "APPROVE_GUEST", until, hostedById: boardId },
 		});
 
-		const person = await t.run(async (ctx) => ctx.db.get(id));
+		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person?.tier).toBe("guest");
 		expect(person?.stage).toBe("onboarding");
 		expect(person?.accessUntil).toBe(until);
@@ -108,7 +110,7 @@ describe("transition", () => {
 		// catch the wrong function being scheduled (e.g. `windowExpired` never
 		// scheduled, or the door never reconciled on the transition that turns
 		// access ON).
-		const jobs = await scheduledJobs(t);
+		const jobs = await scheduledJobs(backend);
 		expect(jobs).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
@@ -134,15 +136,15 @@ describe("transition", () => {
 	});
 
 	it("approves an open-ended guest: window open, nothing scheduled to close it", async () => {
-		const { t, asBoard, boardId } = await setup();
-		const id = await insertProspect(t, "verified");
+		const { backend, asBoard, boardId } = await setup();
+		const id = await insertProspect(backend, "verified");
 
 		await asBoard.mutation(api.lifecycle.transition, {
 			personId: id,
 			event: { type: "APPROVE_GUEST", hostedById: boardId },
 		});
 
-		const person = await t.run(async (ctx) => ctx.db.get(id));
+		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person?.tier).toBe("guest");
 		expect(person?.stage).toBe("onboarding");
 		// The window OPENED — `accessFrom` is stamped — it simply never closes.
@@ -151,11 +153,11 @@ describe("transition", () => {
 		expect(person?.accessUntilLocal).toBeUndefined();
 		expect(person?.hostedById).toBe(boardId);
 
-		const jobs = await scheduledJobs(t);
+		const jobs = await scheduledJobs(backend);
 		// No expiry job: there is no instant to fire at. The door still
 		// reconciles and the approval email still goes — this is a full
 		// approval, not a partial one.
-		expect(jobs.some((j) => j.name === "lifecycle:windowExpired")).toBe(
+		expect(jobs.some((job) => job.name === "lifecycle:windowExpired")).toBe(
 			false
 		);
 		expect(jobs).toEqual(
@@ -179,8 +181,8 @@ describe("transition", () => {
 	});
 
 	it("refuses an illegal transition and writes nothing", async () => {
-		const { t, asBoard } = await setup();
-		const id = await insertProspect(t, "unverified");
+		const { backend, asBoard } = await setup();
+		const id = await insertProspect(backend, "unverified");
 
 		await expect(
 			asBoard.mutation(api.lifecycle.transition, {
@@ -189,36 +191,37 @@ describe("transition", () => {
 			})
 		).rejects.toThrow(/Illegal transition/);
 
-		const person = await t.run(async (ctx) => ctx.db.get(id));
+		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person?.stage).toBe("unverified");
-		expect(await eventsFor(t, id)).toHaveLength(0);
+		expect(await eventsFor(backend, id)).toHaveLength(0);
 	});
 
 	it("leaves a fresh applicant without an onboarding record on approval", async () => {
-		const { t, asBoard } = await setup();
-		const id = await insertProspect(t, "verified");
+		const { backend, asBoard } = await setup();
+		const id = await insertProspect(backend, "verified");
 
 		await asBoard.mutation(api.lifecycle.transition, {
 			personId: id,
 			event: { type: "APPROVE_MEMBER" },
 		});
 
-		expect(
-			(await t.run((ctx) => ctx.db.get(id)))?.onboarding
-		).toBeUndefined();
+		const person = await backend.run((context) => context.db.get(id));
+		expect(person?.onboarding).toBeUndefined();
 	});
 
 	it("appends an audit row naming the actor", async () => {
-		const { t, asBoard, boardId } = await setup();
-		const id = await insertProspect(t, "verified");
+		const { backend, asBoard, boardId } = await setup();
+		const id = await insertProspect(backend, "verified");
 
 		await asBoard.mutation(api.lifecycle.transition, {
 			personId: id,
 			event: { type: "APPROVE_MEMBER" },
 		});
 
-		const events = await eventsFor(t, id);
-		expect(events.filter((e) => e.kind === "transition")).toMatchObject([
+		const events = await eventsFor(backend, id);
+		expect(
+			events.filter((event) => event.kind === "transition")
+		).toMatchObject([
 			{
 				event: "APPROVE_MEMBER",
 				from: "prospect.verified",
@@ -229,22 +232,21 @@ describe("transition", () => {
 	});
 
 	it("writes an email audit row and schedules the approval email for every lifecycle email it sends", async () => {
-		const { t, asBoard } = await setup();
-		const id = await insertProspect(t, "verified");
+		const { backend, asBoard } = await setup();
+		const id = await insertProspect(backend, "verified");
 
 		await asBoard.mutation(api.lifecycle.transition, {
 			personId: id,
 			event: { type: "APPROVE_MEMBER" },
 		});
 
-		const emails = (await eventsFor(t, id)).filter(
-			(e) => e.kind === "email"
-		);
+		const allEvents = await eventsFor(backend, id);
+		const emails = allEvents.filter((event) => event.kind === "email");
 		expect(emails).toMatchObject([{ meta: "approval" }]);
 
 		// The audit row alone doesn't prove the RIGHT function was scheduled —
 		// see `scheduledJobs`'s doc comment.
-		const jobs = await scheduledJobs(t);
+		const jobs = await scheduledJobs(backend);
 		expect(jobs).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
@@ -256,9 +258,9 @@ describe("transition", () => {
 	});
 
 	it("re-opens the document step and clears the window on promotion", async () => {
-		const { t, asBoard } = await setup();
-		const id = await t.run(async (ctx) => {
-			const personId = await ctx.db.insert("people", {
+		const { backend, asBoard } = await setup();
+		const id = await backend.run(async (context) => {
+			const personId = await context.db.insert("people", {
 				email: "ada@example.com",
 				firstName: "Ada",
 				lastName: "Lovelace",
@@ -278,7 +280,7 @@ describe("transition", () => {
 					tourSeen: true,
 				},
 			});
-			await ctx.db.insert("signatures", {
+			await context.db.insert("signatures", {
 				personId,
 				email: "ada@example.com",
 				variant: "guest",
@@ -295,7 +297,7 @@ describe("transition", () => {
 			event: { type: "PROMOTE_TO_MEMBER" },
 		});
 
-		const person = await t.run(async (ctx) => ctx.db.get(id));
+		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person?.tier).toBe("member");
 		expect(person?.stage).toBe("onboarding");
 		expect(person?.accessUntil).toBeUndefined();
@@ -306,14 +308,15 @@ describe("transition", () => {
 		// Space facts survive; the tour never runs twice.
 		expect(person?.onboarding?.steps.rules).toBeDefined();
 		expect(person?.onboarding?.tourSeen).toBe(true);
+		const allEvents = await eventsFor(backend, id);
 		expect(
-			(await eventsFor(t, id)).filter((e) => e.kind === "email")
+			allEvents.filter((event) => event.kind === "email")
 		).toMatchObject([{ meta: "memberUpgrade" }]);
 		// The exact swap this task exists to prevent: `sendApprovalEmail`
 		// scheduled instead of `sendMemberUpgradeEmail` on promotion. A test
 		// that only checks the `personEvents` `meta` field cannot catch this,
 		// since both write the identical `{ meta: "memberUpgrade" }` row.
-		const jobs = await scheduledJobs(t);
+		const jobs = await scheduledJobs(backend);
 		expect(jobs).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
@@ -328,9 +331,9 @@ describe("transition", () => {
 		// Regression for the bug where SET_FORMER read the ALREADY-PATCHED row,
 		// found tier === "former", and stored formerOf: undefined — after which
 		// RE_ADMIT defaulted every kicked core member back to plain member.
-		const { t, asBoard } = await setup();
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const { backend, asBoard } = await setup();
+		const id = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "cora@example.com",
 				firstName: "Cora",
 				lastName: "Member",
@@ -347,7 +350,7 @@ describe("transition", () => {
 			event: { type: "KICK_OUT" },
 		});
 
-		const kicked = await t.run(async (ctx) => ctx.db.get(id));
+		const kicked = await backend.run(async (context) => context.db.get(id));
 		expect(kicked?.tier).toBe("former");
 		expect(kicked?.formerOf).toBe("core");
 		expect(kicked?.formerReason).toBe("kicked");
@@ -359,7 +362,9 @@ describe("transition", () => {
 			personId: id,
 			event: { type: "RE_ADMIT" },
 		});
-		const readmitted = await t.run(async (ctx) => ctx.db.get(id));
+		const readmitted = await backend.run(async (context) =>
+			context.db.get(id)
+		);
 		expect(readmitted?.tier).toBe("core");
 		// Cora has NO signature on file, so RE_ADMIT must land her in onboarding,
 		// not active. Facts are computed from the pre-transition row, whose tier is
@@ -372,9 +377,9 @@ describe("transition", () => {
 	});
 
 	it("remembers a kicked staff person, so the row stays legal and re-admit restores staff", async () => {
-		const { t, asBoard } = await setup();
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const { backend, asBoard } = await setup();
+		const id = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "sam@example.com",
 				firstName: "Sam",
 				lastName: "Staff",
@@ -389,7 +394,7 @@ describe("transition", () => {
 			event: { type: "KICK_OUT" },
 		});
 
-		const kicked = await t.run(async (ctx) => ctx.db.get(id));
+		const kicked = await backend.run(async (context) => context.db.get(id));
 		expect(kicked?.tier).toBe("former");
 		expect(kicked?.formerOf).toBe("staff");
 		if (!kicked) throw new Error("row vanished");
@@ -399,7 +404,9 @@ describe("transition", () => {
 			personId: id,
 			event: { type: "RE_ADMIT" },
 		});
-		const readmitted = await t.run(async (ctx) => ctx.db.get(id));
+		const readmitted = await backend.run(async (context) =>
+			context.db.get(id)
+		);
 		expect(`${readmitted?.tier}.${readmitted?.stage}`).toBe("staff.active");
 	});
 
@@ -410,9 +417,9 @@ describe("transition", () => {
 		// agreement (board has no variant), so evaluating compliance against
 		// `board` returns "met" and drops them into member.active holding
 		// nothing — the failure the spec exists to kill.
-		const { t, asBoard } = await setup();
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const { backend, asBoard } = await setup();
+		const id = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "ex-board@example.com",
 				firstName: "Ex",
 				lastName: "Board",
@@ -427,7 +434,7 @@ describe("transition", () => {
 			event: { type: "SET_ROLE", tier: "member" },
 		});
 
-		const person = await t.run(async (ctx) => ctx.db.get(id));
+		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person?.tier).toBe("member");
 		expect(person?.stage).toBe("onboarding");
 	});
@@ -437,9 +444,9 @@ describe("transition", () => {
 		// board/admin keep a break-glass key: the demotion must queue
 		// revokeUnlessBreakGlass for them, or their break-glass key outlives
 		// their board seat.
-		const { t, asBoard } = await setup();
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const { backend, asBoard } = await setup();
+		const id = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "ex-board@example.com",
 				firstName: "Ex",
 				lastName: "Board",
@@ -454,7 +461,7 @@ describe("transition", () => {
 			event: { type: "SET_ROLE", tier: "member" },
 		});
 
-		expect(await scheduledJobs(t)).toEqual(
+		expect(await scheduledJobs(backend)).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
 					name: "doorRevoke:revokeUnlessBreakGlass",
@@ -471,9 +478,9 @@ describe("transition", () => {
 	});
 
 	it("demotes a board member straight to active when the member agreement is on file", async () => {
-		const { t, asBoard } = await setup();
-		const id = await t.run(async (ctx) => {
-			const personId = await ctx.db.insert("people", {
+		const { backend, asBoard } = await setup();
+		const id = await backend.run(async (context) => {
+			const personId = await context.db.insert("people", {
 				email: "ex-board@example.com",
 				firstName: "Ex",
 				lastName: "Board",
@@ -490,7 +497,7 @@ describe("transition", () => {
 					},
 				},
 			});
-			await ctx.db.insert("signatures", {
+			await context.db.insert("signatures", {
 				personId,
 				email: "ex-board@example.com",
 				variant: "member",
@@ -507,15 +514,15 @@ describe("transition", () => {
 			event: { type: "SET_ROLE", tier: "member" },
 		});
 
-		const person = await t.run(async (ctx) => ctx.db.get(id));
+		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person?.tier).toBe("member");
 		expect(person?.stage).toBe("active");
 	});
 
 	it("round-trips between board and admin through active", async () => {
-		const { t, asBoard } = await setup();
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const { backend, asBoard } = await setup();
+		const id = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "staff@example.com",
 				firstName: "Sta",
 				lastName: "Ff",
@@ -529,7 +536,9 @@ describe("transition", () => {
 			personId: id,
 			event: { type: "SET_ROLE", tier: "admin" },
 		});
-		expect(await t.run(async (ctx) => ctx.db.get(id))).toMatchObject({
+		expect(
+			await backend.run(async (context) => context.db.get(id))
+		).toMatchObject({
 			tier: "admin",
 			stage: "active",
 		});
@@ -541,7 +550,9 @@ describe("transition", () => {
 		// Neither tier has an agreement variant or self steps, so neither may
 		// detour through `.onboarding` — a state with no ONBOARDING_PROGRESSED
 		// edge, i.e. one they could never leave.
-		expect(await t.run(async (ctx) => ctx.db.get(id))).toMatchObject({
+		expect(
+			await backend.run(async (context) => context.db.get(id))
+		).toMatchObject({
 			tier: "board",
 			stage: "active",
 		});
@@ -551,31 +562,32 @@ describe("transition", () => {
 		// SET_SCORE is prospect.queued -> prospect.queued. `personStatus.since`
 		// ("in this state 23 days") is the spec's only stuck-person signal, so a
 		// board re-score must not reset it to zero.
-		const { t, asBoard } = await setup();
-		const id = await insertProspect(t, "verified");
+		const { backend, asBoard } = await setup();
+		const id = await insertProspect(backend, "verified");
 
 		await asBoard.mutation(api.lifecycle.transition, {
 			personId: id,
 			event: { type: "SET_SCORE" },
 		});
-		const first = await t.run(
-			async (ctx) => (await ctx.db.get(id))?.stageSince
-		);
+		const first = await backend.run(async (context) => {
+			const record = await context.db.get(id);
+			return record?.stageSince;
+		});
 		expect(first).toBeTypeOf("number");
 
 		await asBoard.mutation(api.lifecycle.transition, {
 			personId: id,
 			event: { type: "SET_SCORE" },
 		});
-		const second = await t.run(async (ctx) => ctx.db.get(id));
+		const second = await backend.run(async (context) => context.db.get(id));
 		expect(second?.stage).toBe("queued");
 		expect(second?.stageSince).toBe(first);
 	});
 
 	it("undenies a denied prospect and clears deniedAt", async () => {
-		const { t, asBoard } = await setup();
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const { backend, asBoard } = await setup();
+		const id = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "ada@example.com",
 				firstName: "Ada",
 				lastName: "Lovelace",
@@ -592,24 +604,24 @@ describe("transition", () => {
 			event: { type: "UNDENY" },
 		});
 
-		const person = await t.run(async (ctx) => ctx.db.get(id));
+		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person?.stage).toBe("queued");
 		expect(person?.deniedAt).toBeUndefined();
 	});
 
 	it("verifies email, notifies the board, and schedules applicationReceived on VERIFY_EMAIL", async () => {
-		const { t, asBoard } = await setup();
-		const id = await insertProspect(t, "unverified");
+		const { backend, asBoard } = await setup();
+		const id = await insertProspect(backend, "unverified");
 
 		await asBoard.mutation(api.lifecycle.transition, {
 			personId: id,
 			event: { type: "VERIFY_EMAIL" },
 		});
 
-		const person = await t.run(async (ctx) => ctx.db.get(id));
+		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person?.stage).toBe("verified");
 
-		const jobs = await scheduledJobs(t);
+		const jobs = await scheduledJobs(backend);
 		expect(jobs).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
@@ -637,19 +649,19 @@ describe("transition", () => {
 	});
 
 	it("denies a verified prospect, stamps deniedAt, and schedules the rejection email", async () => {
-		const { t, asBoard } = await setup();
-		const id = await insertProspect(t, "verified");
+		const { backend, asBoard } = await setup();
+		const id = await insertProspect(backend, "verified");
 
 		await asBoard.mutation(api.lifecycle.transition, {
 			personId: id,
 			event: { type: "DENY" },
 		});
 
-		const person = await t.run(async (ctx) => ctx.db.get(id));
+		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person?.stage).toBe("denied");
 		expect(person?.deniedAt).toBeTypeOf("number");
 
-		const jobs = await scheduledJobs(t);
+		const jobs = await scheduledJobs(backend);
 		expect(jobs).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
@@ -667,9 +679,9 @@ describe("transition", () => {
 	});
 
 	it("reapplies a denied prospect, resets the score and reconciles the door", async () => {
-		const { t, asBoard } = await setup();
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const { backend, asBoard } = await setup();
+		const id = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "ada@example.com",
 				firstName: "Ada",
 				lastName: "Lovelace",
@@ -687,13 +699,13 @@ describe("transition", () => {
 			event: { type: "REAPPLY" },
 		});
 
-		const person = await t.run(async (ctx) => ctx.db.get(id));
+		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person?.stage).toBe("unverified");
 		expect(person?.board?.score).toBeUndefined();
 		// RESET_SCORE clears only `score` — board notes are a separate field.
 		expect(person?.board?.notes).toBe("promising");
 
-		const jobs = await scheduledJobs(t);
+		const jobs = await scheduledJobs(backend);
 		expect(jobs).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
@@ -715,9 +727,9 @@ describe("transition", () => {
 		// RECONCILE_DOOR effect, unlike the prospect.denied one above — and
 		// RESET_SCORE must not create `board: { score: undefined }` out of thin
 		// air on a prospect who was never scored (dashboard noise).
-		const { t, asBoard } = await setup();
-		const id = await insertProspect(t, "unverified");
-		const before = await t.run(async (ctx) => ctx.db.get(id));
+		const { backend, asBoard } = await setup();
+		const id = await insertProspect(backend, "unverified");
+		const before = await backend.run(async (context) => context.db.get(id));
 		expect(before?.board).toBeUndefined();
 
 		await asBoard.mutation(api.lifecycle.transition, {
@@ -725,21 +737,23 @@ describe("transition", () => {
 			event: { type: "REAPPLY" },
 		});
 
-		const person = await t.run(async (ctx) => ctx.db.get(id));
+		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person?.stage).toBe("unverified");
 		expect(person?.board).toBeUndefined();
 	});
 
 	it("stamps accessFrom once and never re-stamps it on EXTEND_WINDOW", async () => {
-		const { t, asBoard } = await setup();
-		const id = await insertProspect(t, "verified");
+		const { backend, asBoard } = await setup();
+		const id = await insertProspect(backend, "verified");
 		const firstUntil = Date.now() + 30 * DAY;
 
 		await asBoard.mutation(api.lifecycle.transition, {
 			personId: id,
 			event: { type: "APPROVE_GUEST", until: firstUntil },
 		});
-		const afterApprove = await t.run(async (ctx) => ctx.db.get(id));
+		const afterApprove = await backend.run(async (context) =>
+			context.db.get(id)
+		);
 		expect(afterApprove?.accessFrom).toBeTypeOf("number");
 		const stampedFrom = afterApprove?.accessFrom;
 
@@ -749,7 +763,9 @@ describe("transition", () => {
 			event: { type: "EXTEND_WINDOW", until: laterUntil },
 		});
 
-		const afterExtend = await t.run(async (ctx) => ctx.db.get(id));
+		const afterExtend = await backend.run(async (context) =>
+			context.db.get(id)
+		);
 		expect(afterExtend?.accessUntil).toBe(laterUntil);
 		// EXTEND_WINDOW reuses SET_WINDOW, so it must re-derive `accessUntilLocal`
 		// from the NEW epoch too, not just leave the one from APPROVE_GUEST.
@@ -764,9 +780,9 @@ describe("transition", () => {
 	});
 
 	it("grants core to a compliant member and reconciles the door", async () => {
-		const { t, asBoard } = await setup();
-		const id = await t.run(async (ctx) => {
-			const personId = await ctx.db.insert("people", {
+		const { backend, asBoard } = await setup();
+		const id = await backend.run(async (context) => {
+			const personId = await context.db.insert("people", {
 				email: "mia@example.com",
 				firstName: "Mia",
 				lastName: "Member",
@@ -783,7 +799,7 @@ describe("transition", () => {
 					},
 				},
 			});
-			await ctx.db.insert("signatures", {
+			await context.db.insert("signatures", {
 				personId,
 				email: "mia@example.com",
 				variant: "member",
@@ -800,11 +816,11 @@ describe("transition", () => {
 			event: { type: "GRANT_CORE" },
 		});
 
-		const person = await t.run(async (ctx) => ctx.db.get(id));
+		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person?.tier).toBe("core");
 		expect(person?.stage).toBe("active");
 
-		const jobs = await scheduledJobs(t);
+		const jobs = await scheduledJobs(backend);
 		expect(jobs).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
@@ -822,9 +838,9 @@ describe("transition", () => {
 	});
 
 	it("revokes core, demoting a compliant core member to member.active", async () => {
-		const { t, asBoard } = await setup();
-		const id = await t.run(async (ctx) => {
-			const personId = await ctx.db.insert("people", {
+		const { backend, asBoard } = await setup();
+		const id = await backend.run(async (context) => {
+			const personId = await context.db.insert("people", {
 				email: "cal@example.com",
 				firstName: "Cal",
 				lastName: "Core",
@@ -841,7 +857,7 @@ describe("transition", () => {
 					},
 				},
 			});
-			await ctx.db.insert("signatures", {
+			await context.db.insert("signatures", {
 				personId,
 				email: "cal@example.com",
 				variant: "member",
@@ -858,15 +874,15 @@ describe("transition", () => {
 			event: { type: "REVOKE_CORE" },
 		});
 
-		const person = await t.run(async (ctx) => ctx.db.get(id));
+		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person?.tier).toBe("member");
 		expect(person?.stage).toBe("active");
 	});
 
 	it("marks a member as left, distinct from being kicked out", async () => {
-		const { t, asBoard } = await setup();
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const { backend, asBoard } = await setup();
+		const id = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "leaving@example.com",
 				firstName: "Lea",
 				lastName: "Ving",
@@ -881,16 +897,16 @@ describe("transition", () => {
 			event: { type: "MARK_LEFT" },
 		});
 
-		const person = await t.run(async (ctx) => ctx.db.get(id));
+		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person?.tier).toBe("former");
 		expect(person?.formerOf).toBe("member");
 		expect(person?.formerReason).toBe("left");
 	});
 
 	it("promotes an active member to the board", async () => {
-		const { t, asBoard } = await setup();
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const { backend, asBoard } = await setup();
+		const id = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "riser@example.com",
 				firstName: "Ris",
 				lastName: "Er",
@@ -905,15 +921,15 @@ describe("transition", () => {
 			event: { type: "PROMOTE_TO_BOARD" },
 		});
 
-		const person = await t.run(async (ctx) => ctx.db.get(id));
+		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person?.tier).toBe("board");
 		expect(person?.stage).toBe("active");
 	});
 
 	it("activates a guest whose onboarding just completed", async () => {
-		const { t, asBoard } = await setup();
-		const id = await t.run(async (ctx) => {
-			const personId = await ctx.db.insert("people", {
+		const { backend, asBoard } = await setup();
+		const id = await backend.run(async (context) => {
+			const personId = await context.db.insert("people", {
 				email: "newguest@example.com",
 				firstName: "New",
 				lastName: "Guest",
@@ -931,7 +947,7 @@ describe("transition", () => {
 					},
 				},
 			});
-			await ctx.db.insert("signatures", {
+			await context.db.insert("signatures", {
 				personId,
 				email: "newguest@example.com",
 				variant: "guest",
@@ -948,16 +964,16 @@ describe("transition", () => {
 			event: { type: "ONBOARDING_PROGRESSED" },
 		});
 
-		const person = await t.run(async (ctx) => ctx.db.get(id));
+		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person?.stage).toBe("active");
 	});
 
 	it("activates a door-blocked guest who has done every step", async () => {
 		// The step list IS the activation guard, and it no longer depends on the
 		// door: a guest approved without door access onboards like anyone else.
-		const { t, asBoard } = await setup();
-		const id = await t.run(async (ctx) => {
-			const personId = await ctx.db.insert("people", {
+		const { backend, asBoard } = await setup();
+		const id = await backend.run(async (context) => {
+			const personId = await context.db.insert("people", {
 				email: "blocked@example.com",
 				firstName: "No",
 				lastName: "Key",
@@ -975,7 +991,7 @@ describe("transition", () => {
 					},
 				},
 			});
-			await ctx.db.insert("signatures", {
+			await context.db.insert("signatures", {
 				personId,
 				email: "blocked@example.com",
 				variant: "guest",
@@ -992,15 +1008,14 @@ describe("transition", () => {
 			event: { type: "ONBOARDING_PROGRESSED" },
 		});
 
-		expect((await t.run(async (ctx) => ctx.db.get(id)))?.stage).toBe(
-			"active"
-		);
+		const person = await backend.run(async (context) => context.db.get(id));
+		expect(person?.stage).toBe("active");
 	});
 
 	it("activates a guest WITH door access who has done every step — there is no door-key step to wait on", async () => {
-		const { t, asBoard } = await setup();
-		const id = await t.run(async (ctx) => {
-			const personId = await ctx.db.insert("people", {
+		const { backend, asBoard } = await setup();
+		const id = await backend.run(async (context) => {
+			const personId = await context.db.insert("people", {
 				email: "haskey@example.com",
 				firstName: "Has",
 				lastName: "Key",
@@ -1017,7 +1032,7 @@ describe("transition", () => {
 					},
 				},
 			});
-			await ctx.db.insert("signatures", {
+			await context.db.insert("signatures", {
 				personId,
 				email: "haskey@example.com",
 				variant: "guest",
@@ -1034,15 +1049,14 @@ describe("transition", () => {
 			event: { type: "ONBOARDING_PROGRESSED" },
 		});
 
-		expect((await t.run(async (ctx) => ctx.db.get(id)))?.stage).toBe(
-			"active"
-		);
+		const person = await backend.run(async (context) => context.db.get(id));
+		expect(person?.stage).toBe("active");
 	});
 
 	it("rejects a non-board caller", async () => {
-		const { t } = await setup();
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const { backend } = await setup();
+		const id = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "m@example.com",
 				firstName: "M",
 				lastName: "M",
@@ -1053,7 +1067,7 @@ describe("transition", () => {
 		);
 
 		await expect(
-			t
+			backend
 				.withIdentity({ email: "m@example.com" })
 				.mutation(api.lifecycle.transition, {
 					personId: id,
@@ -1065,9 +1079,9 @@ describe("transition", () => {
 
 describe("windowExpired", () => {
 	it("expires a guest whose window has closed", async () => {
-		const { t } = await setup();
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const { backend } = await setup();
+		const id = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "guest@example.com",
 				firstName: "Gue",
 				lastName: "St",
@@ -1078,16 +1092,21 @@ describe("windowExpired", () => {
 			})
 		);
 
-		await t.mutation(internal.lifecycle.windowExpired, { personId: id });
-		expect(await t.run(async (ctx) => (await ctx.db.get(id))?.stage)).toBe(
-			"expired"
-		);
+		await backend.mutation(internal.lifecycle.windowExpired, {
+			personId: id,
+		});
+		expect(
+			await backend.run(async (context) => {
+				const record = await context.db.get(id);
+				return record?.stage;
+			})
+		).toBe("expired");
 	});
 
 	it("no-ops when the window was extended after the job was scheduled", async () => {
-		const { t } = await setup();
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const { backend } = await setup();
+		const id = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "guest@example.com",
 				firstName: "Gue",
 				lastName: "St",
@@ -1098,20 +1117,25 @@ describe("windowExpired", () => {
 			})
 		);
 
-		await t.mutation(internal.lifecycle.windowExpired, { personId: id });
-		expect(await t.run(async (ctx) => (await ctx.db.get(id))?.stage)).toBe(
-			"active"
-		);
+		await backend.mutation(internal.lifecycle.windowExpired, {
+			personId: id,
+		});
+		expect(
+			await backend.run(async (context) => {
+				const record = await context.db.get(id);
+				return record?.stage;
+			})
+		).toBe("active");
 		// A no-op must not pollute the timeline.
-		expect(await eventsFor(t, id)).toHaveLength(0);
+		expect(await eventsFor(backend, id)).toHaveLength(0);
 	});
 });
 
 describe("sweepExpiredWindows", () => {
 	it("catches guests whose scheduled expiry never fired", async () => {
-		const { t } = await setup();
-		const { missedId, currentId } = await t.run(async (ctx) => {
-			const missedId = await ctx.db.insert("people", {
+		const { backend } = await setup();
+		const { missedId, currentId } = await backend.run(async (context) => {
+			const missedId = await context.db.insert("people", {
 				email: "missed@example.com",
 				firstName: "Mis",
 				lastName: "Sed",
@@ -1120,7 +1144,7 @@ describe("sweepExpiredWindows", () => {
 				stageSince: Date.now(),
 				accessUntil: Date.now() - 5 * DAY,
 			});
-			const currentId = await ctx.db.insert("people", {
+			const currentId = await context.db.insert("people", {
 				email: "current@example.com",
 				firstName: "Cur",
 				lastName: "Rent",
@@ -1133,7 +1157,7 @@ describe("sweepExpiredWindows", () => {
 		});
 
 		expect(
-			await t.mutation(internal.lifecycle.sweepExpiredWindows, {})
+			await backend.mutation(internal.lifecycle.sweepExpiredWindows, {})
 		).toEqual({
 			expired: 1,
 		});
@@ -1141,52 +1165,59 @@ describe("sweepExpiredWindows", () => {
 		// The count alone doesn't prove the sweep expired the RIGHT guest —
 		// swapping which one gets skipped would still return `{ expired: 1 }`.
 		expect(
-			await t.run(async (ctx) => (await ctx.db.get(missedId))?.stage)
+			await backend.run(async (context) => {
+				const record = await context.db.get(missedId);
+				return record?.stage;
+			})
 		).toBe("expired");
 		expect(
-			await t.run(async (ctx) => (await ctx.db.get(currentId))?.stage)
+			await backend.run(async (context) => {
+				const record = await context.db.get(currentId);
+				return record?.stage;
+			})
 		).toBe("active");
 	});
 });
 
-describe("activatedAt", () => {
-	async function insertPerson(
-		t: TestConvex<typeof schema>,
-		tier: "guest" | "member",
-		stage: "onboarding" | "active",
-		opts: { signed: boolean; stageSince?: number }
-	) {
-		return t.run(async (ctx) => {
-			const pid = await ctx.db.insert("people", {
-				email: "m@example.com",
-				firstName: "M",
-				lastName: "Member",
-				tier,
-				stage,
-				stageSince: opts.stageSince ?? 1,
-			});
-			if (opts.signed) {
-				await ctx.db.insert("signatures", {
-					personId: pid,
-					email: "m@example.com",
-					variant: "member",
-					signedName: "M Member",
-					agreementVersion: "test",
-					agreementHash: "",
-					signedAt: 1,
-				});
-			}
-			return pid;
+async function insertPerson(
+	backend: TestConvex<typeof schema>,
+	tier: "guest" | "member",
+	stage: "onboarding" | "active",
+	options: { signed: boolean; stageSince?: number }
+) {
+	return backend.run(async (context) => {
+		const pid = await context.db.insert("people", {
+			email: "m@example.com",
+			firstName: "M",
+			lastName: "Member",
+			tier,
+			stage,
+			stageSince: options.stageSince ?? 1,
 		});
-	}
-	function get(t: TestConvex<typeof schema>, id: Id<"people">) {
-		return t.run((ctx) => ctx.db.get(id));
-	}
+		if (options.signed) {
+			await context.db.insert("signatures", {
+				personId: pid,
+				email: "m@example.com",
+				variant: "member",
+				signedName: "M Member",
+				agreementVersion: "test",
+				agreementHash: "",
+				signedAt: 1,
+			});
+		}
+		return pid;
+	});
+}
 
+function getPerson(backend: TestConvex<typeof schema>, id: Id<"people">) {
+	return backend.run((context) => context.db.get(id));
+}
+
+describe("activatedAt", () => {
 	it("stamps the same time as stageSince on first activation and never moves it", async () => {
-		const t = convexTest(schema, modules);
-		const id = await t.run((ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const id = await backend.run((context) =>
+			context.db.insert("people", {
 				email: "p@example.com",
 				firstName: "P",
 				lastName: "Prospect",
@@ -1196,23 +1227,24 @@ describe("activatedAt", () => {
 				verifiedAt: 1,
 			})
 		);
-		await t.run((ctx) =>
-			applyEvent(ctx, id, { type: "SET_ROLE", tier: "board" })
+		await backend.run((context) =>
+			applyEvent(context, id, { type: "SET_ROLE", tier: "board" })
 		);
-		const row = await get(t, id);
+		const row = await getPerson(backend, id);
 		expect(row?.stageSince).not.toBe(1);
 		expect(row?.activatedAt).toBe(row?.stageSince);
 		const first = row?.activatedAt;
-		await t.run((ctx) =>
-			applyEvent(ctx, id, { type: "SET_ROLE", tier: "admin" })
+		await backend.run((context) =>
+			applyEvent(context, id, { type: "SET_ROLE", tier: "admin" })
 		);
-		expect((await get(t, id))?.activatedAt).toBe(first);
+		const person = await getPerson(backend, id);
+		expect(person?.activatedAt).toBe(first);
 	});
 
 	it("does not stamp staff, so a staff person made a member still onboards", async () => {
-		const t = convexTest(schema, modules);
-		const id = await t.run((ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const id = await backend.run((context) =>
+			context.db.insert("people", {
 				email: "s@example.com",
 				firstName: "S",
 				lastName: "Staff",
@@ -1221,75 +1253,82 @@ describe("activatedAt", () => {
 				stageSince: 1,
 			})
 		);
-		await t.run((ctx) =>
-			applyEvent(ctx, id, { type: "SET_ROLE", tier: "staff" })
+		await backend.run((context) =>
+			applyEvent(context, id, { type: "SET_ROLE", tier: "staff" })
 		);
-		expect((await get(t, id))?.activatedAt).toBeUndefined();
-		await t.run((ctx) =>
-			applyEvent(ctx, id, { type: "SET_ROLE", tier: "member" })
+		const person = await getPerson(backend, id);
+		expect(person?.activatedAt).toBeUndefined();
+		await backend.run((context) =>
+			applyEvent(context, id, { type: "SET_ROLE", tier: "member" })
 		);
-		const row = await get(t, id);
+		const row = await getPerson(backend, id);
 		expect(`${row?.tier}.${row?.stage}`).toBe("member.onboarding");
 		expect(row?.activatedAt).toBeUndefined();
 	});
 
 	it("stamps the old stageSince when a row active before the backfill moves to another active state", async () => {
-		const t = convexTest(schema, modules);
-		const id = await insertPerson(t, "member", "active", {
+		const backend = convexTest(schema, modules);
+		const id = await insertPerson(backend, "member", "active", {
 			signed: true,
 			stageSince: 12_345,
 		});
-		await t.run((ctx) => applyEvent(ctx, id, { type: "PROMOTE_TO_BOARD" }));
-		const row = await get(t, id);
+		await backend.run((context) =>
+			applyEvent(context, id, { type: "PROMOTE_TO_BOARD" })
+		);
+		const row = await getPerson(backend, id);
 		expect(row?.tier).toBe("board");
 		expect(row?.stageSince).not.toBe(12_345);
 		expect(row?.activatedAt).toBe(12_345);
 	});
 
 	it("leaves activatedAt unset when landing in an onboarding stage", async () => {
-		const t = convexTest(schema, modules);
-		const id = await insertPerson(t, "guest", "onboarding", {
+		const backend = convexTest(schema, modules);
+		const id = await insertPerson(backend, "guest", "onboarding", {
 			signed: false,
 		});
-		await t.run((ctx) =>
-			applyEvent(ctx, id, {
+		await backend.run((context) =>
+			applyEvent(context, id, {
 				type: "EXTEND_WINDOW",
 				until: Date.now() + DAY,
 			})
 		);
-		const row = await get(t, id);
+		const row = await getPerson(backend, id);
 		expect(row?.stage).toBe("onboarding");
 		expect(row?.activatedAt).toBeUndefined();
 	});
 
 	it("stamps the old stageSince on a self-loop of an already-active row", async () => {
-		const t = convexTest(schema, modules);
-		const id = await insertPerson(t, "guest", "active", {
+		const backend = convexTest(schema, modules);
+		const id = await insertPerson(backend, "guest", "active", {
 			signed: false,
 			stageSince: 12_345,
 		});
-		await t.run((ctx) =>
-			applyEvent(ctx, id, {
+		await backend.run((context) =>
+			applyEvent(context, id, {
 				type: "EXTEND_WINDOW",
 				until: Date.now() + DAY,
 			})
 		);
-		const row = await get(t, id);
+		const row = await getPerson(backend, id);
 		expect(row?.stageSince).toBe(12_345);
 		expect(row?.activatedAt).toBe(12_345);
 	});
 
 	it("does not count leaving mid-onboarding: RE_ADMIT goes back to onboarding", async () => {
-		const t = convexTest(schema, modules);
-		const id = await insertPerson(t, "member", "onboarding", {
+		const backend = convexTest(schema, modules);
+		const id = await insertPerson(backend, "member", "onboarding", {
 			signed: true,
 		});
-		await t.run((ctx) => applyEvent(ctx, id, { type: "KICK_OUT" }));
-		const former = await get(t, id);
+		await backend.run((context) =>
+			applyEvent(context, id, { type: "KICK_OUT" })
+		);
+		const former = await getPerson(backend, id);
 		expect(former?.tier).toBe("former");
 		expect(former?.activatedAt).toBeUndefined();
-		await t.run((ctx) => applyEvent(ctx, id, { type: "RE_ADMIT" }));
-		const row = await get(t, id);
+		await backend.run((context) =>
+			applyEvent(context, id, { type: "RE_ADMIT" })
+		);
+		const row = await getPerson(backend, id);
 		expect(`${row?.tier}.${row?.stage}`).toBe("member.onboarding");
 		expect(row?.activatedAt).toBeUndefined();
 	});
@@ -1297,9 +1336,9 @@ describe("activatedAt", () => {
 
 describe("agreement re-opened on a tier move", () => {
 	it("makes a guest set to member sign again instead of finishing with nothing to do", async () => {
-		const t = convexTest(schema, modules);
-		const id = await t.run(async (ctx) => {
-			const pid = await ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const id = await backend.run(async (context) => {
+			const pid = await context.db.insert("people", {
 				email: "g@example.com",
 				firstName: "G",
 				lastName: "Guest",
@@ -1316,7 +1355,7 @@ describe("agreement re-opened on a tier move", () => {
 					},
 				},
 			});
-			await ctx.db.insert("signatures", {
+			await context.db.insert("signatures", {
 				personId: pid,
 				email: "g@example.com",
 				variant: "guest",
@@ -1327,22 +1366,22 @@ describe("agreement re-opened on a tier move", () => {
 			});
 			return pid;
 		});
-		await t.run((ctx) =>
-			applyEvent(ctx, id, { type: "SET_ROLE", tier: "member" })
+		await backend.run((context) =>
+			applyEvent(context, id, { type: "SET_ROLE", tier: "member" })
 		);
-		const row = await t.run((ctx) => ctx.db.get(id));
+		const row = await backend.run((context) => context.db.get(id));
 		expect(`${row?.tier}.${row?.stage}`).toBe("member.onboarding");
-		expect(Object.keys(row?.onboarding?.steps ?? {}).sort()).toEqual([
-			"rules",
-			"visit",
-			"welcome",
-		]);
+		expect(
+			Object.keys(row?.onboarding?.steps ?? {}).sort((first, second) =>
+				first.localeCompare(second)
+			)
+		).toEqual(["rules", "visit", "welcome"]);
 	});
 
 	it("makes an expired guest who re-applies and is approved as a member sign the member agreement", async () => {
-		const t = convexTest(schema, modules);
-		const id = await t.run(async (ctx) => {
-			const pid = await ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const id = await backend.run(async (context) => {
+			const pid = await context.db.insert("people", {
 				email: "g@example.com",
 				firstName: "G",
 				lastName: "Guest",
@@ -1362,7 +1401,7 @@ describe("agreement re-opened on a tier move", () => {
 					},
 				},
 			});
-			await ctx.db.insert("signatures", {
+			await context.db.insert("signatures", {
 				personId: pid,
 				email: "g@example.com",
 				variant: "guest",
@@ -1378,24 +1417,24 @@ describe("agreement re-opened on a tier move", () => {
 			{ type: "VERIFY_EMAIL" },
 			{ type: "APPROVE_MEMBER" },
 		] as const)
-			await t.run((ctx) => applyEvent(ctx, id, event));
+			await backend.run((context) => applyEvent(context, id, event));
 
-		const row = await t.run((ctx) => ctx.db.get(id));
+		const row = await backend.run((context) => context.db.get(id));
 		expect(`${row?.tier}.${row?.stage}`).toBe("member.onboarding");
-		expect(Object.keys(row?.onboarding?.steps ?? {}).sort()).toEqual([
-			"rules",
-			"visit",
-			"welcome",
-		]);
+		expect(
+			Object.keys(row?.onboarding?.steps ?? {}).sort((first, second) =>
+				first.localeCompare(second)
+			)
+		).toEqual(["rules", "visit", "welcome"]);
 		// The guest's closed window would deny the wizard and the door.
 		expect(row?.accessUntil).toBeUndefined();
 		expect(row && entitled(row, Date.now())).toBe(true);
 	});
 
 	it("approves a re-applicant who already signed the member agreement straight into active", async () => {
-		const t = convexTest(schema, modules);
-		const id = await t.run(async (ctx) => {
-			const pid = await ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const id = await backend.run(async (context) => {
+			const pid = await context.db.insert("people", {
 				email: "m@example.com",
 				firstName: "M",
 				lastName: "Member",
@@ -1414,7 +1453,7 @@ describe("agreement re-opened on a tier move", () => {
 					},
 				},
 			});
-			await ctx.db.insert("signatures", {
+			await context.db.insert("signatures", {
 				personId: pid,
 				email: "m@example.com",
 				variant: "member",
@@ -1430,9 +1469,9 @@ describe("agreement re-opened on a tier move", () => {
 			{ type: "VERIFY_EMAIL" },
 			{ type: "APPROVE_MEMBER" },
 		] as const)
-			await t.run((ctx) => applyEvent(ctx, id, event));
+			await backend.run((context) => applyEvent(context, id, event));
 
-		const row = await t.run((ctx) => ctx.db.get(id));
+		const row = await backend.run((context) => context.db.get(id));
 		expect(`${row?.tier}.${row?.stage}`).toBe("member.active");
 		expect(row?.activatedAt).toBeTypeOf("number");
 		expect(row?.onboarding?.steps.document).toBeDefined();
@@ -1443,9 +1482,9 @@ describe("agreement re-opened on a tier move", () => {
 	it.each(["member", "board"] as const)(
 		"drops a closed guest window when an expired guest is made %s",
 		async (tier) => {
-			const t = convexTest(schema, modules);
-			const id = await t.run(async (ctx) =>
-				ctx.db.insert("people", {
+			const backend = convexTest(schema, modules);
+			const id = await backend.run(async (context) =>
+				context.db.insert("people", {
 					email: "g@example.com",
 					firstName: "G",
 					lastName: "Guest",
@@ -1459,11 +1498,11 @@ describe("agreement re-opened on a tier move", () => {
 						"1970-01-01T01:00:00+01:00[Europe/Zurich]",
 				})
 			);
-			await t.run((ctx) =>
-				applyEvent(ctx, id, { type: "SET_ROLE", tier })
+			await backend.run((context) =>
+				applyEvent(context, id, { type: "SET_ROLE", tier })
 			);
 
-			const row = await t.run((ctx) => ctx.db.get(id));
+			const row = await backend.run((context) => context.db.get(id));
 			expect(row?.tier).toBe(tier);
 			expect(row?.accessFrom).toBeUndefined();
 			expect(row?.accessUntil).toBeUndefined();
@@ -1473,8 +1512,8 @@ describe("agreement re-opened on a tier move", () => {
 	);
 
 	it("approves a fresh applicant into onboarding as before", async () => {
-		const { t, asBoard, boardId } = await setup();
-		const id = await insertProspect(t, "verified");
+		const { backend, asBoard, boardId } = await setup();
+		const id = await insertProspect(backend, "verified");
 		const until = Date.now() + 30 * DAY;
 
 		await asBoard.mutation(api.lifecycle.transition, {
@@ -1482,13 +1521,13 @@ describe("agreement re-opened on a tier move", () => {
 			event: { type: "APPROVE_GUEST", until, hostedById: boardId },
 		});
 
-		const row = await t.run((ctx) => ctx.db.get(id));
+		const row = await backend.run((context) => context.db.get(id));
 		expect(`${row?.tier}.${row?.stage}`).toBe("guest.onboarding");
 		expect(row?.accessUntil).toBe(until);
 		expect(row?.hostedById).toBe(boardId);
 		// Nothing is ticked, so there is no step to re-open and no record to write.
 		expect(row?.onboarding).toBeUndefined();
-		const jobs = await scheduledJobs(t);
+		const jobs = await scheduledJobs(backend);
 		expect(jobs).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({

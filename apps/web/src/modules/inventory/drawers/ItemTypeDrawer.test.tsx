@@ -39,8 +39,7 @@ vi.mock("../data/inventoryData.ts", () => ({
 		return {
 			data: () => {
 				if (id === "itemTypes:chair") return chairItems;
-				if (id === "itemTypes:empty") return [];
-				return undefined;
+				return id === "itemTypes:empty" ? [] : undefined;
 			},
 		};
 	},

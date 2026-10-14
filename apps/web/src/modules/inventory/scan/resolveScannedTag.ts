@@ -19,6 +19,7 @@ export async function resolveScannedTag(
 	const link = extractItemLink(raw);
 	if (link.kind === "invalid") return { kind: "invalid" };
 	const found = await lookup(link.tag);
-	if (found) return { kind: "open", id: found._id, assetTag: link.tag };
-	return { kind: "unknown", assetTag: link.tag };
+	return found
+		? { kind: "open", id: found._id, assetTag: link.tag }
+		: { kind: "unknown", assetTag: link.tag };
 }

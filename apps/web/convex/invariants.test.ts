@@ -38,7 +38,7 @@ const STEPS = {
 };
 
 beforeEach(() => {
-	vi.spyOn(console, "log").mockImplementation(() => undefined);
+	vi.spyOn(console, "log").mockImplementation(() => {});
 });
 afterEach(() => {
 	dispatchFailure.failNext = false;
@@ -49,10 +49,10 @@ afterEach(() => {
 
 describe("invariants.healAndScan", () => {
 	it("activates a should-be-active guest and reports what is left", async () => {
-		const t = convexTest(schema, modules);
-		const { stuck } = await t.run(async (ctx) => {
+		const backend = convexTest(schema, modules);
+		const { stuck } = await backend.run(async (context) => {
 			const now = Date.now();
-			const stuck = await ctx.db.insert("people", {
+			const stuck = await context.db.insert("people", {
 				email: "s@example.com",
 				firstName: "S",
 				lastName: "Stuck",
@@ -61,7 +61,7 @@ describe("invariants.healAndScan", () => {
 				stageSince: now,
 				onboarding: { steps: STEPS },
 			});
-			await ctx.db.insert("signatures", {
+			await context.db.insert("signatures", {
 				personId: stuck,
 				email: "s@example.com",
 				variant: "guest",
@@ -70,7 +70,7 @@ describe("invariants.healAndScan", () => {
 				agreementHash: "",
 				signedAt: now,
 			});
-			await ctx.db.insert("people", {
+			await context.db.insert("people", {
 				email: "n@example.com",
 				firstName: "N",
 				lastName: "Nosig",
@@ -81,19 +81,23 @@ describe("invariants.healAndScan", () => {
 			});
 			return { stuck };
 		});
-		const result = await t.mutation(internal.invariants.healAndScan, {});
+		const result = await backend.mutation(
+			internal.invariants.healAndScan,
+			{}
+		);
 		expect(result.healed).toBe(1);
-		expect((await t.run((ctx) => ctx.db.get(stuck)))?.stage).toBe("active");
-		expect(result.found.map((f) => `${f.name}:${f.code}`)).toEqual([
-			"N Nosig:active-without-agreement",
-		]);
+		const person = await backend.run((context) => context.db.get(stuck));
+		expect(person?.stage).toBe("active");
+		expect(
+			result.found.map((finding) => `${finding.name}:${finding.code}`)
+		).toEqual(["N Nosig:active-without-agreement"]);
 	});
 
 	it("does not activate a guest whose window already closed", async () => {
-		const t = convexTest(schema, modules);
+		const backend = convexTest(schema, modules);
 		const now = Date.now();
-		const id = await t.run(async (ctx) => {
-			const id = await ctx.db.insert("people", {
+		const id = await backend.run(async (context) => {
+			const id = await context.db.insert("people", {
 				email: "p@example.com",
 				firstName: "P",
 				lastName: "Past",
@@ -103,7 +107,7 @@ describe("invariants.healAndScan", () => {
 				accessUntil: now - 1000,
 				onboarding: { steps: STEPS },
 			});
-			await ctx.db.insert("signatures", {
+			await context.db.insert("signatures", {
 				personId: id,
 				email: "p@example.com",
 				variant: "guest",
@@ -114,19 +118,23 @@ describe("invariants.healAndScan", () => {
 			});
 			return id;
 		});
-		const result = await t.mutation(internal.invariants.healAndScan, {});
-		expect(result.healed).toBe(0);
-		expect((await t.run((ctx) => ctx.db.get(id)))?.stage).toBe(
-			"onboarding"
+		const result = await backend.mutation(
+			internal.invariants.healAndScan,
+			{}
 		);
-		expect(result.found.map((f) => f.code)).toContain("live-past-window");
+		expect(result.healed).toBe(0);
+		const person = await backend.run((context) => context.db.get(id));
+		expect(person?.stage).toBe("onboarding");
+		expect(result.found.map((finding) => finding.code)).toContain(
+			"live-past-window"
+		);
 	});
 
 	it("does not activate a member who kept a closed guest window", async () => {
-		const t = convexTest(schema, modules);
+		const backend = convexTest(schema, modules);
 		const now = Date.now();
-		const id = await t.run(async (ctx) => {
-			const id = await ctx.db.insert("people", {
+		const id = await backend.run(async (context) => {
+			const id = await context.db.insert("people", {
 				email: "m@example.com",
 				firstName: "M",
 				lastName: "Past",
@@ -136,7 +144,7 @@ describe("invariants.healAndScan", () => {
 				accessUntil: now - 1000,
 				onboarding: { steps: STEPS },
 			});
-			await ctx.db.insert("signatures", {
+			await context.db.insert("signatures", {
 				personId: id,
 				email: "m@example.com",
 				variant: "member",
@@ -147,139 +155,156 @@ describe("invariants.healAndScan", () => {
 			});
 			return id;
 		});
-		const result = await t.mutation(internal.invariants.healAndScan, {});
-		expect(result.healed).toBe(0);
-		expect((await t.run((ctx) => ctx.db.get(id)))?.stage).toBe(
-			"onboarding"
+		const result = await backend.mutation(
+			internal.invariants.healAndScan,
+			{}
 		);
-		expect(result.found.map((f) => f.code).sort()).toEqual([
-			"live-past-window",
-			"should-be-active",
-		]);
+		expect(result.healed).toBe(0);
+		const person = await backend.run((context) => context.db.get(id));
+		expect(person?.stage).toBe("onboarding");
+		expect(
+			result.found
+				.map((finding) => finding.code)
+				.sort((first, second) => first.localeCompare(second))
+		).toEqual(["live-past-window", "should-be-active"]);
 	});
 
 	it("finds nothing on a clean table", async () => {
-		const t = convexTest(schema, modules);
-		const result = await t.mutation(internal.invariants.healAndScan, {});
+		const backend = convexTest(schema, modules);
+		const result = await backend.mutation(
+			internal.invariants.healAndScan,
+			{}
+		);
 		expect(result).toEqual({ healed: 0, found: [] });
 	});
 });
 
+async function boardWithPush() {
+	vi.stubEnv("SITE_URL", "https://app.example.com");
+	vi.stubEnv("VAPID_PUBLIC_KEY", "pub");
+	vi.stubEnv("VAPID_PRIVATE_KEY", "priv");
+	vi.stubEnv("VAPID_SUBJECT", "mailto:board@example.com");
+	const backend = convexTest(schema, modules);
+	const personId = await backend.run((context) =>
+		context.db.insert("people", {
+			email: "b@example.org",
+			firstName: "B",
+			lastName: "O",
+			tier: "board",
+			stage: "active",
+			stageSince: Date.now(),
+			notificationPrefs: {
+				applications: { push: true, email: false },
+			},
+		})
+	);
+	await backend.run((context) =>
+		context.db.insert("pushSubscriptions", {
+			personId,
+			endpoint: "https://push/b",
+			p256dh: "p",
+			auth: "a",
+			userAgent: "test",
+			createdAt: Date.now(),
+		})
+	);
+	return backend;
+}
+
+function addUnsignedGuest(backend: TestConvex<typeof schema>, email: string) {
+	return backend.run((context) =>
+		context.db.insert("people", {
+			email,
+			firstName: "N",
+			lastName: email,
+			tier: "guest",
+			stage: "active",
+			stageSince: 1,
+			activatedAt: 1,
+		})
+	);
+}
+
 describe("invariants.check", () => {
 	const KEY = LIFECYCLE_ALERT_KEY;
 
-	async function boardWithPush() {
-		vi.stubEnv("SITE_URL", "https://app.example.com");
-		vi.stubEnv("VAPID_PUBLIC_KEY", "pub");
-		vi.stubEnv("VAPID_PRIVATE_KEY", "priv");
-		vi.stubEnv("VAPID_SUBJECT", "mailto:board@example.com");
-		const t = convexTest(schema, modules);
-		const personId = await t.run((ctx) =>
-			ctx.db.insert("people", {
-				email: "b@example.org",
-				firstName: "B",
-				lastName: "O",
-				tier: "board",
-				stage: "active",
-				stageSince: Date.now(),
-				notificationPrefs: {
-					applications: { push: true, email: false },
-				},
-			})
-		);
-		await t.run((ctx) =>
-			ctx.db.insert("pushSubscriptions", {
-				personId,
-				endpoint: "https://push/b",
-				p256dh: "p",
-				auth: "a",
-				userAgent: "test",
-				createdAt: Date.now(),
-			})
-		);
-		return t;
-	}
-
-	function addUnsignedGuest(t: TestConvex<typeof schema>, email: string) {
-		return t.run((ctx) =>
-			ctx.db.insert("people", {
-				email,
-				firstName: "N",
-				lastName: email,
-				tier: "guest",
-				stage: "active",
-				stageSince: 1,
-				activatedAt: 1,
-			})
-		);
-	}
-
-	function claimRow(t: TestConvex<typeof schema>) {
-		return t.run((ctx) =>
-			ctx.db
+	function claimRow(backend: TestConvex<typeof schema>) {
+		return backend.run((context) =>
+			context.db
 				.query("opsAlerts")
-				.withIndex("by_key", (q) => q.eq("key", KEY))
+				.withIndex("by_key", (range) => range.eq("key", KEY))
 				.unique()
 		);
 	}
 
+	async function claimFingerprint(backend: TestConvex<typeof schema>) {
+		const claim = await claimRow(backend);
+		return claim?.fingerprint;
+	}
+
+	async function claimLastSentAt(backend: TestConvex<typeof schema>) {
+		const claim = await claimRow(backend);
+		return claim?.lastSentAt;
+	}
+
 	it("claims the alert with a sorted, deterministic fingerprint", async () => {
-		const t = await boardWithPush();
+		const backend = await boardWithPush();
 		setPushSenderForTests(() => Promise.resolve());
 		const ids = [
-			await addUnsignedGuest(t, "a@example.com"),
-			await addUnsignedGuest(t, "b@example.com"),
+			await addUnsignedGuest(backend, "a@example.com"),
+			await addUnsignedGuest(backend, "b@example.com"),
 		];
-		const result = await t.action(internal.invariants.check, {});
+		const result = await backend.action(internal.invariants.check, {});
 		expect(result.violations).toBe(2);
 		const expected = ids
 			.map((id) => `active-without-agreement:${id}`)
+			// eslint-disable-next-line id-length -- conventional comparator parameter names
 			.sort((a, b) => a.localeCompare(b))
 			.join(",");
-		expect((await claimRow(t))?.fingerprint).toBe(expected);
+		expect(await claimFingerprint(backend)).toBe(expected);
 
-		const again = await t.action(internal.invariants.check, {});
+		const again = await backend.action(internal.invariants.check, {});
 		expect(again.decision).toBe("silent");
 	});
 
 	it("releases the claim when nothing was delivered, then retries", async () => {
-		const t = await boardWithPush();
-		await addUnsignedGuest(t, "a@example.com");
-		vi.spyOn(console, "error").mockImplementation(() => undefined);
-		vi.spyOn(console, "warn").mockImplementation(() => undefined);
+		const backend = await boardWithPush();
+		await addUnsignedGuest(backend, "a@example.com");
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		vi.spyOn(console, "warn").mockImplementation(() => {});
 		setPushSenderForTests(() =>
 			Promise.reject(new Error("push service down"))
 		);
-		await t.action(internal.invariants.check, {});
-		expect((await claimRow(t))?.lastSentAt).toBe(0);
+		await backend.action(internal.invariants.check, {});
+		expect(await claimLastSentAt(backend)).toBe(0);
 
 		const sender = vi.fn<PushSender>(() => Promise.resolve());
 		setPushSenderForTests(sender);
-		await t.action(internal.invariants.check, {});
+		await backend.action(internal.invariants.check, {});
 		expect(sender).toHaveBeenCalledOnce();
-		expect((await claimRow(t))?.lastSentAt).toBeGreaterThan(0);
+		expect(await claimLastSentAt(backend)).toBeGreaterThan(0);
 	});
 
 	it("releases the claim when dispatch throws, then retries", async () => {
-		const t = await boardWithPush();
-		await addUnsignedGuest(t, "a@example.com");
+		const backend = await boardWithPush();
+		await addUnsignedGuest(backend, "a@example.com");
 		const sender = vi.fn<PushSender>(() => Promise.resolve());
 		setPushSenderForTests(sender);
 		dispatchFailure.failNext = true;
-		await expect(t.action(internal.invariants.check, {})).rejects.toThrow(
-			"dispatch down"
-		);
-		expect((await claimRow(t))?.lastSentAt).toBe(0);
+		await expect(
+			backend.action(internal.invariants.check, {})
+		).rejects.toThrow("dispatch down");
+		expect(await claimLastSentAt(backend)).toBe(0);
 		expect(sender).not.toHaveBeenCalled();
 
-		await t.action(internal.invariants.check, {});
+		await backend.action(internal.invariants.check, {});
 		expect(sender).toHaveBeenCalledOnce();
 	});
 
 	it("sends an all-clear once when a recorded violation is gone", async () => {
-		const t = await boardWithPush();
-		await t.run((ctx) =>
-			ctx.db.insert("opsAlerts", {
+		const backend = await boardWithPush();
+		await backend.run((context) =>
+			context.db.insert("opsAlerts", {
 				key: KEY,
 				fingerprint: "active-without-agreement:gone",
 				lastSentAt: 1,
@@ -287,15 +312,15 @@ describe("invariants.check", () => {
 		);
 		const sender = vi.fn<PushSender>(() => Promise.resolve());
 		setPushSenderForTests(sender);
-		const result = await t.action(internal.invariants.check, {});
+		const result = await backend.action(internal.invariants.check, {});
 		expect(result.decision).toBe("resolved");
 		expect(sender).toHaveBeenCalledOnce();
 		expect(sender.mock.calls[0][1]).toContain(
 			"Every person's status is consistent again"
 		);
-		expect((await claimRow(t))?.fingerprint).toBe("");
+		expect(await claimFingerprint(backend)).toBe("");
 
-		await t.action(internal.invariants.check, {});
+		await backend.action(internal.invariants.check, {});
 		expect(sender).toHaveBeenCalledOnce();
 	});
 });

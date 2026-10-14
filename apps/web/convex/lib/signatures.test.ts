@@ -9,9 +9,9 @@ const modules = import.meta.glob("../**/*.*s");
 
 describe("insertSignature", () => {
 	it("rejects a signature with neither a file nor a link, writing nothing", async () => {
-		const t = convexTest(schema, modules);
-		const personId = await t.run((ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const personId = await backend.run((context) =>
+			context.db.insert("people", {
 				email: "nofile@example.com",
 				firstName: "No",
 				lastName: "File",
@@ -21,8 +21,8 @@ describe("insertSignature", () => {
 			})
 		);
 		await expect(
-			t.run((ctx) =>
-				insertSignature(ctx, {
+			backend.run((context) =>
+				insertSignature(context, {
 					personId,
 					email: "nofile@example.com",
 					variant: "guest",
@@ -34,10 +34,11 @@ describe("insertSignature", () => {
 			)
 		).rejects.toThrow("A signature needs a fileId or a sourceUrl.");
 		expect(
-			await t.run((ctx) => ctx.db.query("signatures").collect())
+			await backend.run((context) =>
+				context.db.query("signatures").collect()
+			)
 		).toHaveLength(0);
-		expect(
-			(await t.run((ctx) => ctx.db.get(personId)))?.signedVariants
-		).toBeUndefined();
+		const stored = await backend.run((context) => context.db.get(personId));
+		expect(stored?.signedVariants).toBeUndefined();
 	});
 });

@@ -39,7 +39,7 @@ const BACK_ONLINE = {
  */
 export const poll = internalAction({
 	args: {},
-	handler: async (ctx): Promise<null> => {
+	handler: async (context): Promise<null> => {
 		if (!doorProviderConfigured()) {
 			// eslint-disable-next-line no-console -- door provider not configured on this deployment: surface the skipped poll in the Convex logs
 			console.log("[door-poll] door provider is not configured; skipped");
@@ -50,8 +50,9 @@ export const poll = internalAction({
 		}).readLockStatus();
 		const offline = locks
 			.filter((lock) => !lock.online)
+			// eslint-disable-next-line id-length -- conventional comparator parameter names
 			.sort((a, b) => a.lockId.localeCompare(b.lockId));
-		await alertOnChange(ctx, {
+		await alertOnChange(context, {
 			key: DOOR_ONLINE_ALERT_KEY,
 			fingerprint: offline.map((lock) => lock.lockId).join(","),
 			kind: "doorAlert",

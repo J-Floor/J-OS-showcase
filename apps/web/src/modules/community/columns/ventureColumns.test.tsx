@@ -27,7 +27,7 @@ type Link = { label?: string; url: string };
  *  without the Convex client the neighbouring editable cells need). */
 function renderLinks(links: Link[]): void {
 	const column = ventureColumns<ApplicationRow>().find(
-		(c) => c.id === "links"
+		(candidate) => candidate.id === "links"
 	);
 	if (!column?.cell || typeof column.cell !== "function") {
 		throw new Error("links column has no cell renderer");
@@ -112,8 +112,8 @@ test("members and guests carry the same venture columns as applications", () => 
 		"links",
 		"vertical",
 	];
-	const memberIds = memberColumns().map((c) => c.id);
-	const guestIds = guestColumns([]).map((c) => c.id);
+	const memberIds = memberColumns().map((column) => column.id);
+	const guestIds = guestColumns([]).map((column) => column.id);
 	for (const id of wanted) {
 		expect(memberIds).toContain(id);
 		expect(guestIds).toContain(id);
@@ -124,14 +124,16 @@ test("hosted-by filters on an enum of the board, not free text", () => {
 	// Free text meant filtering to a host required typing their name exactly,
 	// and a surname returned nothing.
 	const column = guestColumns([{ value: "b1", label: "Sara" }]).find(
-		(c) => c.id === "hostedById"
+		(candidate) => candidate.id === "hostedById"
 	);
 	expect(column?.dataType).toBe("enum");
 	expect(column?.enumOptions).toEqual([{ value: "b1", label: "Sara" }]);
 });
 
 test("time remaining is measured again on every push, as it reads the clock", () => {
-	const column = guestColumns([]).find((c) => c.id === "timeRemaining");
+	const column = guestColumns([]).find(
+		(candidate) => candidate.id === "timeRemaining"
+	);
 	expect(column?.measureVolatile).toBe(true);
 });
 
@@ -143,7 +145,7 @@ type SizedColumn = {
 };
 
 function byId(columns: readonly SizedColumn[], id: string): SizedColumn {
-	const column = columns.find((c) => c.id === id);
+	const column = columns.find((candidate) => candidate.id === id);
 	if (!column) throw new Error(`no ${id} column`);
 	return column;
 }
@@ -224,7 +226,8 @@ test("notes wrap in a weighted share, and the date fits its text", () => {
 	);
 	expect(
 		applications.find(
-			(c) => (c as { accessorKey?: string }).accessorKey === "email"
+			(column) =>
+				(column as { accessorKey?: string }).accessorKey === "email"
 		)?.size
 	).toBeUndefined();
 });

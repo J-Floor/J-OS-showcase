@@ -46,20 +46,23 @@ async function sampleSignatureDataUrl(): Promise<string> {
 }
 
 async function signOne(variant: "member" | "guest"): Promise<void> {
-	const templateBuf = Buffer.from(TEMPLATES[variant].bytesBase64, "base64");
+	const templateBuffer = Buffer.from(
+		TEMPLATES[variant].bytesBase64,
+		"base64"
+	);
 	const template = new Uint8Array(
-		templateBuf.buffer,
-		templateBuf.byteOffset,
-		templateBuf.byteLength
+		templateBuffer.buffer,
+		templateBuffer.byteOffset,
+		templateBuffer.byteLength
 	);
 
 	const signaturePng = validatePngDataUrl(await sampleSignatureDataUrl());
 
 	// Real board PNGs live in Convex file storage; the dry run stamps the sample
 	// scribble for every board member instead.
-	const board = SAMPLE_BOARD.map((b) => ({
-		name: b.name,
-		role: b.role,
+	const board = SAMPLE_BOARD.map((member) => ({
+		name: member.name,
+		role: member.role,
 		signaturePng,
 	}));
 
@@ -74,29 +77,33 @@ async function signOne(variant: "member" | "guest"): Promise<void> {
 	});
 
 	let final = drawn;
-	let sealed = false;
+	let isSealed = false;
 	if (
 		process.env.AGREEMENT_SIGNING_P12 &&
 		process.env.AGREEMENT_SIGNING_P12_PASS
 	) {
 		final = await sealPdf(drawn);
-		sealed = true;
+		isSealed = true;
 	}
 
 	const outPath = resolve(OUT_DIR, `test-signed-${variant}.pdf`);
 	await writeFile(outPath, final);
 
+	const boardSigners = board
+		.map((member) => `${member.name} (with signature)`)
+		.join(", ");
+
 	console.log(
 		`[test-sign] ${variant} (${AGREEMENT_VERSION[variant]}) → ${outPath}\n` +
-			`  board signers: ${board.map((b) => `${b.name} (with signature)`).join(", ")}\n` +
-			`  sealed: ${sealed ? "yes" : "no (set AGREEMENT_SIGNING_P12 / _PASS to test sealing)"}\n` +
+			`  board signers: ${boardSigners}\n` +
+			`  sealed: ${isSealed ? "yes" : "no (set AGREEMENT_SIGNING_P12 / _PASS to test sealing)"}\n` +
 			`  sha256: ${sha256Hex(final)}`
 	);
 }
 
 async function main(): Promise<void> {
-	const arg = process.argv[2] ?? "all";
-	if (!["member", "guest", "all"].includes(arg)) {
+	const argument = process.argv[2] ?? "all";
+	if (!["member", "guest", "all"].includes(argument)) {
 		console.error(
 			`usage: bun run --filter @j-os/web agreements:test-sign [member|guest|all]`
 		);
@@ -106,8 +113,10 @@ async function main(): Promise<void> {
 	await readFile(resolve(OUT_DIR, "member.typ"));
 
 	const variants: ("member" | "guest")[] =
-		arg === "all" ? ["member", "guest"] : [arg as "member" | "guest"];
-	for (const v of variants) await signOne(v);
+		argument === "all"
+			? ["member", "guest"]
+			: [argument as "member" | "guest"];
+	for (const variant of variants) await signOne(variant);
 }
 
 await main();

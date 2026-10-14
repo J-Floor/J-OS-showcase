@@ -3,12 +3,15 @@ import { fireEvent, render, screen } from "@solidjs/testing-library";
 import { Input } from "./Input.tsx";
 
 test("calls onValueChange on input", () => {
-	let v = "";
+	let value = "";
 	render(() => (
-		<Input label="Q" onValueChange={(e) => (v = e.currentTarget.value)} />
+		<Input
+			label="Q"
+			onValueChange={(event) => (value = event.currentTarget.value)}
+		/>
 	));
 	fireEvent.input(screen.getByRole("textbox"), { target: { value: "hi" } });
-	expect(v).toBe("hi");
+	expect(value).toBe("hi");
 });
 
 test("merges onValueChange with onInput", () => {
@@ -17,8 +20,8 @@ test("merges onValueChange with onInput", () => {
 	render(() => (
 		<Input
 			label="Q"
-			onInput={(e) => (fromInput = e.currentTarget.value)}
-			onValueChange={(e) => (fromValue = e.currentTarget.value)}
+			onInput={(event) => (fromInput = event.currentTarget.value)}
+			onValueChange={(event) => (fromValue = event.currentTarget.value)}
 		/>
 	));
 	fireEvent.input(screen.getByRole("textbox"), { target: { value: "yo" } });
@@ -32,9 +35,9 @@ test("renders a leading icon when leadingIconName is given", () => {
 });
 
 test("forwards ref to the underlying input", () => {
-	let el: HTMLInputElement | undefined;
-	render(() => <Input label="Q" ref={(node) => (el = node)} />);
-	expect(el).toBe(screen.getByRole("textbox"));
+	let element: HTMLInputElement | undefined;
+	render(() => <Input label="Q" ref={(node) => (element = node)} />);
+	expect(element).toBe(screen.getByRole("textbox"));
 });
 
 test("clicking the wrapper focuses the input", () => {

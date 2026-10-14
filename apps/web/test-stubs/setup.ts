@@ -4,15 +4,19 @@
 // next. A job that far out never comes due during a test: arm nothing.
 const MAX_TIMER_MS = 2 ** 31 - 1;
 const realSetTimeout = globalThis.setTimeout;
-globalThis.setTimeout = function setTimeout(
+function guardedSetTimeout(
 	handler: TimerHandler,
 	timeout?: number,
 	...args: unknown[]
 ) {
-	if (timeout !== undefined && timeout > MAX_TIMER_MS)
-		return realSetTimeout(() => {}, MAX_TIMER_MS);
-	return realSetTimeout(handler, timeout, ...args);
-} as typeof globalThis.setTimeout;
+	const isTooFar = timeout !== undefined && timeout > MAX_TIMER_MS;
+	return realSetTimeout(
+		isTooFar ? () => {} : handler,
+		isTooFar ? MAX_TIMER_MS : timeout,
+		...(isTooFar ? [] : args)
+	);
+}
+globalThis.setTimeout = guardedSetTimeout as unknown as typeof setTimeout;
 
 // See packages/design-system/vitest.setup.ts: design-system tables and drawers
 // defer their bodies by one paint; tests assert synchronously.

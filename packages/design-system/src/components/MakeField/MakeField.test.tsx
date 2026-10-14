@@ -45,12 +45,12 @@ test("places children inside the field", () => {
 });
 
 test("calls onLabelClicked when the label is clicked", () => {
-	let clicked = false;
+	let isClicked = false;
 	render(() => (
-		<MakeField label="Click me" onLabelClicked={() => (clicked = true)}>
+		<MakeField label="Click me" onLabelClicked={() => (isClicked = true)}>
 			<input />
 		</MakeField>
 	));
 	screen.getByText("Click me").click();
-	expect(clicked).toBe(true);
+	expect(isClicked).toBe(true);
 });

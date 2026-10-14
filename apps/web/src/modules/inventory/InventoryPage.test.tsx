@@ -95,17 +95,16 @@ vi.mock("convex-solidjs", () => ({
 	// `entity.useRows()` calls `InventoryPage` makes directly. Convex's `api`
 	// is a proxy whose refs aren't `===`-stable (see EventsPage.test.tsx), so
 	// route by the query's stable string name instead.
-	useQuery: (fn: unknown) => {
+	useQuery: (function_: unknown) => {
 		const name = getFunctionName(
-			fn as Parameters<typeof getFunctionName>[0]
+			function_ as Parameters<typeof getFunctionName>[0]
 		);
 		if (name === "inventory:listItemTypes") {
 			return { data: () => itemTypesData.current };
 		}
-		if (name === "inventory:listCategories") {
-			return { data: () => categoriesData.current };
-		}
-		return { data: () => itemsData.current };
+		return name === "inventory:listCategories"
+			? { data: () => categoriesData.current }
+			: { data: () => itemsData.current };
 	},
 }));
 
@@ -412,7 +411,7 @@ test("the toolbar Print button prints the whole list in query order", async () =
 		expect(mockPrint).toHaveBeenCalledTimes(1);
 	});
 	const [rows] = mockPrint.mock.calls[0] as unknown as [(typeof chairItem)[]];
-	expect(rows.map((r) => r.assetTag)).toEqual(["A00002", "A00001"]);
+	expect(rows.map((row) => row.assetTag)).toEqual(["A00002", "A00001"]);
 });
 
 test("the toolbar Print button is disabled when there are no items", () => {

@@ -138,7 +138,7 @@ it("starts no polling when unmounted before the first request resolves", async (
 });
 
 it("shows a loading card until the first answer lands", () => {
-	occupancyMutate.mockReturnValue(new Promise(() => undefined));
+	occupancyMutate.mockReturnValue(new Promise(() => {}));
 	render(() => <OccupancyCard />);
 	expect(screen.getByText("Occupancy")).toBeInTheDocument();
 	expect(screen.queryByText("High")).not.toBeInTheDocument();
@@ -180,7 +180,7 @@ it("a second mount after an enabled answer shows the gauge before the action res
 	const first = render(() => <OccupancyCard />);
 	await screen.findByText("High");
 	first.unmount();
-	occupancyMutate.mockReturnValue(new Promise(() => undefined));
+	occupancyMutate.mockReturnValue(new Promise(() => {}));
 	render(() => <OccupancyCard />);
 	expect(screen.getByText("High")).toBeInTheDocument();
 });

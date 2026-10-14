@@ -8,9 +8,9 @@ import { MAX_SUBSCRIPTIONS_PER_PERSON } from "./subscriptions.ts";
 
 const modules = import.meta.glob("/convex/**/*.*s");
 
-async function seed(t: ReturnType<typeof convexTest>, email: string) {
-	return t.run((ctx) =>
-		ctx.db.insert("people", {
+async function seed(backend: ReturnType<typeof convexTest>, email: string) {
+	return backend.run((context) =>
+		context.db.insert("people", {
 			email,
 			firstName: "A",
 			lastName: "B",
@@ -28,44 +28,46 @@ const SUB = {
 	userAgent: "test-agent",
 };
 
-async function rows(t: ReturnType<typeof convexTest>) {
-	return t.run((ctx) => ctx.db.query("pushSubscriptions").collect());
+async function rows(backend: ReturnType<typeof convexTest>) {
+	return backend.run((context) =>
+		context.db.query("pushSubscriptions").collect()
+	);
 }
 
 describe("push subscriptions", () => {
 	it("stores a subscription for the signed-in person", async () => {
-		const t = convexTest(schema, modules);
-		const ada = await seed(t, "ada@example.org");
-		await t
+		const backend = convexTest(schema, modules);
+		const ada = await seed(backend, "ada@example.org");
+		await backend
 			.withIdentity({ email: "ada@example.org" })
 			.mutation(api.notify.subscriptions.subscribe, SUB);
-		const all = await rows(t);
+		const all = await rows(backend);
 		expect(all).toHaveLength(1);
 		expect(all[0]).toMatchObject({ ...SUB, personId: ada });
 	});
 
 	it("re-assigns an endpoint to whoever subscribes from that device next", async () => {
-		const t = convexTest(schema, modules);
-		await seed(t, "ada@example.org");
-		const bob = await seed(t, "bob@example.org");
-		await t
+		const backend = convexTest(schema, modules);
+		await seed(backend, "ada@example.org");
+		const bob = await seed(backend, "bob@example.org");
+		await backend
 			.withIdentity({ email: "ada@example.org" })
 			.mutation(api.notify.subscriptions.subscribe, SUB);
-		await t
+		await backend
 			.withIdentity({ email: "bob@example.org" })
 			.mutation(api.notify.subscriptions.subscribe, {
 				...SUB,
 				auth: "a2",
 			});
-		const all = await rows(t);
+		const all = await rows(backend);
 		expect(all).toHaveLength(1);
 		expect(all[0]).toMatchObject({ personId: bob, auth: "a2" });
 	});
 
 	it("rejects people without an access tier", async () => {
-		const t = convexTest(schema, modules);
-		await t.run((ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		await backend.run((context) =>
+			context.db.insert("people", {
 				email: "p@example.org",
 				firstName: "P",
 				lastName: "R",
@@ -75,16 +77,16 @@ describe("push subscriptions", () => {
 			})
 		);
 		await expect(
-			t
+			backend
 				.withIdentity({ email: "p@example.org" })
 				.mutation(api.notify.subscriptions.subscribe, SUB)
 		).rejects.toThrow();
 	});
 
 	it("rejects staff, who get no notifications", async () => {
-		const t = convexTest(schema, modules);
-		await t.run((ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		await backend.run((context) =>
+			context.db.insert("people", {
 				email: "s@example.org",
 				firstName: "S",
 				lastName: "T",
@@ -94,49 +96,50 @@ describe("push subscriptions", () => {
 			})
 		);
 		await expect(
-			t
+			backend
 				.withIdentity({ email: "s@example.org" })
 				.mutation(api.notify.subscriptions.subscribe, SUB)
 		).rejects.toThrow("Forbidden");
-		expect(await rows(t)).toHaveLength(0);
+		expect(await rows(backend)).toHaveLength(0);
 	});
 
 	it("unsubscribe deletes only the caller's own row", async () => {
-		const t = convexTest(schema, modules);
-		await seed(t, "ada@example.org");
-		await seed(t, "bob@example.org");
-		await t
+		const backend = convexTest(schema, modules);
+		await seed(backend, "ada@example.org");
+		await seed(backend, "bob@example.org");
+		await backend
 			.withIdentity({ email: "ada@example.org" })
 			.mutation(api.notify.subscriptions.subscribe, SUB);
-		await t
+		await backend
 			.withIdentity({ email: "bob@example.org" })
 			.mutation(api.notify.subscriptions.unsubscribe, {
 				endpoint: SUB.endpoint,
 			});
-		expect(await rows(t)).toHaveLength(1);
-		await t
+		expect(await rows(backend)).toHaveLength(1);
+		await backend
 			.withIdentity({ email: "ada@example.org" })
 			.mutation(api.notify.subscriptions.unsubscribe, {
 				endpoint: SUB.endpoint,
 			});
-		expect(await rows(t)).toHaveLength(0);
+		expect(await rows(backend)).toHaveLength(0);
 	});
 
 	it("removeByEndpoint deletes regardless of owner", async () => {
-		const t = convexTest(schema, modules);
-		await seed(t, "ada@example.org");
-		await t
+		const backend = convexTest(schema, modules);
+		await seed(backend, "ada@example.org");
+		await backend
 			.withIdentity({ email: "ada@example.org" })
 			.mutation(api.notify.subscriptions.subscribe, SUB);
-		await t.mutation(internal.notify.subscriptions.removeByEndpoint, {
+		await backend.mutation(internal.notify.subscriptions.removeByEndpoint, {
 			endpoint: SUB.endpoint,
 		});
-		expect(await rows(t)).toHaveLength(0);
+		expect(await rows(backend)).toHaveLength(0);
 	});
 
 	it.each([
 		[
 			"an http endpoint",
+			// eslint-disable-next-line sonarjs/no-clear-text-protocols -- the fixture is the insecure endpoint the allowlist must reject
 			{ endpoint: "http://fcm.googleapis.com/fcm/send/abc" },
 		],
 		["an off-allowlist host", { endpoint: "https://evil.example/abc" }],
@@ -152,17 +155,17 @@ describe("push subscriptions", () => {
 		["an overlong p256dh", { p256dh: "p".repeat(257) }],
 		["an overlong auth", { auth: "a".repeat(65) }],
 	])("rejects %s", async (_name, override) => {
-		const t = convexTest(schema, modules);
-		await seed(t, "ada@example.org");
+		const backend = convexTest(schema, modules);
+		await seed(backend, "ada@example.org");
 		await expect(
-			t
+			backend
 				.withIdentity({ email: "ada@example.org" })
 				.mutation(api.notify.subscriptions.subscribe, {
 					...SUB,
 					...override,
 				})
 		).rejects.toThrow("Invalid push endpoint");
-		expect(await rows(t)).toHaveLength(0);
+		expect(await rows(backend)).toHaveLength(0);
 	});
 
 	it.each([
@@ -170,35 +173,39 @@ describe("push subscriptions", () => {
 		"https://updates.push.services.mozilla.com/wpush/v2/abc",
 		"https://wns2-par02p.notify.windows.com/w/?token=abc",
 	])("accepts the allowlisted endpoint %s", async (endpoint) => {
-		const t = convexTest(schema, modules);
-		await seed(t, "ada@example.org");
-		await t
+		const backend = convexTest(schema, modules);
+		await seed(backend, "ada@example.org");
+		await backend
 			.withIdentity({ email: "ada@example.org" })
 			.mutation(api.notify.subscriptions.subscribe, { ...SUB, endpoint });
-		expect(await rows(t)).toHaveLength(1);
+		expect(await rows(backend)).toHaveLength(1);
 	});
 
 	it("keeps only the newest subscriptions per person", async () => {
-		const t = convexTest(schema, modules);
-		const ada = await seed(t, "ada@example.org");
-		await t.run(async (ctx) => {
-			for (let i = 0; i < MAX_SUBSCRIPTIONS_PER_PERSON; i += 1) {
-				await ctx.db.insert("pushSubscriptions", {
+		const backend = convexTest(schema, modules);
+		const ada = await seed(backend, "ada@example.org");
+		await backend.run(async (context) => {
+			for (
+				let index = 0;
+				index < MAX_SUBSCRIPTIONS_PER_PERSON;
+				index += 1
+			) {
+				await context.db.insert("pushSubscriptions", {
 					personId: ada,
-					endpoint: `https://fcm.googleapis.com/fcm/send/old${String(i)}`,
+					endpoint: `https://fcm.googleapis.com/fcm/send/old${String(index)}`,
 					p256dh: "p",
 					auth: "a",
 					userAgent: "test",
-					createdAt: i + 1,
+					createdAt: index + 1,
 				});
 			}
 		});
-		await t
+		await backend
 			.withIdentity({ email: "ada@example.org" })
 			.mutation(api.notify.subscriptions.subscribe, SUB);
-		const all = await rows(t);
+		const all = await rows(backend);
 		expect(all).toHaveLength(MAX_SUBSCRIPTIONS_PER_PERSON);
-		const endpoints = all.map((r: { endpoint: string }) => r.endpoint);
+		const endpoints = all.map((row: { endpoint: string }) => row.endpoint);
 		expect(endpoints).toContain(SUB.endpoint);
 		expect(endpoints).not.toContain(
 			"https://fcm.googleapis.com/fcm/send/old0"
@@ -207,34 +214,41 @@ describe("push subscriptions", () => {
 	});
 
 	it("re-assigning a device into a full person keeps the re-registered device", async () => {
-		const t = convexTest(schema, modules);
-		await seed(t, "ada@example.org");
-		const bob = await seed(t, "bob@example.org");
-		await t
+		const backend = convexTest(schema, modules);
+		await seed(backend, "ada@example.org");
+		const bob = await seed(backend, "bob@example.org");
+		await backend
 			.withIdentity({ email: "ada@example.org" })
 			.mutation(api.notify.subscriptions.subscribe, SUB);
-		await t.run(async (ctx) => {
-			const [moved] = await ctx.db.query("pushSubscriptions").collect();
-			await ctx.db.patch(moved._id, { createdAt: 1 });
-			for (let i = 0; i < MAX_SUBSCRIPTIONS_PER_PERSON; i += 1) {
-				await ctx.db.insert("pushSubscriptions", {
+		await backend.run(async (context) => {
+			const [moved] = await context.db
+				.query("pushSubscriptions")
+				.collect();
+			await context.db.patch(moved._id, { createdAt: 1 });
+			for (
+				let index = 0;
+				index < MAX_SUBSCRIPTIONS_PER_PERSON;
+				index += 1
+			) {
+				await context.db.insert("pushSubscriptions", {
 					personId: bob,
-					endpoint: `https://fcm.googleapis.com/fcm/send/bob${String(i)}`,
+					endpoint: `https://fcm.googleapis.com/fcm/send/bob${String(index)}`,
 					p256dh: "p",
 					auth: "a",
 					userAgent: "test",
-					createdAt: 100 + i,
+					createdAt: 100 + index,
 				});
 			}
 		});
-		await t
+		await backend
 			.withIdentity({ email: "bob@example.org" })
 			.mutation(api.notify.subscriptions.subscribe, SUB);
-		const mine = (await rows(t)).filter(
-			(r: { personId: unknown }) => r.personId === bob
+		const allRows = await rows(backend);
+		const mine = allRows.filter(
+			(row: { personId: unknown }) => row.personId === bob
 		);
 		expect(mine).toHaveLength(MAX_SUBSCRIPTIONS_PER_PERSON);
-		expect(mine.map((r: { endpoint: string }) => r.endpoint)).toContain(
+		expect(mine.map((row: { endpoint: string }) => row.endpoint)).toContain(
 			SUB.endpoint
 		);
 	});

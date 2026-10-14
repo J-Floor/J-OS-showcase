@@ -72,14 +72,14 @@ describe("startPwaUpdateChecks", () => {
 		const doc = createFakeDoc("visible");
 		// A mutable flag, not a constant `() => false`: the check must be
 		// re-evaluated on each trigger, not just skipped once at setup.
-		let online = false;
-		startPwaUpdateChecks(registration, { doc, isOnline: () => online });
+		let isOnline = false;
+		startPwaUpdateChecks(registration, { doc, isOnline: () => isOnline });
 
 		doc.dispatchEvent(new Event("visibilitychange"));
 		vi.advanceTimersByTime(60 * 60 * 1000);
 		expect(update).not.toHaveBeenCalled();
 
-		online = true;
+		isOnline = true;
 		doc.dispatchEvent(new Event("visibilitychange"));
 		expect(update).toHaveBeenCalledTimes(1);
 	});
@@ -127,9 +127,9 @@ function createFakeContainer(hasController: boolean) {
 	});
 }
 
-function createFakeWatchedRegistration(installing: boolean) {
+function createFakeWatchedRegistration(isInstalling: boolean) {
 	return Object.assign(new EventTarget(), {
-		installing: installing ? {} : null,
+		installing: isInstalling ? {} : null,
 	}) as unknown as ServiceWorkerRegistration;
 }
 

@@ -52,10 +52,10 @@ export function ShellWarmup(): JSX.Element {
 				prefetch(api.wifi.get, {});
 			});
 		}
-		for (const m of modules) {
-			if (current.can("view", m.subject)) {
-				once(m.id, () => {
-					preloadView(m);
+		for (const entry of modules) {
+			if (current.can("view", entry.subject)) {
+				once(entry.id, () => {
+					preloadView(entry);
 				});
 			}
 		}

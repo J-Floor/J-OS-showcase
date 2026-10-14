@@ -3,6 +3,7 @@ import {
 	type ComboboxInputValueChangeDetails,
 	type ComboboxRootProps as ArkComboboxRootProps,
 	createListCollection,
+	type UseComboboxContext,
 } from "@ark-ui/solid/combobox";
 import clsx from "clsx";
 import {
@@ -79,6 +80,158 @@ export type ComboboxRootProps = Omit<
 		children?: JSX.Element;
 	};
 
+const OWN_KEYS = [
+	"items",
+	"sameWidth",
+	"allowClearing",
+	"placeholder",
+	"emptyText",
+	"filter",
+	"children",
+	"onInputValueChange",
+] as const satisfies readonly (keyof ComboboxRootProps)[];
+
+/** Backspace with nothing left to delete in the input takes the most recent
+ *  selection with it. */
+function removeLastOnBackspace(
+	event: KeyboardEvent & { currentTarget: HTMLInputElement },
+	context: UseComboboxContext<unknown>
+): void {
+	if (
+		event.key !== "Backspace" ||
+		event.currentTarget.value !== "" ||
+		context().value.length === 0
+	) {
+		return;
+	}
+
+	event.preventDefault();
+	context().clearValue(context().value[context().value.length - 1]);
+}
+
+/** Clears every selection; its tooltip says whether that is one or many. */
+function ClearButton(props: {
+	context: UseComboboxContext<unknown>;
+}): JSX.Element {
+	return (
+		<Tooltip
+			tooltipContent={
+				props.context().value.length > 1 ? "Clear all" : "Clear value"
+			}
+			asChild={(tooltipProps) => (
+				<span
+					{...(tooltipProps() as object)}
+					class={styles.clearTriggerWrap}
+				>
+					<ArkCombobox.ClearTrigger class={styles.clearTrigger}>
+						<Icon>{ICONS.close}</Icon>
+					</ArkCombobox.ClearTrigger>
+				</span>
+			)}
+		/>
+	);
+}
+
+/** The chevron that opens and closes the list. */
+function ExpandButton(props: {
+	context: UseComboboxContext<unknown>;
+}): JSX.Element {
+	return (
+		<Tooltip
+			tooltipContent={props.context().open ? "Close" : "Show options"}
+			asChild={(tooltipProps) => (
+				<span
+					{...(tooltipProps() as object)}
+					class={styles.triggerWrap}
+				>
+					<ArkCombobox.Trigger class={styles.trigger}>
+						<Icon>
+							{props.context().open
+								? ICONS.collapseAll
+								: ICONS.expandAll}
+						</Icon>
+					</ArkCombobox.Trigger>
+				</span>
+			)}
+		/>
+	);
+}
+
+/** The field's control row: selected chips, the input, and the clear and
+ *  expand buttons. */
+function InputControl(props: {
+	setControlElement: (element: HTMLDivElement) => void;
+	getInputElement: () => HTMLInputElement | undefined;
+	setInputElement: (element: HTMLInputElement) => void;
+	isInvalid: boolean;
+	isTyping: boolean;
+	isMultiple: boolean | undefined;
+	placeholder: string | undefined;
+	allowClearing: boolean | undefined;
+}): JSX.Element {
+	return (
+		<ArkCombobox.Control
+			ref={props.setControlElement}
+			class={styles.inputWrapper}
+			data-invalid={props.isInvalid ? "true" : undefined}
+			// While there is a filter to read, the line belongs to the
+			// input: the chips give their room back and collapse.
+			data-typing={props.isTyping}
+			// With chips present the input collapses to a caret pinned
+			// after them (see `.inputWrapper` in the module), so most of
+			// the field is a dead zone: a click there hit the control,
+			// not the input, and nothing opened. Forward those clicks to
+			// the input so the whole field behaves like a text field —
+			// focus it and open the list (`openOnClick`). The real
+			// controls (clear, expand, each chip's dismiss) are buttons
+			// and keep their own behaviour.
+			onClick={(event) => {
+				const target = event.target as HTMLElement;
+				const input = props.getInputElement();
+				if (input?.isSameNode(target) || target.closest("button"))
+					return;
+				input?.focus();
+				input?.click();
+			}}
+		>
+			<ArkCombobox.Context>
+				{(context) => (
+					<>
+						<Show when={props.isMultiple}>
+							<SelectedOptions />
+						</Show>
+						<ArkCombobox.Input
+							ref={props.setInputElement}
+							// The chips already say what is selected, so
+							// the placeholder would repeat the ask.
+							placeholder={
+								props.isMultiple && context().value.length > 0
+									? undefined
+									: (props.placeholder ?? DEFAULT_PLACEHOLDER)
+							}
+							class={styles.input}
+							onKeyDown={(event) => {
+								if (props.isMultiple) {
+									removeLastOnBackspace(event, context);
+								}
+							}}
+						/>
+						<Show
+							when={
+								context().value.length > 0 &&
+								props.allowClearing
+							}
+						>
+							<ClearButton context={context} />
+						</Show>
+						<ExpandButton context={context} />
+					</>
+				)}
+			</ArkCombobox.Context>
+		</ArkCombobox.Control>
+	);
+}
+
 /**
  * An input that filters a list of options as you type.
  *
@@ -99,21 +252,10 @@ export type ComboboxRootProps = Omit<
  * ```
  */
 function Root(props: ComboboxRootProps): JSX.Element {
-	// eslint-disable-next-line no-unassigned-vars -- assigned by Solid's `ref={controlEl}` binding below, which the rule can't see
-	let controlEl: HTMLDivElement | undefined;
-	// eslint-disable-next-line no-unassigned-vars -- assigned by Solid's `ref={inputEl}` binding below, which the rule can't see
-	let inputEl: HTMLInputElement | undefined;
+	let controlElement: HTMLDivElement | undefined;
+	let inputElement: HTMLInputElement | undefined;
 
-	const [own, rest] = splitArkProps(props, [
-		"items",
-		"sameWidth",
-		"allowClearing",
-		"placeholder",
-		"emptyText",
-		"filter",
-		"children",
-		"onInputValueChange",
-	]);
+	const [own, rest] = splitArkProps(props, OWN_KEYS);
 	// MakeField props (label/helper/error + semantics + the full disabling set)
 	// route to MakeField; the rest spreads on ArkCombobox.Root. `disabled`/
 	// `required` are re-forwarded to the ark Root below (it is not a Field.*
@@ -131,10 +273,9 @@ function Root(props: ComboboxRootProps): JSX.Element {
 		const query = inputValue();
 		if (!query) return own.items;
 		const predicate = own.filter;
-		if (predicate) {
-			return own.items.filter((item) => predicate(query, item));
-		}
-		return filterItemsByInput(own.items, query, itemToString);
+		return predicate
+			? own.items.filter((item) => predicate(query, item))
+			: filterItemsByInput(own.items, query, itemToString);
 	}
 
 	// Memoised so a keystroke filters and rebuilds the collection once, not
@@ -158,7 +299,7 @@ function Root(props: ComboboxRootProps): JSX.Element {
 	}
 
 	function focusInput(): void {
-		inputEl?.focus();
+		inputElement?.focus();
 	}
 
 	return (
@@ -189,124 +330,23 @@ function Root(props: ComboboxRootProps): JSX.Element {
 					// control, but doing it explicitly here means there is no
 					// render where the rect silently falls back to something else.
 					getAnchorRect: () =>
-						controlEl?.getBoundingClientRect() ?? null,
+						controlElement?.getBoundingClientRect() ?? null,
 				}}
 			>
-				<ArkCombobox.Control
-					ref={controlEl}
-					class={styles.inputWrapper}
-					data-invalid={makeFieldProps.invalid ? "true" : undefined}
-					// While there is a filter to read, the line belongs to the
-					// input: the chips give their room back and collapse.
-					data-typing={inputValue().length > 0}
-					// With chips present the input collapses to a caret pinned
-					// after them (see `.inputWrapper` in the module), so most of
-					// the field is a dead zone: a click there hit the control,
-					// not the input, and nothing opened. Forward those clicks to
-					// the input so the whole field behaves like a text field —
-					// focus it and open the list (`openOnClick`). The real
-					// controls (clear, expand, each chip's dismiss) are buttons
-					// and keep their own behaviour.
-					onClick={(event) => {
-						const target = event.target as HTMLElement;
-						if (target === inputEl || target.closest("button"))
-							return;
-						inputEl?.focus();
-						inputEl?.click();
+				<InputControl
+					setControlElement={(element) => {
+						controlElement = element;
 					}}
-				>
-					<ArkCombobox.Context>
-						{(context) => (
-							<>
-								<Show when={props.multiple}>
-									<SelectedOptions />
-								</Show>
-								<ArkCombobox.Input
-									ref={inputEl}
-									// The chips already say what is selected, so
-									// the placeholder would repeat the ask.
-									placeholder={
-										props.multiple &&
-										context().value.length > 0
-											? undefined
-											: (own.placeholder ??
-												DEFAULT_PLACEHOLDER)
-									}
-									class={styles.input}
-									onKeyDown={(event) => {
-										// Backspace with nothing left to delete
-										// in the input takes the most recent
-										// selection with it.
-										if (
-											!props.multiple ||
-											event.key !== "Backspace" ||
-											event.currentTarget.value !== "" ||
-											context().value.length === 0
-										) {
-											return;
-										}
-
-										event.preventDefault();
-										context().clearValue(
-											context().value[
-												context().value.length - 1
-											]
-										);
-									}}
-								/>
-								<Show
-									when={
-										context().value.length > 0 &&
-										own.allowClearing
-									}
-								>
-									<Tooltip
-										tooltipContent={
-											context().value.length > 1
-												? "Clear all"
-												: "Clear value"
-										}
-										asChild={(tooltipProps) => (
-											<span
-												{...(tooltipProps() as object)}
-												class={styles.clearTriggerWrap}
-											>
-												<ArkCombobox.ClearTrigger
-													class={styles.clearTrigger}
-												>
-													<Icon>{ICONS.close}</Icon>
-												</ArkCombobox.ClearTrigger>
-											</span>
-										)}
-									/>
-								</Show>
-								<Tooltip
-									tooltipContent={
-										context().open
-											? "Close"
-											: "Show options"
-									}
-									asChild={(tooltipProps) => (
-										<span
-											{...(tooltipProps() as object)}
-											class={styles.triggerWrap}
-										>
-											<ArkCombobox.Trigger
-												class={styles.trigger}
-											>
-												<Icon>
-													{context().open
-														? ICONS.collapseAll
-														: ICONS.expandAll}
-												</Icon>
-											</ArkCombobox.Trigger>
-										</span>
-									)}
-								/>
-							</>
-						)}
-					</ArkCombobox.Context>
-				</ArkCombobox.Control>
+					getInputElement={() => inputElement}
+					setInputElement={(element) => {
+						inputElement = element;
+					}}
+					isInvalid={Boolean(makeFieldProps.invalid)}
+					isTyping={inputValue().length > 0}
+					isMultiple={props.multiple}
+					placeholder={own.placeholder}
+					allowClearing={own.allowClearing}
+				/>
 				<Content emptyText={own.emptyText}>
 					<For each={collection().items}>
 						{(item) => <Option item={item} />}

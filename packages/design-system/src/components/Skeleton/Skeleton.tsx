@@ -73,20 +73,20 @@ export function Skeleton(props: SkeletonProps): JSX.Element {
 
 function Shimmer(props: { children: JSX.Element }): JSX.Element {
 	const [rects, setRects] = createSignal<LeafRect[]>([]);
-	let measureEl: HTMLDivElement | undefined;
+	let measureElement: HTMLDivElement | undefined;
 
 	function remeasure(): void {
-		if (measureEl) setRects(measureLeaves(measureEl));
+		if (measureElement) setRects(measureLeaves(measureElement));
 	}
 	onMount(() => {
 		remeasure();
-		if (measureEl) onCleanup(observeResize(measureEl, remeasure));
+		if (measureElement) onCleanup(observeResize(measureElement, remeasure));
 	});
 
 	return (
 		<div class={styles.container} data-shimmer-container="true">
 			<div
-				ref={(el) => (measureEl = el)}
+				ref={(element) => (measureElement = element)}
 				class={styles.measure}
 				data-measured={rects().length > 0 ? "" : undefined}
 				aria-hidden="true"
@@ -97,18 +97,18 @@ function Shimmer(props: { children: JSX.Element }): JSX.Element {
 				{/* When nothing measured (jsdom / no layout), the measure layer
 				    above already shows the children; render no blocks. */}
 				<For each={rects()}>
-					{(r) => (
+					{(rect) => (
 						<span
 							class={styles.block}
 							style={{
-								left: `${r.x}px`,
-								top: `${r.y}px`,
-								width: `${r.width}px`,
-								height: `${r.height}px`,
+								left: `${rect.x}px`,
+								top: `${rect.y}px`,
+								width: `${rect.width}px`,
+								height: `${rect.height}px`,
 								"border-radius":
-									r.borderRadius === "0px"
+									rect.borderRadius === "0px"
 										? "var(--jf-radius-container)"
-										: r.borderRadius,
+										: rect.borderRadius,
 							}}
 						/>
 					)}

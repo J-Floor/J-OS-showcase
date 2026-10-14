@@ -22,12 +22,15 @@ import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { QueryCtx } from "./_generated/server";
+import { DAY_MS } from "./lib/constants.ts";
 
 /** The day the importer stamped on everything it could not date, UTC. */
-const BAD_FROM = Date.UTC(2025, 11, 31);
-const BAD_UNTIL = Date.UTC(2026, 0, 1);
+const IMPORT_YEAR = 2025;
+const DECEMBER = 11;
+const LAST_DAY_OF_DECEMBER = 31;
+const BAD_FROM = Date.UTC(IMPORT_YEAR, DECEMBER, LAST_DAY_OF_DECEMBER);
+const BAD_UNTIL = Date.UTC(IMPORT_YEAR + 1, 0, 1);
 
-const DAY_MS = 86_400_000;
 const MINUTE_MS = 60_000;
 
 /** How many rows one transaction repairs. Both passes below filter on the bad
@@ -78,15 +81,15 @@ function repairedEventAt(
 
 /** Events still sitting on the bad day, oldest batch first. */
 async function badEvents(
-	ctx: QueryCtx,
+	context: QueryCtx,
 	limit: number
 ): Promise<Doc<"personEvents">[]> {
-	return ctx.db
+	return context.db
 		.query("personEvents")
-		.filter((q) =>
-			q.and(
-				q.gte(q.field("at"), BAD_FROM),
-				q.lt(q.field("at"), BAD_UNTIL)
+		.filter((expression) =>
+			expression.and(
+				expression.gte(expression.field("at"), BAD_FROM),
+				expression.lt(expression.field("at"), BAD_UNTIL)
 			)
 		)
 		.take(limit);
@@ -94,15 +97,15 @@ async function badEvents(
 
 /** Signatures still sitting on the bad day. */
 async function badSignatures(
-	ctx: QueryCtx,
+	context: QueryCtx,
 	limit: number
 ): Promise<Doc<"signatures">[]> {
-	return ctx.db
+	return context.db
 		.query("signatures")
-		.filter((q) =>
-			q.and(
-				q.gte(q.field("signedAt"), BAD_FROM),
-				q.lt(q.field("signedAt"), BAD_UNTIL)
+		.filter((expression) =>
+			expression.and(
+				expression.gte(expression.field("signedAt"), BAD_FROM),
+				expression.lt(expression.field("signedAt"), BAD_UNTIL)
 			)
 		)
 		.take(limit);
@@ -111,13 +114,13 @@ async function badSignatures(
 /** Look before touching anything. Reports exactly what `run` would do. */
 export const preview = internalQuery({
 	args: {},
-	handler: async (ctx) => {
-		const events = await badEvents(ctx, BATCH_SIZE);
-		const signatures = await badSignatures(ctx, BATCH_SIZE);
+	handler: async (context) => {
+		const events = await badEvents(context, BATCH_SIZE);
+		const signatures = await badSignatures(context, BATCH_SIZE);
 
 		const eventRows = await Promise.all(
 			events.map(async (event) => {
-				const person = await ctx.db.get(event.personId);
+				const person = await context.db.get(event.personId);
 				const to = repairedEventAt(event, person);
 				return {
 					name: `${person?.firstName ?? "?"} ${person?.lastName ?? ""}`.trim(),
@@ -129,7 +132,7 @@ export const preview = internalQuery({
 		);
 		const signatureRows = await Promise.all(
 			signatures.map(async (signature) => {
-				const person = await ctx.db.get(signature.personId);
+				const person = await context.db.get(signature.personId);
 				const submittedAt = person?.submittedAt;
 				return {
 					email: signature.email,
@@ -144,12 +147,12 @@ export const preview = internalQuery({
 		return {
 			events: {
 				total: eventRows.length,
-				skipped: eventRows.filter((r) => r.to === null).length,
+				skipped: eventRows.filter((row) => row.to === null).length,
 				rows: eventRows,
 			},
 			signatures: {
 				total: signatureRows.length,
-				skipped: signatureRows.filter((r) => r.to === null).length,
+				skipped: signatureRows.filter((row) => row.to === null).length,
 				rows: signatureRows,
 			},
 		};
@@ -161,31 +164,33 @@ export const preview = internalQuery({
  *  repaired without the other is two dates for one signature. */
 export const run = internalMutation({
 	args: { dryRun: v.optional(v.boolean()) },
-	handler: async (ctx, { dryRun }) => {
+	handler: async (context, { dryRun }) => {
 		let events = 0;
 		let signatures = 0;
 		let skipped = 0;
 
-		for (const event of await badEvents(ctx, BATCH_SIZE)) {
-			const person = await ctx.db.get(event.personId);
+		const staleEvents = await badEvents(context, BATCH_SIZE);
+		for (const event of staleEvents) {
+			const person = await context.db.get(event.personId);
 			const at = repairedEventAt(event, person);
 			if (at === null) {
 				skipped++;
 				continue;
 			}
-			if (dryRun !== true) await ctx.db.patch(event._id, { at });
+			if (dryRun !== true) await context.db.patch(event._id, { at });
 			events++;
 		}
 
-		for (const signature of await badSignatures(ctx, BATCH_SIZE)) {
-			const person = await ctx.db.get(signature.personId);
+		const staleSignatures = await badSignatures(context, BATCH_SIZE);
+		for (const signature of staleSignatures) {
+			const person = await context.db.get(signature.personId);
 			const submittedAt = person?.submittedAt;
 			if (submittedAt === undefined) {
 				skipped++;
 				continue;
 			}
 			if (dryRun !== true)
-				await ctx.db.patch(signature._id, {
+				await context.db.patch(signature._id, {
 					signedAt: signedAt(submittedAt),
 				});
 			signatures++;

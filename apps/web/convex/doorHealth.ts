@@ -23,9 +23,9 @@ import { BOARD_LEVEL } from "./lib/roles.ts";
  */
 export const callerHasAccess = internalQuery({
 	args: {},
-	handler: async (ctx): Promise<boolean> => {
+	handler: async (context): Promise<boolean> => {
 		try {
-			await requireRole(ctx, BOARD_LEVEL);
+			await requireRole(context, BOARD_LEVEL);
 			return true;
 		} catch {
 			return false;
@@ -61,10 +61,13 @@ const HEALTH_CACHE_KEY = "doors";
  *  the action knows to refetch. */
 export const readDoorHealthCache = internalQuery({
 	args: { freshSince: v.number() },
-	handler: async (ctx, { freshSince }): Promise<DoorHealthResult | null> => {
-		const row = await ctx.db
+	handler: async (
+		context,
+		{ freshSince }
+	): Promise<DoorHealthResult | null> => {
+		const row = await context.db
 			.query("doorHealthCache")
-			.withIndex("by_key", (q) => q.eq("key", HEALTH_CACHE_KEY))
+			.withIndex("by_key", (range) => range.eq("key", HEALTH_CACHE_KEY))
 			.unique();
 		if (!row || row.checkedAt < freshSince || row.locks === undefined)
 			return null;
@@ -97,14 +100,14 @@ export const writeDoorHealthCache = internalMutation({
 		),
 		checkedAt: v.number(),
 	},
-	handler: async (ctx, args): Promise<void> => {
-		const row = await ctx.db
+	handler: async (context, args): Promise<void> => {
+		const row = await context.db
 			.query("doorHealthCache")
-			.withIndex("by_key", (q) => q.eq("key", HEALTH_CACHE_KEY))
+			.withIndex("by_key", (range) => range.eq("key", HEALTH_CACHE_KEY))
 			.unique();
-		if (row) await ctx.db.patch(row._id, args);
+		if (row) await context.db.patch(row._id, args);
 		else
-			await ctx.db.insert("doorHealthCache", {
+			await context.db.insert("doorHealthCache", {
 				key: HEALTH_CACHE_KEY,
 				...args,
 			});
@@ -113,12 +116,12 @@ export const writeDoorHealthCache = internalMutation({
 
 export const doorHealth = action({
 	args: {},
-	handler: async (ctx): Promise<DoorHealthResult> => {
-		if (!(await ctx.runQuery(internal.doorHealth.callerHasAccess, {})))
+	handler: async (context): Promise<DoorHealthResult> => {
+		if (!(await context.runQuery(internal.doorHealth.callerHasAccess, {})))
 			throw new Error("Forbidden");
 		// Serve a recent reading rather than fanning a live provider round-trip out
 		// per viewer per poll — see the TTL note and the cache table.
-		const cached = await ctx.runQuery(
+		const cached = await context.runQuery(
 			internal.doorHealth.readDoorHealthCache,
 			{ freshSince: Date.now() - HEALTH_TTL_MS }
 		);
@@ -128,15 +131,15 @@ export const doorHealth = action({
 		const result: DoorHealthResult = {
 			configured: locks.length,
 			unavailable: locks
-				.filter((l) => !l.online)
-				.map((l) => ({
-					lockId: l.lockId,
-					name: l.name,
-					serverState: l.serverState,
+				.filter((lock) => !lock.online)
+				.map((lock) => ({
+					lockId: lock.lockId,
+					name: lock.name,
+					serverState: lock.serverState,
 				})),
 			locks,
 		};
-		await ctx.runMutation(internal.doorHealth.writeDoorHealthCache, {
+		await context.runMutation(internal.doorHealth.writeDoorHealthCache, {
 			...result,
 			checkedAt: Date.now(),
 		});

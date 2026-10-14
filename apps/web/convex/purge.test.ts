@@ -13,17 +13,17 @@ const DAY = 86_400_000;
 
 /** A test deployment with the auth and rate-limit components erasure reaches. */
 function setup() {
-	const t = convexTest(schema, modules);
-	betterAuthTest.register(t);
-	rateLimiterTest.register(t);
-	return t;
+	const backend = convexTest(schema, modules);
+	betterAuthTest.register(backend);
+	rateLimiterTest.register(backend);
+	return backend;
 }
 
 describe("purgeUnverified", () => {
 	it("deletes the purged prospect's personState row and leaves others", async () => {
-		const t = convexTest(schema, modules);
-		const [goneId, stayId] = await t.run(async (ctx) => {
-			const gone = await ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const [goneId, stayId] = await backend.run(async (context) => {
+			const gone = await context.db.insert("people", {
 				email: "stale2@example.com",
 				firstName: "Stale",
 				lastName: "Two",
@@ -31,13 +31,13 @@ describe("purgeUnverified", () => {
 				stage: "unverified",
 				stageSince: Date.now(),
 			});
-			await issueToken(ctx, {
+			await issueToken(context, {
 				token: "stale2",
 				purpose: "application",
 				personId: gone,
 				ttlMs: -DAY,
 			});
-			const stay = await ctx.db.insert("people", {
+			const stay = await context.db.insert("people", {
 				email: "stay2@example.com",
 				firstName: "Stay",
 				lastName: "Two",
@@ -45,28 +45,30 @@ describe("purgeUnverified", () => {
 				stage: "active",
 				stageSince: Date.now(),
 			});
-			await ctx.db.insert("personState", {
+			await context.db.insert("personState", {
 				personId: gone,
 				lastPath: "/tasks",
 			});
-			await ctx.db.insert("personState", {
+			await context.db.insert("personState", {
 				personId: stay,
 				lastPath: "/community",
 			});
 			return [gone, stay];
 		});
-		await t.mutation(internal.purge.purgeUnverified, {});
-		expect(await t.run((ctx) => ctx.db.get(goneId))).toBeNull();
-		const rows = await t.run((ctx) =>
-			ctx.db.query("personState").collect()
+		await backend.mutation(internal.purge.purgeUnverified, {});
+		expect(
+			await backend.run((context) => context.db.get(goneId))
+		).toBeNull();
+		const rows = await backend.run((context) =>
+			context.db.query("personState").collect()
 		);
-		expect(rows.map((r) => r.personId)).toEqual([stayId]);
+		expect(rows.map((row) => row.personId)).toEqual([stayId]);
 	});
 
 	it("deletes an unverified prospect whose token expired, with its audit rows, and logs the count", async () => {
-		const t = convexTest(schema, modules);
-		const id = await t.run(async (ctx) => {
-			const personId = await ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const id = await backend.run(async (context) => {
+			const personId = await context.db.insert("people", {
 				email: "stale@example.com",
 				firstName: "Stale",
 				lastName: "Prospect",
@@ -74,13 +76,13 @@ describe("purgeUnverified", () => {
 				stage: "unverified",
 				stageSince: Date.now(),
 			});
-			await issueToken(ctx, {
+			await issueToken(context, {
 				token: "stale",
 				purpose: "application",
 				personId,
 				ttlMs: -DAY,
 			});
-			await ctx.db.insert("personEvents", {
+			await context.db.insert("personEvents", {
 				personId,
 				at: Date.now(),
 				kind: "transition",
@@ -97,24 +99,30 @@ describe("purgeUnverified", () => {
 			return personId;
 		});
 
+		const purged = await backend.mutation(
+			internal.purge.purgeUnverified,
+			{}
+		);
+		expect(purged.count).toBe(1);
 		expect(
-			(await t.mutation(internal.purge.purgeUnverified, {})).count
-		).toBe(1);
-		expect(await t.run(async (ctx) => ctx.db.get(id))).toBeNull();
+			await backend.run(async (context) => context.db.get(id))
+		).toBeNull();
 		expect(
-			await t.run(async (ctx) => ctx.db.query("personEvents").collect())
+			await backend.run(async (context) =>
+				context.db.query("personEvents").collect()
+			)
 		).toHaveLength(0);
-		const log = await t.run(async (ctx) =>
-			ctx.db.query("purgeLog").collect()
+		const log = await backend.run(async (context) =>
+			context.db.query("purgeLog").collect()
 		);
 		expect(log).toHaveLength(1);
 		expect(log[0].count).toBe(1);
 	});
 
 	it("keeps unverified prospects inside the token window", async () => {
-		const t = convexTest(schema, modules);
-		await t.run(async (ctx) => {
-			const personId = await ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		await backend.run(async (context) => {
+			const personId = await context.db.insert("people", {
 				email: "fresh@example.com",
 				firstName: "Fresh",
 				lastName: "Prospect",
@@ -122,7 +130,7 @@ describe("purgeUnverified", () => {
 				stage: "unverified",
 				stageSince: Date.now(),
 			});
-			await issueToken(ctx, {
+			await issueToken(context, {
 				token: "fresh",
 				purpose: "application",
 				personId,
@@ -130,18 +138,22 @@ describe("purgeUnverified", () => {
 			});
 		});
 
+		const purged = await backend.mutation(
+			internal.purge.purgeUnverified,
+			{}
+		);
+		expect(purged.count).toBe(0);
 		expect(
-			(await t.mutation(internal.purge.purgeUnverified, {})).count
-		).toBe(0);
-		expect(
-			await t.run(async (ctx) => ctx.db.query("people").collect())
+			await backend.run(async (context) =>
+				context.db.query("people").collect()
+			)
 		).toHaveLength(1);
 	});
 
 	it("never touches verified prospects or any other tier", async () => {
-		const t = convexTest(schema, modules);
-		await t.run(async (ctx) => {
-			await ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		await backend.run(async (context) => {
+			await context.db.insert("people", {
 				email: "verified@example.com",
 				firstName: "V",
 				lastName: "P",
@@ -149,7 +161,7 @@ describe("purgeUnverified", () => {
 				stage: "verified",
 				stageSince: Date.now(),
 			});
-			await ctx.db.insert("people", {
+			await context.db.insert("people", {
 				email: "member@example.com",
 				firstName: "M",
 				lastName: "M",
@@ -159,21 +171,27 @@ describe("purgeUnverified", () => {
 			});
 		});
 
+		const purged = await backend.mutation(
+			internal.purge.purgeUnverified,
+			{}
+		);
+		expect(purged.count).toBe(0);
 		expect(
-			(await t.mutation(internal.purge.purgeUnverified, {})).count
-		).toBe(0);
-		expect(
-			await t.run(async (ctx) => ctx.db.query("people").collect())
+			await backend.run(async (context) =>
+				context.db.query("people").collect()
+			)
 		).toHaveLength(2);
 	});
 
 	it("writes a purgeLog row even on a run that deletes nothing", async () => {
 		// The log is how a broken verification email surfaces: a run of 0 next to
 		// a run of 40 is only readable if every run is recorded.
-		const t = convexTest(schema, modules);
-		await t.mutation(internal.purge.purgeUnverified, {});
+		const backend = convexTest(schema, modules);
+		await backend.mutation(internal.purge.purgeUnverified, {});
 		expect(
-			await t.run(async (ctx) => ctx.db.query("purgeLog").collect())
+			await backend.run(async (context) =>
+				context.db.query("purgeLog").collect()
+			)
 		).toHaveLength(1);
 	});
 
@@ -184,13 +202,13 @@ describe("purgeUnverified", () => {
 		// leave the remainder for the next run to pick up — not read the whole
 		// backlog and abort with nothing purged.
 		const EXTRA = 3;
-		const t = convexTest(schema, modules);
-		await t.run(async (ctx) => {
-			for (let i = 0; i < BATCH_SIZE + EXTRA; i++) {
-				await ctx.db.insert("people", {
-					email: `stale-${String(i)}@example.com`,
+		const backend = convexTest(schema, modules);
+		await backend.run(async (context) => {
+			for (let index = 0; index < BATCH_SIZE + EXTRA; index++) {
+				await context.db.insert("people", {
+					email: `stale-${String(index)}@example.com`,
 					firstName: "Stale",
-					lastName: String(i),
+					lastName: String(index),
 					tier: "prospect",
 					stage: "unverified",
 					stageSince: Date.now(),
@@ -198,23 +216,33 @@ describe("purgeUnverified", () => {
 			}
 		});
 
-		const first = await t.mutation(internal.purge.purgeUnverified, {});
+		const first = await backend.mutation(
+			internal.purge.purgeUnverified,
+			{}
+		);
 		expect(first.count).toBe(BATCH_SIZE);
 		expect(
-			await t.run(async (ctx) => ctx.db.query("people").collect())
+			await backend.run(async (context) =>
+				context.db.query("people").collect()
+			)
 		).toHaveLength(EXTRA);
 
-		const second = await t.mutation(internal.purge.purgeUnverified, {});
+		const second = await backend.mutation(
+			internal.purge.purgeUnverified,
+			{}
+		);
 		expect(second.count).toBe(EXTRA);
 		expect(
-			await t.run(async (ctx) => ctx.db.query("people").collect())
+			await backend.run(async (context) =>
+				context.db.query("people").collect()
+			)
 		).toHaveLength(0);
 	});
 
 	it("purges an unverified prospect with no live token and keeps a former member whose staged token expired", async () => {
-		const t = convexTest(schema, modules);
-		const [staleId, formerId] = await t.run(async (ctx) => {
-			const s = await ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const [staleId, formerId] = await backend.run(async (context) => {
+			const staleRow = await context.db.insert("people", {
 				email: "s@example.com",
 				firstName: "S",
 				lastName: "",
@@ -222,7 +250,7 @@ describe("purgeUnverified", () => {
 				stage: "unverified",
 				stageSince: 0,
 			});
-			const f = await ctx.db.insert("people", {
+			const formerRow = await context.db.insert("people", {
 				email: "f@example.com",
 				firstName: "F",
 				lastName: "",
@@ -231,10 +259,10 @@ describe("purgeUnverified", () => {
 				stageSince: 0,
 				verifiedAt: 1,
 			});
-			await issueToken(ctx, {
+			await issueToken(context, {
 				token: "old",
 				purpose: "application",
-				personId: f,
+				personId: formerRow,
 				ttlMs: -1,
 				payload: {
 					firstName: "X",
@@ -245,25 +273,36 @@ describe("purgeUnverified", () => {
 					submittedAt: 0,
 				},
 			});
-			await ctx.db.insert("personEvents", {
-				personId: f,
+			await context.db.insert("personEvents", {
+				personId: formerRow,
 				at: 0,
 				kind: "transition",
 				event: "SUBMIT",
 				to: "prospect.unverified",
 			});
-			return [s, f];
+			return [staleRow, formerRow];
 		});
-		const res = await t.mutation(internal.purge.purgeUnverified, {});
-		expect(res.count).toBe(1);
-		expect(res.tokens).toBe(1);
-		expect(await t.run((ctx) => ctx.db.get(staleId))).toBeNull();
-		expect(await t.run((ctx) => ctx.db.get(formerId))).not.toBeNull();
+		const result = await backend.mutation(
+			internal.purge.purgeUnverified,
+			{}
+		);
+		expect(result.count).toBe(1);
+		expect(result.tokens).toBe(1);
 		expect(
-			await t.run((ctx) => ctx.db.query("personEvents").collect())
+			await backend.run((context) => context.db.get(staleId))
+		).toBeNull();
+		expect(
+			await backend.run((context) => context.db.get(formerId))
+		).not.toBeNull();
+		expect(
+			await backend.run((context) =>
+				context.db.query("personEvents").collect()
+			)
 		).toHaveLength(1);
 		expect(
-			await t.run((ctx) => ctx.db.query("confirmTokens").collect())
+			await backend.run((context) =>
+				context.db.query("confirmTokens").collect()
+			)
 		).toHaveLength(0);
 	});
 
@@ -274,9 +313,9 @@ describe("purgeUnverified", () => {
 		// visitor. Both fixtures live in one test so the confirmed row's
 		// survival is proven against the very run that deletes its sibling,
 		// not just against a run with nothing else in the table.
-		const t = convexTest(schema, modules);
-		const staleId = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const staleId = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "stale-visitor@example.com",
 				firstName: "Stale",
 				lastName: "Visitor",
@@ -285,8 +324,8 @@ describe("purgeUnverified", () => {
 				stageSince: Date.now(),
 			})
 		);
-		const confirmedId = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const confirmedId = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "confirmed-visitor@example.com",
 				firstName: "Confirmed",
 				lastName: "Visitor",
@@ -297,21 +336,25 @@ describe("purgeUnverified", () => {
 			})
 		);
 
+		const purged = await backend.mutation(
+			internal.purge.purgeUnverified,
+			{}
+		);
+		expect(purged.count).toBe(1);
 		expect(
-			(await t.mutation(internal.purge.purgeUnverified, {})).count
-		).toBe(1);
-		expect(await t.run(async (ctx) => ctx.db.get(staleId))).toBeNull();
+			await backend.run(async (context) => context.db.get(staleId))
+		).toBeNull();
 		expect(
-			await t.run(async (ctx) => ctx.db.get(confirmedId))
+			await backend.run(async (context) => context.db.get(confirmedId))
 		).not.toBeNull();
 	});
 });
 
 describe("purgeEmail", () => {
 	it("deletes the person, their signatures, events and confirm tokens, and leaves others", async () => {
-		const t = setup();
-		await t.run(async (ctx) => {
-			const personId = await ctx.db.insert("people", {
+		const backend = setup();
+		await backend.run(async (context) => {
+			const personId = await context.db.insert("people", {
 				email: "gone@example.com",
 				firstName: "Gone",
 				lastName: "Person",
@@ -319,7 +362,7 @@ describe("purgeEmail", () => {
 				stage: "active",
 				stageSince: Date.now(),
 			});
-			await ctx.db.insert("people", {
+			await context.db.insert("people", {
 				email: "stay@example.com",
 				firstName: "Stay",
 				lastName: "Person",
@@ -327,7 +370,7 @@ describe("purgeEmail", () => {
 				stage: "active",
 				stageSince: Date.now(),
 			});
-			await ctx.db.insert("signatures", {
+			await context.db.insert("signatures", {
 				personId,
 				email: "gone@example.com",
 				variant: "member",
@@ -336,14 +379,14 @@ describe("purgeEmail", () => {
 				agreementHash: "h",
 				signedAt: Date.now(),
 			});
-			await ctx.db.insert("personEvents", {
+			await context.db.insert("personEvents", {
 				personId,
 				at: Date.now(),
 				kind: "transition",
 				event: "IMPORT",
 				to: "member.active",
 			});
-			await issueToken(ctx, {
+			await issueToken(context, {
 				token: "staged",
 				purpose: "application",
 				personId,
@@ -351,24 +394,26 @@ describe("purgeEmail", () => {
 			});
 		});
 
-		const res = await t.mutation(internal.purge.purgeEmail, {
+		const result = await backend.mutation(internal.purge.purgeEmail, {
 			email: "gone@example.com",
 		});
-		expect(res.deleted).toBe(4);
-		const left = await t.run(async (ctx) =>
-			ctx.db.query("people").collect()
+		expect(result.deleted).toBe(4);
+		const left = await backend.run(async (context) =>
+			context.db.query("people").collect()
 		);
-		expect(left.map((p) => p.email)).toEqual(["stay@example.com"]);
-		const tokens = await t.run((ctx) =>
-			ctx.db.query("confirmTokens").collect()
+		expect(left.map((person) => person.email)).toEqual([
+			"stay@example.com",
+		]);
+		const tokens = await backend.run((context) =>
+			context.db.query("confirmTokens").collect()
 		);
 		expect(tokens).toHaveLength(0);
 	});
 
 	it("deletes the person's personState row and leaves others", async () => {
-		const t = setup();
-		await t.run(async (ctx) => {
-			const goneId = await ctx.db.insert("people", {
+		const backend = setup();
+		await backend.run(async (context) => {
+			const goneId = await context.db.insert("people", {
 				email: "gone@example.com",
 				firstName: "Gone",
 				lastName: "Person",
@@ -376,7 +421,7 @@ describe("purgeEmail", () => {
 				stage: "active",
 				stageSince: Date.now(),
 			});
-			const stayId = await ctx.db.insert("people", {
+			const stayId = await context.db.insert("people", {
 				email: "stay@example.com",
 				firstName: "Stay",
 				lastName: "Person",
@@ -384,30 +429,30 @@ describe("purgeEmail", () => {
 				stage: "active",
 				stageSince: Date.now(),
 			});
-			await ctx.db.insert("personState", {
+			await context.db.insert("personState", {
 				personId: goneId,
 				lastPath: "/tasks",
 			});
-			await ctx.db.insert("personState", {
+			await context.db.insert("personState", {
 				personId: stayId,
 				lastPath: "/community",
 			});
 		});
 
-		await t.mutation(internal.purge.purgeEmail, {
+		await backend.mutation(internal.purge.purgeEmail, {
 			email: "gone@example.com",
 		});
 
-		const rows = await t.run((ctx) =>
-			ctx.db.query("personState").collect()
+		const rows = await backend.run((context) =>
+			context.db.query("personState").collect()
 		);
-		expect(rows.map((r) => r.lastPath)).toEqual(["/community"]);
+		expect(rows.map((row) => row.lastPath)).toEqual(["/community"]);
 	});
 
 	it("keeps an email change the purged person requested but drops their actorId", async () => {
-		const t = setup();
-		const otherId = await t.run(async (ctx) => {
-			const boardId = await ctx.db.insert("people", {
+		const backend = setup();
+		const otherId = await backend.run(async (context) => {
+			const boardId = await context.db.insert("people", {
 				email: "gone@example.com",
 				firstName: "Gone",
 				lastName: "Board",
@@ -415,7 +460,7 @@ describe("purgeEmail", () => {
 				stage: "active",
 				stageSince: Date.now(),
 			});
-			const id = await ctx.db.insert("people", {
+			const id = await context.db.insert("people", {
 				email: "stay@example.com",
 				firstName: "Stay",
 				lastName: "Person",
@@ -423,7 +468,7 @@ describe("purgeEmail", () => {
 				stage: "active",
 				stageSince: Date.now(),
 			});
-			await issueToken(ctx, {
+			await issueToken(context, {
 				token: "change",
 				purpose: "emailChange",
 				personId: id,
@@ -434,11 +479,11 @@ describe("purgeEmail", () => {
 			return id;
 		});
 
-		await t.mutation(internal.purge.purgeEmail, {
+		await backend.mutation(internal.purge.purgeEmail, {
 			email: "gone@example.com",
 		});
-		const tokens = await t.run((ctx) =>
-			ctx.db.query("confirmTokens").collect()
+		const tokens = await backend.run((context) =>
+			context.db.query("confirmTokens").collect()
 		);
 		expect(tokens).toHaveLength(1);
 		expect(tokens[0].personId).toBe(otherId);
@@ -447,10 +492,10 @@ describe("purgeEmail", () => {
 	});
 
 	it("deletes the person's notification history and leaves other people's", async () => {
-		const t = setup();
+		const backend = setup();
 		const createdAt = Date.now();
-		const stayId = await t.run(async (ctx) => {
-			const goneId = await ctx.db.insert("people", {
+		const stayId = await backend.run(async (context) => {
+			const goneId = await context.db.insert("people", {
 				email: "gone@example.com",
 				firstName: "Gone",
 				lastName: "Person",
@@ -458,7 +503,7 @@ describe("purgeEmail", () => {
 				stage: "active",
 				stageSince: createdAt,
 			});
-			const stay = await ctx.db.insert("people", {
+			const stay = await context.db.insert("people", {
 				email: "stay@example.com",
 				firstName: "Stay",
 				lastName: "Person",
@@ -467,7 +512,7 @@ describe("purgeEmail", () => {
 				stageSince: createdAt,
 			});
 			for (const personId of [goneId, stay]) {
-				await ctx.db.insert("notifications", {
+				await context.db.insert("notifications", {
 					personId,
 					kind: "taskAssigned",
 					title: "New task assigned",
@@ -479,15 +524,15 @@ describe("purgeEmail", () => {
 			return stay;
 		});
 
-		const res = await t.mutation(internal.purge.purgeEmail, {
+		const result = await backend.mutation(internal.purge.purgeEmail, {
 			email: "gone@example.com",
 		});
 
-		expect(res.deleted).toBe(2);
-		const left = await t.run((ctx) =>
-			ctx.db.query("notifications").collect()
+		expect(result.deleted).toBe(2);
+		const left = await backend.run((context) =>
+			context.db.query("notifications").collect()
 		);
-		expect(left.map((r) => r.personId)).toEqual([stayId]);
+		expect(left.map((row) => row.personId)).toEqual([stayId]);
 	});
 });
 
@@ -498,17 +543,17 @@ const GONE = {
 };
 
 /** A person named in every way the schema allows, beside a person who stays. */
-async function seedEverywhere(t: ReturnType<typeof setup>) {
+async function seedEverywhere(backend: ReturnType<typeof setup>) {
 	const at = Date.now();
 	const name = `${GONE.firstName} ${GONE.lastName}`;
-	const seeded = await t.run(async (ctx) => {
-		const goneId = await ctx.db.insert("people", {
+	const seeded = await backend.run(async (context) => {
+		const goneId = await context.db.insert("people", {
 			...GONE,
 			tier: "board",
 			stage: "active",
 			stageSince: at,
 		});
-		const stayId = await ctx.db.insert("people", {
+		const stayId = await context.db.insert("people", {
 			email: "stay@example.com",
 			firstName: "Stay",
 			lastName: "Person",
@@ -524,7 +569,7 @@ async function seedEverywhere(t: ReturnType<typeof setup>) {
 			board: { noteLog: [{ authorId: goneId, text: "fine", at }] },
 		});
 		// An imported guest whose host only resolved to a display name.
-		await ctx.db.insert("people", {
+		await context.db.insert("people", {
 			email: "legacy@example.com",
 			firstName: "Legacy",
 			lastName: "Guest",
@@ -533,8 +578,10 @@ async function seedEverywhere(t: ReturnType<typeof setup>) {
 			stageSince: at,
 			hostedBy: name,
 		});
-		const fileId = await ctx.storage.store(new Blob(["%PDF agreement"]));
-		const signatureId = await ctx.db.insert("signatures", {
+		const fileId = await context.storage.store(
+			new Blob(["%PDF agreement"])
+		);
+		const signatureId = await context.db.insert("signatures", {
 			personId: goneId,
 			email: GONE.email,
 			variant: "member",
@@ -544,19 +591,19 @@ async function seedEverywhere(t: ReturnType<typeof setup>) {
 			signedAt: at,
 			fileId,
 		});
-		const projectId = await ctx.db.insert("projects", {
+		const projectId = await context.db.insert("projects", {
 			name: "Roof",
 			leaderId: goneId,
 			createdBy: goneId,
 		});
-		const taskId = await ctx.db.insert("tasks", {
+		const taskId = await context.db.insert("tasks", {
 			title: "Fix it",
 			status: "backlog",
 			assigneeIds: [goneId, stayId],
 			projectId,
 			createdBy: goneId,
 		});
-		const eventId = await ctx.db.insert("events", {
+		const eventId = await context.db.insert("events", {
 			name: "Demo night",
 			startsAt: at,
 			endsAt: at + DAY,
@@ -565,12 +612,12 @@ async function seedEverywhere(t: ReturnType<typeof setup>) {
 			createdBy: goneId,
 			createdAt: at,
 		});
-		await ctx.db.insert("eventAttendance", {
+		await context.db.insert("eventAttendance", {
 			personId: goneId,
 			eventId,
 			confirmedAt: at,
 		});
-		await ctx.db.insert("personEvents", {
+		await context.db.insert("personEvents", {
 			personId: goneId,
 			at,
 			kind: "field_edit",
@@ -578,7 +625,7 @@ async function seedEverywhere(t: ReturnType<typeof setup>) {
 			before: "old@example.com",
 			after: GONE.email,
 		});
-		await ctx.db.insert("personEvents", {
+		await context.db.insert("personEvents", {
 			personId: stayId,
 			at,
 			actorId: goneId,
@@ -593,7 +640,7 @@ async function seedEverywhere(t: ReturnType<typeof setup>) {
 			lockNames: ["Downstairs"],
 			outcome: "ok" as const,
 		};
-		await ctx.db.insert("doorLog", {
+		await context.db.insert("doorLog", {
 			...doorRow,
 			at,
 			personId: goneId,
@@ -602,13 +649,13 @@ async function seedEverywhere(t: ReturnType<typeof setup>) {
 			name,
 		});
 		// Written before `personId` was stored: only the address finds it.
-		await ctx.db.insert("doorLog", {
+		await context.db.insert("doorLog", {
 			...doorRow,
 			at,
 			email: GONE.email,
 			name,
 		});
-		await ctx.db.insert("doorLog", {
+		await context.db.insert("doorLog", {
 			...doorRow,
 			operation: "revoke",
 			trigger: "override",
@@ -618,13 +665,13 @@ async function seedEverywhere(t: ReturnType<typeof setup>) {
 			email: "stay@example.com",
 			name: "Stay Person",
 		});
-		await issueToken(ctx, {
+		await issueToken(context, {
 			token: "gone-own",
 			purpose: "application",
 			personId: goneId,
 			ttlMs: DAY,
 		});
-		await issueToken(ctx, {
+		await issueToken(context, {
 			token: "stay-change",
 			purpose: "emailChange",
 			personId: stayId,
@@ -632,7 +679,7 @@ async function seedEverywhere(t: ReturnType<typeof setup>) {
 			newEmail: "stay2@example.com",
 			actorId: goneId,
 		});
-		await ctx.db.insert("pushSubscriptions", {
+		await context.db.insert("pushSubscriptions", {
 			personId: goneId,
 			endpoint: "https://push.example/gone",
 			p256dh: "k",
@@ -641,7 +688,7 @@ async function seedEverywhere(t: ReturnType<typeof setup>) {
 			createdAt: at,
 		});
 		for (const personId of [goneId, stayId])
-			await ctx.db.insert("notifications", {
+			await context.db.insert("notifications", {
 				personId,
 				kind: "taskAssigned",
 				title: "New task",
@@ -651,7 +698,7 @@ async function seedEverywhere(t: ReturnType<typeof setup>) {
 			});
 		return { goneId, stayId, fileId, signatureId, taskId, projectId };
 	});
-	const user = (await t.mutation(components.betterAuth.adapter.create, {
+	const user = (await backend.mutation(components.betterAuth.adapter.create, {
 		input: {
 			model: "user",
 			data: {
@@ -663,7 +710,7 @@ async function seedEverywhere(t: ReturnType<typeof setup>) {
 			},
 		},
 	})) as { _id: string };
-	await t.mutation(components.betterAuth.adapter.create, {
+	await backend.mutation(components.betterAuth.adapter.create, {
 		input: {
 			model: "session",
 			data: {
@@ -676,7 +723,7 @@ async function seedEverywhere(t: ReturnType<typeof setup>) {
 			},
 		},
 	});
-	await t.mutation(components.betterAuth.adapter.create, {
+	await backend.mutation(components.betterAuth.adapter.create, {
 		input: {
 			model: "account",
 			data: {
@@ -688,7 +735,7 @@ async function seedEverywhere(t: ReturnType<typeof setup>) {
 			},
 		},
 	});
-	await t.mutation(components.betterAuth.adapter.create, {
+	await backend.mutation(components.betterAuth.adapter.create, {
 		input: {
 			model: "verification",
 			data: {
@@ -705,48 +752,58 @@ async function seedEverywhere(t: ReturnType<typeof setup>) {
 
 describe("purgeEmail erases the person everywhere", () => {
 	it("leaves no row naming them, no stored file, and no sign-in records", async () => {
-		const t = setup();
+		const backend = setup();
 		const { goneId, stayId, fileId, taskId, projectId } =
-			await seedEverywhere(t);
+			await seedEverywhere(backend);
 
-		await t.mutation(internal.purge.purgeEmail, { email: GONE.email });
+		await backend.mutation(internal.purge.purgeEmail, {
+			email: GONE.email,
+		});
 
 		const traces = [GONE.email, GONE.firstName, GONE.lastName, goneId];
-		const leaks = await t.run(async (ctx) => {
+		const leaks = await backend.run(async (context) => {
 			const found: string[] = [];
-			for (const table of Object.keys(schema.tables))
-				for (const row of await ctx.db
+			for (const table of Object.keys(schema.tables)) {
+				const rows = await context.db
 					.query(table as "people")
-					.collect()) {
-					const json = JSON.stringify(row);
-					for (const trace of traces)
-						if (json.includes(trace))
-							found.push(`${table}: ${trace}`);
-				}
+					.collect();
+				found.push(
+					...rows.flatMap((row) => {
+						const json = JSON.stringify(row);
+						return traces
+							.filter((trace) => json.includes(trace))
+							.map((trace) => `${table}: ${trace}`);
+					})
+				);
+			}
 			return found;
 		});
 		expect(leaks).toEqual([]);
-		expect(await t.run((ctx) => ctx.storage.get(fileId))).toBeNull();
+		expect(
+			await backend.run((context) => context.storage.get(fileId))
+		).toBeNull();
 
 		// References on what stays are stripped; the rows themselves are kept.
-		const kept = await t.run(async (ctx) => ({
-			stay: await ctx.db.get(stayId),
-			task: await ctx.db.get(taskId),
-			project: await ctx.db.get(projectId),
-			doorLog: await ctx.db.query("doorLog").collect(),
+		const kept = await backend.run(async (context) => ({
+			stay: await context.db.get(stayId),
+			task: await context.db.get(taskId),
+			project: await context.db.get(projectId),
+			doorLog: await context.db.query("doorLog").collect(),
 		}));
 		expect(kept.task?.assigneeIds).toEqual([stayId]);
 		expect(kept.project?.name).toBe("Roof");
 		expect(kept.stay?.board?.noteLog?.[0].text).toBe("fine");
-		expect(kept.doorLog.map((r) => r.email)).toEqual(["stay@example.com"]);
+		expect(kept.doorLog.map((row) => row.email)).toEqual([
+			"stay@example.com",
+		]);
 
-		const after = await t.query(internal.people.exportPerson, {
+		const after = await backend.query(internal.people.exportPerson, {
 			email: GONE.email,
 		});
 		expect(after.people).toEqual([]);
 		expect(after.auth).toEqual([]);
 		for (const model of ["session", "account", "verification"] as const) {
-			const rows = (await t.query(
+			const rows = (await backend.query(
 				components.betterAuth.adapter.findMany,
 				{
 					model,
@@ -760,11 +817,11 @@ describe("purgeEmail erases the person everywhere", () => {
 
 describe("exportPerson", () => {
 	it("returns what is held about the person, without sign-in secrets or other people's rows", async () => {
-		const t = setup();
+		const backend = setup();
 		const { goneId, stayId, signatureId, taskId, projectId } =
-			await seedEverywhere(t);
+			await seedEverywhere(backend);
 
-		const out = await t.query(internal.people.exportPerson, {
+		const out = await backend.query(internal.people.exportPerson, {
 			email: GONE.email,
 		});
 
@@ -777,7 +834,10 @@ describe("exportPerson", () => {
 		expect(agreementPdfs[0].url).toMatch(/^https?:\/\//);
 		// Only their own records come back whole: one of each, plus their
 		// own door row (the legacy one is listed below, by address).
-		expect(Object.keys(records).sort()).toEqual([
+		expect(
+			// eslint-disable-next-line id-length -- conventional comparator parameter names
+			Object.keys(records).toSorted((a, b) => a.localeCompare(b))
+		).toEqual([
 			"confirmTokens",
 			"doorLog",
 			"eventAttendance",
@@ -803,7 +863,7 @@ describe("exportPerson", () => {
 			])
 		);
 		expect(
-			new Set(references.map((r) => r.table)).has("confirmTokens")
+			new Set(references.map((row) => row.table)).has("confirmTokens")
 		).toBe(true);
 		// Nothing of the people they are linked to is disclosed.
 		const json = JSON.stringify(out);
@@ -818,10 +878,13 @@ describe("exportPerson", () => {
 			expect(json).not.toContain(other);
 		// Their earlier address is included; the legacy door row under the
 		// current one comes back, the person who stays's row does not.
-		expect(out.addresses.sort()).toEqual(["old@example.com", GONE.email]);
+		expect(
+			// eslint-disable-next-line id-length -- conventional comparator parameter names
+			out.addresses.toSorted((a, b) => a.localeCompare(b))
+		).toEqual(["old@example.com", GONE.email]);
 		expect(out.legacyDoorLog).toHaveLength(1);
 		expect(out.legacyDoorLog[0].personId).toBeUndefined();
-		const current = out.auth.find((a) => a.address === GONE.email);
+		const current = out.auth.find((auth) => auth.address === GONE.email);
 		expect(current?.user?.email).toBe(GONE.email);
 		expect(current?.sessions).toHaveLength(1);
 		expect(JSON.stringify(out.auth)).not.toContain("session-secret");
@@ -830,8 +893,8 @@ describe("exportPerson", () => {
 
 describe("purgeEmail never reaches another person's records", () => {
 	it("keeps the door history of whoever holds an address the person used, and door rows naming someone else", async () => {
-		const t = setup();
-		const { stayId } = await seedEverywhere(t);
+		const backend = setup();
+		const { stayId } = await seedEverywhere(backend);
 		const doorRow = {
 			operation: "unlock" as const,
 			trigger: "app" as const,
@@ -839,9 +902,9 @@ describe("purgeEmail never reaches another person's records", () => {
 			outcome: "ok" as const,
 			at: Date.now(),
 		};
-		const kept = await t.run(async (ctx) => {
+		const kept = await backend.run(async (context) => {
 			// Someone else took over the address the person changed away from.
-			const takerId = await ctx.db.insert("people", {
+			const takerId = await context.db.insert("people", {
 				email: "old@example.com",
 				firstName: "Taker",
 				lastName: "Over",
@@ -850,20 +913,20 @@ describe("purgeEmail never reaches another person's records", () => {
 				stageSince: Date.now(),
 			});
 			return [
-				await ctx.db.insert("doorLog", {
+				await context.db.insert("doorLog", {
 					...doorRow,
 					personId: takerId,
 					email: "old@example.com",
 					name: "Taker Over",
 				}),
 				// No personId, under an address someone else holds now.
-				await ctx.db.insert("doorLog", {
+				await context.db.insert("doorLog", {
 					...doorRow,
 					email: "old@example.com",
 					name: "Taker Over",
 				}),
 				// Someone else's row stored under the person's current address.
-				await ctx.db.insert("doorLog", {
+				await context.db.insert("doorLog", {
 					...doorRow,
 					personId: stayId,
 					email: GONE.email,
@@ -872,19 +935,21 @@ describe("purgeEmail never reaches another person's records", () => {
 			];
 		});
 
-		await t.mutation(internal.purge.purgeEmail, { email: GONE.email });
+		await backend.mutation(internal.purge.purgeEmail, {
+			email: GONE.email,
+		});
 
-		const left = await t.run(async (ctx) =>
-			Promise.all(kept.map((id) => ctx.db.get(id)))
+		const left = await backend.run(async (context) =>
+			Promise.all(kept.map((id) => context.db.get(id)))
 		);
-		expect(left.map((r) => r?._id)).toEqual(kept);
+		expect(left.map((row) => row?._id)).toEqual(kept);
 	});
 
 	it("keeps a legacy host name when the guest's host id is someone else's", async () => {
-		const t = setup();
-		const { stayId } = await seedEverywhere(t);
-		const guestId = await t.run((ctx) =>
-			ctx.db.insert("people", {
+		const backend = setup();
+		const { stayId } = await seedEverywhere(backend);
+		const guestId = await backend.run((context) =>
+			context.db.insert("people", {
 				email: "other-guest@example.com",
 				firstName: "Other",
 				lastName: "Guest",
@@ -896,18 +961,20 @@ describe("purgeEmail never reaches another person's records", () => {
 			})
 		);
 
-		await t.mutation(internal.purge.purgeEmail, { email: GONE.email });
+		await backend.mutation(internal.purge.purgeEmail, {
+			email: GONE.email,
+		});
 
-		const guest = await t.run((ctx) => ctx.db.get(guestId));
+		const guest = await backend.run((context) => context.db.get(guestId));
 		expect(guest?.hostedBy).toBe(`${GONE.firstName} ${GONE.lastName}`);
 	});
 
 	it("leaves a live magic link for an address that merely contains theirs", async () => {
-		const t = setup();
-		await seedEverywhere(t);
+		const backend = setup();
+		await seedEverywhere(backend);
 		const at = Date.now();
 		const other = `x${GONE.email}`;
-		await t.mutation(components.betterAuth.adapter.create, {
+		await backend.mutation(components.betterAuth.adapter.create, {
 			input: {
 				model: "verification",
 				data: {
@@ -920,26 +987,28 @@ describe("purgeEmail never reaches another person's records", () => {
 			},
 		});
 
-		await t.mutation(internal.purge.purgeEmail, { email: GONE.email });
+		await backend.mutation(internal.purge.purgeEmail, {
+			email: GONE.email,
+		});
 
-		const { page } = (await t.query(
+		const { page } = (await backend.query(
 			components.betterAuth.adapter.findMany,
 			{
 				model: "verification",
 				paginationOpts: { cursor: null, numItems: 10 },
 			}
 		)) as { page: { identifier: string }[] };
-		expect(page.map((r) => r.identifier)).toEqual(["other-link"]);
+		expect(page.map((row) => row.identifier)).toEqual(["other-link"]);
 	});
 });
 
 describe("purgeEmail erases every address the person used", () => {
 	it("removes the sign-in records and legacy door rows under an address they changed away from", async () => {
-		const t = setup();
-		await seedEverywhere(t);
+		const backend = setup();
+		await seedEverywhere(backend);
 		const at = Date.now();
 		// `seedEverywhere` records an email change from old@example.com.
-		const oldUser = (await t.mutation(
+		const oldUser = (await backend.mutation(
 			components.betterAuth.adapter.create,
 			{
 				input: {
@@ -954,7 +1023,7 @@ describe("purgeEmail erases every address the person used", () => {
 				},
 			}
 		)) as { _id: string };
-		await t.mutation(components.betterAuth.adapter.create, {
+		await backend.mutation(components.betterAuth.adapter.create, {
 			input: {
 				model: "session",
 				data: {
@@ -966,8 +1035,8 @@ describe("purgeEmail erases every address the person used", () => {
 				},
 			},
 		});
-		const legacyId = await t.run((ctx) =>
-			ctx.db.insert("doorLog", {
+		const legacyId = await backend.run((context) =>
+			context.db.insert("doorLog", {
 				operation: "unlock",
 				trigger: "app",
 				lockNames: ["Downstairs"],
@@ -978,14 +1047,19 @@ describe("purgeEmail erases every address the person used", () => {
 			})
 		);
 
-		const res = await t.mutation(internal.purge.purgeEmail, {
+		const result = await backend.mutation(internal.purge.purgeEmail, {
 			email: GONE.email,
 		});
 
-		expect(res.addresses.sort()).toEqual(["old@example.com", GONE.email]);
-		expect(await t.run((ctx) => ctx.db.get(legacyId))).toBeNull();
+		expect(
+			// eslint-disable-next-line id-length -- conventional comparator parameter names
+			result.addresses.toSorted((a, b) => a.localeCompare(b))
+		).toEqual(["old@example.com", GONE.email]);
+		expect(
+			await backend.run((context) => context.db.get(legacyId))
+		).toBeNull();
 		for (const model of ["user", "session"] as const) {
-			const { page } = (await t.query(
+			const { page } = (await backend.query(
 				components.betterAuth.adapter.findMany,
 				{ model, paginationOpts: { cursor: null, numItems: 10 } }
 			)) as { page: unknown[] };

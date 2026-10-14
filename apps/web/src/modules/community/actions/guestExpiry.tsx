@@ -32,13 +32,92 @@ type RequestGuestExpiry = (applicationIds: Id<"people">[]) => void;
 const GuestExpiryContext = createContext<RequestGuestExpiry>();
 
 export function useGuestExpiry(): RequestGuestExpiry {
-	const ctx = useContext(GuestExpiryContext);
-	if (!ctx) {
+	const context = useContext(GuestExpiryContext);
+	if (!context) {
 		throw new Error(
 			"useGuestExpiry must be used within <GuestExpiryProvider>"
 		);
 	}
-	return ctx;
+	return context;
+}
+
+function DoorAccessChoice(props: {
+	isAllowed: boolean;
+	onChange: (isAllowed: boolean) => void;
+}): JSX.Element {
+	return (
+		<div class={styles.door}>
+			<span class={styles.doorLabel}>Allow door access</span>
+			<Segment.Root
+				// Two options in a full-width dialog: side by
+				// side reads as the switch this is, where the
+				// stacked default reads as a list of choices.
+				orientation="horizontal"
+				class={styles.doorSegment}
+				value={props.isAllowed ? "yes" : "no"}
+				onValueChange={(details) => {
+					props.onChange(details.value === "yes");
+				}}
+			>
+				<Segment.Item value="yes">Yes</Segment.Item>
+				<Segment.Item value="no">No</Segment.Item>
+			</Segment.Root>
+			{/* "Yes" is not an override — it leaves the lock
+		    following their access window, which is what
+		    approving a guest has always done. */}
+			<span class={styles.doorHint}>
+				{props.isAllowed
+					? "The app opens the doors for them for as long as their access window lasts."
+					: "The app will not open the doors for them. A board member can allow it later from their drawer."}
+			</span>
+		</div>
+	);
+}
+
+function GuestExpiryFooter(props: {
+	isSaving: boolean;
+	hasHost: boolean;
+	onConfirm: () => void;
+}): JSX.Element {
+	return (
+		<div class={styles.footer}>
+			<Dialog.CloseTrigger
+				asChild={(closeProps) => (
+					<Button {...(closeProps() as object)} variant="tertiary">
+						Cancel
+					</Button>
+				)}
+			/>
+			<Confetti>
+				<Button
+					isLoading={props.isSaving}
+					disabled={!props.hasHost}
+					disabledReason="Choose a host first"
+					onClick={props.onConfirm}
+				>
+					Grant guest access
+				</Button>
+			</Confetti>
+		</div>
+	);
+}
+
+// Land the caret on the Host field — the one required input and the
+// thing this dialog is here to ask. Without this, `Dialog.Root`
+// self-focuses its content (right for a dialog with no obvious
+// first field, wrong here), so opening it — by the `G` shortcut or
+// a click — left focus on the panel. The Host `Select`'s own
+// `autofocus` cannot win: the dialog's focus trap applies after it.
+function hostSelectTrigger(): HTMLElement | null {
+	return (
+		document
+			.querySelector(
+				'[data-scope="dialog"][data-part="content"][data-state="open"]'
+			)
+			?.querySelector<HTMLElement>(
+				'[data-scope="select"][data-part="trigger"]'
+			) ?? null
+	);
 }
 
 /**
@@ -99,21 +178,7 @@ export function GuestExpiryProvider(props: ParentProps): JSX.Element {
 			<Dialog.Root
 				open={open()}
 				onOpenChange={(details) => setOpen(details.open)}
-				// Land the caret on the Host field — the one required input and the
-				// thing this dialog is here to ask. Without this, `Dialog.Root`
-				// self-focuses its content (right for a dialog with no obvious
-				// first field, wrong here), so opening it — by the `G` shortcut or
-				// a click — left focus on the panel. The Host `Select`'s own
-				// `autofocus` cannot win: the dialog's focus trap applies after it.
-				initialFocusEl={() =>
-					document
-						.querySelector(
-							'[data-scope="dialog"][data-part="content"][data-state="open"]'
-						)
-						?.querySelector<HTMLElement>(
-							'[data-scope="select"][data-part="trigger"]'
-						) ?? null
-				}
+				initialFocusEl={hostSelectTrigger}
 			>
 				<Dialog.Content>
 					<Dialog.Title>Guest configuration</Dialog.Title>
@@ -136,56 +201,16 @@ export function GuestExpiryProvider(props: ParentProps): JSX.Element {
 							minIso={minExpiryIso(SITE_TIMEZONE)}
 							onValueChange={setIso}
 						/>
-						<div class={styles.door}>
-							<span class={styles.doorLabel}>
-								Allow door access
-							</span>
-							<Segment.Root
-								// Two options in a full-width dialog: side by
-								// side reads as the switch this is, where the
-								// stacked default reads as a list of choices.
-								orientation="horizontal"
-								class={styles.doorSegment}
-								value={doorAllowed() ? "yes" : "no"}
-								onValueChange={(details) => {
-									setDoorAllowed(details.value === "yes");
-								}}
-							>
-								<Segment.Item value="yes">Yes</Segment.Item>
-								<Segment.Item value="no">No</Segment.Item>
-							</Segment.Root>
-							{/* "Yes" is not an override — it leaves the lock
-							    following their access window, which is what
-							    approving a guest has always done. */}
-							<span class={styles.doorHint}>
-								{doorAllowed()
-									? "The app opens the doors for them for as long as their access window lasts."
-									: "The app will not open the doors for them. A board member can allow it later from their drawer."}
-							</span>
-						</div>
-					</Show>
-					<div class={styles.footer}>
-						<Dialog.CloseTrigger
-							asChild={(closeProps) => (
-								<Button
-									{...(closeProps() as object)}
-									variant="tertiary"
-								>
-									Cancel
-								</Button>
-							)}
+						<DoorAccessChoice
+							isAllowed={doorAllowed()}
+							onChange={setDoorAllowed}
 						/>
-						<Confetti>
-							<Button
-								isLoading={saving()}
-								disabled={!host()}
-								disabledReason="Choose a host first"
-								onClick={() => void confirm()}
-							>
-								Grant guest access
-							</Button>
-						</Confetti>
-					</div>
+					</Show>
+					<GuestExpiryFooter
+						isSaving={saving()}
+						hasHost={host() !== null}
+						onConfirm={() => void confirm()}
+					/>
 				</Dialog.Content>
 			</Dialog.Root>
 		</GuestExpiryContext.Provider>

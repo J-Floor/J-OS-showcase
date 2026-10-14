@@ -41,12 +41,12 @@ it("names no lock vendor outside the provider adapters", () => {
 	for (const [path, source] of Object.entries(files)) {
 		if (VENDOR_FILES.has(path)) continue;
 		const stripped = (ALLOWED[path] ?? []).reduce(
-			(s, re) => s.replace(re, ""),
+			(text, re) => text.replace(re, ""),
 			source
 		);
-		stripped.split("\n").forEach((line, i) => {
+		stripped.split("\n").forEach((line, index) => {
 			if (VENDOR.test(line))
-				offenders.push(`${path}:${String(i + 1)}: ${line.trim()}`);
+				offenders.push(`${path}:${String(index + 1)}: ${line.trim()}`);
 		});
 	}
 	expect(

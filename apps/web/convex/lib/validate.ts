@@ -8,7 +8,7 @@ export const SSID_MAX = 64;
 export const WIFI_PASSWORD_MAX = 128;
 
 /** Throws when a client-supplied string is longer than the field allows. */
-export function assertLen(
+export function assertLength(
 	value: string | undefined,
 	max: number,
 	field: string

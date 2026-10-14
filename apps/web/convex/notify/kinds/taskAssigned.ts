@@ -16,7 +16,7 @@ export const taskAssigned = defineKind({
 		taskId: v.id("tasks"),
 		taskTitle: v.string(),
 	}),
-	audience: (ctx, { assigneeId }) => entitledIds(ctx, [assigneeId]),
+	audience: (context, { assigneeId }) => entitledIds(context, [assigneeId]),
 	push: ({ taskId, taskTitle }) => ({
 		title: "New task assigned",
 		body: taskTitle,

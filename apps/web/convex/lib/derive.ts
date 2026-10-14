@@ -1,3 +1,4 @@
+import { DAY_MS } from "./constants.ts";
 import type { Stage, Tier } from "./lifecycleTypes.ts";
 import { BOARD_STEPS, type BoardStepId } from "./onboardingSteps.ts";
 import { isAccessTier, isBoardLevel } from "./roles.ts";
@@ -44,8 +45,7 @@ export function isLiveStage(stage: Stage): boolean {
 /** Which agreement variant a tier requires; null = no agreement needed. */
 export function agreementVariantFor(tier: Tier): "guest" | "member" | null {
 	if (tier === "guest") return "guest";
-	if (tier === "member" || tier === "core") return "member";
-	return null;
+	return tier === "member" || tier === "core" ? "member" : null;
 }
 
 /**
@@ -62,9 +62,11 @@ export function compliance(
 	return signatureVariants.includes(required) ? "met" : "outstanding";
 }
 
-export function windowOpen(person: LifecyclePerson, now: number): boolean {
-	if (person.accessFrom != null && person.accessFrom > now) return false;
-	if (person.accessUntil != null && person.accessUntil <= now) return false;
+export function isWindowOpen(person: LifecyclePerson, now: number): boolean {
+	if (person.accessFrom !== undefined && person.accessFrom > now)
+		return false;
+	if (person.accessUntil !== undefined && person.accessUntil <= now)
+		return false;
 	return true;
 }
 
@@ -73,7 +75,7 @@ export function entitled(person: LifecyclePerson, now: number): boolean {
 	return (
 		isAccessTier(person.tier) &&
 		isLiveStage(person.stage) &&
-		windowOpen(person, now)
+		isWindowOpen(person, now)
 	);
 }
 
@@ -192,15 +194,118 @@ function tierTone(person: LifecyclePerson): Tone {
 	if (person.tier === "former" || person.stage === "expired")
 		return "neutral";
 	if (person.tier === "prospect") return "info";
-	if (person.stage === "onboarding") return "warning";
-	return "success";
+	return person.stage === "onboarding" ? "warning" : "success";
 }
-
-const DAY_MS = 86_400_000;
 
 /** Whole days in the current stage; negative clock skew floors at 0. */
 function daysInStage(stageSince: number, now: number): number {
 	return Math.max(0, Math.floor((now - stageSince) / DAY_MS));
+}
+
+function agreementFactState(
+	required: ReturnType<typeof agreementVariantFor>,
+	isMet: boolean
+): "not_required" | "signed" | "missing" {
+	if (required === null) return "not_required";
+	return isMet ? "signed" : "missing";
+}
+
+function doorFactState(
+	person: LifecyclePerson,
+	now: number
+): "suspended" | "forced_open" | "open" | "closed" {
+	const override = person.door?.override ?? "none";
+	if (override === "force_off") return "suspended";
+	if (override === "force_on") return "forced_open";
+	return entitled(person, now) ? "open" : "closed";
+}
+
+/**
+ * Board tasks belong to the tiers that onboard at all —
+ * `agreementVariantFor(tier) !== null` is exactly "guest | member | core" —
+ * and stay open until a board member ticks them, onboarding OR active. Not
+ * onboarding alone: a guest finishes their own steps within minutes, so a
+ * task that closed on activation was one the board almost never saw. Board,
+ * admin, staff, former and expired people carry none.
+ */
+function boardTasksFor(person: LifecyclePerson): BoardTask[] {
+	const canOnboard = agreementVariantFor(person.tier) !== null;
+	if (!canOnboard || !isLiveStage(person.stage)) return [];
+	const done = person.onboarding?.boardSteps ?? {};
+	return BOARD_STEPS.filter((step) => !(step.id in done)).map((step) => ({
+		id: step.id,
+		label: step.label,
+	}));
+}
+
+/**
+ * Exceptions only. Anything the tab, the group header or another column
+ * already says is deliberately absent — see StatusFlag.
+ */
+function statusFlags(
+	person: LifecyclePerson,
+	signatureVariants: string[],
+	boardTasks: BoardTask[],
+	doorActorName: string | undefined
+): StatusFlag[] {
+	const required = agreementVariantFor(person.tier);
+	const isMet = compliance(person, signatureVariants) === "met";
+	const override = person.door?.override ?? "none";
+	const flags: StatusFlag[] = [];
+	if (required !== null && !isMet)
+		flags.push({ id: "agreement_missing", variant: required });
+	// Board work nobody else can see. It does not gate activation — a board
+	// member forgetting it must not hold anyone up — but it is the board's own
+	// backlog, and the drawer was the only place it appeared, which is exactly
+	// the "invisible until you go looking" problem the column exists to fix.
+	for (const task of boardTasks)
+		flags.push({ id: "board_task_pending", step: task.id });
+	if (override === "force_off")
+		flags.push({ id: "door_suspended", actorName: doorActorName });
+	if (override === "force_on")
+		flags.push({ id: "door_forced_open", actorName: doorActorName });
+	return flags;
+}
+
+function statusFacts(
+	person: LifecyclePerson,
+	signatureVariants: string[],
+	now: number,
+	doorActorName: string | undefined
+): StatusFact[] {
+	const required = agreementVariantFor(person.tier);
+	const isMet = compliance(person, signatureVariants) === "met";
+	// Gated here, once, rather than at each call site: the raw field survives
+	// `RE_ADMIT`, so it only means anything while the person is still former.
+	const formerReason =
+		person.tier === "former" ? person.formerReason : undefined;
+	const facts: StatusFact[] = [
+		{ id: "role", tier: person.tier },
+		{ id: "state", stage: person.stage, tone: tierTone(person) },
+		{ id: "since", days: daysInStage(person.stageSince, now) },
+		{
+			id: "agreement",
+			state: agreementFactState(required, isMet),
+			variant: required ?? undefined,
+		},
+		{
+			id: "door",
+			state: doorFactState(person, now),
+			actorName: doorActorName,
+		},
+	];
+	// Only when there is one. Most people have no end date, and a line reading
+	// "Access until —" on every board member is noise that teaches the reader to
+	// skip the section the one time it says something.
+	if (person.accessUntil !== undefined)
+		facts.push({
+			id: "access_until",
+			at: person.accessUntil,
+			local: person.accessUntilLocal,
+		});
+	if (formerReason !== undefined)
+		facts.push({ id: "former", reason: formerReason });
+	return facts;
 }
 
 /**
@@ -226,88 +331,24 @@ export function personStatus(
 	doorActorName?: string
 ): PersonStatus {
 	const sinceDays = daysInStage(person.stageSince, now);
-	const required = agreementVariantFor(person.tier);
-	const met = compliance(person, signatureVariants) === "met";
-	const override = person.door?.override ?? "none";
-	// Gated here, once, rather than at each call site: the raw field survives
-	// `RE_ADMIT`, so it only means anything while the person is still former.
-	const formerReason =
-		person.tier === "former" ? person.formerReason : undefined;
-
-	// Board tasks belong to the tiers that onboard at all —
-	// `agreementVariantFor(tier) !== null` is exactly "guest | member | core" —
-	// and stay open until a board member ticks them, onboarding OR active. Not
-	// onboarding alone: a guest finishes their own steps within minutes, so a
-	// task that closed on activation was one the board almost never saw. Board,
-	// admin, staff, former and expired people carry none.
-	const onboards = agreementVariantFor(person.tier) !== null;
-	const done = person.onboarding?.boardSteps ?? {};
-	const boardTasks: BoardTask[] =
-		onboards && isLiveStage(person.stage)
-			? BOARD_STEPS.filter((t) => !(t.id in done)).map((t) => ({
-					id: t.id,
-					label: t.label,
-				}))
-			: [];
-
-	// Exceptions only. Anything the tab, the group header or another column
-	// already says is deliberately absent — see StatusFlag.
-	const flags: StatusFlag[] = [];
-	if (required !== null && !met)
-		flags.push({ id: "agreement_missing", variant: required });
-	// Board work nobody else can see. It does not gate activation — a board
-	// member forgetting it must not hold anyone up — but it is the board's own
-	// backlog, and the drawer was the only place it appeared, which is exactly
-	// the "invisible until you go looking" problem the column exists to fix.
-	for (const task of boardTasks)
-		flags.push({ id: "board_task_pending", step: task.id });
-	if (override === "force_off")
-		flags.push({ id: "door_suspended", actorName: doorActorName });
-	if (override === "force_on")
-		flags.push({ id: "door_forced_open", actorName: doorActorName });
-	const facts: StatusFact[] = [
-		{ id: "role", tier: person.tier },
-		{ id: "state", stage: person.stage, tone: tierTone(person) },
-		{ id: "since", days: sinceDays },
-		{
-			id: "agreement",
-			state:
-				required === null ? "not_required" : met ? "signed" : "missing",
-			variant: required ?? undefined,
-		},
-		{
-			id: "door",
-			state:
-				override === "force_off"
-					? "suspended"
-					: override === "force_on"
-						? "forced_open"
-						: entitled(person, now)
-							? "open"
-							: "closed",
-			actorName: doorActorName,
-		},
-	];
-	// Only when there is one. Most people have no end date, and a line reading
-	// "Access until —" on every board member is noise that teaches the reader to
-	// skip the section the one time it says something.
-	if (person.accessUntil != null)
-		facts.push({
-			id: "access_until",
-			at: person.accessUntil,
-			local: person.accessUntilLocal,
-		});
-	if (formerReason !== undefined)
-		facts.push({ id: "former", reason: formerReason });
+	const boardTasks = boardTasksFor(person);
+	const flags = statusFlags(
+		person,
+		signatureVariants,
+		boardTasks,
+		doorActorName
+	);
+	const facts = statusFacts(person, signatureVariants, now, doorActorName);
 
 	// A missing agreement or a suspended door is the row's headline problem;
 	// a voluntary departure is not a problem at all, so it must not turn the
 	// summary red — which is why this asks which flags are present rather than
 	// whether any are.
-	const alarming = flags.some(
-		(f) => f.id === "agreement_missing" || f.id === "door_suspended"
+	const isAlarming = flags.some(
+		(flag) =>
+			flag.id === "agreement_missing" || flag.id === "door_suspended"
 	);
-	const tone: Tone = alarming ? "error" : tierTone(person);
+	const tone: Tone = isAlarming ? "error" : tierTone(person);
 
 	return {
 		tone,

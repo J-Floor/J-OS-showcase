@@ -26,7 +26,7 @@ import {
  * installs it once, via `HotkeysProvider`'s `defaultOptions.hotkey`, and every
  * binding in the app — this one included — inherits it from there.
  */
-export function createActionKeys<Person>(opts: {
+export function createActionKeys<Person>(options: {
 	actions: () => ActionDescriptor<Person>[];
 	/** The person the open drawer is showing, if any. */
 	drawerPerson: () => Person | undefined;
@@ -45,11 +45,14 @@ export function createActionKeys<Person>(opts: {
 		return (event: KeyboardEvent) => {
 			// A held key repeats; one press must be one decision, or a
 			// leaned-on `D` queues a confirm dialog per repeat.
-			if (event.repeat) return;
-			if (isTypingTarget(event.target)) return;
-			if (!opts.active()) return;
+			if (
+				event.repeat ||
+				isTypingTarget(event.target) ||
+				!options.active()
+			)
+				return;
 
-			const person = opts.drawerPerson();
+			const person = options.drawerPerson();
 			if (person !== undefined) {
 				if (!action.can(person)) return;
 				event.preventDefault();
@@ -57,34 +60,33 @@ export function createActionKeys<Person>(opts: {
 				return;
 			}
 
-			const checked = opts.selected();
+			const checked = options.selected();
 			if (checked.length > 0) {
 				const targets = eligible(action, checked);
 				if (targets.length === 0) return;
 				event.preventDefault();
 				void (async () => {
 					for (const target of targets) await action.run(target);
-					opts.onClearSelection();
+					options.onClearSelection();
 				})();
 				return;
 			}
 
-			const row = opts.focused();
-			if (row === undefined) return;
-			if (!action.can(row)) return;
+			const row = options.focused();
+			if (row === undefined || !action.can(row)) return;
 			event.preventDefault();
 			// Advance on RESOLVE, not on fire: a rejected mutation means the
 			// row did not move, and moving the ring would say it had.
 			void (async () => {
 				await action.run(row);
-				opts.onAdvance();
+				options.onAdvance();
 			})();
 		};
 	}
 
 	createHotkeys(
 		() => {
-			const actions = opts.actions();
+			const actions = options.actions();
 			assertNoCollisions(actions);
 			return actions.map((action) => ({
 				hotkey: action.hotkey,
@@ -95,6 +97,6 @@ export function createActionKeys<Person>(opts: {
 		// browser behaviour worth cancelling on match, and cancelling it before
 		// `handle` gets to run `isTypingTarget` would swallow the same
 		// keystroke while it is typed into a row's own note/score field.
-		() => ({ enabled: opts.active(), preventDefault: false })
+		() => ({ enabled: options.active(), preventDefault: false })
 	);
 }

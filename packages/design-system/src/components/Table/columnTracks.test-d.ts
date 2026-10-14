@@ -1,28 +1,32 @@
-import type { ColumnSize, JfColumnDef } from "./types.ts";
+import type { ColumnSize, JfColumnDefinition } from "./types.ts";
 
 type Row = { name: string; kind: "a" | "b"; count: number };
 
-const pixels: ColumnSize = 120;
-const content: ColumnSize = "content";
-const weight: ColumnSize = { weight: 2 };
-const floor: ColumnSize = { min: 200 };
-const floorAndWeight: ColumnSize = { min: 200, weight: 2 };
-const bounded: ColumnSize = { min: 120, max: 300 };
-const contentFloor: ColumnSize = { min: "content", weight: 2 };
-const contentBounded: ColumnSize = { min: "content", max: 300 };
+export const pixels: ColumnSize = 120;
+export const content: ColumnSize = "content";
+export const weight: ColumnSize = { weight: 2 };
+export const floor: ColumnSize = { min: 200 };
+export const floorAndWeight: ColumnSize = { min: 200, weight: 2 };
+export const bounded: ColumnSize = { min: 120, max: 300 };
+export const contentFloor: ColumnSize = { min: "content", weight: 2 };
+export const contentBounded: ColumnSize = { min: "content", max: 300 };
 
 // @ts-expect-error -- `max` needs `min`; a `weight` beside it would be dropped
-const cappedWeight: ColumnSize = { max: 300, weight: 1 };
+export const cappedWeight: ColumnSize = { max: 300, weight: 1 };
 
 // @ts-expect-error -- `max` needs `min`; alone it can collapse to 0
-const ceilingOnly: ColumnSize = { max: 300 };
+export const ceilingOnly: ColumnSize = { max: 300 };
 
 // @ts-expect-error -- an empty object says nothing; omit `size` instead
-const empty: ColumnSize = {};
+export const empty: ColumnSize = {};
 
-const display: JfColumnDef<Row> = { id: "actions", header: "", size: 84 };
+export const display: JfColumnDefinition<Row> = {
+	id: "actions",
+	header: "",
+	size: 84,
+};
 
-const boundEnum: JfColumnDef<Row> = {
+export const boundEnum: JfColumnDefinition<Row> = {
 	accessorKey: "kind",
 	header: "Kind",
 	dataType: "enum",
@@ -32,7 +36,7 @@ const boundEnum: JfColumnDef<Row> = {
 	],
 };
 
-const derivedEnum: JfColumnDef<Row> = {
+export const derivedEnum: JfColumnDefinition<Row> = {
 	id: "parity",
 	header: "Parity",
 	dataType: "enum",
@@ -41,7 +45,7 @@ const derivedEnum: JfColumnDef<Row> = {
 };
 
 // @ts-expect-error -- "c" is not a value of `kind`
-const badEnum: JfColumnDef<Row> = {
+export const badEnum: JfColumnDefinition<Row> = {
 	accessorKey: "kind",
 	header: "Kind",
 	dataType: "enum",
@@ -49,9 +53,12 @@ const badEnum: JfColumnDef<Row> = {
 };
 
 // @ts-expect-error -- an accessor column needs a `dataType`
-const untyped: JfColumnDef<Row> = { accessorKey: "name", header: "Name" };
+export const untyped: JfColumnDefinition<Row> = {
+	accessorKey: "name",
+	header: "Name",
+};
 
-const minSize: JfColumnDef<Row> = {
+export const minSize: JfColumnDefinition<Row> = {
 	accessorKey: "name",
 	header: "Name",
 	dataType: "string",
@@ -59,28 +66,9 @@ const minSize: JfColumnDef<Row> = {
 	minSize: 40,
 };
 
-const nested: JfColumnDef<Row> = {
+export const nested: JfColumnDefinition<Row> = {
 	id: "group",
 	header: "Group",
 	// @ts-expect-error -- nested header columns are not supported
 	columns: [],
 };
-
-void pixels;
-void content;
-void weight;
-void floor;
-void floorAndWeight;
-void bounded;
-void contentFloor;
-void contentBounded;
-void cappedWeight;
-void ceilingOnly;
-void empty;
-void display;
-void boundEnum;
-void derivedEnum;
-void badEnum;
-void untyped;
-void minSize;
-void nested;

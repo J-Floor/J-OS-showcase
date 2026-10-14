@@ -18,7 +18,7 @@ export function CountdownCard() {
 		return person.data()?.accessUntil;
 	}
 	return (
-		<Show when={person.data() === undefined || until() != null}>
+		<Show when={person.data() === undefined || until() !== undefined}>
 			<SpaceCard
 				title="Access"
 				helpText="Days left on your access."

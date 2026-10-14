@@ -62,6 +62,54 @@ export function mergeRows<Row extends { _id: string }>(
 	return merged;
 }
 
+type ConvexClient = ReturnType<typeof useConvexClient>;
+
+/** A call, not a read of a flag: TypeScript would otherwise keep the `false`
+ * it narrowed to before an `await` across it. */
+function useDisposedCheck(): () => boolean {
+	let hasBeenDisposed = false;
+	onCleanup(() => {
+		hasBeenDisposed = true;
+	});
+	return () => hasBeenDisposed;
+}
+
+/** Reads the floor once `start` first turns true; a failed read is tried again
+ * the next time `start` turns true. */
+function useFloor<Row>(options: {
+	client: ConvexClient;
+	query: FlooredLogQueries<Row>["firstPageFloor"];
+	start: Accessor<boolean>;
+	isDisposed: () => boolean;
+}): { floor: Accessor<Floor | undefined>; floorFailed: Accessor<boolean> } {
+	const [floor, setFloor] = createSignal<Floor>();
+	const [floorFailed, setFloorFailed] = createSignal(false);
+	let isFloorRequested = false;
+
+	createEffect(() => {
+		if (!options.start() || isFloorRequested) return;
+		isFloorRequested = true;
+		setFloorFailed(false);
+		if (!options.client) {
+			setFloorFailed(true);
+			return;
+		}
+		options.client
+			.query(options.query, {})
+			.then((result) => {
+				if (options.isDisposed()) return;
+				setFloor(result);
+			})
+			.catch(() => {
+				if (options.isDisposed()) return;
+				isFloorRequested = false;
+				setFloorFailed(true);
+			});
+	});
+
+	return { floor, floorFailed };
+}
+
 /**
  * A newest-first log paged around a fixed floor: the floor is read once,
  * when `start` first turns true; rows at or above it are a live query; older
@@ -75,25 +123,20 @@ export function useFlooredLog<Row extends { _id: string }>(options: {
 	start: Accessor<boolean>;
 }): FlooredLog<Row> {
 	const client = useConvexClient();
-	const [floor, setFloor] = createSignal<Floor>();
-	const [floorFailed, setFloorFailed] = createSignal(false);
+	const isDisposed = useDisposedCheck();
+	const { floor, floorFailed } = useFloor({
+		client,
+		query: options.queries.firstPageFloor,
+		start: options.start,
+		isDisposed,
+	});
 	const [older, setOlder] = createSignal<Row[]>([]);
 	const [exhausted, setExhausted] = createSignal(false);
 	const [loading, setLoading] = createSignal(false);
 	const [loadFailed, setLoadFailed] = createSignal(false);
 	let cursor: string | null = null;
-	let floorRequested = false;
-	let busy = false;
-	let wanted = false;
-	let disposed = false;
-	onCleanup(() => {
-		disposed = true;
-	});
-	// A call, not a read of `disposed`: TypeScript would otherwise keep the
-	// `false` it narrowed to before an `await` across it.
-	function isDisposed(): boolean {
-		return disposed;
-	}
+	let isBusy = false;
+	let isWanted = false;
 
 	const head = useQuery(
 		options.queries.listSince,
@@ -102,30 +145,8 @@ export function useFlooredLog<Row extends { _id: string }>(options: {
 	);
 
 	createEffect(() => {
-		if (!options.start() || floorRequested) return;
-		floorRequested = true;
-		setFloorFailed(false);
-		if (!client) {
-			setFloorFailed(true);
-			return;
-		}
-		client
-			.query(options.queries.firstPageFloor, {})
-			.then((result) => {
-				if (isDisposed()) return;
-				if (result.since === null) setExhausted(true);
-				setFloor(result);
-			})
-			.catch(() => {
-				if (isDisposed()) return;
-				floorRequested = false;
-				setFloorFailed(true);
-			});
-	});
-
-	createEffect(() => {
-		if (floor() === undefined || !wanted) return;
-		wanted = false;
+		if (floor() === undefined || !isWanted) return;
+		isWanted = false;
 		void loadMore();
 	});
 
@@ -146,18 +167,28 @@ export function useFlooredLog<Row extends { _id: string }>(options: {
 		if (isDisposed()) return;
 		const since = floor()?.since;
 		if (since === undefined) {
-			wanted = true;
+			isWanted = true;
 			return;
 		}
-		if (!client || since === null || busy || exhausted()) return;
-		busy = true;
+		if (!client || since === null || isBusy || exhausted()) return;
+		await loadOlderPage(client, since);
+	}
+
+	async function loadOlderPage(
+		activeClient: NonNullable<ConvexClient>,
+		since: number
+	): Promise<void> {
+		isBusy = true;
 		setLoading(true);
 		setLoadFailed(false);
 		try {
-			const result = await client.query(options.queries.listBefore, {
-				before: since,
-				paginationOpts: { numItems: options.pageSize, cursor },
-			});
+			const result = await activeClient.query(
+				options.queries.listBefore,
+				{
+					before: since,
+					paginationOpts: { numItems: options.pageSize, cursor },
+				}
+			);
 			if (isDisposed()) return;
 			setOlder((prev) => [...prev, ...result.page]);
 			cursor = result.continueCursor;
@@ -165,7 +196,7 @@ export function useFlooredLog<Row extends { _id: string }>(options: {
 		} catch {
 			if (!isDisposed()) setLoadFailed(true);
 		} finally {
-			busy = false;
+			isBusy = false;
 			if (!isDisposed()) setLoading(false);
 		}
 	}

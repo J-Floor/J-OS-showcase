@@ -29,19 +29,19 @@ const {
 		endDataSession: vi.fn(() => {
 			calls.push("endDataSession");
 		}),
-		setKeeperActive: vi.fn((active: boolean) => {
-			calls.push(`setKeeperActive(${String(active)})`);
+		setKeeperActive: vi.fn((isActive: boolean) => {
+			calls.push(`setKeeperActive(${String(isActive)})`);
 		}),
 	};
 });
 vi.mock("../lib/push.ts", () => ({ disablePush }));
+function currentSession() {
+	return {
+		data: sessionUser.current ? { user: sessionUser.current } : null,
+	};
+}
 vi.mock("../lib/auth.ts", () => ({
-	authClient: {
-		signOut,
-		useSession: () => () => ({
-			data: sessionUser.current ? { user: sessionUser.current } : null,
-		}),
-	},
+	authClient: { signOut, useSession: () => currentSession },
 }));
 vi.mock("./data/caches.ts", () => ({ endDataSession }));
 vi.mock("./data/queryKeeper.ts", () => ({ setKeeperActive }));
@@ -69,7 +69,7 @@ test("still signs out when removing the subscription fails", async () => {
 	disablePush.mockImplementationOnce(() =>
 		Promise.reject(new Error("offline"))
 	);
-	vi.spyOn(console, "error").mockImplementation(() => undefined);
+	vi.spyOn(console, "error").mockImplementation(() => {});
 	await hook()();
 	expect(signOut).toHaveBeenCalledOnce();
 });
@@ -84,7 +84,7 @@ test("signs out even when removing the subscription never settles", async () => 
 				}, 4_000);
 			})
 	);
-	vi.spyOn(console, "error").mockImplementation(() => undefined);
+	vi.spyOn(console, "error").mockImplementation(() => {});
 	vi.useFakeTimers();
 	try {
 		const done = hook()();

@@ -10,6 +10,18 @@ export default [
     rules: { "no-console": "off" },
   },
   {
+    // Cohesive modules kept whole on purpose: splitting them would only move
+    // code, not clarify it.
+    files: [
+      "convex/people.ts",
+      "convex/schema.ts",
+      "convex/applications.ts",
+      "convex/seed.ts",
+      "convex/lib/nukiClient.ts",
+    ],
+    rules: { "max-lines": "off" },
+  },
+  {
     // jsx-email templates are React, not Solid.
     files: ["emails/**"],
     rules: Object.fromEntries(

@@ -8,7 +8,7 @@ import { requireRole } from "./lib/authGuard.ts";
 import { displayName } from "./lib/names.ts";
 import { BOARD_LEVEL, COMMUNITY_TIERS } from "./lib/roles.ts";
 import { SITE_TIMEZONE, utcFromLocal, zonedTimeZoneName } from "./lib/time.ts";
-import { assertLen, NAME_MAX } from "./lib/validate.ts";
+import { assertLength, NAME_MAX } from "./lib/validate.ts";
 import { currentActorId } from "./lifecycle.ts";
 import {
 	cancelEventReminders,
@@ -20,6 +20,7 @@ import {
 // the purge is a bounded, self-rescheduling batch rather than a single
 // collect+delete.
 const BATCH_SIZE = 200;
+const ATTENDEE_ROSTER_CAP = 500;
 
 /** Reject a caller-supplied `*Local` whose embedded IXDTF zone is not the
  *  site's. A board caller could embed e.g. `[America/Los_Angeles]`; the table
@@ -38,12 +39,12 @@ export const createEvent = mutation({
 		endsAtLocal: v.string(),
 	},
 	handler: async (
-		ctx,
+		context,
 		{ name, startsAtLocal, endsAtLocal }
 	): Promise<Id<"events">> => {
-		await requireRole(ctx, BOARD_LEVEL);
-		assertLen(name, NAME_MAX, "Event name");
-		const createdBy = await currentActorId(ctx);
+		await requireRole(context, BOARD_LEVEL);
+		assertLength(name, NAME_MAX, "Event name");
+		const createdBy = await currentActorId(context);
 		if (!createdBy) throw new Error("No acting person.");
 		assertSiteZone(startsAtLocal);
 		assertSiteZone(endsAtLocal);
@@ -53,7 +54,7 @@ export const createEvent = mutation({
 		const endsAt = utcFromLocal(endsAtLocal);
 		if (startsAt > endsAt)
 			throw new Error("The start must be on or before the end.");
-		const id = await ctx.db.insert("events", {
+		const id = await context.db.insert("events", {
 			name,
 			startsAt,
 			endsAt,
@@ -62,42 +63,47 @@ export const createEvent = mutation({
 			createdBy,
 			createdAt: Date.now(),
 		});
-		const event = await ctx.db.get(id);
-		if (event) await scheduleEventReminders(ctx, event);
+		const event = await context.db.get(id);
+		if (event) await scheduleEventReminders(context, event);
 		return id;
 	},
 });
 
 export const listEvents = query({
 	args: {},
-	handler: async (ctx): Promise<Doc<"events">[]> => {
+	handler: async (context): Promise<Doc<"events">[]> => {
 		// Any entitled member with space access may see the event list (the
 		// Events page grants `view` to guests+). Only board/admin can create —
 		// see `createEvent` and the `<Can I="create">`-gated form on the page.
-		await requireRole(ctx, COMMUNITY_TIERS);
-		const rows = await ctx.db.query("events").collect();
+		await requireRole(context, COMMUNITY_TIERS);
+		const rows = await context.db.query("events").collect();
+		// eslint-disable-next-line id-length -- conventional comparator parameter names
 		return rows.sort((a, b) => b.createdAt - a.createdAt);
 	},
 });
 
 export const deleteEvent = mutation({
 	args: { eventId: v.id("events") },
-	handler: async (ctx, { eventId }): Promise<void> => {
-		await requireRole(ctx, BOARD_LEVEL);
-		const event = await ctx.db.get(eventId);
-		if (event) await cancelEventReminders(ctx, event);
+	handler: async (context, { eventId }): Promise<void> => {
+		await requireRole(context, BOARD_LEVEL);
+		const event = await context.db.get(eventId);
+		if (event) await cancelEventReminders(context, event);
 		// Delete the event doc first: it vanishes from listEvents/getEventPublic
 		// immediately, which also shuts the confirm-orphan window (a pending
 		// confirm checks the event still exists — see
 		// lib/attendance.insertAttendanceOnce). Attendance can outlive the event
 		// by a few scheduler ticks; nothing reads attendance without the event.
-		await ctx.db.delete(eventId);
+		await context.db.delete(eventId);
 		// Attendance is bounded by turnout, which for a popular event can exceed
 		// a single transaction's read/write limits — purge it in bounded,
 		// self-rescheduling batches instead of one collect+delete.
-		await ctx.scheduler.runAfter(0, internal.events.purgeEventAttendance, {
-			eventId,
-		});
+		await context.scheduler.runAfter(
+			0,
+			internal.events.purgeEventAttendance,
+			{
+				eventId,
+			}
+		);
 	},
 });
 
@@ -111,14 +117,14 @@ export const deleteEvent = mutation({
  */
 export const purgeEventAttendance = internalMutation({
 	args: { eventId: v.id("events") },
-	handler: async (ctx, { eventId }): Promise<void> => {
-		const rows = await ctx.db
+	handler: async (context, { eventId }): Promise<void> => {
+		const rows = await context.db
 			.query("eventAttendance")
-			.withIndex("by_event", (q) => q.eq("eventId", eventId))
+			.withIndex("by_event", (range) => range.eq("eventId", eventId))
 			.take(BATCH_SIZE);
-		for (const row of rows) await ctx.db.delete(row._id);
+		for (const row of rows) await context.db.delete(row._id);
 		if (rows.length === BATCH_SIZE) {
-			await ctx.scheduler.runAfter(
+			await context.scheduler.runAfter(
 				0,
 				internal.events.purgeEventAttendance,
 				{
@@ -129,6 +135,42 @@ export const purgeEventAttendance = internalMutation({
 	},
 });
 
+type EventTimeFields = { startsAtLocal?: string; endsAtLocal?: string };
+
+function mergedEventTimes(
+	existing: { startsAt: number; endsAt: number },
+	fields: EventTimeFields
+): { startsAt: number; endsAt: number } {
+	let startsAt = existing.startsAt;
+	let endsAt = existing.endsAt;
+	if (fields.startsAtLocal !== undefined) {
+		assertSiteZone(fields.startsAtLocal);
+		startsAt = utcFromLocal(fields.startsAtLocal);
+	}
+	if (fields.endsAtLocal !== undefined) {
+		assertSiteZone(fields.endsAtLocal);
+		endsAt = utcFromLocal(fields.endsAtLocal);
+	}
+	return { startsAt, endsAt };
+}
+
+function timeFieldsPatch(
+	fields: EventTimeFields,
+	times: { startsAt: number; endsAt: number }
+) {
+	return {
+		...(fields.startsAtLocal === undefined
+			? {}
+			: {
+					startsAt: times.startsAt,
+					startsAtLocal: fields.startsAtLocal,
+				}),
+		...(fields.endsAtLocal === undefined
+			? {}
+			: { endsAt: times.endsAt, endsAtLocal: fields.endsAtLocal }),
+	};
+}
+
 export const updateEvent = mutation({
 	args: {
 		eventId: v.id("events"),
@@ -136,49 +178,35 @@ export const updateEvent = mutation({
 		startsAtLocal: v.optional(v.string()),
 		endsAtLocal: v.optional(v.string()),
 	},
-	handler: async (ctx, { eventId, ...fields }): Promise<void> => {
-		await requireRole(ctx, BOARD_LEVEL);
-		assertLen(fields.name, NAME_MAX, "Event name");
-		const existing = await ctx.db.get(eventId);
+	handler: async (context, { eventId, ...fields }): Promise<void> => {
+		await requireRole(context, BOARD_LEVEL);
+		assertLength(fields.name, NAME_MAX, "Event name");
+		const existing = await context.db.get(eventId);
 		if (!existing) throw new Error("Event not found.");
 		// Each drawer field commits on its own, so merge the supplied field(s)
 		// over the current row and validate the RESULT — a lone Starts edit must
 		// not be allowed to invert the interval, and the name must not go blank.
 		const name =
-			fields.name !== undefined ? fields.name.trim() : existing.name;
+			fields.name === undefined ? existing.name : fields.name.trim();
 		if (name === "") throw new Error("Event name is required.");
 		// Patch a time field only when the caller supplied its `*Local`: each
 		// drawer field autosaves on its own, so a lone Starts edit must leave
 		// Ends (and its cached epoch) exactly as they were, and vice versa.
-		let startsAt = existing.startsAt;
-		let endsAt = existing.endsAt;
-		if (fields.startsAtLocal !== undefined) {
-			assertSiteZone(fields.startsAtLocal);
-			startsAt = utcFromLocal(fields.startsAtLocal);
-		}
-		if (fields.endsAtLocal !== undefined) {
-			assertSiteZone(fields.endsAtLocal);
-			endsAt = utcFromLocal(fields.endsAtLocal);
-		}
+		const { startsAt, endsAt } = mergedEventTimes(existing, fields);
 		if (startsAt > endsAt)
 			throw new Error("The start must be on or before the end.");
-		await ctx.db.patch(eventId, {
+		await context.db.patch(eventId, {
 			name,
-			...(fields.startsAtLocal !== undefined
-				? { startsAt, startsAtLocal: fields.startsAtLocal }
-				: {}),
-			...(fields.endsAtLocal !== undefined
-				? { endsAt, endsAtLocal: fields.endsAtLocal }
-				: {}),
+			...timeFieldsPatch(fields, { startsAt, endsAt }),
 		});
 		// Only a time change moves the reminders; the name is read when they fire.
 		if (
-			fields.startsAtLocal !== undefined ||
-			fields.endsAtLocal !== undefined
-		) {
-			const updated = await ctx.db.get(eventId);
-			if (updated) await scheduleEventReminders(ctx, updated);
-		}
+			fields.startsAtLocal === undefined &&
+			fields.endsAtLocal === undefined
+		)
+			return;
+		const updated = await context.db.get(eventId);
+		if (updated) await scheduleEventReminders(context, updated);
 	},
 });
 
@@ -190,7 +218,7 @@ export const updateEvent = mutation({
 export const listEventAttendees = query({
 	args: { eventId: v.id("events") },
 	handler: async (
-		ctx,
+		context,
 		{ eventId }
 	): Promise<
 		{
@@ -200,18 +228,18 @@ export const listEventAttendees = query({
 			confirmedAt: number;
 		}[]
 	> => {
-		await requireRole(ctx, BOARD_LEVEL);
+		await requireRole(context, BOARD_LEVEL);
 		// Bounded like the delete sweep: turnout is unbounded in principle, so
 		// cap the roster the drawer loads rather than risk a transaction /
-		// response-size limit on a popular event. 500 is far above any real
-		// J-floor event; a larger roster would want true pagination.
-		const rows = await ctx.db
+		// response-size limit on a popular event. ATTENDEE_ROSTER_CAP is far above
+		// any real J-floor event; a larger roster would want true pagination.
+		const rows = await context.db
 			.query("eventAttendance")
-			.withIndex("by_event", (q) => q.eq("eventId", eventId))
-			.take(500);
+			.withIndex("by_event", (range) => range.eq("eventId", eventId))
+			.take(ATTENDEE_ROSTER_CAP);
 		const out = await Promise.all(
 			rows.map(async (row) => {
-				const person = await ctx.db.get(row.personId);
+				const person = await context.db.get(row.personId);
 				return person
 					? {
 							personId: row.personId,
@@ -222,16 +250,24 @@ export const listEventAttendees = query({
 					: null;
 			})
 		);
-		return out
-			.filter((a): a is NonNullable<typeof a> => a !== null)
-			.sort((a, b) => b.confirmedAt - a.confirmedAt);
+		return (
+			out
+				.filter(
+					(
+						attendance
+					): attendance is NonNullable<typeof attendance> =>
+						attendance !== null
+				)
+				// eslint-disable-next-line id-length -- conventional comparator parameter names
+				.sort((a, b) => b.confirmedAt - a.confirmedAt)
+		);
 	},
 });
 
 export const getEventPublic = query({
 	args: { eventId: v.id("events") },
 	handler: async (
-		ctx,
+		context,
 		{ eventId }
 	): Promise<{
 		name: string;
@@ -241,7 +277,7 @@ export const getEventPublic = query({
 		endsAtLocal: string;
 		ended: boolean;
 	} | null> => {
-		const event = await ctx.db.get(eventId);
+		const event = await context.db.get(eventId);
 		if (!event) return null;
 		return {
 			name: event.name,

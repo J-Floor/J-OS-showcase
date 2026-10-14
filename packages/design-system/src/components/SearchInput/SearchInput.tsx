@@ -28,7 +28,7 @@ export type SearchInputProps = OmitEach<
  * query, because the caller is what filters on it.
  */
 export function SearchInput(props: SearchInputProps): JSX.Element {
-	let inputEl: HTMLInputElement | undefined;
+	let inputElement: HTMLInputElement | undefined;
 	const [own, rest] = splitProps(props, [
 		"value",
 		"onValueChange",
@@ -42,10 +42,10 @@ export function SearchInput(props: SearchInputProps): JSX.Element {
 			class={clsx(styles.field, own.class)}
 			leadingIconName={ICONS.search}
 			value={own.value}
-			ref={(el: HTMLInputElement) => {
-				inputEl = el;
-				const ref = own.ref;
-				if (typeof ref === "function") ref(el);
+			ref={(element: HTMLInputElement) => {
+				inputElement = element;
+				const reference = own.ref;
+				if (typeof reference === "function") reference(element);
 			}}
 			onValueChange={(event) => {
 				own.onValueChange(event.currentTarget.value);
@@ -55,7 +55,7 @@ export function SearchInput(props: SearchInputProps): JSX.Element {
 					<ClearSearchButton
 						onClear={() => {
 							own.onValueChange("");
-							inputEl?.focus();
+							inputElement?.focus();
 						}}
 					/>
 				</Show>

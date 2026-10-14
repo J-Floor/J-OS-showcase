@@ -1,4 +1,4 @@
-import { Table, type JfColumnDef } from "@j-os/design-system";
+import { Table, type JfColumnDefinition } from "@j-os/design-system";
 import { Show, createMemo, type JSX } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
@@ -34,23 +34,23 @@ const triggerOptions = [
 	{ value: "switchover", label: "Switchover" },
 ] as const;
 
-const columns: JfColumnDef<AuthLogRow>[] = [
+const columns: JfColumnDefinition<AuthLogRow>[] = [
 	{
 		// Hidden grouping column (`Table` hides whatever it groups by): one
 		// group per local day, so the virtualiser has groups to window.
 		id: "day",
 		header: "Day",
 		dataType: "string",
-		accessorFn: (r) => r.day,
+		accessorFn: (row) => row.day,
 	},
 	{
 		id: "at",
 		header: "Time",
 		dataType: "date",
 		size: "content",
-		accessorFn: (r) => r.at,
+		accessorFn: (row) => row.at,
 		cell: (info) => formatTime(info.row.original.at),
-		measureText: (r) => formatTime(r.at),
+		measureText: (row) => formatTime(row.at),
 	},
 	{ accessorKey: "person", header: "Person", dataType: "string" },
 	{

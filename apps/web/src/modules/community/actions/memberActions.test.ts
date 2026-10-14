@@ -26,7 +26,7 @@ const kickOutStub: ActionDescriptor<{ _id: string; group: string }> = {
 	hotkey: "K",
 	scope: "members",
 	can: (person) => person.group !== "kicked_out",
-	run: () => undefined,
+	run: () => {},
 };
 
 test("a mixed selection narrows to the rows the action applies to", () => {
@@ -35,7 +35,10 @@ test("a mixed selection narrows to the rows the action applies to", () => {
 		{ _id: "b", group: "kicked_out" },
 		{ _id: "c", group: "board" },
 	];
-	expect(eligible(kickOutStub, people).map((p) => p._id)).toEqual(["a", "c"]);
+	expect(eligible(kickOutStub, people).map((person) => person._id)).toEqual([
+		"a",
+		"c",
+	]);
 });
 
 test("a selection where nothing applies narrows to nothing", () => {
@@ -50,10 +53,10 @@ test("a selection where nothing applies narrows to nothing", () => {
 // @solidjs/testing-library. The root is disposed right after `actions()` is
 // read; the returned descriptors are plain closures over mocked, non-reactive
 // functions, so calling `run`/`can` on them afterwards is fine.
-function withRoot<T>(fn: () => T): T {
+function withRoot<T>(function_: () => T): T {
 	let result: T | undefined;
 	createRoot((dispose) => {
-		result = fn();
+		result = function_();
 		dispose();
 	});
 	return result as T;
@@ -118,7 +121,7 @@ function guest(fields: {
 test("useMemberActions offers R/change role, K/kick out, A/view agreement, with no collisions", () => {
 	const actions = withRoot(() =>
 		useMemberActions({
-			onChangeRole: () => undefined,
+			onChangeRole: () => {},
 			group: () => "member",
 		}).actions()
 	);
@@ -127,7 +130,8 @@ test("useMemberActions offers R/change role, K/kick out, A/view agreement, with 
 	}).not.toThrow();
 	expect(
 		actions
-			.map((a) => [a.id, a.hotkey, a.scope])
+			.map((action) => [action.id, action.hotkey, action.scope])
+			// eslint-disable-next-line id-length -- conventional comparator parameter names
 			.sort((a, b) => a[0].localeCompare(b[0]))
 	).toEqual([
 		["agreement", "A", "members"],
@@ -143,11 +147,11 @@ test("kick out is only available while the person's group isn't kicked_out — t
 	]);
 	const actions = withRoot(() =>
 		useMemberActions({
-			onChangeRole: () => undefined,
+			onChangeRole: () => {},
 			group: (person) => groups.get(person._id) ?? "member",
 		}).actions()
 	);
-	const kick = actions.find((a) => a.id === "kick")!;
+	const kick = actions.find((action) => action.id === "kick")!;
 	const live = member({ _id: "live", tier: "member" });
 	const gone = member({ _id: "gone", tier: "former" });
 	expect(kick.can(live)).toBe(true);
@@ -160,11 +164,11 @@ test("view agreement is available only when there IS a signed agreement", () => 
 	agreementState.loading = false;
 	const actions = withRoot(() =>
 		useMemberActions({
-			onChangeRole: () => undefined,
+			onChangeRole: () => {},
 			group: () => "member",
 		}).actions()
 	);
-	const agreement = actions.find((a) => a.id === "agreement")!;
+	const agreement = actions.find((action) => action.id === "agreement")!;
 	expect(
 		agreement.can(member({ _id: "a", tier: "member", hasAgreement: true }))
 	).toBe(true);
@@ -176,15 +180,15 @@ test("view agreement is available only when there IS a signed agreement", () => 
 test("view agreement uses the shared agreement icon", () => {
 	const members = withRoot(() =>
 		useMemberActions({
-			onChangeRole: () => undefined,
+			onChangeRole: () => {},
 			group: () => "member",
 		}).actions()
 	);
-	expect(members.find((a) => a.id === "agreement")!.icon).toBe(
+	expect(members.find((action) => action.id === "agreement")!.icon).toBe(
 		ICONS.agreement
 	);
 	const guests = withRoot(() => useGuestActions().actions());
-	expect(guests.find((a) => a.id === "agreement")!.icon).toBe(
+	expect(guests.find((action) => action.id === "agreement")!.icon).toBe(
 		ICONS.agreement
 	);
 });
@@ -197,11 +201,11 @@ test("view agreement disables while a fetch for it is already in flight, even wi
 	agreementState.loading = true;
 	const actions = withRoot(() =>
 		useMemberActions({
-			onChangeRole: () => undefined,
+			onChangeRole: () => {},
 			group: () => "member",
 		}).actions()
 	);
-	const agreement = actions.find((a) => a.id === "agreement")!;
+	const agreement = actions.find((action) => action.id === "agreement")!;
 	expect(
 		agreement.can(member({ _id: "a", tier: "member", hasAgreement: true }))
 	).toBe(false);
@@ -212,11 +216,11 @@ test("view agreement's run opens the agreement via useOpenAgreement, not a per-r
 	openMock.mockClear();
 	const actions = withRoot(() =>
 		useMemberActions({
-			onChangeRole: () => undefined,
+			onChangeRole: () => {},
 			group: () => "member",
 		}).actions()
 	);
-	const agreement = actions.find((a) => a.id === "agreement")!;
+	const agreement = actions.find((action) => action.id === "agreement")!;
 	const person = member({ _id: "p1", tier: "member", hasAgreement: true });
 	void agreement.run(person);
 	expect(openMock).toHaveBeenCalledWith("p1");
@@ -232,7 +236,7 @@ test("change role's run defers to the caller (opens the dialog) rather than muta
 			group: () => "member",
 		}).actions()
 	);
-	const role = actions.find((a) => a.id === "role")!;
+	const role = actions.find((action) => action.id === "role")!;
 	const person = member({ _id: "p1", tier: "member" });
 	void role.run(person);
 	expect(opened).toBe(person);
@@ -242,11 +246,11 @@ test("kick out's run confirms, then calls triage.kickOut with the person's id", 
 	kickOutMock.mockClear();
 	const actions = withRoot(() =>
 		useMemberActions({
-			onChangeRole: () => undefined,
+			onChangeRole: () => {},
 			group: () => "member",
 		}).actions()
 	);
-	const kick = actions.find((a) => a.id === "kick")!;
+	const kick = actions.find((action) => action.id === "kick")!;
 	// No <ConfirmProvider> is mounted, so `useConfirm()` falls back to
 	// auto-confirm (see confirm.tsx).
 	await kick.run(member({ _id: "p1", tier: "member" }));
@@ -262,7 +266,8 @@ test("useGuestActions offers M/upgrade, K/kick out and A/view agreement, with no
 	// matching the Members tab — same letter `A`, same place in the set.
 	expect(
 		actions
-			.map((a) => [a.id, a.hotkey, a.scope])
+			.map((action) => [action.id, action.hotkey, action.scope])
+			// eslint-disable-next-line id-length -- conventional comparator parameter names
 			.sort((a, b) => a[0].localeCompare(b[0]))
 	).toEqual([
 		["agreement", "A", "guests"],
@@ -273,7 +278,7 @@ test("useGuestActions offers M/upgrade, K/kick out and A/view agreement, with no
 
 test("guest kick out is unavailable once access has ended (expired stage or former tier)", () => {
 	const actions = withRoot(() => useGuestActions().actions());
-	const kick = actions.find((a) => a.id === "kick")!;
+	const kick = actions.find((action) => action.id === "kick")!;
 	expect(kick.can(guest({ _id: "a", tier: "guest", stage: "active" }))).toBe(
 		true
 	);
@@ -288,7 +293,7 @@ test("guest kick out is unavailable once access has ended (expired stage or form
 test("guest kick out's run confirms, then calls triage.kickOut", async () => {
 	kickOutMock.mockClear();
 	const actions = withRoot(() => useGuestActions().actions());
-	const kick = actions.find((a) => a.id === "kick")!;
+	const kick = actions.find((action) => action.id === "kick")!;
 	await kick.run(guest({ _id: "g1", tier: "guest" }));
 	expect(kickOutMock).toHaveBeenCalledWith("g1");
 });
@@ -296,7 +301,7 @@ test("guest kick out's run confirms, then calls triage.kickOut", async () => {
 test("guest upgrade's run confirms, then calls triage.upgradeToMember", async () => {
 	upgradeToMemberMock.mockClear();
 	const actions = withRoot(() => useGuestActions().actions());
-	const memberAction = actions.find((a) => a.id === "member")!;
+	const memberAction = actions.find((action) => action.id === "member")!;
 	await memberAction.run(guest({ _id: "g1", tier: "guest" }));
 	expect(upgradeToMemberMock).toHaveBeenCalledWith("g1");
 });

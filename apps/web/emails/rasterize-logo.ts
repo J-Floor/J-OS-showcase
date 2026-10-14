@@ -10,8 +10,10 @@ const SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" fill="#
 <path d="M47.9995 39.2078C47.9995 49.0321 42.2707 54.3333 30.8133 54.3333H11.4297V46.912H30.891C35.5995 46.912 38.1113 44.1549 38.1113 39.7022V12.4214H18.0996V5H47.9995V39.2078Z"/>
 </svg>`;
 
+const LOGO_SIZE = 96;
+
 const OUT = resolve(import.meta.dirname, "../public/email/logo.png");
 
-await sharp(Buffer.from(SVG)).resize(96, 96).png().toFile(OUT);
+await sharp(Buffer.from(SVG)).resize(LOGO_SIZE, LOGO_SIZE).png().toFile(OUT);
 
 console.log(`[email:logo] wrote ${OUT}`);

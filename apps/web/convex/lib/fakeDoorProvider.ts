@@ -7,14 +7,13 @@ import type {
 	DoorModel,
 	DoorPosition,
 	DoorProvider,
-	LockId,
 	LockStatus,
 } from "./doorProvider.ts";
 
 export const FAKE_ACTION_DURATION_MS = 3000;
 
 /** The fake's lock id for each slot. */
-export const FAKE_SLOT_LOCK_IDS: Record<LockSlot, LockId> = {
+export const FAKE_SLOT_LOCK_IDS: Record<LockSlot, string> = {
 	downstairs: "lock-downstairs",
 	upstairs: "lock-upstairs",
 };
@@ -23,7 +22,7 @@ export class FakeDoorProvider implements DoorProvider {
 	model: DoorModel;
 	/** Locks a test marks unreachable: `actuate` reports them `offline`
 	 *  without actuating. A lock not in `model.locks` is offline too. */
-	offline: Set<LockId>;
+	offline: Set<string>;
 	calls: {
 		revokes: string[][];
 		actuations: [LockSlot, DoorAction][];
@@ -31,7 +30,7 @@ export class FakeDoorProvider implements DoorProvider {
 		positions: LockSlot[];
 	};
 	/** Locks that refuse an actuation as still busy (the provider's 'still busy' refusal). */
-	busyLocks = new Set<LockId>();
+	busyLocks = new Set<string>();
 	/** Per door, the readings `position` hands out in turn; the last one
 	 *  repeats. */
 	private readonly readingsBySlot = new Map<LockSlot, DoorPosition[]>();
@@ -55,7 +54,7 @@ export class FakeDoorProvider implements DoorProvider {
 		for (const identity of this.model.identities)
 			if (identity.authIds)
 				identity.authIds = identity.authIds.filter(
-					(a) => !authIds.includes(a.authId)
+					(auth) => !authIds.includes(auth.authId)
 				);
 		this.calls.revokes.push(authIds);
 		return Promise.resolve();
@@ -64,13 +63,13 @@ export class FakeDoorProvider implements DoorProvider {
 	readLockStatus(): Promise<LockStatus[]> {
 		this.calls.lockStatusReads += 1;
 		return Promise.resolve(
-			this.model.locks.map((l) => {
-				const online = !this.offline.has(l.lockId);
+			this.model.locks.map((lock) => {
+				const isOnline = !this.offline.has(lock.lockId);
 				return {
-					lockId: l.lockId,
-					name: l.name,
-					online,
-					serverState: online ? 0 : 1,
+					lockId: lock.lockId,
+					name: lock.name,
+					online: isOnline,
+					serverState: isOnline ? 0 : 1,
 				};
 			})
 		);
@@ -104,7 +103,9 @@ export class FakeDoorProvider implements DoorProvider {
 	actuate(slot: LockSlot, action: DoorAction): Promise<DoorActionResult> {
 		const lockId = FAKE_SLOT_LOCK_IDS[slot];
 		// A slot whose lock is not in the model reports `offline` here, while the real provider throws "not configured"; deliberate, the fake has no notion of configuration.
-		const lock = this.model.locks.find((l) => l.lockId === lockId);
+		const lock = this.model.locks.find(
+			(candidate) => candidate.lockId === lockId
+		);
 		const lockName = lock?.name ?? lockId;
 		if (!lock || this.offline.has(lockId))
 			return Promise.resolve({ status: "offline", lockName });

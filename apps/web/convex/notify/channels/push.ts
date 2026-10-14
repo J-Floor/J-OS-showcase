@@ -9,10 +9,10 @@ import {
 	injectedPushSender,
 	isGone,
 	type PushSender,
-	vapidFromEnv,
+	vapidFromEnvironment,
 } from "./pushSender.ts";
 
-const ONE_DAY_SECONDS = 24 * 60 * 60;
+const ONE_DAY_SECONDS = 86_400;
 const PUSH_TIMEOUT_MS = 10_000;
 
 /**
@@ -20,8 +20,8 @@ const PUSH_TIMEOUT_MS = 10_000;
  * deployment (or a convex-test run) without keys never loads the Node package.
  */
 async function webPushSender(): Promise<PushSender> {
-	const mod = await import("web-push");
-	const webpush = mod.default;
+	const module_ = await import("web-push");
+	const webpush = module_.default;
 	return async (subscription, body, vapid) => {
 		await webpush.sendNotification(
 			{
@@ -65,10 +65,10 @@ export const send = internalAction({
 		}),
 	},
 	handler: async (
-		ctx,
+		context,
 		{ subscriptions, message }
 	): Promise<PushSendResult> => {
-		const vapid = vapidFromEnv();
+		const vapid = vapidFromEnvironment();
 		if (!vapid) {
 			// eslint-disable-next-line no-console -- no VAPID keys on this deployment (dev): surface the skipped push in the Convex logs
 			console.log(
@@ -92,7 +92,7 @@ export const send = internalAction({
 			}
 			const err: unknown = outcome.reason;
 			if (isGone(err)) {
-				await ctx.runMutation(
+				await context.runMutation(
 					internal.notify.subscriptions.removeByEndpoint,
 					{ endpoint: subscriptions[index].endpoint }
 				);

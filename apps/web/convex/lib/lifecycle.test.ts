@@ -180,9 +180,9 @@ describe("reduce", () => {
 		});
 		// Nothing to schedule, and scheduling `runAt(undefined)` would throw
 		// while scheduling `now` would expire them on the spot.
-		expect(effects.some((e) => e.type === "SCHEDULE_WINDOW_EXPIRY")).toBe(
-			false
-		);
+		expect(
+			effects.some((effect) => effect.type === "SCHEDULE_WINDOW_EXPIRY")
+		).toBe(false);
 		expect(effects).toContainEqual({ type: "EMAIL", template: "approval" });
 		expect(effects).toContainEqual({ type: "RECONCILE_DOOR" });
 	});
@@ -193,7 +193,9 @@ describe("reduce", () => {
 			{ type: "APPROVE_GUEST", until: 1 },
 			facts
 		);
-		expect(effects.some((e) => e.type === "SET_HOST")).toBe(false);
+		expect(effects.some((effect) => effect.type === "SET_HOST")).toBe(
+			false
+		);
 	});
 
 	it("refuses to approve an unverified prospect", () => {
@@ -385,12 +387,13 @@ describe("reduce", () => {
 		// per-person revoke — whichever tier and stage they land in.
 		for (const from of ["board.active", "admin.active"] as const)
 			for (const tier of ["member", "core"] as const)
-				for (const f of [
+				for (const scenario of [
 					facts,
 					{ ...facts, complianceMet: true, selfStepsComplete: true },
 				])
 					expect(
-						reduce(from, { type: "SET_ROLE", tier }, f).effects
+						reduce(from, { type: "SET_ROLE", tier }, scenario)
+							.effects
 					).toContainEqual({ type: "RECONCILE_DOOR" });
 	});
 
@@ -557,7 +560,11 @@ describe("reduce", () => {
 
 describe("legalEvents", () => {
 	it("lists exactly the events TABLE holds for a state", () => {
-		expect(legalEvents("member.active").sort()).toEqual(
+		expect(
+			legalEvents("member.active").sort((first, second) =>
+				first.localeCompare(second)
+			)
+		).toEqual(
 			[
 				"GRANT_CORE",
 				"KICK_OUT",
@@ -565,7 +572,7 @@ describe("legalEvents", () => {
 				"ONBOARDING_PROGRESSED",
 				"PROMOTE_TO_BOARD",
 				"SET_ROLE",
-			].sort()
+			].sort((first, second) => first.localeCompare(second))
 		);
 	});
 
@@ -581,8 +588,14 @@ describe("legalEvents", () => {
 		// edge, four destinations — which is why this list has three entries and
 		// not six; `ChangeRoleDialog` expands it into one row per target tier.
 		for (const state of ["board.active", "admin.active"] as const) {
-			expect(legalEvents(state).sort()).toEqual(
-				["KICK_OUT", "MARK_LEFT", "SET_ROLE"].sort()
+			expect(
+				legalEvents(state).sort((first, second) =>
+					first.localeCompare(second)
+				)
+			).toEqual(
+				["KICK_OUT", "MARK_LEFT", "SET_ROLE"].sort((first, second) =>
+					first.localeCompare(second)
+				)
 			);
 			expect(
 				reduce(state, { type: "SET_ROLE", tier: "member" }, facts).next
@@ -647,7 +660,9 @@ describe("totality", () => {
 	it("ALL_EVENTS has no duplicates and covers every event TABLE mentions", () => {
 		expect(new Set(ALL_EVENTS).size).toBe(ALL_EVENTS.length);
 		const mentioned = new Set(
-			Object.values(TABLE).flatMap((n) => Object.keys(n))
+			Object.values(TABLE).flatMap((transitions) =>
+				Object.keys(transitions)
+			)
 		);
 		for (const type of mentioned) expect(ALL_EVENTS).toContain(type);
 	});
@@ -697,8 +712,14 @@ describe("staff tier", () => {
 	});
 
 	it("staff.active can leave, change role, and nothing else", () => {
-		expect(legalEvents("staff.active").sort()).toEqual(
-			["KICK_OUT", "MARK_LEFT", "SET_ROLE"].sort()
+		expect(
+			legalEvents("staff.active").sort((first, second) =>
+				first.localeCompare(second)
+			)
+		).toEqual(
+			["KICK_OUT", "MARK_LEFT", "SET_ROLE"].sort((first, second) =>
+				first.localeCompare(second)
+			)
 		);
 	});
 

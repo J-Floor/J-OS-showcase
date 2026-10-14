@@ -11,6 +11,18 @@ import { useMembers } from "../data/useMembers.ts";
 import styles from "./ExportActions.module.scss";
 import { buildFullExport, buildLightExport } from "./exportShape.ts";
 
+const BYTES_PER_KILOBYTE = 1024;
+
+function downloadFile(json: string, filename: string) {
+	const blob = new Blob([json], { type: "application/json" });
+	const url = URL.createObjectURL(blob);
+	const link = document.createElement("a");
+	link.href = url;
+	link.download = filename;
+	link.click();
+	URL.revokeObjectURL(url);
+}
+
 /** Transient success flag: flips true, auto-reverts after `ms`. */
 function useDoneFlag(ms = 1500) {
 	const [done, setDone] = createSignal(false);
@@ -24,6 +36,37 @@ function useDoneFlag(ms = 1500) {
 		timer = setTimeout(() => setDone(false), ms);
 	}
 	return [done, flash] as const;
+}
+
+/**
+ * D downloads, C copies — global while the console is on screen, since the
+ * export spans all three rosters and does not belong to any one tab. `D` is
+ * free now that deny moved to `X`; neither collides with a tab's action keys.
+ * `isTypingTarget` guards them so typing into a field or an open overlay never
+ * fires an export.
+ */
+function useExportHotkeys(actions: {
+	download: () => void;
+	copy: () => Promise<void>;
+}) {
+	createHotkey(
+		"D",
+		(event) => {
+			if (event.repeat || isTypingTarget(event.target)) return;
+			event.preventDefault();
+			actions.download();
+		},
+		() => ({ preventDefault: false })
+	);
+	createHotkey(
+		"C",
+		(event) => {
+			if (event.repeat || isTypingTarget(event.target)) return;
+			event.preventDefault();
+			void actions.copy();
+		},
+		() => ({ preventDefault: false })
+	);
 }
 
 /**
@@ -52,16 +95,6 @@ export function ExportActions(): JSX.Element {
 		};
 	}
 
-	function downloadFile(json: string, filename: string) {
-		const blob = new Blob([json], { type: "application/json" });
-		const url = URL.createObjectURL(blob);
-		const a = document.createElement("a");
-		a.href = url;
-		a.download = filename;
-		a.click();
-		URL.revokeObjectURL(url);
-	}
-
 	function download() {
 		downloadFile(buildLightExport(rosters()), "jfloor-export.json");
 		flashDownloaded();
@@ -75,42 +108,25 @@ export function ExportActions(): JSX.Element {
 	async function downloadFull() {
 		// Built before the prompt so the size shown is the file written.
 		const json = buildFullExport(rosters());
-		const kb = Math.max(1, Math.round(new Blob([json]).size / 1024));
+		const kb = Math.max(
+			1,
+			Math.round(new Blob([json]).size / BYTES_PER_KILOBYTE)
+		);
 		if (
-			await confirm({
+			!(await confirm({
 				title: "Download full JSON?",
 				message: `Raw database rows plus the UI status block — about ${kb} KB. Meant for debugging; use the regular download for anything you'll read or share.`,
 				confirmLabel: "Download",
-			})
+			}))
 		) {
-			downloadFile(json, "jfloor-export-full.json");
-			flashFullDownloaded();
+			return;
 		}
+
+		downloadFile(json, "jfloor-export-full.json");
+		flashFullDownloaded();
 	}
 
-	// D downloads, C copies — global while the console is on screen, since the
-	// export spans all three rosters and does not belong to any one tab. `D` is
-	// free now that deny moved to `X`; neither collides with a tab's action keys.
-	// `isTypingTarget` guards them so typing into a field or an open overlay never
-	// fires an export.
-	createHotkey(
-		"D",
-		(event) => {
-			if (event.repeat || isTypingTarget(event.target)) return;
-			event.preventDefault();
-			download();
-		},
-		() => ({ preventDefault: false })
-	);
-	createHotkey(
-		"C",
-		(event) => {
-			if (event.repeat || isTypingTarget(event.target)) return;
-			event.preventDefault();
-			void copy();
-		},
-		() => ({ preventDefault: false })
-	);
+	useExportHotkeys({ download, copy });
 
 	return (
 		<div class={styles.actions}>

@@ -11,11 +11,11 @@ describe("doorInternal.doorActionContext", () => {
 	const EMAIL = "board@example.com";
 
 	async function seed(
-		t: ReturnType<typeof convexTest>,
+		backend: ReturnType<typeof convexTest>,
 		fields: Record<string, unknown>
 	) {
-		return t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		return backend.run(async (context) =>
+			context.db.insert("people", {
 				email: EMAIL,
 				firstName: "Bo",
 				lastName: "Ard",
@@ -28,10 +28,10 @@ describe("doorInternal.doorActionContext", () => {
 	}
 
 	it("returns the caller for an active board member", async () => {
-		const t = convexTest(schema, modules);
-		const personId = await seed(t, {});
+		const backend = convexTest(schema, modules);
+		const personId = await seed(backend, {});
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: EMAIL })
 				.query(internal.doorInternal.doorActionContext, {
 					lock: "downstairs",
@@ -46,10 +46,10 @@ describe("doorInternal.doorActionContext", () => {
 	});
 
 	it("admits admin like board", async () => {
-		const t = convexTest(schema, modules);
-		await seed(t, { tier: "admin" });
+		const backend = convexTest(schema, modules);
+		await seed(backend, { tier: "admin" });
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: EMAIL })
 				.query(internal.doorInternal.doorActionContext, {
 					lock: "downstairs",
@@ -61,10 +61,10 @@ describe("doorInternal.doorActionContext", () => {
 	it.each(["member", "core", "guest"] as const)(
 		"returns the caller for an active %s — app unlock is for everyone the door is open for",
 		async (tier) => {
-			const t = convexTest(schema, modules);
-			const personId = await seed(t, { tier });
+			const backend = convexTest(schema, modules);
+			const personId = await seed(backend, { tier });
 			expect(
-				await t
+				await backend
 					.withIdentity({ email: EMAIL })
 					.query(internal.doorInternal.doorActionContext, {
 						lock: "downstairs",
@@ -80,14 +80,14 @@ describe("doorInternal.doorActionContext", () => {
 	);
 
 	it("admits a guest inside their access window", async () => {
-		const t = convexTest(schema, modules);
-		await seed(t, {
+		const backend = convexTest(schema, modules);
+		await seed(backend, {
 			tier: "guest",
 			accessFrom: Date.now() - 86_400_000,
 			accessUntil: Date.now() + 86_400_000,
 		});
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: EMAIL })
 				.query(internal.doorInternal.doorActionContext, {
 					lock: "downstairs",
@@ -97,14 +97,14 @@ describe("doorInternal.doorActionContext", () => {
 	});
 
 	it("refuses a guest whose access window has closed", async () => {
-		const t = convexTest(schema, modules);
-		await seed(t, {
+		const backend = convexTest(schema, modules);
+		await seed(backend, {
 			tier: "guest",
 			stage: "expired",
 			accessUntil: Date.now() - 1000,
 		});
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: EMAIL })
 				.query(internal.doorInternal.doorActionContext, {
 					lock: "downstairs",
@@ -114,13 +114,13 @@ describe("doorInternal.doorActionContext", () => {
 	});
 
 	it("refuses a member the door is forced shut for", async () => {
-		const t = convexTest(schema, modules);
-		await seed(t, {
+		const backend = convexTest(schema, modules);
+		await seed(backend, {
 			tier: "member",
 			door: { override: "force_off", reason: "test" },
 		});
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: EMAIL })
 				.query(internal.doorInternal.doorActionContext, {
 					lock: "downstairs",
@@ -130,10 +130,10 @@ describe("doorInternal.doorActionContext", () => {
 	});
 
 	it("refuses a prospect (not a tier the door is open for)", async () => {
-		const t = convexTest(schema, modules);
-		await seed(t, { tier: "prospect", stage: "verified" });
+		const backend = convexTest(schema, modules);
+		await seed(backend, { tier: "prospect", stage: "verified" });
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: EMAIL })
 				.query(internal.doorInternal.doorActionContext, {
 					lock: "downstairs",
@@ -143,10 +143,12 @@ describe("doorInternal.doorActionContext", () => {
 	});
 
 	it("refuses a board member the door is forced shut for", async () => {
-		const t = convexTest(schema, modules);
-		await seed(t, { door: { override: "force_off", reason: "test" } });
+		const backend = convexTest(schema, modules);
+		await seed(backend, {
+			door: { override: "force_off", reason: "test" },
+		});
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: EMAIL })
 				.query(internal.doorInternal.doorActionContext, {
 					lock: "downstairs",
@@ -156,10 +158,10 @@ describe("doorInternal.doorActionContext", () => {
 	});
 
 	it("refuses an unauthenticated caller", async () => {
-		const t = convexTest(schema, modules);
-		await seed(t, {});
+		const backend = convexTest(schema, modules);
+		await seed(backend, {});
 		expect(
-			await t.query(internal.doorInternal.doorActionContext, {
+			await backend.query(internal.doorInternal.doorActionContext, {
 				lock: "downstairs",
 				action: "unlock",
 			})
@@ -167,8 +169,8 @@ describe("doorInternal.doorActionContext", () => {
 	});
 
 	it("reports the latest SUCCESSFUL unlock of THIS door only", async () => {
-		const t = convexTest(schema, modules);
-		const personId = await seed(t, {});
+		const backend = convexTest(schema, modules);
+		const personId = await seed(backend, {});
 		const base = {
 			trigger: "app" as const,
 			email: EMAIL,
@@ -176,9 +178,9 @@ describe("doorInternal.doorActionContext", () => {
 			personId,
 			lockNames: ["Upstairs"],
 		};
-		await t.run(async (ctx) => {
+		await backend.run(async (context) => {
 			// The successful unlock this test proves is picked up.
-			await ctx.db.insert("doorLog", {
+			await context.db.insert("doorLog", {
 				...base,
 				at: 1_000,
 				operation: "unlock",
@@ -189,7 +191,7 @@ describe("doorInternal.doorActionContext", () => {
 			// A FAILED unlock of the same door — still carries `slot` (every
 			// unlock row does), so this row proves the `outcome: "ok"` filter
 			// still matters, not just the `slot` filter.
-			await ctx.db.insert("doorLog", {
+			await context.db.insert("doorLog", {
 				...base,
 				at: 2_000,
 				operation: "unlock",
@@ -199,7 +201,7 @@ describe("doorInternal.doorActionContext", () => {
 			});
 			// A same-person, ok-outcome GRANT row — never carries `slot`. Proves
 			// the lookup can't be satisfied by a non-unlock row.
-			await ctx.db.insert("doorLog", {
+			await context.db.insert("doorLog", {
 				...base,
 				trigger: "resend",
 				at: 3_000,
@@ -207,7 +209,7 @@ describe("doorInternal.doorActionContext", () => {
 				outcome: "ok",
 			});
 		});
-		const who = await t
+		const who = await backend
 			.withIdentity({ email: EMAIL })
 			.query(internal.doorInternal.doorActionContext, {
 				lock: "upstairs",
@@ -217,10 +219,10 @@ describe("doorInternal.doorActionContext", () => {
 	});
 
 	it("blocks nothing after an ok row without a durationMs", async () => {
-		const t = convexTest(schema, modules);
-		const personId = await seed(t, {});
-		await t.run(async (ctx) => {
-			await ctx.db.insert("doorLog", {
+		const backend = convexTest(schema, modules);
+		const personId = await seed(backend, {});
+		await backend.run(async (context) => {
+			await context.db.insert("doorLog", {
 				trigger: "app",
 				email: EMAIL,
 				name: "Bo Ard",
@@ -232,7 +234,7 @@ describe("doorInternal.doorActionContext", () => {
 				slot: "upstairs",
 			});
 		});
-		const who = await t
+		const who = await backend
 			.withIdentity({ email: EMAIL })
 			.query(internal.doorInternal.doorActionContext, {
 				lock: "upstairs",
@@ -245,10 +247,10 @@ describe("doorInternal.doorActionContext", () => {
 		// A non-unlock row can never satisfy the debounce lookup, because only
 		// `operation: "unlock"` rows carry `slot` — this is what makes
 		// `operation === "unlock"` implied by a match instead of checked.
-		const t = convexTest(schema, modules);
-		const personId = await seed(t, {});
-		await t.run(async (ctx) => {
-			await ctx.db.insert("doorLog", {
+		const backend = convexTest(schema, modules);
+		const personId = await seed(backend, {});
+		await backend.run(async (context) => {
+			await context.db.insert("doorLog", {
 				trigger: "resend",
 				email: EMAIL,
 				name: "Bo Ard",
@@ -259,7 +261,7 @@ describe("doorInternal.doorActionContext", () => {
 				outcome: "ok",
 			});
 		});
-		const who = await t
+		const who = await backend
 			.withIdentity({ email: EMAIL })
 			.query(internal.doorInternal.doorActionContext, {
 				lock: "upstairs",
@@ -269,10 +271,10 @@ describe("doorInternal.doorActionContext", () => {
 	});
 
 	it("ignores a successful unlock of the OTHER door", async () => {
-		const t = convexTest(schema, modules);
-		const personId = await seed(t, {});
-		await t.run(async (ctx) => {
-			await ctx.db.insert("doorLog", {
+		const backend = convexTest(schema, modules);
+		const personId = await seed(backend, {});
+		await backend.run(async (context) => {
+			await context.db.insert("doorLog", {
 				trigger: "app",
 				email: EMAIL,
 				name: "Bo Ard",
@@ -284,7 +286,7 @@ describe("doorInternal.doorActionContext", () => {
 				slot: "downstairs",
 			});
 		});
-		const who = await t
+		const who = await backend
 			.withIdentity({ email: EMAIL })
 			.query(internal.doorInternal.doorActionContext, {
 				lock: "upstairs",
@@ -297,8 +299,8 @@ describe("doorInternal.doorActionContext", () => {
 		// Unlock at 1_000, then lock at 2_000, both upstairs and ok. The newest
 		// row is the lock: it is a repeat for a lock request, and NOT for an
 		// unlock — even though an older ok unlock row exists.
-		const t = convexTest(schema, modules);
-		const personId = await seed(t, {});
+		const backend = convexTest(schema, modules);
+		const personId = await seed(backend, {});
 		const base = {
 			trigger: "app" as const,
 			email: EMAIL,
@@ -309,19 +311,19 @@ describe("doorInternal.doorActionContext", () => {
 			slot: "upstairs" as const,
 			durationMs: 3_000,
 		};
-		await t.run(async (ctx) => {
-			await ctx.db.insert("doorLog", {
+		await backend.run(async (context) => {
+			await context.db.insert("doorLog", {
 				...base,
 				at: 1_000,
 				operation: "unlock",
 			});
-			await ctx.db.insert("doorLog", {
+			await context.db.insert("doorLog", {
 				...base,
 				at: 2_000,
 				operation: "lock",
 			});
 		});
-		const as = t.withIdentity({ email: EMAIL });
+		const as = backend.withIdentity({ email: EMAIL });
 		const forLock = await as.query(
 			internal.doorInternal.doorActionContext,
 			{
@@ -342,11 +344,11 @@ describe("doorInternal.canSeeDoorPosition", () => {
 	const EMAIL = "board@example.com";
 
 	async function seed(
-		t: ReturnType<typeof convexTest>,
+		backend: ReturnType<typeof convexTest>,
 		fields: Record<string, unknown>
 	) {
-		await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: EMAIL,
 				firstName: "Bo",
 				lastName: "Ard",
@@ -359,31 +361,31 @@ describe("doorInternal.canSeeDoorPosition", () => {
 	}
 
 	it("is true for someone the door opens for", async () => {
-		const t = convexTest(schema, modules);
-		await seed(t, {});
+		const backend = convexTest(schema, modules);
+		await seed(backend, {});
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: EMAIL })
 				.query(internal.doorInternal.canSeeDoorPosition, {})
 		).toBe(true);
 	});
 
 	it("is false when unauthenticated", async () => {
-		const t = convexTest(schema, modules);
-		await seed(t, {});
+		const backend = convexTest(schema, modules);
+		await seed(backend, {});
 		expect(
-			await t.query(internal.doorInternal.canSeeDoorPosition, {})
+			await backend.query(internal.doorInternal.canSeeDoorPosition, {})
 		).toBe(false);
 	});
 
 	it("is false for someone the board has shut out", async () => {
-		const t = convexTest(schema, modules);
-		await seed(t, {
+		const backend = convexTest(schema, modules);
+		await seed(backend, {
 			tier: "member",
 			door: { override: "force_off", reason: "under review" },
 		});
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: EMAIL })
 				.query(internal.doorInternal.canSeeDoorPosition, {})
 		).toBe(false);
@@ -392,26 +394,26 @@ describe("doorInternal.canSeeDoorPosition", () => {
 
 describe("doorInternal door position cache", () => {
 	it("misses when stale, hits when fresh", async () => {
-		const t = convexTest(schema, modules);
-		await t.mutation(internal.doorInternal.writeDoorPositionCache, {
+		const backend = convexTest(schema, modules);
+		await backend.mutation(internal.doorInternal.writeDoorPositionCache, {
 			slot: "upstairs",
 			position: "locked",
 			checkedAt: 1_000,
 		});
 		expect(
-			await t.query(internal.doorInternal.readDoorPositionCache, {
+			await backend.query(internal.doorInternal.readDoorPositionCache, {
 				slot: "upstairs",
 				freshSince: 1_000,
 			})
 		).toBe("locked");
 		expect(
-			await t.query(internal.doorInternal.readDoorPositionCache, {
+			await backend.query(internal.doorInternal.readDoorPositionCache, {
 				slot: "upstairs",
 				freshSince: 1_001,
 			})
 		).toBeNull();
 		expect(
-			await t.query(internal.doorInternal.readDoorPositionCache, {
+			await backend.query(internal.doorInternal.readDoorPositionCache, {
 				slot: "downstairs",
 				freshSince: 0,
 			})
@@ -419,19 +421,19 @@ describe("doorInternal door position cache", () => {
 	});
 
 	it("keeps one row per slot on upsert", async () => {
-		const t = convexTest(schema, modules);
-		await t.mutation(internal.doorInternal.writeDoorPositionCache, {
+		const backend = convexTest(schema, modules);
+		await backend.mutation(internal.doorInternal.writeDoorPositionCache, {
 			slot: "upstairs",
 			position: "locked",
 			checkedAt: 1_000,
 		});
-		await t.mutation(internal.doorInternal.writeDoorPositionCache, {
+		await backend.mutation(internal.doorInternal.writeDoorPositionCache, {
 			slot: "upstairs",
 			position: "unlocked",
 			checkedAt: 2_000,
 		});
-		const rows = await t.run(async (ctx) =>
-			ctx.db.query("doorPositionCache").collect()
+		const rows = await backend.run(async (context) =>
+			context.db.query("doorPositionCache").collect()
 		);
 		expect(rows).toHaveLength(1);
 		expect(rows[0]).toMatchObject({
@@ -444,9 +446,9 @@ describe("doorInternal door position cache", () => {
 
 describe("doorInternal email lookup", () => {
 	it("finds the caller whatever the case of the identity's email", async () => {
-		const t = convexTest(schema, modules);
-		await t.run((ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		await backend.run((context) =>
+			context.db.insert("people", {
 				email: "board@example.com",
 				firstName: "Bo",
 				lastName: "Ard",
@@ -455,7 +457,7 @@ describe("doorInternal email lookup", () => {
 				stageSince: Date.now(),
 			})
 		);
-		const asCaller = t.withIdentity({ email: "Board@Example.COM" });
+		const asCaller = backend.withIdentity({ email: "Board@Example.COM" });
 		expect(
 			await asCaller.query(internal.doorInternal.canSeeDoorPosition, {})
 		).toBe(true);

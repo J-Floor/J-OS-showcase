@@ -1,4 +1,7 @@
-import { PRESENCE_PATH } from "../../../convex/lib/doorPresence.ts";
+import {
+	HTTP_FORBIDDEN,
+	PRESENCE_PATH,
+} from "../../../convex/lib/doorPresence.ts";
 
 /**
  * Ask the presence oracle for a short-lived token proving this device is on
@@ -8,9 +11,11 @@ import { PRESENCE_PATH } from "../../../convex/lib/doorPresence.ts";
  */
 export async function fetchPresenceToken(): Promise<string | null> {
 	const base = import.meta.env.VITE_CONVEX_SITE_URL as string;
-	const res = await fetch(`${base}${PRESENCE_PATH}`, { cache: "no-store" });
-	if (res.status === 403) return null;
-	if (!res.ok) throw new Error("Couldn't check your network.");
-	const body = (await res.json()) as { token: string };
+	const response = await fetch(`${base}${PRESENCE_PATH}`, {
+		cache: "no-store",
+	});
+	if (response.status === HTTP_FORBIDDEN) return null;
+	if (!response.ok) throw new Error("Couldn't check your network.");
+	const body = (await response.json()) as { token: string };
 	return body.token;
 }

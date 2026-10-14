@@ -9,5 +9,7 @@ export const spaceModule: ModuleManifest = {
 	path: "/space",
 	subject: "Space",
 	// Code-split: the page and everything only it imports load on first visit.
-	view: lazyPage(() => import("./SpacePage.tsx").then((m) => m.SpacePage)),
+	view: lazyPage(() =>
+		import("./SpacePage.tsx").then((loaded) => loaded.SpacePage)
+	),
 };

@@ -55,6 +55,9 @@ const DOCUMENTS = [
 	},
 ] as const;
 
+const MIN_PDF_BYTES = 4096;
+const PDF_MAGIC = "%PDF";
+
 function failTypst(message: string, detail?: string): never {
 	console.error(message);
 	if (detail) {
@@ -64,25 +67,27 @@ function failTypst(message: string, detail?: string): never {
 }
 
 function assertTypstVersion(): void {
-	const res = spawnSync("typst", ["--version"], {
+	// eslint-disable-next-line sonarjs/no-os-command-from-path -- typst is a pinned dev-time tool found on PATH; assertTypstVersion verifies the version
+	const result = spawnSync("typst", ["--version"], {
 		cwd: WEB,
 		encoding: "utf8",
 	});
-	if (res.error || res.status !== 0) {
+	if (result.error || result.status !== 0) {
 		failTypst(
 			`[agreements] typst not found — install ${TYPST_VERSION}, see build.ts header`,
-			res.error?.message
+			result.error?.message
 		);
 	}
-	if (!res.stdout.startsWith(`typst ${TYPST_VERSION}`)) {
+	if (!result.stdout.startsWith(`typst ${TYPST_VERSION}`)) {
 		failTypst(
-			`[agreements] typst ${TYPST_VERSION} required, found: ${res.stdout.trim()}`
+			`[agreements] typst ${TYPST_VERSION} required, found: ${result.stdout.trim()}`
 		);
 	}
 }
 
-function compile(src: string, out: string): void {
-	const res = spawnSync(
+function compile(source: string, out: string): void {
+	const result = spawnSync(
+		// eslint-disable-next-line sonarjs/no-os-command-from-path -- typst is a pinned dev-time tool found on PATH; assertTypstVersion verifies the version
 		"typst",
 		[
 			"compile",
@@ -91,7 +96,7 @@ function compile(src: string, out: string): void {
 			"--font-path",
 			"agreements/fonts",
 			"--ignore-system-fonts",
-			src,
+			source,
 			out,
 		],
 		{
@@ -100,32 +105,34 @@ function compile(src: string, out: string): void {
 			env: { ...process.env, SOURCE_DATE_EPOCH: "0" },
 		}
 	);
-	if (res.error) {
+	if (result.error) {
 		failTypst(
 			`[agreements] typst not found — install ${TYPST_VERSION}, see build.ts header`,
-			res.error.message
+			result.error.message
 		);
 	}
-	if (res.status !== 0) {
-		console.error(`[agreements] typst failed compiling ${src}`);
-		console.error(res.stderr);
-		process.exit(1);
+	if (result.status === 0) {
+		return;
 	}
+
+	console.error(`[agreements] typst failed compiling ${source}`);
+	console.error(result.stderr);
+	process.exit(1);
 }
 
 /** Compile every document into a temp dir and return the fresh bytes, in
  * DOCUMENTS order. Nothing committed is touched. */
-async function compileToTemp(): Promise<Buffer[]> {
-	const dir = await mkdtemp(join(tmpdir(), "agreements-"));
+async function compileToTemporary(): Promise<Buffer[]> {
+	const directory = await mkdtemp(join(tmpdir(), "agreements-"));
 	// compile() may process.exit, which skips `finally`; clean up on exit instead.
 	process.on("exit", () => {
-		rmSync(dir, { recursive: true, force: true });
+		rmSync(directory, { recursive: true, force: true });
 	});
 	const fresh: Buffer[] = [];
-	for (const [i, doc] of DOCUMENTS.entries()) {
-		const tmpOut = join(dir, `${i}.pdf`);
-		compile(doc.src, tmpOut);
-		fresh.push(await readFile(tmpOut));
+	for (const [index, doc] of DOCUMENTS.entries()) {
+		const temporaryOut = join(directory, `${index}.pdf`);
+		compile(doc.src, temporaryOut);
+		fresh.push(await readFile(temporaryOut));
 	}
 	return fresh;
 }
@@ -133,11 +140,11 @@ async function compileToTemp(): Promise<Buffer[]> {
 /** Fail naming each committed PDF whose bytes differ from the fresh compile. */
 async function assertCommittedPdfsFresh(fresh: Buffer[]): Promise<void> {
 	const stale: string[] = [];
-	for (const [i, doc] of DOCUMENTS.entries()) {
+	for (const [index, doc] of DOCUMENTS.entries()) {
 		const committed = await readFile(resolve(WEB, doc.out)).catch(
 			() => null
 		);
-		if (!committed?.equals(fresh[i])) {
+		if (!committed?.equals(fresh[index])) {
 			stale.push(doc.out);
 		}
 	}
@@ -155,73 +162,82 @@ async function assertCommittedPdfsFresh(fresh: Buffer[]): Promise<void> {
 async function assertVersionsBumped(
 	out: Record<string, { sha256: string }>
 ): Promise<void> {
-	const cur = await readFile(GEN, "utf8").catch(() => "");
-	let unbumped = false;
-	for (const v of VARIANTS) {
+	const current = await readFile(GEN, "utf8").catch(() => "");
+	let isUnbumped = false;
+	for (const variant of VARIANTS) {
 		const oldSha = new RegExp(
-			`"${v.key}": \\{\\s*"bytesBase64": "[^"]*",\\s*"sha256": "([0-9a-f]+)"`
-		).exec(cur)?.[1];
-		const oldVersion = new RegExp(`"${v.key}": "([^"]+)"`).exec(cur)?.[1];
+			`"${variant.key}": \\{\\s*"bytesBase64": "[^"]*",\\s*"sha256": "([0-9a-f]+)"`
+		).exec(current)?.[1];
+		const oldVersion = new RegExp(`"${variant.key}": "([^"]+)"`).exec(
+			current
+		)?.[1];
 		if (
 			oldSha !== undefined &&
-			oldSha !== out[v.key].sha256 &&
-			oldVersion === v.version
+			oldSha !== out[variant.key].sha256 &&
+			oldVersion === variant.version
 		) {
 			console.error(
-				`[agreements:build] ${v.key} template changed — bump its version in VARIANTS (and the .typ AGREEMENT_VERSION comment)`
+				`[agreements:build] ${variant.key} template changed — bump its version in VARIANTS (and the .typ AGREEMENT_VERSION comment)`
 			);
-			unbumped = true;
+			isUnbumped = true;
 		}
 	}
-	if (unbumped) {
+	if (isUnbumped) {
 		process.exit(1);
 	}
 }
 
 async function main(): Promise<void> {
-	const check = process.argv.includes("--check");
+	const isCheck = process.argv.includes("--check");
 
 	assertTypstVersion();
-	const fresh = await compileToTemp();
-	if (check) {
+	const fresh = await compileToTemporary();
+	if (isCheck) {
 		await assertCommittedPdfsFresh(fresh);
 	}
 
 	const out: Record<string, { bytesBase64: string; sha256: string }> = {};
 	const versions: Record<string, string> = {};
 
-	for (const v of VARIANTS) {
+	for (const variant of VARIANTS) {
 		const bytes =
-			fresh[DOCUMENTS.findIndex((d) => d.out.endsWith(`/${v.key}.pdf`))];
-		if (bytes.length < 4096 || bytes.subarray(0, 4).toString() !== "%PDF") {
-			console.error(`[agreements:build] ${v.key}.pdf is not a PDF`);
+			fresh[
+				DOCUMENTS.findIndex((document) =>
+					document.out.endsWith(`/${variant.key}.pdf`)
+				)
+			];
+		if (
+			bytes.length < MIN_PDF_BYTES ||
+			bytes.subarray(0, PDF_MAGIC.length).toString() !== PDF_MAGIC
+		) {
+			console.error(`[agreements:build] ${variant.key}.pdf is not a PDF`);
 			process.exit(1);
 		}
-		out[v.key] = {
+		out[variant.key] = {
 			bytesBase64: bytes.toString("base64"),
 			sha256: createHash("sha256").update(bytes).digest("hex"),
 		};
-		versions[v.key] = v.version;
+		versions[variant.key] = variant.version;
 	}
 
 	const manrope = await readFile(
 		resolve(STATIC_FONTS, "Manrope-Regular.ttf")
 	);
-	const fontsSrc =
+	const fontsSource =
 		`// AUTO-GENERATED by agreements/build.ts — do not edit.\n` +
 		`// Run \`bun run --filter @j-os/web agreements:build\` to regenerate from agreements/static-fonts.\n` +
 		`export const MANROPE_REGULAR_BASE64 = ${JSON.stringify(manrope.toString("base64"))};\n`;
 
-	const src =
+	const source =
 		`// AUTO-GENERATED by agreements/build.ts — do not edit.\n` +
 		`// Run \`bun run --filter @j-os/web agreements:build\` to regenerate from the committed PDFs.\n` +
 		`export const AGREEMENT_VERSION = ${JSON.stringify(versions, null, "\t")} as const;\n` +
 		`export const TEMPLATES: Record<"member" | "guest", { bytesBase64: string; sha256: string }> = ${JSON.stringify(out, null, "\t")};\n`;
 
-	if (check) {
-		const cur = await readFile(GEN, "utf8").catch(() => "");
-		const curFonts = await readFile(GEN_FONTS, "utf8").catch(() => "");
-		if (cur !== src || curFonts !== fontsSrc) {
+	if (isCheck) {
+		const current = await readFile(GEN, "utf8").catch(() => "");
+		const currentFonts = await readFile(GEN_FONTS, "utf8").catch(() => "");
+		if (current !== source || currentFonts !== fontsSource) {
 			console.error(
 				"[agreements:check] generated templates/fonts are out of sync — run agreements:build"
 			);
@@ -232,11 +248,11 @@ async function main(): Promise<void> {
 		);
 	} else {
 		await assertVersionsBumped(out);
-		for (const [i, doc] of DOCUMENTS.entries()) {
-			await writeFile(resolve(WEB, doc.out), fresh[i]);
+		for (const [index, doc] of DOCUMENTS.entries()) {
+			await writeFile(resolve(WEB, doc.out), fresh[index]);
 		}
-		await writeFile(GEN, src, "utf8");
-		await writeFile(GEN_FONTS, fontsSrc, "utf8");
+		await writeFile(GEN, source, "utf8");
+		await writeFile(GEN_FONTS, fontsSource, "utf8");
 		console.log("[agreements:build] wrote templates.ts + fonts.ts");
 	}
 }

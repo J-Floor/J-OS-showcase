@@ -1,8 +1,9 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
+import { DAY_MS } from "../../../../convex/lib/constants.ts";
+
 import {
-	DAY_MS,
 	applicationsPerMonth,
 	expiryRunway,
 	headlines,
@@ -42,7 +43,7 @@ function person(fields: Partial<PersonRow> = {}): PersonRow {
 }
 
 function tile(rows: ReturnType<typeof headlines>, id: string) {
-	const found = rows.find((r) => r.id === id);
+	const found = rows.find((row) => row.id === id);
 	if (!found) throw new Error(`no tile ${id}`);
 	return found;
 }
@@ -158,13 +159,13 @@ describe("headlines", () => {
 	});
 
 	it("splits applications into unscored and queued", () => {
-		const applications = [
+		const apps = [
 			person({ tier: "prospect", stage: "verified" }),
 			person({ tier: "prospect", stage: "queued", board: { score: 4 } }),
 			// Denied rows are decided; they are not waiting on anyone.
 			person({ tier: "prospect", stage: "denied", board: { score: 1 } }),
 		];
-		const rows = headlines([], [], applications, NOW);
+		const rows = headlines([], [], apps, NOW);
 		expect(tile(rows, "toScore").value).toBe(1);
 		expect(tile(rows, "queue").value).toBe(1);
 	});
@@ -210,8 +211,8 @@ describe("applicationsPerMonth", () => {
 
 	it("puts the year on January only", () => {
 		const rows = applicationsPerMonth([], NOW);
-		expect(rows.map((r) => r.month)).toContain("Jan 26");
-		expect(rows.map((r) => r.month)).toContain("Sep");
+		expect(rows.map((row) => row.month)).toContain("Jan 26");
+		expect(rows.map((row) => row.month)).toContain("Sep");
 	});
 });
 
@@ -227,7 +228,7 @@ describe("joinsPerMonth", () => {
 
 	it("skips anyone whose access window was never opened", () => {
 		const rows = joinsPerMonth([person()], [], NOW);
-		expect(rows.every((r) => r.members === 0)).toBe(true);
+		expect(rows.every((row) => row.members === 0)).toBe(true);
 	});
 });
 
@@ -248,9 +249,9 @@ describe("expiryRunway", () => {
 			person({ tier: "guest", accessUntil: NOW - DAY_MS }),
 			person({ tier: "guest", accessUntil: NOW + 400 * DAY_MS }),
 		];
-		expect(expiryRunway(guests, NOW).every((r) => r.expiring === 0)).toBe(
-			true
-		);
+		expect(
+			expiryRunway(guests, NOW).every((row) => row.expiring === 0)
+		).toBe(true);
 	});
 });
 
@@ -264,22 +265,22 @@ describe("hostLoad", () => {
 	it("disambiguates two hosts sharing a first name", () => {
 		// The board has two Alans. Plotting both as "Alan" merged two
 		// people's guest counts under a label that does not hint there are two.
-		const a = person({
+		const first = person({
 			tier: "board",
 			firstName: "Alan",
 			lastName: "Turing",
 		});
-		const b = person({
+		const second = person({
 			tier: "board",
 			firstName: "Alan",
 			lastName: "Perlis",
 		});
 		const guests = [
-			person({ tier: "guest", hostedById: a._id }),
-			person({ tier: "guest", hostedById: b._id }),
-			person({ tier: "guest", hostedById: b._id }),
+			person({ tier: "guest", hostedById: first._id }),
+			person({ tier: "guest", hostedById: second._id }),
+			person({ tier: "guest", hostedById: second._id }),
 		];
-		expect(hostLoad(guests, [a, b])).toEqual([
+		expect(hostLoad(guests, [first, second])).toEqual([
 			{ host: "Alan P.", guests: 2 },
 			{ host: "Alan T.", guests: 1 },
 		]);

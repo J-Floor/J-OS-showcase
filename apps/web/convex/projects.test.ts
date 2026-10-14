@@ -10,9 +10,9 @@ import schema from "./schema.ts";
 
 const modules = import.meta.glob("./**/*.*s");
 
-async function board(t: ReturnType<typeof convexTest>) {
-	await t.run(async (ctx) => {
-		await ctx.db.insert("people", {
+async function board(backend: ReturnType<typeof convexTest>) {
+	await backend.run(async (context) => {
+		await context.db.insert("people", {
 			email: "b@example.org",
 			firstName: "B",
 			lastName: "O",
@@ -21,14 +21,14 @@ async function board(t: ReturnType<typeof convexTest>) {
 			stageSince: Date.now(),
 		});
 	});
-	return t.withIdentity({ email: "b@example.org" });
+	return backend.withIdentity({ email: "b@example.org" });
 }
 
 async function seedLeader(
-	t: ReturnType<typeof convexTest>
+	backend: ReturnType<typeof convexTest>
 ): Promise<Id<"people">> {
-	return t.run((ctx) =>
-		ctx.db.insert("people", {
+	return backend.run((context) =>
+		context.db.insert("people", {
 			email: "lead@example.org",
 			firstName: "L",
 			lastName: "D",
@@ -40,21 +40,21 @@ async function seedLeader(
 }
 
 test("create + list", async () => {
-	const t = convexTest(schema, modules);
-	const b = await board(t);
-	const id = await b.mutation(api.projects.create, { name: "Launch" });
-	const list = await b.query(api.projects.list, {});
+	const backend = convexTest(schema, modules);
+	const asBoard = await board(backend);
+	const id = await asBoard.mutation(api.projects.create, { name: "Launch" });
+	const list = await asBoard.query(api.projects.list, {});
 	expect(list).toHaveLength(1);
 	expect(list[0]).toMatchObject({ _id: id, name: "Launch" });
 });
 
 test("rejects start date after end date on create and update", async () => {
-	const t = convexTest(schema, modules);
-	const b = await board(t);
+	const backend = convexTest(schema, modules);
+	const asBoard = await board(backend);
 	const start = Date.parse("2026-06-10");
 	const end = Date.parse("2026-06-05");
 	await expect(
-		b.mutation(api.projects.create, {
+		asBoard.mutation(api.projects.create, {
 			name: "Bad",
 			startDate: start,
 			endDate: end,
@@ -63,13 +63,13 @@ test("rejects start date after end date on create and update", async () => {
 
 	// A valid project (start 06-05 ≤ end 06-10), then an update pushing the start
 	// past the end is rejected.
-	const id = await b.mutation(api.projects.create, {
+	const id = await asBoard.mutation(api.projects.create, {
 		name: "Ok",
 		startDate: end,
 		endDate: start,
 	});
 	await expect(
-		b.mutation(api.projects.update, {
+		asBoard.mutation(api.projects.update, {
 			id,
 			startDate: Date.parse("2026-06-20"),
 		})
@@ -77,58 +77,60 @@ test("rejects start date after end date on create and update", async () => {
 });
 
 test("emails a leader assigned on create", async () => {
-	const t = convexTest(schema, modules);
-	const b = await board(t);
-	const leaderId = await seedLeader(t);
-	const logs = await runAndCollectLogs(t, () =>
-		b.mutation(api.projects.create, { name: "Apollo", leaderId })
+	const backend = convexTest(schema, modules);
+	const asBoard = await board(backend);
+	const leaderId = await seedLeader(backend);
+	const logs = await runAndCollectLogs(backend, () =>
+		asBoard.mutation(api.projects.create, { name: "Apollo", leaderId })
 	);
 	expect(
 		logs.some(
-			(m) =>
-				m.includes("[notify:projectAssigned]") &&
-				m.includes("lead@example.org") &&
-				m.includes("Apollo")
+			(message) =>
+				message.includes("[notify:projectAssigned]") &&
+				message.includes("lead@example.org") &&
+				message.includes("Apollo")
 		)
 	).toBe(true);
 });
 
 test("emails a leader newly set on update", async () => {
-	const t = convexTest(schema, modules);
-	const b = await board(t);
-	const leaderId = await seedLeader(t);
-	const id = await b.mutation(api.projects.create, { name: "Gemini" });
-	const logs = await runAndCollectLogs(t, () =>
-		b.mutation(api.projects.update, { id, leaderId })
+	const backend = convexTest(schema, modules);
+	const asBoard = await board(backend);
+	const leaderId = await seedLeader(backend);
+	const id = await asBoard.mutation(api.projects.create, { name: "Gemini" });
+	const logs = await runAndCollectLogs(backend, () =>
+		asBoard.mutation(api.projects.update, { id, leaderId })
 	);
-	expect(logs.some((m) => m.includes("[notify:projectAssigned]"))).toBe(true);
+	expect(
+		logs.some((message) => message.includes("[notify:projectAssigned]"))
+	).toBe(true);
 });
 
 test("remove detaches its tasks", async () => {
-	const t = convexTest(schema, modules);
-	const b = await board(t);
-	const pid = await b.mutation(api.projects.create, { name: "P" });
-	const tid = await b.mutation(api.tasks.create, {
+	const backend = convexTest(schema, modules);
+	const asBoard = await board(backend);
+	const pid = await asBoard.mutation(api.projects.create, { name: "P" });
+	const tid = await asBoard.mutation(api.tasks.create, {
 		title: "T",
 		projectId: pid,
 	});
-	await b.mutation(api.projects.remove, { id: pid });
-	const tasks = await b.query(api.tasks.list, {});
+	await asBoard.mutation(api.projects.remove, { id: pid });
+	const tasks = await asBoard.query(api.tasks.list, {});
 	expect(
-		tasks.find((x: { _id: string }) => x._id === tid)?.projectId
+		tasks.find((task: { _id: string }) => task._id === tid)?.projectId
 	).toBeUndefined();
 });
 
 test("the leader email deep-links to the project, not the timeline", async () => {
-	const t = convexTest(schema, modules);
-	const b = await board(t);
-	const leaderId = await seedLeader(t);
-	const id = await b.mutation(api.projects.create, {
+	const backend = convexTest(schema, modules);
+	const asBoard = await board(backend);
+	const leaderId = await seedLeader(backend);
+	const id = await asBoard.mutation(api.projects.create, {
 		name: "Apollo",
 		leaderId,
 	});
-	const jobs = await t.run((ctx) =>
-		ctx.db.system.query("_scheduled_functions").collect()
+	const jobs = await backend.run((context) =>
+		context.db.system.query("_scheduled_functions").collect()
 	);
 	expect(jobs).toEqual(
 		expect.arrayContaining([
@@ -150,22 +152,25 @@ test("the leader email deep-links to the project, not the timeline", async () =>
 });
 
 test("create and update reject an over-long name or description", async () => {
-	const t = convexTest(schema, modules);
-	const b = await board(t);
+	const backend = convexTest(schema, modules);
+	const asBoard = await board(backend);
 	await expect(
-		b.mutation(api.projects.create, { name: "n".repeat(201) })
+		asBoard.mutation(api.projects.create, { name: "n".repeat(201) })
 	).rejects.toThrow("Project name is too long (max 200 characters).");
 	await expect(
-		b.mutation(api.projects.create, {
+		asBoard.mutation(api.projects.create, {
 			name: "ok",
 			description: "d".repeat(5001),
 		})
 	).rejects.toThrow("Description is too long (max 5000 characters).");
-	const id = await b.mutation(api.projects.create, { name: "Fine" });
+	const id = await asBoard.mutation(api.projects.create, { name: "Fine" });
 	await expect(
-		b.mutation(api.projects.update, { id, name: "n".repeat(201) })
+		asBoard.mutation(api.projects.update, { id, name: "n".repeat(201) })
 	).rejects.toThrow("Project name is too long (max 200 characters).");
 	await expect(
-		b.mutation(api.projects.update, { id, description: "d".repeat(5001) })
+		asBoard.mutation(api.projects.update, {
+			id,
+			description: "d".repeat(5001),
+		})
 	).rejects.toThrow("Description is too long (max 5000 characters).");
 });

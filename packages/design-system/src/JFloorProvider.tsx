@@ -25,10 +25,10 @@ const ThemeContext = createContext<ThemeContextValue>();
 
 /** Read/toggle the active theme. Works only inside a {@link JFloorProvider}. */
 export function useTheme(): ThemeContextValue {
-	const ctx = useContext(ThemeContext);
-	if (!ctx)
+	const context = useContext(ThemeContext);
+	if (!context)
 		throw new Error("useTheme must be used within a <JFloorProvider>");
-	return ctx;
+	return context;
 }
 
 const THEME_STORAGE_KEY = "jf-theme";

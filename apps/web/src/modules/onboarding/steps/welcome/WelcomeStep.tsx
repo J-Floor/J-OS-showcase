@@ -6,6 +6,9 @@ import type { OnboardingStepProps } from "../../types.ts";
 
 import styles from "./WelcomeStep.module.scss";
 
+const CONFETTI_LEFT_DELAY_MS = 150;
+const CONFETTI_RIGHT_DELAY_MS = 300;
+
 /**
  * Onboarding step 1: a welcome screen. Bursts confetti on arrival and points the
  * new member at the short setup that follows. Info-only — Continue completes it.
@@ -18,13 +21,13 @@ export function WelcomeStep(props: OnboardingStepProps) {
 			const timers = [
 				setTimeout(() => {
 					fireConfetti({ x: 0.3, y: 0.4 });
-				}, 150),
+				}, CONFETTI_LEFT_DELAY_MS),
 				setTimeout(() => {
 					fireConfetti({ x: 0.7, y: 0.4 });
-				}, 300),
+				}, CONFETTI_RIGHT_DELAY_MS),
 			];
 			onCleanup(() => {
-				timers.forEach(clearTimeout);
+				for (const timer of timers) clearTimeout(timer);
 			});
 		} catch {
 			/* ignore */

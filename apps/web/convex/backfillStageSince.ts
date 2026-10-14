@@ -24,6 +24,8 @@ import type { Doc } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { QueryCtx } from "./_generated/server";
 import { stateOf } from "./lib/lifecycle.ts";
+import { displayName } from "./lib/names.ts";
+import { ISO_DATE_LENGTH } from "./lib/time.ts";
 
 /**
  * The instant `lifecycleMigration` stamped on everybody. Hard-coded rather than
@@ -56,31 +58,32 @@ type Recovered = { at: number; source: string };
  *    something we had not.
  */
 async function recover(
-	ctx: QueryCtx,
+	context: QueryCtx,
 	person: Doc<"people">
 ): Promise<Recovered> {
-	const events = await ctx.db
+	const events = await context.db
 		.query("personEvents")
-		.withIndex("by_person", (q) => q.eq("personId", person._id))
+		.withIndex("by_person", (range) => range.eq("personId", person._id))
 		.collect();
 
 	const state = stateOf(person);
-	const entering = events.filter((e) => e.to === state).map((e) => e.at);
+	const entering = events
+		.filter((event) => event.to === state)
+		.map((event) => event.at);
 	if (entering.length > 0)
 		return { at: Math.max(...entering), source: "entered-state event" };
 
 	if (events.length > 0)
 		return {
-			at: Math.max(...events.map((e) => e.at)),
+			at: Math.max(...events.map((event) => event.at)),
 			source: "latest event",
 		};
 
 	if (person.verifiedAt !== undefined)
 		return { at: person.verifiedAt, source: "verifiedAt" };
-	if (person.submittedAt !== undefined)
-		return { at: person.submittedAt, source: "submittedAt" };
-
-	return { at: Math.floor(person._creationTime), source: "row created" };
+	return person.submittedAt === undefined
+		? { at: Math.floor(person._creationTime), source: "row created" }
+		: { at: person.submittedAt, source: "submittedAt" };
 }
 
 /**
@@ -96,26 +99,33 @@ function capped(at: number): number {
 }
 
 /** People still carrying the cutover stamp. */
-async function stamped(ctx: QueryCtx, limit: number): Promise<Doc<"people">[]> {
-	return ctx.db
+async function stamped(
+	context: QueryCtx,
+	limit: number
+): Promise<Doc<"people">[]> {
+	return context.db
 		.query("people")
-		.filter((q) => q.eq(q.field("stageSince"), CUTOVER_STAMP))
+		.filter((expression) =>
+			expression.eq(expression.field("stageSince"), CUTOVER_STAMP)
+		)
 		.take(limit);
 }
 
 /** Look before touching anything. Reports exactly what `run` would do. */
 export const preview = internalQuery({
 	args: {},
-	handler: async (ctx) => {
-		const people = await stamped(ctx, BATCH_SIZE);
+	handler: async (context) => {
+		const people = await stamped(context, BATCH_SIZE);
 		const rows = await Promise.all(
 			people.map(async (person) => {
-				const { at, source } = await recover(ctx, person);
+				const { at, source } = await recover(context, person);
 				return {
-					name: `${person.firstName} ${person.lastName}`.trim(),
+					name: displayName(person),
 					state: stateOf(person),
 					source,
-					since: new Date(capped(at)).toISOString().slice(0, 10),
+					since: new Date(capped(at))
+						.toISOString()
+						.slice(0, ISO_DATE_LENGTH),
 					// Recovered the stamp itself: nothing to learn, left alone.
 					skip: capped(at) === person.stageSince,
 				};
@@ -126,11 +136,11 @@ export const preview = internalQuery({
 			bySource[row.source] = (bySource[row.source] ?? 0) + 1;
 		return {
 			total: rows.length,
-			toWrite: rows.filter((r) => !r.skip).length,
+			toWrite: rows.filter((row) => !row.skip).length,
 			bySource,
 			// A spread of days is the whole point; one date would mean this
 			// changed nothing.
-			distinctDays: new Set(rows.map((r) => r.since)).size,
+			distinctDays: new Set(rows.map((row) => row.since)).size,
 			rows,
 		};
 	},
@@ -138,12 +148,12 @@ export const preview = internalQuery({
 
 export const run = internalMutation({
 	args: { dryRun: v.optional(v.boolean()) },
-	handler: async (ctx, { dryRun }) => {
-		const people = await stamped(ctx, BATCH_SIZE);
+	handler: async (context, { dryRun }) => {
+		const people = await stamped(context, BATCH_SIZE);
 		let written = 0;
 		let unknown = 0;
 		for (const person of people) {
-			const { at } = await recover(ctx, person);
+			const { at } = await recover(context, person);
 			const next = capped(at);
 			// Recovered the stamp itself: this row has no history to recover
 			// FROM, so there is nothing to write. Skipped rather than rewritten
@@ -154,7 +164,7 @@ export const run = internalMutation({
 				continue;
 			}
 			if (dryRun !== true)
-				await ctx.db.patch(person._id, { stageSince: next });
+				await context.db.patch(person._id, { stageSince: next });
 			written++;
 		}
 		// Run again while `written` is above zero: one call repairs at most

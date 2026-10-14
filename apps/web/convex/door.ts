@@ -31,19 +31,19 @@ import { doorOverride } from "./schema.ts";
  * Caller must have checked authorisation; this does not.
  */
 export async function applyDoorOverride(
-	ctx: MutationCtx,
+	context: MutationCtx,
 	personId: Id<"people">,
 	override: DoorOverride,
 	reason?: string
 ): Promise<void> {
-	const person = await ctx.db.get(personId);
+	const person = await context.db.get(personId);
 	if (!person) throw new Error("Person not found");
-	const actorId = await currentActorId(ctx);
+	const actorId = await currentActorId(context);
 	const now = Date.now();
 
 	// Keep the stored provider account id: it is how `revokeUnlessBreakGlass` finds
 	// a break-glass key whose provider-side email no longer matches.
-	await ctx.db.patch(personId, {
+	await context.db.patch(personId, {
 		door: {
 			override,
 			reason,
@@ -52,7 +52,7 @@ export async function applyDoorOverride(
 			doorUserId: person.door?.doorUserId,
 		},
 	});
-	await ctx.db.insert("personEvents", {
+	await context.db.insert("personEvents", {
 		personId,
 		at: now,
 		actorId,
@@ -61,7 +61,7 @@ export async function applyDoorOverride(
 		after: override,
 		meta: reason,
 	});
-	await ctx.scheduler.runAfter(
+	await context.scheduler.runAfter(
 		0,
 		internal.doorRevoke.revokeUnlessBreakGlass,
 		{
@@ -78,9 +78,9 @@ export const setOverride = mutation({
 		override: doorOverride,
 		reason: v.optional(v.string()),
 	},
-	handler: async (ctx, { personId, override, reason }) => {
-		await requireRole(ctx, BOARD_LEVEL);
-		await applyDoorOverride(ctx, personId, override, reason);
+	handler: async (context, { personId, override, reason }) => {
+		await requireRole(context, BOARD_LEVEL);
+		await applyDoorOverride(context, personId, override, reason);
 		return null;
 	},
 });

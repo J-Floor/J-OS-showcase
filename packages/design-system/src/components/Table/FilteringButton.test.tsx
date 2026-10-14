@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor } from "@solidjs/testing-library";
 
 import { firstValueField } from "./FilteringButton.tsx";
 import { Table } from "./Table.tsx";
-import type { JfColumnDef } from "./types.ts";
+import type { JfColumnDefinition } from "./types.ts";
 
 // jsdom workarounds for ark/zag (Popover/Tooltip).
 if (!(Element.prototype as { scrollTo?: unknown }).scrollTo) {
@@ -61,7 +61,7 @@ test("clearing the text filter removes it instead of leaving it active", async (
 });
 
 type Scored = { name: string; score: number };
-const scored: JfColumnDef<Scored>[] = [
+const scored: JfColumnDefinition<Scored>[] = [
 	{ accessorKey: "name", header: "Name", dataType: "string" },
 	{ accessorKey: "score", header: "Score", dataType: "number" },
 ];
@@ -112,7 +112,7 @@ test("a number range with one bound filters and is active", () => {
 });
 
 type Logged = { who: string; op: string; ok: boolean };
-const logged: JfColumnDef<Logged>[] = [
+const logged: JfColumnDefinition<Logged>[] = [
 	{ accessorKey: "who", header: "Who", dataType: "string" },
 	{
 		accessorKey: "op",
@@ -179,7 +179,7 @@ test("switching a number filter to range carries the value to its upper bound", 
 });
 
 type Dated = { name: string; at: number; time: string };
-const datedColumns: JfColumnDef<Dated>[] = [
+const datedColumns: JfColumnDefinition<Dated>[] = [
 	{ accessorKey: "name", header: "Name", dataType: "string" },
 	{ accessorKey: "at", header: "At", dataType: "date" },
 	{ accessorKey: "time", header: "Time", dataType: "time" },

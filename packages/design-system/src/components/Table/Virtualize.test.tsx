@@ -3,11 +3,11 @@ import { createSignal } from "solid-js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Table } from "./Table.tsx";
-import type { JfColumnDef } from "./types.ts";
+import type { JfColumnDefinition } from "./types.ts";
 
 type Row = Record<string, unknown> & { id: string; group: string };
 
-const columns: JfColumnDef<Row>[] = [
+const columns: JfColumnDefinition<Row>[] = [
 	{
 		id: "group",
 		header: "Group",
@@ -16,17 +16,17 @@ const columns: JfColumnDef<Row>[] = [
 			{ value: "a", label: "Group A" },
 			{ value: "b", label: "Group B" },
 		],
-		accessorFn: (r) => r.group,
+		accessorFn: (row) => row.group,
 	},
 	{ accessorKey: "id", header: "Id", dataType: "string" },
 ];
 
 const SCROLL_PAST_END = 100_000;
 
-function rows(n: number): Row[] {
-	return Array.from({ length: n }, (_, i) => ({
-		id: `r${String(i)}`,
-		group: i % 2 === 0 ? "a" : "b",
+function rows(count: number): Row[] {
+	return Array.from({ length: count }, (_, index) => ({
+		id: `r${String(index)}`,
+		group: index % 2 === 0 ? "a" : "b",
 	}));
 }
 
@@ -54,9 +54,9 @@ function observableStub(): ObservableStub {
 	const callbacks = new Set<(entries: ResizeObserverEntry[]) => void>();
 	class StubResizeObserver {
 		#cb: (entries: ResizeObserverEntry[]) => void;
-		constructor(cb: (entries: ResizeObserverEntry[]) => void) {
-			this.#cb = cb;
-			callbacks.add(cb);
+		constructor(callback: (entries: ResizeObserverEntry[]) => void) {
+			this.#cb = callback;
+			callbacks.add(callback);
 		}
 		observe() {
 			/* the test drives measurement via fire() */
@@ -77,7 +77,7 @@ function observableStub(): ObservableStub {
 			callbacks.clear();
 		},
 		fire() {
-			for (const cb of callbacks) cb([]);
+			for (const callback of callbacks) callback([]);
 		},
 	};
 }
@@ -93,33 +93,36 @@ function measurableScrollParent(initial: number) {
 	const stub = observableStub();
 	stub.install();
 	let height = initial;
-	function apply(el: HTMLDivElement, h: number) {
-		height = h;
-		for (const [prop, value] of [
-			["clientHeight", h],
+	function apply(element: HTMLDivElement, nextHeight: number) {
+		height = nextHeight;
+		for (const [property, value] of [
+			["clientHeight", nextHeight],
 			// `offsetHeight`/`offsetWidth` are what the virtualiser seeds its
 			// viewport from — the first being stubbed alone would produce an
 			// empty table, which is exactly the bug the fallback guards against.
-			["offsetHeight", h],
+			["offsetHeight", nextHeight],
 			["offsetWidth", 800],
 		] as const) {
-			Object.defineProperty(el, prop, { value, configurable: true });
+			Object.defineProperty(element, property, {
+				value,
+				configurable: true,
+			});
 		}
-		el.getBoundingClientRect = () =>
-			({ top: 0, left: 0, height: h, width: 800 }) as DOMRect;
+		element.getBoundingClientRect = () =>
+			({ top: 0, left: 0, height: nextHeight, width: 800 }) as DOMRect;
 	}
 	let captured: HTMLDivElement | undefined;
 	return {
-		ref: (el: HTMLDivElement) => {
-			captured = el;
-			el.style.overflowY = "auto";
-			apply(el, height);
+		ref: (element: HTMLDivElement) => {
+			captured = element;
+			element.style.overflowY = "auto";
+			apply(element, height);
 		},
 		/** Model a hide/show flip by setting the container's clientHeight and
 		 *  firing the ResizeObserver the component installed on it. */
-		resize(h: number) {
+		resize(nextHeight: number) {
 			if (!captured) throw new Error("scroll parent not captured yet");
-			apply(captured, h);
+			apply(captured, nextHeight);
 			stub.fire();
 		},
 		/** Scroll the container to `top` and notify listeners, as a user
@@ -192,7 +195,7 @@ describe("Table virtualisation", () => {
 					data={rows(200)}
 					groupBy="group"
 					virtualize
-					onDisplayedRowsChange={(r) => seen.push(r)}
+					onDisplayedRowsChange={(displayed) => seen.push(displayed)}
 				/>
 			</div>
 		));
@@ -248,7 +251,7 @@ describe("Table virtualisation", () => {
 		// which is the cost this task removes — it shows skeleton rows until the
 		// tab is actually shown. When the tab returns and clientHeight goes
 		// non-zero, the component's ResizeObserver on the scroll parent fires;
-		// the reactive `scrollParentHeight` signal flips `everVisible` true,
+		// the reactive `scrollParentHeight` signal flips `hasEverBeenVisible` true,
 		// `virtualizing()` turns true, and the virtual window kicks in against
 		// real measurements.
 		const parent = measurableScrollParent(0);
@@ -263,8 +266,10 @@ describe("Table virtualisation", () => {
 			</div>
 		));
 		// Never visible: skeleton rows, not a full render.
-		expect(document.querySelectorAll("[data-skeleton-row]").length).toBe(8);
-		expect(document.querySelectorAll("tbody tr[data-index]").length).toBe(
+		expect(document.querySelectorAll("[data-skeleton-row]")).toHaveLength(
+			8
+		);
+		expect(document.querySelectorAll("tbody tr[data-index]")).toHaveLength(
 			0
 		);
 		expect(screen.queryByText("r199")).toBeNull();
@@ -273,8 +278,8 @@ describe("Table virtualisation", () => {
 		parent.resize(300);
 		await waitFor(() => {
 			expect(
-				document.querySelectorAll("[data-skeleton-row]").length
-			).toBe(0);
+				document.querySelectorAll("[data-skeleton-row]")
+			).toHaveLength(0);
 			const rendered = document.querySelectorAll("tbody tr[data-index]");
 			expect(rendered.length).toBeGreaterThan(0);
 			expect(rendered.length).toBeLessThan(60);
@@ -315,14 +320,18 @@ describe("Table virtualisation", () => {
 		const immediatelyAfter = [
 			...document.querySelectorAll("tbody tr[data-index]"),
 		];
-		expect(immediatelyAfter.length).toBe(before.length);
-		expect(immediatelyAfter.every((tr, i) => tr === before[i])).toBe(true);
+		expect(immediatelyAfter).toHaveLength(before.length);
+		expect(
+			immediatelyAfter.every((tr, index) => tr === before[index])
+		).toBe(true);
 
-		await new Promise((r) => setTimeout(r, 0));
+		await new Promise((resolve) => setTimeout(resolve, 0));
 		const after = [...document.querySelectorAll("tbody tr[data-index]")];
-		expect(after.length).toBe(before.length);
-		expect(after.every((tr, i) => tr === before[i])).toBe(true); // same nodes
-		expect(document.querySelectorAll("[data-skeleton-row]").length).toBe(0);
+		expect(after).toHaveLength(before.length);
+		expect(after.every((tr, index) => tr === before[index])).toBe(true); // same nodes
+		expect(document.querySelectorAll("[data-skeleton-row]")).toHaveLength(
+			0
+		);
 	});
 
 	it("re-showing a hidden virtualised table re-windows instead of going blank", async () => {
@@ -355,7 +364,7 @@ describe("Table virtualisation", () => {
 		// A gap between hide and show, like a real tab switch — long enough for
 		// the virtualiser's own deferred internal recompute (queued while
 		// hidden) to land before the tab returns.
-		await new Promise((r) => setTimeout(r, 0));
+		await new Promise((resolve) => setTimeout(resolve, 0));
 		parent.resize(400); // back to visible, same height as before
 
 		// The window returns to the same rows it showed before hiding. If the
@@ -364,15 +373,23 @@ describe("Table virtualisation", () => {
 		// would have unmounted every row and remounted fresh ones — so an
 		// identity check catches what a row-count check alone would miss.
 		const after = document.querySelectorAll("tbody tr[data-index]");
-		expect(after.length).toBe(before.length);
-		expect([...after].every((tr, i) => tr === before[i])).toBe(true);
-		expect(document.querySelectorAll("[data-skeleton-row]").length).toBe(0);
+		expect(after).toHaveLength(before.length);
+		expect([...after].every((tr, index) => tr === before[index])).toBe(
+			true
+		);
+		expect(document.querySelectorAll("[data-skeleton-row]")).toHaveLength(
+			0
+		);
 
-		await new Promise((r) => setTimeout(r, 0));
+		await new Promise((resolve) => setTimeout(resolve, 0));
 		const settled = document.querySelectorAll("tbody tr[data-index]");
-		expect(settled.length).toBe(before.length);
-		expect([...settled].every((tr, i) => tr === before[i])).toBe(true);
-		expect(document.querySelectorAll("[data-skeleton-row]").length).toBe(0);
+		expect(settled).toHaveLength(before.length);
+		expect([...settled].every((tr, index) => tr === before[index])).toBe(
+			true
+		);
+		expect(document.querySelectorAll("[data-skeleton-row]")).toHaveLength(
+			0
+		);
 	});
 });
 
@@ -398,7 +415,7 @@ describe("Table onEndReached", () => {
 
 		// Same row count, new objects: a re-render alone does not re-fire.
 		setData(rows(4));
-		await new Promise((r) => setTimeout(r, 0));
+		await new Promise((resolve) => setTimeout(resolve, 0));
 		expect(onEndReached).toHaveBeenCalledTimes(1);
 
 		// More rows that still do not fill the box: fires again.
@@ -422,7 +439,7 @@ describe("Table onEndReached", () => {
 				/>
 			</div>
 		));
-		await new Promise((r) => setTimeout(r, 0));
+		await new Promise((resolve) => setTimeout(resolve, 0));
 		expect(onEndReached).not.toHaveBeenCalled();
 
 		parent.scrollTo(SCROLL_PAST_END);
@@ -452,11 +469,11 @@ describe("Table onEndReached", () => {
 
 		// Still at the end with the same rows: no second call.
 		parent.scrollTo(SCROLL_PAST_END + 1);
-		await new Promise((r) => setTimeout(r, 0));
+		await new Promise((resolve) => setTimeout(resolve, 0));
 		expect(onEndReached).toHaveBeenCalledTimes(1);
 
 		parent.scrollTo(0);
-		await new Promise((r) => setTimeout(r, 0));
+		await new Promise((resolve) => setTimeout(resolve, 0));
 		parent.scrollTo(SCROLL_PAST_END);
 		await waitFor(() => {
 			expect(onEndReached).toHaveBeenCalledTimes(2);
@@ -477,7 +494,7 @@ describe("Table onEndReached", () => {
 				/>
 			</div>
 		));
-		await new Promise((r) => setTimeout(r, 0));
+		await new Promise((resolve) => setTimeout(resolve, 0));
 		expect(onEndReached).not.toHaveBeenCalled();
 	});
 
@@ -491,7 +508,7 @@ describe("Table onEndReached", () => {
 				onEndReached={onEndReached}
 			/>
 		));
-		await new Promise((r) => setTimeout(r, 0));
+		await new Promise((resolve) => setTimeout(resolve, 0));
 		expect(onEndReached).not.toHaveBeenCalled();
 	});
 });

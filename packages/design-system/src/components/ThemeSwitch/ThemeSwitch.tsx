@@ -20,13 +20,13 @@ export function ThemeSwitch(): JSX.Element {
 	// The keyed <Show> re-creates the glyph span on every toggle (→ rotate-in)
 	// AND on every mount. Animate only AFTER the initial mount, so re-mounting
 	// the switch (e.g. on navigation) doesn't replay the intro — only a real
-	// toggle does. `mounted` is read at span-creation time, no reactivity needed.
-	let mounted = false;
+	// toggle does. `isMounted` is read at span-creation time, no reactivity needed.
+	let isMounted = false;
 	onMount(() => {
-		mounted = true;
+		isMounted = true;
 	});
 	function iconClass(): string {
-		return mounted ? `${styles.icon} ${styles.animate}` : styles.icon;
+		return isMounted ? `${styles.icon} ${styles.animate}` : styles.icon;
 	}
 	return (
 		<Tooltip

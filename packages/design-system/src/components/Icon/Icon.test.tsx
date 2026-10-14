@@ -4,8 +4,8 @@ import { Icon } from "./Icon.tsx";
 
 test("renders ligature + aria-hidden + data-icon", () => {
 	render(() => <Icon>check</Icon>);
-	const el = screen.getByText("check");
-	expect(el).toHaveAttribute("aria-hidden", "true");
+	const element = screen.getByText("check");
+	expect(element).toHaveAttribute("aria-hidden", "true");
 	// data-icon is what lets typography mixins size the glyph via [data-icon].
-	expect(el).toHaveAttribute("data-icon");
+	expect(element).toHaveAttribute("data-icon");
 });

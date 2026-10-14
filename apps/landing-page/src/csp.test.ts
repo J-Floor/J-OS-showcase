@@ -20,7 +20,7 @@ function hydrationScriptHash(): string {
 
 describe("landing page CSP", () => {
 	it("allows the inline hydration script the prerender injects", () => {
-		const scriptSrc = /script-src ([^;]*)/.exec(HEADERS)?.[1] ?? "";
-		expect(scriptSrc).toContain(`'sha256-${hydrationScriptHash()}'`);
+		const scriptSource = /script-src ([^;]*)/.exec(HEADERS)?.[1] ?? "";
+		expect(scriptSource).toContain(`'sha256-${hydrationScriptHash()}'`);
 	});
 });

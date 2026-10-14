@@ -8,7 +8,7 @@ import {
 	HEADER_LABEL_ATTR,
 } from "./domContract.ts";
 import { enumCellText } from "./filter.ts";
-import type { JfColumnDef } from "./types.ts";
+import type { JfColumnDefinition } from "./types.ts";
 
 /** Width in px a string takes in the body font. */
 export type TextMeasurer = (text: string) => number;
@@ -25,7 +25,7 @@ export type ColumnNeeds = Readonly<Record<string, number>>;
 /** A visible leaf column as the width logic sees it. */
 export type MeasuredColumn<Data extends Record<string, unknown>> = {
 	id: string;
-	def: JfColumnDef<Data>;
+	def: JfColumnDefinition<Data>;
 };
 
 /** Canvas text metrics and laid-out text can differ by a fraction of a pixel;
@@ -52,8 +52,9 @@ export function cellMeasureText<Data extends Record<string, unknown>>(
 	if (def.measureText === false) return undefined;
 	if (def.measureText) return def.measureText(row.original);
 	const value = row.getValue(id);
-	if (def.dataType === "enum") return enumCellText(def.enumOptions, value);
-	return plainText(value);
+	return def.dataType === "enum"
+		? enumCellText(def.enumOptions, value)
+		: plainText(value);
 }
 
 /** Wraps a measurer so each distinct string is measured once. */
@@ -77,9 +78,9 @@ let sharedContext: TextContext | null | undefined;
 function textContext(): TextContext | null {
 	if (sharedContext !== undefined) return sharedContext;
 	sharedContext =
-		typeof OffscreenCanvas !== "undefined"
-			? new OffscreenCanvas(1, 1).getContext("2d")
-			: document.createElement("canvas").getContext("2d");
+		typeof OffscreenCanvas === "undefined"
+			? document.createElement("canvas").getContext("2d")
+			: new OffscreenCanvas(1, 1).getContext("2d");
 	return sharedContext;
 }
 
@@ -120,8 +121,8 @@ export function createTextMeasurer(font: TextFont): TextMeasurer | undefined {
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
 	if (typeof value !== "object" || value === null) return false;
-	const proto = Object.getPrototypeOf(value) as unknown;
-	return proto === Object.prototype || proto === null;
+	const prototype = Object.getPrototypeOf(value) as unknown;
+	return prototype === Object.prototype || prototype === null;
 }
 
 /**
@@ -130,21 +131,23 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * other value (string, number, bigint, `ArrayBuffer`, ...) by `Object.is`.
  * A push re-parses every nested object and array fresh.
  */
-export function sameStructure(a: unknown, b: unknown): boolean {
-	if (Object.is(a, b)) return true;
-	if (Array.isArray(a)) {
+export function sameStructure(left: unknown, right: unknown): boolean {
+	if (Object.is(left, right)) return true;
+	if (Array.isArray(left)) {
 		return (
-			Array.isArray(b) &&
-			a.length === b.length &&
-			a.every((item, i) => sameStructure(item, b[i]))
+			Array.isArray(right) &&
+			left.length === right.length &&
+			left.every((item, index) => sameStructure(item, right[index]))
 		);
 	}
-	if (!isPlainObject(a) || !isPlainObject(b)) return false;
-	const keys = Object.keys(a);
+	if (!isPlainObject(left) || !isPlainObject(right)) return false;
+	const keys = Object.keys(left);
 	return (
-		keys.length === Object.keys(b).length &&
+		keys.length === Object.keys(right).length &&
 		keys.every(
-			(key) => Object.hasOwn(b, key) && sameStructure(a[key], b[key])
+			(key) =>
+				Object.hasOwn(right, key) &&
+				sameStructure(left[key], right[key])
 		)
 	);
 }
@@ -169,14 +172,13 @@ export function sameStructure(a: unknown, b: unknown): boolean {
 export function createBodyNeeds<Data extends Record<string, unknown>>(): (
 	columns: readonly MeasuredColumn<Data>[],
 	rows: readonly TanRow<Data>[],
-	measure: TextMeasurer,
-	paddingInline: number,
-	columnsKey: string
+	settings: BodyNeedsSettings
 ) => ColumnNeeds {
 	let measured = new Map<string, Data>();
 	let widest: Record<string, number> = {};
 	let basis: { measure: TextMeasurer; columnsKey: string } | undefined;
-	return (columns, rows, measure, paddingInline, columnsKey) => {
+	return (columns, rows, settings) => {
+		const { measure, paddingInline, columnsKey } = settings;
 		if (basis?.measure !== measure || basis.columnsKey !== columnsKey) {
 			measured = new Map();
 			widest = {};
@@ -186,36 +188,62 @@ export function createBodyNeeds<Data extends Record<string, unknown>>(): (
 		for (const row of rows) {
 			current.set(row.id, row.original);
 			const previous = measured.get(row.id);
-			const unchanged =
+			const isUnchanged =
 				previous !== undefined && sameStructure(previous, row.original);
 			for (const column of columns) {
-				if (unchanged && column.def.measureVolatile !== true) continue;
-				const text = cellMeasureText(column, row);
-				if (text)
-					widest[column.id] = Math.max(
-						widest[column.id] ?? 0,
-						measure(text)
-					);
+				if (isUnchanged && column.def.measureVolatile !== true)
+					continue;
+				widenColumn(widest, column, row, measure);
 			}
 		}
 		measured = current;
-		const needs: Record<string, number> = {};
-		for (const { id } of columns) {
-			const width = widest[id] ?? 0;
-			if (width > 0) needs[id] = width + paddingInline + SUBPIXEL_SLACK;
-		}
-		return needs;
+		return paddedNeeds(widest, columns, paddingInline);
 	};
 }
 
+/** What `createBodyNeeds` measures with, and when it starts over: a new
+ *  `measure` or `columnsKey` discards everything measured so far. */
+type BodyNeedsSettings = {
+	measure: TextMeasurer;
+	paddingInline: number;
+	columnsKey: string;
+};
+
+/** Grows `widest` for a column to the width of this row's cell text. */
+function widenColumn<Data extends Record<string, unknown>>(
+	widest: Record<string, number>,
+	column: MeasuredColumn<Data>,
+	row: TanRow<Data>,
+	measure: TextMeasurer
+): void {
+	const text = cellMeasureText(column, row);
+	if (text)
+		widest[column.id] = Math.max(widest[column.id] ?? 0, measure(text));
+}
+
+/** The widest widths with padding and slack added; a column with none gets no
+ *  entry. */
+function paddedNeeds<Data extends Record<string, unknown>>(
+	widest: Readonly<Record<string, number>>,
+	columns: readonly MeasuredColumn<Data>[],
+	paddingInline: number
+): ColumnNeeds {
+	const needs: Record<string, number> = {};
+	for (const { id } of columns) {
+		const width = widest[id] ?? 0;
+		if (width > 0) needs[id] = width + paddingInline + SUBPIXEL_SLACK;
+	}
+	return needs;
+}
+
 function px(value: string): number {
-	const n = Number.parseFloat(value);
-	return Number.isFinite(n) ? n : 0;
+	const parsed = Number.parseFloat(value);
+	return Number.isFinite(parsed) ? parsed : 0;
 }
 
 /** An element's computed left plus right padding. */
-export function horizontalPadding(el: Element): number {
-	const style = getComputedStyle(el);
+export function horizontalPadding(element: Element): number {
+	const style = getComputedStyle(element);
 	return px(style.paddingLeft) + px(style.paddingRight);
 }
 
@@ -232,9 +260,10 @@ export function horizontalPadding(el: Element): number {
  */
 export function measureHeaderNeeds(thead: HTMLElement): ColumnNeeds {
 	const needs: Record<string, number> = {};
-	for (const th of Array.from(
+	const headerCells = Array.from(
 		thead.querySelectorAll<HTMLElement>(HEADER_COLUMN_SELECTOR)
-	)) {
+	);
+	for (const th of headerCells) {
 		const id = th.getAttribute(COLUMN_ID_ATTR);
 		const cell = th.querySelector<HTMLElement>(`[${HEADER_CELL_ATTR}]`);
 		const label = th.querySelector<HTMLElement>(`[${HEADER_LABEL_ATTR}]`);
@@ -255,25 +284,28 @@ export function measureHeaderNeeds(thead: HTMLElement): ColumnNeeds {
 }
 
 /** The font an element's text renders in. */
-export function readTextFont(el: Element): TextFont {
-	const style = getComputedStyle(el);
+export function readTextFont(element: Element): TextFont {
+	const style = getComputedStyle(element);
 	return {
 		font: `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`,
 		letterSpacing: style.letterSpacing,
 	};
 }
 
-export function sameNeeds(a: ColumnNeeds, b: ColumnNeeds): boolean {
-	const keys = Object.keys(a);
+export function sameNeeds(left: ColumnNeeds, right: ColumnNeeds): boolean {
+	const keys = Object.keys(left);
 	return (
-		keys.length === Object.keys(b).length &&
-		keys.every((key) => a[key] === b[key])
+		keys.length === Object.keys(right).length &&
+		keys.every((key) => left[key] === right[key])
 	);
 }
 
 export function sameFont(
-	a: TextFont | undefined,
-	b: TextFont | undefined
+	left: TextFont | undefined,
+	right: TextFont | undefined
 ): boolean {
-	return a?.font === b?.font && a?.letterSpacing === b?.letterSpacing;
+	return (
+		left?.font === right?.font &&
+		left?.letterSpacing === right?.letterSpacing
+	);
 }

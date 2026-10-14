@@ -8,9 +8,9 @@ const modules = import.meta.glob("./**/*.*s");
 
 describe("onboarding.getState", () => {
 	it("reports needsOnboarding for a member in the onboarding stage", async () => {
-		const t = convexTest(schema, modules);
-		await t.run(async (ctx) => {
-			await ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		await backend.run(async (context) => {
+			await context.db.insert("people", {
 				email: "ada@example.com",
 				firstName: "Ada",
 				lastName: "Lovelace",
@@ -20,7 +20,7 @@ describe("onboarding.getState", () => {
 			});
 		});
 
-		const state = await t
+		const state = await backend
 			.withIdentity({ email: "ada@example.com" })
 			.query(api.onboarding.getState, {});
 		expect(state.needsOnboarding).toBe(true);
@@ -28,9 +28,9 @@ describe("onboarding.getState", () => {
 	});
 
 	it("reports no onboarding for an active member and for an expired guest", async () => {
-		const t = convexTest(schema, modules);
-		await t.run(async (ctx) => {
-			await ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		await backend.run(async (context) => {
+			await context.db.insert("people", {
 				email: "ada@example.com",
 				firstName: "Ada",
 				lastName: "Lovelace",
@@ -38,7 +38,7 @@ describe("onboarding.getState", () => {
 				stage: "active",
 				stageSince: Date.now(),
 			});
-			await ctx.db.insert("people", {
+			await context.db.insert("people", {
 				email: "gone@example.com",
 				firstName: "Gone",
 				lastName: "Guest",
@@ -48,14 +48,11 @@ describe("onboarding.getState", () => {
 			});
 		});
 
-		expect(
-			(
-				await t
-					.withIdentity({ email: "ada@example.com" })
-					.query(api.onboarding.getState, {})
-			).needsOnboarding
-		).toBe(false);
-		const gone = await t
+		const adaState = await backend
+			.withIdentity({ email: "ada@example.com" })
+			.query(api.onboarding.getState, {});
+		expect(adaState.needsOnboarding).toBe(false);
+		const gone = await backend
 			.withIdentity({ email: "gone@example.com" })
 			.query(api.onboarding.getState, {});
 		expect(gone.hasAccess).toBe(false);
@@ -63,35 +60,52 @@ describe("onboarding.getState", () => {
 	});
 });
 
+async function onboardingMember(backend: ReturnType<typeof convexTest>) {
+	return backend.run(async (context) =>
+		context.db.insert("people", {
+			email: "ada@example.com",
+			firstName: "Ada",
+			lastName: "Lovelace",
+			tier: "member",
+			stage: "onboarding",
+			stageSince: Date.now(),
+		})
+	);
+}
+
+async function personWithTier(
+	tier: "prospect" | "guest" | "member" | "former"
+) {
+	const backend = convexTest(schema, modules);
+	await backend.run(async (context) => {
+		await context.db.insert("people", {
+			email: "ada@example.com",
+			firstName: "Ada",
+			lastName: "Lovelace",
+			tier,
+			stage: "active",
+			stageSince: Date.now(),
+		});
+	});
+	return backend.withIdentity({ email: "ada@example.com" });
+}
+
 describe("onboarding.completeStep", () => {
-	async function onboardingMember(t: ReturnType<typeof convexTest>) {
-		return t.run(async (ctx) =>
-			ctx.db.insert("people", {
-				email: "ada@example.com",
-				firstName: "Ada",
-				lastName: "Lovelace",
-				tier: "member",
-				stage: "onboarding",
-				stageSince: Date.now(),
-			})
-		);
-	}
-
 	it("records a step and writes one audit row naming the person themselves", async () => {
-		const t = convexTest(schema, modules);
-		const id = await onboardingMember(t);
+		const backend = convexTest(schema, modules);
+		const id = await onboardingMember(backend);
 
-		await t
+		await backend
 			.withIdentity({ email: "ada@example.com" })
 			.mutation(api.onboarding.completeStep, { stepId: "rules" });
 
-		const person = await t.run(async (ctx) => ctx.db.get(id));
+		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person?.onboarding?.steps.rules).toBeDefined();
 
-		const events = await t.run(async (ctx) =>
-			ctx.db
+		const events = await backend.run(async (context) =>
+			context.db
 				.query("personEvents")
-				.withIndex("by_person", (q) => q.eq("personId", id))
+				.withIndex("by_person", (range) => range.eq("personId", id))
 				.collect()
 		);
 		expect(events).toMatchObject([
@@ -100,39 +114,39 @@ describe("onboarding.completeStep", () => {
 	});
 
 	it("rejects completing the document step (must sign the agreement)", async () => {
-		const t = convexTest(schema, modules);
-		await onboardingMember(t);
+		const backend = convexTest(schema, modules);
+		await onboardingMember(backend);
 		await expect(
-			t
+			backend
 				.withIdentity({ email: "ada@example.com" })
 				.mutation(api.onboarding.completeStep, { stepId: "document" })
 		).rejects.toThrow(/signing the agreement/);
 	});
 
 	it("rejects an unknown step id", async () => {
-		const t = convexTest(schema, modules);
-		await onboardingMember(t);
+		const backend = convexTest(schema, modules);
+		await onboardingMember(backend);
 		await expect(
-			t
+			backend
 				.withIdentity({ email: "ada@example.com" })
 				.mutation(api.onboarding.completeStep, { stepId: "wifi" })
 		).rejects.toThrow(/Unknown onboarding step/);
 	});
 
 	it("rejects whatsapp — it is a board task, not a step the person can do", async () => {
-		const t = convexTest(schema, modules);
-		await onboardingMember(t);
+		const backend = convexTest(schema, modules);
+		await onboardingMember(backend);
 		await expect(
-			t
+			backend
 				.withIdentity({ email: "ada@example.com" })
 				.mutation(api.onboarding.completeStep, { stepId: "whatsapp" })
 		).rejects.toThrow(/Unknown onboarding step/);
 	});
 
 	it("does NOT activate until every self step AND the agreement are done", async () => {
-		const t = convexTest(schema, modules);
-		const id = await onboardingMember(t);
-		const asAda = t.withIdentity({ email: "ada@example.com" });
+		const backend = convexTest(schema, modules);
+		const id = await onboardingMember(backend);
+		const asAda = backend.withIdentity({ email: "ada@example.com" });
 
 		for (const stepId of ["welcome", "rules", "visit"]) {
 			await asAda.mutation(api.onboarding.completeStep, { stepId });
@@ -141,29 +155,30 @@ describe("onboarding.completeStep", () => {
 		// three ONBOARDING_PROGRESSED events those calls dispatched were all
 		// rejected by the activation guard, silently, which is the intended
 		// behaviour of applyEventIfLegal.
-		const person = await t.run(async (ctx) => ctx.db.get(id));
+		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person?.stage).toBe("onboarding");
-		expect(Object.keys(person?.onboarding?.steps ?? {}).sort()).toEqual([
-			"rules",
-			"visit",
-			"welcome",
-		]);
+		expect(
+			// eslint-disable-next-line id-length -- conventional comparator parameter names
+			Object.keys(person?.onboarding?.steps ?? {}).sort((a, b) =>
+				a.localeCompare(b)
+			)
+		).toEqual(["rules", "visit", "welcome"]);
 		// And the rejections left no transition rows behind.
-		const events = await t.run(async (ctx) =>
-			ctx.db
+		const events = await backend.run(async (context) =>
+			context.db
 				.query("personEvents")
-				.withIndex("by_person", (q) => q.eq("personId", id))
+				.withIndex("by_person", (range) => range.eq("personId", id))
 				.collect()
 		);
-		expect(events.every((e) => e.kind === "step")).toBe(true);
+		expect(events.every((event) => event.kind === "step")).toBe(true);
 	});
 
 	it("activates on the last step when the agreement is already on file", async () => {
-		const t = convexTest(schema, modules);
-		const id = await onboardingMember(t);
-		const asAda = t.withIdentity({ email: "ada@example.com" });
-		await t.run(async (ctx) => {
-			await ctx.db.insert("signatures", {
+		const backend = convexTest(schema, modules);
+		const id = await onboardingMember(backend);
+		const asAda = backend.withIdentity({ email: "ada@example.com" });
+		await backend.run(async (context) => {
+			await context.db.insert("signatures", {
 				personId: id,
 				email: "ada@example.com",
 				variant: "member",
@@ -172,7 +187,7 @@ describe("onboarding.completeStep", () => {
 				agreementHash: "h",
 				signedAt: Date.now(),
 			});
-			await ctx.db.patch(id, {
+			await context.db.patch(id, {
 				onboarding: {
 					steps: { document: { completedAt: Date.now() } },
 				},
@@ -182,24 +197,26 @@ describe("onboarding.completeStep", () => {
 		for (const stepId of ["welcome", "rules"]) {
 			await asAda.mutation(api.onboarding.completeStep, { stepId });
 		}
-		expect(await t.run(async (ctx) => (await ctx.db.get(id))?.stage)).toBe(
-			"onboarding"
+		const stageBefore = await backend.run(async (context) =>
+			context.db.get(id)
 		);
+		expect(stageBefore?.stage).toBe("onboarding");
 
 		await asAda.mutation(api.onboarding.completeStep, { stepId: "visit" });
-		expect(await t.run(async (ctx) => (await ctx.db.get(id))?.stage)).toBe(
-			"active"
+		const stageAfter = await backend.run(async (context) =>
+			context.db.get(id)
 		);
+		expect(stageAfter?.stage).toBe("active");
 	});
 
 	it("an open board task does not gate activation", async () => {
 		// The previous test activated with `boardSteps` empty. Asserted here
 		// explicitly because it is one of the spec's named regressions.
-		const t = convexTest(schema, modules);
-		const id = await onboardingMember(t);
-		const asAda = t.withIdentity({ email: "ada@example.com" });
-		await t.run(async (ctx) => {
-			await ctx.db.insert("signatures", {
+		const backend = convexTest(schema, modules);
+		const id = await onboardingMember(backend);
+		const asAda = backend.withIdentity({ email: "ada@example.com" });
+		await backend.run(async (context) => {
+			await context.db.insert("signatures", {
 				personId: id,
 				email: "ada@example.com",
 				variant: "member",
@@ -208,7 +225,7 @@ describe("onboarding.completeStep", () => {
 				agreementHash: "h",
 				signedAt: Date.now(),
 			});
-			await ctx.db.patch(id, {
+			await context.db.patch(id, {
 				onboarding: {
 					steps: { document: { completedAt: Date.now() } },
 					boardSteps: {},
@@ -218,33 +235,33 @@ describe("onboarding.completeStep", () => {
 		for (const stepId of ["welcome", "rules", "visit"]) {
 			await asAda.mutation(api.onboarding.completeStep, { stepId });
 		}
-		const person = await t.run(async (ctx) => ctx.db.get(id));
+		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person?.stage).toBe("active");
 		expect(person?.onboarding?.boardSteps).toEqual({});
 	});
 
 	it("is idempotent — repeating a step keeps one record and one audit row", async () => {
-		const t = convexTest(schema, modules);
-		const id = await onboardingMember(t);
-		const asAda = t.withIdentity({ email: "ada@example.com" });
+		const backend = convexTest(schema, modules);
+		const id = await onboardingMember(backend);
+		const asAda = backend.withIdentity({ email: "ada@example.com" });
 		await asAda.mutation(api.onboarding.completeStep, { stepId: "rules" });
 		await asAda.mutation(api.onboarding.completeStep, { stepId: "rules" });
 
-		const person = await t.run(async (ctx) => ctx.db.get(id));
+		const person = await backend.run(async (context) => context.db.get(id));
 		expect(Object.keys(person?.onboarding?.steps ?? {})).toEqual(["rules"]);
-		const events = await t.run(async (ctx) =>
-			ctx.db
+		const events = await backend.run(async (context) =>
+			context.db
 				.query("personEvents")
-				.withIndex("by_person", (q) => q.eq("personId", id))
+				.withIndex("by_person", (range) => range.eq("personId", id))
 				.collect()
 		);
 		expect(events).toHaveLength(1);
 	});
 
 	it("refuses an expired guest mid-onboarding", async () => {
-		const t = convexTest(schema, modules);
-		await t.run(async (ctx) => {
-			await ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		await backend.run(async (context) => {
+			await context.db.insert("people", {
 				email: "gone@example.com",
 				firstName: "Gone",
 				lastName: "Guest",
@@ -255,7 +272,7 @@ describe("onboarding.completeStep", () => {
 			});
 		});
 		await expect(
-			t
+			backend
 				.withIdentity({ email: "gone@example.com" })
 				.mutation(api.onboarding.completeStep, { stepId: "rules" })
 		).rejects.toThrow(/Access expired or revoked/);
@@ -264,9 +281,9 @@ describe("onboarding.completeStep", () => {
 
 describe("onboarding.setTourSeen", () => {
 	it("sets the tourSeen flag", async () => {
-		const t = convexTest(schema, modules);
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const id = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "ada@example.com",
 				firstName: "Ada",
 				lastName: "Lovelace",
@@ -275,17 +292,17 @@ describe("onboarding.setTourSeen", () => {
 				stageSince: Date.now(),
 			})
 		);
-		await t
+		await backend
 			.withIdentity({ email: "ada@example.com" })
 			.mutation(api.onboarding.setTourSeen, {});
-		const person = await t.run(async (ctx) => ctx.db.get(id));
+		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person?.onboarding?.tourSeen).toBe(true);
 	});
 
 	it("refuses a former member and an expired guest", async () => {
-		const t = convexTest(schema, modules);
-		const [former, expired] = await t.run(async (ctx) => [
-			await ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const [former, expired] = await backend.run(async (context) => [
+			await context.db.insert("people", {
 				email: "gone@example.com",
 				firstName: "Gone",
 				lastName: "G",
@@ -293,7 +310,7 @@ describe("onboarding.setTourSeen", () => {
 				stage: "expired",
 				stageSince: Date.now(),
 			}),
-			await ctx.db.insert("people", {
+			await context.db.insert("people", {
 				email: "late@example.com",
 				firstName: "Late",
 				lastName: "L",
@@ -305,16 +322,16 @@ describe("onboarding.setTourSeen", () => {
 		]);
 		for (const email of ["gone@example.com", "late@example.com"]) {
 			await expect(
-				t
+				backend
 					.withIdentity({ email })
 					.mutation(api.onboarding.setTourSeen, {})
 			).rejects.toThrow(/Access expired or revoked/);
 		}
-		const rows = await t.run(async (ctx) => [
-			await ctx.db.get(former),
-			await ctx.db.get(expired),
+		const rows = await backend.run(async (context) => [
+			await context.db.get(former),
+			await context.db.get(expired),
 		]);
-		expect(rows.map((r) => r?.onboarding?.tourSeen)).toEqual([
+		expect(rows.map((row) => row?.onboarding?.tourSeen)).toEqual([
 			undefined,
 			undefined,
 		]);
@@ -323,9 +340,9 @@ describe("onboarding.setTourSeen", () => {
 
 describe("getOnboardingHost", () => {
 	it("returns the host name + phone for a guest", async () => {
-		const t = convexTest(schema, modules);
-		await t.run(async (ctx) => {
-			const hostId = await ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		await backend.run(async (context) => {
+			const hostId = await context.db.insert("people", {
 				email: "host@example.com",
 				firstName: "Ho",
 				lastName: "St",
@@ -334,7 +351,7 @@ describe("getOnboardingHost", () => {
 				stage: "active",
 				stageSince: Date.now(),
 			});
-			await ctx.db.insert("people", {
+			await context.db.insert("people", {
 				email: "gia@example.com",
 				firstName: "Gia",
 				lastName: "Guest",
@@ -346,16 +363,16 @@ describe("getOnboardingHost", () => {
 		});
 
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: "gia@example.com" })
 				.query(api.onboarding.getOnboardingHost, {})
 		).toEqual({ name: "Ho St", phone: "+1 555 0100" });
 	});
 
 	it("returns null for a member (no host)", async () => {
-		const t = convexTest(schema, modules);
-		await t.run(async (ctx) => {
-			await ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		await backend.run(async (context) => {
+			await context.db.insert("people", {
 				email: "ada@example.com",
 				firstName: "Ada",
 				lastName: "Lovelace",
@@ -365,7 +382,7 @@ describe("getOnboardingHost", () => {
 			});
 		});
 		expect(
-			await t
+			await backend
 				.withIdentity({ email: "ada@example.com" })
 				.query(api.onboarding.getOnboardingHost, {})
 		).toBeNull();
@@ -374,9 +391,9 @@ describe("getOnboardingHost", () => {
 
 describe("onboarding.setDoorsIntroSeen", () => {
 	it("stamps the caller's own row", async () => {
-		const t = convexTest(schema, modules);
-		const [ada, bob] = await t.run(async (ctx) => [
-			await ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const [ada, bob] = await backend.run(async (context) => [
+			await context.db.insert("people", {
 				email: "ada@example.com",
 				firstName: "Ada",
 				lastName: "Lovelace",
@@ -384,7 +401,7 @@ describe("onboarding.setDoorsIntroSeen", () => {
 				stage: "active",
 				stageSince: Date.now(),
 			}),
-			await ctx.db.insert("people", {
+			await context.db.insert("people", {
 				email: "bob@example.com",
 				firstName: "Bob",
 				lastName: "B",
@@ -394,21 +411,21 @@ describe("onboarding.setDoorsIntroSeen", () => {
 			}),
 		]);
 		const before = Date.now();
-		await t
+		await backend
 			.withIdentity({ email: "ada@example.com" })
 			.mutation(api.onboarding.setDoorsIntroSeen, {});
-		const [a, b] = await t.run(async (ctx) => [
-			await ctx.db.get(ada),
-			await ctx.db.get(bob),
+		const [adaRow, bobRow] = await backend.run(async (context) => [
+			await context.db.get(ada),
+			await context.db.get(bob),
 		]);
-		expect(a?.doorsIntroSeenAt).toBeGreaterThanOrEqual(before);
-		expect(b?.doorsIntroSeenAt).toBeUndefined();
+		expect(adaRow?.doorsIntroSeenAt).toBeGreaterThanOrEqual(before);
+		expect(bobRow?.doorsIntroSeenAt).toBeUndefined();
 	});
 
 	it("keeps the first timestamp when called again", async () => {
-		const t = convexTest(schema, modules);
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const id = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "ada@example.com",
 				firstName: "Ada",
 				lastName: "Lovelace",
@@ -418,27 +435,26 @@ describe("onboarding.setDoorsIntroSeen", () => {
 				doorsIntroSeenAt: 123,
 			})
 		);
-		await t
+		await backend
 			.withIdentity({ email: "ada@example.com" })
 			.mutation(api.onboarding.setDoorsIntroSeen, {});
-		expect(
-			(await t.run(async (ctx) => ctx.db.get(id)))?.doorsIntroSeenAt
-		).toBe(123);
+		const seen = await backend.run(async (context) => context.db.get(id));
+		expect(seen?.doorsIntroSeenAt).toBe(123);
 	});
 
 	it("refuses a caller with no person row", async () => {
-		const t = convexTest(schema, modules);
+		const backend = convexTest(schema, modules);
 		await expect(
-			t
+			backend
 				.withIdentity({ email: "nobody@example.com" })
 				.mutation(api.onboarding.setDoorsIntroSeen, {})
 		).rejects.toThrow(/Forbidden/);
 	});
 
 	it("refuses a former member and writes nothing", async () => {
-		const t = convexTest(schema, modules);
-		const id = await t.run(async (ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const id = await backend.run(async (context) =>
+			context.db.insert("people", {
 				email: "gone@example.com",
 				firstName: "Gone",
 				lastName: "G",
@@ -448,21 +464,20 @@ describe("onboarding.setDoorsIntroSeen", () => {
 			})
 		);
 		await expect(
-			t
+			backend
 				.withIdentity({ email: "gone@example.com" })
 				.mutation(api.onboarding.setDoorsIntroSeen, {})
 		).rejects.toThrow(/Access expired or revoked/);
-		expect(
-			(await t.run(async (ctx) => ctx.db.get(id)))?.doorsIntroSeenAt
-		).toBeUndefined();
+		const unseen = await backend.run(async (context) => context.db.get(id));
+		expect(unseen?.doorsIntroSeenAt).toBeUndefined();
 	});
 });
 
 describe("the retired door-key step", () => {
 	it("a person who completed the door-key step before the switchover still activates on the remaining steps", async () => {
-		const t = convexTest(schema, modules);
-		const id = await t.run(async (ctx) => {
-			const personId = await ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		const id = await backend.run(async (context) => {
+			const personId = await context.db.insert("people", {
 				email: "ada@example.com",
 				firstName: "Ada",
 				lastName: "Lovelace",
@@ -477,7 +492,7 @@ describe("the retired door-key step", () => {
 					},
 				},
 			});
-			await ctx.db.insert("signatures", {
+			await context.db.insert("signatures", {
 				personId,
 				email: "ada@example.com",
 				variant: "member",
@@ -488,11 +503,11 @@ describe("the retired door-key step", () => {
 			});
 			return personId;
 		});
-		const asAda = t.withIdentity({ email: "ada@example.com" });
+		const asAda = backend.withIdentity({ email: "ada@example.com" });
 		await asAda.mutation(api.onboarding.completeStep, { stepId: "rules" });
 		await asAda.mutation(api.onboarding.completeStep, { stepId: "visit" });
 
-		const person = await t.run(async (ctx) => ctx.db.get(id));
+		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person?.stage).toBe("active");
 		// The legacy record is left alone: the steps record is open-ended.
 		expect(person?.onboarding?.steps.doorKey).toEqual({ completedAt: 1 });
@@ -508,12 +523,12 @@ describe("onboarding.resume", () => {
 	};
 
 	async function seedGuest(
-		t: ReturnType<typeof convexTest>,
-		withSignature: boolean
+		backend: ReturnType<typeof convexTest>,
+		hasSignature: boolean
 	) {
-		return t.run(async (ctx) => {
+		return backend.run(async (context) => {
 			const now = Date.now();
-			const id = await ctx.db.insert("people", {
+			const id = await context.db.insert("people", {
 				email: "ana@example.com",
 				firstName: "Ana",
 				lastName: "Stuck",
@@ -522,8 +537,8 @@ describe("onboarding.resume", () => {
 				stageSince: now,
 				onboarding: { steps: ALL_STEPS },
 			});
-			if (withSignature)
-				await ctx.db.insert("signatures", {
+			if (hasSignature)
+				await context.db.insert("signatures", {
 					personId: id,
 					email: "ana@example.com",
 					variant: "guest",
@@ -537,31 +552,31 @@ describe("onboarding.resume", () => {
 	}
 
 	it("activates a guest whose steps and agreement are complete", async () => {
-		const t = convexTest(schema, modules);
-		const id = await seedGuest(t, true);
-		const result = await t
+		const backend = convexTest(schema, modules);
+		const id = await seedGuest(backend, true);
+		const result = await backend
 			.withIdentity({ email: "ana@example.com" })
 			.mutation(api.onboarding.resume, {});
 		expect(result).toEqual({ activated: true });
-		const person = await t.run((ctx) => ctx.db.get(id));
+		const person = await backend.run((context) => context.db.get(id));
 		expect(person?.stage).toBe("active");
 	});
 
 	it("leaves a guest without an agreement in onboarding", async () => {
-		const t = convexTest(schema, modules);
-		const id = await seedGuest(t, false);
-		const result = await t
+		const backend = convexTest(schema, modules);
+		const id = await seedGuest(backend, false);
+		const result = await backend
 			.withIdentity({ email: "ana@example.com" })
 			.mutation(api.onboarding.resume, {});
 		expect(result).toEqual({ activated: false });
-		const person = await t.run((ctx) => ctx.db.get(id));
+		const person = await backend.run((context) => context.db.get(id));
 		expect(person?.stage).toBe("onboarding");
 	});
 
 	it("refuses someone who is not onboarding", async () => {
-		const t = convexTest(schema, modules);
-		await t.run((ctx) =>
-			ctx.db.insert("people", {
+		const backend = convexTest(schema, modules);
+		await backend.run((context) =>
+			context.db.insert("people", {
 				email: "ada@example.com",
 				firstName: "Ada",
 				lastName: "Active",
@@ -571,7 +586,7 @@ describe("onboarding.resume", () => {
 			})
 		);
 		await expect(
-			t
+			backend
 				.withIdentity({ email: "ada@example.com" })
 				.mutation(api.onboarding.resume, {})
 		).rejects.toThrow("not in an onboarding state");
@@ -582,23 +597,6 @@ describe("onboarding.whatsappInvite", () => {
 	afterEach(() => {
 		vi.unstubAllEnvs();
 	});
-
-	async function personWithTier(
-		tier: "prospect" | "guest" | "member" | "former"
-	) {
-		const t = convexTest(schema, modules);
-		await t.run(async (ctx) => {
-			await ctx.db.insert("people", {
-				email: "ada@example.com",
-				firstName: "Ada",
-				lastName: "Lovelace",
-				tier,
-				stage: "active",
-				stageSince: Date.now(),
-			});
-		});
-		return t.withIdentity({ email: "ada@example.com" });
-	}
 
 	it("gives an entitled member the configured invite link", async () => {
 		vi.stubEnv(
@@ -622,9 +620,9 @@ describe("onboarding.whatsappInvite", () => {
 			"WHATSAPP_INVITE_URL",
 			"https://chat.whatsapp.com/EXAMPLEINVITE"
 		);
-		const t = convexTest(schema, modules);
+		const backend = convexTest(schema, modules);
 		await expect(
-			t.query(api.onboarding.whatsappInvite, {})
+			backend.query(api.onboarding.whatsappInvite, {})
 		).rejects.toThrow(/Not authenticated/);
 	});
 

@@ -21,7 +21,7 @@ const { state } = vi.hoisted(
 		state: {
 			onboarding: { tourSeen: true },
 			extra: {},
-			bump: () => undefined,
+			bump: () => {},
 		},
 	})
 );
@@ -29,7 +29,7 @@ const { state } = vi.hoisted(
 vi.mock("convex-solidjs", async () => {
 	const { createSignal } = await import("solid-js");
 	const [version, setVersion] = createSignal(0);
-	state.bump = () => setVersion((n) => n + 1);
+	state.bump = () => setVersion((count) => count + 1);
 	return {
 		useQuery: () => ({
 			data: () => {
@@ -39,7 +39,7 @@ vi.mock("convex-solidjs", async () => {
 				};
 			},
 			isLoading: () => false,
-			error: () => undefined,
+			error: () => {},
 		}),
 	};
 });
@@ -96,7 +96,7 @@ test("does NOT show when this version has already been acknowledged", async () =
 	localStorage.setItem("jos:whatsNewSeen", APP_VERSION);
 	render(() => <WhatsNew />);
 	// Nothing to show; the item never appears.
-	await new Promise((r) => setTimeout(r, 0));
+	await new Promise((resolve) => setTimeout(resolve, 0));
 	expect(screen.queryByText(ALT_LINE)).toBeNull();
 });
 
@@ -105,7 +105,7 @@ const OPEN_DOOR_MEMBER = { tier: "member", stage: "active", stageSince: 0 };
 test("waits while the doors intro is pending: shows nothing and records nothing", async () => {
 	state.extra = { ...OPEN_DOOR_MEMBER };
 	render(() => <WhatsNew />);
-	await new Promise((r) => setTimeout(r, 0));
+	await new Promise((resolve) => setTimeout(resolve, 0));
 	expect(screen.queryByText(ALT_LINE)).toBeNull();
 	expect(localStorage.getItem("jos:whatsNewSeen")).toBeNull();
 });
@@ -113,7 +113,7 @@ test("waits while the doors intro is pending: shows nothing and records nothing"
 test("shows once the doors intro is dismissed", async () => {
 	state.extra = { ...OPEN_DOOR_MEMBER };
 	render(() => <WhatsNew />);
-	await new Promise((r) => setTimeout(r, 0));
+	await new Promise((resolve) => setTimeout(resolve, 0));
 	expect(screen.queryByText(ALT_LINE)).toBeNull();
 
 	state.extra = { ...OPEN_DOOR_MEMBER, doorsIntroSeenAt: 1 };

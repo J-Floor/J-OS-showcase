@@ -46,13 +46,12 @@ export function reapplyDecision(
 		return { kind: "blocked", reason: "under_review" };
 	}
 
-	if (person.stage === "denied" && person.deniedAt != null) {
+	if (person.stage === "denied" && person.deniedAt !== undefined) {
 		const until = person.deniedAt + REAPPLY_DEBOUNCE_MS;
 		if (now < until) return { kind: "blocked", reason: "debounce", until };
 	}
 
-	if (!legalEvents(stateOf(person)).includes("REAPPLY")) {
-		return { kind: "blocked", reason: "under_review" };
-	}
-	return { kind: "reuse" };
+	return legalEvents(stateOf(person)).includes("REAPPLY")
+		? { kind: "reuse" }
+		: { kind: "blocked", reason: "under_review" };
 }
