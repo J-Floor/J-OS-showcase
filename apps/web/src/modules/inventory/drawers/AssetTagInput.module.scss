@@ -1,12 +1,14 @@
 @use "@j-os/design-system/typography" as typo;
 
 .group {
+	position: relative;
 	display: flex;
 	flex-direction: column;
 	gap: var(--jf-spacing-near);
 }
 
 .label,
+.requiredIndicator,
 .helper,
 .error {
 	@include typo.jf-typo-body-small;
@@ -16,6 +18,14 @@
 
 .label {
 	color: var(--jf-fg-default);
+}
+
+.requiredIndicator {
+	position: absolute;
+	inset-block-start: 0;
+	inset-inline-end: 0;
+	color: var(--jf-fg-muted);
+	pointer-events: none;
 }
 
 .helper {

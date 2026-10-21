@@ -181,11 +181,17 @@ export function AssetTagInput(props: AssetTagInputProps): JSX.Element {
 			<span id={labelId} class={styles.label}>
 				Asset tag
 			</span>
+			{/* One marker for the pair, where the design system puts it: in the
+			    label row. Each Input's own marker would sit inside its box,
+			    since neither has a visible label. */}
+			<span class={styles.requiredIndicator} aria-hidden="true">
+				Required
+			</span>
 			<div class={styles.fields}>
 				<div class={styles.letter}>
 					<Input
 						aria-label="Asset tag letter"
-						required
+						aria-required="true"
 						value={fields.letter()}
 						maxLength={1}
 						autocomplete="off"
@@ -197,7 +203,7 @@ export function AssetTagInput(props: AssetTagInputProps): JSX.Element {
 				<div class={styles.number}>
 					<Input
 						aria-label="Asset tag number"
-						required
+						aria-required="true"
 						value={fields.digits()}
 						inputMode="numeric"
 						autocomplete="off"

@@ -45,6 +45,16 @@ test("is one labelled group of two named fields", () => {
 	).toBeInTheDocument();
 });
 
+test("marks the group required once, in its label row, not inside either field", () => {
+	const { letter, number } = renderInput();
+	const group = screen.getByRole("group", { name: "Asset tag" });
+	const markers = screen.getAllByText("Required");
+	expect(markers).toHaveLength(1);
+	expect(markers[0].parentElement).toBe(group);
+	expect(letter()).toHaveAttribute("aria-required", "true");
+	expect(number()).toHaveAttribute("aria-required", "true");
+});
+
 test("a typed letter is uppercased and moves focus to the number", () => {
 	const { letter, number, changes } = renderInput();
 	fireEvent.input(letter(), { target: { value: "a" } });
