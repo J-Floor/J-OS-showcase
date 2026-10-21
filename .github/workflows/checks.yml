@@ -124,7 +124,15 @@ jobs:
       # its own job.
       - name: Stylelint, typecheck, generated-file checks, builds
         if: steps.scope.outputs.docs-only != 'true'
-        run: bunx --bun turbo run lint:style:ci typecheck email:check agreements:check icons:check build build:demo${{ github.event_name == 'pull_request' && ' --affected' || '' }} --continue
+        run: bunx --bun turbo run lint:style:ci typecheck email:check agreements:check build build:demo${{ github.event_name == 'pull_request' && ' --affected' || '' }} --continue
+
+      # Outside --affected on purpose: icons:check belongs to the design system
+      # but scans the apps' sources for icon names, so a PR that only touches
+      # an app must still run it (turbo caches it by those inputs). Under
+      # --affected it was skipped there and failed on main after merge.
+      - name: Icon font covers every icon name in use
+        if: steps.scope.outputs.docs-only != 'true'
+        run: bunx --bun turbo run icons:check
 
   # Separate job: on 2-vCPU runners type-aware ESLint and tsc contend for CPU
   # when run together, so each gets its own runner.

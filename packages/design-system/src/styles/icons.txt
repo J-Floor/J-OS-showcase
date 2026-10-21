@@ -42,7 +42,6 @@ dishwasher
 done
 door_front
 download
-draft
 draw
 edit
 elevator
@@ -124,7 +123,6 @@ phone
 pill
 preview
 print
-problem
 productivity
 public
 qr_code
@@ -172,6 +170,7 @@ task
 task_alt
 text_fields_alt
 title
+toast
 today
 token
 tooltip
@@ -187,3 +186,4 @@ widgets
 width
 wifi
 window
+work
