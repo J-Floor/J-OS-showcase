@@ -148,6 +148,11 @@ const TEMPLATES: Entry[] = [
 		],
 	},
 	{
+		name: "boardOccupancyAlert",
+		file: "templates/boardOccupancyAlert.tsx",
+		fields: ["headline", "detail", "insightsUrl", "manageUrl", "logoUrl"],
+	},
+	{
 		name: "boardLifecycleAlert",
 		file: "templates/boardLifecycleAlert.tsx",
 		fields: ["headline", "rows", "communityUrl", "manageUrl", "logoUrl"],

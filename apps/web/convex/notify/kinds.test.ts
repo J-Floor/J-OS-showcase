@@ -9,11 +9,7 @@ import type { Recipient } from "./types.ts";
 
 const modules = import.meta.glob("../**/*.*s");
 const DAY = 86_400_000;
-const PUSH_ONLY = new Set([
-	"eventEndingSoon",
-	"eventStartingSoon",
-	"occupancyAlert",
-]);
+const PUSH_ONLY = new Set(["eventEndingSoon", "eventStartingSoon"]);
 
 type Seed = {
 	email: string;

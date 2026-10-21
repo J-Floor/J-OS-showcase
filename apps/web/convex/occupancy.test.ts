@@ -664,10 +664,16 @@ describe("offline alert", () => {
 
 	it("alerts the board once while a push counter stays silent, then once on return", async () => {
 		const backend = await boardBackend();
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
 		setOccupancyProviderForTests(
 			new FakeOccupancyProvider({ updates: [], maxSilenceMs: SILENCE })
 		);
 		await poll(backend);
+		expect(log).toHaveBeenCalledWith(
+			expect.stringContaining(
+				"[notify:occupancyAlert] board@example.com: J floor occupancy counter needs attention"
+			)
+		);
 		const sentFirst = await notifications(backend);
 		expect(sentFirst).toHaveLength(1);
 		const [first] = sentFirst;
