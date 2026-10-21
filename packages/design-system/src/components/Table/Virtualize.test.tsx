@@ -425,6 +425,70 @@ describe("Table onEndReached", () => {
 		});
 	});
 
+	it("waits while loadingMore, then fires once it clears with more rows", async () => {
+		const parent = measurableScrollParent(300);
+		const onEndReached = vi.fn();
+		const [data, setData] = createSignal(rows(4));
+		const [loadingMore, setLoadingMore] = createSignal(false);
+		render(() => (
+			<div ref={parent.ref} style={{ height: "300px" }}>
+				<Table.Root
+					columns={columns}
+					data={data()}
+					groupBy="group"
+					virtualize
+					loadingMore={loadingMore()}
+					onEndReached={onEndReached}
+				/>
+			</div>
+		));
+		await waitFor(() => {
+			expect(onEndReached).toHaveBeenCalledTimes(1);
+		});
+
+		// The page is in flight: more rows arriving does not re-fire.
+		setLoadingMore(true);
+		setData(rows(8));
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(onEndReached).toHaveBeenCalledTimes(1);
+
+		// The page landed: the new row count fires once.
+		setLoadingMore(false);
+		await waitFor(() => {
+			expect(onEndReached).toHaveBeenCalledTimes(2);
+		});
+	});
+
+	it("fires again after a page that landed with no rows", async () => {
+		const parent = measurableScrollParent(300);
+		const onEndReached = vi.fn();
+		const [loadingMore, setLoadingMore] = createSignal(false);
+		render(() => (
+			<div ref={parent.ref} style={{ height: "300px" }}>
+				<Table.Root
+					columns={columns}
+					data={rows(4)}
+					groupBy="group"
+					virtualize
+					loadingMore={loadingMore()}
+					onEndReached={onEndReached}
+				/>
+			</div>
+		));
+		await waitFor(() => {
+			expect(onEndReached).toHaveBeenCalledTimes(1);
+		});
+
+		setLoadingMore(true);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		setLoadingMore(false);
+		await waitFor(() => {
+			expect(onEndReached).toHaveBeenCalledTimes(2);
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(onEndReached).toHaveBeenCalledTimes(2);
+	});
+
 	it("waits until the window nears the last row", async () => {
 		const parent = measurableScrollParent(300);
 		const onEndReached = vi.fn();

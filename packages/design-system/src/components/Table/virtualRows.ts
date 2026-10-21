@@ -146,7 +146,7 @@ export function createScrollParent(): ScrollParent {
  * `END_REACHED_THRESHOLD_ROWS` rows of the last row, once per row count.
  */
 function watchEndReached<Data extends Record<string, unknown>>(options: {
-	props: Pick<TableRootProps<Data>, "onEndReached">;
+	props: Pick<TableRootProps<Data>, "onEndReached" | "loadingMore">;
 	rows: RowVirtualizer;
 	renderItems: Accessor<RenderItem<Data>[]>;
 	hidden: () => boolean;
@@ -157,13 +157,14 @@ function watchEndReached<Data extends Record<string, unknown>>(options: {
 	// leaves the end zone, so scrolling back in fires again.
 	let endReachedCount: number | undefined;
 	createEffect(() => {
-		if (
-			!props.onEndReached ||
-			!rows.virtualizing() ||
-			hidden() ||
-			loading()
-		)
+		if (!props.onEndReached) return;
+		// Cleared while a page loads: one that lands with no rows leaves the
+		// count as it was, and the end zone must still ask for the next one.
+		if (props.loadingMore) {
+			endReachedCount = undefined;
 			return;
+		}
+		if (!rows.virtualizing() || hidden() || loading()) return;
 		const count = renderItems().length;
 		const last = rows.virtualizer.getVirtualItems().at(-1);
 		if (count === 0 || !last) return;
@@ -180,7 +181,10 @@ function watchEndReached<Data extends Record<string, unknown>>(options: {
 export function createRowVirtualizer<
 	Data extends Record<string, unknown>,
 >(options: {
-	props: Pick<TableRootProps<Data>, "virtualize" | "onEndReached">;
+	props: Pick<
+		TableRootProps<Data>,
+		"virtualize" | "onEndReached" | "loadingMore"
+	>;
 	scroll: ScrollParent;
 	renderItems: Accessor<RenderItem<Data>[]>;
 	/** The `<tbody>`, whose top is where the rows start. */

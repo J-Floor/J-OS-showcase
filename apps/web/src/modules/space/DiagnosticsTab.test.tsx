@@ -1,5 +1,11 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen, waitFor } from "@solidjs/testing-library";
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@solidjs/testing-library";
 import { getFunctionName } from "convex/server";
 import { createSignal } from "solid-js";
 import { afterEach, beforeEach, expect, test, vi, type Mock } from "vitest";
@@ -367,14 +373,14 @@ test("two end-reached calls while a load is pending make one call", async () => 
 	endReached();
 	endReached();
 	expect(state.listBefore).toHaveBeenCalledTimes(1);
-	expect(
-		await screen.findByText("Loading older entries…")
-	).toBeInTheDocument();
+	const table = screen.getByRole("table");
+	await waitFor(() => {
+		expect(table.querySelectorAll("[data-skeleton-row]")).toHaveLength(3);
+	});
+	expect(screen.getByText("Ada A")).toBeInTheDocument();
 	gate.release?.(page([], "c1", true));
 	await waitFor(() => {
-		expect(
-			screen.queryByText("Loading older entries…")
-		).not.toBeInTheDocument();
+		expect(table.querySelectorAll("[data-skeleton-row]")).toHaveLength(0);
 	});
 });
 
@@ -410,7 +416,7 @@ test("a new head row appears on top and a row in both lists renders once", async
 	expect(text.indexOf("Newest N")).toBeLessThan(text.indexOf("Dup D"));
 });
 
-test("a failed older load says so quietly and the next end reached retries", async () => {
+test("a failed older load waits for Try again, not the next end reached", async () => {
 	state.head = [row("a", at(0), "Ada A")];
 	state.listBefore
 		.mockRejectedValueOnce(new Error("boom"))
@@ -421,6 +427,8 @@ test("a failed older load says so quietly and the next end reached retries", asy
 		await screen.findByText("Couldn't load older entries.")
 	).toBeInTheDocument();
 	endReached();
+	expect(state.listBefore).toHaveBeenCalledTimes(1);
+	fireEvent.click(screen.getByRole("button", { name: "Try again" }));
 	expect(await screen.findByText("Old One")).toBeInTheDocument();
 	expect(state.listBefore).toHaveBeenCalledTimes(2);
 	expect(state.listBefore).toHaveBeenLastCalledWith({

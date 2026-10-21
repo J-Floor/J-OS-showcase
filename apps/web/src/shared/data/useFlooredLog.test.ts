@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { waitFor } from "@solidjs/testing-library";
-import { createRoot, createSignal } from "solid-js";
+import { createEffect, createRoot, createSignal } from "solid-js";
 import {
 	afterEach,
 	beforeEach,
@@ -90,15 +90,26 @@ function page(rows: Row[], continueCursor: string, isDone: boolean) {
 
 let dispose: (() => void) | undefined;
 
-function mount(options: { start?: () => boolean } = {}): FlooredLog<Row> {
+function mount(
+	options: {
+		start?: () => boolean;
+		watch?: (log: FlooredLog<Row>) => void;
+	} = {}
+): FlooredLog<Row> {
 	const shouldStart = options.start ?? (() => true);
 	return createRoot((disposeRoot) => {
 		dispose = disposeRoot;
-		return useFlooredLog<Row>({
+		const log = useFlooredLog<Row>({
 			queries: QUERIES,
 			pageSize: PAGE_SIZE,
 			start: shouldStart,
 		});
+		const { watch } = options;
+		if (watch)
+			createEffect(() => {
+				watch(log);
+			});
+		return log;
 	});
 }
 
@@ -242,10 +253,10 @@ describe("useFlooredLog", () => {
 		});
 
 		await log.loadMore();
-		expect(log.loadFailed()).toBe(true);
-		expect(log.loading()).toBe(false);
+		expect(log.loadMoreFailed()).toBe(true);
+		expect(log.loadingMore()).toBe(false);
 		await log.loadMore();
-		expect(log.loadFailed()).toBe(false);
+		expect(log.loadMoreFailed()).toBe(false);
 		expect(log.rows()?.map((entry) => entry._id)).toEqual(["a", "o"]);
 		expect(state.listBefore).toHaveBeenLastCalledWith({
 			before: 100,
@@ -268,10 +279,42 @@ describe("useFlooredLog", () => {
 
 		const first = log.loadMore();
 		void log.loadMore();
-		expect(log.loading()).toBe(true);
+		expect(log.loadingMore()).toBe(true);
 		expect(state.listBefore).toHaveBeenCalledTimes(1);
 		gate.release?.(page([], "c1", true));
 		await first;
-		expect(log.loading()).toBe(false);
+		expect(log.loadingMore()).toBe(false);
+	});
+
+	it("lands a page's outcome in the same update as loading going false", async () => {
+		setHead([row("a")]);
+		state.listBefore
+			.mockRejectedValueOnce(new Error("boom"))
+			.mockResolvedValueOnce(page([row("o")], "c1", true));
+		const idle: { loadMoreFailed: boolean; canLoadMore: boolean }[] = [];
+		const log = mount({
+			watch: (watched) => {
+				if (!watched.loadingMore())
+					idle.push({
+						loadMoreFailed: watched.loadMoreFailed(),
+						canLoadMore: watched.canLoadMore(),
+					});
+			},
+		});
+		await waitFor(() => {
+			expect(log.canLoadMore()).toBe(true);
+		});
+
+		idle.length = 0;
+		const failing = log.loadMore();
+		expect(log.loadingMore()).toBe(true);
+		await failing;
+		expect(log.loadMoreFailed()).toBe(true);
+		expect(idle.some((seen) => !seen.loadMoreFailed)).toBe(false);
+
+		idle.length = 0;
+		await log.loadMore();
+		expect(log.canLoadMore()).toBe(false);
+		expect(idle.some((seen) => seen.canLoadMore)).toBe(false);
 	});
 });

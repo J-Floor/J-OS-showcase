@@ -1,4 +1,4 @@
-import { Table, type JfColumnDefinition } from "@j-os/design-system";
+import { Button, Table, type JfColumnDefinition } from "@j-os/design-system";
 import { Show, createMemo, type JSX } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
@@ -176,18 +176,30 @@ export function DiagnosticsTab(): JSX.Element {
 								data={rows()}
 								groupBy="day"
 								virtualize
+								loadingMore={log.loadingMore()}
 								onEndReached={() => {
-									void log.loadMore();
+									// A failed page waits for "Try again":
+									// the end is still in view, so retrying
+									// here would loop while offline.
+									if (!log.loadMoreFailed())
+										void log.loadMore();
 								}}
 							/>
 						</div>
 					</Show>
 				</Show>
-				<Show when={log.loadFailed()}>
-					<p class={styles.empty}>Couldn't load older entries.</p>
-				</Show>
-				<Show when={log.loading()}>
-					<p class={styles.empty}>Loading older entries…</p>
+				<Show when={log.loadMoreFailed()}>
+					<div class={styles.retry}>
+						<p class={styles.empty}>Couldn't load older entries.</p>
+						<Button
+							variant="tertiary"
+							onClick={() => {
+								void log.loadMore();
+							}}
+						>
+							Try again
+						</Button>
+					</div>
 				</Show>
 			</section>
 		</div>

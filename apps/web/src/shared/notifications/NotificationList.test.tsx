@@ -7,7 +7,7 @@ import {
 	waitFor,
 } from "@solidjs/testing-library";
 import { createSignal } from "solid-js";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 const { head, clientQuery, markRead, markAllRead, navigate, toasterCreate } =
 	vi.hoisted(() => ({
@@ -44,6 +44,43 @@ vi.mock("../../../convex/_generated/api", () => ({
 }));
 vi.mock("@solidjs/router", () => ({ useNavigate: () => navigate }));
 vi.mock("../toaster.ts", () => ({ toaster: { create: toasterCreate } }));
+
+/** One per sentinel mount, in mount order, with the elements it observes. */
+const intersections: {
+	callback: IntersectionObserverCallback;
+	elements: Element[];
+}[] = [];
+
+class StubIntersectionObserver {
+	private readonly entry: (typeof intersections)[number];
+	constructor(callback: IntersectionObserverCallback) {
+		this.entry = { callback, elements: [] };
+		intersections.push(this.entry);
+	}
+	observe(element: Element) {
+		this.entry.elements.push(element);
+	}
+	unobserve() {}
+	disconnect() {}
+}
+
+/** Report the current sentinel as scrolled into view, or not. */
+function reachEnd(isIntersecting = true): void {
+	const current = intersections.at(-1);
+	if (!current) throw new Error("no sentinel is observed");
+	current.callback(
+		current.elements.map(
+			(target) =>
+				({ isIntersecting, target }) as IntersectionObserverEntry
+		),
+		{} as IntersectionObserver
+	);
+}
+
+function listBeforeCalls(): number {
+	return clientQuery.mock.calls.filter((call) => call[0] === "listBefore")
+		.length;
+}
 
 import styles from "./NotificationList.module.scss";
 import { NotificationList } from "./NotificationList.tsx";
@@ -106,8 +143,14 @@ function rowOf(title: string): HTMLElement {
 	return item;
 }
 
+beforeEach(() => {
+	vi.stubGlobal("IntersectionObserver", StubIntersectionObserver);
+});
+
 afterEach(() => {
 	cleanup();
+	vi.unstubAllGlobals();
+	intersections.length = 0;
 	vi.clearAllMocks();
 	head.data = undefined;
 	head.error = undefined;
@@ -179,32 +222,113 @@ test("a failed markRead still navigates, toasts, and leaves the row unread", asy
 	});
 });
 
-test("Load more appends an older page and hides once a page comes back done", async () => {
+test("reaching the end loads an older page, with skeleton rows until it lands", async () => {
 	head.data = [TASK];
 	const older = row("n9", "Older one", TODAY_NOON - 2 * DAY);
+	const gate: { release?: (value: unknown) => void } = {};
 	serve({ since: TODAY_NOON }, [
-		{ page: [older], isDone: true, continueCursor: "c1" },
+		new Promise((resolve) => {
+			gate.release = resolve;
+		}),
 	]);
 	renderList();
-	fireEvent.click(await screen.findByRole("button", { name: "Load more" }));
-	expect(await screen.findByText("Older one")).toBeInTheDocument();
+	await waitFor(() => {
+		expect(intersections).toHaveLength(1);
+	});
+	expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+	reachEnd();
+	expect(
+		await screen.findByRole("status", { name: "Loading" })
+	).toBeInTheDocument();
 	expect(clientQuery).toHaveBeenCalledWith("listBefore", {
 		before: TODAY_NOON,
 		paginationOpts: { numItems: 50, cursor: null },
 	});
-	expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+	gate.release?.({ page: [older], isDone: true, continueCursor: "c1" });
+	expect(await screen.findByText("Older one")).toBeInTheDocument();
+	expect(screen.queryByRole("status", { name: "Loading" })).toBeNull();
+	expect(document.querySelector(`.${styles.sentinel}`)).toBeNull();
 });
 
-test("a failed Load more offers to try again", async () => {
+test("a short page that leaves the end in view loads the next one unprompted", async () => {
 	head.data = [TASK];
-	serve({ since: TODAY_NOON }, [new Error("offline")]);
+	serve({ since: TODAY_NOON }, [
+		{
+			page: [row("n9", "Older one", TODAY_NOON - 2 * DAY)],
+			isDone: false,
+			continueCursor: "c1",
+		},
+		{
+			page: [row("n8", "Older two", TODAY_NOON - 3 * DAY)],
+			isDone: true,
+			continueCursor: "c2",
+		},
+	]);
 	renderList();
-	fireEvent.click(await screen.findByRole("button", { name: "Load more" }));
-	expect(
-		await screen.findByRole("button", {
-			name: "Couldn't load more. Try again.",
-		})
-	).toBeInTheDocument();
+	await waitFor(() => {
+		expect(intersections).toHaveLength(1);
+	});
+	reachEnd();
+	expect(await screen.findByText("Older one")).toBeInTheDocument();
+	await waitFor(() => {
+		expect(intersections).toHaveLength(2);
+	});
+	expect(listBeforeCalls()).toBe(1);
+	reachEnd();
+	expect(await screen.findByText("Older two")).toBeInTheDocument();
+	expect(clientQuery).toHaveBeenLastCalledWith("listBefore", {
+		before: TODAY_NOON,
+		paginationOpts: { numItems: 50, cursor: "c1" },
+	});
+});
+
+test("a page that pushes the end out of view loads nothing more", async () => {
+	head.data = [TASK];
+	serve({ since: TODAY_NOON }, [
+		{
+			page: [row("n9", "Older one", TODAY_NOON - 2 * DAY)],
+			isDone: false,
+			continueCursor: "c1",
+		},
+		{ page: [], isDone: true, continueCursor: "c2" },
+	]);
+	renderList();
+	await waitFor(() => {
+		expect(intersections).toHaveLength(1);
+	});
+	reachEnd();
+	expect(await screen.findByText("Older one")).toBeInTheDocument();
+	await Promise.resolve();
+	expect(listBeforeCalls()).toBe(1);
+	await waitFor(() => {
+		expect(intersections).toHaveLength(2);
+	});
+	reachEnd(false);
+	await Promise.resolve();
+	expect(listBeforeCalls()).toBe(1);
+	expect(screen.queryByRole("status", { name: "Loading" })).toBeNull();
+});
+
+test("a failed page says so and Try again fetches it", async () => {
+	head.data = [TASK];
+	serve({ since: TODAY_NOON }, [
+		new Error("offline"),
+		{
+			page: [row("n9", "Older one", TODAY_NOON - 2 * DAY)],
+			isDone: true,
+			continueCursor: "c1",
+		},
+	]);
+	renderList();
+	await waitFor(() => {
+		expect(intersections).toHaveLength(1);
+	});
+	reachEnd();
+	expect(await screen.findByText("Couldn't load more.")).toBeInTheDocument();
+	expect(screen.queryByRole("status", { name: "Loading" })).toBeNull();
+	fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+	expect(await screen.findByText("Older one")).toBeInTheDocument();
+	expect(screen.queryByText("Couldn't load more.")).toBeNull();
 });
 
 test("an empty history shows the empty state", () => {

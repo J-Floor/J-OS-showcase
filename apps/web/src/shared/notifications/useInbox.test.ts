@@ -27,8 +27,8 @@ vi.mock("../data/useFlooredLog.ts", () => ({
 		rows: () => rows,
 		failed: () => false,
 		canLoadMore: () => false,
-		loading: () => false,
-		loadFailed: () => false,
+		loadingMore: () => false,
+		loadMoreFailed: () => false,
 		loadMore: () => Promise.resolve(),
 	}),
 }));

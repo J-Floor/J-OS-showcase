@@ -45,12 +45,27 @@ function PadRow(rowProps: { height: number }): JSX.Element {
 /** Skeleton rows lined up with the visible columns. */
 function LoadingRows<Data extends Record<string, unknown>>(body: {
 	context: BodyContext<Data>;
+	rows?: number;
 }): JSX.Element {
 	return (
 		<SkeletonRows
 			columns={columnCount(body.context.table)}
 			hasActions={hasActions(body.context.table)}
+			rows={body.rows}
 		/>
+	);
+}
+
+const LOADING_MORE_ROWS = 3;
+
+/** Skeleton rows after the last row while the next page loads. */
+function LoadingMoreRows<Data extends Record<string, unknown>>(body: {
+	context: BodyContext<Data>;
+}): JSX.Element {
+	return (
+		<Show when={body.context.props.loadingMore}>
+			<LoadingRows context={body.context} rows={LOADING_MORE_ROWS} />
+		</Show>
 	);
 }
 
@@ -232,6 +247,7 @@ function VirtualBody<Data extends Record<string, unknown>>(body: {
 			<Show when={padBottom() > 0}>
 				<PadRow height={padBottom()} />
 			</Show>
+			<LoadingMoreRows context={body.context} />
 		</>
 	);
 }
@@ -244,9 +260,12 @@ function FlatBody<Data extends Record<string, unknown>>(body: {
 			when={body.context.table.getRowModel().rows.length > 0}
 			fallback={<EmptyRow context={body.context} />}
 		>
-			<For each={body.context.table.getRowModel().rows}>
-				{(row) => renderRow(body.context, row)}
-			</For>
+			<>
+				<For each={body.context.table.getRowModel().rows}>
+					{(row) => renderRow(body.context, row)}
+				</For>
+				<LoadingMoreRows context={body.context} />
+			</>
 		</Show>
 	);
 }
@@ -290,27 +309,33 @@ function GroupedBody<Data extends Record<string, unknown>>(body: {
 					<Show
 						when={body.context.rows.virtualizing()}
 						fallback={
-							<For each={body.context.groups.rowGroups()}>
-								{(group) => (
-									<>
-										<GroupHeaderRow
-											context={body.context}
-											group={group}
-										/>
-										<Show
-											when={body.context.groups.isGroupExpanded(
-												group.key
-											)}
-										>
-											<For each={group.rows}>
-												{(row) =>
-													renderRow(body.context, row)
-												}
-											</For>
-										</Show>
-									</>
-								)}
-							</For>
+							<>
+								<For each={body.context.groups.rowGroups()}>
+									{(group) => (
+										<>
+											<GroupHeaderRow
+												context={body.context}
+												group={group}
+											/>
+											<Show
+												when={body.context.groups.isGroupExpanded(
+													group.key
+												)}
+											>
+												<For each={group.rows}>
+													{(row) =>
+														renderRow(
+															body.context,
+															row
+														)
+													}
+												</For>
+											</Show>
+										</>
+									)}
+								</For>
+								<LoadingMoreRows context={body.context} />
+							</>
 						}
 					>
 						<VirtualBody context={body.context} />

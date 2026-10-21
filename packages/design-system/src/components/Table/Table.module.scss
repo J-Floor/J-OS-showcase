@@ -523,10 +523,13 @@ $track-properties: ();
 
 /* Loading placeholders — `<tr>`s inside a real `<tbody>`, sized to match the
    real rows they stand in for ($row-height) so the swap from skeleton to
-   content does not shift the page. */
+   content does not shift the page. Never a scroll anchor: rows below the
+   fold are pinned to the skeleton, so the browser would keep the view at the
+   end as each page lands and every page would ask for the next. */
 .skeletonRow {
 	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value */
 	block-size: $row-height;
+	overflow-anchor: none;
 
 	td {
 		padding-inline: var(--jf-spacing-near);

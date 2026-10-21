@@ -1,6 +1,16 @@
-import { Button, EmptyState, List } from "@j-os/design-system";
+import { Button, EmptyState, List, Skeleton } from "@j-os/design-system";
 import { useNavigate } from "@solidjs/router";
-import { createMemo, For, type JSX, Show } from "solid-js";
+import {
+	createEffect,
+	createMemo,
+	createSignal,
+	For,
+	Index,
+	type JSX,
+	onCleanup,
+	Show,
+	untrack,
+} from "solid-js";
 
 import { ICONS } from "../icons.ts";
 import { dayLabel, formatAgo } from "../time.ts";
@@ -34,6 +44,32 @@ function rowClass(row: InboxRow): string {
 	return row.read ? styles.row : `${styles.row} ${styles.unread}`;
 }
 
+const LOADING_MORE_ROWS = 3;
+
+/** Placeholder rows in one card, where the next page's rows will land. Plain
+ *  blocks rather than `List.Item`s, which would each add a tab stop. */
+function LoadingMoreRows(): JSX.Element {
+	return (
+		<section
+			class={`${styles.day} ${styles.noScrollAnchor}`}
+			role="status"
+			aria-label="Loading"
+		>
+			<div class={`${styles.group} ${styles.loadingMore}`}>
+				<Index each={Array.from({ length: LOADING_MORE_ROWS })}>
+					{() => (
+						<div class={styles.skeletonRow}>
+							<Skeleton width="long" />
+							<Skeleton width="full" />
+							<Skeleton width="short" />
+						</div>
+					)}
+				</Index>
+			</div>
+		</section>
+	);
+}
+
 function NotificationRow(props: {
 	row: InboxRow;
 	onOpen: (row: InboxRow) => void;
@@ -57,10 +93,74 @@ function NotificationRow(props: {
 	);
 }
 
+/** Below the last row: the skeleton card while a page loads, a retry when it
+ *  failed, and the sentinel that asks for the next page. */
+function LoadMoreFooter(props: { inbox: Inbox }): JSX.Element {
+	// No `root`: the drawer body's `overflow` clips the sentinel until it is
+	// scrolled to, which the observer respects.
+	const [atEnd, setAtEnd] = createSignal(false);
+	function watchEnd(element: HTMLDivElement): void {
+		const observer = new IntersectionObserver((entries) => {
+			// An entry queued before `disconnect` can still be delivered after
+			// it; a removed sentinel must not leave `atEnd` stuck true.
+			setAtEnd(
+				element.isConnected &&
+					entries.some((entry) => entry.isIntersecting)
+			);
+		});
+		observer.observe(element);
+		onCleanup(() => {
+			observer.disconnect();
+			setAtEnd(false);
+		});
+	}
+
+	// The sentinel is mounted only while a load may start, so each page that
+	// lands mounts a fresh one. Its observer's first entry is measured after
+	// the new rows are laid out: a short page that leaves it in view loads the
+	// next one, a full page that pushed it away does not. Keeping one sentinel
+	// would leave `atEnd` true from before the page landed and fetch twice.
+	createEffect(() => {
+		if (atEnd()) void untrack(() => props.inbox.loadMore());
+	});
+	return (
+		<>
+			<Show when={props.inbox.loadingMore()}>
+				<LoadingMoreRows />
+			</Show>
+			<Show when={props.inbox.loadMoreFailed()}>
+				<div class={styles.retry}>
+					<p class={styles.message}>Couldn't load more.</p>
+					<Button
+						variant="tertiary"
+						onClick={() => {
+							void props.inbox.loadMore();
+						}}
+					>
+						Try again
+					</Button>
+				</div>
+			</Show>
+			<Show
+				when={
+					props.inbox.canLoadMore() &&
+					!props.inbox.loadingMore() &&
+					!props.inbox.loadMoreFailed()
+				}
+			>
+				<div
+					ref={watchEnd}
+					class={`${styles.sentinel} ${styles.noScrollAnchor}`}
+				/>
+			</Show>
+		</>
+	);
+}
+
 /**
  * The drawer's notification history: rows grouped by day, unread ones
  * marked. A click closes the drawer, opens the row's page and marks it read
- * without waiting; older rows load a page at a time.
+ * without waiting; older rows load a page at a time as the end scrolls into view.
  */
 export function NotificationList(props: {
 	inbox: Inbox;
@@ -124,19 +224,7 @@ export function NotificationList(props: {
 								</section>
 							)}
 						</For>
-						<Show when={props.inbox.canLoadMore()}>
-							<Button
-								variant="tertiary"
-								isLoading={props.inbox.loadingMore()}
-								onClick={() => {
-									void props.inbox.loadMore();
-								}}
-							>
-								{props.inbox.loadMoreFailed()
-									? "Couldn't load more. Try again."
-									: "Load more"}
-							</Button>
-						</Show>
+						<LoadMoreFooter inbox={props.inbox} />
 					</div>
 				</Show>
 			</Show>

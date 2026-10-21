@@ -1,4 +1,4 @@
-import { Show, createSignal, type JSX } from "solid-js";
+import { Show, createSignal, onCleanup, type JSX } from "solid-js";
 import { Button, Icon, Table } from "@j-os/design-system";
 
 import type { JfColumnDefinition } from "@j-os/design-system";
@@ -32,9 +32,17 @@ function entries(from: number): Entry[] {
 	});
 }
 
-/** A virtualised table that appends a chunk each time its end nears. */
+const ENDLESS_DELAY_MS = 600;
+
+/** A virtualised table that appends a chunk each time its end nears, with
+ *  skeleton rows while the chunk "loads". */
 function EndlessTable(): JSX.Element {
 	const [rows, setRows] = createSignal(entries(0));
+	const [loadingMore, setLoadingMore] = createSignal(false);
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	onCleanup(() => {
+		clearTimeout(timer);
+	});
 	return (
 		<div class={styles.endless}>
 			<Table.Root
@@ -42,9 +50,14 @@ function EndlessTable(): JSX.Element {
 				data={rows()}
 				groupBy="batch"
 				virtualize
+				loadingMore={loadingMore()}
 				onEndReached={() => {
 					if (rows().length >= ENDLESS_MAX) return;
-					setRows((prev) => [...prev, ...entries(prev.length)]);
+					setLoadingMore(true);
+					timer = setTimeout(() => {
+						setRows((prev) => [...prev, ...entries(prev.length)]);
+						setLoadingMore(false);
+					}, ENDLESS_DELAY_MS);
 				}}
 			/>
 		</div>

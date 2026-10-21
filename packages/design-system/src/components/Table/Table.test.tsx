@@ -264,6 +264,77 @@ async function settle(): Promise<void> {
 	await Promise.resolve();
 }
 
+describe("loadingMore", () => {
+	test("appends three skeleton rows after the data rows", () => {
+		render(() => (
+			<Table.Root columns={columns as never} data={data()} loadingMore />
+		));
+		const rows = [...document.querySelectorAll("tbody tr")];
+		expect(rows).toHaveLength(data().length + 3);
+		expect(
+			rows.slice(-3).every((row) => row.hasAttribute("data-skeleton-row"))
+		).toBe(true);
+		expect(screen.getByText("A")).toBeInTheDocument();
+	});
+
+	test("skeleton rows leave once it turns off", () => {
+		const [loadingMore, setLoadingMore] = createSignal(true);
+		render(() => (
+			<Table.Root
+				columns={columns as never}
+				data={data()}
+				loadingMore={loadingMore()}
+			/>
+		));
+		expect(document.querySelectorAll("[data-skeleton-row]")).toHaveLength(
+			3
+		);
+		setLoadingMore(false);
+		expect(document.querySelectorAll("[data-skeleton-row]")).toHaveLength(
+			0
+		);
+	});
+
+	test("a grouped table appends them after the last group", () => {
+		render(() => (
+			<Table.Root
+				columns={columns as never}
+				data={data()}
+				groupBy="name"
+				loadingMore
+			/>
+		));
+		const rows = [...document.querySelectorAll("tbody tr")];
+		expect(
+			rows.slice(-3).every((row) => row.hasAttribute("data-skeleton-row"))
+		).toBe(true);
+		expect(document.querySelectorAll("[data-skeleton-row]")).toHaveLength(
+			3
+		);
+		expect(
+			rows
+				.slice(0, -3)
+				.flatMap((row) => [
+					...row.querySelectorAll('[data-column-id="score"]'),
+				])
+				.map((cell) => cell.textContent)
+		).toEqual(["1", "2"]);
+	});
+
+	test("the first-load skeleton wins while data is undefined", () => {
+		render(() => (
+			<Table.Root
+				columns={columns as never}
+				data={undefined}
+				loadingMore
+			/>
+		));
+		expect(document.querySelectorAll("[data-skeleton-row]")).toHaveLength(
+			8
+		);
+	});
+});
+
 describe("column tracks", () => {
 	let noPadding: HTMLStyleElement;
 

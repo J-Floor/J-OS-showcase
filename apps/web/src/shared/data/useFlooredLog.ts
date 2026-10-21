@@ -6,6 +6,7 @@ import type {
 import { useConvexClient } from "convex-solidjs";
 import {
 	type Accessor,
+	batch,
 	createEffect,
 	createMemo,
 	createSignal,
@@ -44,8 +45,8 @@ export type FlooredLog<Row> = {
 	rows: Accessor<Row[] | undefined>;
 	failed: Accessor<boolean>;
 	canLoadMore: Accessor<boolean>;
-	loading: Accessor<boolean>;
-	loadFailed: Accessor<boolean>;
+	loadingMore: Accessor<boolean>;
+	loadMoreFailed: Accessor<boolean>;
 	loadMore: () => Promise<void>;
 };
 
@@ -134,8 +135,8 @@ export function useFlooredLog<Row extends { _id: string }>(options: {
 	});
 	const [older, setOlder] = createSignal<Row[]>([]);
 	const [exhausted, setExhausted] = createSignal(false);
-	const [loading, setLoading] = createSignal(false);
-	const [loadFailed, setLoadFailed] = createSignal(false);
+	const [loadingMore, setLoadingMore] = createSignal(false);
+	const [loadMoreFailed, setLoadMoreFailed] = createSignal(false);
 	let cursor: string | null = null;
 	let isBusy = false;
 	let isWanted = false;
@@ -181,8 +182,8 @@ export function useFlooredLog<Row extends { _id: string }>(options: {
 		since: number
 	): Promise<void> {
 		isBusy = true;
-		setLoading(true);
-		setLoadFailed(false);
+		setLoadingMore(true);
+		setLoadMoreFailed(false);
 		const result = await call(
 			activeClient.query(options.queries.listBefore, {
 				before: since,
@@ -192,15 +193,19 @@ export function useFlooredLog<Row extends { _id: string }>(options: {
 		);
 		isBusy = false;
 		if (isDisposed()) return;
-		setLoading(false);
-		if (result.isErr()) {
-			setLoadFailed(true);
-			return;
-		}
-		setOlder((prev) => [...prev, ...result.value.page]);
-		cursor = result.value.continueCursor;
-		if (result.value.isDone) setExhausted(true);
+		// Solid does not batch after an await, so without this a reader would
+		// see `loadingMore` false while the page's outcome is not yet set.
+		batch(() => {
+			setLoadingMore(false);
+			if (result.isErr()) {
+				setLoadMoreFailed(true);
+				return;
+			}
+			setOlder((prev) => [...prev, ...result.value.page]);
+			cursor = result.value.continueCursor;
+			if (result.value.isDone) setExhausted(true);
+		});
 	}
 
-	return { rows, failed, canLoadMore, loading, loadFailed, loadMore };
+	return { rows, failed, canLoadMore, loadingMore, loadMoreFailed, loadMore };
 }

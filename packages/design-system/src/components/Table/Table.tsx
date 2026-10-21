@@ -31,6 +31,10 @@ export type TableRootProps<Data extends Record<string, unknown>> = {
 	data: Data[] | undefined;
 	/** Force the loading skeleton even when `data` is defined. */
 	loading?: boolean;
+	/** Append skeleton rows after the last row while the next page loads.
+	 *  Ignored while `loading`: the first-load skeleton covers the body. With
+	 *  zero rows the empty row shows and no skeleton rows render. */
+	loadingMore?: boolean;
 	initialColumnSorting?: SortingState;
 	initialColumnFilters?: ColumnFiltersState;
 	/** Group rows natively by this column id. */
@@ -72,7 +76,11 @@ export type TableRootProps<Data extends Record<string, unknown>> = {
 	 *
 	 * Fires once per row count: it re-arms when the number of rows changes, or
 	 * when the window scrolls back out of that zone and returns. Sitting at the
-	 * end with the same rows never fires it twice.
+	 * end with the same rows never fires it twice. It also waits while
+	 * `loadingMore` is true, and fires again when `loadingMore` clears at the
+	 * end, even with the same rows: a page that came back empty still asks
+	 * for the next. A caller whose page failed should not retry from here, or
+	 * it loops while offline.
 	 *
 	 * Virtualised tables only (`virtualize` + `groupBy`, inside a bounded scroll
 	 * box). It reads the virtualiser's window, so an unvirtualised table, or
