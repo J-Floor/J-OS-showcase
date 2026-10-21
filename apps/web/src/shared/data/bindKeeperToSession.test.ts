@@ -5,7 +5,6 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api } from "../../../convex/_generated/api";
 
 import { bindKeeperToSession } from "./bindKeeperToSession.ts";
-import { lastAnswer, rememberAnswer } from "./lastAnswer.ts";
 import {
 	LINGER_TTL,
 	bindQueryKeeper,
@@ -63,18 +62,8 @@ it("a refetch re-emitting the same user does not re-activate after sign-out bega
 it("a new user with no signed-out moment between starts from empty caches", () => {
 	const { setState, dispose } = setup({ data: { user: { id: "a" } } });
 	retain(api.events.listEvents, {}, LINGER_TTL);
-	rememberAnswer("occupancy", { enabled: true });
 	expect(keptCount()).toBe(1);
 	setState({ data: { user: { id: "b" } } });
 	expect(keptCount()).toBe(0);
-	expect(lastAnswer("occupancy", LINGER_TTL)).toBeUndefined();
-	dispose();
-});
-
-it("signing out forgets remembered answers", () => {
-	const { setState, dispose } = setup({ data: { user: { id: "a" } } });
-	rememberAnswer("occupancy", { enabled: true });
-	setState({ data: null });
-	expect(lastAnswer("occupancy", LINGER_TTL)).toBeUndefined();
 	dispose();
 });

@@ -79,4 +79,23 @@ crons.daily(
 	{}
 );
 
+// The occupancy counter, every 5 minutes, when the installed counter can be
+// polled. No-ops on deployments without one.
+crons.interval(
+	"poll occupancy counter",
+	{ minutes: 5 },
+	internal.occupancy.poll,
+	{}
+);
+
+// Start each occupancy day from an empty space: counters drift with missed
+// events. Hourly on the hour, because 04:00 Zurich is on the hour in UTC in
+// both seasons; the runs that are not the day boundary change nothing.
+crons.hourly(
+	"reset occupancy for the new day",
+	{ minuteUTC: 0 },
+	internal.occupancy.resetDay,
+	{}
+);
+
 export default crons;

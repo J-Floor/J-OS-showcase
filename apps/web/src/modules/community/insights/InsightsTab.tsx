@@ -1,5 +1,5 @@
 import { Chart, Skeleton, type ChartDatum } from "@j-os/design-system";
-import { For, Show, createMemo, type JSX, type ParentProps } from "solid-js";
+import { For, createMemo, type JSX } from "solid-js";
 
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
 import {
@@ -8,6 +8,8 @@ import {
 	useMembers,
 } from "../data/communityData.tsx";
 
+import { AttendanceSection } from "./AttendanceSection.tsx";
+import { ChartCard } from "./ChartCard.tsx";
 import styles from "./InsightsTab.module.scss";
 import {
 	applicationsPerMonth,
@@ -93,27 +95,6 @@ function useInsightMetrics() {
 		rostersLoading,
 		hostsLoading,
 	};
-}
-
-/** A chart card: its title and hint, then the chart, or a chart-sized
- *  skeleton until its data is in. */
-function ChartCard(
-	props: ParentProps<{ title: string; hint: string; loading: boolean }>
-) {
-	return (
-		<figure class={styles.card}>
-			<figcaption class={styles.cardTitle}>
-				{props.title}
-				<span class={styles.cardHint}>{props.hint}</span>
-			</figcaption>
-			<Show
-				when={!props.loading}
-				fallback={<Skeleton class={styles.chartSkeleton} />}
-			>
-				{props.children}
-			</Show>
-		</figure>
-	);
 }
 
 function RunwayCard(props: {
@@ -304,6 +285,8 @@ export function InsightsTab(): JSX.Element {
 			</section>
 
 			<InsightCharts metrics={metrics} />
+
+			<AttendanceSection />
 		</div>
 	);
 }

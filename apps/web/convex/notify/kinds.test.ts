@@ -9,6 +9,11 @@ import type { Recipient } from "./types.ts";
 
 const modules = import.meta.glob("../**/*.*s");
 const DAY = 86_400_000;
+const PUSH_ONLY = new Set([
+	"eventEndingSoon",
+	"eventStartingSoon",
+	"occupancyAlert",
+]);
 
 type Seed = {
 	email: string;
@@ -65,11 +70,10 @@ describe("registry", () => {
 		).toEqual(sorted(Object.keys(KINDS)));
 	});
 
-	it("gives every kind an email except the push-only event reminders", () => {
+	it("gives every kind an email except the push-only ones", () => {
 		for (const [name, definition] of Object.entries(KINDS)) {
 			expect(definition.push, name).toBeTypeOf("function");
-			if (name === "eventEndingSoon" || name === "eventStartingSoon")
-				expect(definition.email).toBeUndefined();
+			if (PUSH_ONLY.has(name)) expect(definition.email).toBeUndefined();
 			else expect(definition.email, name).toBeTypeOf("function");
 		}
 	});

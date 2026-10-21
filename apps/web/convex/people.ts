@@ -57,7 +57,6 @@ import { invariant, refuse, unwrap, unwrapLogged } from "./lib/result.ts";
 import {
 	ACCESS_TIERS,
 	BOARD_LEVEL,
-	COMMUNITY_TIERS,
 	CORE_AND_BOARD,
 	isAccessTier,
 	isBoardLevel,
@@ -1269,22 +1268,5 @@ export const attendedEvents = query({
 				});
 		}
 		return out;
-	},
-});
-
-/**
- * Whether the caller takes part in the community (guest and up, not staff,
- * inside their window) — the gate for actions, which cannot call `requireRole`
- * themselves.
- */
-export const callerInCommunity = internalQuery({
-	args: {},
-	handler: async (context): Promise<boolean> => {
-		try {
-			unwrap(await requireRole(context, COMMUNITY_TIERS));
-			return true;
-		} catch {
-			return false;
-		}
 	},
 });

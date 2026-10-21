@@ -5,6 +5,7 @@ import { type EventsError, eventsMessages } from "./events.ts";
 import { type InputError, inputMessages } from "./input.ts";
 import { type InventoryError, inventoryMessages } from "./inventory.ts";
 import { type NotifyError, notifyMessages } from "./notify.ts";
+import { type OccupancyError, occupancyMessages } from "./occupancy.ts";
 import { type PeopleError, peopleMessages } from "./people.ts";
 import { type WifiError, wifiMessages } from "./wifi.ts";
 
@@ -16,6 +17,7 @@ export type AppError =
 	| InputError
 	| InventoryError
 	| NotifyError
+	| OccupancyError
 	| PeopleError
 	| WifiError;
 
@@ -27,6 +29,7 @@ const MESSAGES: Record<AppError["type"], string> = {
 	...inputMessages,
 	...inventoryMessages,
 	...notifyMessages,
+	...occupancyMessages,
 	...peopleMessages,
 	...wifiMessages,
 };

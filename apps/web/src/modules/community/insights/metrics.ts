@@ -291,7 +291,7 @@ function monthKey(at: number): string {
 
 const YEARS_PER_CENTURY = 100;
 
-const MONTH_NAMES = [
+export const MONTH_NAMES = [
 	"Jan",
 	"Feb",
 	"Mar",
@@ -306,6 +306,14 @@ const MONTH_NAMES = [
 	"Dec",
 ];
 
+/** The axis label of a month (`month` is 1 to 12). The year appears on January
+ *  only: repeating it on all twelve labels crowds the axis to say one thing. */
+export function monthLabel(year: number, month: number): string {
+	return month === 1
+		? `${MONTH_NAMES[0]} ${String(year % YEARS_PER_CENTURY)}`
+		: (MONTH_NAMES[month - 1] ?? "");
+}
+
 /** The last `count` months ending with the one containing `now`, oldest first. */
 function recentMonths(
 	now: number,
@@ -319,12 +327,7 @@ function recentMonths(
 		date.setMonth(date.getMonth() - index);
 		out.push({
 			key: monthKey(date.getTime()),
-			// The year appears on January only: repeating it on all twelve
-			// labels crowds the axis to say one thing.
-			label:
-				date.getMonth() === 0
-					? `${MONTH_NAMES[0]} ${String(date.getFullYear() % YEARS_PER_CENTURY)}`
-					: (MONTH_NAMES[date.getMonth()] ?? ""),
+			label: monthLabel(date.getFullYear(), date.getMonth() + 1),
 		});
 	}
 	return out;

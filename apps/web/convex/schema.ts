@@ -438,6 +438,30 @@ export default defineSchema({
 		lastPath: v.string(),
 	}).index("by_person", ["personId"]),
 	purgeLog: defineTable({ at: v.number(), count: v.number() }),
+	// The current anonymous headcount. One row; absent until the first update.
+	// `updatedAt`: where accrual last stopped (the reset included).
+	// `reportedAt`: the counter's last report, read by offline detection.
+	// `offline`: set by the poll while the counter is silent past its limit;
+	// any report clears it.
+	occupancy: defineTable({
+		count: v.number(),
+		updatedAt: v.number(),
+		reportedAt: v.number(),
+		offline: v.optional(v.boolean()),
+	}),
+	// Delta event ids already applied, so a retried webhook counts once.
+	// Kept for a day, then deleted by the hourly reset job.
+	occupancyEvents: defineTable({ eventId: v.string() }).index("by_eventId", [
+		"eventId",
+	]),
+	// One anonymous row per site day (04:00 → 04:00 Zurich), kept for trends.
+	occupancyDays: defineTable({
+		day: v.string(),
+		peak: v.number(),
+		peakAt: v.number(),
+		personMinutes: v.number(),
+		entries: v.optional(v.number()),
+	}).index("by_day", ["day"]),
 	signatures: defineTable({
 		personId: v.id("people"),
 		email: v.string(),

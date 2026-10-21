@@ -1,93 +1,34 @@
 import { Skeleton } from "@j-os/design-system";
-import { useAction } from "convex-solidjs";
-import { createSignal, onCleanup, onMount, Show } from "solid-js";
+import { Show } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
-import type { OccupancyAnswer } from "../../../convex/occupancy.ts";
-import { call } from "../../lib/call.ts";
-import { lastAnswer, rememberAnswer } from "../../shared/data/lastAnswer.ts";
+import { useQuery } from "../../shared/data/useQuery.ts";
 
 import { occupancyFill, occupancyLevel } from "./occupancy.ts";
 import styles from "./OccupancyCard.module.scss";
 import { OccupancyGauge } from "./OccupancyGauge.tsx";
 import { SpaceCard } from "./SpaceCard.tsx";
 
-export const POLL_INTERVAL_MS = 60_000;
-const ANSWER_KEY = "occupancy";
-
 /**
- * Live-tab card: an ambient occupancy gauge, refreshed every 60s. Renders
- * nothing while occupancy is disabled (no active provider). Until the first
- * answer it is a loading card; a remembered answer under a minute old shows at
- * once.
+ * Live-tab card: an ambient occupancy gauge. Live through the query
+ * subscription. Renders nothing while occupancy is disabled (no counter
+ * installed) or when the read fails; a loading card until the first answer.
  */
 export function OccupancyCard() {
-	const occ = useAction(api.occupancy.current);
-	// Last successful answer; a failed call keeps it, so the card stays as it was.
-	const [answer, setAnswer] = createSignal<OccupancyAnswer | null>(
-		lastAnswer<OccupancyAnswer>(ANSWER_KEY, POLL_INTERVAL_MS) ?? null
-	);
-	// A first call that failed with nothing remembered: the card steps aside,
-	// as it did before it had a loading state, and polling goes on.
-	const [failed, setFailed] = createSignal(false);
+	const occupancy = useQuery(api.occupancy.current, {});
 	function enabled() {
-		return answer()?.enabled === true;
+		return !occupancy.error() && occupancy.data()?.enabled === true;
 	}
 	function loading() {
-		return answer() === null && !failed();
+		return occupancy.data() === undefined && !occupancy.error();
 	}
-	// `null` = no reading (the active provider returned no reading) → "Unknown".
+	// `null` = no reading yet → "Unknown".
 	function fill() {
-		const reading = answer();
-		return reading?.enabled && reading.count !== null
-			? occupancyFill(reading.count, reading.capacity)
+		const answer = occupancy.data();
+		return answer?.enabled && answer.count !== null
+			? occupancyFill(answer.count, answer.capacity)
 			: null;
 	}
-
-	let id: ReturnType<typeof setInterval> | undefined;
-	let isDisposed = false;
-
-	function stopPolling() {
-		clearInterval(id);
-		id = undefined;
-	}
-
-	function ensurePolling() {
-		if (id === undefined && !isDisposed) {
-			id = setInterval(() => void refresh(), POLL_INTERVAL_MS);
-		}
-	}
-
-	// Ticks overlap and responses can resolve out of order; only the newest
-	// request may update state or the polling interval.
-	let latestSeq = 0;
-
-	async function refresh() {
-		const seq = ++latestSeq;
-		const result = await call(occ.mutate({}), "Could not read occupancy.");
-		if (result.isErr()) {
-			if (seq !== latestSeq) return;
-			setFailed(true);
-			// ambient readout: keep the last answer
-			ensurePolling(); // a failed call is not "disabled": retry next tick
-			return;
-		}
-		// An answer landing after unmount (e.g. mid sign-out) is dropped.
-		if (seq !== latestSeq || isDisposed) return;
-		setAnswer(result.value);
-		rememberAnswer(ANSWER_KEY, result.value);
-		// Only an explicit "disabled" answer stops polling.
-		if (result.value.enabled) ensurePolling();
-		else stopPolling();
-	}
-
-	onMount(() => {
-		onCleanup(() => {
-			isDisposed = true;
-			stopPolling();
-		});
-		void refresh();
-	});
 
 	return (
 		<Show when={loading() || enabled()}>

@@ -1,230 +1,87 @@
 // @vitest-environment happy-dom
-import { setDeferredImmediate } from "@j-os/design-system";
 import { cleanup, render, screen } from "@solidjs/testing-library";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { getFunctionName, type FunctionReference } from "convex/server";
+import { createSignal } from "solid-js";
+import { afterEach, expect, it, vi } from "vitest";
 
-const { occupancyMutate } = vi.hoisted(() => ({
-	occupancyMutate: vi.fn(),
-}));
+import { api } from "../../../convex/_generated/api";
+import type { OccupancyAnswer } from "../../../convex/occupancy.ts";
 
-// convex-solidjs's useAction throws without a ConvexProvider; stub it.
-vi.mock("convex-solidjs", () => ({
-	useAction: () => ({ mutate: occupancyMutate }),
-}));
+const [answer, setAnswer] = createSignal<OccupancyAnswer | undefined>();
+const [error, setError] = createSignal<Error | undefined>();
 
-import { clearAnswers, lastAnswer } from "../../shared/data/lastAnswer.ts";
-import { setKeeperActive } from "../../shared/data/queryKeeper.ts";
+const useQuery = vi.hoisted(() => vi.fn());
 
-import { OccupancyCard, POLL_INTERVAL_MS } from "./OccupancyCard.tsx";
+vi.mock("../../shared/data/useQuery.ts", () => ({ useQuery }));
 
-/** Lets every pending promise step run: a call is a Result chain, several
- *  microtasks deep. */
-function flush(): Promise<void> {
-	return new Promise((resolve) => {
-		setTimeout(resolve, 0);
-	});
-}
+import { OccupancyCard } from "./OccupancyCard.tsx";
 
-beforeEach(() => {
-	setKeeperActive(true);
-	setDeferredImmediate(true);
-	vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
-});
+useQuery.mockImplementation(() => ({ data: answer, error }));
 
 afterEach(() => {
 	cleanup();
-	clearAnswers();
-	setKeeperActive(false);
-	setDeferredImmediate(false);
-	occupancyMutate.mockReset();
-	vi.useRealTimers();
+	setAnswer(undefined);
+	setError(undefined);
 });
 
-it("renders nothing when occupancy is disabled", async () => {
-	occupancyMutate.mockResolvedValue({ enabled: false });
-	const { container } = render(() => <OccupancyCard />);
-	await flush();
-	expect(container).toBeEmptyDOMElement();
-});
-
-it("does not poll while occupancy is disabled", async () => {
-	occupancyMutate.mockResolvedValue({ enabled: false });
+it("subscribes to the stored count", () => {
 	render(() => <OccupancyCard />);
-	await flush();
-	vi.advanceTimersByTime(3 * POLL_INTERVAL_MS);
-	expect(occupancyMutate).toHaveBeenCalledTimes(1);
-});
-
-it("shows the gauge when a provider answers", async () => {
-	occupancyMutate.mockResolvedValue({
-		enabled: true,
-		count: 30,
-		capacity: 40,
-	});
-	render(() => <OccupancyCard />);
-	expect(await screen.findByText("High")).toBeInTheDocument();
-});
-
-it("keeps polling once enabled", async () => {
-	occupancyMutate.mockResolvedValue({
-		enabled: true,
-		count: 30,
-		capacity: 40,
-	});
-	render(() => <OccupancyCard />);
-	await screen.findByText("High");
-	vi.advanceTimersByTime(POLL_INTERVAL_MS);
-	expect(occupancyMutate).toHaveBeenCalledTimes(2);
-});
-
-it("retries after a failed first call and then shows the card", async () => {
-	occupancyMutate
-		.mockRejectedValueOnce(new Error("network"))
-		.mockResolvedValue({ enabled: true, count: 30, capacity: 40 });
-	render(() => <OccupancyCard />);
-	await flush();
-	vi.advanceTimersByTime(POLL_INTERVAL_MS);
-	expect(await screen.findByText("High")).toBeInTheDocument();
-});
-
-it("stops polling once an answer turns disabled", async () => {
-	occupancyMutate
-		.mockResolvedValueOnce({ enabled: true, count: 30, capacity: 40 })
-		.mockResolvedValue({ enabled: false });
-	const { container } = render(() => <OccupancyCard />);
-	await screen.findByText("High");
-	vi.advanceTimersByTime(POLL_INTERVAL_MS);
-	await vi.waitFor(() => expect(container).toBeEmptyDOMElement());
-	vi.advanceTimersByTime(3 * POLL_INTERVAL_MS);
-	expect(occupancyMutate).toHaveBeenCalledTimes(2);
-});
-
-it("ignores a stale response that resolves after a newer disabled answer", async () => {
-	let resolveStale: ((answer: unknown) => void) | undefined;
-	occupancyMutate
-		.mockRejectedValueOnce(new Error("network")) // initial call fails: polling starts
-		.mockReturnValueOnce(
-			new Promise((resolve) => {
-				resolveStale = resolve;
-			})
-		) // first tick hangs
-		.mockResolvedValueOnce({ enabled: false }) // next tick answers disabled
-		.mockResolvedValue({ enabled: true, count: 30, capacity: 40 });
-	const { container } = render(() => <OccupancyCard />);
-	await flush();
-	vi.advanceTimersByTime(POLL_INTERVAL_MS);
-	vi.advanceTimersByTime(POLL_INTERVAL_MS);
-	expect(occupancyMutate).toHaveBeenCalledTimes(3);
-	await flush();
-	resolveStale?.({ enabled: true, count: 30, capacity: 40 });
-	await flush();
-	expect(container).toBeEmptyDOMElement();
-	vi.advanceTimersByTime(3 * POLL_INTERVAL_MS);
-	expect(occupancyMutate).toHaveBeenCalledTimes(3);
-});
-
-it("starts no polling when unmounted before the first request resolves", async () => {
-	let resolveFirst: ((answer: unknown) => void) | undefined;
-	occupancyMutate.mockReturnValueOnce(
-		new Promise((resolve) => {
-			resolveFirst = resolve;
-		})
+	expect(useQuery).toHaveBeenCalled();
+	const reference = useQuery.mock.lastCall?.[0] as FunctionReference<"query">;
+	expect(getFunctionName(reference)).toBe(
+		getFunctionName(api.occupancy.current)
 	);
-	const { unmount } = render(() => <OccupancyCard />);
-	unmount();
-	resolveFirst?.({ enabled: true, count: 30, capacity: 40 });
-	await flush();
-	vi.advanceTimersByTime(3 * POLL_INTERVAL_MS);
-	expect(occupancyMutate).toHaveBeenCalledTimes(1);
 });
 
 it("shows a loading card until the first answer lands", () => {
-	occupancyMutate.mockReturnValue(new Promise(() => {}));
 	render(() => <OccupancyCard />);
 	expect(screen.getByText("Occupancy")).toBeInTheDocument();
 	expect(screen.queryByText("High")).not.toBeInTheDocument();
 	expect(screen.getByRole("status")).toBeInTheDocument();
 });
 
-it("steps aside when the first call fails with nothing remembered, and keeps polling", async () => {
-	occupancyMutate.mockRejectedValue(new Error("network"));
+it("renders nothing when occupancy is disabled", () => {
+	setAnswer({ enabled: false });
 	const { container } = render(() => <OccupancyCard />);
-	await vi.waitFor(() => expect(container).toBeEmptyDOMElement());
-	vi.advanceTimersByTime(POLL_INTERVAL_MS);
-	expect(occupancyMutate).toHaveBeenCalledTimes(2);
+	expect(container).toBeEmptyDOMElement();
 });
 
-it("replaces the loading card with the gauge on an enabled answer", async () => {
-	occupancyMutate.mockResolvedValue({
-		enabled: true,
-		count: 30,
-		capacity: 40,
-	});
+it("renders nothing when the query fails", () => {
+	setError(new Error("network"));
+	const { container } = render(() => <OccupancyCard />);
+	expect(container).toBeEmptyDOMElement();
+});
+
+it("renders nothing when a later read fails, even with an earlier answer", () => {
+	setAnswer({ enabled: true, count: 30, capacity: 40 });
+	setError(new Error("network"));
+	const { container } = render(() => <OccupancyCard />);
+	expect(container).toBeEmptyDOMElement();
+});
+
+it("shows Low for an empty space", () => {
+	setAnswer({ enabled: true, count: 0, capacity: 40 });
 	render(() => <OccupancyCard />);
-	expect(screen.getByText("Occupancy")).toBeInTheDocument();
-	expect(await screen.findByText("High")).toBeInTheDocument();
+	expect(screen.getByText("Low")).toBeInTheDocument();
 });
 
-it("removes the loading card on a disabled answer", async () => {
-	occupancyMutate.mockResolvedValue({ enabled: false });
-	const { container } = render(() => <OccupancyCard />);
-	expect(screen.getByText("Occupancy")).toBeInTheDocument();
-	await vi.waitFor(() => expect(container).toBeEmptyDOMElement());
-});
-
-it("a second mount after an enabled answer shows the gauge before the action resolves", async () => {
-	occupancyMutate.mockResolvedValueOnce({
-		enabled: true,
-		count: 30,
-		capacity: 40,
-	});
-	const first = render(() => <OccupancyCard />);
-	await screen.findByText("High");
-	first.unmount();
-	occupancyMutate.mockReturnValue(new Promise(() => {}));
+it("shows the gauge level when a provider answers", () => {
+	setAnswer({ enabled: true, count: 30, capacity: 40 });
 	render(() => <OccupancyCard />);
 	expect(screen.getByText("High")).toBeInTheDocument();
 });
 
-it("remembers an answer for the next mount", async () => {
-	occupancyMutate.mockResolvedValue({
-		enabled: true,
-		count: 30,
-		capacity: 40,
-	});
+it("shows Unknown when there is no reading", () => {
+	setAnswer({ enabled: true, count: null, capacity: 40 });
 	render(() => <OccupancyCard />);
-	await screen.findByText("High");
-	expect(lastAnswer("occupancy", POLL_INTERVAL_MS)).toEqual({
-		enabled: true,
-		count: 30,
-		capacity: 40,
-	});
+	expect(screen.getByText("Unknown")).toBeInTheDocument();
 });
 
-it("does not remember an answer that lands after unmount", async () => {
-	let resolveFirst: ((answer: unknown) => void) | undefined;
-	occupancyMutate.mockReturnValueOnce(
-		new Promise((resolve) => {
-			resolveFirst = resolve;
-		})
-	);
-	const { unmount } = render(() => <OccupancyCard />);
-	unmount();
-	resolveFirst?.({ enabled: true, count: 30, capacity: 40 });
-	await flush();
-	expect(lastAnswer("occupancy", POLL_INTERVAL_MS)).toBeUndefined();
-});
-
-it("does not remember an answer that lands after the session ended", async () => {
-	let resolveFirst: ((answer: unknown) => void) | undefined;
-	occupancyMutate.mockReturnValueOnce(
-		new Promise((resolve) => {
-			resolveFirst = resolve;
-		})
-	);
+it("follows the query as the count changes", () => {
+	setAnswer({ enabled: true, count: 30, capacity: 40 });
 	render(() => <OccupancyCard />);
-	setKeeperActive(false);
-	resolveFirst?.({ enabled: true, count: 30, capacity: 40 });
-	await screen.findByText("High");
-	expect(lastAnswer("occupancy", POLL_INTERVAL_MS)).toBeUndefined();
+	expect(screen.getByText("High")).toBeInTheDocument();
+	setAnswer({ enabled: true, count: 5, capacity: 40 });
+	expect(screen.getByText("Low")).toBeInTheDocument();
+	expect(screen.queryByText("High")).not.toBeInTheDocument();
 });

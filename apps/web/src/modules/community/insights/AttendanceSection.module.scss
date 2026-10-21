@@ -1,0 +1,22 @@
+@use "@j-os/design-system/typography" as typo;
+
+.section {
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-far);
+}
+
+.header {
+	display: flex;
+	flex-flow: row wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--jf-spacing-near);
+}
+
+.heading {
+	@include typo.jf-typo-h3;
+
+	margin: 0;
+	color: var(--jf-fg-strong);
+}

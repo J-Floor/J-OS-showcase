@@ -502,26 +502,6 @@ function accountUserIdsFor(users: AccountUser[], email: string): number[] {
 		.map((user) => user.accountUserId);
 }
 
-type NukiLogEntry = { action: number; date: string };
-
-/**
- * Fetch a smart lock's activity log since `sinceIso`. Used by the occupancy
- * provider to count door-open events. The Nuki Web API returns newest-first.
- */
-export function fetchSmartlockLog(
-	deps: NukiDeps,
-	args: { lockId: string; sinceIso: string }
-): ResultAsync<NukiLogEntry[], DoorError> {
-	const params = new URLSearchParams({
-		smartlockId: args.lockId,
-		fromDate: args.sinceIso,
-		limit: "200",
-	});
-	return request(deps, "GET", `/smartlock/log?${params.toString()}`).map(
-		(body) => body as NukiLogEntry[]
-	);
-}
-
 /**
  * Delete the given smartlock authorizations. Nuki's bulk async delete takes an
  * array of auth ids; no-op on an empty list to avoid a pointless call.

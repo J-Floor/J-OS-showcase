@@ -8,6 +8,9 @@ export const RENAG_MS = 604_800_000;
 /** Lock reachability seen by the 10-minute poll. */
 export const DOOR_ONLINE_ALERT_KEY = "door-online";
 
+/** Occupancy counter silence seen by the 5-minute poll. */
+export const OCCUPANCY_ONLINE_ALERT_KEY = "occupancy-online";
+
 /** People whose lifecycle state disagrees with their data (nightly check). */
 export const LIFECYCLE_ALERT_KEY = "lifecycle-invariants";
 

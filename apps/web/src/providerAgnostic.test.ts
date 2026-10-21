@@ -14,15 +14,13 @@ const files = import.meta.glob<string>(
 	{ query: "?raw", import: "default", eager: true }
 );
 
-/** Whole files that may name the vendor: its door and occupancy adapters,
- *  their tests, and the security invariants that inspect the door adapter.
+/** Whole files that may name the vendor: its door adapter, the adapter's
+ *  test, and the security invariants that inspect the door adapter.
  *  (This file is never in the glob: Vite leaves the importing module out.) */
 const VENDOR_FILES = new Set([
 	"../convex/lib/nukiClient.ts",
 	"../convex/lib/nukiClient.test.ts",
 	"../convex/security.invariants.test.ts",
-	"../convex/lib/occupancy/providers/nukiDoorOpens.ts",
-	"../convex/lib/occupancy/providers/nukiDoorOpens.test.ts",
 ]);
 
 /** Per file: the exact vendor text it may still contain, stripped before the

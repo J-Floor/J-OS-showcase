@@ -45,6 +45,8 @@ const PUBLIC_ON_PURPOSE: Record<string, string> = {
 		"the public event page: name and times only, no attendees",
 	"http.ts:route PRESENCE_PATH":
 		"the door presence oracle: proves where a request comes from, not who sent it; doorActions checks who",
+	"http.ts:route OCCUPANCY_WEBHOOK_PATH":
+		"the counter webhook: the caller is a device, not a person; it must carry the shared secret, and it carries only anonymous counts",
 };
 
 /** Calls that establish who the caller is (and, for requireRole, what they may do). */

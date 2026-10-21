@@ -45,6 +45,13 @@ vi.mock("../../../shared/data/boardLevel.tsx", () => ({
 	useBoardLevel: () => query(() => rosters.boardLevel),
 }));
 
+vi.mock("../../../shared/data/useQuery.ts", () => ({
+	useQuery: () => ({
+		data: () => ({ enabled: false }),
+		error: () => {},
+	}),
+}));
+
 import { InsightsTab } from "./InsightsTab.tsx";
 
 const EMPTY_COPY = [
