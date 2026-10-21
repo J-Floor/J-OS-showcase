@@ -56,6 +56,7 @@ export function createActionKeys<Person>(options: {
 			if (person !== undefined) {
 				if (!action.can(person)) return;
 				event.preventDefault();
+				// The action reports its own failure (`settleRosterAction`).
 				void action.run(person);
 				return;
 			}
@@ -66,7 +67,12 @@ export function createActionKeys<Person>(options: {
 				if (targets.length === 0) return;
 				event.preventDefault();
 				void (async () => {
-					for (const target of targets) await action.run(target);
+					for (const target of targets) {
+						// Stop at the first failure: the rest of the batch would
+						// fail the same way, and the selection must survive it.
+						const outcome = await action.run(target);
+						if (outcome?.refused) return;
+					}
 					options.onClearSelection();
 				})();
 				return;
@@ -78,7 +84,8 @@ export function createActionKeys<Person>(options: {
 			// Advance on RESOLVE, not on fire: a rejected mutation means the
 			// row did not move, and moving the ring would say it had.
 			void (async () => {
-				await action.run(row);
+				const outcome = await action.run(row);
+				if (outcome?.refused) return;
 				options.onAdvance();
 			})();
 		};

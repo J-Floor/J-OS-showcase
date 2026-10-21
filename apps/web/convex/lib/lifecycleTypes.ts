@@ -123,15 +123,3 @@ export type Effect =
 	| { type: "CLEAR_DENIED_AT" }
 	| { type: "RESET_SCORE" }
 	| { type: "SET_FORMER"; reason: "kicked" | "left" };
-
-export class IllegalTransitionError extends Error {
-	readonly from: StateId;
-	readonly event: EventType;
-
-	constructor(from: StateId, event: EventType) {
-		super(`Illegal transition ${from} -[${event}]->`);
-		this.name = "IllegalTransitionError";
-		this.from = from;
-		this.event = event;
-	}
-}

@@ -1,12 +1,18 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
+import { ok, type Result } from "neverthrow";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+
+import type { ClientError } from "../lib/call.ts";
 
 const { push } = vi.hoisted(() => ({
 	push: {
 		configured: true,
 		support: "default",
-		enable: vi.fn(() => Promise.resolve("granted")),
+		enable: vi.fn(
+			(): Promise<Result<string, ClientError>> =>
+				Promise.resolve(ok("granted"))
+		),
 	},
 }));
 vi.mock("../lib/push.ts", () => ({

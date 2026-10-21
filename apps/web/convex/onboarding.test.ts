@@ -120,7 +120,7 @@ describe("onboarding.completeStep", () => {
 			backend
 				.withIdentity({ email: "ada@example.com" })
 				.mutation(api.onboarding.completeStep, { stepId: "document" })
-		).rejects.toThrow(/signing the agreement/);
+		).rejects.toThrow(/DocumentStepNeedsSignature/);
 	});
 
 	it("rejects an unknown step id", async () => {
@@ -275,7 +275,7 @@ describe("onboarding.completeStep", () => {
 			backend
 				.withIdentity({ email: "gone@example.com" })
 				.mutation(api.onboarding.completeStep, { stepId: "rules" })
-		).rejects.toThrow(/Access expired or revoked/);
+		).rejects.toThrow(/AccessExpired/);
 	});
 });
 
@@ -325,7 +325,7 @@ describe("onboarding.setTourSeen", () => {
 				backend
 					.withIdentity({ email })
 					.mutation(api.onboarding.setTourSeen, {})
-			).rejects.toThrow(/Access expired or revoked/);
+			).rejects.toThrow(/AccessExpired/);
 		}
 		const rows = await backend.run(async (context) => [
 			await context.db.get(former),
@@ -467,7 +467,7 @@ describe("onboarding.setDoorsIntroSeen", () => {
 			backend
 				.withIdentity({ email: "gone@example.com" })
 				.mutation(api.onboarding.setDoorsIntroSeen, {})
-		).rejects.toThrow(/Access expired or revoked/);
+		).rejects.toThrow(/AccessExpired/);
 		const unseen = await backend.run(async (context) => context.db.get(id));
 		expect(unseen?.doorsIntroSeenAt).toBeUndefined();
 	});
@@ -589,7 +589,7 @@ describe("onboarding.resume", () => {
 			backend
 				.withIdentity({ email: "ada@example.com" })
 				.mutation(api.onboarding.resume, {})
-		).rejects.toThrow("not in an onboarding state");
+		).rejects.toThrow(/NotOnboarding/);
 	});
 });
 
@@ -623,7 +623,7 @@ describe("onboarding.whatsappInvite", () => {
 		const backend = convexTest(schema, modules);
 		await expect(
 			backend.query(api.onboarding.whatsappInvite, {})
-		).rejects.toThrow(/Not authenticated/);
+		).rejects.toThrow(/NotAuthenticated/);
 	});
 
 	for (const tier of ["prospect", "former"] as const) {

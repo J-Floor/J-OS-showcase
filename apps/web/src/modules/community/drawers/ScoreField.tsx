@@ -2,6 +2,7 @@ import { Kbd, NumberInput } from "@j-os/design-system";
 import { createEffect, on, onCleanup, onMount, useContext } from "solid-js";
 
 import type { Doc } from "../../../../convex/_generated/dataModel";
+import { InlineError } from "../../../shared/InlineError.tsx";
 import { CurrentPersonContext } from "../columns/applicationColumns.tsx";
 import { useScoreDraft } from "../columns/useScoreDraft.ts";
 
@@ -15,7 +16,7 @@ import styles from "./ScoreField.module.scss";
  */
 export function ScoreField(props: { person: Doc<"people"> }) {
 	const currentPerson = useContext(CurrentPersonContext);
-	const { setDraft, draft, display, commit } = useScoreDraft({
+	const { setDraft, draft, display, commit, error } = useScoreDraft({
 		personId: () => props.person._id,
 		currentScore: () => props.person.board?.score,
 		canScore: () => Boolean(currentPerson()),
@@ -81,6 +82,7 @@ export function ScoreField(props: { person: Doc<"people"> }) {
 			{/* Peek hint mirroring the roster's score cell: 0–9 is the score's
 			    value range. `inline` shows it only while peeking (Alt). */}
 			<Kbd label="0–9" inline class={styles.kbd} />
+			<InlineError message={error()} />
 		</div>
 	);
 }

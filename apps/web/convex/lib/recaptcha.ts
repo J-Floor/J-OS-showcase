@@ -1,3 +1,7 @@
+import { errAsync, ResultAsync } from "neverthrow";
+
+import type { InputError } from "./errors/input.ts";
+
 // Shape of the relevant fields from Google's siteverify response.
 export type RecaptchaResult = {
 	success?: boolean;
@@ -24,35 +28,40 @@ export function passesRecaptcha(
 
 // Verifies a reCAPTCHA token against Google's siteverify endpoint and checks
 // it against `expectedAction`. Treats ANY siteverify failure — network reject,
-// non-2xx, or non-JSON body — as a verification failure behind one generic
-// message. Never leaks the score or the specific failure reason. Takes
+// non-2xx, or non-JSON body — as `RecaptchaUnavailable`, so an outage is not
+// reported to the applicant as a failed check. Ok(false) is a real rejection.
+// Never leaks the score or the failure reason. Takes
 // `secret` as a param rather than reading `process.env` itself so callers
 // keep ownership of the "is reCAPTCHA configured" check.
-export async function verifyRecaptchaToken(
+export function verifyRecaptchaToken(
 	secret: string,
 	token: string,
 	expectedAction: string
-): Promise<boolean> {
-	let result: RecaptchaResult;
-	try {
-		const response = await fetch(
-			"https://www.google.com/recaptcha/api/siteverify",
-			{
-				method: "POST",
-				headers: {
-					"Content-Type": "application/x-www-form-urlencoded",
-				},
-				body: new URLSearchParams({
-					secret,
-					response: token,
-				}).toString(),
-			}
-		);
-		if (!response.ok)
-			throw new Error("siteverify returned a non-2xx response");
-		result = (await response.json()) as RecaptchaResult;
-	} catch {
-		throw new Error("Couldn't verify you're human — please try again.");
-	}
-	return passesRecaptcha(result, expectedAction);
+): ResultAsync<boolean, InputError> {
+	return ResultAsync.fromPromise(
+		fetch("https://www.google.com/recaptcha/api/siteverify", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/x-www-form-urlencoded",
+			},
+			body: new URLSearchParams({
+				secret,
+				response: token,
+			}).toString(),
+		}),
+		unavailable
+	)
+		.andThen((response) =>
+			response.ok
+				? ResultAsync.fromPromise(
+						response.json() as Promise<RecaptchaResult>,
+						unavailable
+					)
+				: errAsync(unavailable())
+		)
+		.map((result) => passesRecaptcha(result, expectedAction));
+}
+
+function unavailable(): InputError {
+	return { type: "RecaptchaUnavailable" };
 }

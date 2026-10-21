@@ -1,10 +1,13 @@
 import { v } from "convex/values";
+import { err, ok, type Result } from "neverthrow";
 
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { internalMutation, mutation } from "../_generated/server";
 import { requireRole } from "../lib/authGuard.ts";
 import { personForCurrentUser } from "../lib/currentPerson.ts";
+import type { NotifyError } from "../lib/errors/notify.ts";
+import { unwrap } from "../lib/result.ts";
 import { COMMUNITY_TIERS } from "../lib/roles.ts";
 
 const PUSH_HOST_ALLOWLIST = [
@@ -25,28 +28,27 @@ function isAllowedHost(hostname: string): boolean {
 }
 
 /** The server POSTs to this URL, so it must be a real push service. */
-function assertValidSubscription(args: {
+function checkSubscription(args: {
 	endpoint: string;
 	p256dh: string;
 	auth: string;
-}): void {
+}): Result<void, NotifyError> {
 	const { endpoint, p256dh, auth } = args;
 	if (
 		endpoint.length > MAX_ENDPOINT_LENGTH ||
 		p256dh.length > MAX_P256DH_LENGTH ||
 		auth.length > MAX_AUTH_LENGTH
-	) {
-		throw new Error("Invalid push endpoint");
-	}
+	)
+		return err({ type: "InvalidPushEndpoint" });
 	let url: URL;
 	try {
 		url = new URL(endpoint);
 	} catch {
-		throw new Error("Invalid push endpoint");
+		return err({ type: "InvalidPushEndpoint" });
 	}
-	if (url.protocol !== "https:" || !isAllowedHost(url.hostname)) {
-		throw new Error("Invalid push endpoint");
-	}
+	return url.protocol === "https:" && isAllowedHost(url.hostname)
+		? ok()
+		: err({ type: "InvalidPushEndpoint" });
 }
 
 async function trimToCap(context: MutationCtx, personId: Id<"people">) {
@@ -87,8 +89,8 @@ export const subscribe = mutation({
 		userAgent: v.string(),
 	},
 	handler: async (context, args): Promise<null> => {
-		const person = await requireRole(context, COMMUNITY_TIERS);
-		assertValidSubscription(args);
+		const person = unwrap(await requireRole(context, COMMUNITY_TIERS));
+		unwrap(checkSubscription(args));
 		const existing = await byEndpoint(context, args.endpoint);
 		if (existing) {
 			await context.db.patch(existing._id, {

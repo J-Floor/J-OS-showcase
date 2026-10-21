@@ -5,7 +5,8 @@ import type { GuestRow } from "../columns/guestColumns.tsx";
 import { useOpenAgreement } from "../openAgreement.ts";
 
 import { agreementAction } from "./agreementAction.ts";
-import type { ActionDescriptor } from "./shortcuts.ts";
+import { settleRosterAction } from "./RosterActionError.tsx";
+import type { ActionDescriptor, RosterActionOutcome } from "./shortcuts.ts";
 import { useTriage } from "./triage.ts";
 
 // A guest whose access already ended (expired, or already former) can't be
@@ -28,7 +29,7 @@ export function useGuestActions(): {
 	const confirm = useConfirm();
 	const agreement = useOpenAgreement();
 
-	async function upgrade(person: GuestRow): Promise<void> {
+	async function upgrade(person: GuestRow): Promise<RosterActionOutcome> {
 		if (
 			await confirm({
 				title: "Upgrade to member?",
@@ -36,10 +37,14 @@ export function useGuestActions(): {
 				confirmLabel: "Upgrade",
 			})
 		)
-			await triage.upgradeToMember(person._id);
+			return settleRosterAction(
+				"guests",
+				person._id,
+				triage.upgradeToMember(person._id)
+			);
 	}
 
-	async function kickOut(person: GuestRow): Promise<void> {
+	async function kickOut(person: GuestRow): Promise<RosterActionOutcome> {
 		if (
 			await confirm({
 				title: "Kick out?",
@@ -48,7 +53,11 @@ export function useGuestActions(): {
 				tone: "danger",
 			})
 		)
-			await triage.kickOut(person._id);
+			return settleRosterAction(
+				"guests",
+				person._id,
+				triage.kickOut(person._id)
+			);
 	}
 
 	function actions(): ActionDescriptor<GuestRow>[] {

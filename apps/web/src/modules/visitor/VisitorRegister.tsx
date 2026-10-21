@@ -15,13 +15,17 @@ import {
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { authClient } from "../../lib/auth.ts";
+import { call } from "../../lib/call.ts";
 import { useQuery } from "../../shared/data/useQuery.ts";
 import { ICONS } from "../../shared/icons.ts";
 import { emailError } from "../../shared/isValidEmail.ts";
-import { SITE_KEY, useRecaptchaScript } from "../../shared/recaptcha.ts";
+import { useRecaptchaScript } from "../../shared/recaptcha.ts";
 import { PrivacyNoticeLine } from "../privacy/PrivacyNoticeLine.tsx";
+import { getCaptchaToken } from "../signup/captchaToken.ts";
 
 import styles from "./VisitorRegister.module.scss";
+
+const REGISTER_FAILED = "Something went wrong registering. Please try again.";
 
 type RegisterOutcome = "pending" | "no-event" | "ended";
 
@@ -71,10 +75,14 @@ function createCheckInStatus(options: {
 		)
 			return;
 		setCheckInStatus("pending");
-		void checkIn
-			.mutateAsync({ eventId: id as Id<"events"> })
-			.then(() => setCheckInStatus("done"))
-			.catch(() => setCheckInStatus("denied"));
+		// A refusal drops the visitor back onto the registration form, which is
+		// where they would have registered anyway.
+		void call(
+			checkIn.mutateAsync({ eventId: id as Id<"events"> }),
+			"Could not check you in."
+		).then((result) => {
+			setCheckInStatus(result.isOk() ? "done" : "denied");
+		});
 	});
 	return checkInStatus;
 }
@@ -163,28 +171,28 @@ function createRegistration(options: { eventId: Accessor<string | null> }) {
 		if (!id) return;
 
 		setSubmitting(true);
-		try {
-			if (!SITE_KEY || !window.grecaptcha) {
-				throw new Error("captcha-unavailable");
-			}
-			const token = await window.grecaptcha.execute(SITE_KEY, {
-				action: "visitor",
-			});
-			const result = await register.mutateAsync({
+		const token = await getCaptchaToken("visitor");
+		if (token.isErr()) {
+			setSubmitError(REGISTER_FAILED);
+			setSubmitting(false);
+			return;
+		}
+		const result = await call(
+			register.mutateAsync({
 				eventId: id as Id<"events">,
 				firstName: firstName().trim(),
 				lastName: lastName().trim(),
 				email: email().trim(),
-				token,
-			});
-			setOutcome(result.status);
-		} catch {
-			setSubmitError(
-				"Something went wrong registering. Please try again."
-			);
-		} finally {
-			setSubmitting(false);
+				token: token.value,
+			}),
+			REGISTER_FAILED
+		);
+		setSubmitting(false);
+		if (result.isErr()) {
+			setSubmitError(result.error.message);
+			return;
 		}
+		setOutcome(result.value.status);
 	}
 
 	return {

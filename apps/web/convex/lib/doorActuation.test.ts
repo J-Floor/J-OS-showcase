@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
 	CONFIRM_POLL_MS,
 	CONFIRM_WINDOW_MS,
-	IllegalActuationTransitionError,
 	attemptState,
 	hasReacted,
 	storedAttempt,
@@ -306,7 +305,7 @@ describe("transition", () => {
 
 	it.each(ILLEGAL)("%s throws", (_label, state, event) => {
 		expect(() => transition(state, event)).toThrow(
-			IllegalActuationTransitionError
+			/^Illegal actuation transition /
 		);
 	});
 

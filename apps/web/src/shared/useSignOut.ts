@@ -1,10 +1,14 @@
 import { useNavigate } from "@solidjs/router";
+import { ResultAsync } from "neverthrow";
 
 import { authClient } from "../lib/auth.ts";
 import { disablePush } from "../lib/push.ts";
 
 import { endDataSession } from "./data/caches.ts";
 import { setKeeperActive } from "./data/queryKeeper.ts";
+import { toaster } from "./toaster.ts";
+
+const SIGN_OUT_FAILED = "Could not sign out. Try again.";
 
 /**
  * Sign out.
@@ -15,27 +19,33 @@ import { setKeeperActive } from "./data/queryKeeper.ts";
  * The data session ends before the auth session does, so the unmounting
  * signed-in pages cannot refill the caches. If signing out fails and the
  * session still has its user, the keeper comes back on; with no user it
- * stays off.
+ * stays off. A failed sign-out is a toast, unless the caller has an area of
+ * its own for it and passes `onError`.
  */
-export function useSignOut(): () => Promise<void> {
+export function useSignOut(options?: {
+	onError: (message: string) => void;
+}): () => Promise<void> {
 	const navigate = useNavigate();
 	const session = authClient.useSession();
 	return async function signOut(): Promise<void> {
-		try {
-			await disablePush();
-		} catch (err) {
+		const unsubscribed = await disablePush();
+		if (unsubscribed.isErr()) {
 			// eslint-disable-next-line no-console -- a failed unsubscribe must not block signing out; surface it for debugging
 			console.error(
 				"[push] could not remove this device's subscription",
-				err
+				unsubscribed.error
 			);
 		}
 		endDataSession();
-		try {
-			await authClient.signOut();
-		} catch (err) {
+		const signedOut = await ResultAsync.fromPromise(
+			authClient.signOut(),
+			() => SIGN_OUT_FAILED
+		);
+		if (signedOut.isErr()) {
 			if (session().data?.user) setKeeperActive(true);
-			throw err;
+			if (options) options.onError(signedOut.error);
+			else toaster.create({ type: "error", title: signedOut.error });
+			return;
 		}
 		navigate("/signin", { replace: true });
 	};

@@ -132,11 +132,11 @@ describe("categories", () => {
 		const asBoard = await seedBoard(backend);
 		await expect(
 			asBoard.mutation(api.inventory.createCategory, { name: "   " })
-		).rejects.toThrow(/Name is required/);
+		).rejects.toThrow(/NameRequired/);
 		await asBoard.mutation(api.inventory.createCategory, { name: "IT" });
 		await expect(
 			asBoard.mutation(api.inventory.createCategory, { name: "IT" })
-		).rejects.toThrow(/already uses that name/);
+		).rejects.toThrow(/CategoryNameTaken/);
 	});
 
 	it("lists only the item types that belong to the given category", async () => {
@@ -181,23 +181,22 @@ describe("categories", () => {
 		await seedType(asBoard, categoryId);
 		await expect(
 			asBoard.mutation(api.inventory.removeCategory, { id: categoryId })
-		).rejects.toThrow(/item type/);
+		).rejects.toThrow(/CategoryNotEmpty/);
 	});
 
-	it("still blocks the delete with a capped count once item types exceed the guard's display cap", async () => {
+	it("still blocks the delete once item types outnumber the guard's probe", async () => {
 		const backend = convexTest(schema, modules);
 		const asBoard = await seedBoard(backend);
 		const categoryId = await seedCategory(asBoard);
-		// One more than the guard's display cap (20): the existence check now
-		// reads with `.take()`, not `.collect()`, so this must still block the
-		// delete without reading the whole table — and the message caps at
-		// "20+" rather than the exact (uncounted) total.
+		// More children than the guard probes: the existence check reads with
+		// `.take()`, not `.collect()`, so this must still block the delete
+		// without reading the whole table.
 		for (let index = 0; index < 21; index++) {
 			await seedType(asBoard, categoryId, `Type ${String(index)}`);
 		}
 		await expect(
 			asBoard.mutation(api.inventory.removeCategory, { id: categoryId })
-		).rejects.toThrow(/20\+ item types still use it/);
+		).rejects.toThrow(/CategoryNotEmpty/);
 	});
 });
 
@@ -249,7 +248,7 @@ describe("item types", () => {
 				name: "Cable",
 				categoryId: av,
 			})
-		).rejects.toThrow(/already uses that name/);
+		).rejects.toThrow(/ItemTypeNameTaken/);
 		await expect(
 			asBoard.mutation(api.inventory.createItemType, {
 				name: "Cable",
@@ -269,16 +268,15 @@ describe("item types", () => {
 		});
 		await expect(
 			asBoard.mutation(api.inventory.removeItemType, { id: typeId })
-		).rejects.toThrow(/item/);
+		).rejects.toThrow(/ItemTypeNotEmpty/);
 	});
 
-	it("still blocks the delete with a capped count once items exceed the guard's display cap", async () => {
+	it("still blocks the delete once items outnumber the guard's probe", async () => {
 		const backend = convexTest(schema, modules);
 		const asBoard = await seedBoard(backend);
 		const categoryId = await seedCategory(asBoard);
 		const typeId = await seedType(asBoard, categoryId);
-		// One more than the guard's display cap (20): the existence check now
-		// reads with `.take()`, not `.collect()`.
+		// More children than the guard probes: it reads with `.take()`.
 		for (let index = 0; index < 21; index++) {
 			await asBoard.mutation(api.inventory.createItem, {
 				typeId,
@@ -287,7 +285,7 @@ describe("item types", () => {
 		}
 		await expect(
 			asBoard.mutation(api.inventory.removeItemType, { id: typeId })
-		).rejects.toThrow(/20\+ items still use it/);
+		).rejects.toThrow(/ItemTypeNotEmpty/);
 	});
 });
 
@@ -323,7 +321,7 @@ describe("items", () => {
 				typeId,
 				assetTag: "nope",
 			})
-		).rejects.toThrow(/A00000/);
+		).rejects.toThrow(/InvalidAssetTag/);
 		await asBoard.mutation(api.inventory.createItem, {
 			typeId,
 			assetTag: "B00001",
@@ -333,7 +331,7 @@ describe("items", () => {
 				typeId,
 				assetTag: "B00001",
 			})
-		).rejects.toThrow(/already uses that asset tag/);
+		).rejects.toThrow(/AssetTagTaken/);
 	});
 
 	it("updates the type and tag, then deletes the item", async () => {
@@ -437,6 +435,6 @@ describe("items", () => {
 			asBoard.query(api.inventory.getItemByAssetTag, {
 				assetTag: "nope",
 			})
-		).rejects.toThrow(/A00000/);
+		).rejects.toThrow(/InvalidAssetTag/);
 	});
 });

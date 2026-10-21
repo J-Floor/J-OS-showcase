@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { MemoryRouter, Route, createMemoryHistory } from "@solidjs/router";
 import { cleanup, render, screen, waitFor } from "@solidjs/testing-library";
+import { ok } from "neverthrow";
 import type { ParentProps } from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
 
@@ -15,7 +16,7 @@ vi.mock("../../lib/convex.ts", () => ({
 }));
 vi.mock("../../lib/auth.ts", () => ({ authClient: {} }));
 vi.mock("../../lib/push.ts", () => ({
-	resyncPush: () => Promise.resolve(),
+	resyncPush: () => Promise.resolve(ok()),
 }));
 vi.mock("./NotificationsDrawer.tsx", () => ({
 	NotificationsDrawer: (props: { open: boolean }) => (

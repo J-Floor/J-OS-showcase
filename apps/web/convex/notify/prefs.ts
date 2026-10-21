@@ -2,6 +2,7 @@ import { v } from "convex/values";
 
 import { mutation, query } from "../_generated/server";
 import { requireRole } from "../lib/authGuard.ts";
+import { refuse, unwrap } from "../lib/result.ts";
 import { COMMUNITY_TIERS } from "../lib/roles.ts";
 
 import {
@@ -27,7 +28,7 @@ export type CategoryPrefRow = {
 export const mine = query({
 	args: {},
 	handler: async (context): Promise<CategoryPrefRow[]> => {
-		const person = await requireRole(context, COMMUNITY_TIERS);
+		const person = unwrap(await requireRole(context, COMMUNITY_TIERS));
 		return categoriesForTier(person.tier).map((category) => {
 			const info = CATEGORY_INFO[category];
 			return {
@@ -50,9 +51,9 @@ export const set = mutation({
 		email: v.boolean(),
 	},
 	handler: async (context, { category, push, email }): Promise<null> => {
-		const person = await requireRole(context, COMMUNITY_TIERS);
+		const person = unwrap(await requireRole(context, COMMUNITY_TIERS));
 		if (!categoriesForTier(person.tier).includes(category))
-			throw new Error("Forbidden");
+			refuse({ type: "Forbidden" });
 		const notificationPrefs: NotificationPrefs = {
 			...(person.notificationPrefs ?? {}),
 		};

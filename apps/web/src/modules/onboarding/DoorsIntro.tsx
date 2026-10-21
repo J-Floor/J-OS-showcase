@@ -5,6 +5,7 @@ import { For, Show, createSignal, type JSX } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
 import { type LockSlot } from "../../../convex/lib/doorLocks.ts";
+import { ignoreFailure } from "../../lib/call.ts";
 import { useQuery } from "../../shared/data/useQuery.ts";
 import { LOCK_SLOTS } from "../space/lockSlots.ts";
 
@@ -46,11 +47,12 @@ export function DoorsIntro(): JSX.Element {
 	}
 
 	/** A button press: close now and record it as seen. A failed save only
-	 *  means it shows again next session, so the rejection is swallowed. */
+	 *  means it shows again next session, and the dialog is already closed, so
+	 *  there is no area left to show it in. */
 	function markSeen(): void {
 		if (dismissed()) return;
 		setDismissed(true);
-		setSeen.mutateAsync({}).catch(() => {});
+		ignoreFailure(setSeen.mutateAsync({}));
 	}
 
 	function goToDoors(): void {

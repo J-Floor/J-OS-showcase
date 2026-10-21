@@ -10,6 +10,7 @@ import { type JSX, Show } from "solid-js";
 import { api } from "../../../../convex/_generated/api";
 import { legalEvents } from "../../../../convex/lib/lifecycle.ts";
 import type { EventType } from "../../../../convex/lib/lifecycleTypes.ts";
+import { call } from "../../../lib/call.ts";
 import { type ConfirmOptions, useConfirm } from "../../../shared/confirm.tsx";
 import { useQuery } from "../../../shared/data/useQuery.ts";
 import { ICONS } from "../../../shared/icons.ts";
@@ -18,7 +19,8 @@ import {
 	GuestExpiryProvider,
 	useGuestExpiry,
 } from "../actions/guestExpiry.tsx";
-import { useTriage } from "../actions/triage.ts";
+import { settleRosterAction } from "../actions/RosterActionError.tsx";
+import { type TriageResult, useTriage } from "../actions/triage.ts";
 import {
 	applicationColumns,
 	CurrentPersonContext,
@@ -84,7 +86,7 @@ function useBatchRunner(batch: () => ApplicationBatch) {
 	return function runBatchAfter(
 		prompt: ConfirmOptions | undefined,
 		rows: ApplicationRow[],
-		action: (id: ApplicationRow["_id"]) => Promise<unknown>
+		action: (id: ApplicationRow["_id"]) => TriageResult
 	): void {
 		void (async () => {
 			if (prompt !== undefined && !(await confirm(prompt))) return;
@@ -119,7 +121,7 @@ function BatchDecisionButton(props: {
 	prompt?: (count: number) => ConfirmOptions;
 	decide: (
 		triage: ReturnType<typeof useTriage>
-	) => (id: ApplicationRow["_id"]) => Promise<unknown>;
+	) => (id: ApplicationRow["_id"]) => TriageResult;
 }): JSX.Element {
 	const triage = useTriage();
 	const runBatchAfter = useBatchRunner(() => props.batch);
@@ -229,10 +231,17 @@ function useApplicationRowKeys(
 					const row = focused();
 					if (!row) return;
 					event.preventDefault();
-					void setScore.mutateAsync({
-						personId: row._id,
-						value: Number(digit),
-					});
+					void settleRosterAction(
+						"applications",
+						row._id,
+						call(
+							setScore.mutateAsync({
+								personId: row._id,
+								value: Number(digit),
+							}),
+							"Could not save the score."
+						)
+					);
 				},
 			})),
 		() => ({ ignoreInputs: false, preventDefault: false })
@@ -265,6 +274,7 @@ function ApplicationsRoster(props: TabProps): JSX.Element {
 		<CurrentPersonContext.Provider value={currentPerson.data}>
 			<RosterTab<ApplicationRow>
 				tab={props}
+				scope="applications"
 				data={() => applications.data()}
 				columns={() => applicationColumns()}
 				groupBy="triageGroup"

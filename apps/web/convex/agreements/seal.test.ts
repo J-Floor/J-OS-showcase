@@ -14,6 +14,14 @@ const PASS = "test-pass";
 const PNG_1PX =
 	"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
+/** The drawn bytes of a draw that must succeed. */
+async function drawOk(
+	...args: Parameters<typeof drawSignedPdf>
+): Promise<Uint8Array> {
+	const result = await drawSignedPdf(...args);
+	return result._unsafeUnwrap();
+}
+
 /** A small, valid, classic-xref PDF (matches drawSignedPdf's save options). */
 async function makePdf(): Promise<Uint8Array> {
 	const doc = await PDFDocument.create();
@@ -75,8 +83,8 @@ describe("sealWith", () => {
 		const template = new Uint8Array(
 			Buffer.from(TEMPLATES.member.bytesBase64, "base64")
 		);
-		const signaturePng = validatePngDataUrl(PNG_1PX);
-		const drawn = await drawSignedPdf(template, {
+		const signaturePng = validatePngDataUrl(PNG_1PX)._unsafeUnwrap();
+		const drawn = await drawOk(template, {
 			variant: "member",
 			name: "Ada",
 			company: "Engine",

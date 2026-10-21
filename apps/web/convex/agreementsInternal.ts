@@ -9,6 +9,7 @@ import { requireRole } from "./lib/authGuard.ts";
 import { agreementVariantFor, entitled } from "./lib/derive.ts";
 import { personByEmail } from "./lib/emailAddress.ts";
 import { displayName } from "./lib/names.ts";
+import { unwrap } from "./lib/result.ts";
 import { BOARD_LEVEL } from "./lib/roles.ts";
 import { insertSignature } from "./lib/signatures.ts";
 import { markStepComplete } from "./onboarding.ts";
@@ -80,7 +81,7 @@ export const signingContext = internalQuery({
 export const signatureForVerification = internalQuery({
 	args: { personId: v.id("people") },
 	handler: async (context, { personId }) => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		const sig = await context.db
 			.query("signatures")
 			.withIndex("by_person", (range) => range.eq("personId", personId))

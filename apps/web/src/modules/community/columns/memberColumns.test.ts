@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { errAsync, okAsync } from "neverthrow";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -15,26 +16,21 @@ import { applyMove, memberGroup, type MemberRow } from "./memberColumns.tsx";
  * the right mock fired AND that its sibling did not.
  */
 function mockTriage(): ReturnType<typeof useTriage> {
-	// `deny`/`makeMember`/`approveAsGuest`/`undeny` wrap `applications.decide`
-	// and `.undeny`, which resolve `null`; every other method wraps
-	// `lifecycle.transition`, which resolves the person's new `StateId` — an
-	// arbitrary legal one is fine here since `applyMove` never reads the value.
+	// Every method resolves a Result; `applyMove` never reads the Ok value.
 	return {
-		deny: vi.fn(() => Promise.resolve(null)),
-		makeMember: vi.fn(() => Promise.resolve(null)),
-		approveAsGuest: vi.fn(() => Promise.resolve(null)),
-		undeny: vi.fn(() => Promise.resolve(null)),
-		kickOut: vi.fn(() => Promise.resolve("former.active" as const)),
-		markLeft: vi.fn(() => Promise.resolve("former.active" as const)),
-		reAdmit: vi.fn(() => Promise.resolve("member.active" as const)),
-		upgradeToMember: vi.fn(() =>
-			Promise.resolve("member.onboarding" as const)
-		),
-		grantCore: vi.fn(() => Promise.resolve("core.active" as const)),
-		revokeCore: vi.fn(() => Promise.resolve("member.active" as const)),
-		promoteToBoard: vi.fn(() => Promise.resolve("board.active" as const)),
-		setRole: vi.fn(() => Promise.resolve("member.active" as const)),
-		extendWindow: vi.fn(() => Promise.resolve("guest.active" as const)),
+		deny: vi.fn(() => okAsync(null)),
+		makeMember: vi.fn(() => okAsync(null)),
+		approveAsGuest: vi.fn(() => okAsync(null)),
+		undeny: vi.fn(() => okAsync(null)),
+		kickOut: vi.fn(() => okAsync(null)),
+		markLeft: vi.fn(() => okAsync(null)),
+		reAdmit: vi.fn(() => okAsync(null)),
+		upgradeToMember: vi.fn(() => okAsync(null)),
+		grantCore: vi.fn(() => okAsync(null)),
+		revokeCore: vi.fn(() => okAsync(null)),
+		promoteToBoard: vi.fn(() => okAsync(null)),
+		setRole: vi.fn(() => okAsync(null)),
+		extendWindow: vi.fn(() => okAsync(null)),
 	};
 }
 
@@ -113,6 +109,21 @@ describe("applyMove", () => {
 		expect(triage.kickOut).toHaveBeenNthCalledWith(1, "p1");
 		expect(triage.kickOut).toHaveBeenNthCalledWith(2, "p2");
 		expect(triage.kickOut).toHaveBeenNthCalledWith(3, "p3");
+	});
+});
+
+describe("applyMove failures", () => {
+	it("stops at the first failing id and resolves to its error", async () => {
+		const triage = mockTriage();
+		const error = { code: "Forbidden", message: "You can't do that." };
+		vi.mocked(triage.kickOut).mockReturnValueOnce(errAsync(error));
+		const ids = ["p1", "p2"] as Id<"people">[];
+		const result = await applyMove(triage, ids, {
+			kind: "event",
+			event: "KICK_OUT",
+		});
+		expect(result.isErr() && result.error.code).toBe("Forbidden");
+		expect(triage.kickOut).toHaveBeenCalledTimes(1);
 	});
 });
 

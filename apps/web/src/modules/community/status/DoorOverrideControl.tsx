@@ -5,7 +5,10 @@ import { For, type JSX } from "solid-js";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { DoorOverride } from "../../../../convex/lib/derive.ts";
+import { call } from "../../../lib/call.ts";
 import { useConfirm } from "../../../shared/confirm.tsx";
+import { createActionError } from "../../../shared/createActionError.ts";
+import { InlineError } from "../../../shared/InlineError.tsx";
 
 import styles from "./DoorOverrideControl.module.scss";
 
@@ -62,24 +65,29 @@ export function DoorOverrideControl(props: {
 }): JSX.Element {
 	const setOverride = useMutation(api.door.setOverride);
 	const confirm = useConfirm();
+	const { error, trackResult } = createActionError(() => props.personId);
 
 	function change(next: DoorOverride): void {
 		if (next === props.value) return;
 		const option = OPTIONS.find((candidate) => candidate.value === next);
 		if (!option) return;
 		void (async () => {
-			if (
-				await confirm({
-					title: `${option.label} door access for ${props.name}?`,
-					message: option.confirm,
-					confirmLabel: option.label,
-					tone: next === "force_off" ? "danger" : "default",
-				})
-			)
-				await setOverride.mutateAsync({
-					personId: props.personId,
-					override: next,
-				});
+			const isConfirmed = await confirm({
+				title: `${option.label} door access for ${props.name}?`,
+				message: option.confirm,
+				confirmLabel: option.label,
+				tone: next === "force_off" ? "danger" : "default",
+			});
+			if (!isConfirmed) return;
+			await trackResult(
+				call(
+					setOverride.mutateAsync({
+						personId: props.personId,
+						override: next,
+					}),
+					"Could not change door access."
+				)
+			);
 		})();
 	}
 
@@ -123,6 +131,7 @@ export function DoorOverrideControl(props: {
 			    that needs explaining, and hover-only help is help you have to
 			    already suspect you need. */}
 			<span class={styles.hint}>{hint()}</span>
+			<InlineError message={error()} />
 		</div>
 	);
 }

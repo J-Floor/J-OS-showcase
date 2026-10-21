@@ -430,7 +430,7 @@ describe("checkInToEvent", () => {
 
 		await expect(
 			asExpired.mutation(api.eventCheckIn.checkInToEvent, { eventId })
-		).rejects.toThrow("Access expired or revoked");
+		).rejects.toThrow("AccessExpired");
 		const rows = await backend.run((context) =>
 			context.db.query("eventAttendance").collect()
 		);
@@ -468,7 +468,7 @@ describe("checkInToEvent", () => {
 
 		await expect(
 			backend.mutation(api.eventCheckIn.checkInToEvent, { eventId })
-		).rejects.toThrow("Not authenticated");
+		).rejects.toThrow("NotAuthenticated");
 		const rows = await backend.run((context) =>
 			context.db.query("eventAttendance").collect()
 		);
@@ -493,7 +493,7 @@ describe("checkInToEvent", () => {
 
 		await expect(
 			asMember.mutation(api.eventCheckIn.checkInToEvent, { eventId })
-		).rejects.toThrow("Event has ended");
+		).rejects.toThrow("EventEnded");
 		const rows = await backend.run((context) =>
 			context.db.query("eventAttendance").collect()
 		);
@@ -519,7 +519,7 @@ describe("checkInToEvent", () => {
 
 		await expect(
 			asMember.mutation(api.eventCheckIn.checkInToEvent, { eventId })
-		).rejects.toThrow("Event not found");
+		).rejects.toThrow("EventNotFound");
 		const rows = await backend.run((context) =>
 			context.db.query("eventAttendance").collect()
 		);

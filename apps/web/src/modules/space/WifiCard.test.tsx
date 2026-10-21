@@ -2,6 +2,7 @@
 import { setDeferredImmediate } from "@j-os/design-system";
 import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
 import { getFunctionName } from "convex/server";
+import { ConvexError } from "convex/values";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 const { logWifiOpenMutate, updateWifiMutate, credentials } = vi.hoisted(() => ({
@@ -112,6 +113,23 @@ test("board sees the edit control and saving calls wifi.update with the entered 
 		ssid: "New network",
 		password: "new-password",
 	});
+});
+
+test("a refused save shows the reason in the form and keeps it open", async () => {
+	updateWifiMutate.mockRejectedValueOnce(
+		new ConvexError({
+			code: "WifiSsidRequired",
+			message: "SSID is required.",
+		})
+	);
+	renderAs("board");
+	fireEvent.click(screen.getByRole("button", { name: /^Edit/ }));
+	fireEvent.input(screen.getByLabelText("Network name"), {
+		target: { value: "" },
+	});
+	fireEvent.click(screen.getByRole("button", { name: /^Save/ }));
+	expect(await screen.findByText("SSID is required.")).toBeInTheDocument();
+	expect(screen.getByLabelText("Network name")).toBeInTheDocument();
 });
 
 test("cancelling the edit brings the code back without saving", () => {

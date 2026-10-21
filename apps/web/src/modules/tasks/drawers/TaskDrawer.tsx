@@ -1,25 +1,26 @@
-import {
-	Drawer,
-	Input,
-	PropertyRow,
-	Select,
-	fireConfetti,
-} from "@j-os/design-system";
+import { Drawer, Input, PropertyRow, Select } from "@j-os/design-system";
 import { Show, type JSX } from "solid-js";
 
 import { NAME_MAX, TEXT_MAX } from "../../../../convex/lib/validate.ts";
+import { celebrate } from "../../../lib/celebrate.ts";
 import {
 	createSyncedField,
 	shallowArrayEquals,
 } from "../../../lib/createSyncedField.ts";
 import { DescriptionField } from "../../../shared/components/DescriptionField.tsx";
 import { SelectOptionList } from "../../../shared/components/SelectOptionList.tsx";
+import {
+	createActionError,
+	scopeOfFields,
+	type ActionErrorState,
+} from "../../../shared/createActionError.ts";
 import { EntityCreateFooter } from "../../../shared/entity/EntityCreateFooter.tsx";
 import {
 	EntityDrawerHeader,
 	type DrawerNavState,
 } from "../../../shared/entity/EntityDrawerHeader.tsx";
 import { ICONS } from "../../../shared/icons.ts";
+import { InlineError } from "../../../shared/InlineError.tsx";
 import type { Person, Project, Task } from "../data/tasksData.tsx";
 import { useTaskActions, type TaskActions } from "../data/tasksData.tsx";
 
@@ -89,14 +90,25 @@ type TaskDrawerProps = {
  * is the empty/initial value, so it resets; the `write`s no-op (patch guards
  * on `props.task`) and createTask reads the drafts directly.
  */
-function createTaskFields(props: TaskDrawerProps, actions: TaskActions) {
+function createTaskFields(
+	props: TaskDrawerProps,
+	actions: TaskActions,
+	failure: ActionErrorState
+) {
 	function key() {
 		return `${String(props.open)}:${props.task?._id ?? "new"}`;
 	}
 
 	// Simplified patch: the server validator constrains the real payload.
+	async function patchTask(task: Task, fields: Record<string, unknown>) {
+		await failure.trackResult(
+			actions.update({ id: task._id, ...fields }),
+			scopeOfFields(fields)
+		);
+	}
+
 	function patch(fields: Record<string, unknown>) {
-		if (props.task) void actions.update({ id: props.task._id, ...fields });
+		if (props.task) void patchTask(props.task, fields);
 	}
 
 	return {
@@ -155,7 +167,7 @@ type TaskFields = ReturnType<typeof createTaskFields>;
 
 /** The status picker. Completing a task bursts confetti from its row — set
  *  first, since the status write must never depend on the decorative
- *  confetti, which can throw. */
+ *  confetti, which can fail. */
 function StatusRow(props: { status: TaskFields["status"] }) {
 	// Anchors the completion confetti to the Status row.
 	let statusRowElement: HTMLDivElement | undefined;
@@ -176,14 +188,11 @@ function StatusRow(props: { status: TaskFields["status"] }) {
 					const isCompleted =
 						next === "done" && props.status.value() !== "done";
 					// Set first — the status write must never depend on the
-					// decorative confetti, which can throw.
+					// decorative confetti, which can fail.
 					props.status.set(next);
 					if (isCompleted) {
-						try {
-							fireConfetti(statusRowElement);
-						} catch {
-							/* decorative only */
-						}
+						// Decorative only: a failure is ignored.
+						celebrate(statusRowElement);
 					}
 				}}
 			>
@@ -237,23 +246,34 @@ function TaskDetailRows(props: {
 function createTaskCommands(
 	props: TaskDrawerProps,
 	fields: TaskFields,
-	actions: TaskActions
+	actions: TaskActions,
+	failure: ActionErrorState
 ) {
 	async function createTask() {
 		if (!fields.title.value().trim()) return;
-		await actions.create({
-			title: fields.title.value().trim(),
-			status: fields.status.value(),
-			assigneeIds: fields.assignees.value(),
-			projectId: fields.projectId.value(),
-			dueDate: fields.dueDate.value(),
-			description: fields.description.value().trim() || undefined,
-		});
+		const result = await failure.trackResult(
+			actions.create({
+				title: fields.title.value().trim(),
+				status: fields.status.value(),
+				assigneeIds: fields.assignees.value(),
+				projectId: fields.projectId.value(),
+				dueDate: fields.dueDate.value(),
+				description: fields.description.value().trim() || undefined,
+			})
+		);
+		if (result.isErr()) return;
 		props.onOpenChange(false);
 	}
 
-	function deleteTask() {
-		if (props.task) void actions.remove(props.task._id);
+	async function deleteTask() {
+		if (!props.task) {
+			props.onOpenChange(false);
+			return;
+		}
+		const result = await failure.trackResult(
+			actions.remove(props.task._id)
+		);
+		if (result.isErr()) return;
 		props.onOpenChange(false);
 	}
 
@@ -262,11 +282,13 @@ function createTaskCommands(
 
 export function TaskDrawer(props: TaskDrawerProps): JSX.Element {
 	const actions = useTaskActions();
-	const fields = createTaskFields(props, actions);
+	const failure = createActionError();
+	const fields = createTaskFields(props, actions, failure);
 	const { createTask, deleteTask } = createTaskCommands(
 		props,
 		fields,
-		actions
+		actions,
+		failure
 	);
 	function isEdit() {
 		return props.task !== undefined;
@@ -287,7 +309,9 @@ export function TaskDrawer(props: TaskDrawerProps): JSX.Element {
 				nav={props.nav}
 				isEdit={isEdit()}
 				deleteLabel="Delete task"
-				onDelete={deleteTask}
+				onDelete={() => {
+					void deleteTask();
+				}}
 			/>
 			<Drawer.Body
 				loading={props.loading}
@@ -319,6 +343,7 @@ export function TaskDrawer(props: TaskDrawerProps): JSX.Element {
 					description={fields.description}
 					maxLength={TEXT_MAX}
 				/>
+				<InlineError message={failure.error()} />
 			</Drawer.Body>
 			<Show when={!props.loading && !isEdit()}>
 				<EntityCreateFooter

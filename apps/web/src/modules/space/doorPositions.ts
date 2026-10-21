@@ -15,6 +15,7 @@ import {
 	type LockSlot,
 } from "../../../convex/lib/doorLocks.ts";
 import { type DoorPosition } from "../../../convex/lib/doorProvider.ts";
+import { call } from "../../lib/call.ts";
 
 import { LOCK_SLOTS } from "./lockSlots.ts";
 
@@ -98,13 +99,13 @@ async function fetchPosition(
 	slot: LockSlot,
 	isFresh: boolean
 ): Promise<DoorPosition> {
-	try {
-		return await read.mutateAsync(
+	const result = await call(
+		read.mutateAsync(
 			isFresh ? { lock: slot, fresh: isFresh } : { lock: slot }
-		);
-	} catch {
-		return "unknown";
-	}
+		),
+		"Could not read the door."
+	);
+	return result.unwrapOr("unknown");
 }
 
 /** Reads every lockable door once when `enabled` turns true, then every

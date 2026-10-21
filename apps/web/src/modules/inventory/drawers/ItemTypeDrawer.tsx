@@ -2,25 +2,26 @@ import { Drawer, PropertyRow } from "@j-os/design-system";
 import { Show, createSignal, type JSX } from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
+import { call } from "../../../lib/call.ts";
 import { createSyncedField } from "../../../lib/createSyncedField.ts";
 import { DescriptionField } from "../../../shared/components/DescriptionField.tsx";
 import { useConfirm } from "../../../shared/confirm.tsx";
+import {
+	createActionError,
+	scopeOfFields,
+} from "../../../shared/createActionError.ts";
 import { EntityCreateFooter } from "../../../shared/entity/EntityCreateFooter.tsx";
 import {
 	EntityDrawerHeader,
 	type DrawerNavState,
 } from "../../../shared/entity/EntityDrawerHeader.tsx";
 import { ICONS } from "../../../shared/icons.ts";
+import { InlineError } from "../../../shared/InlineError.tsx";
 import type { Category, ItemType } from "../data/inventoryData.ts";
 import { useItemsByType, useItemTypeActions } from "../data/inventoryData.ts";
 
 import styles from "./InventoryDrawer.module.scss";
-import {
-	FormErrorLine,
-	NameField,
-	OptionSelect,
-	runAttempt,
-} from "./InventoryForm.tsx";
+import { NameField, OptionSelect } from "./InventoryForm.tsx";
 import { RelatedListSection } from "./RelatedListSection.tsx";
 
 /**
@@ -57,23 +58,13 @@ type ItemTypeDrawerProps = {
 	nav?: DrawerNavState;
 };
 
-/** The item type's fields (saved as they are typed) and the actions that
- *  create and delete it. */
-function createItemTypeForm(props: ItemTypeDrawerProps) {
-	const actions = useItemTypeActions();
-	const confirm = useConfirm();
-	const [formError, setFormError] = createSignal<string>();
-
+/** The item type's three fields, each saved as it is typed. */
+function createItemTypeFields(
+	props: ItemTypeDrawerProps,
+	patch: (change: Record<string, unknown>) => Promise<void>
+) {
 	function key() {
 		return `${String(props.open)}:${props.itemType?._id ?? "new"}`;
-	}
-
-	async function patch(change: Record<string, unknown>) {
-		const itemType = props.itemType;
-		if (!itemType) return;
-		await runAttempt(setFormError, "Could not save.", () =>
-			actions.update({ id: itemType._id, ...change })
-		);
 	}
 
 	const name = createSyncedField({
@@ -98,31 +89,52 @@ function createItemTypeForm(props: ItemTypeDrawerProps) {
 			void patch({ description: value.trim() === "" ? null : value });
 		},
 	});
+	return { name, categoryId, description };
+}
+
+/** The item type's fields and the actions that create and delete it. */
+function createItemTypeForm(props: ItemTypeDrawerProps) {
+	const actions = useItemTypeActions();
+	const confirm = useConfirm();
+	const failure = createActionError();
+
+	async function patch(change: Record<string, unknown>) {
+		const itemType = props.itemType;
+		if (!itemType) return;
+		await failure.trackResult(
+			call(
+				actions.update({ id: itemType._id, ...change }),
+				"Could not save."
+			),
+			scopeOfFields(change)
+		);
+	}
+
+	const fields = createItemTypeFields(props, patch);
 
 	return {
-		name,
-		categoryId,
-		description,
-		formError,
+		...fields,
+		formError: failure.error,
 		/** Forwards the drawer's open state, dropping a stale error on close. */
 		onOpenChange: (isOpen: boolean) => {
-			if (!isOpen) setFormError(undefined);
+			if (!isOpen) failure.clear();
 			props.onOpenChange(isOpen);
 		},
 		async createItemType() {
-			const selected = categoryId.value();
-			if (!name.value().trim() || selected === undefined) return;
-			const isCreated = await runAttempt(
-				setFormError,
-				"Could not create.",
-				() =>
+			const selected = fields.categoryId.value();
+			if (!fields.name.value().trim() || selected === undefined) return;
+			const created = await failure.trackResult(
+				call(
 					actions.create({
-						name: name.value(),
+						name: fields.name.value(),
 						categoryId: selected,
-						description: description.value().trim() || undefined,
-					})
+						description:
+							fields.description.value().trim() || undefined,
+					}),
+					"Could not create."
+				)
 			);
-			if (isCreated) props.onOpenChange(false);
+			if (created.isOk()) props.onOpenChange(false);
 		},
 		async deleteItemType() {
 			if (!props.itemType) return;
@@ -135,12 +147,10 @@ function createItemTypeForm(props: ItemTypeDrawerProps) {
 			});
 			if (!isOk) return;
 			const itemType = props.itemType;
-			const isDeleted = await runAttempt(
-				setFormError,
-				"Could not delete.",
-				() => actions.remove(itemType._id)
+			const deleted = await failure.trackResult(
+				call(actions.remove(itemType._id), "Could not delete.")
 			);
-			if (isDeleted) props.onOpenChange(false);
+			if (deleted.isOk()) props.onOpenChange(false);
 		},
 	};
 }
@@ -206,7 +216,7 @@ export function ItemTypeDrawer(props: ItemTypeDrawerProps): JSX.Element {
 			>
 				<NameField
 					name={form.name}
-					hasError={form.formError() !== undefined}
+					hasError={form.formError() !== null}
 					onElement={(element) => {
 						nameElement = element;
 					}}
@@ -225,7 +235,7 @@ export function ItemTypeDrawer(props: ItemTypeDrawerProps): JSX.Element {
 					class={styles.description}
 					description={form.description}
 				/>
-				<FormErrorLine error={form.formError} />
+				<InlineError message={form.formError()} />
 				<Show when={isEdit()}>
 					<RelatedListSection
 						value="items"

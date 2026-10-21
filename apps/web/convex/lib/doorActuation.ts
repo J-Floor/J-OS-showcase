@@ -8,6 +8,7 @@ import type { Infer } from "convex/values";
 import type { doorActuation } from "../schema.ts";
 
 import type { DoorAction, DoorPosition } from "./doorProvider.ts";
+import { invariant } from "./result.ts";
 
 export const CONFIRM_POLL_MS = 500;
 export const CONFIRM_WINDOW_MS = 20_000;
@@ -52,18 +53,6 @@ export type ActuationEvent =
 type Phase = ActuationState["phase"];
 type EventType = ActuationEvent["type"];
 type Rule = (state: ActuationState, event: ActuationEvent) => ActuationState;
-
-export class IllegalActuationTransitionError extends Error {
-	readonly phase: Phase;
-	readonly event: EventType;
-
-	constructor(phase: Phase, event: EventType) {
-		super(`Illegal actuation transition ${phase} -[${event}]->`);
-		this.name = "IllegalActuationTransitionError";
-		this.phase = phase;
-		this.event = event;
-	}
-}
 
 /** Per action, the reading of the door on its way and the one it ends in. */
 const TARGET: Record<DoorAction, { moving: DoorPosition; done: DoorPosition }> =
@@ -159,8 +148,10 @@ export function transition(
 	event: ActuationEvent
 ): ActuationState {
 	const rule = TABLE[state.phase][event.type];
-	if (!rule)
-		throw new IllegalActuationTransitionError(state.phase, event.type);
+	invariant(
+		rule,
+		`Illegal actuation transition ${state.phase} -[${event.type}]->`
+	);
 	return rule(state, event);
 }
 
@@ -211,8 +202,10 @@ export function attemptState(
 		case "unconfirmed":
 			return { phase: "unconfirmed", action, requestedAt };
 		case "actuated":
-			if (stored.actuatedAt === undefined)
-				throw new Error("An actuated attempt has no actuatedAt.");
+			invariant(
+				stored.actuatedAt !== undefined,
+				"An actuated attempt has no actuatedAt."
+			);
 			return {
 				phase: "actuated",
 				action,

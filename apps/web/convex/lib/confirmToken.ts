@@ -5,6 +5,7 @@ import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import type { confirmPurpose, reapplyPayload } from "../schema.ts";
 
 import { HEX_RADIX } from "./constants.ts";
+import { invariant } from "./result.ts";
 
 const TOKEN_BYTES = 32;
 
@@ -69,12 +70,14 @@ export async function issueToken(
 		actorId?: Id<"people">;
 	}
 ): Promise<Id<"confirmTokens">> {
-	if (args.purpose === "eventInvite" && args.eventId === undefined) {
-		throw new Error("eventInvite tokens need an eventId");
-	}
-	if (args.purpose === "emailChange" && args.newEmail === undefined) {
-		throw new Error("emailChange tokens need a newEmail");
-	}
+	invariant(
+		args.purpose !== "eventInvite" || args.eventId !== undefined,
+		"eventInvite tokens need an eventId"
+	);
+	invariant(
+		args.purpose !== "emailChange" || args.newEmail !== undefined,
+		"emailChange tokens need a newEmail"
+	);
 	const prior = await context.db
 		.query("confirmTokens")
 		.withIndex("by_person_purpose", (range) =>

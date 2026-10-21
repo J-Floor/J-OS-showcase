@@ -4,12 +4,18 @@ import { For, Show, type JSX } from "solid-js";
 import { NAME_MAX, TEXT_MAX } from "../../../../convex/lib/validate.ts";
 import { createSyncedField } from "../../../lib/createSyncedField.ts";
 import { DescriptionField } from "../../../shared/components/DescriptionField.tsx";
+import {
+	createActionError,
+	scopeOfFields,
+	type ActionErrorState,
+} from "../../../shared/createActionError.ts";
 import { EntityCreateFooter } from "../../../shared/entity/EntityCreateFooter.tsx";
 import {
 	EntityDrawerHeader,
 	type DrawerNavState,
 } from "../../../shared/entity/EntityDrawerHeader.tsx";
 import { ICONS } from "../../../shared/icons.ts";
+import { InlineError } from "../../../shared/InlineError.tsx";
 import { dateToIso, isoToMs } from "../data/taskHelpers.ts";
 import type { Person, Project, Task } from "../data/tasksData.tsx";
 import { useProjectActions, type ProjectActions } from "../data/tasksData.tsx";
@@ -79,15 +85,25 @@ type ProjectDrawerProps = {
  */
 function createProjectFields(
 	props: ProjectDrawerProps,
-	actions: ProjectActions
+	actions: ProjectActions,
+	failure: ActionErrorState
 ) {
 	function key() {
 		return `${String(props.open)}:${props.project?._id ?? "new"}`;
 	}
 
+	async function patchProject(
+		project: Project,
+		fields: Record<string, unknown>
+	) {
+		await failure.trackResult(
+			actions.update({ id: project._id, ...fields }),
+			scopeOfFields(fields)
+		);
+	}
+
 	function patch(fields: Record<string, unknown>) {
-		if (props.project)
-			void actions.update({ id: props.project._id, ...fields });
+		if (props.project) void patchProject(props.project, fields);
 	}
 
 	return {
@@ -144,22 +160,33 @@ type ProjectFields = ReturnType<typeof createProjectFields>;
 function createProjectCommands(
 	props: ProjectDrawerProps,
 	fields: ProjectFields,
-	actions: ProjectActions
+	actions: ProjectActions,
+	failure: ActionErrorState
 ) {
 	async function createProject() {
 		if (!fields.name.value().trim()) return;
-		await actions.create({
-			name: fields.name.value().trim(),
-			leaderId: fields.leaderId.value(),
-			startDate: fields.startDate.value(),
-			endDate: fields.endDate.value(),
-			description: fields.description.value().trim() || undefined,
-		});
+		const result = await failure.trackResult(
+			actions.create({
+				name: fields.name.value().trim(),
+				leaderId: fields.leaderId.value(),
+				startDate: fields.startDate.value(),
+				endDate: fields.endDate.value(),
+				description: fields.description.value().trim() || undefined,
+			})
+		);
+		if (result.isErr()) return;
 		props.onOpenChange(false);
 	}
 
-	function deleteProject() {
-		if (props.project) void actions.remove(props.project._id);
+	async function deleteProject() {
+		if (!props.project) {
+			props.onOpenChange(false);
+			return;
+		}
+		const result = await failure.trackResult(
+			actions.remove(props.project._id)
+		);
+		if (result.isErr()) return;
 		props.onOpenChange(false);
 	}
 
@@ -258,11 +285,13 @@ function ProjectTasksSection(props: {
 
 export function ProjectDrawer(props: ProjectDrawerProps): JSX.Element {
 	const actions = useProjectActions();
-	const fields = createProjectFields(props, actions);
+	const failure = createActionError();
+	const fields = createProjectFields(props, actions, failure);
 	const { createProject, deleteProject } = createProjectCommands(
 		props,
 		fields,
-		actions
+		actions,
+		failure
 	);
 	function isEdit() {
 		return props.project !== undefined;
@@ -283,7 +312,9 @@ export function ProjectDrawer(props: ProjectDrawerProps): JSX.Element {
 				nav={props.nav}
 				isEdit={isEdit()}
 				deleteLabel="Delete project"
-				onDelete={deleteProject}
+				onDelete={() => {
+					void deleteProject();
+				}}
 			/>
 			<Drawer.Body
 				loading={props.loading}
@@ -309,6 +340,7 @@ export function ProjectDrawer(props: ProjectDrawerProps): JSX.Element {
 					description={fields.description}
 					maxLength={TEXT_MAX}
 				/>
+				<InlineError message={failure.error()} />
 
 				<Show when={isEdit()}>
 					<ProjectTasksSection

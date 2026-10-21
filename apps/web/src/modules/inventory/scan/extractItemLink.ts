@@ -1,3 +1,5 @@
+import { Result } from "neverthrow";
+
 import { parseAssetTag } from "../../../../convex/lib/assetTag.ts";
 
 export type ItemLinkResolution =
@@ -15,22 +17,20 @@ export type ItemLinkResolution =
  * Lives in `scan/`, not `convex/lib/assetTag.ts`: that file backs mutation
  * validators, and a URL must never be accepted there as a storable tag.
  */
+const parseUrl = Result.fromThrowable(
+	(raw: string) => new URL(raw, "https://placeholder.invalid")
+);
+
 export function extractItemLink(raw: string): ItemLinkResolution {
-	let candidate = raw;
-	try {
-		// A relative deep link (no origin) parses fine against a dummy base;
-		// an absolute one ignores the base entirely. Either way, pull `item`
-		// from the query string when present.
-		const url = new URL(raw, "https://placeholder.invalid");
-		const item = url.searchParams.get("item");
-		if (item !== null) candidate = item;
-	} catch {
-		// Not URL-parseable at all (e.g. stray characters) — fall through and
-		// try the raw payload as a bare tag.
-	}
-	try {
-		return { kind: "tag", tag: parseAssetTag(candidate) };
-	} catch {
-		return { kind: "invalid" };
-	}
+	// A relative deep link (no origin) parses fine against a dummy base; an
+	// absolute one ignores the base entirely. Either way, pull `item` from the
+	// query string when present. A payload that is not URL-parseable at all
+	// (e.g. stray characters) is tried as a bare tag.
+	const item = parseUrl(raw)
+		.map((url) => url.searchParams.get("item"))
+		.unwrapOr(null);
+	return parseAssetTag(item ?? raw).match(
+		(tag): ItemLinkResolution => ({ kind: "tag", tag }),
+		(): ItemLinkResolution => ({ kind: "invalid" })
+	);
 }

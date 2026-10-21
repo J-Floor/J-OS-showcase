@@ -1,7 +1,8 @@
-import { Button, fireConfetti, Icon, Logo } from "@j-os/design-system";
+import { Button, Icon, Logo } from "@j-os/design-system";
 import { useLocation } from "@solidjs/router";
 import { onMount, Show } from "solid-js";
 
+import { celebrate } from "../../lib/celebrate.ts";
 import { ICONS } from "../../shared/icons.ts";
 import { useRecaptchaScript } from "../../shared/recaptcha.ts";
 import { PrivacyNoticeLine } from "../privacy/PrivacyNoticeLine.tsx";
@@ -26,7 +27,7 @@ function SubmittedNotice(props: { email: string }) {
 			class={styles.thanks}
 			ref={(element) => {
 				onMount(() => {
-					fireConfetti(element);
+					celebrate(element);
 				});
 			}}
 		>

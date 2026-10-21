@@ -1,14 +1,20 @@
 import { Button, Drawer, PropertyRow } from "@j-os/design-system";
 import { Show, createSignal, type JSX } from "solid-js";
 
+import { call } from "../../../lib/call.ts";
 import { createSyncedField } from "../../../lib/createSyncedField.ts";
 import { DescriptionField } from "../../../shared/components/DescriptionField.tsx";
 import { useConfirm } from "../../../shared/confirm.tsx";
+import {
+	createActionError,
+	scopeOfFields,
+} from "../../../shared/createActionError.ts";
 import {
 	EntityDrawerHeader,
 	type DrawerNavState,
 } from "../../../shared/entity/EntityDrawerHeader.tsx";
 import { ICONS } from "../../../shared/icons.ts";
+import { InlineError } from "../../../shared/InlineError.tsx";
 import type { Category } from "../data/inventoryData.ts";
 import {
 	useCategoryActions,
@@ -16,7 +22,7 @@ import {
 } from "../data/inventoryData.ts";
 
 import styles from "./InventoryDrawer.module.scss";
-import { FormErrorLine, NameField, runAttempt } from "./InventoryForm.tsx";
+import { NameField } from "./InventoryForm.tsx";
 import { RelatedListSection } from "./RelatedListSection.tsx";
 
 /**
@@ -54,7 +60,7 @@ type CategoryDrawerProps = {
 function createCategoryForm(props: CategoryDrawerProps) {
 	const actions = useCategoryActions();
 	const confirm = useConfirm();
-	const [formError, setFormError] = createSignal<string>();
+	const failure = createActionError();
 
 	function key() {
 		return `${String(props.open)}:${props.category?._id ?? "new"}`;
@@ -63,8 +69,12 @@ function createCategoryForm(props: CategoryDrawerProps) {
 	async function patch(change: Record<string, unknown>) {
 		const category = props.category;
 		if (!category) return;
-		await runAttempt(setFormError, "Could not save.", () =>
-			actions.update({ id: category._id, ...change })
+		await failure.trackResult(
+			call(
+				actions.update({ id: category._id, ...change }),
+				"Could not save."
+			),
+			scopeOfFields(change)
 		);
 	}
 
@@ -86,24 +96,24 @@ function createCategoryForm(props: CategoryDrawerProps) {
 	return {
 		name,
 		description,
-		formError,
+		formError: failure.error,
 		/** Forwards the drawer's open state, dropping a stale error on close. */
 		onOpenChange: (isOpen: boolean) => {
-			if (!isOpen) setFormError(undefined);
+			if (!isOpen) failure.clear();
 			props.onOpenChange(isOpen);
 		},
 		async createCategory() {
 			if (!name.value().trim()) return;
-			const isCreated = await runAttempt(
-				setFormError,
-				"Could not create.",
-				() =>
+			const created = await failure.trackResult(
+				call(
 					actions.create({
 						name: name.value(),
 						description: description.value().trim() || undefined,
-					})
+					}),
+					"Could not create."
+				)
 			);
-			if (isCreated) props.onOpenChange(false);
+			if (created.isOk()) props.onOpenChange(false);
 		},
 		async deleteCategory() {
 			if (!props.category) return;
@@ -116,12 +126,10 @@ function createCategoryForm(props: CategoryDrawerProps) {
 			});
 			if (!isOk) return;
 			const category = props.category;
-			const isDeleted = await runAttempt(
-				setFormError,
-				"Could not delete.",
-				() => actions.remove(category._id)
+			const deleted = await failure.trackResult(
+				call(actions.remove(category._id), "Could not delete.")
 			);
-			if (isDeleted) props.onOpenChange(false);
+			if (deleted.isOk()) props.onOpenChange(false);
 		},
 	};
 }
@@ -170,7 +178,7 @@ export function CategoryDrawer(props: CategoryDrawerProps): JSX.Element {
 			>
 				<NameField
 					name={form.name}
-					hasError={form.formError() !== undefined}
+					hasError={form.formError() !== null}
 					onElement={(element) => {
 						nameElement = element;
 					}}
@@ -179,7 +187,7 @@ export function CategoryDrawer(props: CategoryDrawerProps): JSX.Element {
 					class={styles.description}
 					description={form.description}
 				/>
-				<FormErrorLine error={form.formError} />
+				<InlineError message={form.formError()} />
 				<Show when={isEdit()}>
 					<RelatedListSection
 						value="types"

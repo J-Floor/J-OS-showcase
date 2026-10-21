@@ -13,6 +13,7 @@ import {
 	waitFor,
 } from "@solidjs/testing-library";
 import { getFunctionName } from "convex/server";
+import { ok } from "neverthrow";
 import { Show } from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
 
@@ -158,11 +159,11 @@ const chairItem = {
 function hangUntilAbort() {
 	mockStart.mockImplementation(
 		(_video: unknown, _onDetect: unknown, signal: AbortSignal) =>
-			new Promise<void>((resolve) => {
+			new Promise((resolve) => {
 				signal.addEventListener(
 					"abort",
 					() => {
-						resolve();
+						resolve(ok());
 					},
 					{ once: true }
 				);
@@ -178,11 +179,11 @@ function detectThenHang(raw: string) {
 			signal: AbortSignal
 		) => {
 			detect(raw);
-			return new Promise<void>((resolve) => {
+			return new Promise((resolve) => {
 				signal.addEventListener(
 					"abort",
 					() => {
-						resolve();
+						resolve(ok());
 					},
 					{ once: true }
 				);

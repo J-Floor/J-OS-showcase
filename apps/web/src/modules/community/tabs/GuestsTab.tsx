@@ -39,6 +39,7 @@ export function GuestsTab(props: TabProps): JSX.Element {
 	return (
 		<RosterTab<GuestRow>
 			tab={props}
+			scope="guests"
 			data={() => guests.data()}
 			columns={columns}
 			groupBy="guestStatus"

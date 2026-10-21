@@ -1,8 +1,11 @@
+import { type Result, err, ok } from "neverthrow";
+
 import type { Doc } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 
 import { entitled } from "./derive.ts";
 import { personByEmail } from "./emailAddress.ts";
+import type { AuthError } from "./errors/auth.ts";
 import type { Tier } from "./lifecycleTypes.ts";
 
 /**
@@ -22,16 +25,15 @@ import type { Tier } from "./lifecycleTypes.ts";
 export async function requireRole(
 	context: QueryCtx,
 	tiers: readonly Tier[]
-): Promise<Doc<"people">> {
+): Promise<Result<Doc<"people">, AuthError>> {
 	const identity = await context.auth.getUserIdentity();
 	const email = identity?.email;
-	if (!email) throw new Error("Not authenticated");
+	if (!email) return err({ type: "NotAuthenticated" });
 	const person = await personByEmail(context, email);
 	if (!person || !tiers.includes(person.tier)) {
-		throw new Error("Forbidden");
+		return err({ type: "Forbidden" });
 	}
-	if (!entitled(person, Date.now())) {
-		throw new Error("Access expired or revoked");
-	}
-	return person;
+	return entitled(person, Date.now())
+		? ok(person)
+		: err({ type: "AccessExpired" });
 }

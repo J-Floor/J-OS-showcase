@@ -1,5 +1,6 @@
 import { Navigate } from "@solidjs/router";
 import { useMutation } from "convex-solidjs";
+import { ok, type Result } from "neverthrow";
 import { Show } from "solid-js";
 import { Dynamic } from "solid-js/web";
 
@@ -9,8 +10,11 @@ import {
 	firstIncompleteSelfStepId,
 	requiredSelfStepIds,
 } from "../../../convex/lib/onboardingSteps.ts";
+import { call, type ClientError } from "../../lib/call.ts";
 import { AppErrorBoundary } from "../../shared/AppErrorBoundary.tsx";
+import { createActionError } from "../../shared/createActionError.ts";
 import { useQuery } from "../../shared/data/useQuery.ts";
+import { InlineError } from "../../shared/InlineError.tsx";
 import { LoadingScreen } from "../../shared/LoadingScreen.tsx";
 
 import { FinishOnboarding } from "./FinishOnboarding.tsx";
@@ -20,9 +24,14 @@ import { ONBOARDING_VIEWS } from "./registry.ts";
 /** Presentational wizard: renders the current step for a given person. */
 export function OnboardingWizardView(props: {
 	person: Doc<"people">;
-	onComplete: () => Promise<void>;
-	onResume: () => Promise<{ activated: boolean }>;
+	onComplete: () => PromiseLike<Result<unknown, ClientError>>;
+	onResume: () => PromiseLike<Result<{ activated: boolean }, ClientError>>;
 }) {
+	const { error: completeError, trackResult } = createActionError();
+	/** What each step's button calls; a refusal shows under the step. */
+	async function complete(): Promise<void> {
+		await trackResult(props.onComplete());
+	}
 	function tier() {
 		return props.person.tier;
 	}
@@ -63,9 +72,10 @@ export function OnboardingWizardView(props: {
 							<Dynamic
 								component={view.component}
 								person={props.person}
-								onComplete={props.onComplete}
+								onComplete={complete}
 							/>
 						</AppErrorBoundary>
+						<InlineError message={completeError()} />
 					</section>
 				);
 			}}
@@ -79,14 +89,20 @@ export function OnboardingWizard() {
 	const completeStep = useMutation(api.onboarding.completeStep);
 	const resume = useMutation(api.onboarding.resume);
 
-	async function complete() {
+	async function complete(): Promise<Result<unknown, ClientError>> {
 		const person = state.data()?.person;
-		if (!person) return;
-		const id = firstIncompleteSelfStepId(
-			person.tier,
-			person.onboarding?.steps ?? {}
-		);
-		if (id) await completeStep.mutateAsync({ stepId: id });
+		const id = person
+			? firstIncompleteSelfStepId(
+					person.tier,
+					person.onboarding?.steps ?? {}
+				)
+			: undefined;
+		return id
+			? call(
+					completeStep.mutateAsync({ stepId: id }),
+					"Could not save that step."
+				)
+			: ok(undefined);
 	}
 
 	return (
@@ -99,7 +115,12 @@ export function OnboardingWizard() {
 					<OnboardingWizardView
 						person={person()}
 						onComplete={complete}
-						onResume={() => resume.mutateAsync({})}
+						onResume={() =>
+							call(
+								resume.mutateAsync({}),
+								"Could not finish your setup."
+							)
+						}
 					/>
 				)}
 			</Show>

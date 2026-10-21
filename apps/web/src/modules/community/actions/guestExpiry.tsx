@@ -5,6 +5,7 @@ import {
 	Dialog,
 	Segment,
 } from "@j-os/design-system";
+import { ok, type Result } from "neverthrow";
 import {
 	type JSX,
 	type ParentProps,
@@ -15,11 +16,15 @@ import {
 } from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
+import { invariant } from "../../../../convex/lib/result.ts";
 import {
 	composeExpiry,
 	minExpiryIso,
 	SITE_TIMEZONE,
 } from "../../../../convex/lib/time.ts";
+import type { ClientError } from "../../../lib/call.ts";
+import { createActionError } from "../../../shared/createActionError.ts";
+import { InlineError } from "../../../shared/InlineError.tsx";
 import { HostSelect } from "../columns/HostSelect.tsx";
 
 import styles from "./guestExpiry.module.scss";
@@ -33,11 +38,10 @@ const GuestExpiryContext = createContext<RequestGuestExpiry>();
 
 export function useGuestExpiry(): RequestGuestExpiry {
 	const context = useContext(GuestExpiryContext);
-	if (!context) {
-		throw new Error(
-			"useGuestExpiry must be used within <GuestExpiryProvider>"
-		);
-	}
+	invariant(
+		context,
+		"useGuestExpiry must be used within <GuestExpiryProvider>"
+	);
 	return context;
 }
 
@@ -120,6 +124,31 @@ function hostSelectTrigger(): HTMLElement | null {
 	);
 }
 
+/** Approve each application in turn; the first refusal ends the run. */
+async function approveAll(
+	approveAsGuest: ReturnType<typeof useTriage>["approveAsGuest"],
+	ids: Id<"people">[],
+	grant: {
+		until: number | undefined;
+		hostedById: Id<"people">;
+		shouldBlockDoor: boolean;
+		/** Called as each one is approved, so a retry skips it. */
+		onApproved: (id: Id<"people">) => void;
+	}
+): Promise<Result<unknown, ClientError>> {
+	for (const id of ids) {
+		const result = await approveAsGuest(
+			id,
+			grant.until,
+			grant.hostedById,
+			grant.shouldBlockDoor
+		);
+		if (result.isErr()) return result;
+		grant.onApproved(id);
+	}
+	return ok(undefined);
+}
+
 /**
  * Provides the make-guest flow: any descendant calls `useGuestExpiry()(ids)` to
  * open a dialog asking for an expiry date, then approves each application as a
@@ -131,6 +160,7 @@ export function GuestExpiryProvider(props: ParentProps): JSX.Element {
 	const [ids, setIds] = createSignal<Id<"people">[]>([]);
 	const [iso, setIso] = createSignal<string | null>(null);
 	const [saving, setSaving] = createSignal(false);
+	const { error, trackResult, clear } = createActionError();
 	const [host, setHost] = createSignal<Id<"people"> | null>(null);
 	// Default yes, which is what approving a guest has always done: the lock
 	// simply follows their access window. "No" is the new capability, and it is
@@ -139,6 +169,7 @@ export function GuestExpiryProvider(props: ParentProps): JSX.Element {
 
 	function request(applicationIds: Id<"people">[]): void {
 		setIds(applicationIds);
+		clear();
 		setIso(null);
 		setHost(null);
 		setDoorAllowed(true);
@@ -155,21 +186,19 @@ export function GuestExpiryProvider(props: ParentProps): JSX.Element {
 		// in sight. `composeExpiry(null, ...)` is null, which `approveAsGuest`
 		// sends as an absent `until`.
 		if (!chosenHost) return;
-		const expiresAt = composeExpiry(iso(), SITE_TIMEZONE)?.utc ?? null;
+		const until = composeExpiry(iso(), SITE_TIMEZONE)?.utc;
 		setSaving(true);
-		try {
-			for (const id of ids()) {
-				await approveAsGuest(
-					id,
-					expiresAt ?? undefined,
-					chosenHost,
-					!doorAllowed()
-				);
-			}
-			setOpen(false);
-		} finally {
-			setSaving(false);
-		}
+		const result = await trackResult(
+			approveAll(approveAsGuest, ids(), {
+				until,
+				hostedById: chosenHost,
+				shouldBlockDoor: !doorAllowed(),
+				onApproved: (id) =>
+					setIds((rest) => rest.filter((x) => x !== id)),
+			})
+		);
+		setSaving(false);
+		if (result.isOk()) setOpen(false);
 	}
 
 	return (
@@ -206,6 +235,7 @@ export function GuestExpiryProvider(props: ParentProps): JSX.Element {
 							onChange={setDoorAllowed}
 						/>
 					</Show>
+					<InlineError message={error()} />
 					<GuestExpiryFooter
 						isSaving={saving()}
 						hasHost={host() !== null}

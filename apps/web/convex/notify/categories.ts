@@ -1,7 +1,7 @@
 import { v, type Infer, type VOptional } from "convex/values";
 
 import type { Tier } from "../lib/lifecycleTypes.ts";
-import { BOARD_LEVEL, COMMUNITY_TIERS } from "../lib/roles.ts";
+import { BOARD_LEVEL, COMMUNITY_TIERS, CORE_AND_BOARD } from "../lib/roles.ts";
 
 /**
  * What a person can switch on or off, per channel. Kinds belong to exactly one
@@ -74,7 +74,7 @@ export const CATEGORY_INFO: Record<Category, CategoryInfo> = {
 	tasks: {
 		label: "Tasks",
 		description: "You are assigned a task or made lead of a project.",
-		tiers: [...BOARD_LEVEL, "core"],
+		tiers: CORE_AND_BOARD,
 	},
 };
 

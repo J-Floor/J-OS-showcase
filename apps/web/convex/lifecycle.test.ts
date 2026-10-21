@@ -6,9 +6,14 @@ import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { entitled } from "./lib/derive.ts";
 import { violations } from "./lib/invariants.ts";
+import { unwrap } from "./lib/result.ts";
 import { utcFromLocal } from "./lib/time.ts";
 import { applyEvent } from "./lifecycle.ts";
 import schema from "./schema.ts";
+
+async function applyOrThrow(...args: Parameters<typeof applyEvent>) {
+	return unwrap(await applyEvent(...args));
+}
 
 const modules = import.meta.glob("./**/*.*s");
 const DAY = 86_400_000;
@@ -189,7 +194,7 @@ describe("transition", () => {
 				personId: id,
 				event: { type: "APPROVE_MEMBER" },
 			})
-		).rejects.toThrow(/Illegal transition/);
+		).rejects.toThrow(/IllegalTransition/);
 
 		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person?.stage).toBe("unverified");
@@ -1228,14 +1233,14 @@ describe("activatedAt", () => {
 			})
 		);
 		await backend.run((context) =>
-			applyEvent(context, id, { type: "SET_ROLE", tier: "board" })
+			applyOrThrow(context, id, { type: "SET_ROLE", tier: "board" })
 		);
 		const row = await getPerson(backend, id);
 		expect(row?.stageSince).not.toBe(1);
 		expect(row?.activatedAt).toBe(row?.stageSince);
 		const first = row?.activatedAt;
 		await backend.run((context) =>
-			applyEvent(context, id, { type: "SET_ROLE", tier: "admin" })
+			applyOrThrow(context, id, { type: "SET_ROLE", tier: "admin" })
 		);
 		const person = await getPerson(backend, id);
 		expect(person?.activatedAt).toBe(first);
@@ -1254,12 +1259,12 @@ describe("activatedAt", () => {
 			})
 		);
 		await backend.run((context) =>
-			applyEvent(context, id, { type: "SET_ROLE", tier: "staff" })
+			applyOrThrow(context, id, { type: "SET_ROLE", tier: "staff" })
 		);
 		const person = await getPerson(backend, id);
 		expect(person?.activatedAt).toBeUndefined();
 		await backend.run((context) =>
-			applyEvent(context, id, { type: "SET_ROLE", tier: "member" })
+			applyOrThrow(context, id, { type: "SET_ROLE", tier: "member" })
 		);
 		const row = await getPerson(backend, id);
 		expect(`${row?.tier}.${row?.stage}`).toBe("member.onboarding");
@@ -1273,7 +1278,7 @@ describe("activatedAt", () => {
 			stageSince: 12_345,
 		});
 		await backend.run((context) =>
-			applyEvent(context, id, { type: "PROMOTE_TO_BOARD" })
+			applyOrThrow(context, id, { type: "PROMOTE_TO_BOARD" })
 		);
 		const row = await getPerson(backend, id);
 		expect(row?.tier).toBe("board");
@@ -1287,7 +1292,7 @@ describe("activatedAt", () => {
 			signed: false,
 		});
 		await backend.run((context) =>
-			applyEvent(context, id, {
+			applyOrThrow(context, id, {
 				type: "EXTEND_WINDOW",
 				until: Date.now() + DAY,
 			})
@@ -1304,7 +1309,7 @@ describe("activatedAt", () => {
 			stageSince: 12_345,
 		});
 		await backend.run((context) =>
-			applyEvent(context, id, {
+			applyOrThrow(context, id, {
 				type: "EXTEND_WINDOW",
 				until: Date.now() + DAY,
 			})
@@ -1320,13 +1325,13 @@ describe("activatedAt", () => {
 			signed: true,
 		});
 		await backend.run((context) =>
-			applyEvent(context, id, { type: "KICK_OUT" })
+			applyOrThrow(context, id, { type: "KICK_OUT" })
 		);
 		const former = await getPerson(backend, id);
 		expect(former?.tier).toBe("former");
 		expect(former?.activatedAt).toBeUndefined();
 		await backend.run((context) =>
-			applyEvent(context, id, { type: "RE_ADMIT" })
+			applyOrThrow(context, id, { type: "RE_ADMIT" })
 		);
 		const row = await getPerson(backend, id);
 		expect(`${row?.tier}.${row?.stage}`).toBe("member.onboarding");
@@ -1367,7 +1372,7 @@ describe("agreement re-opened on a tier move", () => {
 			return pid;
 		});
 		await backend.run((context) =>
-			applyEvent(context, id, { type: "SET_ROLE", tier: "member" })
+			applyOrThrow(context, id, { type: "SET_ROLE", tier: "member" })
 		);
 		const row = await backend.run((context) => context.db.get(id));
 		expect(`${row?.tier}.${row?.stage}`).toBe("member.onboarding");
@@ -1417,7 +1422,7 @@ describe("agreement re-opened on a tier move", () => {
 			{ type: "VERIFY_EMAIL" },
 			{ type: "APPROVE_MEMBER" },
 		] as const)
-			await backend.run((context) => applyEvent(context, id, event));
+			await backend.run((context) => applyOrThrow(context, id, event));
 
 		const row = await backend.run((context) => context.db.get(id));
 		expect(`${row?.tier}.${row?.stage}`).toBe("member.onboarding");
@@ -1469,7 +1474,7 @@ describe("agreement re-opened on a tier move", () => {
 			{ type: "VERIFY_EMAIL" },
 			{ type: "APPROVE_MEMBER" },
 		] as const)
-			await backend.run((context) => applyEvent(context, id, event));
+			await backend.run((context) => applyOrThrow(context, id, event));
 
 		const row = await backend.run((context) => context.db.get(id));
 		expect(`${row?.tier}.${row?.stage}`).toBe("member.active");
@@ -1499,7 +1504,7 @@ describe("agreement re-opened on a tier move", () => {
 				})
 			);
 			await backend.run((context) =>
-				applyEvent(context, id, { type: "SET_ROLE", tier })
+				applyOrThrow(context, id, { type: "SET_ROLE", tier })
 			);
 
 			const row = await backend.run((context) => context.db.get(id));

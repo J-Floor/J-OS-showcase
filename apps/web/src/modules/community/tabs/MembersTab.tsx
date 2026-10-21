@@ -2,6 +2,7 @@ import { Button, Icon } from "@j-os/design-system";
 import { type JSX, Show, createSignal } from "solid-js";
 
 import type { StateId } from "../../../../convex/lib/lifecycleTypes.ts";
+import { invariant } from "../../../../convex/lib/result.ts";
 import { useConfirm } from "../../../shared/confirm.tsx";
 import { ICONS } from "../../../shared/icons.ts";
 import { ChangeRoleDialog } from "../actions/ChangeRoleDialog.tsx";
@@ -59,8 +60,9 @@ function MemberBatchActions(props: {
 					// the dialog await the whole batch before it closes.
 					const ids = props.batch.selectedRows.map((row) => row._id);
 					const clearSelection = props.batch.clearSelection;
-					return applyMove(triage, ids, move).then(() => {
-						clearSelection();
+					return applyMove(triage, ids, move).then((result) => {
+						if (result.isOk()) clearSelection();
+						return result;
 					});
 				}}
 			/>
@@ -123,13 +125,14 @@ export function MembersTab(props: TabProps): JSX.Element {
 		const action = memberActions
 			.actions()
 			.find((candidate) => candidate.id === "kick");
-		if (!action) throw new Error("useMemberActions: no 'kick' descriptor");
+		invariant(action, "useMemberActions: no 'kick' descriptor");
 		return action;
 	}
 
 	return (
 		<RosterTab<MemberRow>
 			tab={props}
+			scope="members"
 			data={() => members.data()}
 			columns={() => memberColumns()}
 			groupBy="group"

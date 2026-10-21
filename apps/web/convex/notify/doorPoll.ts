@@ -4,6 +4,7 @@ import {
 	doorProvider,
 	doorProviderConfigured,
 } from "../lib/doorProviderEnv.ts";
+import { unwrap } from "../lib/result.ts";
 import { DOOR_ONLINE_ALERT_KEY } from "../opsAlerts.ts";
 
 import { alertOnChange } from "./alertOnChange.ts";
@@ -45,9 +46,8 @@ export const poll = internalAction({
 			console.log("[door-poll] door provider is not configured; skipped");
 			return null;
 		}
-		const locks = await doorProvider({
-			requireWrites: false,
-		}).readLockStatus();
+		const provider = unwrap(doorProvider({ requireWrites: false }));
+		const locks = unwrap(await provider.readLockStatus());
 		const offline = locks
 			.filter((lock) => !lock.online)
 			// eslint-disable-next-line id-length -- conventional comparator parameter names

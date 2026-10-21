@@ -3,8 +3,10 @@ import { createSignal, type JSX, Show } from "solid-js";
 
 import { createDismissed } from "../../lib/dismissed.ts";
 import { enablePush, pushConfigured, pushSupport } from "../../lib/push.ts";
+import { createActionError } from "../createActionError.ts";
 // Same pill surface as the install prompt; PromptStack places them both.
 import { ICONS } from "../icons.ts";
+import { InlineError } from "../InlineError.tsx";
 import styles from "../InstallPwaPrompt.module.scss";
 
 const DISMISSED_KEY = "jf-push-prompt-dismissed";
@@ -17,33 +19,28 @@ const DISMISSED_KEY = "jf-push-prompt-dismissed";
 export function NotificationsPrompt(): JSX.Element {
 	const [dismissed, dismiss] = createDismissed(DISMISSED_KEY);
 	const [support, setSupport] = createSignal(pushSupport());
-	const [busy, setBusy] = createSignal(false);
+	const { error: failure, trackResult } = createActionError();
 
 	function show(): boolean {
 		return pushConfigured() && support() === "default" && !dismissed();
 	}
 
+	// No busy flag of its own: the Button ignores clicks while the promise
+	// its onClick returned is pending.
 	async function enable(): Promise<void> {
-		if (busy()) return;
-		setBusy(true);
-		try {
-			const next = await enablePush();
-			setSupport(next);
-			// A real refusal is final; anything else leaves the pill to retry.
-			if (next === "denied") dismiss();
-		} catch (err) {
-			// A thrown error (a timeout, a flaky network) is not a refusal: keep
-			// the pill so the person can try again.
-			// eslint-disable-next-line no-console -- surface a failed subscribe; the pill stays for a retry
-			console.error("[push] could not enable notifications", err);
-		} finally {
-			setBusy(false);
-		}
+		const result = await trackResult(enablePush());
+		// A failure (a timeout, a flaky network) is not a refusal: keep the
+		// pill so the person can try again, and say why.
+		if (result.isErr()) return;
+		setSupport(result.value);
+		// A real refusal is final; anything else leaves the pill to retry.
+		if (result.value === "denied") dismiss();
 	}
 
 	return (
 		<Show when={show()}>
 			<div class={styles.pill}>
+				<InlineError message={failure()} />
 				<Button
 					class={styles.install}
 					variant="tertiary"

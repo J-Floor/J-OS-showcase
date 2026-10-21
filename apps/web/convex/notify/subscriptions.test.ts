@@ -164,7 +164,7 @@ describe("push subscriptions", () => {
 					...SUB,
 					...override,
 				})
-		).rejects.toThrow("Invalid push endpoint");
+		).rejects.toThrow("InvalidPushEndpoint");
 		expect(await rows(backend)).toHaveLength(0);
 	});
 

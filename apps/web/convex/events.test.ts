@@ -114,7 +114,7 @@ describe("createEvent", () => {
 				startsAtLocal: "2026-10-01T22:01:00+02:00[Europe/Zurich]",
 				endsAtLocal: eventInput.endsAtLocal,
 			})
-		).rejects.toThrow(/start must be on or before the end/i);
+		).rejects.toThrow(/EventStartAfterEnd/);
 	});
 
 	it("rejects a non-Europe/Zurich embedded zone on startsAtLocal", async () => {
@@ -126,7 +126,7 @@ describe("createEvent", () => {
 				startsAtLocal: "2026-10-01T09:00:00-07:00[America/Los_Angeles]",
 				endsAtLocal: eventInput.endsAtLocal,
 			})
-		).rejects.toThrow(/Event times must be in Europe\/Zurich/);
+		).rejects.toThrow(/EventTimesNotInSiteZone/);
 	});
 
 	it("rejects a non-Europe/Zurich embedded zone on endsAtLocal", async () => {
@@ -138,7 +138,19 @@ describe("createEvent", () => {
 				startsAtLocal: eventInput.startsAtLocal,
 				endsAtLocal: "2026-10-01T15:00:00-07:00[America/Los_Angeles]",
 			})
-		).rejects.toThrow(/Event times must be in Europe\/Zurich/);
+		).rejects.toThrow(/EventTimesNotInSiteZone/);
+	});
+
+	it("rejects a local time with no embedded zone", async () => {
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
+		await expect(
+			asBoard.mutation(api.events.createEvent, {
+				name: "No Zone",
+				startsAtLocal: "2026-10-01T09:00:00+02:00",
+				endsAtLocal: eventInput.endsAtLocal,
+			})
+		).rejects.toThrow(/InvalidZonedValue/);
 	});
 
 	it("accepts an Europe/Zurich embedded zone (still works)", async () => {
@@ -372,7 +384,7 @@ describe("updateEvent", () => {
 		);
 		await expect(
 			asBoard.mutation(api.events.updateEvent, { eventId, name: "   " })
-		).rejects.toThrow(/name is required/i);
+		).rejects.toThrow(/EventNameRequired/);
 		const doc = await backend.run(async (context) =>
 			context.db.get(eventId)
 		);
@@ -392,7 +404,7 @@ describe("updateEvent", () => {
 				eventId,
 				startsAtLocal: "2026-10-01T22:01:00+02:00[Europe/Zurich]",
 			})
-		).rejects.toThrow(/start must be on or before the end/i);
+		).rejects.toThrow(/EventStartAfterEnd/);
 		const doc = await backend.run(async (context) =>
 			context.db.get(eventId)
 		);
@@ -507,7 +519,7 @@ describe("updateEvent", () => {
 				eventId,
 				startsAtLocal: "2026-10-01T09:00:00-07:00[America/Los_Angeles]",
 			})
-		).rejects.toThrow(/Event times must be in Europe\/Zurich/);
+		).rejects.toThrow(/EventTimesNotInSiteZone/);
 	});
 
 	it("rejects a non-Europe/Zurich embedded zone on a supplied endsAtLocal", async () => {
@@ -522,7 +534,7 @@ describe("updateEvent", () => {
 				eventId,
 				endsAtLocal: "2026-10-01T15:00:00-07:00[America/Los_Angeles]",
 			})
-		).rejects.toThrow(/Event times must be in Europe\/Zurich/);
+		).rejects.toThrow(/EventTimesNotInSiteZone/);
 	});
 
 	it("accepts an Europe/Zurich embedded zone on update (still works)", async () => {
@@ -742,7 +754,7 @@ describe("event name length cap", () => {
 	it("createEvent and updateEvent reject a 201-char name", async () => {
 		const backend = convexTest(schema, modules);
 		const { asBoard } = await seedBoard(backend);
-		const message = "Event name is too long (max 200 characters).";
+		const message = /FieldTooLong/;
 		await expect(
 			asBoard.mutation(api.events.createEvent, {
 				...eventInput,
@@ -759,5 +771,20 @@ describe("event name length cap", () => {
 				name: "n".repeat(201),
 			})
 		).rejects.toThrow(message);
+	});
+});
+
+describe("updateEvent on a vanished event", () => {
+	it("is EventNotFound", async () => {
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
+		const eventId = await asBoard.mutation(
+			api.events.createEvent,
+			eventInput
+		);
+		await backend.run((context) => context.db.delete(eventId));
+		await expect(
+			asBoard.mutation(api.events.updateEvent, { eventId, name: "Gone" })
+		).rejects.toThrow(/EventNotFound/);
 	});
 });

@@ -3,6 +3,7 @@ import { useMutation } from "convex-solidjs";
 import { api } from "../../../../convex/_generated/api";
 import type { Doc } from "../../../../convex/_generated/dataModel";
 import type { BoardLevelPerson } from "../../../../convex/lib/personViews.ts";
+import { call } from "../../../lib/call.ts";
 import { useQuery } from "../../../shared/data/useQuery.ts";
 
 export type Task = Doc<"tasks">;
@@ -21,7 +22,8 @@ export function useCurrentPerson() {
 
 type Mutation<Args, Result> = { mutate: (args: Args) => Promise<Result> };
 
-/** One table's create / update / remove, each a plain call. */
+/** One table's create / update / remove, each a Result: the caller shows a
+ *  failure where the action happened. */
 function tableActions<
 	CreateArgs,
 	CreateResult,
@@ -35,9 +37,12 @@ function tableActions<
 	remove: Mutation<{ id: RemoveId }, RemoveResult>
 ) {
 	return {
-		create: (args: CreateArgs) => create.mutate(args),
-		update: (args: UpdateArgs) => update.mutate(args),
-		remove: (id: RemoveId) => remove.mutate({ id }),
+		create: (args: CreateArgs) =>
+			call(create.mutate(args), "Could not create that."),
+		update: (args: UpdateArgs) =>
+			call(update.mutate(args), "Could not save that change."),
+		remove: (id: RemoveId) =>
+			call(remove.mutate({ id }), "Could not delete that."),
 	};
 }
 

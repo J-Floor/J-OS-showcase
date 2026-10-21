@@ -22,8 +22,14 @@ import {
 	zonedTime,
 } from "../../../convex/lib/time.ts";
 import { NAME_MAX } from "../../../convex/lib/validate.ts";
+import { call } from "../../lib/call.ts";
+import {
+	createActionError,
+	scopeOfFields,
+} from "../../shared/createActionError.ts";
 import { EntityQrBlock } from "../../shared/entity/EntityQr.tsx";
 import { ICONS } from "../../shared/icons.ts";
+import { InlineError } from "../../shared/InlineError.tsx";
 
 import { eventsEntity } from "./entity.ts";
 import styles from "./EventDrawer.module.scss";
@@ -76,7 +82,7 @@ function EventBoundaryRow(props: {
 	boundary: keyof typeof BOUNDARIES;
 	event: Accessor<Doc<"events">>;
 	isEditing: Accessor<boolean>;
-	onPatch: (patch: EventPatch) => void;
+	onPatch: (patch: EventPatch) => Promise<void>;
 }) {
 	function boundary() {
 		return BOUNDARIES[props.boundary];
@@ -86,7 +92,7 @@ function EventBoundaryRow(props: {
 	}
 	function commit(composed: ZonedValue) {
 		if (boundary().isAllowed(composed, props.event()))
-			props.onPatch(boundary().patch(composed.local));
+			void props.onPatch(boundary().patch(composed.local));
 	}
 	return (
 		<PropertyRow icon={boundary().icon} label={boundary().label}>
@@ -134,11 +140,18 @@ export function EventDetailsItem(props: {
 	isEditing: Accessor<boolean>;
 }) {
 	const updateEvent = useMutation(api.events.updateEvent);
-	function patch(change: EventPatch | { name: string }) {
-		void updateEvent.mutateAsync({
-			eventId: props.event()._id,
-			...change,
-		});
+	const { error, trackResult } = createActionError();
+	async function patch(change: EventPatch | { name: string }) {
+		await trackResult(
+			call(
+				updateEvent.mutateAsync({
+					eventId: props.event()._id,
+					...change,
+				}),
+				"Could not save that change."
+			),
+			scopeOfFields(change)
+		);
 	}
 	return (
 		<Accordion.Item value="details">
@@ -154,7 +167,7 @@ export function EventDetailsItem(props: {
 								value={props.event().name}
 								maxLength={NAME_MAX}
 								onCommit={(value) => {
-									patch({ name: value });
+									void patch({ name: value });
 								}}
 							/>
 						</Show>
@@ -171,6 +184,7 @@ export function EventDetailsItem(props: {
 						isEditing={props.isEditing}
 						onPatch={patch}
 					/>
+					<InlineError message={error()} />
 				</div>
 			</Accordion.ItemContent>
 		</Accordion.Item>

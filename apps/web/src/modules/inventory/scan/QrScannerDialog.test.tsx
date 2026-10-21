@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { cleanup, render, screen } from "@solidjs/testing-library";
+import { err, ok } from "neverthrow";
 import { afterEach, expect, test, vi } from "vitest";
 
 const { mockStart } = vi.hoisted(() => ({ mockStart: vi.fn() }));
@@ -17,7 +18,6 @@ if (!("ResizeObserver" in globalThis)) {
 	};
 }
 
-import { QrScanError } from "./qrScan.ts";
 import { QrScannerDialog } from "./QrScannerDialog.tsx";
 
 afterEach(() => {
@@ -28,11 +28,11 @@ afterEach(() => {
 function hangUntilAbort() {
 	mockStart.mockImplementation(
 		(_video: unknown, _onDetect: unknown, signal: AbortSignal) =>
-			new Promise<void>((resolve) => {
+			new Promise((resolve) => {
 				signal.addEventListener(
 					"abort",
 					() => {
-						resolve();
+						resolve(ok());
 					},
 					{ once: true }
 				);
@@ -52,7 +52,7 @@ test("shows the scan hint while the camera is running", async () => {
 });
 
 test("shows unsupported copy when the decoder rejects as unsupported", async () => {
-	mockStart.mockRejectedValue(new QrScanError("unsupported", "internal"));
+	mockStart.mockResolvedValue(err({ code: "unsupported" }));
 	render(() => (
 		<QrScannerDialog open onOpenChange={() => {}} onDetect={() => {}} />
 	));
@@ -62,7 +62,7 @@ test("shows unsupported copy when the decoder rejects as unsupported", async () 
 });
 
 test("shows permission copy when the decoder rejects as permission", async () => {
-	mockStart.mockRejectedValue(new QrScanError("permission", "internal"));
+	mockStart.mockResolvedValue(err({ code: "permission" }));
 	render(() => (
 		<QrScannerDialog open onOpenChange={() => {}} onDetect={() => {}} />
 	));
@@ -82,11 +82,11 @@ test("forwards a detected payload", async () => {
 			signal: AbortSignal
 		) => {
 			detect("A00001");
-			return new Promise<void>((resolve) => {
+			return new Promise((resolve) => {
 				signal.addEventListener(
 					"abort",
 					() => {
-						resolve();
+						resolve(ok());
 					},
 					{ once: true }
 				);

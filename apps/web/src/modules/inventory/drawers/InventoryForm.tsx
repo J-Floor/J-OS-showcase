@@ -1,30 +1,8 @@
 import { Input, PropertyRow, Select } from "@j-os/design-system";
-import { Show, type Accessor } from "solid-js";
+import type { Accessor } from "solid-js";
 
 import type { SyncedField } from "../../../lib/createSyncedField.ts";
 import { SelectOptionList } from "../../../shared/components/SelectOptionList.tsx";
-
-import styles from "./InventoryDrawer.module.scss";
-
-/**
- * Runs one drawer action. On success the form error is cleared and this
- * resolves `true`; on failure the error message (or `failureMessage` when it
- * is not an `Error`) goes into the form and this resolves `false`.
- */
-export async function runAttempt(
-	setFormError: (message: string | undefined) => void,
-	failureMessage: string,
-	run: () => Promise<unknown>
-): Promise<boolean> {
-	try {
-		await run();
-		setFormError(undefined);
-		return true;
-	} catch (err) {
-		setFormError(err instanceof Error ? err.message : failureMessage);
-		return false;
-	}
-}
 
 /** The required name box, saved as it is typed. `onElement` receives the
  *  input so the drawer can focus it on open. */
@@ -86,14 +64,5 @@ export function OptionSelect<Value extends string>(props: {
 				<SelectOptionList options={props.options} />
 			</Select.Root>
 		</PropertyRow>
-	);
-}
-
-/** The last action's failure, if there was one. */
-export function FormErrorLine(props: { error: Accessor<string | undefined> }) {
-	return (
-		<Show when={props.error()}>
-			{(message) => <p class={styles.error}>{message()}</p>}
-		</Show>
 	);
 }

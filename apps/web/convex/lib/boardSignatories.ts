@@ -1,3 +1,5 @@
+import { invariant } from "./result.ts";
+
 export type Signatory = {
 	name: string;
 	role: string;
@@ -11,14 +13,20 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 function parseSignatory(entry: unknown): Signatory {
-	if (typeof entry !== "object" || entry === null)
-		throw new Error(NOT_CONFIGURED);
+	invariant(typeof entry === "object" && entry !== null, NOT_CONFIGURED);
 	const { name, role, signatureSlug } = entry as Record<string, unknown>;
-	if (!isNonEmptyString(name) || !isNonEmptyString(role))
-		throw new Error(NOT_CONFIGURED);
+	invariant(isNonEmptyString(name) && isNonEmptyString(role), NOT_CONFIGURED);
 	if (signatureSlug === undefined) return { name, role };
-	if (!isNonEmptyString(signatureSlug)) throw new Error(NOT_CONFIGURED);
+	invariant(isNonEmptyString(signatureSlug), NOT_CONFIGURED);
 	return { name, role, signatureSlug };
+}
+
+function parseJson(raw: string): unknown {
+	try {
+		return JSON.parse(raw);
+	} catch {
+		return null;
+	}
 }
 
 /** Board members who countersign agreements, read from the Convex env var
@@ -29,14 +37,8 @@ function parseSignatory(entry: unknown): Signatory {
  * fallback. Role is always typed text. */
 export function boardSignatories(): Signatory[] {
 	const raw = process.env.BOARD_SIGNATORIES;
-	if (!raw) throw new Error(NOT_CONFIGURED);
-	let parsed: unknown;
-	try {
-		parsed = JSON.parse(raw);
-	} catch {
-		throw new Error(NOT_CONFIGURED);
-	}
-	if (!Array.isArray(parsed) || parsed.length === 0)
-		throw new Error(NOT_CONFIGURED);
+	invariant(raw, NOT_CONFIGURED);
+	const parsed = parseJson(raw);
+	invariant(Array.isArray(parsed) && parsed.length > 0, NOT_CONFIGURED);
 	return parsed.map((entry) => parseSignatory(entry));
 }

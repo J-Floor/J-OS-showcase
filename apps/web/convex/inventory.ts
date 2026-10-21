@@ -1,10 +1,13 @@
 import { v } from "convex/values";
+import { err, ok, type Result } from "neverthrow";
 
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import type { QueryCtx } from "./_generated/server";
 import { parseAssetTag } from "./lib/assetTag.ts";
 import { requireRole } from "./lib/authGuard.ts";
+import type { InventoryError } from "./lib/errors/inventory.ts";
+import { invariant, refuse, unwrap } from "./lib/result.ts";
 import { BOARD_LEVEL } from "./lib/roles.ts";
 
 export type ItemTypeRow = Doc<"itemTypes"> & { categoryName: string };
@@ -17,10 +20,9 @@ export type ItemRow = Doc<"items"> & {
 /** An update's text field: a string sets it, null clears it, absent leaves it. */
 const editableText = v.optional(v.union(v.string(), v.null()));
 
-function requireName(raw: string): string {
+function requireName(raw: string): Result<string, InventoryError> {
 	const name = raw.trim();
-	if (name === "") throw new Error("Name is required.");
-	return name;
+	return name === "" ? err({ type: "NameRequired" }) : ok(name);
 }
 
 function optionalText(raw: string | null | undefined): string | undefined {
@@ -33,13 +35,14 @@ async function assertCategoryNameFree(
 	context: QueryCtx,
 	name: string,
 	except?: Id<"itemCategories">
-): Promise<void> {
+): Promise<Result<void, InventoryError>> {
 	const clash = await context.db
 		.query("itemCategories")
 		.withIndex("by_name", (range) => range.eq("name", name))
 		.unique();
-	if (clash && clash._id !== except)
-		throw new Error("Another category already uses that name.");
+	return clash && clash._id !== except
+		? err({ type: "CategoryNameTaken" })
+		: ok();
 }
 
 async function assertTypeNameFree(
@@ -47,30 +50,30 @@ async function assertTypeNameFree(
 	categoryId: Id<"itemCategories">,
 	name: string,
 	except?: Id<"itemTypes">
-): Promise<void> {
+): Promise<Result<void, InventoryError>> {
 	const clash = await context.db
 		.query("itemTypes")
 		.withIndex("by_category_and_name", (range) =>
 			range.eq("categoryId", categoryId).eq("name", name)
 		)
 		.unique();
-	if (clash && clash._id !== except)
-		throw new Error(
-			"Another item type in this category already uses that name."
-		);
+	return clash && clash._id !== except
+		? err({ type: "ItemTypeNameTaken" })
+		: ok();
 }
 
 async function assertAssetTagFree(
 	context: QueryCtx,
 	assetTag: string,
 	except?: Id<"items">
-): Promise<void> {
+): Promise<Result<void, InventoryError>> {
 	const clash = await context.db
 		.query("items")
 		.withIndex("by_assetTag", (range) => range.eq("assetTag", assetTag))
 		.unique();
-	if (clash && clash._id !== except)
-		throw new Error("Another item already uses that asset tag.");
+	return clash && clash._id !== except
+		? err({ type: "AssetTagTaken" })
+		: ok();
 }
 
 async function requireCategory(
@@ -78,7 +81,7 @@ async function requireCategory(
 	id: Id<"itemCategories">
 ): Promise<Doc<"itemCategories">> {
 	const row = await context.db.get(id);
-	if (!row) throw new Error("Category not found.");
+	invariant(row, "Category not found.");
 	return row;
 }
 
@@ -87,7 +90,7 @@ async function requireItemType(
 	id: Id<"itemTypes">
 ): Promise<Doc<"itemTypes">> {
 	const row = await context.db.get(id);
-	if (!row) throw new Error("Item type not found.");
+	invariant(row, "Item type not found.");
 	return row;
 }
 
@@ -96,7 +99,7 @@ async function requireItem(
 	id: Id<"items">
 ): Promise<Doc<"items">> {
 	const row = await context.db.get(id);
-	if (!row) throw new Error("Item not found.");
+	invariant(row, "Item not found.");
 	return row;
 }
 
@@ -111,17 +114,8 @@ function byName<T extends { name: string }>(a: T, b: T): number {
  *  limit. */
 const DRAWER_LIST_CAP = 200;
 
-/** A delete guard only needs to know "is this empty" and, for the message, a
- *  rough count — never the whole child table. Cap the probe at
- *  `DELETE_GUARD_CAP + 1` rows so a category/type with thousands of children
- *  can't blow a mutation's read limit. */
-const DELETE_GUARD_CAP = 20;
-
-function guardCountLabel(count: number): string {
-	return count > DELETE_GUARD_CAP
-		? `${String(DELETE_GUARD_CAP)}+`
-		: String(count);
-}
+/** A delete guard only needs to know whether any child exists. */
+const DELETE_GUARD_PROBE = 1;
 
 async function enrichItem(
 	context: QueryCtx,
@@ -142,7 +136,7 @@ async function enrichItem(
 export const listCategories = query({
 	args: {},
 	handler: async (context): Promise<Doc<"itemCategories">[]> => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		const rows = await context.db.query("itemCategories").collect();
 		return rows.sort(byName);
 	},
@@ -154,9 +148,9 @@ export const createCategory = mutation({
 		description: v.optional(v.string()),
 	},
 	handler: async (context, args): Promise<Id<"itemCategories">> => {
-		await requireRole(context, BOARD_LEVEL);
-		const name = requireName(args.name);
-		await assertCategoryNameFree(context, name);
+		unwrap(await requireRole(context, BOARD_LEVEL));
+		const name = unwrap(requireName(args.name));
+		unwrap(await assertCategoryNameFree(context, name));
 		return context.db.insert("itemCategories", {
 			name,
 			description: optionalText(args.description),
@@ -171,15 +165,15 @@ export const updateCategory = mutation({
 		description: editableText,
 	},
 	handler: async (context, args): Promise<null> => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		await requireCategory(context, args.id);
 		const patch: {
 			name?: string;
 			description?: string;
 		} = {};
 		if (args.name !== undefined) {
-			const name = requireName(args.name);
-			await assertCategoryNameFree(context, name, args.id);
+			const name = unwrap(requireName(args.name));
+			unwrap(await assertCategoryNameFree(context, name, args.id));
 			patch.name = name;
 		}
 		if (args.description !== undefined)
@@ -192,18 +186,13 @@ export const updateCategory = mutation({
 export const removeCategory = mutation({
 	args: { id: v.id("itemCategories") },
 	handler: async (context, { id }): Promise<null> => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		await requireCategory(context, id);
 		const types = await context.db
 			.query("itemTypes")
 			.withIndex("by_category", (range) => range.eq("categoryId", id))
-			.take(DELETE_GUARD_CAP + 1);
-		if (types.length > 0) {
-			const count = types.length;
-			throw new Error(
-				`Cannot delete category: ${guardCountLabel(count)} item type${count === 1 ? "" : "s"} still use it.`
-			);
-		}
+			.take(DELETE_GUARD_PROBE);
+		if (types.length > 0) refuse({ type: "CategoryNotEmpty" });
 		await context.db.delete(id);
 		return null;
 	},
@@ -212,7 +201,7 @@ export const removeCategory = mutation({
 export const listItemTypes = query({
 	args: {},
 	handler: async (context): Promise<ItemTypeRow[]> => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		const rows = await context.db.query("itemTypes").collect();
 		const out: ItemTypeRow[] = [];
 		for (const row of rows) {
@@ -230,7 +219,7 @@ export const listItemTypesByCategory = query({
 		context,
 		{ categoryId }
 	): Promise<Pick<Doc<"itemTypes">, "_id" | "name">[]> => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		const rows = await context.db
 			.query("itemTypes")
 			.withIndex("by_category", (range) =>
@@ -250,10 +239,10 @@ export const createItemType = mutation({
 		description: v.optional(v.string()),
 	},
 	handler: async (context, args): Promise<Id<"itemTypes">> => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		await requireCategory(context, args.categoryId);
-		const name = requireName(args.name);
-		await assertTypeNameFree(context, args.categoryId, name);
+		const name = unwrap(requireName(args.name));
+		unwrap(await assertTypeNameFree(context, args.categoryId, name));
 		return context.db.insert("itemTypes", {
 			name,
 			categoryId: args.categoryId,
@@ -270,15 +259,19 @@ export const updateItemType = mutation({
 		description: editableText,
 	},
 	handler: async (context, args): Promise<null> => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		const existing = await requireItemType(context, args.id);
 		const categoryId = args.categoryId ?? existing.categoryId;
 		if (args.categoryId !== undefined)
 			await requireCategory(context, args.categoryId);
 		const name =
-			args.name === undefined ? existing.name : requireName(args.name);
+			args.name === undefined
+				? existing.name
+				: unwrap(requireName(args.name));
 		if (name !== existing.name || categoryId !== existing.categoryId)
-			await assertTypeNameFree(context, categoryId, name, args.id);
+			unwrap(
+				await assertTypeNameFree(context, categoryId, name, args.id)
+			);
 		const patch: {
 			name?: string;
 			categoryId?: Id<"itemCategories">;
@@ -296,18 +289,13 @@ export const updateItemType = mutation({
 export const removeItemType = mutation({
 	args: { id: v.id("itemTypes") },
 	handler: async (context, { id }): Promise<null> => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		await requireItemType(context, id);
 		const items = await context.db
 			.query("items")
 			.withIndex("by_type", (range) => range.eq("typeId", id))
-			.take(DELETE_GUARD_CAP + 1);
-		if (items.length > 0) {
-			const count = items.length;
-			throw new Error(
-				`Cannot delete item type: ${guardCountLabel(count)} item${count === 1 ? "" : "s"} still use it.`
-			);
-		}
+			.take(DELETE_GUARD_PROBE);
+		if (items.length > 0) refuse({ type: "ItemTypeNotEmpty" });
 		await context.db.delete(id);
 		return null;
 	},
@@ -316,7 +304,7 @@ export const removeItemType = mutation({
 export const listItems = query({
 	args: {},
 	handler: async (context): Promise<ItemRow[]> => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		const rows = await context.db.query("items").collect();
 		const out: ItemRow[] = [];
 		for (const row of rows) {
@@ -334,7 +322,7 @@ export const listItemsByType = query({
 		context,
 		{ typeId }
 	): Promise<Pick<Doc<"items">, "_id" | "assetTag">[]> => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		const rows = await context.db
 			.query("items")
 			.withIndex("by_type", (range) => range.eq("typeId", typeId))
@@ -351,8 +339,8 @@ export const listItemsByType = query({
 export const getItemByAssetTag = query({
 	args: { assetTag: v.string() },
 	handler: async (context, args): Promise<ItemRow | null> => {
-		await requireRole(context, BOARD_LEVEL);
-		const assetTag = parseAssetTag(args.assetTag);
+		unwrap(await requireRole(context, BOARD_LEVEL));
+		const assetTag = unwrap(parseAssetTag(args.assetTag));
 		const row = await context.db
 			.query("items")
 			.withIndex("by_assetTag", (range) => range.eq("assetTag", assetTag))
@@ -368,10 +356,10 @@ export const createItem = mutation({
 		description: v.optional(v.string()),
 	},
 	handler: async (context, args): Promise<Id<"items">> => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		await requireItemType(context, args.typeId);
-		const assetTag = parseAssetTag(args.assetTag);
-		await assertAssetTagFree(context, assetTag);
+		const assetTag = unwrap(parseAssetTag(args.assetTag));
+		unwrap(await assertAssetTagFree(context, assetTag));
 		return context.db.insert("items", {
 			typeId: args.typeId,
 			assetTag,
@@ -388,7 +376,7 @@ export const updateItem = mutation({
 		description: editableText,
 	},
 	handler: async (context, args): Promise<null> => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		await requireItem(context, args.id);
 		if (args.typeId !== undefined)
 			await requireItemType(context, args.typeId);
@@ -399,8 +387,8 @@ export const updateItem = mutation({
 		} = {};
 		if (args.typeId !== undefined) patch.typeId = args.typeId;
 		if (args.assetTag !== undefined) {
-			const assetTag = parseAssetTag(args.assetTag);
-			await assertAssetTagFree(context, assetTag, args.id);
+			const assetTag = unwrap(parseAssetTag(args.assetTag));
+			unwrap(await assertAssetTagFree(context, assetTag, args.id));
 			patch.assetTag = assetTag;
 		}
 		if (args.description !== undefined)
@@ -413,7 +401,7 @@ export const updateItem = mutation({
 export const removeItem = mutation({
 	args: { id: v.id("items") },
 	handler: async (context, { id }): Promise<null> => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		await requireItem(context, id);
 		await context.db.delete(id);
 		return null;

@@ -1,5 +1,6 @@
 // apps/web/convex/lifecycle.ts
 import { v } from "convex/values";
+import { err, ok, type Result } from "neverthrow";
 
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -11,6 +12,7 @@ import {
 import { requireRole } from "./lib/authGuard.ts";
 import { isLiveStage } from "./lib/derive.ts";
 import { personByEmail } from "./lib/emailAddress.ts";
+import type { PeopleError } from "./lib/errors/people.ts";
 import {
 	factsFor,
 	isMembershipActive,
@@ -19,7 +21,6 @@ import {
 	stateOf,
 } from "./lib/lifecycle.ts";
 import {
-	IllegalTransitionError,
 	type Effect,
 	type Facts,
 	type LifecycleEvent,
@@ -27,6 +28,7 @@ import {
 	type Tier,
 } from "./lib/lifecycleTypes.ts";
 import { displayName } from "./lib/names.ts";
+import { invariant, unwrap } from "./lib/result.ts";
 import { BOARD_LEVEL, formerOfTier, ROLE_TIERS } from "./lib/roles.ts";
 import { SITE_TIMEZONE, zonedLocalFromEpoch } from "./lib/time.ts";
 import {
@@ -334,7 +336,7 @@ export async function currentActorId(
  * The single write path for lifecycle state: load facts, reduce, patch, log,
  * run effects. Nothing else in the codebase may write `tier`/`stage`.
  *
- * `reduce` throws before the first write, so an illegal event leaves the row
+ * `reduce` refuses before the first write, so an illegal event leaves the row
  * and the audit log untouched.
  */
 export async function applyEvent(
@@ -342,15 +344,17 @@ export async function applyEvent(
 	personId: Id<"people">,
 	event: LifecycleEvent,
 	actorId?: Id<"people">
-): Promise<StateId> {
+): Promise<Result<StateId, PeopleError>> {
 	const person = await context.db.get(personId);
-	if (!person) throw new Error("Person not found");
+	invariant(person, "Person not found");
 
 	const from = stateOf(person);
 	// The event goes in: two edges (RE_ADMIT, SET_ROLE) resolve their stage
 	// against the tier they move INTO, not the one the row is in.
 	const facts = await loadFacts(context, person, event);
-	const { next, effects } = reduce(from, event, facts);
+	const transition = reduce(from, event, facts);
+	if (transition.isErr()) return err(transition.error);
+	const { next, effects } = transition.value;
 
 	const [tier, stage] = next.split(".") as [
 		NonNullable<Doc<"people">["tier"]>,
@@ -394,14 +398,13 @@ export async function applyEvent(
 		await notifyGuestWindowChanged(context, personId, person.accessUntil);
 	if (event.type === "PROMOTE_TO_MEMBER")
 		await notifyGuestAccessChanged(context, personId, "upgraded");
-	return next;
+	return ok(next);
 }
 
 /**
  * `applyEvent` for callers where "not legal right now" is an ordinary outcome:
  * a scheduled window expiry whose window was extended, or an onboarding step
- * that is not the last one. Returns null instead of throwing. Any other error
- * still propagates.
+ * that is not the last one. Returns null for an illegal move.
  */
 export async function applyEventIfLegal(
 	context: MutationCtx,
@@ -409,12 +412,10 @@ export async function applyEventIfLegal(
 	event: LifecycleEvent,
 	actorId?: Id<"people">
 ): Promise<StateId | null> {
-	try {
-		return await applyEvent(context, personId, event, actorId);
-	} catch (error) {
-		if (error instanceof IllegalTransitionError) return null;
-		throw error;
-	}
+	const result = await applyEvent(context, personId, event, actorId);
+	return result.isErr() && result.error.type === "IllegalTransition"
+		? null
+		: unwrap(result);
 }
 
 /**
@@ -488,12 +489,14 @@ const lifecycleEvent = v.union(
 export const transition = mutation({
 	args: { personId: v.id("people"), event: lifecycleEvent },
 	handler: async (context, { personId, event }) => {
-		await requireRole(context, BOARD_LEVEL);
-		return applyEvent(
-			context,
-			personId,
-			event,
-			await currentActorId(context)
+		unwrap(await requireRole(context, BOARD_LEVEL));
+		return unwrap(
+			await applyEvent(
+				context,
+				personId,
+				event,
+				await currentActorId(context)
+			)
 		);
 	},
 });

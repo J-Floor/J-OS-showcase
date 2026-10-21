@@ -5,7 +5,9 @@ import { type Accessor, createMemo, createSignal } from "solid-js";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { NOTIFICATIONS_PAGE_SIZE } from "../../../convex/lib/constants.ts";
+import { call } from "../../lib/call.ts";
 import { useFlooredLog } from "../data/useFlooredLog.ts";
+import { toaster } from "../toaster.ts";
 
 /** One history row as the inbox queries return it. */
 export type InboxRow = FunctionReturnType<
@@ -74,37 +76,33 @@ export function useInbox(open: Accessor<boolean>): Inbox {
 		setReadLocally((prev) => withReadState(prev, ids, isRead));
 	}
 
-	function mark(
+	async function mark(
 		ids: readonly string[],
 		mutate: () => Promise<unknown>,
-		failure: string
-	): void {
+		fallback: string
+	): Promise<void> {
 		for (const id of ids) pending.set(id, (pending.get(id) ?? 0) + 1);
 		setRead(ids, true);
-		mutate()
-			.then(() => {
-				for (const id of ids) {
-					pending.set(id, (pending.get(id) ?? 1) - 1);
-					confirmed.add(id);
-				}
-			})
-			.catch((err: unknown) => {
-				for (const id of ids)
-					pending.set(id, (pending.get(id) ?? 1) - 1);
-				setRead(
-					ids.filter((id) => !confirmed.has(id) && !pending.get(id)),
-					false
-				);
-				// eslint-disable-next-line no-console -- a failed mark-read must not block the navigation; surface it for debugging
-				console.error(failure, err);
-			});
+		const result = await call(mutate(), fallback);
+		for (const id of ids) pending.set(id, (pending.get(id) ?? 1) - 1);
+		if (result.isOk()) {
+			for (const id of ids) confirmed.add(id);
+			return;
+		}
+		setRead(
+			ids.filter((id) => !confirmed.has(id) && !pending.get(id)),
+			false
+		);
+		// The rows are in a drawer that may be closed, and a failed mark-read
+		// must not block the navigation: a toast is where it can be seen.
+		toaster.create({ type: "error", title: result.error.message });
 	}
 
 	function markRead(id: Id<"notifications">): void {
-		mark(
+		void mark(
 			[id],
 			() => markReadMutation.mutateAsync({ id }),
-			"[notifications] could not mark a notification read"
+			"Could not mark that as read."
 		);
 	}
 
@@ -114,10 +112,10 @@ export function useInbox(open: Accessor<boolean>): Inbox {
 		const ids = (log.rows() ?? [])
 			.filter((row) => !row.read)
 			.map((row) => row._id);
-		mark(
+		void mark(
 			ids,
 			() => markAllReadMutation.mutateAsync({}),
-			"[notifications] could not mark all read"
+			"Could not mark everything as read."
 		);
 	}
 

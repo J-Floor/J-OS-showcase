@@ -11,6 +11,12 @@ export const BOARD_LEVEL = [
 	"admin",
 ] as const satisfies readonly Tier[];
 
+/** The tiers that run tasks and projects: core members plus board level. */
+export const CORE_AND_BOARD = [
+	"core",
+	...BOARD_LEVEL,
+] as const satisfies readonly Tier[];
+
 /**
  * Every tier that may sign in. `prospect` has not been decided on and `former`
  * has been removed; neither is a role. `staff` signs in for the door and the

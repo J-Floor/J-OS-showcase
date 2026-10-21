@@ -11,6 +11,7 @@ import { action, internalMutation, internalQuery } from "./_generated/server";
 import { requireRole } from "./lib/authGuard.ts";
 import { type LockStatus } from "./lib/doorProvider.ts";
 import { doorProvider } from "./lib/doorProviderEnv.ts";
+import { refuse, unwrap } from "./lib/result.ts";
 import { BOARD_LEVEL } from "./lib/roles.ts";
 
 /**
@@ -24,12 +25,8 @@ import { BOARD_LEVEL } from "./lib/roles.ts";
 export const callerHasAccess = internalQuery({
 	args: {},
 	handler: async (context): Promise<boolean> => {
-		try {
-			await requireRole(context, BOARD_LEVEL);
-			return true;
-		} catch {
-			return false;
-		}
+		const access = await requireRole(context, BOARD_LEVEL);
+		return access.isOk();
 	},
 });
 
@@ -117,8 +114,11 @@ export const writeDoorHealthCache = internalMutation({
 export const doorHealth = action({
 	args: {},
 	handler: async (context): Promise<DoorHealthResult> => {
-		if (!(await context.runQuery(internal.doorHealth.callerHasAccess, {})))
-			throw new Error("Forbidden");
+		const hasAccess = await context.runQuery(
+			internal.doorHealth.callerHasAccess,
+			{}
+		);
+		if (!hasAccess) refuse({ type: "Forbidden" });
 		// Serve a recent reading rather than fanning a live provider round-trip out
 		// per viewer per poll — see the TTL note and the cache table.
 		const cached = await context.runQuery(
@@ -126,8 +126,8 @@ export const doorHealth = action({
 			{ freshSince: Date.now() - HEALTH_TTL_MS }
 		);
 		if (cached) return cached;
-		const provider = doorProvider({ requireWrites: false });
-		const locks = await provider.readLockStatus();
+		const provider = unwrap(doorProvider({ requireWrites: false }));
+		const locks = unwrap(await provider.readLockStatus());
 		const result: DoorHealthResult = {
 			configured: locks.length,
 			unavailable: locks

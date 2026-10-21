@@ -681,8 +681,8 @@ export default defineSchema({
 
 	/**
 	 * Board-editable space Wi-Fi credentials. A singleton: at most one row,
-	 * read via `.first()` (no index needed). `lib/wifi.ts#readWifi` throws when
-	 * it is absent.
+	 * read via `.first()` (no index needed). `lib/wifi.ts#readWifi` returns
+	 * Err(WifiNotConfigured) when it is absent.
 	 */
 	wifiConfig: defineTable({
 		ssid: v.string(),

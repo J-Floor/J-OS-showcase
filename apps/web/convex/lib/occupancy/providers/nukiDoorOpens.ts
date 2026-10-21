@@ -1,3 +1,6 @@
+import { okAsync, ResultAsync } from "neverthrow";
+
+import type { DoorError } from "../../errors/door.ts";
 import {
 	type NukiDeps,
 	fetchSmartlockLog,
@@ -29,19 +32,20 @@ export function countDoorOpens(entries: { action: number }[]): number {
 }
 
 /** Sum door-open events across all locks since `sinceIso`. */
-async function countDoorOpensSince(
+function countDoorOpensSince(
 	deps: NukiDeps,
 	args: { lockIds: string[]; sinceIso: string }
-): Promise<number> {
-	let total = 0;
-	for (const lockId of args.lockIds) {
-		const log = await fetchSmartlockLog(deps, {
-			lockId,
-			sinceIso: args.sinceIso,
-		});
-		total += countDoorOpens(log);
-	}
-	return total;
+): ResultAsync<number, DoorError> {
+	return args.lockIds.reduce<ResultAsync<number, DoorError>>(
+		(total, lockId) =>
+			total.andThen((sum) =>
+				fetchSmartlockLog(deps, {
+					lockId,
+					sinceIso: args.sinceIso,
+				}).map((log) => sum + countDoorOpens(log))
+			),
+		okAsync(0)
+	);
 }
 
 export function startOfTodayIso(now: number): string {
@@ -55,11 +59,11 @@ export function startOfTodayIso(now: number): string {
 /** Occupancy from today's door-sensor opens. A proxy, not a headcount; `null`
  *  when Nuki env is unset. */
 export const nukiDoorOpensProvider: OccupancyProvider = {
-	async count(now) {
+	count(now) {
 		const token = process.env.NUKI_API_TOKEN;
 		const lockIds = parseLockIds(process.env.NUKI_SMARTLOCK_IDS);
 		return !token || lockIds.length === 0
-			? null
+			? okAsync(null)
 			: countDoorOpensSince(
 					{ fetch, token },
 					{ lockIds, sinceIso: startOfTodayIso(now) }

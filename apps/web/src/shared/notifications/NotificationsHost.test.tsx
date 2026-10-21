@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
 import { MemoryRouter, Route, createMemoryHistory } from "@solidjs/router";
 import { cleanup, render, screen, waitFor } from "@solidjs/testing-library";
+import { ok } from "neverthrow";
 import { afterEach, expect, test, vi } from "vitest";
 
 const { resync } = vi.hoisted(() => ({
-	resync: vi.fn(() => Promise.resolve()),
+	resync: vi.fn(() => Promise.resolve(ok())),
 }));
 vi.mock("../../lib/push.ts", () => ({ resyncPush: resync }));
 vi.mock("./NotificationsDrawer.tsx", () => ({

@@ -2,7 +2,10 @@
 // adapter's entry points and exposes them under neutral names, and it
 // resolves test injection: a vendor swap changes the module below and nothing
 // else. Only that adapter reads its configuration off `process.env`.
+import { ok, type Result } from "neverthrow";
+
 import { injectedDoorProvider, type DoorProvider } from "./doorProvider.ts";
+import type { DoorError } from "./errors/door.ts";
 import {
 	doorProviderConfigured as adapterConfigured,
 	doorProviderFromEnvironment,
@@ -16,8 +19,9 @@ export { doorWritesEnabled };
  *  `requireWrites` as for `doorProviderFromEnvironment`. */
 export function doorProvider(options: {
 	requireWrites: boolean;
-}): DoorProvider {
-	return injectedDoorProvider() ?? doorProviderFromEnvironment(options);
+}): Result<DoorProvider, DoorError> {
+	const injected = injectedDoorProvider();
+	return injected ? ok(injected) : doorProviderFromEnvironment(options);
 }
 
 /** Whether a door provider is available: a test fake is always treated as

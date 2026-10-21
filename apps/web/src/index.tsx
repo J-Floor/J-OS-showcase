@@ -3,7 +3,7 @@ import "solid-devtools";
 // so the install pill (which mounts late, inside the authed shell) doesn't miss
 // the early-firing event. Must stay at the top, ahead of the first render.
 import "./shared/pwaInstall.ts";
-import { JFloorProvider } from "@j-os/design-system";
+import { JFloorProvider, Toast } from "@j-os/design-system";
 import { Route, Router } from "@solidjs/router";
 import { ConvexProvider } from "convex-solidjs";
 import type { ParentProps } from "solid-js";
@@ -16,6 +16,7 @@ import { render } from "solid-js/web";
 import { registerSW } from "virtual:pwa-register";
 
 import { App, ModuleRoutes } from "./app.tsx";
+import { readSession, writeSession } from "./lib/browserStorage.ts";
 import { APP_ROOT_ID } from "./lib/constants.ts";
 import { bindConvexAuth, convex } from "./lib/convex.ts";
 import { startPwaUpdateChecks, startReloadOnUpdate } from "./lib/pwaUpdates.ts";
@@ -30,6 +31,7 @@ import { VisitorConfirm } from "./modules/visitor/VisitorConfirm.tsx";
 import { VisitorRegister } from "./modules/visitor/VisitorRegister.tsx";
 import { LandingRedirect, PageTitleTracker } from "./routing/index.tsx";
 import { AppErrorBoundary } from "./shared/AppErrorBoundary.tsx";
+import { toaster } from "./shared/toaster.ts";
 import { UpdatingOverlay } from "./shared/UpdatingOverlay.tsx";
 
 function Root(props: ParentProps) {
@@ -40,6 +42,9 @@ function Root(props: ParentProps) {
 				<PageTitleTracker />
 				<AppErrorBoundary>{props.children}</AppErrorBoundary>
 			</ConvexProvider>
+			{/* Outside the route gate, so a failure toasts on every screen,
+			    including the no-access one. */}
+			<Toast toaster={toaster} />
 			<UpdatingOverlay />
 		</JFloorProvider>
 	);
@@ -56,17 +61,15 @@ const PRELOAD_RELOAD_COOLDOWN_MS = 10_000;
 // timestamp caps it to at most one forced reload per 10s.
 window.addEventListener("vite:preloadError", () => {
 	const key = "jf:lastPreloadErrorReload";
-	try {
-		const last = Number(sessionStorage.getItem(key) ?? "0");
-		if (Date.now() - last < PRELOAD_RELOAD_COOLDOWN_MS) return;
-		sessionStorage.setItem(key, String(Date.now()));
-	} catch {
-		// sessionStorage unavailable (private mode / blocked) — there is no
-		// loop guard without it, so do NOT reload: a genuinely broken chunk
-		// would reload forever. Let the import rejection surface to the
-		// route's <AppErrorBoundary> instead.
+	const last = readSession(key).map((stored) => Number(stored ?? "0"));
+	// sessionStorage unavailable (private mode / blocked) means there is no
+	// loop guard, so do NOT reload: a genuinely broken chunk would reload
+	// forever. Let the import rejection surface to the route's
+	// <AppErrorBoundary> instead.
+	if (last.isErr() || Date.now() - last.value < PRELOAD_RELOAD_COOLDOWN_MS)
 		return;
-	}
+	const marked = writeSession(key, String(Date.now()));
+	if (marked.isErr()) return;
 	window.location.reload();
 });
 

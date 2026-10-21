@@ -16,13 +16,13 @@ import { displayName } from "./lib/names.ts";
 import {
 	documentsNaming,
 	type Naming,
-	overBudget,
 	readBudget,
 	type ReadBudget,
 	stripPersonId,
 	takeCharged,
 } from "./lib/peopleRefs.ts";
 import { personStateOf } from "./lib/personState.ts";
+import { unwrapLogged } from "./lib/result.ts";
 import { withoutSystemFields } from "./people.ts";
 
 // Convex mutations are transactions with limits on documents read and
@@ -148,10 +148,12 @@ async function erasePerson(
 		used: Set<string>;
 	}
 ): Promise<void> {
-	const scan = await documentsNaming(context, person._id, budget);
-	if ("problem" in scan) throw new Error(`Erasure refused: ${scan.problem}`);
-	for (const address of addressesOf(person, scan.docs)) used.add(address);
-	for (const naming of scan.docs) {
+	const namings = unwrapLogged(
+		await documentsNaming(context, person._id, budget),
+		"Purge"
+	);
+	for (const address of addressesOf(person, namings)) used.add(address);
+	for (const naming of namings) {
 		const outcome = await eraseDocument(context, person, naming);
 		if (outcome === "deleted") tally.deleted++;
 		if (outcome === "stripped") tally.stripped++;
@@ -184,32 +186,35 @@ export const purgeEmail = internalMutation({
 	args: { email: v.string() },
 	handler: async (context, { email }) => {
 		const budget = readBudget();
-		const people = await takeCharged(peopleByEmail(context, email), budget);
-		if (!people)
-			throw new Error(`Erasure refused: ${overBudget("people")}`);
+		const people = unwrapLogged(
+			await takeCharged(peopleByEmail(context, email), budget, "people"),
+			"Purge"
+		);
 		const tally = { deleted: 0, stripped: 0 };
 		const ids = new Set<string>(people.map((person) => person._id));
 		const used = new Set<string>();
 		for (const person of people)
 			await erasePerson(context, { person, budget, tally, used });
-		const own = await addressesHeldBy(context, [...used], ids, budget);
-		if ("problem" in own)
-			throw new Error(`Erasure refused: ${own.problem}`);
-		const door = await legacyDoorRows(context, own.addresses, budget);
-		if ("problem" in door)
-			throw new Error(`Erasure refused: ${door.problem}`);
-		for (const row of door.rows) {
+		const addresses = unwrapLogged(
+			await addressesHeldBy(context, [...used], ids, budget),
+			"Purge"
+		);
+		const doorRows = unwrapLogged(
+			await legacyDoorRows(context, addresses, budget),
+			"Purge"
+		);
+		for (const row of doorRows) {
 			await context.db.delete(row._id);
 			tally.deleted++;
 		}
 		let auth = 0;
-		for (const address of own.addresses)
+		for (const address of addresses)
 			auth += await eraseAuthRecords(context, address);
 		return {
 			deleted: tally.deleted,
 			stripped: tally.stripped,
 			auth,
-			addresses: own.addresses,
+			addresses,
 		};
 	},
 });

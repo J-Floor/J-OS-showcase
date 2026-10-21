@@ -4,10 +4,19 @@ import {
 	ALL_EVENTS,
 	ALL_STATES,
 	legalEvents,
-	reduce,
+	reduce as reduceResult,
 	TABLE,
 } from "./lifecycle.ts";
-import { IllegalTransitionError, type Facts } from "./lifecycleTypes.ts";
+import type { Facts } from "./lifecycleTypes.ts";
+
+/** The transition of a legal event; a refusal fails the test loudly. */
+function reduce(...args: Parameters<typeof reduceResult>) {
+	return reduceResult(...args)._unsafeUnwrap();
+}
+
+function expectIllegal(result: ReturnType<typeof reduceResult>) {
+	expect(result.isErr() && result.error.type).toBe("IllegalTransition");
+}
 
 const facts: Facts = {
 	verified: true,
@@ -199,23 +208,23 @@ describe("reduce", () => {
 	});
 
 	it("refuses to approve an unverified prospect", () => {
-		expect(() =>
-			reduce(
+		expectIllegal(
+			reduceResult(
 				"prospect.verified",
 				{ type: "APPROVE_MEMBER" },
 				{ ...facts, verified: false }
 			)
-		).toThrow(IllegalTransitionError);
+		);
 	});
 
 	it("activates only when steps and compliance are both satisfied, and reconciles the door", () => {
-		expect(() =>
-			reduce(
+		expectIllegal(
+			reduceResult(
 				"member.onboarding",
 				{ type: "ONBOARDING_PROGRESSED" },
 				facts
 			)
-		).toThrow(IllegalTransitionError);
+		);
 		const { next, effects } = reduce(
 			"member.onboarding",
 			{ type: "ONBOARDING_PROGRESSED" },
@@ -257,13 +266,13 @@ describe("reduce", () => {
 	});
 
 	it("ignores a window-expiry event whose window was extended", () => {
-		expect(() =>
-			reduce(
+		expectIllegal(
+			reduceResult(
 				"guest.active",
 				{ type: "WINDOW_EXPIRED" },
 				{ ...facts, windowOpen: true }
 			)
-		).toThrow(IllegalTransitionError);
+		);
 	});
 
 	it("re-extending an expired guest's window does not bypass compliance", () => {
@@ -304,9 +313,9 @@ describe("reduce", () => {
 	});
 
 	it("refuses to promote a prospect straight to the board", () => {
-		expect(() =>
-			reduce("prospect.queued", { type: "PROMOTE_TO_BOARD" }, facts)
-		).toThrow(IllegalTransitionError);
+		expectIllegal(
+			reduceResult("prospect.queued", { type: "PROMOTE_TO_BOARD" }, facts)
+		);
 	});
 
 	it("grants core only when the member can already activate, and reconciles the door either way", () => {
@@ -605,10 +614,9 @@ describe("legalEvents", () => {
 });
 
 describe("totality", () => {
-	it("every state/event pair either transitions to a known state or throws IllegalTransitionError", () => {
-		// No try/catch: a pair that throws something OTHER than
-		// IllegalTransitionError must fail this test, and a pair that returns an
-		// unknown state must fail it too. `outcome` records which happened.
+	it("every state/event pair either transitions to a known state or is refused as an IllegalTransition", () => {
+		// A pair that returns an unknown state must fail this test, and so must
+		// a refusal of any other kind.
 		for (const state of ALL_STATES) {
 			for (const type of ALL_EVENTS) {
 				// `tier` serves both SET_ROLE and IMPORT; there is no `role`
@@ -621,28 +629,16 @@ describe("totality", () => {
 					tier: "member",
 					hasSignature: false,
 				} as never;
-				const outcome = (():
-					| { ok: true; next: string }
-					| { ok: false; error: unknown } => {
-					try {
-						return {
-							ok: true,
-							next: reduce(state, event, facts).next,
-						};
-					} catch (error) {
-						return { ok: false, error };
-					}
-				})();
-				if (outcome.ok) {
+				const outcome = reduceResult(state, event, facts);
+				if (outcome.isOk()) {
 					expect(
 						ALL_STATES,
-						`${state} -[${type}]-> ${outcome.next}`
-					).toContain(outcome.next);
+						`${state} -[${type}]-> ${outcome.value.next}`
+					).toContain(outcome.value.next);
 				} else {
-					expect(
-						outcome.error,
-						`${state} -[${type}]->`
-					).toBeInstanceOf(IllegalTransitionError);
+					expect(outcome.error.type, `${state} -[${type}]->`).toBe(
+						"IllegalTransition"
+					);
 				}
 			}
 		}
@@ -674,7 +670,7 @@ describe("totality", () => {
 
 	it("every state in ALL_STATES has at least one outgoing edge", () => {
 		// The other totality tests can't catch a state dropped from TABLE
-		// entirely: reduce() throws IllegalTransitionError for every event on a
+		// entirely: reduce() refuses every event with IllegalTransition on a
 		// missing state, which is exactly what the "known state or throws"
 		// test's else-branch accepts. This is the forward-direction guard: a
 		// state with zero legal events is a stuck state, full stop.

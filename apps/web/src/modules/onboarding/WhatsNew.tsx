@@ -2,6 +2,7 @@ import { Button, Dialog } from "@j-os/design-system";
 import { For, Show, createEffect, createSignal } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
+import { readLocal, writeLocal } from "../../lib/browserStorage.ts";
 import { useQuery } from "../../shared/data/useQuery.ts";
 
 import {
@@ -19,19 +20,12 @@ import styles from "./WhatsNew.module.scss";
 const STORAGE_KEY = "jos:whatsNewSeen";
 
 function readSeen(): string | null {
-	try {
-		return localStorage.getItem(STORAGE_KEY);
-	} catch {
-		return null;
-	}
+	return readLocal(STORAGE_KEY).unwrapOr(null);
 }
 
 function writeSeen(version: string): void {
-	try {
-		localStorage.setItem(STORAGE_KEY, version);
-	} catch {
-		/* storage denied — the dialog just shows again next load, harmless */
-	}
+	// Storage denied: the dialog just shows again next load, harmless.
+	writeLocal(STORAGE_KEY, version).unwrapOr(undefined);
 }
 
 /**

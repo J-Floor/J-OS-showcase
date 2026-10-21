@@ -1,14 +1,9 @@
+import { err, ok, Result, ResultAsync } from "neverthrow";
+
 export type QrScanCode = "unsupported" | "permission" | "unavailable";
 
-export class QrScanError extends Error {
-	code: QrScanCode;
-
-	constructor(code: QrScanCode, message: string) {
-		super(message);
-		this.name = "QrScanError";
-		this.code = code;
-	}
-}
+/** Why the camera scan could not start. */
+export type QrScanFailure = { code: QrScanCode };
 
 export type QrVideo = {
 	srcObject: HTMLVideoElement["srcObject"];
@@ -53,21 +48,30 @@ function waitFrame(signal: AbortSignal): Promise<void> {
 }
 
 /** Reports the first non-empty code in the current frame, if any. A frame
- *  that cannot be read yet is skipped. */
+ *  that cannot be read yet (the video may not be ready on the first frames)
+ *  is skipped. */
 async function reportFirstCode(
 	detector: InstanceType<BarcodeDetectorCtor>,
 	video: QrVideo,
 	onDetect: (raw: string) => void
 ): Promise<void> {
-	try {
-		const codes = await detector.detect(video);
-		if (codes.length > 0) {
-			const value = codes[0].rawValue;
-			if (value !== "") onDetect(value);
-		}
-	} catch {
-		// Video may not be ready on the first frames.
-	}
+	const codes = await ResultAsync.fromPromise(
+		detector.detect(video),
+		() => "frame not readable"
+	);
+	if (codes.isErr() || codes.value.length === 0) return;
+	const value = codes.value[0].rawValue;
+	if (value !== "") onDetect(value);
+}
+
+function cameraFailure(error: unknown): QrScanFailure {
+	const name = errorName(error);
+	return {
+		code:
+			name === "NotAllowedError" || name === "SecurityError"
+				? "permission"
+				: "unavailable",
+	};
 }
 
 /**
@@ -78,34 +82,19 @@ export async function startQrScan(
 	video: QrVideo,
 	onDetect: (raw: string) => void,
 	signal: AbortSignal
-): Promise<void> {
+): Promise<Result<void, QrScanFailure>> {
 	const Detector = detectorCtor();
-	if (Detector === undefined) {
-		throw new QrScanError(
-			"unsupported",
-			"This browser can't scan QR codes."
-		);
-	}
+	if (Detector === undefined) return err({ code: "unsupported" });
 
-	let stream: MediaStream;
-	try {
-		stream = await navigator.mediaDevices.getUserMedia({
+	const camera = await ResultAsync.fromPromise(
+		navigator.mediaDevices.getUserMedia({
 			video: { facingMode: { ideal: "environment" } },
 			audio: false,
-		});
-	} catch (err) {
-		const name = errorName(err);
-		if (name === "NotAllowedError" || name === "SecurityError") {
-			throw new QrScanError(
-				"permission",
-				"Camera access is needed to scan. Allow it in the browser and try again."
-			);
-		}
-		throw new QrScanError(
-			"unavailable",
-			"No camera is available on this device."
-		);
-	}
+		}),
+		cameraFailure
+	);
+	if (camera.isErr()) return err(camera.error);
+	const stream = camera.value;
 
 	function stop(): void {
 		for (const track of stream.getTracks()) track.stop();
@@ -118,16 +107,24 @@ export async function startQrScan(
 
 	if (isAborted()) {
 		stop();
-		return;
+		return ok();
 	}
 	signal.addEventListener("abort", stop, { once: true });
 
 	video.srcObject = stream;
-	await video.play();
+	const playing = await ResultAsync.fromPromise(
+		video.play(),
+		(): QrScanFailure => ({ code: "unavailable" })
+	);
+	if (playing.isErr()) {
+		stop();
+		return err(playing.error);
+	}
 
 	const detector = new Detector({ formats: ["qr_code"] });
 	while (!isAborted()) {
 		await reportFirstCode(detector, video, onDetect);
 		await waitFrame(signal);
 	}
+	return ok();
 }

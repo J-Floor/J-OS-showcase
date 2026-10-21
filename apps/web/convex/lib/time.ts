@@ -5,6 +5,9 @@ import {
 	toZoned,
 	type ZonedDateTime,
 } from "@internationalized/date";
+import { err, ok, type Result } from "neverthrow";
+
+import type { InputError } from "./errors/input.ts";
 
 /** The one site today. Multi-site later: supply per-site (it already lives inside each IXDTF value). */
 export const SITE_TIMEZONE = "Europe/Zurich";
@@ -160,12 +163,10 @@ function zoneSuffix(local: string): string | undefined {
 		: body.slice(open + 1);
 }
 
-/** The IANA zone from an IXDTF value's trailing `[Zone]`. Throws if absent. */
-export function zonedTimeZoneName(local: string): string {
+/** The IANA zone from an IXDTF value's trailing `[Zone]`, or an error when absent. */
+export function zonedTimeZoneName(local: string): Result<string, InputError> {
 	const zone = zoneSuffix(local);
-	if (zone === undefined)
-		throw new Error(`Not an IXDTF zoned value: ${local}`);
-	return zone;
+	return zone === undefined ? err({ type: "InvalidZonedValue" }) : ok(zone);
 }
 
 // --- Date-only (unchanged behaviour; dedup) -------------------------------

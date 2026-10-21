@@ -8,6 +8,7 @@ import {
 	waitFor,
 } from "@solidjs/testing-library";
 import { ConvexError } from "convex/values";
+import { err, ok } from "neverthrow";
 import { createSignal } from "solid-js";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -155,7 +156,7 @@ beforeEach(() => {
 	positionAsync.mockReset();
 	fetchPresenceToken.mockReset();
 	currentPerson.value = { tier: "member", stage: "active" };
-	fetchPresenceToken.mockResolvedValue("tok");
+	fetchPresenceToken.mockResolvedValue(ok("tok"));
 	setAttemptRows({
 		[UNLOCK_ATTEMPT]: attemptRow("actuated"),
 		[LOCK_ATTEMPT]: attemptRow("actuated"),
@@ -258,7 +259,7 @@ test("opens the chosen door with a fresh presence token", async () => {
 });
 
 test("off the building network it asks to join the Wi-Fi and never calls unlock", async () => {
-	fetchPresenceToken.mockResolvedValue(null);
+	fetchPresenceToken.mockResolvedValue(ok(null));
 	renderCard();
 	fireEvent.click(screen.getByRole("button", { name: "Unlock Downstairs" }));
 	expect(
@@ -291,7 +292,10 @@ test("a debounced repeat tap reads as already opening", async () => {
 
 test("shows the server's error message", async () => {
 	mutateAsync.mockRejectedValue(
-		new ConvexError("Door unlock is not configured.")
+		new ConvexError({
+			code: "DoorNotConfigured",
+			message: "Door control is not configured.",
+		})
 	);
 	renderCard();
 	fireEvent.click(
@@ -300,8 +304,24 @@ test("shows the server's error message", async () => {
 		})
 	);
 	expect(
-		await screen.findByText("Door unlock is not configured.")
+		await screen.findByText("Door control is not configured.")
 	).toBeInTheDocument();
+});
+
+test("a failed presence check reads as the action's own failure", async () => {
+	fetchPresenceToken.mockResolvedValue(
+		err({ code: "PresenceCheckFailed", message: "Couldn't open the door." })
+	);
+	renderCard();
+	fireEvent.click(
+		await screen.findByRole("button", {
+			name: "Unlock Upstairs (4th floor)",
+		})
+	);
+	expect(
+		await screen.findByText("Couldn't open the door.")
+	).toBeInTheDocument();
+	expect(mutateAsync).not.toHaveBeenCalled();
 });
 
 test("shows a generic message for a non-ConvexError, never the raw error text", async () => {
@@ -358,7 +378,7 @@ test("an offline lock says so", async () => {
 });
 
 test("off the building network Lock never calls lockDoor", async () => {
-	fetchPresenceToken.mockResolvedValue(null);
+	fetchPresenceToken.mockResolvedValue(ok(null));
 	positionAsync.mockResolvedValue("unlocked");
 	renderCard();
 	fireEvent.click(

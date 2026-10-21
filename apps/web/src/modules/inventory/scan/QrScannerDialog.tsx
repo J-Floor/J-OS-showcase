@@ -7,7 +7,7 @@ import {
 	type JSX,
 } from "solid-js";
 
-import { QrScanError, startQrScan, type QrScanCode } from "./qrScan.ts";
+import { startQrScan, type QrScanCode } from "./qrScan.ts";
 import styles from "./QrScannerDialog.module.scss";
 
 const STATUS_COPY: Record<QrScanCode, string> = {
@@ -18,12 +18,6 @@ const STATUS_COPY: Record<QrScanCode, string> = {
 };
 
 const HINT = "Point the camera at the QR code";
-
-function messageFor(err: unknown): string {
-	return err instanceof QrScanError
-		? STATUS_COPY[err.code]
-		: STATUS_COPY.unavailable;
-}
 
 type ScannerProps = {
 	open: boolean;
@@ -37,7 +31,7 @@ type ScannerProps = {
  *  why the camera could not start. */
 function createQrScanStatus(props: ScannerProps) {
 	const [videoElement, setVideoElement] = createSignal<HTMLVideoElement>();
-	const [scanError, setScanError] = createSignal<unknown>();
+	const [scanError, setScanError] = createSignal<QrScanCode>();
 
 	createEffect(() => {
 		if (!props.open || props.unknownTag !== undefined) return;
@@ -46,8 +40,8 @@ function createQrScanStatus(props: ScannerProps) {
 		const onDetect = props.onDetect;
 		setScanError(undefined);
 		const ac = new AbortController();
-		void startQrScan(video, onDetect, ac.signal).catch((err: unknown) => {
-			setScanError(err);
+		void startQrScan(video, onDetect, ac.signal).then((result) => {
+			if (result.isErr()) setScanError(result.error.code);
 		});
 		onCleanup(() => {
 			ac.abort();
@@ -56,8 +50,8 @@ function createQrScanStatus(props: ScannerProps) {
 
 	function statusText(): string {
 		if (props.error !== undefined && props.error !== "") return props.error;
-		const err = scanError();
-		return err === undefined ? HINT : messageFor(err);
+		const code = scanError();
+		return code === undefined ? HINT : STATUS_COPY[code];
 	}
 
 	function statusTone(): "error" | undefined {

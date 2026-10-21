@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { err, ok, type Result } from "neverthrow";
 
 import { api, internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
@@ -20,28 +21,32 @@ import {
 	personByEmail,
 	validEmail,
 } from "./lib/emailAddress.ts";
+import type { InputError } from "./lib/errors/input.ts";
+import type { PeopleError } from "./lib/errors/people.ts";
 import { mayPublicSubmit, rateLimiter } from "./lib/rateLimit.ts";
 import { verifyRecaptchaToken } from "./lib/recaptcha.ts";
+import { invariant, refuse, unwrap } from "./lib/result.ts";
 import { EMAIL_MAX, NAME_MAX } from "./lib/validate.ts";
 import type { Wifi } from "./lib/wifi.ts";
 
 /**
  * The register endpoint is public and unauthenticated — validate its input
- * server-side rather than trusting the form. Throws on anything malformed so a
+ * server-side rather than trusting the form. Refuses anything malformed so a
  * bot or a hand-crafted request cannot write a junk `people` row.
  */
 function validateVisitorInput(input: {
 	firstName: string;
 	lastName: string;
 	email: string;
-}): void {
+}): Result<void, InputError | PeopleError> {
 	const email = input.email.trim();
 	if (!validEmail(email) || email.length > EMAIL_MAX)
-		throw new Error("Enter a valid email.");
+		return err({ type: "InvalidEmail" });
 	if (input.firstName.trim() === "" || input.firstName.length > NAME_MAX)
-		throw new Error("First name is required.");
-	if (input.lastName.trim() === "" || input.lastName.length > NAME_MAX)
-		throw new Error("Last name is required.");
+		return err({ type: "FirstNameRequired" });
+	return input.lastName.trim() === "" || input.lastName.length > NAME_MAX
+		? err({ type: "LastNameRequired" })
+		: ok();
 }
 
 /**
@@ -65,15 +70,14 @@ export const registerVisitor = action({
 		args
 	): Promise<{ status: "pending" | "no-event" | "ended" }> => {
 		const secret = process.env.RECAPTCHA_SECRET;
-		if (!secret) throw new Error("reCAPTCHA is not configured");
-		if (!(await verifyRecaptchaToken(secret, args.token, "visitor"))) {
-			throw new Error("Couldn't verify you're human — please try again.");
-		}
+		invariant(secret, "reCAPTCHA is not configured");
+		if (!unwrap(await verifyRecaptchaToken(secret, args.token, "visitor")))
+			refuse({ type: "RecaptchaFailed" });
 		// Global cap after reCAPTCHA, so failed bots cannot spend it and lock
 		// real visitors out. Exhausted looks exactly like delivered (parity).
 		if (!(await mayPublicSubmit(context, "visitor")))
 			return { status: "pending" };
-		validateVisitorInput(args);
+		unwrap(validateVisitorInput(args));
 
 		const event = await context.runQuery(api.events.getEventPublic, {
 			eventId: args.eventId,

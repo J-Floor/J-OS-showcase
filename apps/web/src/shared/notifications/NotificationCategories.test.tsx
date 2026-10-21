@@ -7,6 +7,7 @@ import {
 	waitFor,
 	within,
 } from "@solidjs/testing-library";
+import { ConvexError } from "convex/values";
 import { afterEach, expect, test, vi } from "vitest";
 
 const { rows, queryCalls, setPref, prefsError } = vi.hoisted(() => ({
@@ -125,6 +126,16 @@ test("shows a polite message when saving fails", async () => {
 	).toBeInTheDocument();
 });
 
+test("shows the server's reason when it refuses the change", async () => {
+	setPref.mockRejectedValueOnce(
+		new ConvexError({ code: "Forbidden", message: "You can't do that." })
+	);
+	rows.value = [TASKS];
+	renderCategories();
+	fireEvent.click(screen.getByRole("checkbox", { name: /Email/ }));
+	expect(await screen.findByText("You can't do that.")).toBeInTheDocument();
+});
+
 test("a row's checkboxes are disabled while its save is pending", async () => {
 	let finish: ((value: null) => void) | undefined;
 	setPref.mockImplementationOnce(
@@ -193,5 +204,34 @@ test("shows a skeleton while the prefs load", () => {
 	expect(screen.queryByRole("group")).not.toBeInTheDocument();
 	expect(
 		screen.queryByText("Couldn't load notification settings.")
+	).not.toBeInTheDocument();
+});
+
+test("a slow failure shows next to its own category, not dropped by a later save", async () => {
+	let fail: ((reason: Error) => void) | undefined;
+	setPref.mockImplementationOnce(
+		() =>
+			new Promise<null>((_resolve, reject) => {
+				fail = reject;
+			})
+	);
+	rows.value = [EVENTS, TASKS];
+	renderCategories();
+	fireEvent.click(group("Tasks").getByRole("checkbox", { name: /Email/ }));
+	fireEvent.click(group("Events").getByRole("checkbox", { name: /Push/ }));
+	await waitFor(() => {
+		expect(setPref).toHaveBeenCalledTimes(2);
+	});
+	await waitFor(() => {
+		expect(
+			group("Events").getByRole("checkbox", { name: /Push/ })
+		).toBeEnabled();
+	});
+	fail?.(new Error("boom"));
+	expect(
+		await group("Tasks").findByText("Could not save that change.")
+	).toBeInTheDocument();
+	expect(
+		group("Events").queryByText("Could not save that change.")
 	).not.toBeInTheDocument();
 });

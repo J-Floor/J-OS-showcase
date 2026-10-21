@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import { err, ok, type Result } from "neverthrow";
 
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -11,11 +12,8 @@ import {
 } from "./_generated/server";
 import { hasAttendance } from "./lib/attendance.ts";
 import { keepsBreakGlassKey } from "./lib/derive.ts";
-import {
-	EMAIL_IN_USE,
-	normalizeEmail,
-	peopleByEmail,
-} from "./lib/emailAddress.ts";
+import { normalizeEmail, peopleByEmail } from "./lib/emailAddress.ts";
+import type { PeopleError } from "./lib/errors/people.ts";
 import { violations } from "./lib/invariants.ts";
 import {
 	documentsNaming,
@@ -23,6 +21,7 @@ import {
 	replacePersonId,
 } from "./lib/peopleRefs.ts";
 import { personStateOf } from "./lib/personState.ts";
+import { refuse, refuseLogged, unwrap, unwrapLogged } from "./lib/result.ts";
 import { syncSignedVariants } from "./lib/signatures.ts";
 import { withoutSystemFields } from "./people.ts";
 
@@ -33,35 +32,28 @@ const mergeArgs = {
 	patch: v.any(),
 };
 
-/** What a dry run throws once every write is done, so Convex rolls them back.
- *  A `ConvexError`, so no message text in a patch can pass for it. */
-const DRY_RUN_ROLLBACK = { kind: "mergeDryRun" } as const;
-
-/** True for the rollback a dry run ends with, and nothing else. */
+/** True for the rollback a dry run ends with (`DryRunRollback`), and nothing
+ *  else. A `ConvexError`, so no message text in a patch can pass for it. */
 export function isDryRunRollback(error: unknown): boolean {
 	return (
 		error instanceof ConvexError &&
-		(error.data as { kind?: unknown } | null)?.kind ===
-			DRY_RUN_ROLLBACK.kind
+		(error.data as { code?: unknown } | null)?.code === "DryRunRollback"
 	);
 }
 
-type Preview =
-	| { problem: string }
-	| {
-			problem: null;
-			drop: Doc<"people">;
-			/** The kept row's email after the merge, always in canonical form. */
-			email: string;
-			/** False when the provider account the dropped row names would be
-			 *  the kept person's after the merge, so revoking by the dropped
-			 *  row would take the kept person's key. */
-			revokeDropped: boolean;
-			/** True when that shared account holds the dropped row's
-			 *  break-glass key and the kept person is not entitled to one: the
-			 *  kept person is revoked after the merge instead. */
-			revokeKept: boolean;
-	  };
+type Preview = {
+	drop: Doc<"people">;
+	/** The kept row's email after the merge, always in canonical form. */
+	email: string;
+	/** False when the provider account the dropped row names would be
+	 *  the kept person's after the merge, so revoking by the dropped
+	 *  row would take the kept person's key. */
+	revokeDropped: boolean;
+	/** True when that shared account holds the dropped row's
+	 *  break-glass key and the kept person is not entitled to one: the
+	 *  kept person is revoked after the merge instead. */
+	revokeKept: boolean;
+};
 
 async function isEmailHeldByOther(
 	context: QueryCtx,
@@ -109,12 +101,11 @@ async function preview(
 	keepId: Id<"people">,
 	dropId: Id<"people">,
 	patch: Partial<Doc<"people">>
-): Promise<Preview> {
-	if (keepId === dropId)
-		return { problem: "Cannot merge a person into itself." };
+): Promise<Result<Preview, PeopleError>> {
+	if (keepId === dropId) return err({ type: "MergeSelf" });
 	const keep = await context.db.get(keepId);
 	const drop = await context.db.get(dropId);
-	if (!keep || !drop) return { problem: "Person not found." };
+	if (!keep || !drop) return err({ type: "MergePersonNotFound" });
 
 	const now = Date.now();
 	const merged = { ...keep, ...patch };
@@ -122,28 +113,25 @@ async function preview(
 	// with capitals would otherwise stay unreachable by every lookup.
 	const email = normalizeEmail(merged.email);
 	if (await isEmailHeldByOther(context, email, keepId, dropId))
-		return { problem: EMAIL_IN_USE };
+		return err({ type: "EmailInUse" });
 
 	const variants = await signatureVariantsOf(context, [keepId, dropId]);
 	const found = violations({ ...merged, email }, variants, now);
 	if (found.length)
-		return {
-			problem: found
+		return err({
+			type: "MergeInvalid",
+			violations: found
 				.map((finding) => `${finding.code} (${finding.detail})`)
 				.join(", "),
-		};
+		});
 
 	const isSharesAccount = isSharingProviderAccount(drop, merged, email);
 	const isDropKeepsKey = keepsBreakGlassKey(drop, now);
 	// The revoke skips a break-glass key, and nothing else would ever revoke
 	// this one once the row is gone.
 	if (!isSharesAccount && isDropKeepsKey)
-		return {
-			problem:
-				"The dropped person is board or admin with door access granted, so their personal door key is a break-glass key and would never be revoked. Shut off their door access or demote them first.",
-		};
-	return {
-		problem: null,
+		return err({ type: "MergeStrandsBreakGlassKey" });
+	return ok({
 		drop,
 		email,
 		revokeDropped: !isSharesAccount,
@@ -151,16 +139,14 @@ async function preview(
 			isSharesAccount &&
 			isDropKeepsKey &&
 			!keepsBreakGlassKey(merged, now),
-	};
+	});
 }
 
-function patchOf(raw: unknown): Partial<Doc<"people">> | null {
+function patchOf(raw: unknown): Result<Partial<Doc<"people">>, PeopleError> {
 	return raw === null || typeof raw !== "object" || Array.isArray(raw)
-		? null
-		: raw;
+		? err({ type: "MergePatchNotObject" })
+		: ok(raw);
 }
-
-const NOT_AN_OBJECT = "The patch must be an object.";
 
 /**
  * Attendance is one row per person and event, and `personState` one row per
@@ -187,18 +173,16 @@ export const check = internalQuery({
 	args: mergeArgs,
 	handler: async (context, { keepId, dropId, patch }) => {
 		const clean = patchOf(patch);
-		if (!clean) return { ok: false, reason: NOT_AN_OBJECT } as const;
-		const result = await preview(context, keepId, dropId, clean);
-		if (result.problem !== null)
-			return { ok: false, reason: result.problem } as const;
+		if (clean.isErr()) return { ok: false, error: clean.error } as const;
+		const result = await preview(context, keepId, dropId, clean.value);
+		if (result.isErr()) return { ok: false, error: result.error } as const;
 		const scan = await documentsNaming(context, dropId);
-		if ("problem" in scan)
-			return { ok: false, reason: scan.problem } as const;
+		if (scan.isErr()) return { ok: false, error: scan.error } as const;
 		return {
 			ok: true,
-			keptEmail: result.email,
-			revokeDropped: result.revokeDropped,
-			revokeKept: result.revokeKept,
+			keptEmail: result.value.email,
+			revokeDropped: result.value.revokeDropped,
+			revokeKept: result.value.revokeKept,
 		} as const;
 	},
 });
@@ -206,9 +190,9 @@ export const check = internalQuery({
 /**
  * Fold `dropId` into `keepId`: patch the kept row, move every reference to the
  * dropped row (found from the schema, not a hand list), audit, delete.
- * Throws before the audit and delete when the kept row would end up in a
- * violated state or the references cannot be walked; a throw rolls the whole
- * mutation back. With `dryRun` it does every write and then throws the
+ * Refuses before the audit and delete when the kept row would end up in a
+ * violated state or the references cannot be walked; the refusal is thrown at
+ * the edge, which rolls the whole mutation back. With `dryRun` it does every write and then throws the
  * rollback {@link isDryRunRollback} recognises, so the rollback proves the
  * writes would succeed.
  */
@@ -219,19 +203,20 @@ export const apply = internalMutation({
 		dryRun: v.optional(v.boolean()),
 	},
 	handler: async (context, { keepId, dropId, patch, actorId, dryRun }) => {
-		const clean = patchOf(patch);
-		if (!clean) throw new Error(`Merge refused: ${NOT_AN_OBJECT}`);
-		const result = await preview(context, keepId, dropId, clean);
-		if (result.problem !== null)
-			throw new Error(`Merge refused: ${result.problem}`);
+		const clean = unwrap(patchOf(patch));
+		const result = unwrapLogged(
+			await preview(context, keepId, dropId, clean),
+			"Merge"
+		);
 
 		await context.db.patch(keepId, { ...clean, email: result.email });
 		// Read after the patch so the kept row is walked as patched.
-		const scan = await documentsNaming(context, dropId);
-		if ("problem" in scan)
-			throw new Error(`Merge refused: ${scan.problem}`);
+		const namings = unwrapLogged(
+			await documentsNaming(context, dropId),
+			"Merge"
+		);
 		let moved = 0;
-		for (const naming of scan.docs) {
+		for (const naming of namings) {
 			const _id = naming.doc._id;
 			if (_id === dropId) continue;
 			const fields = withoutSystemFields(naming.doc);
@@ -253,7 +238,7 @@ export const apply = internalMutation({
 			meta: { dropId, droppedEmail: result.drop.email },
 		});
 		await context.db.delete(dropId);
-		if (dryRun) throw new ConvexError(DRY_RUN_ROLLBACK);
+		if (dryRun) refuse({ type: "DryRunRollback" });
 		return { moved };
 	},
 });
@@ -283,15 +268,17 @@ export const run = internalAction({
 			dropId: args.dropId,
 			patch: args.patch as unknown,
 		});
-		if (!verdict.ok) throw new Error(`Merge refused: ${verdict.reason}`);
-		try {
-			await context.runMutation(internal.merge.apply, {
-				...args,
-				dryRun: true,
-			});
-		} catch (error) {
-			if (!isDryRunRollback(error)) throw error;
-		}
+		if (!verdict.ok) refuseLogged(verdict.error, "Merge");
+		// The dry run always ends in a rollback. Any other rejection is the
+		// real refusal, and passes on untouched, ConvexError code included.
+		await context
+			.runMutation(internal.merge.apply, { ...args, dryRun: true })
+			.catch((error: unknown) =>
+				isDryRunRollback(error)
+					? undefined
+					: // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- passes the mutation's own ConvexError on unchanged
+						Promise.reject(error)
+			);
 		async function revoke(personId: Id<"people">, spareEmail?: string) {
 			await context.runAction(
 				internal.doorRevoke.revokeUnlessBreakGlass,

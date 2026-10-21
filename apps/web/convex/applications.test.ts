@@ -10,7 +10,6 @@ import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { validateApplicationInput } from "./applications.ts";
 import { hashConfirmToken, issueToken } from "./lib/confirmToken.ts";
-import { EMAIL_IN_USE, EMAIL_INVALID } from "./lib/emailAddress.ts";
 import {
 	EMAIL_LIMIT_COUNT,
 	PUBLIC_SUBMIT_PER_HOUR,
@@ -518,7 +517,7 @@ describe("applications.decide", () => {
 				personId: id,
 				decision: { kind: "member" },
 			})
-		).rejects.toThrow(/Illegal transition/);
+		).rejects.toThrow(/IllegalTransition/);
 
 		// An illegal event must leave the row, the audit log and the scheduler
 		// completely untouched — `reduce` throws before `applyEvent`'s first
@@ -564,7 +563,7 @@ describe("applications.decide", () => {
 				personId: boardPersonId,
 				decision: { kind: "member" },
 			})
-		).rejects.toThrow(/Illegal transition/);
+		).rejects.toThrow(/IllegalTransition/);
 
 		const person = await backend.run(async (context) =>
 			context.db.get(boardPersonId)
@@ -622,7 +621,7 @@ describe("insertApplication", () => {
 			})
 			.catch((error: unknown) => error as Error);
 		expect(err).toBeInstanceOf(Error);
-		expect((err as Error).message).toMatch(/Cannot apply$/);
+		expect((err as Error).message).toMatch(/ApplicationBlocked/);
 	});
 
 	it("schedules a link reputation check when the application has links", async () => {
@@ -725,122 +724,118 @@ describe("insertApplication", () => {
 
 describe("validateApplicationInput", () => {
 	it("accepts a fully valid input", () => {
-		expect(() => {
-			validateApplicationInput(appInput);
-		}).not.toThrow();
+		expect(validateApplicationInput(appInput).isOk()).toBe(true);
 	});
 
 	it("rejects teamSize of 0", () => {
-		expect(() => {
-			validateApplicationInput({ ...appInput, teamSize: 0 });
-		}).toThrow("Invalid application input");
+		const result = validateApplicationInput({ ...appInput, teamSize: 0 });
+		expect(result.isErr() && result.error.type).toBe("InvalidApplication");
 	});
 
 	it("rejects a negative teamSize", () => {
-		expect(() => {
-			validateApplicationInput({ ...appInput, teamSize: -3 });
-		}).toThrow("Invalid application input");
+		const result = validateApplicationInput({ ...appInput, teamSize: -3 });
+		expect(result.isErr() && result.error.type).toBe("InvalidApplication");
 	});
 
 	it("rejects a non-integer teamSize", () => {
-		expect(() => {
-			validateApplicationInput({ ...appInput, teamSize: 2.5 });
-		}).toThrow("Invalid application input");
+		const result = validateApplicationInput({ ...appInput, teamSize: 2.5 });
+		expect(result.isErr() && result.error.type).toBe("InvalidApplication");
 	});
 
 	it("rejects an empty vertical array", () => {
-		expect(() => {
-			validateApplicationInput({ ...appInput, vertical: [] });
-		}).toThrow("Invalid application input");
+		const result = validateApplicationInput({ ...appInput, vertical: [] });
+		expect(result.isErr() && result.error.type).toBe("InvalidApplication");
 	});
 
 	it("rejects a malformed email", () => {
-		expect(() => {
-			validateApplicationInput({ ...appInput, email: "not-an-email" });
-		}).toThrow("Invalid application input");
+		const result = validateApplicationInput({
+			...appInput,
+			email: "not-an-email",
+		});
+		expect(result.isErr() && result.error.type).toBe("InvalidApplication");
 	});
 
 	it("rejects an over-long firstName", () => {
-		expect(() => {
-			validateApplicationInput({
-				...appInput,
-				firstName: "a".repeat(201),
-			});
-		}).toThrow("Invalid application input");
+		const result = validateApplicationInput({
+			...appInput,
+			firstName: "a".repeat(201),
+		});
+		expect(result.isErr() && result.error.type).toBe("InvalidApplication");
 	});
 
 	it("rejects an over-long lastName", () => {
-		expect(() => {
-			validateApplicationInput({
-				...appInput,
-				lastName: "a".repeat(201),
-			});
-		}).toThrow("Invalid application input");
+		const result = validateApplicationInput({
+			...appInput,
+			lastName: "a".repeat(201),
+		});
+		expect(result.isErr() && result.error.type).toBe("InvalidApplication");
 	});
 
 	it("rejects an over-long ventureName", () => {
-		expect(() => {
-			validateApplicationInput({
-				...appInput,
-				ventureName: "a".repeat(301),
-			});
-		}).toThrow("Invalid application input");
+		const result = validateApplicationInput({
+			...appInput,
+			ventureName: "a".repeat(301),
+		});
+		expect(result.isErr() && result.error.type).toBe("InvalidApplication");
 	});
 
 	it("rejects an over-long phone", () => {
-		expect(() => {
-			validateApplicationInput({ ...appInput, phone: "1".repeat(51) });
-		}).toThrow("Invalid application input");
+		const result = validateApplicationInput({
+			...appInput,
+			phone: "1".repeat(51),
+		});
+		expect(result.isErr() && result.error.type).toBe("InvalidApplication");
 	});
 
 	it("rejects an email longer than 254 characters", () => {
 		const local = "a".repeat(250);
-		expect(() => {
-			validateApplicationInput({ ...appInput, email: `${local}@x.co` });
-		}).toThrow("Invalid application input");
+		const result = validateApplicationInput({
+			...appInput,
+			email: `${local}@x.co`,
+		});
+		expect(result.isErr() && result.error.type).toBe("InvalidApplication");
 	});
 
 	it("accepts an email of exactly 254 characters", () => {
 		const local = "a".repeat(249);
-		expect(() => {
-			validateApplicationInput({ ...appInput, email: `${local}@x.co` });
-		}).not.toThrow();
+		expect(
+			validateApplicationInput({
+				...appInput,
+				email: `${local}@x.co`,
+			}).isOk()
+		).toBe(true);
 	});
 
 	it("rejects an over-long referral", () => {
-		expect(() => {
-			validateApplicationInput({
-				...appInput,
-				referral: "a".repeat(321),
-			});
-		}).toThrow("Invalid application input");
+		const result = validateApplicationInput({
+			...appInput,
+			referral: "a".repeat(321),
+		});
+		expect(result.isErr() && result.error.type).toBe("InvalidApplication");
 	});
 
 	it("rejects an over-long pastBuilt", () => {
-		expect(() => {
-			validateApplicationInput({
-				...appInput,
-				pastBuilt: "a".repeat(5001),
-			});
-		}).toThrow("Invalid application input");
+		const result = validateApplicationInput({
+			...appInput,
+			pastBuilt: "a".repeat(5001),
+		});
+		expect(result.isErr() && result.error.type).toBe("InvalidApplication");
 	});
 
 	it("rejects an over-long description", () => {
-		expect(() => {
-			validateApplicationInput({
-				...appInput,
-				description: "a".repeat(5001),
-			});
-		}).toThrow("Invalid application input");
+		const result = validateApplicationInput({
+			...appInput,
+			description: "a".repeat(5001),
+		});
+		expect(result.isErr() && result.error.type).toBe("InvalidApplication");
 	});
 
 	it("rejects an over-long whyJoin", () => {
-		expect(() => {
-			validateApplicationInput({
-				...appInput,
-				whyJoin: "a".repeat(5001),
-			});
-		}).toThrow("Invalid application input");
+		const result = validateApplicationInput({
+			...appInput,
+			whyJoin: "a".repeat(5001),
+		});
+		expect(result.isErr() && result.error.type).toBe("InvalidApplication");
 	});
 });
 
@@ -853,7 +848,7 @@ describe("insertApplication validation", () => {
 				token: TOKEN,
 				links: [{ label: "site", url: "" }],
 			})
-		).rejects.toThrow("Links must use http or https.");
+		).rejects.toThrow(/LinkNotHttp/);
 		expect(
 			await backend.run((context) => context.db.query("people").collect())
 		).toHaveLength(0);
@@ -871,7 +866,7 @@ describe("insertApplication validation", () => {
 				token: TOKEN,
 				links,
 			})
-		).rejects.toThrow("Too many links (max 4).");
+		).rejects.toThrow(/TooManyLinks/);
 	});
 
 	it("rejects an over-long link url", async () => {
@@ -882,7 +877,7 @@ describe("insertApplication validation", () => {
 				token: TOKEN,
 				links: [{ label: "", url: `https://x.co/${"a".repeat(2001)}` }],
 			})
-		).rejects.toThrow("Link is too long.");
+		).rejects.toThrow(/LinkTooLong/);
 	});
 
 	it("rejects an over-long link label", async () => {
@@ -893,7 +888,7 @@ describe("insertApplication validation", () => {
 				token: TOKEN,
 				links: [{ label: "a".repeat(201), url: "https://example.com" }],
 			})
-		).rejects.toThrow("Link is too long.");
+		).rejects.toThrow(/LinkTooLong/);
 	});
 
 	it("stores the links normalized", async () => {
@@ -920,7 +915,7 @@ describe("insertApplication validation", () => {
 				token: TOKEN,
 				teamSize: 0,
 			})
-		).rejects.toThrow("Invalid application input");
+		).rejects.toThrow(/InvalidApplication/);
 		const all = await backend.run(async (context) =>
 			context.db.query("people").collect()
 		);
@@ -986,7 +981,7 @@ describe("submitApplication", () => {
 		expect(all).toHaveLength(0);
 	});
 
-	it("treats a rejected fetch as a verification failure (generic error, no row)", async () => {
+	it("reports a rejected fetch as RecaptchaUnavailable (no row)", async () => {
 		process.env.RECAPTCHA_SECRET = "secret";
 		vi.stubGlobal(
 			"fetch",
@@ -996,14 +991,14 @@ describe("submitApplication", () => {
 		registerRateLimiter(backend);
 		await expect(
 			backend.action(api.applications.submitApplication, validToken)
-		).rejects.toThrow("Couldn't verify you're human — please try again.");
+		).rejects.toThrow(/RecaptchaUnavailable/);
 		const all = await backend.run(async (context) =>
 			context.db.query("people").collect()
 		);
 		expect(all).toHaveLength(0);
 	});
 
-	it("treats a non-2xx response as a verification failure (generic error, no row)", async () => {
+	it("reports a non-2xx response as RecaptchaUnavailable (no row)", async () => {
 		process.env.RECAPTCHA_SECRET = "secret";
 		vi.stubGlobal(
 			"fetch",
@@ -1023,14 +1018,14 @@ describe("submitApplication", () => {
 		registerRateLimiter(backend);
 		await expect(
 			backend.action(api.applications.submitApplication, validToken)
-		).rejects.toThrow("Couldn't verify you're human — please try again.");
+		).rejects.toThrow(/RecaptchaUnavailable/);
 		const all = await backend.run(async (context) =>
 			context.db.query("people").collect()
 		);
 		expect(all).toHaveLength(0);
 	});
 
-	it("treats a non-JSON body as a verification failure (generic error, no row)", async () => {
+	it("reports a non-JSON body as RecaptchaUnavailable (no row)", async () => {
 		process.env.RECAPTCHA_SECRET = "secret";
 		vi.stubGlobal(
 			"fetch",
@@ -1045,7 +1040,7 @@ describe("submitApplication", () => {
 		registerRateLimiter(backend);
 		await expect(
 			backend.action(api.applications.submitApplication, validToken)
-		).rejects.toThrow("Couldn't verify you're human — please try again.");
+		).rejects.toThrow(/RecaptchaUnavailable/);
 		const all = await backend.run(async (context) =>
 			context.db.query("people").collect()
 		);
@@ -1097,7 +1092,7 @@ describe("submitApplication", () => {
 				...validToken,
 				teamSize: 0,
 			})
-		).rejects.toThrow("Invalid application input");
+		).rejects.toThrow(/InvalidApplication/);
 		const all = await backend.run(async (context) =>
 			context.db.query("people").collect()
 		);
@@ -1858,7 +1853,7 @@ describe("submitApplication", () => {
 		}
 		await expect(
 			backend.action(api.applications.submitApplication, validToken)
-		).rejects.toThrow("Couldn't verify");
+		).rejects.toThrow(/RecaptchaFailed/);
 		const { ok } = await backend.run((context) =>
 			rateLimiter.limit(context, "publicSubmit")
 		);
@@ -2444,12 +2439,14 @@ describe("people.update", () => {
 			})
 		);
 
-		// A ConvexError, so the message survives production's redaction.
+		// A ConvexError, so the code survives production's redaction.
 		const refusal: unknown = await asBoard
 			.mutation(api.people.update, { id, email: "Grace@Example.com" })
 			.catch((err: unknown) => err);
 		expect(refusal).toBeInstanceOf(ConvexError);
-		expect((refusal as ConvexError<string>).data).toBe(EMAIL_IN_USE);
+		expect((refusal as ConvexError<{ code: string }>).data.code).toBe(
+			"EmailInUse"
+		);
 
 		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person?.email).toBe("ada@example.com");
@@ -2465,7 +2462,9 @@ describe("people.update", () => {
 				.mutation(api.people.update, { id, email })
 				.catch((err: unknown) => err);
 			expect(refusal).toBeInstanceOf(ConvexError);
-			expect((refusal as ConvexError<string>).data).toBe(EMAIL_INVALID);
+			expect((refusal as ConvexError<{ code: string }>).data.code).toBe(
+				"InvalidEmail"
+			);
 		}
 
 		const person = await backend.run(async (context) => context.db.get(id));
@@ -2495,7 +2494,9 @@ describe("people.update", () => {
 		const refusal: unknown = await asBoard
 			.mutation(api.people.update, { id, email: "still garbage" })
 			.catch((err: unknown) => err);
-		expect((refusal as ConvexError<string>).data).toBe(EMAIL_INVALID);
+		expect((refusal as ConvexError<{ code: string }>).data.code).toBe(
+			"InvalidEmail"
+		);
 	});
 
 	it("re-saves a legacy capitalized garbage email without validating or rewriting it", async () => {

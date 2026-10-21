@@ -3,8 +3,9 @@ import { createMemo, createSignal } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
 import { MAX_LINKS } from "../../../convex/lib/safeUrl.ts";
-import { SITE_KEY } from "../../shared/recaptcha.ts";
+import { call } from "../../lib/call.ts";
 
+import { getCaptchaToken } from "./captchaToken.ts";
 import { buildLinks } from "./links.ts";
 import type { FundingStage, ProductStage, Vertical } from "./options.ts";
 import {
@@ -12,6 +13,9 @@ import {
 	validateSignUp,
 	type SignUpValues,
 } from "./signUpValidation.ts";
+
+const SUBMIT_FAILED =
+	"Something went wrong submitting your application. Please try again.";
 
 /** Visitors converting to full applicants arrive with their name + email
  *  already known (passed as router navigation state). */
@@ -175,24 +179,24 @@ export function createSignUpForm(prefill: SignUpPrefill) {
 		if (product === "" || funding === "") return;
 
 		setSubmitting(true);
-		try {
-			if (!SITE_KEY || !window.grecaptcha) {
-				throw new Error("captcha-unavailable");
-			}
-			const token = await window.grecaptcha.execute(SITE_KEY, {
-				action: "signup",
-			});
-			await submit.mutateAsync(
-				applicationPayload(fields, { product, funding }, token)
-			);
-			setDone(true);
-		} catch {
-			setSubmitError(
-				"Something went wrong submitting your application. Please try again."
-			);
-		} finally {
+		const token = await getCaptchaToken("signup");
+		if (token.isErr()) {
+			setSubmitError(SUBMIT_FAILED);
 			setSubmitting(false);
+			return;
 		}
+		const result = await call(
+			submit.mutateAsync(
+				applicationPayload(fields, { product, funding }, token.value)
+			),
+			SUBMIT_FAILED
+		);
+		setSubmitting(false);
+		if (result.isErr()) {
+			setSubmitError(result.error.message);
+			return;
+		}
+		setDone(true);
 	}
 
 	return {

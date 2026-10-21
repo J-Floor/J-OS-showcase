@@ -6,9 +6,11 @@ import {
 	screen,
 	waitFor,
 } from "@solidjs/testing-library";
+import { err, ok, type Result } from "neverthrow";
 import { createSignal } from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
 
+import type { ClientError } from "../../lib/call.ts";
 import type { PushSupport } from "../../lib/push.ts";
 
 const { push } = vi.hoisted(() => {
@@ -16,16 +18,22 @@ const { push } = vi.hoisted(() => {
 		support: "default",
 		subscribed: false,
 		configured: true,
-		enable: vi.fn(() => Promise.resolve("granted")),
-		disable: vi.fn(() => Promise.resolve()),
-		read: vi.fn(() => Promise.resolve(state.subscribed)),
+		enable: vi.fn(
+			(): Promise<Result<string, ClientError>> =>
+				Promise.resolve(ok("granted"))
+		),
+		disable: vi.fn(
+			(): Promise<Result<void, ClientError>> => Promise.resolve(ok())
+		),
+		read: vi.fn(
+			(): Promise<Result<boolean, ClientError>> =>
+				Promise.resolve(ok(state.subscribed))
+		),
 	};
 	return { push: state };
 });
 
 vi.mock("../../lib/push.ts", () => ({
-	isServiceWorkerNotReady: (err: unknown) =>
-		err instanceof Error && err.message.includes("not ready"),
 	pushConfigured: () => push.configured,
 	pushSupport: () => push.support,
 	pushSubscribed: push.read,
@@ -60,7 +68,7 @@ function fakeDevice(state: {
 	return {
 		support: () => support,
 		busy: () => state.busy ?? false,
-		error: () => state.error,
+		error: () => state.error ?? null,
 		pushOn: () => state.pushOn ?? false,
 		configured: () => isConfigured,
 		canToggle: () =>
@@ -216,7 +224,7 @@ test("with the hook: turning it on calls enablePush and ends on", async () => {
 });
 
 test("with the hook: enable resolving denied ends off, disabled and blocked", async () => {
-	push.enable.mockResolvedValueOnce("denied");
+	push.enable.mockResolvedValueOnce(ok("denied"));
 	renderWithHook();
 	fireEvent.click(toggle());
 	await waitFor(() => {
@@ -229,8 +237,11 @@ test("with the hook: enable resolving denied ends off, disabled and blocked", as
 });
 
 test("with the hook: a failed enable shows the message and the switch stays off", async () => {
-	push.enable.mockRejectedValueOnce(
-		new Error("The service worker is not ready.")
+	push.enable.mockResolvedValueOnce(
+		err({
+			code: "ServiceWorkerNotReady",
+			message: "The app is still starting up. Try again in a moment.",
+		})
 	);
 	renderWithHook();
 	fireEvent.click(toggle());
@@ -241,7 +252,9 @@ test("with the hook: a failed enable shows the message and the switch stays off"
 });
 
 test("with the hook: an error from the last open is gone on the next open", async () => {
-	push.enable.mockRejectedValueOnce(new Error("boom"));
+	push.enable.mockResolvedValueOnce(
+		err({ code: "Unknown", message: "Could not turn on notifications." })
+	);
 	const [open, setOpen] = createSignal(true);
 	render(() => {
 		const device = usePushDevice(open);

@@ -1,4 +1,3 @@
-import { fireConfetti } from "@j-os/design-system";
 import { useDragDropContext } from "@thisbeyond/solid-dnd";
 import {
 	createEffect,
@@ -9,12 +8,28 @@ import {
 } from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
+import { celebrate } from "../../../lib/celebrate.ts";
+import { toaster } from "../../../shared/toaster.ts";
 import type { Task, TaskActions } from "../data/tasksData.tsx";
 
 import { COLUMNS, type TaskStatus } from "./onDrop.ts";
 
 type Rect = { x: number; y: number; w: number; h: number };
 export type Vec = { x: number; y: number };
+
+/** The overrides left once the moves that failed are undone. A card whose
+ *  override has since moved on (a newer move) keeps it. */
+export function withoutFailedMoves(
+	current: Record<string, TaskStatus>,
+	failedIds: readonly string[],
+	status: TaskStatus
+): Record<string, TaskStatus> {
+	return Object.fromEntries(
+		Object.entries(current).filter(
+			([id, value]) => !(failedIds.includes(id) && value === status)
+		)
+	);
+}
 
 /** Optimistic status overrides: on drop, reflect the new column immediately so
  *  the card doesn't snap back to its origin while the Convex round-trip lands. */
@@ -220,24 +235,35 @@ export function createDropHandler(options: {
 			for (const id of ids) next[id] = status;
 			return next;
 		});
-		for (const id of moved) {
-			void actions.update({ id: id as Id<"tasks">, status });
-		}
+		void Promise.all(
+			moved.map((id) => actions.update({ id: id as Id<"tasks">, status }))
+		).then((results) => {
+			const failedIds: string[] = [];
+			let message = "";
+			for (const [index, result] of results.entries()) {
+				if (result.isErr()) {
+					failedIds.push(moved[index]);
+					message = result.error.message;
+				}
+			}
+			if (failedIds.length === 0) return;
+			overrides.setOverride((current) =>
+				withoutFailedMoves(current, failedIds, status)
+			);
+			toaster.create({ type: "error", title: message });
+		});
 		if (isCompleted) {
 			// Burst from the card's resting spot in Done — wait a frame for the
 			// re-render to move it there.
 			requestAnimationFrame(() => {
-				try {
-					fireConfetti(
-						selection
-							.board()
-							?.querySelector<HTMLElement>(
-								`[data-task-id="${draggedId}"]`
-							) ?? undefined
-					);
-				} catch {
-					/* decorative only */
-				}
+				// Decorative only: a failure is ignored.
+				celebrate(
+					selection
+						.board()
+						?.querySelector<HTMLElement>(
+							`[data-task-id="${draggedId}"]`
+						) ?? undefined
+				);
 			});
 		}
 		selection.setSelected(new Set<string>());
@@ -283,7 +309,16 @@ export function createBulkDelete(options: {
 			const ids = [...selection.selected()];
 			setConfirmOpen(false);
 			selection.setSelected(new Set<string>());
-			for (const id of ids) void actions.remove(id as Id<"tasks">);
+			void Promise.all(
+				ids.map((id) => actions.remove(id as Id<"tasks">))
+			).then((results) => {
+				const failed = results.find((result) => result.isErr());
+				if (failed?.isErr())
+					toaster.create({
+						type: "error",
+						title: failed.error.message,
+					});
+			});
 		},
 	};
 }

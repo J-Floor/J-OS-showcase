@@ -56,7 +56,13 @@ async function signOne(variant: "member" | "guest"): Promise<void> {
 		templateBuffer.byteLength
 	);
 
-	const signaturePng = validatePngDataUrl(await sampleSignatureDataUrl());
+	const signatureResult = validatePngDataUrl(await sampleSignatureDataUrl());
+	if (signatureResult.isErr()) {
+		console.error(`[test-sign] ${signatureResult.error.type}`);
+		process.exitCode = 1;
+		return;
+	}
+	const signaturePng = signatureResult.value;
 
 	// Real board PNGs live in Convex file storage; the dry run stamps the sample
 	// scribble for every board member instead.
@@ -66,7 +72,7 @@ async function signOne(variant: "member" | "guest"): Promise<void> {
 		signaturePng,
 	}));
 
-	const drawn = await drawSignedPdf(template, {
+	const drawResult = await drawSignedPdf(template, {
 		variant,
 		name: "Ada Lovelace",
 		company: "Engine Co",
@@ -75,6 +81,12 @@ async function signOne(variant: "member" | "guest"): Promise<void> {
 		signaturePng,
 		board,
 	});
+	if (drawResult.isErr()) {
+		console.error(`[test-sign] ${drawResult.error.type}`);
+		process.exitCode = 1;
+		return;
+	}
+	const drawn = drawResult.value;
 
 	let final = drawn;
 	let isSealed = false;

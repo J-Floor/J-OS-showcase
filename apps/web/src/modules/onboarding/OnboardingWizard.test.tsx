@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen } from "@solidjs/testing-library";
+import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
+import { err, ok } from "neverthrow";
 import { afterEach, expect, test } from "vitest";
 
 afterEach(cleanup);
@@ -32,8 +33,8 @@ test("renders the first incomplete step and its progress", () => {
 				welcome: { completedAt: 1 },
 				document: { completedAt: 1 },
 			})}
-			onComplete={() => Promise.resolve()}
-			onResume={() => Promise.resolve({ activated: false })}
+			onComplete={() => Promise.resolve(ok(undefined))}
+			onResume={() => Promise.resolve(ok({ activated: false }))}
 		/>
 	));
 	// welcome + document done → current step is "rules" (step 3 of 4).
@@ -53,10 +54,10 @@ test("with no step left, resumes once and never says All done", async () => {
 	render(() => (
 		<OnboardingWizardView
 			person={personWith(ALL_DONE)}
-			onComplete={() => Promise.resolve()}
+			onComplete={() => Promise.resolve(ok(undefined))}
 			onResume={() => {
 				calls += 1;
-				return Promise.resolve({ activated: false });
+				return Promise.resolve(ok({ activated: false }));
 			}}
 		/>
 	));
@@ -65,15 +66,42 @@ test("with no step left, resumes once and never says All done", async () => {
 	expect(screen.queryByText(/All done/)).toBeNull();
 });
 
-test("a failed resume shows the same message", async () => {
+test("a failed resume shows the same message and the server's reason", async () => {
 	render(() => (
 		<OnboardingWizardView
 			person={personWith(ALL_DONE)}
-			onComplete={() => Promise.resolve()}
-			onResume={() => Promise.reject(new Error("boom"))}
+			onComplete={() => Promise.resolve(ok(undefined))}
+			onResume={() =>
+				Promise.resolve(
+					err({ code: "NotOnboarding", message: "Not onboarding." })
+				)
+			}
 		/>
 	));
 	expect(await screen.findByText("Almost there")).toBeInTheDocument();
+	expect(await screen.findByRole("alert")).toHaveTextContent(
+		"Not onboarding."
+	);
+});
+
+test("a refused step completion shows its reason under the step", async () => {
+	render(() => (
+		<OnboardingWizardView
+			person={personWith({})}
+			onComplete={() =>
+				Promise.resolve(
+					err({ code: "Forbidden", message: "You can't do that." })
+				)
+			}
+			onResume={() => Promise.resolve(ok({ activated: false }))}
+		/>
+	));
+	fireEvent.click(screen.getByRole("button", { name: /let's go/i }));
+	expect(await screen.findByRole("alert")).toHaveTextContent(
+		"You can't do that."
+	);
+	// The step is still on screen so the person can try again.
+	expect(screen.getByRole("button", { name: /let's go/i })).toBeVisible();
 });
 
 test("an activated resume keeps the loading screen for the redirect, never Almost there", async () => {
@@ -81,10 +109,10 @@ test("an activated resume keeps the loading screen for the redirect, never Almos
 	render(() => (
 		<OnboardingWizardView
 			person={personWith(ALL_DONE)}
-			onComplete={() => Promise.resolve()}
+			onComplete={() => Promise.resolve(ok(undefined))}
 			onResume={() => {
 				calls += 1;
-				return Promise.resolve({ activated: true });
+				return Promise.resolve(ok({ activated: true }));
 			}}
 		/>
 	));

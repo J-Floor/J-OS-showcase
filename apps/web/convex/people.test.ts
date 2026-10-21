@@ -735,7 +735,7 @@ describe("setLastPath access", () => {
 			backend
 				.withIdentity({ email: "gone@example.com" })
 				.mutation(api.people.setLastPath, { path: "/tasks" })
-		).rejects.toThrow(/Access expired or revoked/);
+		).rejects.toThrow(/AccessExpired/);
 		expect(await storedPath(backend, id)).toBeNull();
 	});
 
@@ -1114,7 +1114,7 @@ describe("the machine owns every member and guest write", () => {
 
 		await expect(
 			asBoard.mutation(api.people.upgradeGuestToMember, { id })
-		).rejects.toThrow(/Illegal transition/);
+		).rejects.toThrow(/IllegalTransition/);
 
 		const after = await backend.run(async (context) => context.db.get(id));
 		expect(after).toEqual(before);
@@ -1699,7 +1699,7 @@ describe("requireRole(ACCESS_TIERS): every sign-in tier is admitted, an expired 
 			backend
 				.withIdentity({ email: "expired-window@example.com" })
 				.query(api.people.getCurrentPerson, {})
-		).rejects.toThrow(/Access expired or revoked/);
+		).rejects.toThrow(/AccessExpired/);
 	});
 });
 
@@ -1880,7 +1880,7 @@ describe("logWifiOpen", () => {
 			backend
 				.withIdentity({ email: "gone@example.com" })
 				.mutation(api.people.logWifiOpen, {})
-		).rejects.toThrow(/Access expired or revoked/);
+		).rejects.toThrow(/AccessExpired/);
 
 		const events = await backend.run(async (context) =>
 			context.db
@@ -2230,17 +2230,32 @@ describe("addDirect", () => {
 				verifiedAt: 0,
 			})
 		);
-		const refusal: unknown = await backend
-			.mutation(internal.people.addDirect, {
-				email: "v@example.com",
-				firstName: "V",
-				lastName: "X",
-				tier: "staff",
-			})
-			.catch((err: unknown) => err);
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		let refusal: unknown;
+		try {
+			refusal = await backend
+				.mutation(internal.people.addDirect, {
+					email: "v@example.com",
+					firstName: "V",
+					lastName: "X",
+					tier: "staff",
+				})
+				.catch((err: unknown) => err);
+			// The operator sees which transition was refused; the client does not.
+			expect(
+				warn.mock.calls.some(
+					([line]) =>
+						String(line).includes("IllegalTransition") &&
+						String(line).includes("visitor.verified") &&
+						String(line).includes("SET_ROLE")
+				)
+			).toBe(true);
+		} finally {
+			warn.mockRestore();
+		}
 		expect(refusal).toBeInstanceOf(ConvexError);
-		expect((refusal as ConvexError<string>).data).toMatch(
-			/visitor\.verified/
+		expect((refusal as ConvexError<{ code: string }>).data.code).toBe(
+			"IllegalTransition"
 		);
 		expect(await stateOfEmail(backend, "v@example.com")).toBe(
 			"visitor.verified"
@@ -2256,7 +2271,7 @@ describe("addDirect", () => {
 				lastName: "X",
 				tier: "staff",
 			})
-		).rejects.toThrow();
+		).rejects.toThrow(/InvalidEmail/);
 	});
 });
 
@@ -2283,47 +2298,29 @@ describe("input length caps", () => {
 			asMia.mutation(api.people.updateOwnProfile, {
 				phone: "1".repeat(51),
 			})
-		).rejects.toThrow("Phone is too long (max 50 characters).");
+		).rejects.toThrow(/FieldTooLong/);
 		await expect(
 			asMia.mutation(api.people.updateOwnProfile, {
 				ventureName: "v".repeat(301),
 			})
-		).rejects.toThrow("Venture name is too long (max 300 characters).");
+		).rejects.toThrow(/FieldTooLong/);
 		await expect(
 			asMia.mutation(api.people.updateOwnProfile, {
 				description: "d".repeat(5001),
 			})
-		).rejects.toThrow("Description is too long (max 5000 characters).");
+		).rejects.toThrow(/FieldTooLong/);
 	});
 
 	it("the board update rejects over-long text fields", async () => {
 		const backend = convexTest(schema, modules);
 		const id = await seedMiaAndBoard(backend);
-		const cases: [Record<string, string>, string][] = [
-			[
-				{ phone: "1".repeat(51) },
-				"Phone is too long (max 50 characters).",
-			],
-			[
-				{ ventureName: "v".repeat(301) },
-				"Venture name is too long (max 300 characters).",
-			],
-			[
-				{ description: "d".repeat(5001) },
-				"Description is too long (max 5000 characters).",
-			],
-			[
-				{ whyJoin: "w".repeat(5001) },
-				"Why join is too long (max 5000 characters).",
-			],
-			[
-				{ pastBuilt: "p".repeat(5001) },
-				"Past built is too long (max 5000 characters).",
-			],
-			[
-				{ referral: "r".repeat(321) },
-				"Referral is too long (max 320 characters).",
-			],
+		const cases: [Record<string, string>, RegExp][] = [
+			[{ phone: "1".repeat(51) }, /FieldTooLong/],
+			[{ ventureName: "v".repeat(301) }, /FieldTooLong/],
+			[{ description: "d".repeat(5001) }, /FieldTooLong/],
+			[{ whyJoin: "w".repeat(5001) }, /FieldTooLong/],
+			[{ pastBuilt: "p".repeat(5001) }, /FieldTooLong/],
+			[{ referral: "r".repeat(321) }, /FieldTooLong/],
 		];
 		for (const [fields, message] of cases) {
 			await expect(
@@ -2340,6 +2337,6 @@ describe("input length caps", () => {
 				id,
 				text: "n".repeat(5001),
 			})
-		).rejects.toThrow("Note is too long (max 5000 characters).");
+		).rejects.toThrow(/FieldTooLong/);
 	});
 });

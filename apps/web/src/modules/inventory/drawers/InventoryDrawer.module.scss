@@ -1,11 +1,5 @@
 @use "@j-os/design-system/typography" as typo;
 
-.error {
-	@include typo.jf-typo-body-small;
-
-	color: var(--jf-error-fg);
-}
-
 .description {
 	display: flex;
 	flex-direction: column;

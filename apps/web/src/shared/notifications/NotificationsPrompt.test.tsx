@@ -6,13 +6,19 @@ import {
 	screen,
 	waitFor,
 } from "@solidjs/testing-library";
+import { err, ok, type Result } from "neverthrow";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+
+import type { ClientError } from "../../lib/call.ts";
 
 const { push } = vi.hoisted(() => ({
 	push: {
 		configured: true,
 		support: "default",
-		enable: vi.fn(() => Promise.resolve("granted")),
+		enable: vi.fn(
+			(): Promise<Result<string, ClientError>> =>
+				Promise.resolve(ok("granted"))
+		),
 	},
 }));
 vi.mock("../../lib/push.ts", () => ({
@@ -80,7 +86,7 @@ test("dismissing hides it for good", () => {
 });
 
 test("a refused permission dismisses the pill for good", async () => {
-	push.enable.mockResolvedValueOnce("denied");
+	push.enable.mockResolvedValueOnce(ok("denied"));
 	const first = render(() => <NotificationsPrompt />);
 	fireEvent.click(screen.getByText("Enable notifications"));
 	await waitFor(() => {
@@ -94,19 +100,44 @@ test("a refused permission dismisses the pill for good", async () => {
 	expect(screen.queryByText("Enable notifications")).not.toBeInTheDocument();
 });
 
-test("a thrown error keeps the pill up so it can be retried", async () => {
-	const error = vi.spyOn(console, "error").mockImplementation(() => {});
-	push.enable.mockRejectedValueOnce(new Error("timeout"));
+test("a failure keeps the pill up with its message, so it can be retried", async () => {
+	push.enable.mockResolvedValueOnce(
+		err({ code: "Unknown", message: "Could not turn on notifications." })
+	);
 	render(() => <NotificationsPrompt />);
 	fireEvent.click(screen.getByText("Enable notifications"));
-	await waitFor(() => {
-		expect(error).toHaveBeenCalled();
-	});
+	expect(
+		await screen.findByText("Could not turn on notifications.")
+	).toBeInTheDocument();
 	expect(screen.getByText("Enable notifications")).toBeInTheDocument();
 	expect(localStorage.getItem("jf-push-prompt-dismissed")).toBeNull();
-	fireEvent.click(screen.getByText("Enable notifications"));
+	// The button takes clicks again once the attempt has finished.
+	const button = screen.getByRole("button", { name: /Enable notifications/ });
+	await waitFor(() => {
+		expect(button).toHaveAttribute("data-loading", "false");
+	});
+	fireEvent.click(button);
 	await waitFor(() => {
 		expect(push.enable).toHaveBeenCalledTimes(2);
 	});
-	error.mockRestore();
+});
+
+test("a second click while the first attempt is pending asks only once", async () => {
+	let settle!: (result: Result<string, ClientError>) => void;
+	push.enable.mockReturnValueOnce(
+		new Promise((resolve) => {
+			settle = resolve;
+		})
+	);
+	render(() => <NotificationsPrompt />);
+	const button = screen.getByRole("button", { name: /Enable notifications/ });
+	fireEvent.click(button);
+	fireEvent.click(button);
+	settle(ok("granted"));
+	await waitFor(() => {
+		expect(
+			screen.queryByText("Enable notifications")
+		).not.toBeInTheDocument();
+	});
+	expect(push.enable).toHaveBeenCalledOnce();
 });

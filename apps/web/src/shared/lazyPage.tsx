@@ -1,7 +1,13 @@
+import { ErrorScreen } from "@j-os/design-system";
 import { createSignal, Show, type Component } from "solid-js";
 import { Dynamic } from "solid-js/web";
 
+import { checkForUpdateNow } from "../lib/pwaUpdates.ts";
+
 import { PageSkeleton } from "./PageSkeleton.tsx";
+
+const LOAD_FAILED =
+	"This page didn't load. Check your connection and try again.";
 
 /**
  * Code-splits a page component without `solid-js`'s `lazy()` — that pairs
@@ -26,20 +32,20 @@ export function lazyPage(load: () => Promise<Component>): LazyPage {
 
 	function preload(): Promise<Component> {
 		// Idempotent for the success path (cached forever), but NOT for a
-		// rejection: clearing `inflight` on failure means the AppErrorBoundary's
-		// Retry button (which re-renders LazyPage and calls preload() again)
-		// actually re-imports instead of replaying the same cached rejection.
-		inflight ??= load().then(
+		// failure: clearing `inflight` means Retry re-imports instead of
+		// replaying the same cached rejection.
+		if (inflight) return inflight;
+		const attempt = load();
+		inflight = attempt;
+		attempt.then(
 			(Loaded) => {
 				cached = Loaded;
-				return Loaded;
 			},
-			(reason: unknown) => {
+			() => {
 				inflight = undefined;
-				throw reason;
 			}
 		);
-		return inflight;
+		return attempt;
 	}
 
 	function LazyPage() {
@@ -48,31 +54,28 @@ export function lazyPage(load: () => Promise<Component>): LazyPage {
 		// always be set via `() => value`, never passed directly. The initial
 		// value here is exempt (createSignal stores it as-is, unwrapped).
 		const [comp, setComp] = createSignal<Component | undefined>(cached);
-		const [error, setError] = createSignal<Error>();
-		if (!cached) {
+		const [failed, setFailed] = createSignal(false);
+
+		function start() {
+			setFailed(false);
 			preload().then(
 				(Loaded) => setComp(() => Loaded),
-				(reason: unknown) =>
-					setError(() =>
-						reason instanceof Error
-							? reason
-							: new Error(String(reason))
-					)
+				() => {
+					checkForUpdateNow();
+					setFailed(true);
+				}
 			);
 		}
+		if (!cached) start();
 		return (
 			<Show
 				when={comp()}
 				fallback={
-					// A rejected load never resolves `comp`, so the "still loading"
-					// branch is where a stored error must surface. `error()` is read
-					// inside this Show's own tracked render, so throwing here runs
-					// during a render computation (not the promise callback above)
-					// and reaches the route's <AppErrorBoundary>.
-					<Show when={error()} fallback={<PageSkeleton />}>
-						{(failure) => {
-							throw failure();
-						}}
+					// A failed load never resolves `comp`, so the "still loading"
+					// branch is where the failure shows: the usual cause after a
+					// deploy is a stale bundle, which the update check addresses.
+					<Show when={failed()} fallback={<PageSkeleton />}>
+						<ErrorScreen message={LOAD_FAILED} onRetry={start} />
 					</Show>
 				}
 			>

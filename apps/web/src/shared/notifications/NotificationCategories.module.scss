@@ -34,10 +34,3 @@
 	flex-wrap: wrap;
 	gap: var(--jf-spacing-away);
 }
-
-.error {
-	@include typo.jf-typo-body-small;
-
-	margin: 0;
-	color: var(--jf-fg-strong);
-}

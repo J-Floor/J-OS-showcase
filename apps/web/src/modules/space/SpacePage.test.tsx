@@ -31,7 +31,7 @@ vi.mock("convex-solidjs", async () => {
 	const { getFunctionName } = await import("convex/server");
 	return {
 		useAction: (reference: Parameters<typeof getFunctionName>[0]) => ({
-			mutate: vi.fn(),
+			mutate: () => Promise.reject(new Error("unused")),
 			mutateAsync: () => {
 				if (getFunctionName(reference) === "doorHealth:doorHealth")
 					doorHealthCalls.count++;

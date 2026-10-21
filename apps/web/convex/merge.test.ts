@@ -1,11 +1,10 @@
 import { convexTest } from "convex-test";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { issueToken } from "./lib/confirmToken.ts";
 import { setDoorProviderForTests } from "./lib/doorProvider.ts";
-import { EMAIL_IN_USE } from "./lib/emailAddress.ts";
 import {
 	FAKE_SLOT_LOCK_IDS,
 	FakeDoorProvider,
@@ -315,10 +314,32 @@ describe("merge", () => {
 				dropId: drop,
 				patch: { tier: "guest" },
 			})
-		).rejects.toThrow(/Merge refused: active-without-agreement/);
+		).rejects.toThrow(/MergeInvalid/);
 		expect(
 			await backend.run((context) => context.db.get(drop))
 		).not.toBeNull();
+	});
+
+	it("logs the violation list when it refuses a merge", async () => {
+		const backend = convexTest(schema, modules);
+		const { keep, drop } = await seed(backend);
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			await backend
+				.mutation(internal.merge.apply, {
+					keepId: keep,
+					dropId: drop,
+					patch: { tier: "guest" },
+				})
+				.catch(() => {});
+			expect(
+				warn.mock.calls.some((call) =>
+					String(call[0]).includes("active-without-agreement")
+				)
+			).toBe(true);
+		} finally {
+			warn.mockRestore();
+		}
 	});
 
 	it("check reports the same refusal without writing", async () => {
@@ -329,7 +350,9 @@ describe("merge", () => {
 			dropId: drop,
 			patch: { tier: "guest" },
 		});
-		expect(result.ok ? null : result.reason).toContain(
+		const error = result.ok ? null : result.error;
+		expect(error?.type).toBe("MergeInvalid");
+		expect(error?.type === "MergeInvalid" && error.violations).toContain(
 			"active-without-agreement"
 		);
 	});
@@ -343,7 +366,7 @@ describe("merge", () => {
 				dropId: keep,
 				patch: {},
 			})
-		).rejects.toThrow("Merge refused: Cannot merge a person into itself.");
+		).rejects.toThrow(/MergeSelf/);
 	});
 
 	it("refuses an email a third person already uses, but lets the kept row take the dropped row's", async () => {
@@ -357,14 +380,14 @@ describe("merge", () => {
 			dropId: drop,
 			patch: { email: "Third@Example.com" },
 		});
-		expect(clash).toEqual({ ok: false, reason: EMAIL_IN_USE });
+		expect(clash).toEqual({ ok: false, error: { type: "EmailInUse" } });
 		await expect(
 			backend.mutation(internal.merge.apply, {
 				keepId: keep,
 				dropId: drop,
 				patch: { email: "third@example.com" },
 			})
-		).rejects.toThrow(/already uses/);
+		).rejects.toThrow(/EmailInUse/);
 		expect(
 			await backend.run((context) => context.db.get(drop))
 		).not.toBeNull();
@@ -387,7 +410,7 @@ describe("merge", () => {
 				dropId: drop,
 				patch: "nope",
 			})
-		).toEqual({ ok: false, reason: "The patch must be an object." });
+		).toEqual({ ok: false, error: { type: "MergePatchNotObject" } });
 	});
 
 	it("a patch the people schema rejects fails the write, leaving the dropped row", async () => {
@@ -432,7 +455,7 @@ describe("merge", () => {
 		});
 		expect(result).toEqual({
 			ok: false,
-			reason: `Too many documents to scan in one transaction (more than ${MAX_SCANNED_DOCS}, reached in personEvents).`,
+			error: { type: "ReadBudgetExceeded", where: "personEvents" },
 		});
 	});
 
@@ -445,7 +468,7 @@ describe("merge", () => {
 				person("b@example.com", "u2")
 			),
 		}));
-		const reason = /break-glass key and would never be revoked/;
+		const reason = /MergeStrandsBreakGlassKey/;
 		const verdict = await backend.query(internal.merge.check, {
 			keepId: ids.keep,
 			dropId: ids.board,
@@ -823,12 +846,37 @@ describe("merge.run", () => {
 				dropId: drop,
 				patch: { tier: "guest" },
 			})
-		).rejects.toThrow(/Merge refused: active-without-agreement/);
+		).rejects.toThrow(/MergeInvalid/);
 
 		expect(fake.calls.revokes).toEqual([]);
 		expect(
 			await backend.run((context) => context.db.get(drop))
 		).not.toBeNull();
+	});
+
+	it("logs the violation list when check refuses the merge", async () => {
+		const backend = convexTest(schema, modules);
+		const { keep, drop } = await seed(backend);
+		setDoorProviderForTests(account("drop@example.com"));
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			await expect(
+				backend.action(internal.merge.run, {
+					keepId: keep,
+					dropId: drop,
+					patch: { tier: "guest" },
+				})
+			).rejects.toThrow(/MergeInvalid/);
+			expect(
+				warn.mock.calls.some(
+					([line]) =>
+						String(line).includes("MergeInvalid") &&
+						String(line).includes("active-without-agreement")
+				)
+			).toBe(true);
+		} finally {
+			warn.mockRestore();
+		}
 	});
 
 	it("revokes nothing when the dry run fails on a patch the schema rejects", async () => {

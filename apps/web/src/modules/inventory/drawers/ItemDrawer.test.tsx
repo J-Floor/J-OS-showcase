@@ -72,7 +72,8 @@ test("new item with initialAssetTag shows that tag in the field", () => {
 			initialAssetTag="A00001"
 		/>
 	));
-	expect(screen.getByLabelText("Asset tag")).toHaveValue("A00001");
+	expect(screen.getByLabelText("Asset tag letter")).toHaveValue("A");
+	expect(screen.getByLabelText("Asset tag number")).toHaveValue("00001");
 	expect(screen.getByText("New item")).toBeInTheDocument();
 });
 
@@ -112,7 +113,8 @@ test("picking a source copies type and description and leaves the asset tag", as
 	fireEvent.click(
 		await screen.findByRole("button", { name: "A00001 Chair" })
 	);
-	expect(screen.getByDisplayValue("Z00099")).toBeInTheDocument();
+	expect(screen.getByLabelText("Asset tag letter")).toHaveValue("Z");
+	expect(screen.getByLabelText("Asset tag number")).toHaveValue("00099");
 	expect(screen.getByLabelText("Description")).toHaveValue("Meeting room");
 	expect(screen.getByRole("combobox")).toHaveTextContent("Chair · Furniture");
 	expect(
@@ -158,7 +160,7 @@ test("asset tag is read-only in edit mode and editing another field autosaves wi
 	// In edit mode the asset tag is read-only text, not an editable input: the
 	// tag is the slug, and autosaving it on blur would change the slug out from
 	// under `selected()` and slam the drawer shut mid-edit.
-	expect(screen.queryByLabelText("Asset tag")).not.toBeInTheDocument();
+	expect(screen.queryByRole("group", { name: "Asset tag" })).toBeNull();
 	expect(screen.getByText("A00001")).toBeInTheDocument();
 
 	// Editing another field still autosaves that field only...
@@ -187,9 +189,8 @@ test("copying details does not invent an asset tag", async () => {
 	fireEvent.click(
 		await screen.findByRole("button", { name: "A00001 Chair" })
 	);
-	for (const field of screen.getAllByLabelText("Asset tag")) {
-		expect(field).toHaveValue("");
-	}
+	expect(screen.getByLabelText("Asset tag letter")).toHaveValue("");
+	expect(screen.getByLabelText("Asset tag number")).toHaveValue("");
 	expect(screen.getByRole("button", { name: /Create item/ })).toBeDisabled();
 });
 
@@ -200,7 +201,7 @@ test("loading: shows the skeleton (shaped like the loaded fields), not the creat
 		<ItemDrawer open onOpenChange={() => {}} itemTypes={[]} loading />
 	));
 	expect(screen.queryByText("New item")).toBeNull();
-	expect(screen.queryByLabelText("Asset tag")).toBeNull();
+	expect(screen.queryByRole("group", { name: "Asset tag" })).toBeNull();
 	expect(screen.queryByRole("button", { name: /Create item/ })).toBeNull();
 	expect(
 		document.querySelector("[data-drawer-skeleton]")
@@ -227,8 +228,83 @@ test("no item, not loading: shows the create form and 'New item' title", () => {
 		<ItemDrawer open onOpenChange={() => {}} itemTypes={[chairType]} />
 	));
 	expect(screen.getByText("New item")).toBeInTheDocument();
-	expect(screen.getByLabelText("Asset tag")).toBeInTheDocument();
+	expect(
+		screen.getByRole("group", { name: "Asset tag" })
+	).toBeInTheDocument();
 	expect(
 		screen.getByRole("button", { name: /Create item/ })
 	).toBeInTheDocument();
+});
+
+test("an invalid asset tag keeps Create disabled even with a type chosen", async () => {
+	render(() => (
+		<ItemDrawer
+			open
+			onOpenChange={() => {}}
+			itemTypes={[chairType]}
+			items={[chair]}
+			initialAssetTag="not-a-tag"
+		/>
+	));
+	fireEvent.click(screen.getByRole("button", { name: /Copy from item/ }));
+	fireEvent.click(
+		await screen.findByRole("button", { name: "A00001 Chair" })
+	);
+	expect(screen.getByRole("combobox")).toHaveTextContent("Chair · Furniture");
+	expect(screen.getByRole("button", { name: /Create item/ })).toBeDisabled();
+});
+
+test("pasting a full tag with a type chosen enables Create", async () => {
+	render(() => (
+		<ItemDrawer
+			open
+			onOpenChange={() => {}}
+			itemTypes={[chairType]}
+			items={[chair]}
+		/>
+	));
+	fireEvent.click(screen.getByRole("button", { name: /Copy from item/ }));
+	fireEvent.click(
+		await screen.findByRole("button", { name: "A00001 Chair" })
+	);
+	expect(screen.getByRole("button", { name: /Create item/ })).toBeDisabled();
+	fireEvent.paste(screen.getByLabelText("Asset tag letter"), {
+		clipboardData: { getData: () => "a00012" },
+	});
+	expect(
+		screen.getByRole("button", { name: /Create item/ })
+	).not.toBeDisabled();
+});
+
+test("an incomplete asset tag says what to enter once the group is left", () => {
+	render(() => (
+		<ItemDrawer open onOpenChange={() => {}} itemTypes={[chairType]} />
+	));
+	const letter = screen.getByLabelText("Asset tag letter");
+	const number = screen.getByLabelText("Asset tag number");
+	fireEvent.input(letter, { target: { value: "a" } });
+	fireEvent.input(number, { target: { value: "12" } });
+	expect(screen.queryByText("Enter one letter and five digits.")).toBeNull();
+
+	fireEvent.focusOut(number, { relatedTarget: document.body });
+	expect(
+		screen.getByText("Enter one letter and five digits.")
+	).toBeInTheDocument();
+	expect(number).toHaveAttribute("aria-invalid", "true");
+
+	fireEvent.input(number, { target: { value: "12345" } });
+	expect(screen.queryByText("Enter one letter and five digits.")).toBeNull();
+	expect(
+		screen.getByText("One letter and five digits, e.g. A00000")
+	).toBeInTheDocument();
+});
+
+test("an empty asset tag shows the hint, not an error, after leaving the group", () => {
+	render(() => (
+		<ItemDrawer open onOpenChange={() => {}} itemTypes={[chairType]} />
+	));
+	fireEvent.focusOut(screen.getByLabelText("Asset tag letter"), {
+		relatedTarget: document.body,
+	});
+	expect(screen.queryByText("Enter one letter and five digits.")).toBeNull();
 });

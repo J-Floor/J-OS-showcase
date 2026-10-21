@@ -1,7 +1,9 @@
 import { Button, Dialog } from "@j-os/design-system";
+import type { Result } from "neverthrow";
 import { Show, type JSX } from "solid-js";
 
 import type { StateId } from "../../../../convex/lib/lifecycleTypes.ts";
+import type { ClientError } from "../../../lib/call.ts";
 
 import styles from "./ChangeRoleDialog.module.scss";
 import { RoleChooser } from "./RoleChooser.tsx";
@@ -20,7 +22,7 @@ export function ChangeRoleDialog(props: {
 	/** Machine state of every selected row. */
 	states: StateId[];
 	count: number;
-	onMove: (move: RoleMove) => void | Promise<void>;
+	onMove: (move: RoleMove) => Promise<Result<unknown, ClientError>>;
 }): JSX.Element {
 	return (
 		<Dialog.Root

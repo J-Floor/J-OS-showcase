@@ -12,6 +12,7 @@ import {
 	type JSX,
 } from "solid-js";
 
+import { invariant } from "../../convex/lib/result.ts";
 import {
 	ACCESS_TIERS,
 	isBoardLevel,
@@ -112,9 +113,7 @@ export function AbilityProvider(props: {
 
 export function useAbility(): Accessor<AppAbility> {
 	const context = useContext(AbilityContext);
-	if (!context) {
-		throw new Error("useAbility must be used within an <AbilityProvider>");
-	}
+	invariant(context, "useAbility must be used within an <AbilityProvider>");
 	return context;
 }
 

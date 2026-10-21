@@ -20,6 +20,7 @@ import { api } from "../../convex/_generated/api";
 import { isAccessTier } from "../../convex/lib/roles.ts";
 import { AbilityProvider, Can } from "../lib/ability.tsx";
 import { authClient } from "../lib/auth.ts";
+import { ignoreFailure } from "../lib/call.ts";
 import { APP_NAME } from "../lib/constants.ts";
 import { ottPending } from "../lib/convex.ts";
 import { modules } from "../modules/registry.ts";
@@ -127,7 +128,8 @@ export function LastPathTracker() {
 	createEffect(() => {
 		const path = location.pathname;
 		if (MODULE_PATHS.has(path))
-			void setLastPath.mutateAsync({ path }).catch(() => {});
+			// Remembering the page is best effort: a failure has nobody to tell.
+			ignoreFailure(setLastPath.mutateAsync({ path }));
 	});
 	return null;
 }

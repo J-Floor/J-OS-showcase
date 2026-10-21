@@ -160,18 +160,18 @@ test("create and update reject an over-long title or description", async () => {
 	const { board } = await seedBoard(backend);
 	await expect(
 		board.mutation(api.tasks.create, { title: "t".repeat(201) })
-	).rejects.toThrow("Title is too long (max 200 characters).");
+	).rejects.toThrow(/FieldTooLong/);
 	await expect(
 		board.mutation(api.tasks.create, {
 			title: "ok",
 			description: "d".repeat(5001),
 		})
-	).rejects.toThrow("Description is too long (max 5000 characters).");
+	).rejects.toThrow(/FieldTooLong/);
 	const id = await board.mutation(api.tasks.create, { title: "Fine" });
 	await expect(
 		board.mutation(api.tasks.update, { id, title: "t".repeat(201) })
-	).rejects.toThrow("Title is too long (max 200 characters).");
+	).rejects.toThrow(/FieldTooLong/);
 	await expect(
 		board.mutation(api.tasks.update, { id, description: "d".repeat(5001) })
-	).rejects.toThrow("Description is too long (max 5000 characters).");
+	).rejects.toThrow(/FieldTooLong/);
 });

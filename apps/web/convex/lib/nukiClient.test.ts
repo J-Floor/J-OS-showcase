@@ -1,6 +1,8 @@
+import type { Result } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { lockNamesFromModel } from "./doorProvider.ts";
+import type { DoorError } from "./errors/door.ts";
 import {
 	configuredLockStatus,
 	doorProviderFromEnvironment,
@@ -15,6 +17,19 @@ import {
 	revokeAuthIds,
 	type NukiDeps,
 } from "./nukiClient.ts";
+
+/** The value of an Ok, for tests that expect success. */
+async function valueOf<T>(
+	pending: PromiseLike<Result<T, DoorError>>
+): Promise<T> {
+	const result = await pending;
+	return result._unsafeUnwrap();
+}
+
+/** The error of a failed Result, or undefined for an Ok. */
+function errorOf<T>(result: Result<T, DoorError>): DoorError | undefined {
+	return result.isErr() ? result.error : undefined;
+}
 
 const DOWNSTAIRS_ID = "1111111111";
 const UPSTAIRS_ID = "2222222222";
@@ -109,7 +124,11 @@ describe("readSnapshot", () => {
 		);
 		// A bad status surfaces here rather than being swallowed into an empty
 		// account that would look like "nobody has any locks".
-		await expect(readSnapshot(deps(fetch))).rejects.toThrow(/401/);
+		const result = await readSnapshot(deps(fetch));
+		expect(result.isErr() && result.error).toMatchObject({
+			type: "DoorProviderFailed",
+			status: 401,
+		});
 	});
 });
 
@@ -165,9 +184,11 @@ describe("req retries", () => {
 		const calls: Call[] = [];
 		const sleeps: number[] = [];
 		const fetch = sequencedFetch([429], calls);
-		await expect(
-			listAccountUsers(retryDeps(fetch, sleeps))
-		).rejects.toThrow(/429/);
+		const result = await listAccountUsers(retryDeps(fetch, sleeps));
+		expect(result.isErr() && result.error).toMatchObject({
+			type: "DoorProviderFailed",
+			status: 429,
+		});
 		expect(calls).toHaveLength(5);
 		expect(sleeps).toEqual([750, 1500, 3000, 6000]);
 	});
@@ -176,9 +197,9 @@ describe("req retries", () => {
 		const calls: Call[] = [];
 		const sleeps: number[] = [];
 		const fetch = sequencedFetch([500, 200], calls);
-		await expect(
-			listAccountUsers(retryDeps(fetch, sleeps))
-		).resolves.toEqual([]);
+		expect(
+			await valueOf(listAccountUsers(retryDeps(fetch, sleeps)))
+		).toEqual([]);
 		expect(calls).toHaveLength(2);
 		expect(sleeps).toEqual([750]);
 	});
@@ -195,9 +216,11 @@ describe("req retries", () => {
 		const calls: Call[] = [];
 		const sleeps: number[] = [];
 		const fetch = sequencedFetch([401], calls);
-		await expect(
-			listAccountUsers(retryDeps(fetch, sleeps))
-		).rejects.toThrow(/401/);
+		const result = await listAccountUsers(retryDeps(fetch, sleeps));
+		expect(result.isErr() && result.error).toMatchObject({
+			type: "DoorProviderFailed",
+			status: 401,
+		});
 		expect(calls).toHaveLength(1);
 		expect(sleeps).toEqual([]);
 	});
@@ -278,7 +301,7 @@ function actuationProvider(
 	return nukiProvider({ fetch: fakeFetch(routes, calls), token: "t" }, [
 		LOCK_SLOT_IDS.downstairs,
 		LOCK_SLOT_IDS.upstairs,
-	]);
+	])._unsafeUnwrap();
 }
 
 describe("nukiProvider.readModel", () => {
@@ -316,11 +339,11 @@ describe("nukiProvider.readModel", () => {
 				{ smartlockId: UNMANAGED_ID, name: "Other", serverState: 0 },
 			],
 		});
-		const model = await nukiProvider({ fetch, token: "t" }, [
-			UP,
-			DN,
-			UNMANAGED_ID,
-		]).readModel();
+		const model = await valueOf(
+			nukiProvider({ fetch, token: "t" }, [UP, DN, UNMANAGED_ID])
+				._unsafeUnwrap()
+				.readModel()
+		);
 		expect(model.identities[0]?.authIds).toEqual([
 			{ lockId: DN, authId: "dn" },
 		]);
@@ -357,10 +380,11 @@ describe("nukiProvider.readModel", () => {
 				{ smartlockId: DN, name: "DN", serverState: 0 },
 			],
 		});
-		const model = await nukiProvider({ fetch, token: "t" }, [
-			UP,
-			DN,
-		]).readModel();
+		const model = await valueOf(
+			nukiProvider({ fetch, token: "t" }, [UP, DN])
+				._unsafeUnwrap()
+				.readModel()
+		);
 		expect(model.identities).toHaveLength(1);
 		expect(model.identities[0]?.email).toBe("Ada@Example.COM");
 		expect(
@@ -392,8 +416,11 @@ describe("nukiProvider.readModel", () => {
 				{ smartlockId: DN, name: "DN", serverState: 0 },
 			],
 		});
-		const provider = nukiProvider({ fetch, token: "t" }, [UP, DN]);
-		const model = await provider.readModel();
+		const provider = nukiProvider({ fetch, token: "t" }, [
+			UP,
+			DN,
+		])._unsafeUnwrap();
+		const model = await valueOf(provider.readModel());
 		expect(model.identities).toEqual([
 			{
 				providerUserId: "1",
@@ -434,8 +461,11 @@ describe("nukiProvider.readModel", () => {
 				{ smartlockId: DN, name: "DN", serverState: 0 },
 			],
 		});
-		const provider = nukiProvider({ fetch, token: "t" }, [UP, DN]);
-		const model = await provider.readModel();
+		const provider = nukiProvider({ fetch, token: "t" }, [
+			UP,
+			DN,
+		])._unsafeUnwrap();
+		const model = await valueOf(provider.readModel());
 
 		expect(
 			model.identities.flatMap((identity) => identity.authIds ?? [])
@@ -451,8 +481,11 @@ describe("nukiProvider.readModel", () => {
 				{ smartlockId: 999, name: "Not ours", serverState: 0 },
 			],
 		});
-		const provider = nukiProvider({ fetch, token: "t" }, [UP, DN]);
-		const model = await provider.readModel();
+		const provider = nukiProvider({ fetch, token: "t" }, [
+			UP,
+			DN,
+		])._unsafeUnwrap();
+		const model = await valueOf(provider.readModel());
 
 		expect(model.locks).toEqual([
 			{ lockId: UP, name: "UP" },
@@ -481,8 +514,11 @@ describe("nukiProvider.readModel", () => {
 				{ smartlockId: DN, name: "DN", serverState: 0 },
 			],
 		});
-		const provider = nukiProvider({ fetch, token: "t" }, [UP, DN]);
-		const model = await provider.readModel();
+		const provider = nukiProvider({ fetch, token: "t" }, [
+			UP,
+			DN,
+		])._unsafeUnwrap();
+		const model = await valueOf(provider.readModel());
 
 		expect(model.identities[0]?.authIds).toEqual([
 			{ lockId: DN, authId: "app" },
@@ -493,13 +529,19 @@ describe("nukiProvider.readModel", () => {
 
 describe("nukiActionFor (unlock)", () => {
 	it("buzzes an Opener and unlocks a Smart Lock", () => {
-		expect(nukiActionFor(2, "unlock")).toBe(3);
+		expect(nukiActionFor(2, "unlock")._unsafeUnwrap()).toBe(3);
 		for (const state of [0, 3, 4, 5])
-			expect(nukiActionFor(state, "unlock")).toBe(1);
+			expect(nukiActionFor(state, "unlock")._unsafeUnwrap()).toBe(1);
 	});
 	it("refuses device types it cannot open", () => {
-		expect(() => nukiActionFor(1, "unlock")).toThrow(/Unsupported/);
-		expect(() => nukiActionFor(undefined, "unlock")).toThrow(/Unsupported/);
+		expect(errorOf(nukiActionFor(1, "unlock"))).toMatchObject({
+			type: "DoorProviderFailed",
+			detail: "Unsupported Nuki device type: 1",
+		});
+		expect(errorOf(nukiActionFor(undefined, "unlock"))).toMatchObject({
+			type: "DoorProviderFailed",
+			detail: "Unsupported Nuki device type: undefined",
+		});
 	});
 });
 
@@ -527,12 +569,14 @@ describe("nukiProvider.actuate (unlock)", () => {
 			},
 			calls
 		);
-		expect(await provider.actuate("downstairs", "unlock")).toEqual({
-			status: "ok",
-			lockName: "J Floor City - Downstairs",
-			durationMs: 3500,
-			positionBefore: "unknown",
-		});
+		expect(await valueOf(provider.actuate("downstairs", "unlock"))).toEqual(
+			{
+				status: "ok",
+				lockName: "J Floor City - Downstairs",
+				durationMs: 3500,
+				positionBefore: "unknown",
+			}
+		);
 		const post = calls.filter((call) => call.method === "POST");
 		expect(post).toEqual([
 			{
@@ -559,12 +603,14 @@ describe("nukiProvider.actuate (unlock)", () => {
 			},
 			calls
 		);
-		expect(await provider.actuate("downstairs", "unlock")).toEqual({
-			status: "ok",
-			lockName: "J Floor City - Downstairs",
-			durationMs: 3000,
-			positionBefore: "unknown",
-		});
+		expect(await valueOf(provider.actuate("downstairs", "unlock"))).toEqual(
+			{
+				status: "ok",
+				lockName: "J Floor City - Downstairs",
+				durationMs: 3000,
+				positionBefore: "unknown",
+			}
+		);
 	});
 
 	it("unlocks the upstairs Smart Lock with action 1", async () => {
@@ -583,7 +629,7 @@ describe("nukiProvider.actuate (unlock)", () => {
 			},
 			calls
 		);
-		expect(await provider.actuate("upstairs", "unlock")).toEqual({
+		expect(await valueOf(provider.actuate("upstairs", "unlock"))).toEqual({
 			status: "ok",
 			lockName: "J Floor City - Upstairs",
 			durationMs: 5000,
@@ -610,7 +656,7 @@ describe("nukiProvider.actuate (unlock)", () => {
 			},
 			calls
 		);
-		expect(await provider.actuate("upstairs", "unlock")).toEqual({
+		expect(await valueOf(provider.actuate("upstairs", "unlock"))).toEqual({
 			status: "offline",
 			lockName: "J Floor City - Upstairs",
 		});
@@ -633,9 +679,9 @@ describe("nukiProvider.actuate (unlock)", () => {
 			},
 			calls
 		);
-		await expect(provider.actuate("downstairs", "unlock")).rejects.toThrow(
-			/503/
-		);
+		expect(
+			errorOf(await provider.actuate("downstairs", "unlock"))
+		).toMatchObject({ type: "DoorProviderFailed", status: 503 });
 		expect(calls.filter((call) => call.method === "POST")).toHaveLength(1);
 	});
 
@@ -655,10 +701,12 @@ describe("nukiProvider.actuate (unlock)", () => {
 			},
 			calls
 		);
-		expect(await provider.actuate("downstairs", "unlock")).toEqual({
-			status: "busy",
-			lockName: "J Floor City - Downstairs",
-		});
+		expect(await valueOf(provider.actuate("downstairs", "unlock"))).toEqual(
+			{
+				status: "busy",
+				lockName: "J Floor City - Downstairs",
+			}
+		);
 		expect(calls.filter((call) => call.method === "POST")).toHaveLength(1);
 	});
 
@@ -668,9 +716,9 @@ describe("nukiProvider.actuate (unlock)", () => {
 			{ [`GET /smartlock/${DN}`]: () => ({ status: 429 }) },
 			calls
 		);
-		await expect(provider.actuate("downstairs", "unlock")).rejects.toThrow(
-			/429/
-		);
+		expect(
+			errorOf(await provider.actuate("downstairs", "unlock"))
+		).toMatchObject({ type: "DoorProviderFailed", status: 429 });
 		expect(calls).toHaveLength(1);
 	});
 
@@ -679,10 +727,13 @@ describe("nukiProvider.actuate (unlock)", () => {
 		const provider = nukiProvider(
 			{ fetch: fakeFetch({}, calls), token: "t" },
 			[UP]
-		);
-		await expect(provider.actuate("downstairs", "unlock")).rejects.toThrow(
-			/not configured/
-		);
+		)._unsafeUnwrap();
+		expect(
+			errorOf(await provider.actuate("downstairs", "unlock"))
+		).toMatchObject({
+			type: "DoorProviderNotConfigured",
+			detail: `Lock ${DOWNSTAIRS_ID} is not configured.`,
+		});
 		expect(calls).toHaveLength(0);
 	});
 
@@ -712,11 +763,15 @@ describe("nukiProvider.actuate (unlock)", () => {
 			},
 			[]
 		);
-		expect(await provider.actuate("downstairs", "unlock")).toMatchObject({
+		expect(
+			await valueOf(provider.actuate("downstairs", "unlock"))
+		).toMatchObject({
 			status: "ok",
 			positionBefore: "locked",
 		});
-		expect(await provider.actuate("upstairs", "unlock")).toMatchObject({
+		expect(
+			await valueOf(provider.actuate("upstairs", "unlock"))
+		).toMatchObject({
 			status: "ok",
 			positionBefore: "unlocked",
 		});
@@ -754,7 +809,7 @@ describe("nukiProvider.position", () => {
 			{ [`GET /smartlock/${UP}`]: upstairs(state) },
 			calls
 		);
-		expect(await provider.position("upstairs")).toBe(expected);
+		expect(await valueOf(provider.position("upstairs"))).toBe(expected);
 		expect(calls).toEqual([
 			{ method: "GET", path: `/smartlock/${UP}`, body: undefined },
 		]);
@@ -765,7 +820,7 @@ describe("nukiProvider.position", () => {
 			{ [`GET /smartlock/${UP}`]: upstairs() },
 			[]
 		);
-		expect(await provider.position("upstairs")).toBe("unknown");
+		expect(await valueOf(provider.position("upstairs"))).toBe("unknown");
 	});
 
 	it("is offline when the provider cannot reach the lock", async () => {
@@ -773,7 +828,7 @@ describe("nukiProvider.position", () => {
 			{ [`GET /smartlock/${UP}`]: upstairs(1, 4) },
 			[]
 		);
-		expect(await provider.position("upstairs")).toBe("offline");
+		expect(await valueOf(provider.position("upstairs"))).toBe("offline");
 	});
 
 	it("reads a lock that reports no serverState as reachable", async () => {
@@ -789,7 +844,7 @@ describe("nukiProvider.position", () => {
 			},
 			[]
 		);
-		expect(await provider.position("upstairs")).toBe("locked");
+		expect(await valueOf(provider.position("upstairs"))).toBe("locked");
 	});
 
 	it("logs the state when a reachable lock maps to unknown", async () => {
@@ -798,7 +853,7 @@ describe("nukiProvider.position", () => {
 			{ [`GET /smartlock/${UP}`]: upstairs(255) },
 			[]
 		);
-		expect(await provider.position("upstairs")).toBe("unknown");
+		expect(await valueOf(provider.position("upstairs"))).toBe("unknown");
 		expect(warn).toHaveBeenCalledWith(expect.stringContaining("state 255"));
 		warn.mockRestore();
 	});
@@ -826,7 +881,7 @@ describe("nukiProvider.position", () => {
 			{ [`GET /smartlock/${DN}`]: downstairs(state) },
 			[]
 		);
-		expect(await provider.position("downstairs")).toBe(expected);
+		expect(await valueOf(provider.position("downstairs"))).toBe(expected);
 		warn.mockRestore();
 	});
 
@@ -836,20 +891,21 @@ describe("nukiProvider.position", () => {
 			{ [`GET /smartlock/${DN}`]: downstairs(3) },
 			[]
 		);
-		expect(await provider.position("downstairs")).toBe("unknown");
+		expect(await valueOf(provider.position("downstairs"))).toBe("unknown");
 		expect(warn).toHaveBeenCalledWith(expect.stringContaining("state 3"));
 		warn.mockRestore();
 	});
 
-	it("throws for a slot whose lock is not configured", async () => {
+	it("is not configured for a slot whose lock is not configured", async () => {
 		const calls: Call[] = [];
 		const provider = nukiProvider(
 			{ fetch: fakeFetch({}, calls), token: "t" },
 			[DN]
-		);
-		await expect(provider.position("upstairs")).rejects.toThrow(
-			/not configured/
-		);
+		)._unsafeUnwrap();
+		expect(errorOf(await provider.position("upstairs"))).toMatchObject({
+			type: "DoorProviderNotConfigured",
+			detail: `Lock ${UPSTAIRS_ID} is not configured.`,
+		});
 		expect(calls).toEqual([]);
 	});
 
@@ -859,7 +915,10 @@ describe("nukiProvider.position", () => {
 			{ [`GET /smartlock/${UP}`]: () => ({ status: 503 }) },
 			calls
 		);
-		await expect(provider.position("upstairs")).rejects.toThrow();
+		expect(errorOf(await provider.position("upstairs"))).toMatchObject({
+			type: "DoorProviderFailed",
+			status: 503,
+		});
 		expect(calls).toHaveLength(1);
 	});
 });
@@ -867,14 +926,22 @@ describe("nukiProvider.position", () => {
 describe("nukiActionFor (lock)", () => {
 	it("locks a Smart Lock with action 2", () => {
 		for (const state of [0, 3, 4, 5])
-			expect(nukiActionFor(state, "lock")).toBe(2);
+			expect(nukiActionFor(state, "lock")._unsafeUnwrap()).toBe(2);
 	});
-	it("refuses to lock an Opener, which has no lock action", () => {
-		expect(() => nukiActionFor(2, "lock")).toThrow(/Opener/);
+	it("treats a lock on an Opener as a bug, since it has no lock action", () => {
+		expect(() => nukiActionFor(2, "lock")).toThrow(
+			"A Nuki Opener cannot lock: it has no lock action."
+		);
 	});
 	it("refuses device types it cannot lock", () => {
-		expect(() => nukiActionFor(1, "lock")).toThrow(/Unsupported/);
-		expect(() => nukiActionFor(undefined, "lock")).toThrow(/Unsupported/);
+		expect(errorOf(nukiActionFor(1, "lock"))).toMatchObject({
+			type: "DoorProviderFailed",
+			detail: "Unsupported Nuki device type: 1",
+		});
+		expect(errorOf(nukiActionFor(undefined, "lock"))).toMatchObject({
+			type: "DoorProviderFailed",
+			detail: "Unsupported Nuki device type: undefined",
+		});
 	});
 });
 
@@ -902,7 +969,7 @@ describe("nukiProvider.actuate (lock)", () => {
 			},
 			calls
 		);
-		expect(await provider.actuate("upstairs", "lock")).toEqual({
+		expect(await valueOf(provider.actuate("upstairs", "lock"))).toEqual({
 			status: "ok",
 			lockName: "J Floor City - Upstairs",
 			durationMs: 5000,
@@ -934,7 +1001,7 @@ describe("nukiProvider.actuate (lock)", () => {
 			calls
 		);
 		await expect(provider.actuate("downstairs", "lock")).rejects.toThrow(
-			/Opener/
+			/Opener cannot lock/
 		);
 		expect(calls.some((call) => call.method === "POST")).toBe(false);
 	});
@@ -955,7 +1022,7 @@ describe("nukiProvider.actuate (lock)", () => {
 			calls
 		);
 		await expect(provider.actuate("downstairs", "lock")).rejects.toThrow(
-			/Opener/
+			/Opener cannot lock/
 		);
 		expect(calls.some((call) => call.method === "POST")).toBe(false);
 	});
@@ -969,9 +1036,9 @@ describe("nukiProvider.actuate (lock)", () => {
 			},
 			calls
 		);
-		await expect(provider.actuate("upstairs", "lock")).rejects.toThrow(
-			/503/
-		);
+		expect(
+			errorOf(await provider.actuate("upstairs", "lock"))
+		).toMatchObject({ type: "DoorProviderFailed", status: 503 });
 		expect(calls.filter((call) => call.method === "POST")).toHaveLength(1);
 	});
 });
@@ -995,9 +1062,9 @@ describe("doorProviderFromEnvironment and the write gate", () => {
 				})
 			);
 		});
-		await doorProviderFromEnvironment({
-			requireWrites: false,
-		}).readLockStatus();
+		await doorProviderFromEnvironment({ requireWrites: false })
+			._unsafeUnwrap()
+			.readLockStatus();
 		expect(urls).toEqual(["https://api.nuki.io/smartlock"]);
 	});
 
@@ -1020,11 +1087,9 @@ describe("doorProviderFromEnvironment and the write gate", () => {
 		vi.stubEnv("NUKI_WRITE_ENABLED", "");
 		const fetchSpy = vi.fn();
 		vi.stubGlobal("fetch", fetchSpy);
-		expect(() =>
-			doorProviderFromEnvironment({ requireWrites: true })
-		).toThrow(
-			'Door writes are disabled on this deployment (NUKI_WRITE_ENABLED is not "1"), so nothing was sent to the lock.'
-		);
+		expect(
+			errorOf(doorProviderFromEnvironment({ requireWrites: true }))
+		).toEqual({ type: "DoorWritesDisabled" });
 		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 
@@ -1032,9 +1097,9 @@ describe("doorProviderFromEnvironment and the write gate", () => {
 		vi.stubEnv("NUKI_API_TOKEN", "test-token");
 		vi.stubEnv("NUKI_SMARTLOCK_IDS", "1,2");
 		vi.stubEnv("NUKI_WRITE_ENABLED", "");
-		expect(() =>
-			doorProviderFromEnvironment({ requireWrites: false })
-		).not.toThrow();
+		expect(
+			doorProviderFromEnvironment({ requireWrites: false }).isOk()
+		).toBe(true);
 	});
 
 	it("reads a door position through a read-only provider without the opt-in", async () => {
@@ -1059,9 +1124,11 @@ describe("doorProviderFromEnvironment and the write gate", () => {
 			});
 		});
 		expect(
-			await doorProviderFromEnvironment({
-				requireWrites: false,
-			}).position("upstairs")
+			await valueOf(
+				doorProviderFromEnvironment({ requireWrites: false })
+					._unsafeUnwrap()
+					.position("upstairs")
+			)
 		).toBe("locked");
 		expect(calls).toEqual([`GET https://api.nuki.io/smartlock/${UP}`]);
 	});
@@ -1069,9 +1136,12 @@ describe("doorProviderFromEnvironment and the write gate", () => {
 	it("names the missing Nuki credential", () => {
 		vi.stubEnv("NUKI_API_TOKEN", "");
 		vi.stubEnv("NUKI_SMARTLOCK_IDS", "1,2");
-		expect(() =>
-			doorProviderFromEnvironment({ requireWrites: false })
-		).toThrow("NUKI_API_TOKEN is not set.");
+		expect(
+			errorOf(doorProviderFromEnvironment({ requireWrites: false }))
+		).toEqual({
+			type: "DoorProviderNotConfigured",
+			detail: "NUKI_API_TOKEN is not set.",
+		});
 	});
 
 	it("builds the provider from NUKI_SMARTLOCK_IDS and still leaves out the lock that is not ours", async () => {
@@ -1121,9 +1191,11 @@ describe("doorProviderFromEnvironment and the write gate", () => {
 				text: () => Promise.resolve(""),
 			} as unknown as Response)
 		);
-		const model = await doorProviderFromEnvironment({
-			requireWrites: false,
-		}).readModel();
+		const model = await valueOf(
+			doorProviderFromEnvironment({ requireWrites: false })
+				._unsafeUnwrap()
+				.readModel()
+		);
 		expect(model.identities[0]?.authIds).toEqual([
 			{ lockId: DN, authId: "dn" },
 		]);
@@ -1145,8 +1217,8 @@ describe("nukiProvider.readLockStatus", () => {
 		const provider = nukiProvider(
 			{ fetch: fakeFetch({}, calls), token: "t" },
 			["1", "2", "3"]
-		);
-		expect(await provider.readLockStatus()).toEqual([
+		)._unsafeUnwrap();
+		expect(await valueOf(provider.readLockStatus())).toEqual([
 			{ lockId: "1", name: "Downstairs", online: true, serverState: 0 },
 			{ lockId: "2", name: "Upstairs", online: true, serverState: 0 },
 			{
@@ -1164,7 +1236,7 @@ describe("nukiProvider.readLockStatus", () => {
 
 describe("lock ids from the environment", () => {
 	it("maps each slot to the id in its env var", () => {
-		expect(lockSlotIds()).toEqual({
+		expect(lockSlotIds()._unsafeUnwrap()).toEqual({
 			downstairs: DOWNSTAIRS_ID,
 			upstairs: UPSTAIRS_ID,
 		});
@@ -1174,16 +1246,20 @@ describe("lock ids from the environment", () => {
 		"is not configured when %s is missing",
 		(name) => {
 			vi.stubEnv(name, "");
-			expect(() => lockSlotIds()).toThrow(`${name} is not set.`);
-			expect(() => nukiProvider({ fetch, token: "t" }, ["1"])).toThrow(
-				`${name} is not set.`
+			const notSet = {
+				type: "DoorProviderNotConfigured",
+				detail: `${name} is not set.`,
+			};
+			expect(errorOf(lockSlotIds())).toEqual(notSet);
+			expect(errorOf(nukiProvider({ fetch, token: "t" }, ["1"]))).toEqual(
+				notSet
 			);
 			vi.stubEnv("NUKI_API_TOKEN", "test-token");
 			vi.stubEnv("NUKI_SMARTLOCK_IDS", `${DOWNSTAIRS_ID},${UPSTAIRS_ID}`);
 			expect(doorProviderConfigured()).toBe(false);
-			expect(() =>
-				doorProviderFromEnvironment({ requireWrites: false })
-			).toThrow(`${name} is not set.`);
+			expect(
+				errorOf(doorProviderFromEnvironment({ requireWrites: false }))
+			).toEqual(notSet);
 		}
 	);
 
@@ -1192,10 +1268,13 @@ describe("lock ids from the environment", () => {
 		const provider = nukiProvider(
 			{ fetch: fakeFetch({}, calls), token: "t" },
 			[DOWNSTAIRS_ID, UNMANAGED_ID]
-		);
-		await expect(provider.actuate("upstairs", "unlock")).rejects.toThrow(
-			`Lock ${UPSTAIRS_ID} is not configured.`
-		);
+		)._unsafeUnwrap();
+		expect(
+			errorOf(await provider.actuate("upstairs", "unlock"))
+		).toMatchObject({
+			type: "DoorProviderNotConfigured",
+			detail: `Lock ${UPSTAIRS_ID} is not configured.`,
+		});
 		expect(calls).toEqual([]);
 	});
 });

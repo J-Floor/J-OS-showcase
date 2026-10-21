@@ -4,6 +4,7 @@
 // the default edge-runtime environment (no `document`) that crashes at
 // IMPORT time, not just on render, because Solid's compiled output registers
 // DOM event delegation at module load.
+import { okAsync } from "neverthrow";
 import { createRoot } from "solid-js";
 import { expect, test, vi } from "vitest";
 
@@ -63,8 +64,8 @@ function withRoot<T>(function_: () => T): T {
 }
 
 const { kickOutMock, upgradeToMemberMock } = vi.hoisted(() => ({
-	kickOutMock: vi.fn(() => Promise.resolve()),
-	upgradeToMemberMock: vi.fn(() => Promise.resolve()),
+	kickOutMock: vi.fn(() => okAsync(undefined)),
+	upgradeToMemberMock: vi.fn(() => okAsync(undefined)),
 }));
 
 vi.mock("./triage.ts", () => ({

@@ -1,13 +1,16 @@
 import type { JfColumnDefinition } from "@j-os/design-system";
+import { ok, type Result } from "neverthrow";
 import { For, createSignal } from "solid-js";
 
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import type { PersonStatus } from "../../../../convex/lib/derive.ts";
+import { invariant } from "../../../../convex/lib/result.ts";
+import type { ClientError } from "../../../lib/call.ts";
 import { SHORT_TEXT_SIZE } from "../../../shared/columnSizes.ts";
 import { ChangeRoleDialog } from "../actions/ChangeRoleDialog.tsx";
 import type { RoleMove } from "../actions/ChangeRoleDialog.tsx";
 import { useMemberActions } from "../actions/memberActions.ts";
-import { useTriage } from "../actions/triage.ts";
+import { type TriageResult, useTriage } from "../actions/triage.ts";
 
 import { flagsColumn } from "./flagsColumn.tsx";
 import { joinedColumn } from "./joinedColumn.ts";
@@ -54,13 +57,13 @@ export function memberGroup(
 /**
  * Compile-time exhaustiveness check for `applyMove`'s event branch. If this is
  * ever actually called, `RoleMove["event"]` grew a literal with no branch
- * above it — throwing here (rather than falling through to some default
+ * above it — failing here (rather than falling through to some default
  * action) is the point: the review that flagged this found the OLD final
  * `else` silently defaulted to `triage.kickOut`, so a `RoleMove` that matched
  * nothing kicked the person out of the building instead of failing loudly.
  */
 function assertNever(value: never): never {
-	throw new Error(`applyMove: unhandled RoleMove event ${String(value)}`);
+	invariant(false, `applyMove: unhandled RoleMove event ${String(value)}`);
 }
 
 type Triage = ReturnType<typeof useTriage>;
@@ -72,57 +75,57 @@ type Triage = ReturnType<typeof useTriage>;
 // unlike an `if (event === "KICK_OUT") {…} else {…}` chain, nothing here is
 // a comparison `@typescript-eslint/no-unnecessary-condition` can call
 // "always true" once every other branch is a `case`.
-async function applyEventMove(
+function applyEventMove(
 	triage: Triage,
 	id: Id<"people">,
 	event: Extract<RoleMove, { kind: "event" }>["event"]
-): Promise<void> {
+): TriageResult {
 	switch (event) {
 		case "PROMOTE_TO_MEMBER":
-			await triage.upgradeToMember(id);
-			return;
+			return triage.upgradeToMember(id);
 		case "GRANT_CORE":
-			await triage.grantCore(id);
-			return;
+			return triage.grantCore(id);
 		case "REVOKE_CORE":
-			await triage.revokeCore(id);
-			return;
+			return triage.revokeCore(id);
 		case "PROMOTE_TO_BOARD":
-			await triage.promoteToBoard(id);
-			return;
+			return triage.promoteToBoard(id);
 		case "RE_ADMIT":
-			await triage.reAdmit(id);
-			return;
+			return triage.reAdmit(id);
 		case "MARK_LEFT":
-			await triage.markLeft(id);
-			return;
+			return triage.markLeft(id);
 		case "KICK_OUT":
-			await triage.kickOut(id);
-			return;
+			return triage.kickOut(id);
 		default:
-			assertNever(event);
+			return assertNever(event);
 	}
 }
 
-/** Turn the dialog's choice into the matching triage call, for one row or many. */
+function applyOneMove(
+	triage: Triage,
+	id: Id<"people">,
+	move: RoleMove
+): TriageResult {
+	if (move.kind === "extendWindow")
+		return triage.extendWindow(id, move.until);
+	// One call for every role move in both directions; the tier is the
+	// destination, not a role label.
+	return move.kind === "role"
+		? triage.setRole(id, move.tier)
+		: applyEventMove(triage, id, move.event);
+}
+
+/** Turn the dialog's choice into the matching triage call, for one row or many.
+ *  Stops at the first failure and resolves to it, so the dialog can show why. */
 export async function applyMove(
 	triage: Triage,
 	ids: Id<"people">[],
 	move: RoleMove
-): Promise<void> {
+): Promise<Result<unknown, ClientError>> {
 	for (const id of ids) {
-		if (move.kind === "extendWindow") {
-			await triage.extendWindow(id, move.until);
-			continue;
-		}
-		if (move.kind === "role") {
-			// One call for every role move in both directions; the tier is the
-			// destination, not a role label.
-			await triage.setRole(id, move.tier);
-			continue;
-		}
-		await applyEventMove(triage, id, move.event);
+		const result = await applyOneMove(triage, id, move);
+		if (result.isErr()) return result;
 	}
+	return ok(undefined);
 }
 
 const MEMBER_ACTION_COUNT = 3;

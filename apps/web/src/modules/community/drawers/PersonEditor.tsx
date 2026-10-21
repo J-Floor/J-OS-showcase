@@ -1,12 +1,18 @@
 import { Button, EditableText, PropertyRow } from "@j-os/design-system";
 import { useMutation } from "convex-solidjs";
-import { createEffect, createSignal, on, Show } from "solid-js";
+import { Show } from "solid-js";
 
 import { api } from "../../../../convex/_generated/api";
 import type { Doc } from "../../../../convex/_generated/dataModel";
+import { call } from "../../../lib/call.ts";
+import {
+	createActionError,
+	scopeOfFields,
+	type ActionErrorState,
+} from "../../../shared/createActionError.ts";
 import { useQuery } from "../../../shared/data/useQuery.ts";
 import { ICONS } from "../../../shared/icons.ts";
-import { userErrorMessage } from "../../../shared/userErrorMessage.ts";
+import { InlineError } from "../../../shared/InlineError.tsx";
 import { HostSelect } from "../columns/HostSelect.tsx";
 import {
 	CompanyField,
@@ -37,31 +43,27 @@ function EmailEditor(props: { person: Doc<"people"> }) {
 		() => ({ personId: person()._id }),
 		{ keepPreviousData: false }
 	);
-	const [emailError, setEmailError] = createSignal<string | null>(null);
 	// The drawer is re-used as the board steps through rows, so a clash error
-	// for one person must not linger on the next.
-	createEffect(
-		on(
-			() => person()._id,
-			() => {
-				setEmailError(null);
-			},
-			{ defer: true }
-		)
+	// for one person must not linger on the next, and a refusal that arrives
+	// after stepping on belongs to the person it was made for.
+	const { error: emailError, trackResult } = createActionError(
+		() => person()._id
 	);
 	async function commitEmail(next: string): Promise<void> {
-		setEmailError(null);
-		const id = person()._id;
-		try {
-			await update.mutateAsync({ id, email: next });
-		} catch (err) {
-			// The board may have stepped to another person while this was in
-			// flight; the refusal belongs to the person it was made for.
-			if (person()._id === id)
-				setEmailError(
-					userErrorMessage(err, "Could not change the email.")
-				);
-		}
+		await trackResult(
+			call(
+				update.mutateAsync({ id: person()._id, email: next }),
+				"Could not change the email."
+			)
+		);
+	}
+	async function cancelPending(): Promise<void> {
+		await trackResult(
+			call(
+				cancelEmailChange.mutateAsync({ personId: person()._id }),
+				"Could not cancel the email change."
+			)
+		);
 	}
 	return (
 		<>
@@ -73,13 +75,7 @@ function EmailEditor(props: { person: Doc<"people"> }) {
 					}}
 				/>
 			</PropertyRow>
-			<Show when={emailError()}>
-				{(message) => (
-					<p class={styles.fieldError} role="alert">
-						{message()}
-					</p>
-				)}
-			</Show>
+			<InlineError message={emailError()} />
 			<Show when={pendingEmail.data()?.newEmail} keyed>
 				{(address) => (
 					<div class={styles.pendingEmail} role="status">
@@ -88,11 +84,9 @@ function EmailEditor(props: { person: Doc<"people"> }) {
 						</p>
 						<Button
 							variant="tertiary"
-							onClick={() =>
-								void cancelEmailChange.mutateAsync({
-									personId: person()._id,
-								})
-							}
+							onClick={() => {
+								void cancelPending();
+							}}
 						>
 							Cancel
 						</Button>
@@ -103,16 +97,57 @@ function EmailEditor(props: { person: Doc<"people"> }) {
 	);
 }
 
+/** A guest's host, re-picked here; a refusal shows in the field list's
+ *  `saveError`. */
+const HOST_SCOPE = "host";
+
+function HostedByRow(props: {
+	person: Doc<"people">;
+	saveError: ActionErrorState;
+}) {
+	const setHost = useMutation(api.people.setHost);
+	return (
+		<PropertyRow icon={ICONS.host} label="Hosted by">
+			<HostSelect
+				value={props.person.hostedById ?? null}
+				placeholder={
+					props.person.hostedBy
+						? `${props.person.hostedBy} — re-pick`
+						: undefined
+				}
+				onCommit={(id) => {
+					void props.saveError.trackResult(
+						call(
+							setHost.mutateAsync({
+								id: props.person._id,
+								hostedById: id,
+							}),
+							"Could not change the host."
+						),
+						HOST_SCOPE
+					);
+				}}
+			/>
+		</PropertyRow>
+	);
+}
+
 /** Editable field list; saves each field via `people.update` on blur/change.
  * Mounted only in edit mode (so the read-only view needs no Convex mutation). */
 export function EditableDetail(props: { person: Doc<"people"> }) {
 	const update = useMutation(api.people.update);
-	const setHost = useMutation(api.people.setHost);
 	function person() {
 		return props.person;
 	}
+	const saveError = createActionError(() => person()._id);
 	function patch(fields: Record<string, unknown>): void {
-		void update.mutateAsync({ id: person()._id, ...fields });
+		void saveError.trackResult(
+			call(
+				update.mutateAsync({ id: person()._id, ...fields }),
+				"Could not save the change."
+			),
+			scopeOfFields(fields)
+		);
 	}
 	return (
 		<div>
@@ -154,24 +189,10 @@ export function EditableDetail(props: { person: Doc<"people"> }) {
 			/>
 			{/* Hosting stays here — guest-only, board-managed, not a shared field. */}
 			<Show when={person().tier === "guest"}>
-				<PropertyRow icon={ICONS.host} label="Hosted by">
-					<HostSelect
-						value={person().hostedById ?? null}
-						placeholder={
-							person().hostedBy
-								? `${person().hostedBy} — re-pick`
-								: undefined
-						}
-						onCommit={(id) => {
-							void setHost.mutateAsync({
-								id: person()._id,
-								hostedById: id,
-							});
-						}}
-					/>
-				</PropertyRow>
+				<HostedByRow person={person()} saveError={saveError} />
 			</Show>
 			<VentureEditor person={person()} patch={patch} />
+			<InlineError message={saveError.error()} />
 		</div>
 	);
 }

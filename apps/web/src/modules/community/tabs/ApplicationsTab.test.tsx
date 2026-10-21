@@ -6,6 +6,7 @@ import {
 	within,
 	cleanup,
 } from "@solidjs/testing-library";
+import { okAsync } from "neverthrow";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 
 // apps/web does not run vitest in `globals` mode, so `@solidjs/testing-library`'s
@@ -177,18 +178,18 @@ vi.mock("../data/useApplications.ts", () => ({
 	}),
 }));
 
-const deny = vi.fn().mockResolvedValue(undefined);
-const makeMember = vi.fn().mockResolvedValue(undefined);
-const undeny = vi.fn().mockResolvedValue(undefined);
+const deny = vi.fn((personId: string) => okAsync(personId));
+const makeMember = vi.fn(() => okAsync(undefined));
+const undeny = vi.fn(() => okAsync(undefined));
 
 vi.mock("../actions/triage.ts", () => ({
 	useTriage: () => ({
 		deny,
 		makeMember,
-		approveAsGuest: vi.fn().mockResolvedValue(undefined),
+		approveAsGuest: vi.fn(() => okAsync(undefined)),
 		undeny,
-		kickOut: vi.fn().mockResolvedValue(undefined),
-		upgradeToMember: vi.fn().mockResolvedValue(undefined),
+		kickOut: vi.fn(() => okAsync(undefined)),
+		upgradeToMember: vi.fn(() => okAsync(undefined)),
 	}),
 }));
 

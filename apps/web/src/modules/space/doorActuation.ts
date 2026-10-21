@@ -10,7 +10,7 @@ import {
 	type LockSlot,
 } from "../../../convex/lib/doorLocks.ts";
 import { type DoorAction } from "../../../convex/lib/doorProvider.ts";
-import { userErrorMessage } from "../../shared/userErrorMessage.ts";
+import { call } from "../../lib/call.ts";
 
 import { createDoorAttempt, type DoorAttemptWatch } from "./doorAttempt.ts";
 import {
@@ -31,6 +31,10 @@ const STATUS_HOLD_MS = 5000;
 
 function holdWarning(holds: DoorStatusHolds, slot: LockSlot, text: string) {
 	holds.hold(slot, { tone: "warning", text }, STATUS_HOLD_MS);
+}
+
+function holdError(holds: DoorStatusHolds, slot: LockSlot, text: string) {
+	holds.hold(slot, { tone: "error", text }, STATUS_HOLD_MS);
 }
 
 /** The provider took the command, but there is no attempt to follow: the
@@ -157,38 +161,37 @@ export function createDoorActuation(options: {
 		holds.release(slot);
 		attempts.cancel(slot);
 		holds.setStatus(slot, { tone: "muted", text: SENDING_TEXT });
-		try {
-			const presence = await fetchPresenceToken();
-			if (presence === null) {
-				holdWarning(holds, slot, offsiteText(action));
-				return;
-			}
-			const run = action === "unlock" ? unlock : lock;
-			const result = await run.mutateAsync({ lock: slot, presence });
-			if (result.status !== "ok") {
-				holdRefusal(holds, slot, action, result.status);
-				return;
-			}
-			if (result.attemptId === null) {
-				holdSentUnfollowed(holds, slot, action);
-				return;
-			}
-			if (holds.isDisposed()) return;
-			holds.setStatus(slot, { tone: "muted", text: WAKING_TEXT });
-			attempts.follow(slot, action, result.attemptId);
-		} catch (err) {
-			holds.hold(
-				slot,
-				{
-					tone: "error",
-					text: userErrorMessage(
-						err,
-						ACTION_COPY[action].errorFallback
-					),
-				},
-				STATUS_HOLD_MS
-			);
+		const { errorFallback } = ACTION_COPY[action];
+		const presence = await fetchPresenceToken(errorFallback);
+		if (presence.isErr()) {
+			holdError(holds, slot, presence.error.message);
+			return;
 		}
+		if (presence.value === null) {
+			holdWarning(holds, slot, offsiteText(action));
+			return;
+		}
+		const run = action === "unlock" ? unlock : lock;
+		const result = await call(
+			run.mutateAsync({ lock: slot, presence: presence.value }),
+			errorFallback
+		);
+		if (result.isErr()) {
+			holdError(holds, slot, result.error.message);
+			return;
+		}
+		const outcome = result.value;
+		if (outcome.status !== "ok") {
+			holdRefusal(holds, slot, action, outcome.status);
+			return;
+		}
+		if (outcome.attemptId === null) {
+			holdSentUnfollowed(holds, slot, action);
+			return;
+		}
+		if (holds.isDisposed()) return;
+		holds.setStatus(slot, { tone: "muted", text: WAKING_TEXT });
+		attempts.follow(slot, action, outcome.attemptId);
 	}
 
 	return { actuate };

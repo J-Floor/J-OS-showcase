@@ -8,11 +8,12 @@ import {
 	waitFor,
 	within,
 } from "@solidjs/testing-library";
+import { ok } from "neverthrow";
 import { afterEach, expect, test, vi } from "vitest";
 
 const { unread, disablePush, signOut, navigate } = vi.hoisted(() => ({
 	unread: { value: 0 },
-	disablePush: vi.fn(() => Promise.resolve()),
+	disablePush: vi.fn(() => Promise.resolve(ok())),
 	signOut: vi.fn(() => Promise.resolve()),
 	navigate: vi.fn(),
 }));

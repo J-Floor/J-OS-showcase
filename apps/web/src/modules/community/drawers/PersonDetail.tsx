@@ -6,6 +6,9 @@ import { createSignal, onMount, Show } from "solid-js";
 import { api } from "../../../../convex/_generated/api";
 import type { Doc } from "../../../../convex/_generated/dataModel";
 import type { PersonStatus } from "../../../../convex/lib/derive.ts";
+import { call } from "../../../lib/call.ts";
+import { createActionError } from "../../../shared/createActionError.ts";
+import { InlineError } from "../../../shared/InlineError.tsx";
 import { headline } from "../status/copy.ts";
 import { PersonTimeline } from "../status/PersonTimeline.tsx";
 import { StatusSection } from "../status/StatusSection.tsx";
@@ -88,6 +91,9 @@ function StatusSectionItem(props: {
 	editing?: boolean;
 }) {
 	const completeBoardStep = useMutation(api.people.completeBoardStep);
+	const { error: stepError, trackResult } = createActionError(
+		() => props.person._id
+	);
 	return (
 		<Accordion.Item value="status" class={styles.section}>
 			{/* Plain text, not a Badge: the accordion's subtitle is a
@@ -112,12 +118,18 @@ function StatusSectionItem(props: {
 						// "whatsapp" here is right only for as long as
 						// BOARD_STEPS has exactly one entry, which is not a
 						// property anything enforces.
-						void completeBoardStep.mutateAsync({
-							personId: props.person._id,
-							stepId,
-						});
+						void trackResult(
+							call(
+								completeBoardStep.mutateAsync({
+									personId: props.person._id,
+									stepId,
+								}),
+								"Could not complete that step."
+							)
+						);
 					}}
 				/>
+				<InlineError message={stepError()} />
 			</Accordion.ItemContent>
 		</Accordion.Item>
 	);

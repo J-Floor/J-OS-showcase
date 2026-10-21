@@ -11,6 +11,7 @@ import { magicLink as magicLinkEmail } from "./emails/generated/magicLink.ts";
 import { emailUrls } from "./emails/urls.ts";
 import { sendEmail } from "./lib/email.ts";
 import { mayMagicLink } from "./lib/rateLimit.ts";
+import { invariant } from "./lib/result.ts";
 
 const siteUrl = process.env.SITE_URL!;
 
@@ -30,11 +31,10 @@ export function createAuth(context: GenericCtx<DataModel>) {
 			magicLink({
 				storeToken: "hashed",
 				sendMagicLink: async ({ email, url }) => {
-					if (!("runMutation" in context)) {
-						throw new Error(
-							"sendMagicLink needs an action context"
-						);
-					}
+					invariant(
+						"runMutation" in context,
+						"sendMagicLink needs an action context"
+					);
 					// Exhausted → send nothing; Better Auth still answers
 					// success, so the endpoint stays non-enumerable.
 					if (!(await mayMagicLink(context, email))) return;

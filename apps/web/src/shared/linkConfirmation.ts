@@ -1,6 +1,8 @@
 import { useSearchParams } from "@solidjs/router";
 import { createSignal, onMount, type Accessor } from "solid-js";
 
+import { call } from "../lib/call.ts";
+
 /**
  * Confirms the emailed link's `?token=` with `confirm` on mount. `status` is
  * "loading" until the call answers, then the response's own status; a missing
@@ -26,13 +28,13 @@ export function createLinkConfirmation<Response extends { status: string }>(
 				setStatus("invalid");
 				return;
 			}
-			try {
-				const answer = await confirm({ token });
-				setStatus(answer.status);
-				setResponse(() => answer);
-			} catch {
+			const result = await call(confirm({ token }), "invalid");
+			if (result.isErr()) {
 				setStatus("invalid");
+				return;
 			}
+			setStatus(result.value.status);
+			setResponse(() => result.value);
 		})();
 	});
 	return { status, response };

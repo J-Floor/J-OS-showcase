@@ -138,8 +138,19 @@ async function deliverEmail(
 	try {
 		const email = definition.email?.(payload, recipient);
 		if (email) {
-			await sendNotificationEmail(recipient.email, kind, email);
-			tally.delivered += 1;
+			const sent = await sendNotificationEmail(
+				recipient.email,
+				kind,
+				email
+			);
+			if (sent.isErr()) {
+				tally.failed += 1;
+				// eslint-disable-next-line no-console -- surface the isolated email failure in the Convex logs
+				console.error(
+					`[notify:${kind}] email to ${recipient.email} failed`,
+					sent.error.type
+				);
+			} else tally.delivered += 1;
 		}
 	} catch (err) {
 		tally.failed += 1;

@@ -3,8 +3,11 @@
 // text) plus a test seam for injecting a fake provider. A brand swap
 // means a new implementation of DoorProvider, not a change here.
 
+import type { ResultAsync } from "neverthrow";
+
 import type { LockSlot } from "./doorLocks.ts";
 import { normalizeEmail } from "./emailAddress.ts";
+import type { DoorError } from "./errors/door.ts";
 
 /** A resolvable person-identity on the provider. */
 export type DoorIdentity = {
@@ -37,7 +40,7 @@ export type DoorAction = "unlock" | "lock";
 /** What an actuation did. `offline`: the provider reports the lock
  *  unreachable, so nothing was actuated. `busy`: the lock refused it because it
  *  is still carrying out the previous command — nothing new was actuated, and a
- *  retry a few seconds later works. A failed request throws instead.
+ *  retry a few seconds later works. A failed request is an `Err` instead.
  *  `durationMs` (ok only): how long the action's effect lasts at the door.
  *  `positionBefore` (ok only): where the door was just before the command was
  *  sent, read in the same request that checked it was reachable — the
@@ -85,20 +88,23 @@ export type DoorProvider = {
 	 *  Authorizations (in `identities[].authIds`) are only those on
 	 *  locks this app manages: the provider leaves out any other lock the account
 	 *  carries, so callers do not filter again. */
-	readModel(): Promise<DoorModel>;
-	revokeAuthIds(authIds: string[]): Promise<void>;
+	readModel(): ResultAsync<DoorModel, DoorError>;
+	revokeAuthIds(authIds: string[]): ResultAsync<void, DoorError>;
 	/** Unlock (open) or lock the door now: one attempt, never retried — a
 	 *  retry means someone waiting at the door and, on a buzzer, a second buzz.
 	 *  Checks the lock is reachable first and reports `offline` without
-	 *  actuating if it is not. Throws for an action the device cannot do (an
+	 *  actuating if it is not. An `Err` for an action the device cannot do (an
 	 *  Opener has no lock). The provider resolves the slot to its own lock. */
-	actuate(slot: LockSlot, action: DoorAction): Promise<DoorActionResult>;
+	actuate(
+		slot: LockSlot,
+		action: DoorAction
+	): ResultAsync<DoorActionResult, DoorError>;
 	/** Every configured lock's reachability, in configuration order: one
 	 *  background read (retried on transient failure), never an actuation. */
-	readLockStatus(): Promise<LockStatus[]>;
+	readLockStatus(): ResultAsync<LockStatus[], DoorError>;
 	/** One read of one door's bolt position: never retried, never an
 	 *  actuation. The provider resolves the slot to its own lock. */
-	position(slot: LockSlot): Promise<DoorPosition>;
+	position(slot: LockSlot): ResultAsync<DoorPosition, DoorError>;
 };
 
 /**

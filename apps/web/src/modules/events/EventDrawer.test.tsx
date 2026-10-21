@@ -7,6 +7,7 @@ import {
 	waitFor,
 	within,
 } from "@solidjs/testing-library";
+import { ConvexError } from "convex/values";
 import { afterEach, expect, test, vi } from "vitest";
 
 afterEach(cleanup);
@@ -142,7 +143,9 @@ test("Delete waits for confirmation, then calls deleteEvent", async () => {
 	await waitFor(() => {
 		expect(mutateAsync).toHaveBeenCalledWith({ eventId: "event1" });
 	});
-	expect(onOpenChange).toHaveBeenCalledWith(false);
+	await waitFor(() => {
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+	});
 });
 
 test("edit toggle reveals the name field; committing it calls updateEvent", async () => {
@@ -401,4 +404,36 @@ test("detail (board): no attendees shows the empty copy", () => {
 	renderDrawer("board", { event });
 	expect(screen.getByText("No one has registered yet.")).toBeInTheDocument();
 	expect(document.querySelector("[data-skeleton-list]")).toBeNull();
+});
+
+const REFUSED = new ConvexError({
+	code: "Forbidden",
+	message: "You can't do that.",
+});
+
+test("a refused delete shows the reason in the footer and keeps the drawer open", async () => {
+	mutateAsync.mockRejectedValueOnce(REFUSED);
+	const onOpenChange = vi.fn();
+	renderDrawer("board", { event, onOpenChange });
+	fireEvent.click(screen.getByRole("button", { name: /Delete event/ }));
+	await screen.findByText("Delete event?");
+	const footer = screen.getByRole("button", {
+		name: /Cancel/,
+		hidden: true,
+	}).parentElement!;
+	fireEvent.click(
+		within(footer).getByRole("button", { name: /Delete/, hidden: true })
+	);
+	expect(await screen.findByText("You can't do that.")).toBeInTheDocument();
+	expect(onOpenChange).not.toHaveBeenCalled();
+});
+
+test("a refused rename shows the reason under the details", async () => {
+	mutateAsync.mockRejectedValueOnce(REFUSED);
+	renderDrawer("board", { event });
+	fireEvent.click(screen.getByRole("button", { name: /Unlock to edit/ }));
+	const field = await waitFor(() => screen.getByRole("textbox"));
+	fireEvent.input(field, { target: { value: "Renamed Night" } });
+	fireEvent.blur(field);
+	expect(await screen.findByText("You can't do that.")).toBeInTheDocument();
 });

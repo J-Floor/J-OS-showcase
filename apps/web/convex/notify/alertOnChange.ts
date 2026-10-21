@@ -36,11 +36,12 @@ export async function alertOnChange<K extends KindName>(
 		});
 	}
 	let result;
+	let isNotified = false;
 	try {
 		result = await notifyNow(context, kind, payloadFor(decision));
-	} catch (err) {
-		await releaseClaim();
-		throw err;
+		isNotified = true;
+	} finally {
+		if (!isNotified) await releaseClaim();
 	}
 	if (result.delivered === 0 && result.failed > 0) await releaseClaim();
 	return decision;

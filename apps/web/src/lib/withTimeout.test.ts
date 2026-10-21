@@ -1,31 +1,45 @@
+import { err, ok } from "neverthrow";
 import { afterEach, expect, test, vi } from "vitest";
 
-import { withTimeout } from "./withTimeout.ts";
+import { isTimeout, withTimeout } from "./withTimeout.ts";
 
 afterEach(() => {
 	vi.useRealTimers();
 });
 
-test("resolves with the promise and leaves no timer pending", async () => {
+test("resolves with the work's Result and leaves no timer pending", async () => {
 	vi.useFakeTimers();
-	await expect(withTimeout(Promise.resolve(7), 1000, "late")).resolves.toBe(
-		7
-	);
+	const result = await withTimeout(Promise.resolve(ok(7)), 1000);
+	expect(result._unsafeUnwrap()).toBe(7);
 	expect(vi.getTimerCount()).toBe(0);
 });
 
-test("rejects with the message once the time is up", async () => {
+test("fails with Timeout once the time is up", async () => {
 	vi.useFakeTimers();
-	const pending = withTimeout(new Promise<never>(() => {}), 1000, "late");
-	const assertion = expect(pending).rejects.toThrow("late");
+	const pending = withTimeout(new Promise<never>(() => {}), 1000);
 	await vi.advanceTimersByTimeAsync(1000);
-	await assertion;
+	const result = await pending;
+	expect(result._unsafeUnwrapErr()).toEqual({ code: "Timeout" });
 });
 
-test("passes the promise's own rejection through", async () => {
+test("passes the work's own Err through", async () => {
 	vi.useFakeTimers();
-	await expect(
-		withTimeout(Promise.reject(new Error("boom")), 1000, "late")
-	).rejects.toThrow("boom");
+	const result = await withTimeout(Promise.resolve(err("boom")), 1000);
+	expect(result._unsafeUnwrapErr()).toBe("boom");
 	expect(vi.getTimerCount()).toBe(0);
+});
+
+test("isTimeout is true only for the timeout withTimeout settles with", async () => {
+	vi.useFakeTimers();
+	const pending = withTimeout(new Promise<never>(() => {}), 1000);
+	await vi.advanceTimersByTimeAsync(1000);
+	const timedOut = await pending;
+	expect(isTimeout(timedOut._unsafeUnwrapErr())).toBe(true);
+	expect(isTimeout({ code: "Unknown", message: "Could not save." })).toBe(
+		false
+	);
+	expect(
+		isTimeout({ code: "Timeout", message: "The server timed out." })
+	).toBe(false);
+	expect(isTimeout("boom")).toBe(false);
 });

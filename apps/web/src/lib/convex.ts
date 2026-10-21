@@ -1,4 +1,5 @@
 import { ConvexClient } from "convex/browser";
+import { ResultAsync } from "neverthrow";
 import { createEffect, createSignal, on, onMount } from "solid-js";
 
 import { bindKeeperToSession } from "../shared/data/bindKeeperToSession.ts";
@@ -22,6 +23,10 @@ const [ottPending, setOttPending] = createSignal(
 );
 export { ottPending };
 
+// True once a magic-link token exchange has failed, so the sign-in screen can say so.
+const [ottFailed, setOttFailed] = createSignal(false);
+export { ottFailed };
+
 // Cross-domain one-time-token exchange after the magic-link redirect.
 // Mirrors @convex-dev/better-auth's React provider (which Solid lacks):
 // the verify endpoint redirects to `/?ott=...`; we exchange it for a session.
@@ -34,22 +39,29 @@ async function consumeOneTimeToken() {
 	}
 	url.searchParams.delete("ott");
 	window.history.replaceState({}, "", url);
-	try {
-		const result = await authClient.crossDomain.oneTimeToken.verify({
-			token,
-		});
-		const session = result.data?.session;
-		if (session) {
-			await authClient.getSession({
-				fetchOptions: {
-					headers: { Authorization: `Bearer ${session.token}` },
-				},
-			});
-			void authClient.updateSession();
-		}
-	} finally {
-		setOttPending(false);
-	}
+	const exchanged = await ResultAsync.fromPromise(
+		exchangeOneTimeToken(token),
+		() => false
+	);
+	// A failed exchange leaves the person signed out; the sign-in screen says
+	// the link didn't work.
+	if (exchanged.isErr() || !exchanged.value) setOttFailed(true);
+	setOttPending(false);
+}
+
+/** `true` when the link was exchanged for a session. */
+async function exchangeOneTimeToken(token: string): Promise<boolean> {
+	const result = await authClient.crossDomain.oneTimeToken.verify({
+		token,
+	});
+	if (result.error) return false;
+	await authClient.getSession({
+		fetchOptions: {
+			headers: { Authorization: `Bearer ${result.data.session.token}` },
+		},
+	});
+	void authClient.updateSession();
+	return true;
 }
 
 // Bridge the Better Auth session token into the Convex client.

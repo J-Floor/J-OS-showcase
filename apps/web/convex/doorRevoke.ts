@@ -29,6 +29,7 @@ import {
 import { doorProvider, doorWritesEnabled } from "./lib/doorProviderEnv.ts";
 import { normalizeEmail } from "./lib/emailAddress.ts";
 import { displayName } from "./lib/names.ts";
+import { unwrap } from "./lib/result.ts";
 
 /**
  * The per-person target the RECONCILE_DOOR effect acts on, discriminated so a
@@ -174,13 +175,13 @@ export const revokeUnlessBreakGlass = internalAction({
 
 		// NOT write-gated here: `revokeUnlessBreakGlass` already checked
 		// `isRevokeAllowed()` before reaching this (see {@link isRevokeAllowed}).
-		const provider = doorProvider({ requireWrites: false });
-		const model = await provider.readModel();
+		const provider = unwrap(doorProvider({ requireWrites: false }));
+		const model = unwrap(await provider.readModel());
 		const auths = managedAuthsOf(model, target, spareEmail);
 		if (auths.length === 0)
 			return { outcome: "revoked", email: target.email, revoked: 0 };
 
-		await provider.revokeAuthIds(auths.map((auth) => auth.authId));
+		unwrap(await provider.revokeAuthIds(auths.map((auth) => auth.authId)));
 		await recordAuthLog(context, [
 			{
 				operation: "revoke",

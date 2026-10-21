@@ -3,7 +3,7 @@
 import { v } from "convex/values";
 
 import { internal } from "./_generated/api";
-import { action, internalAction } from "./_generated/server";
+import { action, internalAction, type ActionCtx } from "./_generated/server";
 import {
 	TEMPLATES,
 	AGREEMENT_VERSION,
@@ -19,6 +19,7 @@ import { signedAgreement } from "./emails/generated/signedAgreement.ts";
 import { emailUrls } from "./emails/urls.ts";
 import { boardSignatories } from "./lib/boardSignatories.ts";
 import { sendEmail } from "./lib/email.ts";
+import { invariant, refuse, unwrap } from "./lib/result.ts";
 
 /**
  * Decode the template from base64 (stored in templates.ts as bytesBase64).
@@ -37,6 +38,29 @@ function templateBytes(variant: keyof typeof TEMPLATES): Uint8Array {
 	);
 }
 
+/** The board block for the PDF: each signatory, with their stored PNG when one is uploaded. */
+async function boardSigners(context: ActionCtx) {
+	const files = await context.runQuery(
+		internal.agreementsInternal.boardSignatureFiles,
+		{}
+	);
+	return Promise.all(
+		boardSignatories().map(async (signatory) => {
+			const file = files.find(
+				(candidate) => candidate.slug === signatory.signatureSlug
+			);
+			const blob = file ? await context.storage.get(file.fileId) : null;
+			return {
+				name: signatory.name,
+				role: signatory.role,
+				signaturePng: blob
+					? new Uint8Array(await blob.arrayBuffer())
+					: undefined,
+			};
+		})
+	);
+}
+
 /**
  * Operator CLI: upload one board member's handwriting PNG. The PNG lives in
  * file storage, never in the repository or the static host:
@@ -45,13 +69,13 @@ function templateBytes(variant: keyof typeof TEMPLATES): Uint8Array {
 export const setBoardSignature = internalAction({
 	args: { slug: v.string(), dataUrl: v.string() },
 	handler: async (context, { slug, dataUrl }): Promise<null> => {
-		if (
-			!boardSignatories().some(
+		invariant(
+			boardSignatories().some(
 				(signatory) => signatory.signatureSlug === slug
-			)
-		)
-			throw new Error(`Unknown signatory slug: ${slug}`);
-		const png = validatePngDataUrl(dataUrl);
+			),
+			`Unknown signatory slug: ${slug}`
+		);
+		const png = unwrap(validatePngDataUrl(dataUrl));
 		const fileId = await context.storage.store(
 			new Blob([png as unknown as ArrayBuffer], { type: "image/png" })
 		);
@@ -75,48 +99,29 @@ export const signAgreement = action({
 			internal.agreementsInternal.signingContext,
 			{}
 		);
-		if (!contextData) throw new Error("No onboarding in progress.");
-		if (contextData.alreadySigned) {
-			throw new Error("Agreement already signed.");
-		}
+		if (!contextData) return refuse({ type: "NoOnboardingInProgress" });
+		if (contextData.alreadySigned)
+			return refuse({ type: "AgreementAlreadySigned" });
 		const { personId, email, name, company, variant } = contextData;
 
-		const png = validatePngDataUrl(signaturePng);
+		const png = unwrap(validatePngDataUrl(signaturePng));
 
 		const template = templateBytes(variant);
 
-		const files = await context.runQuery(
-			internal.agreementsInternal.boardSignatureFiles,
-			{}
-		);
-		const board = await Promise.all(
-			boardSignatories().map(async (signatory) => {
-				const file = files.find(
-					(candidate) => candidate.slug === signatory.signatureSlug
-				);
-				const blob = file
-					? await context.storage.get(file.fileId)
-					: null;
-				return {
-					name: signatory.name,
-					role: signatory.role,
-					signaturePng: blob
-						? new Uint8Array(await blob.arrayBuffer())
-						: undefined,
-				};
-			})
-		);
+		const board = await boardSigners(context);
 
 		const now = Date.now();
-		const drawn = await drawSignedPdf(template, {
-			variant,
-			name,
-			company: company ?? "",
-			email,
-			date: formatEmailDate(now),
-			signaturePng: png,
-			board,
-		});
+		const drawn = unwrap(
+			await drawSignedPdf(template, {
+				variant,
+				name,
+				company: company ?? "",
+				email,
+				date: formatEmailDate(now),
+				signaturePng: png,
+				board,
+			})
+		);
 
 		// FINAL write: append the self-signed PAdES seal. Nothing may
 		// re-serialize the PDF after this point.
@@ -222,14 +227,16 @@ export const previewAgreement = action({
 
 		// Preview fills only the applicant's own fields + date — the board
 		// countersignature block stays blank (it's stamped at sign time).
-		const pdf = await drawSignedPdf(template, {
-			variant,
-			name,
-			company: company ?? "",
-			email,
-			date: formatEmailDate(Date.now()),
-			board: [],
-		});
+		const pdf = unwrap(
+			await drawSignedPdf(template, {
+				variant,
+				name,
+				company: company ?? "",
+				email,
+				date: formatEmailDate(Date.now()),
+				board: [],
+			})
+		);
 		return Buffer.from(pdf).toString("base64");
 	},
 });

@@ -1,6 +1,11 @@
 // @vitest-environment happy-dom
-import { ErrorBoundary } from "@j-os/design-system";
-import { cleanup, render, screen, waitFor } from "@solidjs/testing-library";
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@solidjs/testing-library";
 import { createResource, type Component } from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
 
@@ -59,20 +64,31 @@ test("a second mount after load renders the page synchronously, no skeleton", as
 	).toHaveLength(0);
 });
 
-test("a rejected loader reaches an ErrorBoundary fallback", async () => {
-	vi.spyOn(console, "error").mockImplementation(() => {});
-	const LazyPage = lazyPage(() => Promise.reject(new Error("chunk boom")));
+test("a rejected loader shows the failure screen, and Retry re-imports", async () => {
+	const load = vi
+		.fn<() => Promise<Component>>()
+		.mockRejectedValueOnce(new Error("chunk boom"))
+		.mockResolvedValue(ContentPage);
+	const LazyPage = lazyPage(load);
 
-	render(() => (
-		<ErrorBoundary>
-			<LazyPage />
-		</ErrorBoundary>
-	));
+	render(() => <LazyPage />);
 
 	await waitFor(() => {
 		expect(screen.getByText("Something went wrong.")).toBeInTheDocument();
 	});
-	expect(screen.getByText("chunk boom")).toBeInTheDocument();
+	expect(
+		screen.getByText(
+			"This page didn't load. Check your connection and try again."
+		)
+	).toBeInTheDocument();
+	expect(screen.queryByText("chunk boom")).not.toBeInTheDocument();
+
+	fireEvent.click(screen.getByRole("button", { name: /Retry/ }));
+
+	await waitFor(() => {
+		expect(screen.getByText("Page content")).toBeInTheDocument();
+	});
+	expect(load).toHaveBeenCalledTimes(2);
 });
 
 // Regression for the review finding this loader replaces: a route-level

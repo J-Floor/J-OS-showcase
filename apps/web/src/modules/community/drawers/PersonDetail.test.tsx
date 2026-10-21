@@ -7,7 +7,6 @@ import { afterEach, expect, test, vi } from "vitest";
 
 import type { Doc } from "../../../../convex/_generated/dataModel";
 import type { PersonStatus } from "../../../../convex/lib/derive.ts";
-import { EMAIL_IN_USE } from "../../../../convex/lib/emailAddress.ts";
 import { factLine, headline } from "../status/copy.ts";
 
 afterEach(cleanup);
@@ -333,9 +332,16 @@ test("edit mode offers every field the read-only view shows", () => {
 
 // Production redacts a plain Error's message; only a ConvexError's data
 // reaches the client, so that is what the drawer must show.
+const EMAIL_IN_USE_MESSAGE = "Another person already uses that email address.";
+
 function rejectNextUpdateWithClash(): void {
 	completeBoardStepMock.mockImplementationOnce(() =>
-		Promise.reject(new ConvexError(EMAIL_IN_USE))
+		Promise.reject(
+			new ConvexError({
+				code: "EmailInUse",
+				message: EMAIL_IN_USE_MESSAGE,
+			})
+		)
 	);
 }
 
@@ -354,7 +360,9 @@ test("a refused email shows the server's reason and puts the stored email back",
 		/>
 	));
 	commitEmail("old@example.com", "taken@example.com");
-	expect(await screen.findByRole("alert")).toHaveTextContent(EMAIL_IN_USE);
+	expect(await screen.findByRole("alert")).toHaveTextContent(
+		EMAIL_IN_USE_MESSAGE
+	);
 	expect(completeBoardStepMock).toHaveBeenCalledWith(
 		expect.objectContaining({ email: "taken@example.com" })
 	);
@@ -410,7 +418,9 @@ test("a refusal that lands after switching person is not shown on the new one", 
 	setCurrent(
 		person({ status: ACTIVE_MEMBER, _id: "p2", email: "other@example.com" })
 	);
-	pending.refuse?.(new ConvexError(EMAIL_IN_USE));
+	pending.refuse?.(
+		new ConvexError({ code: "EmailInUse", message: EMAIL_IN_USE_MESSAGE })
+	);
 	// Let the rejected commit settle before asserting nothing appeared.
 	await new Promise((resolve) => setTimeout(resolve, 0));
 	expect(screen.queryByRole("alert")).toBeNull();

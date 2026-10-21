@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 
 import { render } from "jsx-email";
 import { compile } from "jsx-email/compile";
+import { err, ok, type Result } from "neverthrow";
 
 const ROOT = resolve(import.meta.dirname);
 const OUT_DIR = resolve(ROOT, "../convex/emails/generated");
@@ -273,7 +274,10 @@ function cap(text: string): string {
 	return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-async function renderEntry(entry: Entry, temporary: string): Promise<string> {
+async function renderEntry(
+	entry: Entry,
+	temporary: string
+): Promise<Result<string, string>> {
 	const results = await compile({
 		files: [resolve(ROOT, entry.file)],
 		hashFiles: false,
@@ -296,12 +300,12 @@ async function renderEntry(entry: Entry, temporary: string): Promise<string> {
 	for (const field of entry.fields) {
 		const placeholder = sentinel(field);
 		if (!html.includes(placeholder) && !text.includes(placeholder)) {
-			throw new Error(
+			return err(
 				`[email:build] ${entry.name}: sentinel ${placeholder} missing from rendered output`
 			);
 		}
 	}
-	return moduleSource(entry, html, text);
+	return ok(moduleSource(entry, html, text));
 }
 
 async function writeEntry(entry: Entry, source: string): Promise<void> {
@@ -327,12 +331,17 @@ async function main(): Promise<void> {
 	let isFailed = false;
 	try {
 		for (const entry of TEMPLATES) {
-			const source = await renderEntry(entry, temporary);
-			if (!isCheck) {
-				await writeEntry(entry, source);
+			const rendered = await renderEntry(entry, temporary);
+			if (rendered.isErr()) {
+				console.error(rendered.error);
+				isFailed = true;
 				continue;
 			}
-			if (await isEntryStale(entry, source)) isFailed = true;
+			if (!isCheck) {
+				await writeEntry(entry, rendered.value);
+				continue;
+			}
+			if (await isEntryStale(entry, rendered.value)) isFailed = true;
 		}
 	} finally {
 		await rm(temporary, { recursive: true, force: true });

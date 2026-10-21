@@ -5,7 +5,8 @@ import type { MemberRow } from "../columns/memberColumns.tsx";
 import { useOpenAgreement } from "../openAgreement.ts";
 
 import { agreementAction } from "./agreementAction.ts";
-import type { ActionDescriptor } from "./shortcuts.ts";
+import { settleRosterAction } from "./RosterActionError.tsx";
+import type { ActionDescriptor, RosterActionOutcome } from "./shortcuts.ts";
 import { useTriage } from "./triage.ts";
 
 /**
@@ -29,7 +30,7 @@ export function useMemberActions(options: {
 	const confirm = useConfirm();
 	const agreement = useOpenAgreement();
 
-	async function kickOut(person: MemberRow): Promise<void> {
+	async function kickOut(person: MemberRow): Promise<RosterActionOutcome> {
 		if (
 			await confirm({
 				title: "Kick out?",
@@ -38,7 +39,11 @@ export function useMemberActions(options: {
 				tone: "danger",
 			})
 		)
-			await triage.kickOut(person._id);
+			return settleRosterAction(
+				"members",
+				person._id,
+				triage.kickOut(person._id)
+			);
 	}
 
 	function actions(): ActionDescriptor<MemberRow>[] {

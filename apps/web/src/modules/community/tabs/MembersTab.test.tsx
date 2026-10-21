@@ -6,8 +6,10 @@ import {
 	waitFor,
 	within,
 } from "@solidjs/testing-library";
+import { errAsync, okAsync, type ResultAsync } from "neverthrow";
 import { afterEach, expect, test, vi } from "vitest";
 
+import type { ClientError } from "../../../lib/call.ts";
 import { ConfirmProvider } from "../../../shared/confirm.tsx";
 import type { MemberRow } from "../columns/memberColumns.tsx";
 
@@ -41,15 +43,17 @@ const {
 	reAdmitMock,
 	markLeftMock,
 } = vi.hoisted(() => ({
-	kickOutMock: vi.fn(() => Promise.resolve()),
-	upgradeToMemberMock: vi.fn(() => Promise.resolve()),
-	extendWindowMock: vi.fn(() => Promise.resolve()),
-	setRoleMock: vi.fn(() => Promise.resolve()),
-	grantCoreMock: vi.fn(() => Promise.resolve()),
-	revokeCoreMock: vi.fn(() => Promise.resolve()),
-	promoteToBoardMock: vi.fn(() => Promise.resolve()),
-	reAdmitMock: vi.fn(() => Promise.resolve()),
-	markLeftMock: vi.fn(() => Promise.resolve()),
+	kickOutMock: vi.fn(
+		(): ResultAsync<undefined, ClientError> => okAsync(undefined)
+	),
+	upgradeToMemberMock: vi.fn(() => okAsync(undefined)),
+	extendWindowMock: vi.fn(() => okAsync(undefined)),
+	setRoleMock: vi.fn(() => okAsync(undefined)),
+	grantCoreMock: vi.fn(() => okAsync(undefined)),
+	revokeCoreMock: vi.fn(() => okAsync(undefined)),
+	promoteToBoardMock: vi.fn(() => okAsync(undefined)),
+	reAdmitMock: vi.fn(() => okAsync(undefined)),
+	markLeftMock: vi.fn(() => okAsync(undefined)),
 }));
 
 vi.mock("../actions/triage.ts", () => ({
@@ -622,4 +626,38 @@ test("K kicks out the focused row once this tab is marked active", async () => {
 	await waitFor(() => {
 		expect(kickOutMock).toHaveBeenCalledWith("p1");
 	});
+});
+
+test("a refused batch kick out shows why, stops, keeps the selection and clears when the drawer opens", async () => {
+	kickOutMock.mockClear();
+	kickOutMock.mockReturnValueOnce(
+		errAsync({ code: "Forbidden", message: "You can't do that." })
+	);
+	const { container } = renderWithSelection((selection) => (
+		<MembersTab selection={selection} />
+	));
+	const checkboxes = screen.getAllByRole("checkbox");
+	fireEvent.click(checkboxes[1]);
+	fireEvent.click(checkboxes[2]);
+	const clear = await screen.findByRole("button", {
+		name: /clear selection/i,
+	});
+	fireEvent.click(
+		within(clear.parentElement!).getByRole("button", { name: /kick out/i })
+	);
+
+	expect(await screen.findByRole("alert")).toHaveTextContent(
+		"You can't do that."
+	);
+	// Stopped at the first refusal; the second row's call never happened.
+	expect(kickOutMock).toHaveBeenCalledTimes(1);
+	expect(screen.getAllByRole("checkbox")[1]).toBeChecked();
+	expect(screen.getAllByRole("checkbox")[2]).toBeChecked();
+
+	// Opening someone's drawer drops a failure that was not theirs.
+	fireEvent.click(within(container).getAllByText("Alan")[0]);
+	await waitFor(() => {
+		expect(openPanel()).not.toBeNull();
+	});
+	expect(screen.queryByRole("alert")).toBeNull();
 });

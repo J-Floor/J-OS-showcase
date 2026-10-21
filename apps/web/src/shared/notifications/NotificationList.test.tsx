@@ -9,8 +9,8 @@ import {
 import { createSignal } from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
 
-const { head, clientQuery, markRead, markAllRead, navigate } = vi.hoisted(
-	() => ({
+const { head, clientQuery, markRead, markAllRead, navigate, toasterCreate } =
+	vi.hoisted(() => ({
 		head: {
 			data: undefined as unknown[] | undefined,
 			error: undefined as Error | undefined,
@@ -19,8 +19,8 @@ const { head, clientQuery, markRead, markAllRead, navigate } = vi.hoisted(
 		markRead: vi.fn(() => Promise.resolve(null)),
 		markAllRead: vi.fn(() => Promise.resolve(null)),
 		navigate: vi.fn(),
-	})
-);
+		toasterCreate: vi.fn(),
+	}));
 
 vi.mock("convex-solidjs", () => ({
 	useQuery: () => ({ data: () => head.data, error: () => head.error }),
@@ -43,6 +43,7 @@ vi.mock("../../../convex/_generated/api", () => ({
 	},
 }));
 vi.mock("@solidjs/router", () => ({ useNavigate: () => navigate }));
+vi.mock("../toaster.ts", () => ({ toaster: { create: toasterCreate } }));
 
 import styles from "./NotificationList.module.scss";
 import { NotificationList } from "./NotificationList.tsx";
@@ -162,9 +163,8 @@ test("clicking a row closes the drawer, opens its page and marks it read", () =>
 	expect(rowOf("New task assigned")).not.toHaveClass(styles.unread);
 });
 
-test("a failed markRead still navigates, is logged, and leaves the row unread", async () => {
+test("a failed markRead still navigates, toasts, and leaves the row unread", async () => {
 	markRead.mockRejectedValueOnce(new Error("Not found"));
-	const error = vi.spyOn(console, "error").mockImplementation(() => {});
 	head.data = [TASK];
 	serve({ since: null });
 	renderList();
@@ -173,8 +173,10 @@ test("a failed markRead still navigates, is logged, and leaves the row unread", 
 	await waitFor(() => {
 		expect(rowOf("New task assigned")).toHaveClass(styles.unread);
 	});
-	expect(error).toHaveBeenCalled();
-	error.mockRestore();
+	expect(toasterCreate).toHaveBeenCalledWith({
+		type: "error",
+		title: "Could not mark that as read.",
+	});
 });
 
 test("Load more appends an older page and hides once a page comes back done", async () => {
@@ -282,7 +284,6 @@ test("a floor fetch that fails says so, and the next open tries again", async ()
 
 test("a failed markAllRead puts the loaded rows back to unread", async () => {
 	markAllRead.mockRejectedValueOnce(new Error("refused"));
-	const error = vi.spyOn(console, "error").mockImplementation(() => {});
 	head.data = [TASK, EVENT, GUEST];
 	serve({ since: null });
 	const exposed: { inbox?: Inbox } = {};
@@ -293,11 +294,9 @@ test("a failed markAllRead puts the loaded rows back to unread", async () => {
 		expect(rowOf("New task assigned")).toHaveClass(styles.unread);
 	});
 	expect(rowOf("Guest access ending soon")).toHaveClass(styles.unread);
-	error.mockRestore();
 });
 
 test("a failed markRead does not un-read a row a successful markAllRead covered", async () => {
-	const error = vi.spyOn(console, "error").mockImplementation(() => {});
 	const rejecter: { run: (reason: Error) => void } = { run: () => {} };
 	markRead.mockImplementationOnce(
 		() =>
@@ -315,10 +314,9 @@ test("a failed markRead does not un-read a row a successful markAllRead covered"
 	await Promise.resolve();
 	rejecter.run(new Error("refused"));
 	await waitFor(() => {
-		expect(error).toHaveBeenCalled();
+		expect(toasterCreate).toHaveBeenCalled();
 	});
 	expect(rowOf("New task assigned")).not.toHaveClass(styles.unread);
-	error.mockRestore();
 });
 
 test("a refetch with a new row on top keeps the existing rows' DOM", () => {

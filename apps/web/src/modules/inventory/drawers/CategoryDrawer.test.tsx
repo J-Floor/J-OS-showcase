@@ -1,5 +1,12 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@solidjs/testing-library";
+import { ConvexError } from "convex/values";
 import { afterEach, expect, test, vi } from "vitest";
 
 const { mockCreate, mockUpdate, mockRemove, mockUseItemTypesByCategory } =
@@ -195,4 +202,30 @@ test("item types loaded empty: shows (0) and the empty copy", () => {
 	expect(screen.getByText("Item types (0)")).toBeInTheDocument();
 	expect(screen.getByText("No item types yet")).toBeInTheDocument();
 	expect(document.querySelector("[data-skeleton-list]")).toBeNull();
+});
+
+test("a refused create keeps the drawer open and says why; a later success closes it", async () => {
+	mockCreate.mockRejectedValueOnce(
+		new ConvexError({ code: "Forbidden", message: "You can't do that." })
+	);
+	mockCreate.mockResolvedValueOnce("itemCategories:new");
+	const onOpenChange = vi.fn();
+	render(() => <CategoryDrawer open onOpenChange={onOpenChange} />);
+	fireEvent.input(screen.getByLabelText("Name"), {
+		target: { value: "IT" },
+	});
+	expect(screen.getByLabelText("Name")).not.toHaveAttribute("aria-invalid");
+	fireEvent.click(screen.getByRole("button", { name: /Create category/ }));
+	expect(await screen.findByText("You can't do that.")).toBeInTheDocument();
+	expect(screen.getByLabelText("Name")).toHaveAttribute(
+		"aria-invalid",
+		"true"
+	);
+	expect(onOpenChange).not.toHaveBeenCalled();
+
+	fireEvent.click(screen.getByRole("button", { name: /Create category/ }));
+	await waitFor(() => {
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+	});
+	expect(screen.queryByText("You can't do that.")).toBeNull();
 });

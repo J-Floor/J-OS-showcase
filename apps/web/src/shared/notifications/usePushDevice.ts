@@ -3,20 +3,19 @@ import { type Accessor, createEffect, createSignal, untrack } from "solid-js";
 import {
 	disablePush,
 	enablePush,
-	isServiceWorkerNotReady,
 	pushConfigured,
 	pushSubscribed,
 	pushSupport,
 	type PushSupport,
 } from "../../lib/push.ts";
-import { userErrorMessage } from "../userErrorMessage.ts";
+import { createActionError } from "../createActionError.ts";
 
 /** This device's push state, shared by the drawer's device row (which shows
  *  and toggles it) and the Categories tab (which locks Push while it's off). */
 export type PushDevice = {
 	support: Accessor<PushSupport>;
 	busy: Accessor<boolean>;
-	error: Accessor<string | undefined>;
+	error: Accessor<string | null>;
 	pushOn: () => boolean;
 	configured: () => boolean;
 	canToggle: () => boolean;
@@ -33,19 +32,15 @@ export function usePushDevice(isOpen: () => boolean): PushDevice {
 	const [support, setSupport] = createSignal<PushSupport>(pushSupport());
 	const [subscribed, setSubscribed] = createSignal(false);
 	const [busy, setBusy] = createSignal(false);
-	const [error, setError] = createSignal<string>();
+	const { error, trackResult, clear } = createActionError();
 
 	createEffect(() => {
 		if (!isOpen()) return;
-		setError(undefined);
+		clear();
 		setSupport(pushSupport());
-		pushSubscribed()
-			.then((value) => {
-				if (!untrack(busy)) setSubscribed(value);
-			})
-			.catch(() => {
-				if (!untrack(busy)) setSubscribed(false);
-			});
+		void pushSubscribed().then((result) => {
+			if (!untrack(busy)) setSubscribed(result.unwrapOr(false));
+		});
 	});
 
 	function pushOn(): boolean {
@@ -62,42 +57,24 @@ export function usePushDevice(isOpen: () => boolean): PushDevice {
 	async function enable(): Promise<void> {
 		if (busy()) return;
 		setBusy(true);
-		setError(undefined);
-		try {
-			const next = await enablePush();
-			setSupport(next);
-			setSubscribed(next === "granted");
-		} catch (err) {
-			setError(
-				isServiceWorkerNotReady(err)
-					? "The app is still starting up. Try again in a moment."
-					: userErrorMessage(err, "Could not turn on notifications.")
-			);
-		} finally {
-			setBusy(false);
+		const result = await trackResult(enablePush());
+		if (result.isOk()) {
+			setSupport(result.value);
+			setSubscribed(result.value === "granted");
 		}
+		setBusy(false);
 	}
 
 	async function disable(): Promise<void> {
 		if (busy()) return;
 		setBusy(true);
-		setError(undefined);
-		try {
-			await disablePush();
-		} catch (err) {
-			setError(
-				userErrorMessage(err, "Could not turn off notifications.")
-			);
-		} finally {
-			// The browser subscription is dropped even when the server call fails,
-			// but not when reading it failed first: ask the browser, don't assume.
-			try {
-				setSubscribed(await pushSubscribed());
-			} catch {
-				// State unknown: leave it as it was.
-			}
-			setBusy(false);
-		}
+		await trackResult(disablePush());
+		// The browser subscription is dropped even when the server call fails,
+		// but not when reading it failed first: ask the browser, don't assume.
+		// State unknown: leave it as it was.
+		const stored = await pushSubscribed();
+		if (stored.isOk()) setSubscribed(stored.value);
+		setBusy(false);
 	}
 
 	return {

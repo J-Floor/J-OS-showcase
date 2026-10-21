@@ -276,7 +276,7 @@ describe("read state", () => {
 		expect(row?.readAt).toBeUndefined();
 	});
 
-	it("markRead on a row that is gone throws Not found", async () => {
+	it("markRead on a row that is gone throws NotificationNotFound", async () => {
 		const backend = convexTest(schema, modules);
 		const ada = await seedPerson(backend, "ada@jfloor.test");
 		const [id] = await seedRows(backend, ada, 1);
@@ -286,7 +286,7 @@ describe("read state", () => {
 			backend
 				.withIdentity({ email: "ada@jfloor.test" })
 				.mutation(api.notify.inbox.markRead, { id })
-		).rejects.toThrow(/Not found/);
+		).rejects.toThrow(/NotificationNotFound/);
 	});
 
 	it("markAllRead clears more than one batch through its scheduled continuation, and only the caller's", async () => {

@@ -1,13 +1,17 @@
 import { Button, Icon, Input, Logo } from "@j-os/design-system";
 import { Navigate, useNavigate } from "@solidjs/router";
-import { createSignal, Show } from "solid-js";
+import { ResultAsync } from "neverthrow";
+import { createEffect, createSignal, on, Show } from "solid-js";
 
 import { authClient } from "../../lib/auth.ts";
-import { ottPending } from "../../lib/convex.ts";
+import { ottFailed, ottPending } from "../../lib/convex.ts";
 import { ICONS } from "../../shared/icons.ts";
 import { LoadingScreen } from "../../shared/LoadingScreen.tsx";
 
 import styles from "./SignIn.module.scss";
+
+const OTT_FAILED = "That sign-in link didn't work. Send a new one.";
+const SEND_FAILED = "Couldn’t send the link. Try again.";
 
 /** Requests the magic link for `email()`, tracking whether it was sent, is
  *  sending, or failed. */
@@ -21,22 +25,21 @@ function createMagicLinkRequest(email: () => string) {
 		if (sending()) return;
 		setError(null);
 		setSending(true);
-		try {
-			const response = await authClient.signIn.magicLink({
+		const response = await ResultAsync.fromPromise(
+			authClient.signIn.magicLink({
 				email: email(),
 				callbackURL: "/",
-			});
-			if (response.error)
-				setError(
-					response.error.message ??
-						"Couldn’t send the link. Try again."
-				);
-			else setSent(true);
-		} catch {
-			setError("Couldn’t send the link. Try again.");
-		} finally {
-			setSending(false);
+			}),
+			() => SEND_FAILED
+		);
+		setSending(false);
+		if (response.isErr()) {
+			setError(response.error);
+			return;
 		}
+		if (response.value.error)
+			setError(response.value.error.message ?? SEND_FAILED);
+		else setSent(true);
 	}
 
 	return { sent, setSent, error, setError, sending, submit };
@@ -67,6 +70,13 @@ export function SignIn() {
 	const { sent, setSent, error, setError, sending, submit } =
 		createMagicLinkRequest(email);
 	const navigate = useNavigate();
+	// A failed link exchange is the form's own error from the moment the
+	// exchange ends, so sending a new link (or starting over) clears it.
+	createEffect(
+		on(ottPending, (isPending) => {
+			if (!isPending && ottFailed()) setError(OTT_FAILED);
+		})
+	);
 
 	// /signin lives outside the RoleGate subtree (that gate only pushes signed-OUT
 	// users TO /signin). Mirror its opposite case here: once the session resolves,

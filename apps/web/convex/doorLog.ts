@@ -19,6 +19,7 @@ import {
 import type { LockSlot } from "./lib/doorLocks.ts";
 import { personByEmail } from "./lib/emailAddress.ts";
 import { withActorNames } from "./lib/names.ts";
+import { unwrap } from "./lib/result.ts";
 import { BOARD_LEVEL } from "./lib/roles.ts";
 import {
 	doorAction,
@@ -34,7 +35,7 @@ export type LogRow = Doc<"doorLog"> & { actorName: string | undefined };
 export const firstPageFloor = query({
 	args: {},
 	handler: async (context): Promise<{ since: number | null }> => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		const rows = await context.db
 			.query("doorLog")
 			.withIndex("by_at")
@@ -52,7 +53,7 @@ export const firstPageFloor = query({
 export const listSince = query({
 	args: { since: v.union(v.number(), v.null()) },
 	handler: async (context, { since }): Promise<LogRow[]> => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		const rows = await context.db
 			.query("doorLog")
 			.withIndex("by_at", (range) =>
@@ -71,7 +72,7 @@ export const listBefore = query({
 		context,
 		{ before, paginationOpts }
 	): Promise<PaginationResult<LogRow>> => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		const result = await context.db
 			.query("doorLog")
 			.withIndex("by_at", (range) => range.lt("at", before))

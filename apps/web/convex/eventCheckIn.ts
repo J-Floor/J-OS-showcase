@@ -5,6 +5,7 @@ import { action, internalMutation, mutation } from "./_generated/server";
 import { eventLive, insertAttendanceOnce } from "./lib/attendance.ts";
 import { requireRole } from "./lib/authGuard.ts";
 import { redeemToken, type ConfirmStatus } from "./lib/confirmToken.ts";
+import { refuse, unwrap } from "./lib/result.ts";
 import { COMMUNITY_TIERS } from "./lib/roles.ts";
 import type { Wifi } from "./lib/wifi.ts";
 
@@ -25,11 +26,12 @@ type InviteConfirmStatus = Exclude<ConfirmStatus, "already">;
 export const checkInToEvent = mutation({
 	args: { eventId: v.id("events") },
 	handler: async (context, { eventId }): Promise<{ ok: boolean }> => {
-		const person = await requireRole(context, COMMUNITY_TIERS);
+		const person = unwrap(await requireRole(context, COMMUNITY_TIERS));
 		const event = await context.db.get(eventId);
-		if (event === null) throw new Error("Event not found");
+		if (event === null) return refuse({ type: "EventNotFound" });
 		// Hard stop, no grace.
-		if (!eventLive(event, Date.now())) throw new Error("Event has ended");
+		if (!eventLive(event, Date.now()))
+			return refuse({ type: "EventEnded" });
 		await insertAttendanceOnce(context, person._id, eventId);
 		return { ok: true };
 	},

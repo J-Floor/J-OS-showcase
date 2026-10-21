@@ -1,13 +1,11 @@
+import { err, ok, type Result } from "neverthrow";
+
 import type { Doc } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 
 import { normalizeEmail, peopleByEmail } from "./emailAddress.ts";
-import {
-	type Naming,
-	overBudget,
-	type ReadBudget,
-	takeCharged,
-} from "./peopleRefs.ts";
+import type { PeopleError } from "./errors/people.ts";
+import { type Naming, type ReadBudget, takeCharged } from "./peopleRefs.ts";
 
 /** True when `doc` is the person's own record (`personId` is theirs). */
 export function ownedBy(doc: object, personId: string): boolean {
@@ -65,17 +63,19 @@ export async function addressesHeldBy(
 	addresses: string[],
 	ids: Set<string>,
 	budget: ReadBudget
-): Promise<{ problem: string } | { addresses: string[] }> {
+): Promise<Result<string[], PeopleError>> {
 	const own = [];
 	for (const address of addresses) {
 		const holders = await takeCharged(
 			peopleByEmail(context, address),
-			budget
+			budget,
+			"people"
 		);
-		if (!holders) return { problem: overBudget("people") };
-		if (holders.every((holder) => ids.has(holder._id))) own.push(address);
+		if (holders.isErr()) return err(holders.error);
+		if (holders.value.every((holder) => ids.has(holder._id)))
+			own.push(address);
 	}
-	return { addresses: own };
+	return ok(own);
 }
 
 /**
@@ -87,17 +87,18 @@ export async function legacyDoorRows(
 	context: QueryCtx,
 	addresses: string[],
 	budget: ReadBudget
-): Promise<{ problem: string } | { rows: Doc<"doorLog">[] }> {
+): Promise<Result<Doc<"doorLog">[], PeopleError>> {
 	const rows = [];
 	for (const address of addresses) {
 		const found = await takeCharged(
 			context.db
 				.query("doorLog")
 				.withIndex("by_email", (range) => range.eq("email", address)),
-			budget
+			budget,
+			"doorLog"
 		);
-		if (!found) return { problem: overBudget("doorLog") };
-		rows.push(...found.filter((row) => row.personId === undefined));
+		if (found.isErr()) return err(found.error);
+		rows.push(...found.value.filter((row) => row.personId === undefined));
 	}
-	return { rows };
+	return ok(rows);
 }

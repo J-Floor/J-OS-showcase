@@ -17,6 +17,14 @@ import { setKeeperActive } from "../../shared/data/queryKeeper.ts";
 
 import { OccupancyCard, POLL_INTERVAL_MS } from "./OccupancyCard.tsx";
 
+/** Lets every pending promise step run: a call is a Result chain, several
+ *  microtasks deep. */
+function flush(): Promise<void> {
+	return new Promise((resolve) => {
+		setTimeout(resolve, 0);
+	});
+}
+
 beforeEach(() => {
 	setKeeperActive(true);
 	setDeferredImmediate(true);
@@ -35,16 +43,14 @@ afterEach(() => {
 it("renders nothing when occupancy is disabled", async () => {
 	occupancyMutate.mockResolvedValue({ enabled: false });
 	const { container } = render(() => <OccupancyCard />);
-	await Promise.resolve();
-	await Promise.resolve();
+	await flush();
 	expect(container).toBeEmptyDOMElement();
 });
 
 it("does not poll while occupancy is disabled", async () => {
 	occupancyMutate.mockResolvedValue({ enabled: false });
 	render(() => <OccupancyCard />);
-	await Promise.resolve();
-	await Promise.resolve();
+	await flush();
 	vi.advanceTimersByTime(3 * POLL_INTERVAL_MS);
 	expect(occupancyMutate).toHaveBeenCalledTimes(1);
 });
@@ -76,8 +82,7 @@ it("retries after a failed first call and then shows the card", async () => {
 		.mockRejectedValueOnce(new Error("network"))
 		.mockResolvedValue({ enabled: true, count: 30, capacity: 40 });
 	render(() => <OccupancyCard />);
-	await Promise.resolve();
-	await Promise.resolve();
+	await flush();
 	vi.advanceTimersByTime(POLL_INTERVAL_MS);
 	expect(await screen.findByText("High")).toBeInTheDocument();
 });
@@ -106,16 +111,13 @@ it("ignores a stale response that resolves after a newer disabled answer", async
 		.mockResolvedValueOnce({ enabled: false }) // next tick answers disabled
 		.mockResolvedValue({ enabled: true, count: 30, capacity: 40 });
 	const { container } = render(() => <OccupancyCard />);
-	await Promise.resolve();
-	await Promise.resolve();
+	await flush();
 	vi.advanceTimersByTime(POLL_INTERVAL_MS);
 	vi.advanceTimersByTime(POLL_INTERVAL_MS);
 	expect(occupancyMutate).toHaveBeenCalledTimes(3);
-	await Promise.resolve();
-	await Promise.resolve();
+	await flush();
 	resolveStale?.({ enabled: true, count: 30, capacity: 40 });
-	await Promise.resolve();
-	await Promise.resolve();
+	await flush();
 	expect(container).toBeEmptyDOMElement();
 	vi.advanceTimersByTime(3 * POLL_INTERVAL_MS);
 	expect(occupancyMutate).toHaveBeenCalledTimes(3);
@@ -131,8 +133,7 @@ it("starts no polling when unmounted before the first request resolves", async (
 	const { unmount } = render(() => <OccupancyCard />);
 	unmount();
 	resolveFirst?.({ enabled: true, count: 30, capacity: 40 });
-	await Promise.resolve();
-	await Promise.resolve();
+	await flush();
 	vi.advanceTimersByTime(3 * POLL_INTERVAL_MS);
 	expect(occupancyMutate).toHaveBeenCalledTimes(1);
 });
@@ -210,8 +211,7 @@ it("does not remember an answer that lands after unmount", async () => {
 	const { unmount } = render(() => <OccupancyCard />);
 	unmount();
 	resolveFirst?.({ enabled: true, count: 30, capacity: 40 });
-	await Promise.resolve();
-	await Promise.resolve();
+	await flush();
 	expect(lastAnswer("occupancy", POLL_INTERVAL_MS)).toBeUndefined();
 });
 

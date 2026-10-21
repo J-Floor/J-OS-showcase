@@ -1,5 +1,14 @@
 import type { Hotkey } from "@tanstack/solid-hotkeys";
 
+import { invariant } from "../../../../convex/lib/result.ts";
+
+/** A settled roster action. A refusal has already been shown, so callers
+ *  only learn whether there was one (to stop a batch or keep a ring). */
+export type SettledAction = { refused: boolean };
+
+/** How an async action ended; `undefined` when the board cancelled it. */
+export type RosterActionOutcome = SettledAction | undefined;
+
 /**
  * Where a key is live. Two actions may share a letter across scopes but never
  * within one — `M` means "make them a member" on both Applications and Guests,
@@ -36,7 +45,7 @@ export type ActionDescriptor<Person> = {
 	 * board nothing about why it cannot press it.
 	 */
 	disabledReason?: (person: Person) => string;
-	run: (person: Person) => void | Promise<void>;
+	run: (person: Person) => Promise<RosterActionOutcome> | undefined;
 };
 
 /**
@@ -53,10 +62,10 @@ export function assertNoCollisions<Person>(
 	for (const action of actions) {
 		const key = `${action.scope}:${action.hotkey}`;
 		const owner = seen.get(key);
-		if (owner !== undefined)
-			throw new Error(
-				`Shortcut collision in scope "${action.scope}": "${action.hotkey}" is claimed by both "${owner}" and "${action.id}".`
-			);
+		invariant(
+			owner === undefined,
+			`Shortcut collision in scope "${action.scope}": "${action.hotkey}" is claimed by both "${String(owner)}" and "${action.id}".`
+		);
 		seen.set(key, action.id);
 	}
 }

@@ -1,7 +1,8 @@
 import { Switch } from "@j-os/design-system";
-import { type JSX, Show } from "solid-js";
+import type { JSX } from "solid-js";
 
 import type { PushSupport } from "../../lib/push.ts";
+import { InlineError } from "../InlineError.tsx";
 
 import styles from "./NotificationDeviceRow.module.scss";
 import type { PushDevice } from "./usePushDevice.ts";
@@ -51,9 +52,7 @@ export function NotificationDeviceRow(props: {
 						: props.device.disable());
 				}}
 			/>
-			<Show when={props.device.error()}>
-				{(message) => <p class={styles.error}>{message()}</p>}
-			</Show>
+			<InlineError message={props.device.error()} />
 		</div>
 	);
 }

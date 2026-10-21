@@ -1,6 +1,7 @@
-import { Button, fireConfetti } from "@j-os/design-system";
+import { Button } from "@j-os/design-system";
 import { onCleanup, onMount } from "solid-js";
 
+import { celebrate } from "../../../../lib/celebrate.ts";
 import { StepActions } from "../../StepActions.tsx";
 import type { OnboardingStepProps } from "../../types.ts";
 
@@ -15,23 +16,19 @@ const CONFETTI_RIGHT_DELAY_MS = 300;
  */
 export function WelcomeStep(props: OnboardingStepProps) {
 	onMount(() => {
-		// Decorative only — never let a confetti hiccup break the step.
-		try {
-			fireConfetti();
-			const timers = [
-				setTimeout(() => {
-					fireConfetti({ x: 0.3, y: 0.4 });
-				}, CONFETTI_LEFT_DELAY_MS),
-				setTimeout(() => {
-					fireConfetti({ x: 0.7, y: 0.4 });
-				}, CONFETTI_RIGHT_DELAY_MS),
-			];
-			onCleanup(() => {
-				for (const timer of timers) clearTimeout(timer);
-			});
-		} catch {
-			/* ignore */
-		}
+		// Decorative only: `celebrate` drops a failed burst.
+		celebrate();
+		const timers = [
+			setTimeout(() => {
+				celebrate({ x: 0.3, y: 0.4 });
+			}, CONFETTI_LEFT_DELAY_MS),
+			setTimeout(() => {
+				celebrate({ x: 0.7, y: 0.4 });
+			}, CONFETTI_RIGHT_DELAY_MS),
+		];
+		onCleanup(() => {
+			for (const timer of timers) clearTimeout(timer);
+		});
 	});
 
 	return (

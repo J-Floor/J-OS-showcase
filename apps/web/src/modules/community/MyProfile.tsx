@@ -5,8 +5,11 @@ import { createSignal, For, Show, type Accessor } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
 import { MAX_LINKS } from "../../../convex/lib/safeUrl.ts";
+import { call } from "../../lib/call.ts";
+import { createActionError } from "../../shared/createActionError.ts";
 import { useQuery } from "../../shared/data/useQuery.ts";
 import { ICONS } from "../../shared/icons.ts";
+import { InlineError } from "../../shared/InlineError.tsx";
 import { buildLinks } from "../signup/links.ts";
 
 import styles from "./MyProfile.module.scss";
@@ -47,8 +50,11 @@ function sanitizePhone(value: string): string {
 export function MyProfile() {
 	const me = useQuery(api.people.getCurrentPerson, {});
 	const update = useMutation(api.people.updateOwnProfile);
-	function patch(fields: Record<string, unknown>): void {
-		void update.mutateAsync(fields);
+	const { error, trackResult } = createActionError();
+	async function patch(fields: Record<string, unknown>): Promise<void> {
+		await trackResult(
+			call(update.mutateAsync(fields), "Could not save your profile.")
+		);
 	}
 	return (
 		<Query.Root data={me.data()}>
@@ -59,7 +65,15 @@ export function MyProfile() {
 				<p>No profile found.</p>
 			</Query.Empty>
 			<Query.Content of={me.data()}>
-				{(person) => <ProfileForm person={person} onPatch={patch} />}
+				{(person) => (
+					<>
+						<ProfileForm
+							person={person}
+							onPatch={(fields) => void patch(fields)}
+						/>
+						<InlineError message={error()} />
+					</>
+				)}
 			</Query.Content>
 		</Query.Root>
 	);

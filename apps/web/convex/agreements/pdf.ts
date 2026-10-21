@@ -1,6 +1,10 @@
 // apps/web/convex/agreements/pdf.ts
 import fontkit from "@pdf-lib/fontkit";
+import { err, ok, type Result } from "neverthrow";
 import { PDFDocument, rgb } from "pdf-lib";
+
+import type { AgreementsError } from "../lib/errors/agreements.ts";
+import { invariant } from "../lib/result.ts";
 
 import { FIELD_COORDS, type Variant } from "./coords.ts";
 import { MANROPE_REGULAR_BASE64 } from "./generated/fonts.ts";
@@ -16,17 +20,25 @@ function base64ToBytes(b64: string): Uint8Array {
 	return Uint8Array.from(atob(b64), (character) => character.charCodeAt(0));
 }
 
-/** Decode + validate a PNG data URL (size-capped). Throws otherwise. */
-export function validatePngDataUrl(dataUrl: string): Uint8Array {
+/** Decode + validate a PNG data URL (size-capped), or say why it is refused. */
+export function validatePngDataUrl(
+	dataUrl: string
+): Result<Uint8Array, AgreementsError> {
 	if (dataUrl.length > MAX_SIG_DATA_URL_LENGTH)
-		throw new Error("Signature image is too large");
+		return err({ type: "SignatureTooLarge" });
 	const match = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
-	if (!match) throw new Error("Signature must be a PNG data URL");
+	if (!match) return err({ type: "SignatureNotPng" });
 	const bytes = base64ToBytes(match[1]);
-	if (bytes.byteLength === 0 || bytes.byteLength > MAX_SIG_BYTES) {
-		throw new Error("Signature image is empty or too large");
+	return bytes.byteLength === 0 || bytes.byteLength > MAX_SIG_BYTES
+		? err({ type: "SignatureSizeInvalid" })
+		: ok(bytes);
+}
+
+function allPrintable(printable: Set<number>, text: string): boolean {
+	for (const character of text) {
+		if (!printable.has(character.codePointAt(0) ?? 0)) return false;
 	}
-	return bytes;
+	return true;
 }
 
 export async function drawSignedPdf(
@@ -41,7 +53,7 @@ export async function drawSignedPdf(
 		signaturePng?: Uint8Array;
 		board: { name: string; role: string; signaturePng?: Uint8Array }[];
 	}
-): Promise<Uint8Array> {
+): Promise<Result<Uint8Array, AgreementsError>> {
 	const doc = await PDFDocument.load(templateBytes);
 	doc.registerFontkit(fontkit);
 	const font = await doc.embedFont(base64ToBytes(MANROPE_REGULAR_BASE64), {
@@ -55,19 +67,20 @@ export async function drawSignedPdf(
 	const page = pages[pages.length - 1];
 	const coords = FIELD_COORDS[options.variant];
 	const black = rgb(0, 0, 0);
-	// Refuse rather than stamp blank boxes for characters the font lacks.
+	// Refuse rather than stamp blank boxes for characters the font lacks: the
+	// applicant's own fields as an error they can fix, the rest as a bug.
+	const applicantFields = [options.name, options.company, options.email];
+	if (!applicantFields.every((text) => allPrintable(printable, text)))
+		return err({ type: "AgreementUnprintable" });
 	function put(
 		label: string,
 		text: string,
 		at: { x: number; y: number }
 	): void {
-		for (const ch of text) {
-			if (!printable.has(ch.codePointAt(0) ?? 0)) {
-				throw new Error(
-					`${label} contains characters the agreement cannot print`
-				);
-			}
-		}
+		invariant(
+			allPrintable(printable, text),
+			`${label} contains characters the agreement cannot print`
+		);
 		page.drawText(text, { x: at.x, y: at.y, size: 11, font, color: black });
 	}
 
@@ -127,5 +140,5 @@ export async function drawSignedPdf(
 	// the Typst-embedded font subsets into compressed object streams that browser
 	// PDF viewers fail to resolve, so the body text falls back to a default font.
 	// Plain xref keeps the FontFile programs where viewers find them.
-	return doc.save({ useObjectStreams: false });
+	return ok(await doc.save({ useObjectStreams: false }));
 }

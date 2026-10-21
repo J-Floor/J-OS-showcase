@@ -1,12 +1,25 @@
 import { Button, SignaturePad } from "@j-os/design-system";
 import { useAction } from "convex-solidjs";
+import { Result } from "neverthrow";
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
 
 import { api } from "../../../../../convex/_generated/api";
+import { call } from "../../../../lib/call.ts";
+import { createActionError } from "../../../../shared/createActionError.ts";
+import { InlineError } from "../../../../shared/InlineError.tsx";
 import { StepActions } from "../../StepActions.tsx";
 import type { OnboardingStepProps } from "../../types.ts";
 
 import styles from "./DocumentStep.module.scss";
+
+const PREVIEW_FAILED =
+	"Couldn't prepare your personalised copy, so the blank agreement is shown instead.";
+
+const decodePdf = Result.fromThrowable(
+	(b64: string) =>
+		Uint8Array.from(atob(b64), (character) => character.charCodeAt(0)),
+	() => PREVIEW_FAILED
+);
 
 /** The agreement PDF for this person: the filled-but-unsigned preview once
  *  it is generated (on mount), the blank template until then or if
@@ -15,6 +28,7 @@ function createAgreementPdf(props: OnboardingStepProps) {
 	const preview = useAction(api.agreements.previewAgreement);
 	// Blob URL of the filled-but-unsigned preview, generated once on mount.
 	const [previewUrl, setPreviewUrl] = createSignal<string | null>(null);
+	const [previewError, setPreviewError] = createSignal<string | null>(null);
 
 	function variant() {
 		return props.person.tier === "guest" ? "guest" : "member";
@@ -30,19 +44,24 @@ function createAgreementPdf(props: OnboardingStepProps) {
 
 	onMount(() => {
 		void (async () => {
-			try {
-				const b64 = await preview.mutateAsync({});
-				if (!b64) return;
-				const bytes = Uint8Array.from(atob(b64), (character) =>
-					character.charCodeAt(0)
-				);
-				const url = URL.createObjectURL(
-					new Blob([bytes], { type: "application/pdf" })
-				);
-				setPreviewUrl(url);
-			} catch {
+			const result = await call(preview.mutateAsync({}), PREVIEW_FAILED);
+			if (result.isErr()) {
 				// Leave previewUrl null — docUrl() falls back to the blank template.
+				setPreviewError(result.error.message);
+				return;
 			}
+			const b64 = result.value;
+			if (!b64) return;
+			const decoded = decodePdf(b64);
+			if (decoded.isErr()) {
+				setPreviewError(decoded.error);
+				return;
+			}
+			setPreviewUrl(
+				URL.createObjectURL(
+					new Blob([decoded.value], { type: "application/pdf" })
+				)
+			);
 		})();
 	});
 	onCleanup(() => {
@@ -59,7 +78,7 @@ function createAgreementPdf(props: OnboardingStepProps) {
 		link.remove();
 	}
 
-	return { docUrl, downloadPdf };
+	return { docUrl, downloadPdf, previewError };
 }
 
 /** The signer's details, read-only, as stamped onto the agreement. */
@@ -89,12 +108,12 @@ export function DocumentStep(props: OnboardingStepProps) {
 	const sign = useAction(api.agreements.signAgreement);
 	const [sig, setSig] = createSignal<string | null>(null);
 	const [busy, setBusy] = createSignal(false);
-	const [error, setError] = createSignal<string | null>(null);
+	const { error, trackResult } = createActionError();
 	// Inline embed is hidden by default: <object>/inline PDF is unreliable on
 	// iOS Safari / Android Chrome (and the embed is bulky), so we gate it behind
 	// "View inline" and make "Download PDF" — which works everywhere — primary.
 	const [showPdf, setShowPdf] = createSignal(false);
-	const { docUrl, downloadPdf } = createAgreementPdf(props);
+	const { docUrl, downloadPdf, previewError } = createAgreementPdf(props);
 	function canSign() {
 		return Boolean(sig()) && !busy();
 	}
@@ -103,15 +122,16 @@ export function DocumentStep(props: OnboardingStepProps) {
 		const png = sig();
 		if (!png) return;
 		setBusy(true);
-		setError(null);
-		try {
-			await sign.mutateAsync({ signaturePng: png });
-			// signAgreement marks the document step complete server-side; the
-			// wizard advances reactively off the person query.
-		} catch {
-			setError("Couldn't submit your signature — please try again.");
-			setBusy(false);
-		}
+		const result = await trackResult(
+			call(
+				sign.mutateAsync({ signaturePng: png }),
+				"Couldn't submit your signature — please try again."
+			)
+		);
+		// On success signAgreement has marked the document step complete
+		// server-side; the wizard advances reactively off the person query.
+		if (result.isOk()) return;
+		setBusy(false);
 	}
 
 	return (
@@ -133,6 +153,7 @@ export function DocumentStep(props: OnboardingStepProps) {
 					Download PDF
 				</Button>
 			</div>
+			<InlineError message={previewError()} />
 			<Button
 				variant="tertiary"
 				onClick={() => {
@@ -152,9 +173,7 @@ export function DocumentStep(props: OnboardingStepProps) {
 			</Show>
 			<SignerDetails person={props.person} />
 			<SignaturePad label="Your signature" onChange={setSig} />
-			<Show when={error()}>
-				<p class={styles.error}>{error()}</p>
-			</Show>
+			<InlineError message={error()} />
 			<StepActions>
 				<Button
 					disabled={!canSign()}

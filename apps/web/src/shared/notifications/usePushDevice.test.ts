@@ -1,21 +1,30 @@
+import { err, ok, type Result } from "neverthrow";
 import { createRoot, createSignal } from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
+
+import type { ClientError } from "../../lib/call.ts";
 
 const { push } = vi.hoisted(() => {
 	const state = {
 		support: "default",
 		subscribed: false,
 		configured: true,
-		enable: vi.fn(() => Promise.resolve("granted")),
-		disable: vi.fn(() => Promise.resolve()),
-		read: vi.fn(() => Promise.resolve(state.subscribed)),
+		enable: vi.fn(
+			(): Promise<Result<string, ClientError>> =>
+				Promise.resolve(ok("granted"))
+		),
+		disable: vi.fn(
+			(): Promise<Result<void, ClientError>> => Promise.resolve(ok())
+		),
+		read: vi.fn(
+			(): Promise<Result<boolean, ClientError>> =>
+				Promise.resolve(ok(state.subscribed))
+		),
 	};
 	return { push: state };
 });
 
 vi.mock("../../lib/push.ts", () => ({
-	isServiceWorkerNotReady: (err: unknown) =>
-		err instanceof Error && err.message.includes("not ready"),
 	pushConfigured: () => push.configured,
 	pushSupport: () => push.support,
 	pushSubscribed: push.read,
@@ -97,7 +106,9 @@ test("re-reads the device state each time it opens", async () => {
 });
 
 test("an error from the last open is cleared on the next open", async () => {
-	push.enable.mockRejectedValueOnce(new Error("boom"));
+	push.enable.mockResolvedValueOnce(
+		err({ code: "Unknown", message: "Could not turn on notifications." })
+	);
 	const [open, setOpen] = createSignal(true);
 	const device = createDevice(open);
 	await device.enable();
@@ -105,7 +116,7 @@ test("an error from the last open is cleared on the next open", async () => {
 	setOpen(false);
 	expect(device.error()).toBe("Could not turn on notifications.");
 	setOpen(true);
-	expect(device.error()).toBeUndefined();
+	expect(device.error()).toBeNull();
 });
 
 test("enable calls enablePush and turns push on", async () => {
@@ -118,20 +129,20 @@ test("enable calls enablePush and turns push on", async () => {
 });
 
 test("enable resolving denied leaves push off and blocked", async () => {
-	push.enable.mockResolvedValueOnce("denied");
+	push.enable.mockResolvedValueOnce(ok("denied"));
 	const device = createDevice();
 	await device.enable();
 	expect(device.pushOn()).toBe(false);
 	expect(device.support()).toBe("denied");
 	expect(device.canToggle()).toBe(false);
-	expect(device.error()).toBeUndefined();
+	expect(device.error()).toBeNull();
 });
 
 test("busy while a call is in flight, and a second call is ignored", async () => {
-	let finish: ((value: string) => void) | undefined;
+	let finish: ((value: Result<string, ClientError>) => void) | undefined;
 	push.enable.mockImplementationOnce(
 		() =>
-			new Promise<string>((resolve) => {
+			new Promise<Result<string, ClientError>>((resolve) => {
 				finish = resolve;
 			})
 	);
@@ -142,15 +153,18 @@ test("busy while a call is in flight, and a second call is ignored", async () =>
 	await device.disable();
 	expect(push.enable).toHaveBeenCalledOnce();
 	expect(push.disable).not.toHaveBeenCalled();
-	finish?.("granted");
+	finish?.(ok("granted"));
 	await first;
 	expect(device.busy()).toBe(false);
 	expect(device.pushOn()).toBe(true);
 });
 
 test("a failed enable keeps push off and says why", async () => {
-	push.enable.mockRejectedValueOnce(
-		new Error("The service worker is not ready.")
+	push.enable.mockResolvedValueOnce(
+		err({
+			code: "ServiceWorkerNotReady",
+			message: "The app is still starting up. Try again in a moment.",
+		})
 	);
 	const device = createDevice();
 	await device.enable();
@@ -166,7 +180,7 @@ test("disable calls disablePush and turns push off", async () => {
 	push.subscribed = true;
 	push.disable.mockImplementationOnce(() => {
 		push.subscribed = false;
-		return Promise.resolve();
+		return Promise.resolve(ok());
 	});
 	const device = createDevice();
 	await vi.waitFor(() => {
@@ -175,7 +189,7 @@ test("disable calls disablePush and turns push off", async () => {
 	await device.disable();
 	expect(push.disable).toHaveBeenCalledOnce();
 	expect(device.pushOn()).toBe(false);
-	expect(device.error()).toBeUndefined();
+	expect(device.error()).toBeNull();
 });
 
 test("a failed disable that still dropped the subscription ends off", async () => {
@@ -183,7 +197,12 @@ test("a failed disable that still dropped the subscription ends off", async () =
 	push.subscribed = true;
 	push.disable.mockImplementationOnce(() => {
 		push.subscribed = false;
-		return Promise.reject(new Error("boom"));
+		return Promise.resolve(
+			err({
+				code: "Unknown",
+				message: "Could not turn off notifications.",
+			})
+		);
 	});
 	const device = createDevice();
 	await vi.waitFor(() => {
@@ -197,7 +216,9 @@ test("a failed disable that still dropped the subscription ends off", async () =
 test("a failed disable before the subscription was dropped stays on", async () => {
 	push.support = "granted";
 	push.subscribed = true;
-	push.disable.mockRejectedValueOnce(new Error("boom"));
+	push.disable.mockResolvedValueOnce(
+		err({ code: "Unknown", message: "Could not turn off notifications." })
+	);
 	const device = createDevice();
 	await vi.waitFor(() => {
 		expect(device.pushOn()).toBe(true);

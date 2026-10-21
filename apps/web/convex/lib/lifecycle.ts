@@ -1,8 +1,10 @@
+import { err, ok, type Result } from "neverthrow";
+
 import type { Doc } from "../_generated/dataModel";
 
 import { compliance, isWindowOpen } from "./derive.ts";
+import type { PeopleError } from "./errors/people.ts";
 import {
-	IllegalTransitionError,
 	type Effect,
 	type EventType,
 	type Facts,
@@ -519,13 +521,11 @@ export function reduce(
 	from: StateId,
 	event: LifecycleEvent,
 	facts: Facts
-): { next: StateId; effects: Effect[] } {
+): Result<{ next: StateId; effects: Effect[] }, PeopleError> {
 	const rule = TABLE[from]?.[event.type];
-	if (!rule) throw new IllegalTransitionError(from, event.type);
-	if (rule.guard && !rule.guard(facts, event)) {
-		throw new IllegalTransitionError(from, event.type);
-	}
+	if (!rule || (rule.guard && !rule.guard(facts, event)))
+		return err({ type: "IllegalTransition", from, event: event.type });
 	const next =
 		typeof rule.to === "function" ? rule.to(event, facts) : rule.to;
-	return { next, effects: rule.effects?.(event, facts) ?? [] };
+	return ok({ next, effects: rule.effects?.(event, facts) ?? [] });
 }

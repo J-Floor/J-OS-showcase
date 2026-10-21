@@ -20,6 +20,7 @@ import {
 	onboardingWithoutStep,
 	stateOf,
 } from "./lib/lifecycle.ts";
+import { invariant } from "./lib/result.ts";
 
 /**
  * One-off data fixes, run via `bunx convex run migrations:<name>` (CLI/dashboard
@@ -243,19 +244,21 @@ export const repairGuestWithoutAgreement = internalMutation({
 	args: { personId: v.id("people") },
 	handler: async (context, { personId }) => {
 		const person = await context.db.get(personId);
-		if (person?.tier !== "guest" || person.stage !== "active")
-			throw new Error("Not an active guest.");
+		invariant(
+			person?.tier === "guest" && person.stage === "active",
+			"Not an active guest."
+		);
 		const sigs = await context.db
 			.query("signatures")
 			.withIndex("by_person", (range) => range.eq("personId", personId))
 			.collect();
-		if (
+		invariant(
 			compliance(
 				person,
 				sigs.map((signature) => signature.variant)
-			) === "met"
-		)
-			throw new Error("This guest has a guest agreement.");
+			) !== "met",
+			"This guest has a guest agreement."
+		);
 		const now = Date.now();
 		// Written outside applyEvent on purpose: the machine has no active-to-onboarding edge.
 		// The document step re-opens too, or a guest who ticked it signing

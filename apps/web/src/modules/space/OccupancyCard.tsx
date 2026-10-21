@@ -4,6 +4,7 @@ import { createSignal, onCleanup, onMount, Show } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
 import type { OccupancyAnswer } from "../../../convex/occupancy.ts";
+import { call } from "../../lib/call.ts";
 import { lastAnswer, rememberAnswer } from "../../shared/data/lastAnswer.ts";
 
 import { occupancyFill, occupancyLevel } from "./occupancy.ts";
@@ -63,21 +64,21 @@ export function OccupancyCard() {
 
 	async function refresh() {
 		const seq = ++latestSeq;
-		try {
-			const result = await occ.mutate({});
-			// An answer landing after unmount (e.g. mid sign-out) is dropped.
-			if (seq !== latestSeq || isDisposed) return;
-			setAnswer(result);
-			rememberAnswer(ANSWER_KEY, result);
-			// Only an explicit "disabled" answer stops polling.
-			if (result.enabled) ensurePolling();
-			else stopPolling();
-		} catch {
+		const result = await call(occ.mutate({}), "Could not read occupancy.");
+		if (result.isErr()) {
 			if (seq !== latestSeq) return;
 			setFailed(true);
-			// ambient readout — keep the last answer, never throw
+			// ambient readout: keep the last answer
 			ensurePolling(); // a failed call is not "disabled": retry next tick
+			return;
 		}
+		// An answer landing after unmount (e.g. mid sign-out) is dropped.
+		if (seq !== latestSeq || isDisposed) return;
+		setAnswer(result.value);
+		rememberAnswer(ANSWER_KEY, result.value);
+		// Only an explicit "disabled" answer stops polling.
+		if (result.value.enabled) ensurePolling();
+		else stopPolling();
 	}
 
 	onMount(() => {

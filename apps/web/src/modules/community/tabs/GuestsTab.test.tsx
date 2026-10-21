@@ -7,6 +7,7 @@ import {
 	waitFor,
 	within,
 } from "@solidjs/testing-library";
+import { okAsync } from "neverthrow";
 import { afterEach, expect, test, vi } from "vitest";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -123,8 +124,8 @@ vi.mock("../../../shared/data/boardLevel.tsx", () => ({
 	}),
 }));
 
-const upgradeToMember = vi.fn().mockResolvedValue(undefined);
-const kickOut = vi.fn().mockResolvedValue(undefined);
+const upgradeToMember = vi.fn(() => okAsync(undefined));
+const kickOut = vi.fn(() => okAsync(undefined));
 vi.mock("../actions/triage.ts", () => ({
 	useTriage: () => ({ upgradeToMember, kickOut }),
 }));

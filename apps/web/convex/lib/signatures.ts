@@ -3,6 +3,8 @@ import type { WithoutSystemFields } from "convex/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 
+import { invariant } from "./result.ts";
+
 /**
  * Insert a signature and add its variant to the person's `signedVariants`.
  * Every `signatures` insert goes through here, so the roster queries can read
@@ -15,8 +17,10 @@ export async function insertSignature(
 	context: MutationCtx,
 	row: WithoutSystemFields<Doc<"signatures">>
 ): Promise<Id<"signatures">> {
-	if (row.fileId === undefined && row.sourceUrl === undefined)
-		throw new Error("A signature needs a fileId or a sourceUrl.");
+	invariant(
+		row.fileId !== undefined || row.sourceUrl !== undefined,
+		"A signature needs a fileId or a sourceUrl."
+	);
 	const id = await context.db.insert("signatures", row);
 	const person = await context.db.get(row.personId);
 	const signed = person?.signedVariants ?? [];

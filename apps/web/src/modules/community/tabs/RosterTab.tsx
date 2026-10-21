@@ -11,7 +11,13 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import { createDrawerNav } from "../../../lib/createDrawerNav.ts";
 import { useRowPrefetch } from "../../../shared/entity/useRowPrefetch.ts";
 import { createActionKeys } from "../actions/createActionKeys.ts";
-import type { ActionDescriptor } from "../actions/shortcuts.ts";
+import {
+	RosterActionError,
+	setShownPerson,
+	settleRosterAction,
+} from "../actions/RosterActionError.tsx";
+import type { ActionDescriptor, ShortcutScope } from "../actions/shortcuts.ts";
+import type { TriageResult } from "../actions/triage.ts";
 import { DecisionBar } from "../drawers/DecisionBar.tsx";
 import { EditToggle } from "../drawers/EditToggle.tsx";
 import { PersonDetail } from "../drawers/PersonDetail.tsx";
@@ -23,10 +29,11 @@ import styles from "./RosterTab.module.scss";
 import type { TabProps } from "./TabProps.ts";
 
 /** Run each row through a per-row mutation (Convex mutations are individually
- *  transactional), then clear the selection. */
+ *  transactional), then clear the selection. Stops at the first failure, shows
+ *  it above the table and leaves the selection as it was. */
 export type RunBatch<Row> = (
 	rows: Row[],
-	action: (id: Id<"people">) => Promise<unknown>,
+	action: (id: Id<"people">) => TriageResult,
 	clearSelection: () => void
 ) => Promise<void>;
 
@@ -84,6 +91,7 @@ function RosterDrawer<Row extends PersonRow>(props: {
 	onClose: () => void;
 	footerLead?: (person: Row) => JSX.Element;
 	actions: ActionDescriptor<Row>[];
+	scope: ShortcutScope;
 }): JSX.Element {
 	return (
 		<Drawer.Root
@@ -129,6 +137,10 @@ function RosterDrawer<Row extends PersonRow>(props: {
 					<Drawer.Footer>
 						<div class={styles.footer}>
 							{props.footerLead?.(person())}
+							<RosterActionError
+								scope={props.scope}
+								personId={person()._id}
+							/>
 							<div class={styles.footerActions}>
 								<DecisionBar
 									person={person()}
@@ -143,29 +155,40 @@ function RosterDrawer<Row extends PersonRow>(props: {
 	);
 }
 
-async function runBatch(
-	rows: { _id: Id<"people"> }[],
-	action: (id: Id<"people">) => Promise<unknown>,
-	clearSelection: () => void
-): Promise<void> {
-	for (const row of rows) {
-		await action(row._id);
-	}
-	clearSelection();
+function batchRunner(scope: ShortcutScope) {
+	return async function runBatch(
+		rows: { _id: Id<"people"> }[],
+		action: (id: Id<"people">) => TriageResult,
+		clearSelection: () => void
+	): Promise<void> {
+		for (const row of rows) {
+			const { refused } = await settleRosterAction(
+				scope,
+				row._id,
+				action(row._id)
+			);
+			if (refused) return;
+		}
+		clearSelection();
+	};
 }
 
 /** Edit mode for the drawer: flips the profile fields to inputs. Reset
  *  whenever a different person is opened or the drawer closes. */
 function useDrawerEditing(
 	isOpen: () => boolean,
-	selection: TabProps["selection"]
+	selection: TabProps["selection"],
+	scope: ShortcutScope
 ) {
 	const [editing, setEditing] = createSignal(false);
 	createEffect(
 		on(
 			() => (isOpen() ? selection.selectedId() : undefined),
-			() => {
+			(shownId) => {
 				setEditing(false);
+				// A failure belongs to the person the drawer showed: paging on or
+				// closing drops it.
+				setShownPerson(scope, shownId);
 			}
 		)
 	);
@@ -245,6 +268,8 @@ type RosterTabProps<Row extends PersonRow> = {
 	initialColumnSorting?: { id: string; desc: boolean }[];
 	/** Descriptors driving both the row keys and the drawer footer. */
 	actions: () => ActionDescriptor<Row>[];
+	/** The tab's own scope: where its failed actions are kept and shown. */
+	scope: ShortcutScope;
 	/** The selection bar's contents, given the selection plus {@link RunBatch}. */
 	batchActions: (props: RosterBatchProps<Row>) => JSX.Element;
 	/** Tab-specific chrome rendered beside the drawer — e.g. a dialog the tab's
@@ -266,6 +291,47 @@ type RosterTabProps<Row extends PersonRow> = {
 	 */
 	focusedRowKeys?: (focused: () => Row | undefined) => void;
 };
+
+/** The roster's keyboard side: the ringed row, its prefetch, and the action
+ *  and tab-specific keys that act on it. */
+function useRosterFocus<Row extends PersonRow>(
+	props: RosterTabProps<Row>,
+	state: {
+		open: () => boolean;
+		selected: () => Row | undefined;
+		checked: () => Row[];
+		setChecked: (rows: Row[]) => void;
+	}
+) {
+	const { focusedRow, onFocusedRowChange, prefetchRow } =
+		useFocusedRowPrefetch<Row>();
+	let focusApi: { advance: () => void } | undefined;
+	useRosterActionKeys(props, {
+		...state,
+		focusedRow,
+		onAdvance: () => {
+			focusApi?.advance();
+		},
+		onClearSelection: () => {
+			state.setChecked([]);
+		},
+	});
+
+	// A tab's own row-scoped keys, bound once at setup (the callback registers
+	// hotkeys and is handed `focusedRow` as an accessor, not a read value —
+	// `focusedRow` is already cleared whenever the ring is not the target, so
+	// they fire only when they should). A one-time setup call, like
+	// `createActionKeys` above, not a reactive read.
+
+	props.focusedRowKeys?.(focusedRow);
+	return {
+		onFocusedRowChange,
+		prefetchRow,
+		setFocusApi: (api: { advance: () => void }) => {
+			focusApi = api;
+		},
+	};
+}
 
 /**
  * The scaffold every community roster tab shares: a grouped, virtualised,
@@ -294,39 +360,26 @@ export function RosterTab<Row extends PersonRow>(
 	const { selection, selected, open } = useRosterSelection(props.tab, () =>
 		props.data()
 	);
-	const [editing, setEditing] = useDrawerEditing(open, selection);
-	const { focusedRow, onFocusedRowChange, prefetchRow } =
-		useFocusedRowPrefetch<Row>();
+	const [editing, setEditing] = useDrawerEditing(
+		open,
+		selection,
+		// eslint-disable-next-line solid/reactivity -- the scope is a constant of the tab, read once
+		props.scope
+	);
 	const [checked, setChecked] = createSignal<Row[]>([]);
-	let focusApi: { advance: () => void } | undefined;
-
+	const { onFocusedRowChange, prefetchRow, setFocusApi } = useRosterFocus(
+		props,
+		{ open, selected, checked, setChecked }
+	);
 	const { nav, setDisplayed } = useDisplayedRowsNav(selected, (row) => {
 		selection.openRow(row);
 	});
 
-	useRosterActionKeys(props, {
-		open,
-		selected,
-		checked,
-		focusedRow,
-		onAdvance: () => {
-			focusApi?.advance();
-		},
-		onClearSelection: () => {
-			setChecked([]);
-		},
-	});
-
-	// A tab's own row-scoped keys, bound once at setup (the callback registers
-	// hotkeys and is handed `focusedRow` as an accessor, not a read value —
-	// `focusedRow` is already cleared whenever the ring is not the target, so
-	// they fire only when they should). A one-time setup call, like
-	// `createActionKeys` above, not a reactive read.
-	// eslint-disable-next-line solid/reactivity -- one-time setup; focusedRow passed as an accessor
-	props.focusedRowKeys?.(focusedRow);
-
 	return (
 		<>
+			<Show when={!open()}>
+				<RosterActionError scope={props.scope} />
+			</Show>
 			<Table.Root
 				columns={props.columns()}
 				data={props.data()}
@@ -350,9 +403,7 @@ export function RosterTab<Row extends PersonRow>(
 				onRowActivate={(row) => {
 					selection.openRow(row);
 				}}
-				focusApi={(api) => {
-					focusApi = api;
-				}}
+				focusApi={setFocusApi}
 				onSelectedRowsChange={setChecked}
 				onDisplayedRowsChange={setDisplayed}
 				onRowClick={(row) => {
@@ -360,7 +411,12 @@ export function RosterTab<Row extends PersonRow>(
 				}}
 			>
 				<Table.BatchActions<Row>>
-					{(batch) => props.batchActions({ ...batch, runBatch })}
+					{(batch) =>
+						props.batchActions({
+							...batch,
+							runBatch: batchRunner(props.scope),
+						})
+					}
 				</Table.BatchActions>
 			</Table.Root>
 			<RosterDrawer
@@ -377,6 +433,7 @@ export function RosterTab<Row extends PersonRow>(
 				}}
 				footerLead={props.footerLead}
 				actions={props.actions()}
+				scope={props.scope}
 			/>
 			{props.extra}
 		</>

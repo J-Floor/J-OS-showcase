@@ -1,5 +1,6 @@
 // apps/web/convex/agreements.test.ts
 import { convexTest } from "convex-test";
+import { ok } from "neverthrow";
 import { afterEach, beforeEach, expect, it, vi, describe } from "vitest";
 
 import { api, internal } from "./_generated/api";
@@ -119,7 +120,7 @@ describe("signAgreement", () => {
 			backend
 				.withIdentity({ email: "ada@example.com" })
 				.action(api.agreements.signAgreement, { signaturePng: PNG_1PX })
-		).rejects.toThrow(/already signed/i);
+		).rejects.toThrow(/AgreementAlreadySigned/);
 		const sigs = await backend.run((context) =>
 			context.db.query("signatures").collect()
 		);
@@ -629,7 +630,9 @@ describe("board signatures", () => {
 		// The stored board PNG is fake bytes; only the call args matter here.
 		vi.mocked(drawSignedPdf)
 			.mockClear()
-			.mockImplementationOnce(() => Promise.resolve(new Uint8Array([1])));
+			.mockImplementationOnce(() =>
+				Promise.resolve(ok(new Uint8Array([1])))
+			);
 		const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 		await backend
 			.withIdentity({ email: "ada@example.com" })
@@ -645,7 +648,9 @@ describe("board signatures", () => {
 		await approvedMember(backend);
 		vi.mocked(drawSignedPdf)
 			.mockClear()
-			.mockImplementationOnce(() => Promise.resolve(new Uint8Array([1])));
+			.mockImplementationOnce(() =>
+				Promise.resolve(ok(new Uint8Array([1])))
+			);
 		const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 		await backend
 			.withIdentity({ email: "ada@example.com" })

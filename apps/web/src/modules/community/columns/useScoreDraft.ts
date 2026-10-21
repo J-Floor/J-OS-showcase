@@ -3,6 +3,8 @@ import { createSignal } from "solid-js";
 
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
+import { call } from "../../../lib/call.ts";
+import { createActionError } from "../../../shared/createActionError.ts";
 
 /**
  * The half-typed score a board member is editing, and how it reaches the
@@ -20,12 +22,25 @@ export function useScoreDraft(options: {
 }) {
 	const setScore = useMutation(api.applications.setScore);
 	const [draft, setDraft] = createSignal<string | null>(null);
+	const { error, trackResult } = createActionError(options.personId);
 
 	function display(): string {
 		const typed = draft();
 		if (typed !== null) return typed;
 		const score = options.currentScore();
 		return score === undefined ? "" : String(score);
+	}
+
+	async function save(args: {
+		personId: Id<"people">;
+		value?: number;
+	}): Promise<void> {
+		await trackResult(
+			call(setScore.mutateAsync(args), "Could not save the score.")
+		);
+		// Err or Ok, the field goes back to mirroring the server: on a refusal
+		// that is the score the board still has, not the one that was typed.
+		setDraft(null);
 	}
 
 	function commit(): void {
@@ -40,9 +55,7 @@ export function useScoreDraft(options: {
 				setDraft(null);
 				return;
 			}
-			void setScore
-				.mutateAsync({ personId: options.personId() })
-				.finally(() => setDraft(null));
+			void save({ personId: options.personId() });
 			return;
 		}
 		const parsed = Number(value);
@@ -50,10 +63,8 @@ export function useScoreDraft(options: {
 			setDraft(null);
 			return;
 		}
-		void setScore
-			.mutateAsync({ personId: options.personId(), value: parsed })
-			.finally(() => setDraft(null));
+		void save({ personId: options.personId(), value: parsed });
 	}
 
-	return { draft, setDraft, display, commit };
+	return { draft, setDraft, display, commit, error };
 }

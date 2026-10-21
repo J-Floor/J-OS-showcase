@@ -2,6 +2,7 @@ import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 
 import { api } from "./_generated/api";
+import { readWifi } from "./lib/wifi.ts";
 import schema from "./schema.ts";
 
 const modules = import.meta.glob("./**/*.*s");
@@ -42,7 +43,7 @@ describe("wifi.get", () => {
 		const backend = convexTest(schema, modules);
 		const asMember = await seedMember(backend);
 		await expect(asMember.query(api.wifi.get, {})).rejects.toThrow(
-			"Wi-Fi not configured"
+			"WifiNotConfigured"
 		);
 	});
 
@@ -67,7 +68,7 @@ describe("wifi.get", () => {
 	it("rejects an unauthenticated caller", async () => {
 		const backend = convexTest(schema, modules);
 		await expect(backend.query(api.wifi.get, {})).rejects.toThrow(
-			"Not authenticated"
+			"NotAuthenticated"
 		);
 	});
 
@@ -120,7 +121,7 @@ describe("wifi.update", () => {
 				ssid: "   ",
 				password: "new-pass",
 			})
-		).rejects.toThrow("SSID is required");
+		).rejects.toThrow("WifiSsidRequired");
 	});
 
 	it("rejects an empty password after trim", async () => {
@@ -131,7 +132,7 @@ describe("wifi.update", () => {
 				ssid: "New SSID",
 				password: "   ",
 			})
-		).rejects.toThrow("Password is required");
+		).rejects.toThrow("WifiPasswordRequired");
 	});
 
 	it("upserts the singleton row, and get reflects it after", async () => {
@@ -187,12 +188,38 @@ describe("wifi.update", () => {
 				ssid: "s".repeat(65),
 				password: "ok",
 			})
-		).rejects.toThrow("SSID is too long (max 64 characters).");
+		).rejects.toThrow(/FieldTooLong/);
 		await expect(
 			asBoard.mutation(api.wifi.update, {
 				ssid: "ok",
 				password: "p".repeat(129),
 			})
-		).rejects.toThrow("Password is too long (max 128 characters).");
+		).rejects.toThrow(/FieldTooLong/);
+	});
+});
+
+describe("readWifi", () => {
+	it("returns a WifiNotConfigured error when no row exists", async () => {
+		const backend = convexTest(schema, modules);
+		const failure = await backend.run(async (context) => {
+			const result = await readWifi(context.db);
+			return result.isErr() ? result.error.type : null;
+		});
+		expect(failure).toBe("WifiNotConfigured");
+	});
+
+	it("returns the credentials once a row exists", async () => {
+		const backend = convexTest(schema, modules);
+		await backend.run((context) =>
+			context.db.insert("wifiConfig", { ssid: "net", password: "pw" })
+		);
+		const credentials = await backend.run(async (context) => {
+			const result = await readWifi(context.db);
+			return result.isOk() ? result.value : null;
+		});
+		expect(credentials).toEqual({
+			ssid: "net",
+			password: "pw",
+		});
 	});
 });

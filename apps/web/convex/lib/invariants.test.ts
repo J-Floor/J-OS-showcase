@@ -317,7 +317,10 @@ function expectCleanLanding(
 	const source = landed(from, facts, []);
 	if (landingCodesOf(source.row, source.sigs).length > 0) return;
 	if (rule.guard && !rule.guard(facts, event)) return;
-	const { next, effects } = reduce(from, event, facts);
+	const transition = reduce(from, event, facts);
+	expect(transition.isOk(), `${from} -[${event.type}]->`).toBe(true);
+	if (transition.isErr()) return;
+	const { next, effects } = transition.value;
 	if (next === from) return;
 	const fromTier = from.split(".")[0] as Tier;
 	const toTier = next.split(".")[0] as Tier;

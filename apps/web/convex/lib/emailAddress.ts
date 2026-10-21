@@ -49,12 +49,6 @@ export function validEmail(email: string): boolean {
 	);
 }
 
-/** Refusal shown when an email is already some other person's identity key. */
-export const EMAIL_IN_USE = "Another person already uses that email address.";
-
-/** Refusal shown when an edited email is not an address at all. */
-export const EMAIL_INVALID = "That is not a valid email address.";
-
 /** The groups of rows sharing one email once normalized; singletons left out. */
 export function groupByNormalizedEmail<T extends { email: string }>(
 	rows: T[]

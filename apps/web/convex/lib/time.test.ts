@@ -177,16 +177,19 @@ describe("guestChosenIso (presence + encoding aware)", () => {
 
 describe("zonedTimeZoneName", () => {
 	it("extracts the IANA zone from a trailing [Zone]", () => {
-		expect(
-			zonedTimeZoneName("2026-09-20T00:01:00+02:00[Europe/Zurich]")
-		).toBe("Europe/Zurich");
-		expect(
-			zonedTimeZoneName("2026-09-20T00:01:00-07:00[America/Los_Angeles]")
-		).toBe("America/Los_Angeles");
-	});
-	it("throws on a non-IXDTF value with no bracketed zone", () => {
-		expect(() => zonedTimeZoneName("2026-09-20T00:01:00+02:00")).toThrow(
-			/Not an IXDTF zoned value/
+		const zurich = zonedTimeZoneName(
+			"2026-09-20T00:01:00+02:00[Europe/Zurich]"
 		);
+		expect(zurich.isOk() && zurich.value).toBe("Europe/Zurich");
+		const losAngeles = zonedTimeZoneName(
+			"2026-09-20T00:01:00-07:00[America/Los_Angeles]"
+		);
+		expect(losAngeles.isOk() && losAngeles.value).toBe(
+			"America/Los_Angeles"
+		);
+	});
+	it("is an Err for a non-IXDTF value with no bracketed zone", () => {
+		const result = zonedTimeZoneName("2026-09-20T00:01:00+02:00");
+		expect(result.isErr() && result.error.type).toBe("InvalidZonedValue");
 	});
 });

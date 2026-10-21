@@ -8,6 +8,14 @@ import { drawSignedPdf, validatePngDataUrl } from "./pdf.ts";
 const PNG_1PX =
 	"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
+/** The drawn bytes of a draw that must succeed. */
+async function drawOk(
+	...args: Parameters<typeof drawSignedPdf>
+): Promise<Uint8Array> {
+	const result = await drawSignedPdf(...args);
+	return result._unsafeUnwrap();
+}
+
 async function blankTemplate(): Promise<Uint8Array> {
 	const doc = await PDFDocument.create();
 	doc.addPage([595, 842]);
@@ -18,35 +26,42 @@ async function blankTemplate(): Promise<Uint8Array> {
 
 describe("validatePngDataUrl", () => {
 	it("accepts a small png data url and returns bytes", () => {
-		const bytes = validatePngDataUrl(PNG_1PX);
-		expect(bytes.byteLength).toBeGreaterThan(0);
+		const result = validatePngDataUrl(PNG_1PX);
+		expect(result.isOk() && result.value.byteLength).toBeGreaterThan(0);
 	});
-	it("rejects a non-png data url", () => {
-		expect(() =>
-			validatePngDataUrl("data:image/jpeg;base64,AAAA")
-		).toThrow();
-	});
-	it("rejects a non-data-url string", () => {
-		expect(() => validatePngDataUrl("https://x/y.png")).toThrow();
-	});
-	it("rejects an over-long data url before decoding it", () => {
-		const huge = `data:image/png;base64,${"A".repeat(700_000)}`;
-		expect(() => validatePngDataUrl(huge)).toThrow(
-			"Signature image is too large"
-		);
+	it.each([
+		[
+			"a non-png data url",
+			"data:image/jpeg;base64,AAAA",
+			"SignatureNotPng",
+		],
+		["a non-data-url string", "https://x/y.png", "SignatureNotPng"],
+		[
+			"an over-long data url before decoding it",
+			`data:image/png;base64,${"A".repeat(700_000)}`,
+			"SignatureTooLarge",
+		],
+		[
+			"a png data url with no payload",
+			"data:image/png;base64,",
+			"SignatureNotPng",
+		],
+	])("rejects %s", (_name, dataUrl, type) => {
+		const result = validatePngDataUrl(dataUrl);
+		expect(result.isErr() && result.error.type).toBe(type);
 	});
 });
 
 describe("drawSignedPdf", () => {
 	it("returns a valid 3-page PDF with the signer fields embedded", async () => {
 		const template = await blankTemplate();
-		const out = await drawSignedPdf(template, {
+		const out = await drawOk(template, {
 			variant: "member",
 			name: "Ada Lovelace",
 			company: "Engine Co",
 			email: "ada@example.com",
 			date: "19 June 2026",
-			signaturePng: validatePngDataUrl(PNG_1PX),
+			signaturePng: validatePngDataUrl(PNG_1PX)._unsafeUnwrap(),
 			board: [{ name: "Boss One", role: "President" }],
 		});
 		expect(Buffer.from(out.slice(0, 5)).toString()).toBe("%PDF-");
@@ -56,7 +71,7 @@ describe("drawSignedPdf", () => {
 
 	it("renders an unsigned preview when no signature is given", async () => {
 		const template = await blankTemplate();
-		const out = await drawSignedPdf(template, {
+		const out = await drawOk(template, {
 			variant: "member",
 			name: "Ada Lovelace",
 			company: "Engine Co",
@@ -73,13 +88,13 @@ describe("drawSignedPdf", () => {
 		const template = await blankTemplate();
 
 		// Without board PNG — typed name only.
-		const withoutBoardPng = await drawSignedPdf(template, {
+		const withoutBoardPng = await drawOk(template, {
 			variant: "member",
 			name: "Ada Lovelace",
 			company: "Engine Co",
 			email: "ada@example.com",
 			date: "19 June 2026",
-			signaturePng: validatePngDataUrl(PNG_1PX),
+			signaturePng: validatePngDataUrl(PNG_1PX)._unsafeUnwrap(),
 			board: [
 				{ name: "Boss One", role: "President" },
 				{ name: "Boss Two", role: "Vice-president" },
@@ -87,18 +102,18 @@ describe("drawSignedPdf", () => {
 		});
 
 		// With board PNG — image embedded for Boss One.
-		const withBoardPng = await drawSignedPdf(template, {
+		const withBoardPng = await drawOk(template, {
 			variant: "member",
 			name: "Ada Lovelace",
 			company: "Engine Co",
 			email: "ada@example.com",
 			date: "19 June 2026",
-			signaturePng: validatePngDataUrl(PNG_1PX),
+			signaturePng: validatePngDataUrl(PNG_1PX)._unsafeUnwrap(),
 			board: [
 				{
 					name: "Boss One",
 					role: "President",
-					signaturePng: validatePngDataUrl(PNG_1PX),
+					signaturePng: validatePngDataUrl(PNG_1PX)._unsafeUnwrap(),
 				},
 				{ name: "Boss Two", role: "Vice-president" },
 			],
@@ -118,7 +133,7 @@ describe("drawSignedPdf", () => {
 describe("drawSignedPdf fonts", () => {
 	it("stamps the signer fields in Manrope, not Helvetica", async () => {
 		const template = await blankTemplate();
-		const out = await drawSignedPdf(template, {
+		const out = await drawOk(template, {
 			variant: "member",
 			name: "Ada Lovelace",
 			company: "Engine Co",
@@ -144,23 +159,26 @@ describe("drawSignedPdf unprintable text", () => {
 
 	it("stamps Latin-extended names", async () => {
 		const template = await blankTemplate();
-		const out = await drawSignedPdf(template, {
+		const out = await drawOk(template, {
 			...base,
 			name: "Paweł Żółć",
 		});
 		expect(Buffer.from(out.slice(0, 5)).toString()).toBe("%PDF-");
 	});
 
-	it("rejects a company the font cannot print, naming the field", async () => {
+	it.each([
+		["name", { name: "日本" }],
+		["company", { company: "日本" }],
+		["email", { email: "日本@example.com" }],
+	])("refuses a %s the font cannot print", async (_field, override) => {
 		const template = await blankTemplate();
-		const attempt = drawSignedPdf(template, { ...base, company: "日本" });
-		await expect(attempt).rejects.toThrow(
-			"Company contains characters the agreement cannot print"
+		const result = await drawSignedPdf(template, { ...base, ...override });
+		expect(result.isErr() && result.error.type).toBe(
+			"AgreementUnprintable"
 		);
-		await expect(attempt).rejects.not.toThrow("日本");
 	});
 
-	it("rejects an emoji in a board name", async () => {
+	it("treats an emoji in a board name as a bug, not a user error", async () => {
 		const template = await blankTemplate();
 		await expect(
 			drawSignedPdf(template, {

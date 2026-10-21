@@ -5,7 +5,8 @@ import { useConfirm } from "../../../shared/confirm.tsx";
 import { ICONS } from "../../../shared/icons.ts";
 
 import { useGuestExpiry } from "./guestExpiry.tsx";
-import type { ActionDescriptor } from "./shortcuts.ts";
+import { settleRosterAction } from "./RosterActionError.tsx";
+import type { ActionDescriptor, RosterActionOutcome } from "./shortcuts.ts";
 import { useTriage } from "./triage.ts";
 
 /** Just enough of a person to decide on their application. */
@@ -17,9 +18,9 @@ export type Applicant = Pick<
 type ApplicationDecisionHandlers = {
 	can: (person: Applicant, action: Action) => boolean;
 	makeGuest: (person: Applicant) => void;
-	makeMember: (person: Applicant) => Promise<void>;
-	turnDown: (person: Applicant) => Promise<void>;
-	undeny: (person: Applicant) => void;
+	makeMember: (person: Applicant) => Promise<RosterActionOutcome>;
+	turnDown: (person: Applicant) => Promise<RosterActionOutcome>;
+	undeny: (person: Applicant) => Promise<RosterActionOutcome>;
 };
 
 function events(person: Applicant): readonly string[] {
@@ -68,9 +69,7 @@ function describeActions(
 			hotkey: "U",
 			scope: "applications",
 			can: (person) => decisions.can(person, "undeny"),
-			run: (person) => {
-				decisions.undeny(person);
-			},
+			run: (person) => decisions.undeny(person),
 		},
 	];
 }
@@ -106,7 +105,7 @@ export function useApplicationDecisions(): ApplicationDecisionHandlers & {
 			requestGuestExpiry([person._id]);
 		},
 
-		makeMember: async (person: Applicant) => {
+		makeMember: async (person: Applicant): Promise<RosterActionOutcome> => {
 			if (
 				await confirm({
 					title: "Make member?",
@@ -114,10 +113,14 @@ export function useApplicationDecisions(): ApplicationDecisionHandlers & {
 					confirmLabel: "Make member",
 				})
 			)
-				await triage.makeMember(person._id);
+				return settleRosterAction(
+					"applications",
+					person._id,
+					triage.makeMember(person._id)
+				);
 		},
 
-		turnDown: async (person: Applicant) => {
+		turnDown: async (person: Applicant): Promise<RosterActionOutcome> => {
 			if (
 				await confirm({
 					title: "Turn down application?",
@@ -126,14 +129,21 @@ export function useApplicationDecisions(): ApplicationDecisionHandlers & {
 					tone: "danger",
 				})
 			)
-				await triage.deny(person._id);
+				return settleRosterAction(
+					"applications",
+					person._id,
+					triage.deny(person._id)
+				);
 		},
 
 		// A mis-clicked Deny must be recoverable. No confirm: undoing a mistake
 		// should not itself need a decision.
-		undeny: (person: Applicant) => {
-			void triage.undeny(person._id);
-		},
+		undeny: (person: Applicant) =>
+			settleRosterAction(
+				"applications",
+				person._id,
+				triage.undeny(person._id)
+			),
 	};
 
 	return { ...decisions, actions: () => describeActions(decisions) };

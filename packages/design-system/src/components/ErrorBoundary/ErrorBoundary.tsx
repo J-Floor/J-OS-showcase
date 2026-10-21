@@ -4,12 +4,7 @@ import {
 	type ParentProps,
 } from "solid-js";
 
-import { ICONS } from "../../icons.ts";
-import { Button } from "../Button/Button.tsx";
-import { ExceptionDisplay } from "../ExceptionDisplay/ExceptionDisplay.tsx";
-import { Icon } from "../Icon/Icon.tsx";
-
-import styles from "./ErrorBoundary.module.scss";
+import { ErrorScreen } from "../ErrorScreen/ErrorScreen.tsx";
 
 export type ErrorBoundaryProps = ParentProps & {
 	/** Log caught errors to the console. Default `true`. */
@@ -20,7 +15,7 @@ export type ErrorBoundaryProps = ParentProps & {
 
 /**
  * Catches render errors in its subtree and shows a retry screen
- * (`ExceptionDisplay`). Wraps Solid's `ErrorBoundary`.
+ * (`ErrorScreen`). Wraps Solid's `ErrorBoundary`.
  *
  * Ported from EmboUI's ErrorBoundary. EmboUI's `Copiable` error-message wrapper
  * is not ported — the message renders as plain text.
@@ -35,30 +30,14 @@ export function ErrorBoundary(props: ErrorBoundaryProps): JSX.Element {
 				}
 				props.onError?.(error);
 				return (
-					<div class={styles.fullHeight}>
-						<ExceptionDisplay
-							status="error"
-							icon="bolt"
-							title="Something went wrong."
-							description={
-								error instanceof Error
-									? error.message
-									: String(error)
-							}
-						>
-							<Button
-								variant="tertiary"
-								onClick={() => {
-									window.history.back();
-								}}
-							>
-								<Icon>{ICONS.back}</Icon>Go back
-							</Button>
-							<Button onClick={reset}>
-								<Icon>{ICONS.refresh}</Icon>Retry
-							</Button>
-						</ExceptionDisplay>
-					</div>
+					<ErrorScreen
+						message={
+							error instanceof Error
+								? error.message
+								: String(error)
+						}
+						onRetry={reset}
+					/>
 				);
 			}}
 		>

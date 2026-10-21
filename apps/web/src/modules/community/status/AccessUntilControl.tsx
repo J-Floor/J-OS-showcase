@@ -10,6 +10,8 @@ import {
 	SITE_TIMEZONE,
 } from "../../../../convex/lib/time.ts";
 import { useConfirm } from "../../../shared/confirm.tsx";
+import { createActionError } from "../../../shared/createActionError.ts";
+import { InlineError } from "../../../shared/InlineError.tsx";
 import { useTriage } from "../actions/triage.ts";
 
 import styles from "./AccessUntilControl.module.scss";
@@ -48,6 +50,7 @@ export function AccessUntilControl(props: {
 	const { extendWindow } = useTriage();
 	const confirm = useConfirm();
 	const [saving, setSaving] = createSignal(false);
+	const { error, trackResult } = createActionError(() => props.personId);
 
 	function change(iso: string | null): void {
 		const until = composeExpiry(iso, SITE_TIMEZONE)?.utc ?? null;
@@ -58,39 +61,36 @@ export function AccessUntilControl(props: {
 		const isShorter = until < props.value;
 		void (async () => {
 			setSaving(true);
-			try {
-				if (
-					await confirm({
-						title: `Move ${props.name}'s access to ${iso}?`,
-						message: isShorter
-							? "Their key stops working on the new date, which is earlier than the one they have now."
-							: "Their key keeps working until the new date. If their access had already run out, this puts them back in.",
-						confirmLabel: isShorter
-							? "Shorten access"
-							: "Extend access",
-						tone: isShorter ? "danger" : "default",
-					})
-				)
-					await extendWindow(props.personId, until);
-			} finally {
-				setSaving(false);
-			}
+			const isConfirmed = await confirm({
+				title: `Move ${props.name}'s access to ${iso}?`,
+				message: isShorter
+					? "Their key stops working on the new date, which is earlier than the one they have now."
+					: "Their key keeps working until the new date. If their access had already run out, this puts them back in.",
+				confirmLabel: isShorter ? "Shorten access" : "Extend access",
+				tone: isShorter ? "danger" : "default",
+			});
+			if (isConfirmed)
+				await trackResult(extendWindow(props.personId, until));
+			setSaving(false);
 		})();
 	}
 
 	return (
-		<DatePicker
-			// Controlled by the server value: if the board cancels the dialog
-			// or the mutation fails, the field snaps back to the window they
-			// actually have rather than showing a date nobody agreed to.
-			value={guestChosenIso(
-				props.accessUntilLocal,
-				props.value,
-				SITE_TIMEZONE
-			)}
-			minIso={minExpiryIso(SITE_TIMEZONE)}
-			onValueChange={change}
-			class={styles.picker}
-		/>
+		<>
+			<DatePicker
+				// Controlled by the server value: if the board cancels the dialog
+				// or the mutation fails, the field snaps back to the window they
+				// actually have rather than showing a date nobody agreed to.
+				value={guestChosenIso(
+					props.accessUntilLocal,
+					props.value,
+					SITE_TIMEZONE
+				)}
+				minIso={minExpiryIso(SITE_TIMEZONE)}
+				onValueChange={change}
+				class={styles.picker}
+			/>
+			<InlineError message={error()} />
+		</>
 	);
 }

@@ -1,5 +1,6 @@
 import type { WithoutSystemFields } from "convex/server";
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
+import { err, ok, type Result } from "neverthrow";
 
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -29,8 +30,6 @@ import { personForCurrentUser } from "./lib/currentPerson.ts";
 import { entitled, personStatus, type PersonStatus } from "./lib/derive.ts";
 import { sendEmail } from "./lib/email.ts";
 import {
-	EMAIL_IN_USE,
-	EMAIL_INVALID,
 	normalizeEmail,
 	peopleByEmail,
 	personByEmail,
@@ -42,35 +41,36 @@ import {
 	legacyDoorRows,
 	ownedBy,
 } from "./lib/erasure.ts";
-import { IllegalTransitionError } from "./lib/lifecycleTypes.ts";
+import type { PeopleError } from "./lib/errors/people.ts";
 import { displayName } from "./lib/names.ts";
 import { BOARD_STEPS } from "./lib/onboardingSteps.ts";
 import {
 	documentsNaming,
 	type Naming,
-	overBudget,
 	pathsNaming,
 	readBudget,
 	takeCharged,
 } from "./lib/peopleRefs.ts";
 import { personStateOf, setPersonLastPath } from "./lib/personState.ts";
 import { boardLevelView, selfView } from "./lib/personViews.ts";
+import { invariant, refuse, unwrap, unwrapLogged } from "./lib/result.ts";
 import {
 	ACCESS_TIERS,
 	BOARD_LEVEL,
 	COMMUNITY_TIERS,
+	CORE_AND_BOARD,
 	isAccessTier,
 	isBoardLevel,
 	ROLE_TIERS,
 } from "./lib/roles.ts";
 import { isModulePath } from "./lib/routes.ts";
-import { assertSafeLinks } from "./lib/safeUrl.ts";
+import { parseSafeLinks } from "./lib/safeUrl.ts";
 import {
 	PHONE_MAX,
 	REFERRAL_MAX,
 	TEXT_MAX,
 	VENTURE_NAME_MAX,
-	assertLength,
+	checkLength,
 } from "./lib/validate.ts";
 import {
 	applyEvent,
@@ -146,33 +146,41 @@ export const exportPerson = internalQuery({
 	args: { email: v.string() },
 	handler: async (context, { email }) => {
 		const budget = readBudget();
-		const rows = await takeCharged(peopleByEmail(context, email), budget);
-		if (!rows) throw new Error(overBudget("people"));
+		const rows = unwrapLogged(
+			await takeCharged(peopleByEmail(context, email), budget, "people"),
+			"Export"
+		);
 		const used = new Set<string>();
 		const people = [];
 		for (const person of rows) {
-			const scan = await documentsNaming(context, person._id, budget);
-			if ("problem" in scan) throw new Error(scan.problem);
-			for (const address of addressesOf(person, scan.docs))
+			const namings = unwrapLogged(
+				await documentsNaming(context, person._id, budget),
+				"Export"
+			);
+			for (const address of addressesOf(person, namings))
 				used.add(address);
-			people.push(await exportDocuments(context, person, scan.docs));
+			people.push(await exportDocuments(context, person, namings));
 		}
-		const own = await addressesHeldBy(
-			context,
-			[...used],
-			new Set(rows.map((row) => row._id)),
-			budget
+		const addresses = unwrapLogged(
+			await addressesHeldBy(
+				context,
+				[...used],
+				new Set(rows.map((row) => row._id)),
+				budget
+			),
+			"Export"
 		);
-		if ("problem" in own) throw new Error(own.problem);
-		const door = await legacyDoorRows(context, own.addresses, budget);
-		if ("problem" in door) throw new Error(door.problem);
+		const legacyDoorLog = unwrapLogged(
+			await legacyDoorRows(context, addresses, budget),
+			"Export"
+		);
 		const auth = [];
-		for (const address of own.addresses)
+		for (const address of addresses)
 			auth.push({ address, ...(await authRecordsFor(context, address)) });
 		return {
 			people,
-			addresses: own.addresses,
-			legacyDoorLog: door.rows,
+			addresses,
+			legacyDoorLog,
 			auth,
 		};
 	},
@@ -196,7 +204,7 @@ export const getCurrentRole = query({
 export const getCurrentPerson = query({
 	args: {},
 	handler: async (context) => {
-		const person = await requireRole(context, ACCESS_TIERS);
+		const person = unwrap(await requireRole(context, ACCESS_TIERS));
 		return selfView(person);
 	},
 });
@@ -223,7 +231,7 @@ export const addDirect = internalMutation({
 	},
 	handler: async (context, { email, firstName, lastName, tier }) => {
 		const normalized = normalizeEmail(email);
-		if (!validEmail(normalized)) throw new ConvexError(EMAIL_INVALID);
+		if (!validEmail(normalized)) refuse({ type: "InvalidEmail" });
 		const existing = await personByEmail(context, normalized);
 		const personId =
 			existing?._id ??
@@ -237,14 +245,10 @@ export const addDirect = internalMutation({
 				provenance: "manual",
 				door: { override: "none" },
 			}));
-		try {
-			await applyEvent(context, personId, { type: "SET_ROLE", tier });
-		} catch (err) {
-			if (!(err instanceof IllegalTransitionError)) throw err;
-			throw new ConvexError(
-				`${normalized} is in ${err.from}, which has no role move. Nothing was changed.`
-			);
-		}
+		unwrapLogged(
+			await applyEvent(context, personId, { type: "SET_ROLE", tier }),
+			"Add person"
+		);
 		return personId;
 	},
 });
@@ -258,7 +262,7 @@ export const setLastPath = mutation({
 	args: { path: v.string() },
 	handler: async (context, { path }) => {
 		if (!isModulePath(path)) return;
-		const person = await requireRole(context, ACCESS_TIERS);
+		const person = unwrap(await requireRole(context, ACCESS_TIERS));
 		await setPersonLastPath(context, person._id, path);
 	},
 });
@@ -372,17 +376,16 @@ async function resolveEmailChange(
 	context: MutationCtx,
 	person: Doc<"people">,
 	requested: string | undefined
-): Promise<string | undefined> {
-	if (requested === undefined) return undefined;
+): Promise<Result<string | undefined, PeopleError>> {
+	if (requested === undefined) return ok(undefined);
 	const newEmail = normalizeEmail(requested);
 	// Any email edit supersedes a change still waiting on its link: a new
 	// address replaces it, and re-entering the stored one withdraws it.
 	await revokeTokens(context, person._id, "emailChange");
-	if (newEmail === normalizeEmail(person.email)) return undefined;
-	if (!validEmail(newEmail)) throw new ConvexError(EMAIL_INVALID);
+	if (newEmail === normalizeEmail(person.email)) return ok(undefined);
+	if (!validEmail(newEmail)) return err({ type: "InvalidEmail" });
 	const clash = await personByEmail(context, newEmail);
-	if (clash) throw new ConvexError(EMAIL_IN_USE);
-	return newEmail;
+	return clash ? err({ type: "EmailInUse" }) : ok(newEmail);
 }
 
 /**
@@ -429,13 +432,13 @@ export const update = mutation({
 		context,
 		args
 	): Promise<{ emailChange: "pending" } | null> => {
-		await requireRole(context, BOARD_LEVEL);
-		assertLength(args.phone, PHONE_MAX, "Phone");
-		assertLength(args.ventureName, VENTURE_NAME_MAX, "Venture name");
-		assertLength(args.description, TEXT_MAX, "Description");
-		assertLength(args.whyJoin, TEXT_MAX, "Why join");
-		assertLength(args.pastBuilt, TEXT_MAX, "Past built");
-		assertLength(args.referral, REFERRAL_MAX, "Referral");
+		unwrap(await requireRole(context, BOARD_LEVEL));
+		unwrap(checkLength(args.phone, PHONE_MAX));
+		unwrap(checkLength(args.ventureName, VENTURE_NAME_MAX));
+		unwrap(checkLength(args.description, TEXT_MAX));
+		unwrap(checkLength(args.whyJoin, TEXT_MAX));
+		unwrap(checkLength(args.pastBuilt, TEXT_MAX));
+		unwrap(checkLength(args.referral, REFERRAL_MAX));
 		const {
 			id,
 			email,
@@ -450,9 +453,11 @@ export const update = mutation({
 			...top
 		} = args;
 		const person = await context.db.get(id);
-		if (!person) throw new Error("Person not found");
+		invariant(person, "Person not found");
 		const actorId = await currentActorId(context);
-		const newEmail = await resolveEmailChange(context, person, email);
+		const newEmail = unwrap(
+			await resolveEmailChange(context, person, email)
+		);
 
 		await applyFieldEdits(context, person, top, actorId);
 		const venturePatch = await logVentureEdits(
@@ -548,7 +553,7 @@ export const pendingEmailChange = query({
 		context,
 		{ personId }
 	): Promise<{ newEmail: string } | null> => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		const rows = await liveTokens(
 			context.db,
 			personId,
@@ -564,7 +569,7 @@ export const pendingEmailChange = query({
 export const cancelEmailChange = mutation({
 	args: { personId: v.id("people") },
 	handler: async (context, { personId }) => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		await revokeTokens(context, personId, "emailChange");
 	},
 });
@@ -668,10 +673,10 @@ export const updateOwnProfile = mutation({
 		// Same gate as `getCurrentPerson`: only a real, entitled access-tier
 		// person (guest/member/core/board/admin/staff) — NOT a prospect or former
 		// member, whom `entitled` alone does not exclude (see getCurrentRole).
-		const person = await requireRole(context, ACCESS_TIERS);
-		assertLength(args.phone, PHONE_MAX, "Phone");
-		assertLength(args.ventureName, VENTURE_NAME_MAX, "Venture name");
-		assertLength(args.description, TEXT_MAX, "Description");
+		const person = unwrap(await requireRole(context, ACCESS_TIERS));
+		unwrap(checkLength(args.phone, PHONE_MAX));
+		unwrap(checkLength(args.ventureName, VENTURE_NAME_MAX));
+		unwrap(checkLength(args.description, TEXT_MAX));
 
 		const {
 			ventureName,
@@ -699,7 +704,7 @@ export const updateOwnProfile = mutation({
 			actorId
 		);
 		if (links !== undefined) {
-			venturePatch.links = assertSafeLinks(links);
+			venturePatch.links = unwrap(parseSafeLinks(links));
 		}
 
 		await patchVenture(context, person, venturePatch);
@@ -717,27 +722,28 @@ export const updateOwnProfile = mutation({
 export const addNote = mutation({
 	args: { id: v.id("people"), text: v.string() },
 	handler: async (context, { id, text }) => {
-		await requireRole(context, BOARD_LEVEL);
-		assertLength(text, TEXT_MAX, "Note");
+		unwrap(await requireRole(context, BOARD_LEVEL));
+		unwrap(checkLength(text, TEXT_MAX));
 		const trimmed = text.trim();
-		if (trimmed === "") return null;
-		const person = await context.db.get(id);
-		if (!person) throw new Error("Person not found");
-		const actorId = await currentActorId(context);
-		const board = person.board ?? {};
-		await context.db.patch(id, {
-			board: {
-				...board,
-				noteLog: [
-					...(board.noteLog ?? []),
-					{
-						authorId: actorId ?? undefined,
-						text: trimmed,
-						at: Date.now(),
-					},
-				],
-			},
-		});
+		if (trimmed !== "") {
+			const person = await context.db.get(id);
+			invariant(person, "Person not found");
+			const actorId = await currentActorId(context);
+			const board = person.board ?? {};
+			await context.db.patch(id, {
+				board: {
+					...board,
+					noteLog: [
+						...(board.noteLog ?? []),
+						{
+							authorId: actorId ?? undefined,
+							text: trimmed,
+							at: Date.now(),
+						},
+					],
+				},
+			});
+		}
 		return null;
 	},
 });
@@ -750,12 +756,14 @@ export const addNote = mutation({
 export const setGuestAccess = mutation({
 	args: { id: v.id("people"), expiresAt: v.number() },
 	handler: async (context, { id, expiresAt }) => {
-		await requireRole(context, BOARD_LEVEL);
-		await applyEvent(
-			context,
-			id,
-			{ type: "EXTEND_WINDOW", until: expiresAt },
-			await currentActorId(context)
+		unwrap(await requireRole(context, BOARD_LEVEL));
+		unwrap(
+			await applyEvent(
+				context,
+				id,
+				{ type: "EXTEND_WINDOW", until: expiresAt },
+				await currentActorId(context)
+			)
 		);
 		return null;
 	},
@@ -772,9 +780,9 @@ export const setHost = mutation({
 		hostedById: v.optional(v.union(v.id("people"), v.null())),
 	},
 	handler: async (context, { id, hostedById }) => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		const person = await context.db.get(id);
-		if (!person) throw new Error("Person not found");
+		invariant(person, "Person not found");
 		const actorId = await currentActorId(context);
 
 		const patch: Partial<Doc<"people">> = {};
@@ -924,7 +932,7 @@ export async function withStatus(
 export const listMembers = query({
 	args: {},
 	handler: async (context) => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		const rows = [
 			...(await peopleByTiers(context, ROLE_TIERS)),
 			...(await formerPeople(context, [...ROLE_TIERS, undefined])),
@@ -940,7 +948,7 @@ export const listMembers = query({
 export const listBoardContacts = query({
 	args: {},
 	handler: async (context) => {
-		await requireRole(context, ACCESS_TIERS);
+		unwrap(await requireRole(context, ACCESS_TIERS));
 		const now = Date.now();
 		// `tier === "board"`, NOT isBoardLevel: admins share board-level
 		// permissions but are not on the board, and this is the member-facing
@@ -962,7 +970,7 @@ export const listBoardContacts = query({
 export const listGuests = query({
 	args: {},
 	handler: async (context) => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		const rows = [
 			...(await peopleByTiers(context, ["guest"])),
 			...(await formerPeople(context, ["guest"])),
@@ -977,7 +985,7 @@ export const listGuests = query({
 export const listBoardLevel = query({
 	args: {},
 	handler: async (context) => {
-		await requireRole(context, [...BOARD_LEVEL, "core"]);
+		unwrap(await requireRole(context, CORE_AND_BOARD));
 		const now = Date.now();
 		const people = await peopleByTiers(context, BOARD_LEVEL);
 		return people
@@ -996,12 +1004,14 @@ export const listBoardLevel = query({
 export const kickOut = mutation({
 	args: { id: v.id("people") },
 	handler: async (context, { id }) => {
-		await requireRole(context, BOARD_LEVEL);
-		await applyEvent(
-			context,
-			id,
-			{ type: "KICK_OUT" },
-			await currentActorId(context)
+		unwrap(await requireRole(context, BOARD_LEVEL));
+		unwrap(
+			await applyEvent(
+				context,
+				id,
+				{ type: "KICK_OUT" },
+				await currentActorId(context)
+			)
 		);
 		return null;
 	},
@@ -1015,12 +1025,14 @@ export const kickOut = mutation({
 export const upgradeGuestToMember = mutation({
 	args: { id: v.id("people") },
 	handler: async (context, { id }) => {
-		await requireRole(context, BOARD_LEVEL);
-		await applyEvent(
-			context,
-			id,
-			{ type: "PROMOTE_TO_MEMBER" },
-			await currentActorId(context)
+		unwrap(await requireRole(context, BOARD_LEVEL));
+		unwrap(
+			await applyEvent(
+				context,
+				id,
+				{ type: "PROMOTE_TO_MEMBER" },
+				await currentActorId(context)
+			)
 		);
 		return null;
 	},
@@ -1034,12 +1046,13 @@ export const upgradeGuestToMember = mutation({
 export const completeBoardStep = mutation({
 	args: { personId: v.id("people"), stepId: v.string() },
 	handler: async (context, { personId, stepId }) => {
-		await requireRole(context, BOARD_LEVEL);
-		if (!BOARD_STEPS.some((step) => step.id === stepId)) {
-			throw new Error(`Unknown board step: ${stepId}`);
-		}
+		unwrap(await requireRole(context, BOARD_LEVEL));
+		invariant(
+			BOARD_STEPS.some((step) => step.id === stepId),
+			`Unknown board step: ${stepId}`
+		);
 		const person = await context.db.get(personId);
-		if (!person) throw new Error("Person not found");
+		invariant(person, "Person not found");
 		const actorId = await currentActorId(context);
 		const boardSteps = {
 			...(person.onboarding?.boardSteps ?? {}),
@@ -1076,8 +1089,10 @@ export const markBoardStepDone = internalMutation({
 		alreadyDone: string[];
 		unknown: string[];
 	}> => {
-		if (!BOARD_STEPS.some((step) => step.id === stepId))
-			throw new Error(`Unknown board step: ${stepId}`);
+		invariant(
+			BOARD_STEPS.some((step) => step.id === stepId),
+			`Unknown board step: ${stepId}`
+		);
 		const result = {
 			marked: [] as string[],
 			alreadyDone: [] as string[],
@@ -1162,8 +1177,10 @@ export const unmarkBoardStepDone = internalMutation({
 		keptByBoard: string[];
 		unknown: string[];
 	}> => {
-		if (!BOARD_STEPS.some((step) => step.id === stepId))
-			throw new Error(`Unknown board step: ${stepId}`);
+		invariant(
+			BOARD_STEPS.some((step) => step.id === stepId),
+			`Unknown board step: ${stepId}`
+		);
 		const result = {
 			unmarked: [] as string[],
 			notDone: [] as string[],
@@ -1191,7 +1208,7 @@ export const unmarkBoardStepDone = internalMutation({
 export const logWifiOpen = mutation({
 	args: {},
 	handler: async (context) => {
-		const person = await requireRole(context, ACCESS_TIERS);
+		const person = unwrap(await requireRole(context, ACCESS_TIERS));
 		const events = await context.db
 			.query("personEvents")
 			.withIndex("by_person", (range) => range.eq("personId", person._id))
@@ -1212,7 +1229,7 @@ export const logWifiOpen = mutation({
 export const getAgreementUrl = query({
 	args: { personId: v.id("people") },
 	handler: async (context, { personId }) => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		const sigs = await context.db
 			.query("signatures")
 			.withIndex("by_person", (range) => range.eq("personId", personId))
@@ -1232,7 +1249,7 @@ export const getAgreementUrl = query({
 export const attendedEvents = query({
 	args: { personId: v.id("people") },
 	handler: async (context, { personId }) => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		const rows = await context.db
 			.query("eventAttendance")
 			.withIndex("by_person", (range) => range.eq("personId", personId))
@@ -1264,7 +1281,7 @@ export const callerInCommunity = internalQuery({
 	args: {},
 	handler: async (context): Promise<boolean> => {
 		try {
-			await requireRole(context, COMMUNITY_TIERS);
+			unwrap(await requireRole(context, COMMUNITY_TIERS));
 			return true;
 		} catch {
 			return false;

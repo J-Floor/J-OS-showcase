@@ -9,6 +9,7 @@ import {
 } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
+import { call } from "../../lib/call.ts";
 
 import { lockHealthSummary, type DoorHealth } from "./lockHealth.ts";
 import styles from "./LockHealthCard.module.scss";
@@ -24,15 +25,16 @@ const POLL_MS = 60_000;
 function createLockHealthPolling() {
 	const health = useAction(api.doorHealth.doorHealth);
 	const [reading, setReading] = createSignal<DoorHealth>();
-	const [failed, setFailed] = createSignal(false);
+	/** Why the last check failed, or null when it succeeded. */
+	const [failure, setFailure] = createSignal<string | null>(null);
 
 	async function check() {
-		try {
-			setReading(await health.mutateAsync({}));
-			setFailed(false);
-		} catch {
-			setFailed(true);
-		}
+		const result = await call(
+			health.mutateAsync({}),
+			"Couldn't reach the locks."
+		);
+		if (result.isOk()) setReading(result.value);
+		setFailure(result.isErr() ? result.error.message : null);
 	}
 
 	function onVisibilityChange() {
@@ -53,7 +55,7 @@ function createLockHealthPolling() {
 			);
 		});
 	});
-	return { reading, failed };
+	return { reading, failure };
 }
 
 /**
@@ -68,16 +70,16 @@ function createLockHealthPolling() {
  * viewer per minute.
  */
 export function LockHealthCard(): JSX.Element {
-	const { reading, failed } = createLockHealthPolling();
+	const { reading, failure } = createLockHealthPolling();
 
 	function summary() {
 		const data = reading();
-		return data && !failed() ? lockHealthSummary(data) : undefined;
+		return data && !failure() ? lockHealthSummary(data) : undefined;
 	}
 	// While loading, and if the check fails, there is no summary — fall back to a
 	// tone the card can still colour by.
 	function tone(): "neutral" | "error" {
-		return summary()?.tone ?? (failed() ? "error" : "neutral");
+		return summary()?.tone ?? (failure() ? "error" : "neutral");
 	}
 
 	return (
@@ -88,11 +90,7 @@ export function LockHealthCard(): JSX.Element {
 				<p class={styles.note} data-tone={tone()}>
 					<Show
 						when={summary()}
-						fallback={
-							failed()
-								? "Couldn't reach the locks."
-								: "Checking door status…"
-						}
+						fallback={failure() ?? "Checking door status…"}
 					>
 						{(loadedSummary) => loadedSummary().detail}
 					</Show>
@@ -105,7 +103,7 @@ export function LockHealthCard(): JSX.Element {
 						when={summary()}
 						fallback={
 							<span class={styles.num}>
-								{failed() ? "?" : "…"}
+								{failure() ? "?" : "…"}
 							</span>
 						}
 					>

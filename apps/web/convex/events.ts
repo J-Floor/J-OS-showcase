@@ -1,14 +1,18 @@
 import { v } from "convex/values";
+import { err, ok, type Result } from "neverthrow";
 
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { eventLive } from "./lib/attendance.ts";
 import { requireRole } from "./lib/authGuard.ts";
+import type { EventsError } from "./lib/errors/events.ts";
+import type { InputError } from "./lib/errors/input.ts";
 import { displayName } from "./lib/names.ts";
+import { invariant, refuse, unwrap } from "./lib/result.ts";
 import { BOARD_LEVEL, COMMUNITY_TIERS } from "./lib/roles.ts";
 import { SITE_TIMEZONE, utcFromLocal, zonedTimeZoneName } from "./lib/time.ts";
-import { assertLength, NAME_MAX } from "./lib/validate.ts";
+import { checkLength, NAME_MAX } from "./lib/validate.ts";
 import { currentActorId } from "./lifecycle.ts";
 import {
 	cancelEventReminders,
@@ -27,9 +31,13 @@ const ATTENDEE_ROSTER_CAP = 500;
  *  formats the cached epoch in Zurich while the drawer formats the stored
  *  zone, so they'd silently disagree. Reject at the mutation boundary
  *  instead. */
-function assertSiteZone(local: string): void {
-	if (zonedTimeZoneName(local) !== SITE_TIMEZONE)
-		throw new Error(`Event times must be in ${SITE_TIMEZONE}.`);
+function checkSiteZone(local: string): Result<void, EventsError | InputError> {
+	return zonedTimeZoneName(local).andThen(
+		(zone): Result<void, EventsError> =>
+			zone === SITE_TIMEZONE
+				? ok()
+				: err({ type: "EventTimesNotInSiteZone" })
+	);
 }
 
 export const createEvent = mutation({
@@ -42,18 +50,17 @@ export const createEvent = mutation({
 		context,
 		{ name, startsAtLocal, endsAtLocal }
 	): Promise<Id<"events">> => {
-		await requireRole(context, BOARD_LEVEL);
-		assertLength(name, NAME_MAX, "Event name");
+		unwrap(await requireRole(context, BOARD_LEVEL));
+		unwrap(checkLength(name, NAME_MAX));
 		const createdBy = await currentActorId(context);
-		if (!createdBy) throw new Error("No acting person.");
-		assertSiteZone(startsAtLocal);
-		assertSiteZone(endsAtLocal);
+		invariant(createdBy, "No acting person.");
+		unwrap(checkSiteZone(startsAtLocal));
+		unwrap(checkSiteZone(endsAtLocal));
 		// The zoned string is the source of truth; the epoch is a cache derived
 		// from it server-side — never trust a client-sent epoch.
 		const startsAt = utcFromLocal(startsAtLocal);
 		const endsAt = utcFromLocal(endsAtLocal);
-		if (startsAt > endsAt)
-			throw new Error("The start must be on or before the end.");
+		if (startsAt > endsAt) refuse({ type: "EventStartAfterEnd" });
 		const id = await context.db.insert("events", {
 			name,
 			startsAt,
@@ -75,7 +82,7 @@ export const listEvents = query({
 		// Any entitled member with space access may see the event list (the
 		// Events page grants `view` to guests+). Only board/admin can create —
 		// see `createEvent` and the `<Can I="create">`-gated form on the page.
-		await requireRole(context, COMMUNITY_TIERS);
+		unwrap(await requireRole(context, COMMUNITY_TIERS));
 		const rows = await context.db.query("events").collect();
 		// eslint-disable-next-line id-length -- conventional comparator parameter names
 		return rows.sort((a, b) => b.createdAt - a.createdAt);
@@ -85,7 +92,7 @@ export const listEvents = query({
 export const deleteEvent = mutation({
 	args: { eventId: v.id("events") },
 	handler: async (context, { eventId }): Promise<void> => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		const event = await context.db.get(eventId);
 		if (event) await cancelEventReminders(context, event);
 		// Delete the event doc first: it vanishes from listEvents/getEventPublic
@@ -144,11 +151,11 @@ function mergedEventTimes(
 	let startsAt = existing.startsAt;
 	let endsAt = existing.endsAt;
 	if (fields.startsAtLocal !== undefined) {
-		assertSiteZone(fields.startsAtLocal);
+		unwrap(checkSiteZone(fields.startsAtLocal));
 		startsAt = utcFromLocal(fields.startsAtLocal);
 	}
 	if (fields.endsAtLocal !== undefined) {
-		assertSiteZone(fields.endsAtLocal);
+		unwrap(checkSiteZone(fields.endsAtLocal));
 		endsAt = utcFromLocal(fields.endsAtLocal);
 	}
 	return { startsAt, endsAt };
@@ -179,22 +186,21 @@ export const updateEvent = mutation({
 		endsAtLocal: v.optional(v.string()),
 	},
 	handler: async (context, { eventId, ...fields }): Promise<void> => {
-		await requireRole(context, BOARD_LEVEL);
-		assertLength(fields.name, NAME_MAX, "Event name");
+		unwrap(await requireRole(context, BOARD_LEVEL));
+		unwrap(checkLength(fields.name, NAME_MAX));
 		const existing = await context.db.get(eventId);
-		if (!existing) throw new Error("Event not found.");
+		if (!existing) return refuse({ type: "EventNotFound" });
 		// Each drawer field commits on its own, so merge the supplied field(s)
 		// over the current row and validate the RESULT — a lone Starts edit must
 		// not be allowed to invert the interval, and the name must not go blank.
 		const name =
 			fields.name === undefined ? existing.name : fields.name.trim();
-		if (name === "") throw new Error("Event name is required.");
+		if (name === "") refuse({ type: "EventNameRequired" });
 		// Patch a time field only when the caller supplied its `*Local`: each
 		// drawer field autosaves on its own, so a lone Starts edit must leave
 		// Ends (and its cached epoch) exactly as they were, and vice versa.
 		const { startsAt, endsAt } = mergedEventTimes(existing, fields);
-		if (startsAt > endsAt)
-			throw new Error("The start must be on or before the end.");
+		if (startsAt > endsAt) refuse({ type: "EventStartAfterEnd" });
 		await context.db.patch(eventId, {
 			name,
 			...timeFieldsPatch(fields, { startsAt, endsAt }),
@@ -228,7 +234,7 @@ export const listEventAttendees = query({
 			confirmedAt: number;
 		}[]
 	> => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		// Bounded like the delete sweep: turnout is unbounded in principle, so
 		// cap the roster the drawer loads rather than risk a transaction /
 		// response-size limit on a popular event. ATTENDEE_ROSTER_CAP is far above

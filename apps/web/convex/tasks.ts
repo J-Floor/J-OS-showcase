@@ -4,8 +4,14 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx } from "./_generated/server";
 import { requireRole } from "./lib/authGuard.ts";
-import { BOARD_LEVEL } from "./lib/roles.ts";
-import { assertLength, NAME_MAX, TEXT_MAX } from "./lib/validate.ts";
+import { unwrap } from "./lib/result.ts";
+import { CORE_AND_BOARD } from "./lib/roles.ts";
+import {
+	checkLength,
+	NAME_MAX,
+	TEXT_MAX,
+	withNullsCleared,
+} from "./lib/validate.ts";
 import { notify } from "./notify/notify.ts";
 import { taskStatus } from "./schema.ts";
 // jscpd:ignore-end
@@ -44,7 +50,7 @@ export const list = query({
 	handler: async (context) => {
 		// Core members can view and manage the Tasks board
 		// (create/update/remove) alongside the board.
-		await requireRole(context, [...BOARD_LEVEL, "core"]);
+		unwrap(await requireRole(context, CORE_AND_BOARD));
 		return context.db.query("tasks").collect();
 	},
 });
@@ -59,9 +65,9 @@ export const create = mutation({
 		dueDate: v.optional(v.number()),
 	},
 	handler: async (context, args) => {
-		const person = await requireRole(context, [...BOARD_LEVEL, "core"]);
-		assertLength(args.title, NAME_MAX, "Title");
-		assertLength(args.description, TEXT_MAX, "Description");
+		const person = unwrap(await requireRole(context, CORE_AND_BOARD));
+		unwrap(checkLength(args.title, NAME_MAX));
+		unwrap(checkLength(args.description, TEXT_MAX));
 		const assigneeIds = args.assigneeIds ?? [];
 		const id = await context.db.insert("tasks", {
 			title: args.title,
@@ -94,14 +100,10 @@ export const update = mutation({
 		dueDate: v.optional(v.union(v.number(), v.null())),
 	},
 	handler: async (context, { id, ...patch }) => {
-		const person = await requireRole(context, [...BOARD_LEVEL, "core"]);
-		assertLength(patch.title, NAME_MAX, "Title");
-		assertLength(patch.description, TEXT_MAX, "Description");
-		// null clears an optional field; undefined leaves it untouched.
-		const clean: Record<string, unknown> = {};
-		for (const [key, value] of Object.entries(patch)) {
-			clean[key] = value ?? undefined;
-		}
+		const person = unwrap(await requireRole(context, CORE_AND_BOARD));
+		unwrap(checkLength(patch.title, NAME_MAX));
+		unwrap(checkLength(patch.description, TEXT_MAX));
+		const clean = withNullsCleared(patch);
 		// Capture the prior assignees BEFORE patching so we can email only the
 		// people newly added in this update.
 		const prior =
@@ -123,7 +125,7 @@ export const update = mutation({
 export const remove = mutation({
 	args: { id: v.id("tasks") },
 	handler: async (context, { id }) => {
-		await requireRole(context, [...BOARD_LEVEL, "core"]);
+		unwrap(await requireRole(context, CORE_AND_BOARD));
 		await context.db.delete(id);
 		return null;
 	},

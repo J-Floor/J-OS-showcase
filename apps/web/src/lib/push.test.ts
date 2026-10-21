@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import type { Result } from "neverthrow";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 const { mutation } = vi.hoisted(() => ({
@@ -17,6 +18,7 @@ vi.mock("../../convex/_generated/api", () => ({
 	},
 }));
 
+import type { ClientError } from "./call.ts";
 import {
 	base64UrlToBytes,
 	disablePush,
@@ -25,6 +27,20 @@ import {
 	pushSupport,
 	resyncPush,
 } from "./push.ts";
+
+async function valueOf<T>(
+	pending: PromiseLike<Result<T, ClientError>>
+): Promise<T> {
+	const result = await pending;
+	return result._unsafeUnwrap();
+}
+
+async function errorOf<T>(
+	pending: PromiseLike<Result<T, ClientError>>
+): Promise<ClientError> {
+	const result = await pending;
+	return result._unsafeUnwrapErr();
+}
 
 const DESKTOP_UA =
 	"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36";
@@ -111,7 +127,7 @@ describe("enablePush", () => {
 			permission: "default",
 			request: "granted",
 		});
-		await expect(enablePush()).resolves.toBe("granted");
+		expect(await valueOf(enablePush())).toBe("granted");
 		expect(pushManager.subscribe).toHaveBeenCalledWith({
 			userVisibleOnly: true,
 			applicationServerKey: new Uint8Array([1, 2, 3]),
@@ -130,7 +146,7 @@ describe("enablePush", () => {
 			permission: "default",
 			request: "denied",
 		});
-		await expect(enablePush()).resolves.toBe("denied");
+		expect(await valueOf(enablePush())).toBe("denied");
 		expect(pushManager.subscribe).not.toHaveBeenCalled();
 		expect(mutation).not.toHaveBeenCalled();
 	});
@@ -138,7 +154,8 @@ describe("enablePush", () => {
 	test("refuses to run without a VAPID key", async () => {
 		vi.stubEnv("VITE_VAPID_PUBLIC_KEY", "");
 		installPush({ permission: "default" });
-		await expect(enablePush()).rejects.toThrow(/not configured/);
+		const error = await errorOf(enablePush());
+		expect(error.code).toBe("PushNotConfigured");
 	});
 });
 
@@ -200,7 +217,8 @@ describe("disablePush, resyncPush, pushSubscribed", () => {
 		const existing = fakeSubscription();
 		installPush({ permission: "granted", existing });
 		mutation.mockRejectedValueOnce(new Error("offline"));
-		await expect(disablePush()).rejects.toThrow("offline");
+		const error = await errorOf(disablePush());
+		expect(error.code).toBe("Unknown");
 		expect(existing.unsubscribe).toHaveBeenCalledOnce();
 	});
 
@@ -210,11 +228,10 @@ describe("disablePush, resyncPush, pushSubscribed", () => {
 			const existing = fakeSubscription();
 			installPush({ permission: "granted", existing });
 			mutation.mockImplementationOnce(() => new Promise(() => {}));
-			const result = expect(disablePush()).rejects.toThrow(
-				/did not confirm in time/
-			);
+			const result = disablePush();
 			await vi.advanceTimersByTimeAsync(4_000);
-			await result;
+			const error = await errorOf(result);
+			expect(error.code).toBe("ServerTimeout");
 			expect(existing.unsubscribe).toHaveBeenCalledOnce();
 			expect(vi.getTimerCount()).toBe(0);
 		} finally {
@@ -238,8 +255,19 @@ describe("disablePush, resyncPush, pushSubscribed", () => {
 			request: "granted",
 			existing: noKeys,
 		});
-		await expect(enablePush()).rejects.toThrow(/missing its keys/);
+		const error = await errorOf(enablePush());
+		expect(error.code).toBe("PushSubscriptionMissingKeys");
 		expect(mutation).not.toHaveBeenCalled();
+	});
+
+	test("a failure reading the subscription on the way off says turning off failed", async () => {
+		installPush({ permission: "granted", existing: null });
+		setNavigator("serviceWorker", {
+			ready: Promise.resolve({}),
+			getRegistration: vi.fn(() => Promise.reject(new Error("no"))),
+		});
+		const error = await errorOf(disablePush());
+		expect(error.message).toBe("Could not turn off notifications.");
 	});
 
 	test("disablePush does nothing without a subscription", async () => {
@@ -265,7 +293,7 @@ describe("disablePush, resyncPush, pushSubscribed", () => {
 
 	test("pushSubscribed reflects the browser subscription", async () => {
 		installPush({ permission: "granted", existing: fakeSubscription() });
-		await expect(pushSubscribed()).resolves.toBe(true);
+		expect(await valueOf(pushSubscribed())).toBe(true);
 	});
 });
 

@@ -11,9 +11,12 @@ import { Show, createEffect, createSignal, on, type Accessor } from "solid-js";
 import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { Can, useAbility } from "../../lib/ability.tsx";
+import { call } from "../../lib/call.ts";
 import { useConfirm } from "../../shared/confirm.tsx";
+import { createActionError } from "../../shared/createActionError.ts";
 import { useQuery } from "../../shared/data/useQuery.ts";
 import { ICONS } from "../../shared/icons.ts";
+import { InlineError } from "../../shared/InlineError.tsx";
 import { EditToggle } from "../community/drawers/EditToggle.tsx";
 
 import {
@@ -137,6 +140,8 @@ function EventDrawerFooter(props: {
 	const deleteEvent = useMutation(api.events.deleteEvent);
 	const confirm = useConfirm();
 
+	const { error, trackResult } = createActionError();
+
 	async function remove(event: Doc<"events">): Promise<void> {
 		const isOk = await confirm({
 			title: "Delete event?",
@@ -145,7 +150,13 @@ function EventDrawerFooter(props: {
 			tone: "danger",
 		});
 		if (!isOk) return;
-		await deleteEvent.mutateAsync({ eventId: event._id });
+		const result = await trackResult(
+			call(
+				deleteEvent.mutateAsync({ eventId: event._id }),
+				"Could not delete the event."
+			)
+		);
+		if (result.isErr()) return;
 		props.onClose();
 	}
 
@@ -157,6 +168,7 @@ function EventDrawerFooter(props: {
 					<Show when={props.canManage && props.event} keyed>
 						{(event) => (
 							<Drawer.Footer>
+								<InlineError message={error()} />
 								<Button
 									variant="tertiary"
 									onClick={() => remove(event)}

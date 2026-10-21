@@ -1,10 +1,20 @@
+import type { Result } from "neverthrow";
 import { describe, expect, it } from "vitest";
 
+import type { DoorError } from "./errors/door.ts";
 import {
 	FAKE_ACTION_DURATION_MS,
 	FAKE_SLOT_LOCK_IDS,
 	FakeDoorProvider,
 } from "./fakeDoorProvider.ts";
+
+/** The value of an Ok, for tests that expect success. */
+async function valueOf<T>(
+	pending: PromiseLike<Result<T, DoorError>>
+): Promise<T> {
+	const result = await pending;
+	return result._unsafeUnwrap();
+}
 
 function base() {
 	return {
@@ -38,7 +48,7 @@ describe("FakeDoorProvider", () => {
 				},
 			],
 		});
-		const model = await provider.readModel();
+		const model = await valueOf(provider.readModel());
 		expect(model.identities[0].authIds).toEqual([
 			{ lockId: "lock-downstairs", authId: "a1" },
 			{ lockId: "lock-upstairs", authId: "a2" },
@@ -56,13 +66,13 @@ describe("FakeDoorProvider.actuate", () => {
 			],
 		});
 		fake.offline.add(FAKE_SLOT_LOCK_IDS.downstairs);
-		expect(await fake.actuate("upstairs", "unlock")).toEqual({
+		expect(await valueOf(fake.actuate("upstairs", "unlock"))).toEqual({
 			status: "ok",
 			lockName: "Upstairs",
 			durationMs: FAKE_ACTION_DURATION_MS,
 			positionBefore: "unknown",
 		});
-		expect(await fake.actuate("downstairs", "unlock")).toEqual({
+		expect(await valueOf(fake.actuate("downstairs", "unlock"))).toEqual({
 			status: "offline",
 			lockName: "Downstairs",
 		});
@@ -85,8 +95,8 @@ describe("FakeDoorProvider.revokeAuthIds", () => {
 				},
 			],
 		});
-		await provider.revokeAuthIds(["a1"]);
-		const model = await provider.readModel();
+		await valueOf(provider.revokeAuthIds(["a1"]));
+		const model = await valueOf(provider.readModel());
 		expect(model.identities[0].authIds).toEqual([
 			{ lockId: "lock-upstairs", authId: "a2" },
 		]);
@@ -104,14 +114,14 @@ describe("FakeDoorProvider.actuate (lock)", () => {
 			],
 		});
 		fake.offline.add(FAKE_SLOT_LOCK_IDS.downstairs);
-		await fake.actuate("upstairs", "unlock");
-		expect(await fake.actuate("upstairs", "lock")).toEqual({
+		await valueOf(fake.actuate("upstairs", "unlock"));
+		expect(await valueOf(fake.actuate("upstairs", "lock"))).toEqual({
 			status: "ok",
 			lockName: "Upstairs",
 			durationMs: FAKE_ACTION_DURATION_MS,
 			positionBefore: "unknown",
 		});
-		expect(await fake.actuate("downstairs", "lock")).toEqual({
+		expect(await valueOf(fake.actuate("downstairs", "lock"))).toEqual({
 			status: "offline",
 			lockName: "Downstairs",
 		});
@@ -132,7 +142,7 @@ describe("FakeDoorProvider.readLockStatus", () => {
 			],
 		});
 		fake.offline.add(FAKE_SLOT_LOCK_IDS.downstairs);
-		expect(await fake.readLockStatus()).toEqual([
+		expect(await valueOf(fake.readLockStatus())).toEqual([
 			{
 				lockId: FAKE_SLOT_LOCK_IDS.upstairs,
 				name: "Upstairs",
@@ -156,10 +166,10 @@ describe("FakeDoorProvider.position", () => {
 			identities: [],
 			locks: [],
 		});
-		expect(await fake.position("upstairs")).toBe("unknown");
+		expect(await valueOf(fake.position("upstairs"))).toBe("unknown");
 		fake.setPosition("upstairs", "locked");
-		expect(await fake.position("upstairs")).toBe("locked");
-		expect(await fake.position("downstairs")).toBe("unknown");
+		expect(await valueOf(fake.position("upstairs"))).toBe("locked");
+		expect(await valueOf(fake.position("downstairs"))).toBe("unknown");
 		expect(fake.calls.positions).toEqual([
 			"upstairs",
 			"upstairs",
@@ -174,8 +184,8 @@ describe("FakeDoorProvider.position", () => {
 		});
 		fake.setPosition("upstairs", "locked");
 		fake.offline.add(FAKE_SLOT_LOCK_IDS.upstairs);
-		expect(await fake.position("upstairs")).toBe("offline");
-		expect(await fake.position("downstairs")).toBe("unknown");
+		expect(await valueOf(fake.position("upstairs"))).toBe("offline");
+		expect(await valueOf(fake.position("downstairs"))).toBe("unknown");
 	});
 });
 
@@ -184,10 +194,10 @@ describe("FakeDoorProvider.queuePositions", () => {
 		const fake = new FakeDoorProvider({ identities: [], locks: [] });
 		fake.queuePositions("downstairs", ["locked", "unlocking", "unlocked"]);
 		expect([
-			await fake.position("downstairs"),
-			await fake.position("downstairs"),
-			await fake.position("downstairs"),
-			await fake.position("downstairs"),
+			await valueOf(fake.position("downstairs")),
+			await valueOf(fake.position("downstairs")),
+			await valueOf(fake.position("downstairs")),
+			await valueOf(fake.position("downstairs")),
 		]).toEqual(["locked", "unlocking", "unlocked", "unlocked"]);
 	});
 
@@ -199,22 +209,43 @@ describe("FakeDoorProvider.queuePositions", () => {
 			],
 		});
 		fake.queuePositions("downstairs", ["locked", "unlocking"]);
-		expect(await fake.actuate("downstairs", "unlock")).toEqual({
+		expect(await valueOf(fake.actuate("downstairs", "unlock"))).toEqual({
 			status: "ok",
 			lockName: "Downstairs",
 			durationMs: FAKE_ACTION_DURATION_MS,
 			positionBefore: "locked",
 		});
-		expect(await fake.position("downstairs")).toBe("locked");
-		expect(await fake.position("downstairs")).toBe("unlocking");
+		expect(await valueOf(fake.position("downstairs"))).toBe("locked");
+		expect(await valueOf(fake.position("downstairs"))).toBe("unlocking");
 	});
 
 	it("reads offline for an offline lock without using up a reading", async () => {
 		const fake = new FakeDoorProvider({ identities: [], locks: [] });
 		fake.queuePositions("downstairs", ["locked", "unlocking"]);
 		fake.offline.add(FAKE_SLOT_LOCK_IDS.downstairs);
-		expect(await fake.position("downstairs")).toBe("offline");
+		expect(await valueOf(fake.position("downstairs"))).toBe("offline");
 		fake.offline.delete(FAKE_SLOT_LOCK_IDS.downstairs);
-		expect(await fake.position("downstairs")).toBe("locked");
+		expect(await valueOf(fake.position("downstairs"))).toBe("locked");
+	});
+});
+
+describe("FakeDoorProvider.failure", () => {
+	it("fails every call with the set error and records nothing", async () => {
+		const fake = new FakeDoorProvider(base());
+		fake.failure = { type: "DoorProviderFailed", detail: "down" };
+		for (const result of [
+			await fake.readModel(),
+			await fake.readLockStatus(),
+			await fake.position("upstairs"),
+			await fake.actuate("upstairs", "unlock"),
+			await fake.revokeAuthIds(["a1"]),
+		])
+			expect(result.isErr() && result.error.type).toBe(
+				"DoorProviderFailed"
+			);
+		expect(fake.calls.actuations).toEqual([]);
+		expect(fake.calls.revokes).toEqual([]);
+		expect(fake.calls.lockStatusReads).toBe(0);
+		expect(fake.calls.positions).toEqual([]);
 	});
 });

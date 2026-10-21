@@ -12,6 +12,8 @@ import {
 	onCleanup,
 } from "solid-js";
 
+import { call } from "../../lib/call.ts";
+
 import { useQuery } from "./useQuery.ts";
 
 type Floor = { since: number | null };
@@ -181,24 +183,23 @@ export function useFlooredLog<Row extends { _id: string }>(options: {
 		isBusy = true;
 		setLoading(true);
 		setLoadFailed(false);
-		try {
-			const result = await activeClient.query(
-				options.queries.listBefore,
-				{
-					before: since,
-					paginationOpts: { numItems: options.pageSize, cursor },
-				}
-			);
-			if (isDisposed()) return;
-			setOlder((prev) => [...prev, ...result.page]);
-			cursor = result.continueCursor;
-			if (result.isDone) setExhausted(true);
-		} catch {
-			if (!isDisposed()) setLoadFailed(true);
-		} finally {
-			isBusy = false;
-			if (!isDisposed()) setLoading(false);
+		const result = await call(
+			activeClient.query(options.queries.listBefore, {
+				before: since,
+				paginationOpts: { numItems: options.pageSize, cursor },
+			}),
+			"Could not load older entries."
+		);
+		isBusy = false;
+		if (isDisposed()) return;
+		setLoading(false);
+		if (result.isErr()) {
+			setLoadFailed(true);
+			return;
 		}
+		setOlder((prev) => [...prev, ...result.value.page]);
+		cursor = result.value.continueCursor;
+		if (result.value.isDone) setExhausted(true);
 	}
 
 	return { rows, failed, canLoadMore, loading, loadFailed, loadMore };

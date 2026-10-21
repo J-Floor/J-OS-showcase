@@ -1,10 +1,12 @@
 import { convexTest, type TestConvex } from "convex-test";
+import { errAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api, internal } from "./_generated/api";
 import { CONFIRM_POLL_MS, CONFIRM_WINDOW_MS } from "./lib/doorActuation.ts";
 import { mintPresenceToken } from "./lib/doorPresence.ts";
 import { setDoorProviderForTests } from "./lib/doorProvider.ts";
+import type { DoorError } from "./lib/errors/door.ts";
 import {
 	FAKE_ACTION_DURATION_MS,
 	FAKE_SLOT_LOCK_IDS,
@@ -13,6 +15,25 @@ import {
 import schema from "./schema.ts";
 
 const modules = import.meta.glob("./**/*.*s");
+
+/** The `data` a rejected call carries, as JSON; empty when it did not reject. */
+async function thrownData(run: Promise<unknown>): Promise<string> {
+	try {
+		await run;
+	} catch (error) {
+		return JSON.stringify((error as { data?: unknown }).data);
+	}
+	return "";
+}
+
+const PROVIDER_FAILED: DoorError = {
+	type: "DoorProviderFailed",
+	detail: "the provider said 503",
+};
+const READ_FAILED: DoorError = {
+	type: "DoorProviderFailed",
+	detail: "read failed",
+};
 const EMAIL = "ada@example.com";
 // The fake's lock id per slot — `actuate(slot)` resolves to these, so the
 // fake's lock set must use them.
@@ -157,7 +178,7 @@ describe("unlockDoor", () => {
 					lock: "upstairs",
 					presence,
 				})
-		).rejects.toThrow(/not available/);
+		).rejects.toThrow(/DoorNotAvailable/);
 		expect(provider.calls.actuations).toEqual([]);
 	});
 
@@ -176,7 +197,7 @@ describe("unlockDoor", () => {
 					lock: "downstairs",
 					presence,
 				})
-		).rejects.toThrow(/not available/);
+		).rejects.toThrow(/DoorNotAvailable/);
 		expect(provider.calls.actuations).toEqual([]);
 	});
 
@@ -192,7 +213,7 @@ describe("unlockDoor", () => {
 					lock: "upstairs",
 					presence,
 				})
-		).rejects.toThrow(/Wi-Fi/);
+		).rejects.toThrow(/NotOnBuildingNetwork/);
 		expect(provider.calls.actuations).toEqual([]);
 	});
 
@@ -208,7 +229,7 @@ describe("unlockDoor", () => {
 					lock: "upstairs",
 					presence,
 				})
-		).rejects.toThrow(/Wi-Fi/);
+		).rejects.toThrow(/NotOnBuildingNetwork/);
 		expect(provider.calls.actuations).toEqual([]);
 	});
 
@@ -223,7 +244,7 @@ describe("unlockDoor", () => {
 					lock: "upstairs",
 					presence: "x.y",
 				})
-		).rejects.toThrow(/not configured/);
+		).rejects.toThrow(/DoorNotConfigured/);
 	});
 
 	it("reports an offline lock and logs a failure", async () => {
@@ -392,18 +413,19 @@ describe("unlockDoor", () => {
 	it("logs a thrown provider failure and rethrows", async () => {
 		const backend = await setup();
 		const provider = fake();
-		provider.actuate = () =>
-			Promise.reject(new Error("the provider said 503"));
+		provider.failure = PROVIDER_FAILED;
 		setDoorProviderForTests(provider);
 		const presence = await mintPresenceToken(SECRET, Date.now());
-		await expect(
+		const data = await thrownData(
 			backend
 				.withIdentity({ email: BOARD })
 				.action(api.doorActions.unlockDoor, {
 					lock: "upstairs",
 					presence,
 				})
-		).rejects.toThrow(/503/);
+		);
+		expect(data).toContain('"code":"DoorProviderFailed"');
+		expect(data).not.toContain("503");
 		expect(await firstLogRow(backend)).toMatchObject({
 			operation: "unlock",
 			outcome: "failed",
@@ -476,7 +498,7 @@ describe("unlockDoor", () => {
 					lock: "downstairs",
 					presence,
 				})
-		).rejects.toThrow(/This door locks by itself/);
+		).rejects.toThrow(/DoorLocksItself/);
 		expect(provider.calls.actuations).toEqual([]);
 		expect(await logRows(backend)).toHaveLength(0);
 	});
@@ -493,7 +515,7 @@ describe("unlockDoor", () => {
 					lock: "upstairs",
 					presence,
 				})
-		).rejects.toThrow(/Wi-Fi/);
+		).rejects.toThrow(/NotOnBuildingNetwork/);
 		expect(provider.calls.actuations).toEqual([]);
 	});
 
@@ -527,7 +549,7 @@ describe("unlockDoor", () => {
 					lock: "upstairs",
 					presence,
 				})
-		).rejects.toThrow(/not available/);
+		).rejects.toThrow(/DoorNotAvailable/);
 		expect(provider.calls.actuations).toEqual([]);
 	});
 
@@ -609,18 +631,19 @@ describe("unlockDoor", () => {
 	it("lockDoor logs a thrown provider failure as a lock row and rethrows", async () => {
 		const backend = await setup();
 		const provider = fake();
-		provider.actuate = () =>
-			Promise.reject(new Error("the provider said 503"));
+		provider.failure = PROVIDER_FAILED;
 		setDoorProviderForTests(provider);
 		const presence = await mintPresenceToken(SECRET, Date.now());
-		await expect(
+		const data = await thrownData(
 			backend
 				.withIdentity({ email: BOARD })
 				.action(api.doorActions.lockDoor, {
 					lock: "upstairs",
 					presence,
 				})
-		).rejects.toThrow(/503/);
+		);
+		expect(data).toContain('"code":"DoorProviderFailed"');
+		expect(data).not.toContain("503");
 		expect(await firstLogRow(backend)).toMatchObject({
 			operation: "lock",
 			outcome: "failed",
@@ -700,9 +723,7 @@ describe("unlockDoor", () => {
 		let reads = 0;
 		provider.position = (slot) => {
 			reads += 1;
-			return reads === 1
-				? Promise.reject(new Error("read failed"))
-				: read(slot);
+			return reads === 1 ? errAsync(READ_FAILED) : read(slot);
 		};
 		setDoorProviderForTests(provider);
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -764,13 +785,13 @@ describe("unlockDoor", () => {
 		const backend = await setup();
 		const provider = fake();
 		const actuate = provider.actuate.bind(provider);
-		provider.actuate = async (slot, action) => {
-			const result = await actuate(slot, action);
-			return result.status === "ok"
-				? // An invalid positionBefore deliberately makes the attempt row write fail.
-					{ ...result, positionBefore: "jammed" as never }
-				: result;
-		};
+		provider.actuate = (slot, action) =>
+			actuate(slot, action).map((result) =>
+				result.status === "ok"
+					? // An invalid positionBefore deliberately makes the attempt row write fail.
+						{ ...result, positionBefore: "jammed" as never }
+					: result
+			);
 		setDoorProviderForTests(provider);
 		const error = vi.spyOn(console, "error").mockImplementation(() => {});
 		expect(await unlock(backend, "downstairs")).toEqual({
@@ -801,8 +822,7 @@ describe("unlockDoor", () => {
 		[
 			"thrown",
 			(provider) => {
-				provider.actuate = () =>
-					Promise.reject(new Error("the provider said 503"));
+				provider.failure = PROVIDER_FAILED;
 			},
 		],
 	];
@@ -816,7 +836,7 @@ describe("unlockDoor", () => {
 			setDoorProviderForTests(provider);
 			const run = unlock(backend, "downstairs");
 			await (label === "thrown"
-				? expect(run).rejects.toThrow(/503/)
+				? expect(run).rejects.toThrow(/DoorProviderFailed/)
 				: expect(run).resolves.toEqual({ status: label }));
 			const [row] = await logRows(backend);
 			expect(row).not.toHaveProperty("actuation");
@@ -872,7 +892,7 @@ describe("doorPosition", () => {
 		const provider = fakeWithLockedUpstairs();
 		await expect(
 			as.action(api.doorActions.doorPosition, { lock: "downstairs" })
-		).rejects.toThrow(/This door's position is not shown/);
+		).rejects.toThrow(/DoorPositionNotShown/);
 		expect(provider.calls.positions).toEqual([]);
 	});
 
@@ -884,7 +904,7 @@ describe("doorPosition", () => {
 		const provider = fakeWithLockedUpstairs();
 		await expect(
 			as.action(api.doorActions.doorPosition, { lock: "upstairs" })
-		).rejects.toThrow(/not available for your account/i);
+		).rejects.toThrow(/DoorPositionNotAvailable/);
 		expect(provider.calls.positions).toEqual([]);
 	});
 
@@ -1035,7 +1055,7 @@ describe("door actions without a test provider while door writes are disabled", 
 					lock: "downstairs",
 					presence,
 				})
-		).rejects.toThrow(/Door writes are disabled on this deployment/);
+		).rejects.toThrow(/DoorWritesDisabled/);
 		expect(calls).toEqual([]);
 	});
 
@@ -1050,7 +1070,7 @@ describe("door actions without a test provider while door writes are disabled", 
 					lock: "upstairs",
 					presence,
 				})
-		).rejects.toThrow(/Door writes are disabled on this deployment/);
+		).rejects.toThrow(/DoorWritesDisabled/);
 		expect(calls).toEqual([]);
 	});
 });
@@ -1127,7 +1147,7 @@ describe("pollActuation", () => {
 	it("takes a failed read as no information and polls again", async () => {
 		const { backend, id } = await acceptedAttempt();
 		const provider = emptyFake();
-		provider.position = () => Promise.reject(new Error("read failed"));
+		provider.position = () => errAsync(READ_FAILED);
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 		await backend.action(internal.doorActions.pollActuation, {
 			id,

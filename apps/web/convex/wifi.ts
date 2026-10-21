@@ -2,8 +2,9 @@ import { v } from "convex/values";
 
 import { internalQuery, mutation, query } from "./_generated/server";
 import { requireRole } from "./lib/authGuard.ts";
+import { refuse, unwrap } from "./lib/result.ts";
 import { BOARD_LEVEL, COMMUNITY_TIERS } from "./lib/roles.ts";
-import { assertLength, SSID_MAX, WIFI_PASSWORD_MAX } from "./lib/validate.ts";
+import { checkLength, SSID_MAX, WIFI_PASSWORD_MAX } from "./lib/validate.ts";
 import { readWifi } from "./lib/wifi.ts";
 
 /**
@@ -17,8 +18,8 @@ import { readWifi } from "./lib/wifi.ts";
 export const get = query({
 	args: {},
 	handler: async (context): Promise<{ ssid: string; password: string }> => {
-		await requireRole(context, COMMUNITY_TIERS);
-		return readWifi(context.db);
+		unwrap(await requireRole(context, COMMUNITY_TIERS));
+		return unwrap(await readWifi(context.db));
 	},
 });
 
@@ -32,7 +33,7 @@ export const get = query({
 export const read = internalQuery({
 	args: {},
 	handler: async (context): Promise<{ ssid: string; password: string }> => {
-		return readWifi(context.db);
+		return unwrap(await readWifi(context.db));
 	},
 });
 
@@ -44,16 +45,16 @@ export const read = internalQuery({
 export const update = mutation({
 	args: { ssid: v.string(), password: v.string() },
 	handler: async (context, args): Promise<void> => {
-		await requireRole(context, BOARD_LEVEL);
-		assertLength(args.ssid, SSID_MAX, "SSID");
-		assertLength(args.password, WIFI_PASSWORD_MAX, "Password");
+		unwrap(await requireRole(context, BOARD_LEVEL));
+		unwrap(checkLength(args.ssid, SSID_MAX));
+		unwrap(checkLength(args.password, WIFI_PASSWORD_MAX));
 		const ssid = args.ssid.trim();
-		if (ssid === "") throw new Error("SSID is required.");
+		if (ssid === "") refuse({ type: "WifiSsidRequired" });
 		// Validate the password is non-blank, but store it verbatim: a WPA
 		// passphrase may legitimately contain leading/trailing spaces, so
 		// trimming what we save could silently break the network.
 		const password = args.password;
-		if (password.trim() === "") throw new Error("Password is required.");
+		if (password.trim() === "") refuse({ type: "WifiPasswordRequired" });
 
 		const existing = await context.db.query("wifiConfig").first();
 		if (existing) {

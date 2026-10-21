@@ -8,6 +8,7 @@ import {
 
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { DAY_MS } from "../../../../convex/lib/constants.ts";
+import { toaster } from "../../../shared/toaster.ts";
 import type { Project } from "../data/tasksData.tsx";
 import { useProjectActions } from "../data/tasksData.tsx";
 
@@ -227,6 +228,41 @@ function barWidth(
 	return Math.max(Math.min(width, totalW), dayWidth);
 }
 
+type DragInfo = {
+	id: Id<"projects">;
+	kind: DragKind;
+	startX: number;
+	startMs: number;
+	endMs: number;
+};
+
+/** The overrides left once a refused move is undone. A bar whose override
+ *  has since moved on (a newer drag) keeps it. */
+export function withoutOverride(
+	overrides: Record<string, Override>,
+	id: string,
+	attempted: Override
+): Record<string, Override> {
+	return id in overrides &&
+		overrides[id].startMs === attempted.startMs &&
+		overrides[id].endMs === attempted.endMs
+		? Object.fromEntries(
+				Object.entries(overrides).filter(([key]) => key !== id)
+			)
+		: overrides;
+}
+
+/** A refused move: the bar goes back to where the server has it. */
+export function rollBack(
+	setOverrides: ReturnType<typeof createProjectOverrides>["setOverrides"],
+	id: Id<"projects">,
+	attempted: Override,
+	message: string
+): void {
+	setOverrides((prev) => withoutOverride(prev, id, attempted));
+	toaster.create({ type: "error", title: message });
+}
+
 /** Dragging a bar to move it or resize either end; a near-stationary drag is
  *  a click that opens the project. */
 export function createBarDrag(options: {
@@ -239,29 +275,30 @@ export function createBarDrag(options: {
 	const [drag, setDrag] = createSignal<LiveDrag>(null);
 
 	// Drag state held outside the signal so handlers can read the originals.
-	let dragInfo: {
-		id: Id<"projects">;
-		kind: DragKind;
-		startX: number;
-		startMs: number;
-		endMs: number;
-	} | null = null;
+	let dragInfo: DragInfo | null = null;
 
-	function commitDrag(
-		info: NonNullable<typeof dragInfo>,
-		deltaDays: number
-	): void {
+	function commitDrag(info: DragInfo, deltaDays: number): void {
 		const { startMs, endMs } = draggedDates(info, deltaDays);
 		if (startMs === info.startMs && endMs === info.endMs) return;
 		options.setOverrides((prev) => ({
 			...prev,
 			[info.id]: { startMs, endMs },
 		}));
-		void actions.update({
-			id: info.id,
-			startDate: startMs,
-			endDate: endMs,
-		});
+		void actions
+			.update({
+				id: info.id,
+				startDate: startMs,
+				endDate: endMs,
+			})
+			.then((result) => {
+				if (result.isErr())
+					rollBack(
+						options.setOverrides,
+						info.id,
+						{ startMs, endMs },
+						result.error.message
+					);
+			});
 	}
 
 	return {

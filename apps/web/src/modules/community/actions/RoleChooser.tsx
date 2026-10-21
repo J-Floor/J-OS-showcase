@@ -1,4 +1,5 @@
 import { DatePicker, Segment } from "@j-os/design-system";
+import type { Result } from "neverthrow";
 import {
 	For,
 	Show,
@@ -15,11 +16,23 @@ import {
 	minExpiryIso,
 	SITE_TIMEZONE,
 } from "../../../../convex/lib/time.ts";
+import type { ClientError } from "../../../lib/call.ts";
+import { createActionError } from "../../../shared/createActionError.ts";
+import { InlineError } from "../../../shared/InlineError.tsx";
 
 import styles from "./RoleChooser.module.scss";
 import { MOVES, type RoleMove } from "./roleMoves.ts";
 
 type Via = (typeof MOVES)[number]["via"][number];
+
+/** The first of `move.via` that is legal from every one of `states`. */
+function firstLegalEvent(move: (typeof MOVES)[number], states: StateId[]) {
+	return states.length === 0
+		? undefined
+		: move.via.find((event) =>
+				states.every((state) => legalEvents(state).includes(event))
+			);
+}
 
 /** The move a chosen destination dispatches through `event`, or undefined while
  *  it still lacks what that event needs (a date, a target tier). `expiryIso`
@@ -79,13 +92,14 @@ export function RoleChooser(props: {
 		saving: Accessor<boolean>;
 		commit: () => void;
 	}) => JSX.Element;
-	onMove: (move: RoleMove) => void | Promise<void>;
+	onMove: (move: RoleMove) => Promise<Result<unknown, ClientError>>;
 	/** Called after a successful move — the dialog closes itself with it. */
 	onDone?: () => void;
 }): JSX.Element {
 	const [choice, setChoice] = createSignal<string | undefined>();
 	const [iso, setIso] = createSignal<string | null>(null);
 	const [saving, setSaving] = createSignal(false);
+	const { error, trackResult } = createActionError();
 
 	/**
 	 * The event this row would actually dispatch for the current selection, or
@@ -93,13 +107,7 @@ export function RoleChooser(props: {
 	 * event beats the generic `SET_ROLE` wherever both apply.
 	 */
 	function eventFor(move: (typeof MOVES)[number]) {
-		return props.states.length === 0
-			? undefined
-			: move.via.find((event) =>
-					props.states.every((state) =>
-						legalEvents(state).includes(event)
-					)
-				);
+		return firstLegalEvent(move, props.states);
 	}
 
 	const available = createMemo(() =>
@@ -132,12 +140,9 @@ export function RoleChooser(props: {
 		if (payload === undefined || saving()) return;
 		setSaving(true);
 		void (async () => {
-			try {
-				await props.onMove(payload);
-				props.onDone?.();
-			} finally {
-				setSaving(false);
-			}
+			const result = await trackResult(props.onMove(payload));
+			setSaving(false);
+			if (result.isOk()) props.onDone?.();
 		})();
 	}
 
@@ -168,6 +173,7 @@ export function RoleChooser(props: {
 					onValueChange={setIso}
 				/>
 			</Show>
+			<InlineError message={error()} />
 			{props.children({ move, saving, commit })}
 		</>
 	);

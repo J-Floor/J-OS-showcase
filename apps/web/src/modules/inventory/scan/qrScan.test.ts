@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { QrScanError, startQrScan } from "./qrScan.ts";
+import { startQrScan } from "./qrScan.ts";
 
 function detectorHost(): { BarcodeDetector?: unknown } {
 	return globalThis as unknown as { BarcodeDetector?: unknown };
@@ -27,17 +27,17 @@ function videoStub() {
 }
 
 describe("startQrScan", () => {
-	it("throws unsupported when BarcodeDetector is missing", async () => {
+	it("fails unsupported when BarcodeDetector is missing", async () => {
 		delete detectorHost().BarcodeDetector;
-		await expect(
-			startQrScan(videoStub(), vi.fn(), new AbortController().signal)
-		).rejects.toMatchObject({
-			name: "QrScanError",
-			code: "unsupported",
-		});
+		const result = await startQrScan(
+			videoStub(),
+			vi.fn(),
+			new AbortController().signal
+		);
+		expect(result._unsafeUnwrapErr()).toEqual({ code: "unsupported" });
 	});
 
-	it("throws permission when getUserMedia is denied", async () => {
+	it("fails permission when getUserMedia is denied", async () => {
 		detectorHost().BarcodeDetector = class {
 			detect() {
 				return Promise.resolve([]);
@@ -54,12 +54,12 @@ describe("startQrScan", () => {
 				),
 			},
 		});
-		await expect(
-			startQrScan(videoStub(), vi.fn(), new AbortController().signal)
-		).rejects.toBeInstanceOf(QrScanError);
-		await expect(
-			startQrScan(videoStub(), vi.fn(), new AbortController().signal)
-		).rejects.toMatchObject({ code: "permission" });
+		const result = await startQrScan(
+			videoStub(),
+			vi.fn(),
+			new AbortController().signal
+		);
+		expect(result._unsafeUnwrapErr()).toEqual({ code: "permission" });
 	});
 
 	it("emits the first decoded value and stops tracks on abort", async () => {

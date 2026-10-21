@@ -630,13 +630,13 @@ function adapterViolations(source: string): string[] {
 	);
 	const factoryBody = factory ? code.slice(factory.start, factory.end) : "";
 	const guard =
-		/if\s*\(\s*options\.requireWrites\s*&&\s*!doorWritesEnabled\(\)\s*\)\s*throw\b/.exec(
+		/if\s*\(\s*options\.requireWrites\s*&&\s*!doorWritesEnabled\(\)\s*\)\s*return\s+err\(/.exec(
 			factoryBody
 		);
 	const build = factoryBody.indexOf("nukiProvider(");
 	if (!guard || build === -1 || guard.index > build)
 		out.push(
-			`${DOOR_ADAPTER}: doorProviderFromEnvironment must throw when requireWrites is set and doorWritesEnabled() is false, before building the provider`
+			`${DOOR_ADAPTER}: doorProviderFromEnvironment must return an Err when requireWrites is set and doorWritesEnabled() is false, before building the provider`
 		);
 
 	for (const match of code.matchAll(/\bnukiProvider\(/g))
@@ -942,7 +942,7 @@ describe("security invariants self-checks", () => {
 			`}`,
 			`export function doorProviderFromEnvironment(options: { requireWrites: boolean }): DoorProvider {`,
 			`	if (options.requireWrites && !doorWritesEnabled())`,
-			`		throw new Error("off");`,
+			`		return err({ type: "DoorWritesDisabled" });`,
 			`	return nukiProvider({ fetch, token: "t" }, []);`,
 			`}`,
 			`export function nukiProvider(deps: NukiDeps, lockIds: string[]): DoorProvider {`,
@@ -1012,12 +1012,12 @@ describe("security invariants self-checks", () => {
 		it("flags a factory that builds the provider without the switch", () => {
 			const sample = withFiles({
 				[DOOR_ADAPTER]: adapter.replace(
-					'\tif (options.requireWrites && !doorWritesEnabled())\n\t\tthrow new Error("off");\n',
+					'\tif (options.requireWrites && !doorWritesEnabled())\n\t\treturn err({ type: "DoorWritesDisabled" });\n',
 					""
 				),
 			});
 			expect(doorWriteViolations(sample)).toEqual([
-				`${DOOR_ADAPTER}: doorProviderFromEnvironment must throw when requireWrites is set and doorWritesEnabled() is false, before building the provider`,
+				`${DOOR_ADAPTER}: doorProviderFromEnvironment must return an Err when requireWrites is set and doorWritesEnabled() is false, before building the provider`,
 			]);
 		});
 

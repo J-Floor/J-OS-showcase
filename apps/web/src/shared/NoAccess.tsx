@@ -1,9 +1,11 @@
 import { Button, Icon, PermissionDenied } from "@j-os/design-system";
+import { createSignal } from "solid-js";
 
 import { authClient } from "../lib/auth.ts";
 import { APP_NAME } from "../lib/constants.ts";
 
 import { ICONS } from "./icons.ts";
+import { InlineError } from "./InlineError.tsx";
 import styles from "./NoAccess.module.scss";
 import { useSignOut } from "./useSignOut.ts";
 
@@ -20,7 +22,8 @@ const HINT =
  */
 export function NoAccess() {
 	const session = authClient.useSession();
-	const signOut = useSignOut();
+	const [error, setError] = createSignal<string>();
+	const signOut = useSignOut({ onError: setError });
 	function description(): string {
 		const email = session().data?.user.email;
 		return email
@@ -38,7 +41,13 @@ export function NoAccess() {
 				>
 					<Icon>{ICONS.back}</Icon>Back
 				</Button>
-				<Button onClick={() => void signOut()}>
+				<InlineError message={error()} />
+				<Button
+					onClick={() => {
+						setError(undefined);
+						void signOut();
+					}}
+				>
 					<Icon>{ICONS.signOut}</Icon>Sign out
 				</Button>
 			</PermissionDenied>

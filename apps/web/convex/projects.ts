@@ -1,19 +1,28 @@
 import { v } from "convex/values";
+import { err, ok, type Result } from "neverthrow";
 
 import type { Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx } from "./_generated/server";
 import { requireRole } from "./lib/authGuard.ts";
-import { BOARD_LEVEL } from "./lib/roles.ts";
-import { assertLength, NAME_MAX, TEXT_MAX } from "./lib/validate.ts";
+import type { InputError } from "./lib/errors/input.ts";
+import { invariant, unwrap } from "./lib/result.ts";
+import { CORE_AND_BOARD } from "./lib/roles.ts";
+import {
+	checkLength,
+	NAME_MAX,
+	TEXT_MAX,
+	withNullsCleared,
+} from "./lib/validate.ts";
 import { notify } from "./notify/notify.ts";
 import { projectFields } from "./schema.ts";
 
-const DATE_ORDER_ERROR = "Project start date must be on or before its end date";
-
-function assertDateOrder(start?: number, end?: number): void {
-	if (start !== undefined && end !== undefined && start > end) {
-		throw new Error(DATE_ORDER_ERROR);
-	}
+function checkDateOrder(
+	start?: number,
+	end?: number
+): Result<void, InputError> {
+	return start !== undefined && end !== undefined && start > end
+		? err({ type: "ProjectDatesOutOfOrder" })
+		: ok();
 }
 
 // Notify a newly-assigned project lead (skipping the actor assigning
@@ -52,7 +61,7 @@ export const list = query({
 	handler: async (context) => {
 		// Core members can view and manage the Projects timeline
 		// (create/update/remove) alongside the board.
-		await requireRole(context, [...BOARD_LEVEL, "core"]);
+		unwrap(await requireRole(context, CORE_AND_BOARD));
 		return context.db.query("projects").collect();
 	},
 });
@@ -60,10 +69,10 @@ export const list = query({
 export const create = mutation({
 	args: projectFields,
 	handler: async (context, args) => {
-		const person = await requireRole(context, [...BOARD_LEVEL, "core"]);
-		assertLength(args.name, NAME_MAX, "Project name");
-		assertLength(args.description, TEXT_MAX, "Description");
-		assertDateOrder(args.startDate, args.endDate);
+		const person = unwrap(await requireRole(context, CORE_AND_BOARD));
+		unwrap(checkLength(args.name, NAME_MAX));
+		unwrap(checkLength(args.description, TEXT_MAX));
+		unwrap(checkDateOrder(args.startDate, args.endDate));
 		const id = await context.db.insert("projects", {
 			...args,
 			createdBy: person._id,
@@ -89,23 +98,20 @@ export const update = mutation({
 		endDate: v.optional(v.union(v.number(), v.null())),
 	},
 	handler: async (context, { id, ...patch }) => {
-		const person = await requireRole(context, [...BOARD_LEVEL, "core"]);
-		assertLength(patch.name, NAME_MAX, "Project name");
-		assertLength(patch.description, TEXT_MAX, "Description");
-		const clean: Record<string, unknown> = {};
-		for (const [key, value] of Object.entries(patch)) {
-			clean[key] = value ?? undefined;
-		}
+		const person = unwrap(await requireRole(context, CORE_AND_BOARD));
+		unwrap(checkLength(patch.name, NAME_MAX));
+		unwrap(checkLength(patch.description, TEXT_MAX));
+		const clean = withNullsCleared(patch);
 		// Validate the resulting start/end ordering (a patch may set only one).
 		const existing = await context.db.get(id);
-		if (!existing) throw new Error("Project not found");
+		invariant(existing, "Project not found");
 		const start = (
 			"startDate" in clean ? clean.startDate : existing.startDate
 		) as number | undefined;
 		const end = ("endDate" in clean ? clean.endDate : existing.endDate) as
 			| number
 			| undefined;
-		assertDateOrder(start, end);
+		unwrap(checkDateOrder(start, end));
 		await context.db.patch(id, clean);
 		if (patch.leaderId !== undefined) {
 			await notifyNewProjectLeader(context, {
@@ -124,7 +130,7 @@ export const update = mutation({
 export const remove = mutation({
 	args: { id: v.id("projects") },
 	handler: async (context, { id }) => {
-		await requireRole(context, [...BOARD_LEVEL, "core"]);
+		unwrap(await requireRole(context, CORE_AND_BOARD));
 		// Detach tasks so no card points at a deleted project.
 		const tasks = await context.db
 			.query("tasks")

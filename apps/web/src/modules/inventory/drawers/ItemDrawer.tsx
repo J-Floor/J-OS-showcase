@@ -3,16 +3,20 @@ import {
 	Button,
 	Drawer,
 	Icon,
-	Input,
 	PropertyRow,
 } from "@j-os/design-system";
 import { Show, createSignal, type Accessor, type JSX } from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { parseAssetTag } from "../../../../convex/lib/assetTag.ts";
+import { call } from "../../../lib/call.ts";
 import { createSyncedField } from "../../../lib/createSyncedField.ts";
 import { DescriptionField } from "../../../shared/components/DescriptionField.tsx";
 import { useConfirm } from "../../../shared/confirm.tsx";
+import {
+	createActionError,
+	scopeOfFields,
+} from "../../../shared/createActionError.ts";
 import { EntityCreateFooter } from "../../../shared/entity/EntityCreateFooter.tsx";
 import {
 	EntityDrawerHeader,
@@ -20,14 +24,16 @@ import {
 } from "../../../shared/entity/EntityDrawerHeader.tsx";
 import { EntityQrBlock } from "../../../shared/entity/EntityQr.tsx";
 import { ICONS } from "../../../shared/icons.ts";
+import { InlineError } from "../../../shared/InlineError.tsx";
 import type { Item, ItemType } from "../data/inventoryData.ts";
 import { useItemActions } from "../data/inventoryData.ts";
 import { itemEntity } from "../entity.ts";
 
+import { AssetTagInput } from "./AssetTagInput.tsx";
 import { detailsFromItem } from "./copyFromItem.ts";
 import { CopyFromItemDialog } from "./CopyFromItemDialog.tsx";
 import styles from "./InventoryDrawer.module.scss";
-import { FormErrorLine, OptionSelect, runAttempt } from "./InventoryForm.tsx";
+import { OptionSelect } from "./InventoryForm.tsx";
 
 /**
  * Placeholder field layout passed to `Drawer.Body`'s `skeleton` while
@@ -103,25 +109,24 @@ function createItemFields(
 }
 
 function isAssetTagValid(tag: string): boolean {
-	try {
-		parseAssetTag(tag);
-		return true;
-	} catch {
-		return false;
-	}
+	return parseAssetTag(tag).isOk();
 }
 
 /** The item's fields and the actions that create and delete it. */
 function createItemForm(props: ItemDrawerProps) {
 	const actions = useItemActions();
 	const confirm = useConfirm();
-	const [formError, setFormError] = createSignal<string>();
+	const failure = createActionError();
 
 	async function patch(change: Record<string, unknown>) {
 		const item = props.item;
 		if (!item) return;
-		await runAttempt(setFormError, "Could not save.", () =>
-			actions.update({ id: item._id, ...change })
+		await failure.trackResult(
+			call(
+				actions.update({ id: item._id, ...change }),
+				"Could not save."
+			),
+			scopeOfFields(change)
 		);
 	}
 
@@ -133,8 +138,8 @@ function createItemForm(props: ItemDrawerProps) {
 
 	return {
 		...fields,
-		formError,
-		setFormError,
+		formError: failure.error,
+		clearFormError: failure.clear,
 		tagLooksValid,
 		/** Fills the type and description from another item. */
 		copyFrom: (source: Item): void => {
@@ -145,18 +150,18 @@ function createItemForm(props: ItemDrawerProps) {
 		async createItem() {
 			const selected = fields.typeId.value();
 			if (!tagLooksValid() || selected === undefined) return;
-			const isCreated = await runAttempt(
-				setFormError,
-				"Could not create.",
-				() =>
+			const created = await failure.trackResult(
+				call(
 					actions.create({
 						typeId: selected,
 						assetTag: fields.assetTag.value(),
 						description:
 							fields.description.value().trim() || undefined,
-					})
+					}),
+					"Could not create."
+				)
 			);
-			if (isCreated) props.onOpenChange(false);
+			if (created.isOk()) props.onOpenChange(false);
 		},
 		async deleteItem() {
 			if (!props.item) return;
@@ -168,12 +173,10 @@ function createItemForm(props: ItemDrawerProps) {
 			});
 			if (!isOk) return;
 			const item = props.item;
-			const isDeleted = await runAttempt(
-				setFormError,
-				"Could not delete.",
-				() => actions.remove(item._id)
+			const deleted = await failure.trackResult(
+				call(actions.remove(item._id), "Could not delete.")
 			);
-			if (isDeleted) props.onOpenChange(false);
+			if (deleted.isOk()) props.onOpenChange(false);
 		},
 	};
 }
@@ -200,8 +203,8 @@ function CopyFromItemButton(props: {
 	);
 }
 
-/** The asset tag: an input while creating, read-only text for an existing
- *  item (its tag is its slug). */
+/** The asset tag: two fields that only take a tag while creating, read-only
+ *  text for an existing item (its tag is its slug). */
 function AssetTagField(props: {
 	item?: Item;
 	assetTag: ItemForm["assetTag"];
@@ -217,19 +220,12 @@ function AssetTagField(props: {
 				</PropertyRow>
 			}
 		>
-			<Input
-				label="Asset tag"
-				required
-				helperText="One letter and five digits, e.g. A00000"
-				ref={(element: HTMLInputElement) => {
-					props.onElement(element);
-				}}
+			<AssetTagInput
 				value={props.assetTag.value()}
-				onInput={(event) => {
-					props.assetTag.set(event.currentTarget.value);
-				}}
-				onBlur={props.assetTag.flush}
-				invalid={props.hasError}
+				onChange={props.assetTag.set}
+				onFlush={props.assetTag.flush}
+				hasError={props.hasError}
+				onElement={props.onElement}
 			/>
 		</Show>
 	);
@@ -308,7 +304,7 @@ function ItemFormFields(props: {
 			<AssetTagField
 				item={props.item}
 				assetTag={props.form.assetTag}
-				hasError={props.form.formError() !== undefined}
+				hasError={props.form.formError() !== null}
 				onElement={props.onTagElement}
 			/>
 			<ItemTypeSelect
@@ -319,7 +315,7 @@ function ItemFormFields(props: {
 				class={styles.description}
 				description={props.form.description}
 			/>
-			<FormErrorLine error={props.form.formError} />
+			<InlineError message={props.form.formError()} />
 		</>
 	);
 }
@@ -344,7 +340,7 @@ export function ItemDrawer(props: ItemDrawerProps): JSX.Element {
 				onOpenChange={(isOpen) => {
 					if (!isOpen) {
 						setCopyOpen(false);
-						form.setFormError(undefined);
+						form.clearFormError();
 					}
 					props.onOpenChange(isOpen);
 				}}

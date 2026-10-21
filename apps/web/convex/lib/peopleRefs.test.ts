@@ -1,9 +1,14 @@
+import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 
+import schema from "../schema.ts";
+
 import {
+	documentsNaming,
 	pathsNaming,
 	peopleReferencePlans,
 	peopleReferenceTables,
+	readBudget,
 	replacePersonId,
 	stripPersonId,
 } from "./peopleRefs.ts";
@@ -154,5 +159,43 @@ describe("pathsNaming", () => {
 				"gone"
 			)
 		).toEqual(["hostedById", "assigneeIds.1", "board.noteLog.0.authorId"]);
+	});
+});
+
+describe("documentsNaming", () => {
+	it("refuses with ReadBudgetExceeded when the walk would read past its budget", async () => {
+		const backend = convexTest(schema, import.meta.glob("../**/*.*s"));
+		const personId = await backend.run(async (context) => {
+			const id = await context.db.insert("people", {
+				email: "walk@example.com",
+				firstName: "Walk",
+				lastName: "Test",
+				tier: "member",
+				stage: "active",
+				stageSince: 0,
+			});
+			await context.db.insert("personEvents", {
+				personId: id,
+				at: 0,
+				kind: "merge",
+			});
+			return id;
+		});
+		const refusal = await backend.run(async (context) => {
+			const result = await documentsNaming(context, personId, {
+				left: 0,
+			});
+			return result.isErr() && result.error.type;
+		});
+		expect(refusal).toBe("ReadBudgetExceeded");
+		const isWalked = await backend.run(async (context) => {
+			const result = await documentsNaming(
+				context,
+				personId,
+				readBudget()
+			);
+			return result.isOk();
+		});
+		expect(isWalked).toBe(true);
 	});
 });

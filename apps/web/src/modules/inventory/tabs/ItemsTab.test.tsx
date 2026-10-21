@@ -8,6 +8,8 @@ import {
 	waitFor,
 	within,
 } from "@solidjs/testing-library";
+import { ConvexError } from "convex/values";
+import { ok } from "neverthrow";
 import { afterEach, expect, test, vi } from "vitest";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -93,7 +95,7 @@ vi.mock("../print/downloadPdf.ts", () => ({
 }));
 
 vi.mock("../print/inventoryPdfAssets.ts", () => ({
-	loadInventoryPdfAssets: () => Promise.resolve({}),
+	loadInventoryPdfAssets: () => Promise.resolve(ok({})),
 }));
 
 import { ItemsTab } from "./ItemsTab.tsx";
@@ -177,4 +179,45 @@ test("Delete removes each selected item, not just the first", async () => {
 	expect(mockRemove).toHaveBeenCalledWith("items:1");
 	expect(mockRemove).toHaveBeenCalledWith("items:2");
 	expect(mockRemove).not.toHaveBeenCalledWith("items:3");
+});
+
+test("a refused batch delete shows the reason in the batch bar and keeps the selection", async () => {
+	mockRemove.mockClear();
+	mockRemove.mockRejectedValueOnce(
+		new ConvexError({ code: "Forbidden", message: "You can't do that." })
+	);
+	renderTab();
+	const checks = screen.getAllByRole("checkbox");
+	fireEvent.click(checks[1]);
+	fireEvent.click(checks[2]);
+
+	const bar = await batchBar();
+	fireEvent.click(within(bar).getByRole("button", { name: /delete/i }));
+
+	expect(
+		await within(bar).findByText("You can't do that.")
+	).toBeInTheDocument();
+	expect(mockRemove).toHaveBeenCalledTimes(1);
+	expect(
+		screen.getByRole("button", { name: /clear selection/i })
+	).toBeInTheDocument();
+});
+
+test("re-making the selection drops the old batch delete failure", async () => {
+	mockRemove.mockClear();
+	mockRemove.mockRejectedValueOnce(
+		new ConvexError({ code: "Forbidden", message: "You can't do that." })
+	);
+	renderTab();
+	const checks = screen.getAllByRole("checkbox");
+	fireEvent.click(checks[1]);
+	const bar = await batchBar();
+	fireEvent.click(within(bar).getByRole("button", { name: /delete/i }));
+	expect(
+		await within(bar).findByText("You can't do that.")
+	).toBeInTheDocument();
+	fireEvent.click(checks[2]);
+	await waitFor(() => {
+		expect(screen.queryByText("You can't do that.")).toBeNull();
+	});
 });

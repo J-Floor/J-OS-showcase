@@ -5,7 +5,10 @@ import { For, Show, createSignal } from "solid-js";
 import { api } from "../../../../convex/_generated/api";
 import type { Doc } from "../../../../convex/_generated/dataModel";
 import { TEXT_MAX } from "../../../../convex/lib/validate.ts";
+import { call } from "../../../lib/call.ts";
+import { createActionError } from "../../../shared/createActionError.ts";
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
+import { InlineError } from "../../../shared/InlineError.tsx";
 import { formatAgo } from "../../../shared/time.ts";
 import { noteAuthor } from "../noteAuthor.ts";
 
@@ -55,14 +58,26 @@ export function BoardNotes(props: { person: Doc<"people"> }) {
 	const boardLevel = useBoardLevel();
 	const addNote = useMutation(api.people.addNote);
 	const [draft, setDraft] = createSignal("");
+	const { error: noteError, trackResult } = createActionError();
+	let isSaving = false;
 
 	function notes() {
 		return props.person.board?.noteLog ?? [];
 	}
-	function submit(): void {
+	async function submit(): Promise<void> {
 		const text = draft().trim();
-		if (!text) return;
-		void addNote.mutateAsync({ id: props.person._id, text });
+		// Enter and blur both submit; the draft outlives the save, so
+		// without this one note would be sent twice.
+		if (!text || isSaving) return;
+		isSaving = true;
+		const result = await trackResult(
+			call(
+				addNote.mutateAsync({ id: props.person._id, text }),
+				"Could not save the note."
+			)
+		);
+		isSaving = false;
+		if (result.isErr()) return;
 		setDraft("");
 	}
 
@@ -98,11 +113,12 @@ export function BoardNotes(props: { person: Doc<"people"> }) {
 						setDraft(value);
 					}}
 				/>
+				<InlineError message={noteError()} />
 				<div class={styles.composerActions}>
 					<Button
 						disabled={!draft().trim()}
 						disabledReason="Write a note first"
-						onClick={submit}
+						onClick={() => void submit()}
 					>
 						Add note
 					</Button>

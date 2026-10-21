@@ -1,8 +1,11 @@
 import type { ValidatorJSON } from "convex/values";
+import { err, ok, type Result } from "neverthrow";
 
 import type { Doc, Id, TableNames } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import schema from "../schema.ts";
+
+import type { PeopleError } from "./errors/people.ts";
 
 /** Most documents one merge or erasure may read across its walks (one
  *  Convex transaction reads at most 16,384 documents and 8 MiB). */
@@ -172,21 +175,18 @@ export function readBudget(): ReadBudget {
 	return { left: MAX_SCANNED_DOCS };
 }
 
-/** Why a walk stopped before reading past its budget. */
-export function overBudget(table: string): string {
-	return `Too many documents to scan in one transaction (more than ${MAX_SCANNED_DOCS}, reached in ${table}).`;
-}
-
-/** The rows of `query`, charged to `budget`, or null when there are more
- *  than it has left. */
+/** The rows of `query`, charged to `budget`, or a refusal when there are
+ *  more than it has left. `where` names the table for the operator's log. */
 export async function takeCharged<T>(
 	query: { take(n: number): Promise<T[]> },
-	budget: ReadBudget
-): Promise<T[] | null> {
+	budget: ReadBudget,
+	where: string
+): Promise<Result<T[], PeopleError>> {
 	const rows = await query.take(budget.left + 1);
-	if (rows.length > budget.left) return null;
+	if (rows.length > budget.left)
+		return err({ type: "ReadBudgetExceeded", where });
 	budget.left -= rows.length;
-	return rows;
+	return ok(rows);
 }
 
 /**
@@ -202,7 +202,7 @@ export async function documentsNaming(
 	context: QueryCtx,
 	personId: Id<"people">,
 	budget: ReadBudget = readBudget()
-): Promise<{ problem: string } | { docs: Naming[] }> {
+): Promise<Result<Naming[], PeopleError>> {
 	const documentsById = new Map<string, Naming>();
 	for (const [name, plan] of Object.entries(peopleReferencePlans())) {
 		const table = name as TableNames;
@@ -217,12 +217,13 @@ export async function documentsNaming(
 					)
 				: [context.db.query(table as "people")];
 		for (const read of reads) {
-			const rows = await takeCharged(read, budget);
-			if (!rows) return { problem: overBudget(table) };
-			for (const doc of rows) documentsById.set(doc._id, { table, doc });
+			const rows = await takeCharged(read, budget, table);
+			if (rows.isErr()) return err(rows.error);
+			for (const doc of rows.value)
+				documentsById.set(doc._id, { table, doc });
 		}
 	}
-	return { docs: [...documentsById.values()] };
+	return ok([...documentsById.values()]);
 }
 
 /** The dotted paths inside `value` that hold `id` (`assigneeIds.1`,

@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { err, ok, type Result } from "neverthrow";
 
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
@@ -6,9 +7,12 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { requireRole } from "./lib/authGuard.ts";
 import { personForCurrentUser } from "./lib/currentPerson.ts";
 import { entitled } from "./lib/derive.ts";
+import type { AuthError } from "./lib/errors/auth.ts";
+import type { PeopleError } from "./lib/errors/people.ts";
 import { displayName } from "./lib/names.ts";
 import { requiredSelfStepIds } from "./lib/onboardingSteps.ts";
 import { selfView } from "./lib/personViews.ts";
+import { invariant, refuse, unwrap } from "./lib/result.ts";
 import { ACCESS_TIERS } from "./lib/roles.ts";
 import { applyEventIfLegal } from "./lifecycle.ts";
 
@@ -39,16 +43,13 @@ export const getState = query({
  */
 async function requireOnboardingPerson(
 	context: MutationCtx
-): Promise<Doc<"people">> {
+): Promise<Result<Doc<"people">, AuthError | PeopleError>> {
 	const person = await personForCurrentUser(context);
-	if (!person)
-		throw new Error("No onboarding in progress for the current user.");
-	if (!entitled(person, Date.now()))
-		throw new Error("Access expired or revoked");
-	if (person.stage !== "onboarding") {
-		throw new Error("Current user is not in an onboarding state.");
-	}
-	return person;
+	if (!person) return err({ type: "NoOnboardingInProgress" });
+	if (!entitled(person, Date.now())) return err({ type: "AccessExpired" });
+	return person.stage === "onboarding"
+		? ok(person)
+		: err({ type: "NotOnboarding" });
 }
 
 /**
@@ -88,20 +89,18 @@ export async function markStepComplete(
 export const completeStep = mutation({
 	args: { stepId: v.string() },
 	handler: async (context, { stepId }) => {
-		const person = await requireOnboardingPerson(context);
+		const person = unwrap(await requireOnboardingPerson(context));
 		// Same list the activation guard uses. The retired door-key step is not in
 		// it, so completing it is rejected like any unknown step.
 		const required = requiredSelfStepIds(person.tier) as string[];
-		if (!required.includes(stepId)) {
-			throw new Error(`Unknown onboarding step: ${stepId}`);
-		}
+		invariant(
+			required.includes(stepId),
+			`Unknown onboarding step: ${stepId}`
+		);
 		// The document step is completed only by signing the agreement, so
 		// onboarding cannot finish without a signature on file.
-		if (stepId === "document") {
-			throw new Error(
-				"The document step is completed by signing the agreement."
-			);
-		}
+		if (stepId === "document")
+			refuse({ type: "DocumentStepNeedsSignature" });
 		await markStepComplete(context, person._id, stepId);
 		return null;
 	},
@@ -116,7 +115,7 @@ export const completeStep = mutation({
 export const resume = mutation({
 	args: {},
 	handler: async (context): Promise<{ activated: boolean }> => {
-		const person = await requireOnboardingPerson(context);
+		const person = unwrap(await requireOnboardingPerson(context));
 		const next = await applyEventIfLegal(context, person._id, {
 			type: "ONBOARDING_PROGRESSED",
 		});
@@ -132,7 +131,7 @@ export const resume = mutation({
 export const setTourSeen = mutation({
 	args: {},
 	handler: async (context) => {
-		const person = await requireRole(context, ACCESS_TIERS);
+		const person = unwrap(await requireRole(context, ACCESS_TIERS));
 		const prev = person.onboarding ?? { steps: {} };
 		await context.db.patch(person._id, {
 			onboarding: { ...prev, tourSeen: true },
@@ -148,7 +147,7 @@ export const setTourSeen = mutation({
 export const setDoorsIntroSeen = mutation({
 	args: {},
 	handler: async (context) => {
-		const person = await requireRole(context, ACCESS_TIERS);
+		const person = unwrap(await requireRole(context, ACCESS_TIERS));
 		if (person.doorsIntroSeenAt === undefined)
 			await context.db.patch(person._id, {
 				doorsIntroSeenAt: Date.now(),
@@ -163,7 +162,7 @@ export const setDoorsIntroSeen = mutation({
 export const whatsappInvite = query({
 	args: {},
 	handler: async (context) => {
-		await requireRole(context, ACCESS_TIERS);
+		unwrap(await requireRole(context, ACCESS_TIERS));
 		const url = process.env.WHATSAPP_INVITE_URL;
 		return url === undefined || url === "" ? null : url;
 	},

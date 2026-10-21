@@ -9,12 +9,32 @@ import {
 	composeZoned,
 } from "../../../convex/lib/time.ts";
 import { NAME_MAX } from "../../../convex/lib/validate.ts";
+import { call } from "../../lib/call.ts";
+import { createActionError } from "../../shared/createActionError.ts";
+import { InlineError } from "../../shared/InlineError.tsx";
 
 import styles from "./EventDrawer.module.scss";
 
 const DEFAULT_START_TIME = "00:01";
 const DEFAULT_END_TIME = "23:59";
 const MISSING_FIELDS_REASON = "Add a name and both dates first";
+
+/**
+ * Composes the create form's date + time fields into Zurich-zoned instants,
+ * or `null` while either date is unset.
+ */
+function composeRange(
+	startDate: string | null,
+	endDate: string | null,
+	startTime: string,
+	endTime: string
+): { start: ZonedValue; end: ZonedValue } | null {
+	if (startDate === null || endDate === null) return null;
+	return {
+		start: composeZoned(startDate, startTime, SITE_TIMEZONE),
+		end: composeZoned(endDate, endTime, SITE_TIMEZONE),
+	};
+}
 
 /**
  * The create form's state: its fields, and the mutation that submits it.
@@ -28,21 +48,10 @@ export function createEventCreateForm(options: { onCreated: () => void }) {
 	const [startTime, setStartTime] = createSignal(DEFAULT_START_TIME);
 	const [endTime, setEndTime] = createSignal(DEFAULT_END_TIME);
 	const [submitting, setSubmitting] = createSignal(false);
+	const { error, trackResult, clear } = createActionError();
 
-	/**
-	 * Composes the create form's date + time signals into Zurich-zoned
-	 * instants, or `null` while either date is unset. Reads the signals
-	 * directly (not memoised) so callers stay reactive when called from a
-	 * tracked scope, matching the previous `dateTimeToMs`-per-call style.
-	 */
-	function composedRange(): { start: ZonedValue; end: ZonedValue } | null {
-		const startDate = startsAt();
-		const endDate = endsAt();
-		if (startDate === null || endDate === null) return null;
-		return {
-			start: composeZoned(startDate, startTime(), SITE_TIMEZONE),
-			end: composeZoned(endDate, endTime(), SITE_TIMEZONE),
-		};
+	function composedRange() {
+		return composeRange(startsAt(), endsAt(), startTime(), endTime());
 	}
 
 	async function submit(): Promise<void> {
@@ -55,16 +64,19 @@ export function createEventCreateForm(options: { onCreated: () => void }) {
 		)
 			return;
 		setSubmitting(true);
-		try {
-			await createEvent.mutateAsync({
-				name: name().trim(),
-				startsAtLocal: range.start.local,
-				endsAtLocal: range.end.local,
-			});
-			options.onCreated();
-		} finally {
-			setSubmitting(false);
-		}
+		const result = await trackResult(
+			call(
+				createEvent.mutateAsync({
+					name: name().trim(),
+					startsAtLocal: range.start.local,
+					endsAtLocal: range.end.local,
+				}),
+				"Could not create the event."
+			)
+		);
+		setSubmitting(false);
+		if (result.isErr()) return;
+		options.onCreated();
 	}
 
 	return {
@@ -79,6 +91,7 @@ export function createEventCreateForm(options: { onCreated: () => void }) {
 		endTime,
 		setEndTime,
 		submitting,
+		error,
 		/** A fresh, empty create form. */
 		reset() {
 			setName("");
@@ -86,6 +99,7 @@ export function createEventCreateForm(options: { onCreated: () => void }) {
 			setEndsAt(null);
 			setStartTime(DEFAULT_START_TIME);
 			setEndTime(DEFAULT_END_TIME);
+			clear();
 		},
 		canSubmit(): boolean {
 			if (name().trim() === "") return false;
@@ -167,6 +181,7 @@ export function EventCreateForm(props: { form: EventCreateFormState }) {
 				Times are Europe/Zurich (the space), wherever you're editing
 				from.
 			</p>
+			<InlineError message={props.form.error()} />
 		</form>
 	);
 }

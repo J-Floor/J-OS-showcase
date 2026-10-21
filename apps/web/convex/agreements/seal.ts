@@ -21,6 +21,8 @@ import { P12Signer } from "@signpdf/signer-p12";
 import { SignPdf } from "@signpdf/signpdf";
 import forge from "node-forge";
 
+import { invariant } from "../lib/result.ts";
+
 /**
  * Compute the SHA-256 fingerprint (lowercase hex, no colons) of the leaf
  * certificate inside a PKCS#12 buffer. The fingerprint is derived from the
@@ -37,7 +39,7 @@ export function certFingerprintFromP12(
 	const p12 = forge.pkcs12.pkcs12FromAsn1(asn1, passphrase);
 	const bags = p12.getBags({ bagType: forge.pki.oids.certBag });
 	const cert = bags[forge.pki.oids.certBag]?.[0]?.cert;
-	if (!cert) throw new Error("No certificate found in AGREEMENT_SIGNING_P12");
+	invariant(cert, "No certificate found in AGREEMENT_SIGNING_P12");
 	const der = forge.asn1.toDer(forge.pki.certificateToAsn1(cert)).getBytes();
 	return createHash("sha256")
 		.update(Buffer.from(der, "binary"))
@@ -69,11 +71,10 @@ export async function sealWith(
 export async function sealPdf(pdfBytes: Uint8Array): Promise<Uint8Array> {
 	const b64 = process.env.AGREEMENT_SIGNING_P12;
 	const pass = process.env.AGREEMENT_SIGNING_P12_PASS;
-	if (!b64 || !pass) {
-		throw new Error(
-			"Agreement signing key not configured (set AGREEMENT_SIGNING_P12 and AGREEMENT_SIGNING_P12_PASS)"
-		);
-	}
+	invariant(
+		b64 && pass,
+		"Agreement signing key not configured (set AGREEMENT_SIGNING_P12 and AGREEMENT_SIGNING_P12_PASS)"
+	);
 	return sealWith(pdfBytes, Buffer.from(b64, "base64"), pass);
 }
 
@@ -85,11 +86,10 @@ export async function sealPdf(pdfBytes: Uint8Array): Promise<Uint8Array> {
 export function signingCertFingerprint(): string {
 	const b64 = process.env.AGREEMENT_SIGNING_P12;
 	const pass = process.env.AGREEMENT_SIGNING_P12_PASS;
-	if (!b64 || !pass) {
-		throw new Error(
-			"Agreement signing key not configured (set AGREEMENT_SIGNING_P12 and AGREEMENT_SIGNING_P12_PASS)"
-		);
-	}
+	invariant(
+		b64 && pass,
+		"Agreement signing key not configured (set AGREEMENT_SIGNING_P12 and AGREEMENT_SIGNING_P12_PASS)"
+	);
 	return certFingerprintFromP12(Buffer.from(b64, "base64"), pass);
 }
 

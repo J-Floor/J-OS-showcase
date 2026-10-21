@@ -37,9 +37,13 @@ export function NotificationsHost(): JSX.Element {
 		setParams({ [PARAM]: undefined }, { replace: true });
 	});
 	onMount(() => {
-		resyncPush().catch((err: unknown) => {
-			// eslint-disable-next-line no-console -- a failed background re-sync must not break the shell; surface it for debugging
-			console.error("[push] could not re-sync this device", err);
+		void resyncPush().then((result) => {
+			if (result.isErr())
+				// eslint-disable-next-line no-console -- a failed background re-sync must not break the shell; surface it for debugging
+				console.error(
+					"[push] could not re-sync this device",
+					result.error
+				);
 		});
 	});
 	return (

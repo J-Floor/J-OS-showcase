@@ -1,4 +1,5 @@
 import type { useSearchParams } from "@solidjs/router";
+import { ResultAsync } from "neverthrow";
 import { createSignal } from "solid-js";
 
 import type { Item } from "../data/inventoryData.ts";
@@ -63,23 +64,27 @@ export function createInventoryScanner(options: {
 	async function onDetect(raw: string) {
 		if (isScanBusy) return;
 		isScanBusy = true;
-		try {
-			const result = await resolveScannedTag(raw, lookup);
-			if (result.kind === "invalid") {
-				setScanError(INVALID_QR);
-				isScanBusy = false;
-				return;
-			}
-			if (result.kind === "open") {
-				openScannedItem(result);
-				return;
-			}
-			setScanError(undefined);
-			setUnknownTag(result.assetTag);
-		} catch {
-			setScanError("Could not look up that asset tag.");
+		const resolved = await ResultAsync.fromPromise(
+			resolveScannedTag(raw, lookup),
+			() => "Could not look up that asset tag."
+		);
+		if (resolved.isErr()) {
+			setScanError(resolved.error);
 			isScanBusy = false;
+			return;
 		}
+		const result = resolved.value;
+		if (result.kind === "invalid") {
+			setScanError(INVALID_QR);
+			isScanBusy = false;
+			return;
+		}
+		if (result.kind === "open") {
+			openScannedItem(result);
+			return;
+		}
+		setScanError(undefined);
+		setUnknownTag(result.assetTag);
 	}
 
 	return {

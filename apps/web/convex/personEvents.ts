@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { requireRole } from "./lib/authGuard.ts";
 import { withActorNames } from "./lib/names.ts";
+import { unwrap } from "./lib/result.ts";
 import { BOARD_LEVEL } from "./lib/roles.ts";
 
 /** How many of a person's newest `doorLog` rows the timeline reads. A daily
@@ -26,7 +27,7 @@ const DOOR_ACTION_LIMIT = 100;
 export const listForPerson = query({
 	args: { personId: v.id("people") },
 	handler: async (context, { personId }) => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		const events = await context.db
 			.query("personEvents")
 			.withIndex("by_person", (range) => range.eq("personId", personId))

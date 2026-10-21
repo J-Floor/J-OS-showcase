@@ -6,6 +6,7 @@ import {
 	screen,
 	waitFor,
 } from "@solidjs/testing-library";
+import { err, ok } from "neverthrow";
 import { createSignal } from "solid-js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -35,7 +36,7 @@ function alphabetical(first: string, second: string) {
 }
 
 function setup(states: string[] = ["member.active"]) {
-	const onMove = vi.fn();
+	const onMove = vi.fn(() => Promise.resolve(ok(undefined)));
 	render(() => (
 		<ChangeRoleDialog
 			open
@@ -141,7 +142,7 @@ describe("ChangeRoleDialog", () => {
 	});
 
 	it("Cancel requests close and dispatches nothing", async () => {
-		const onMove = vi.fn();
+		const onMove = vi.fn(() => Promise.resolve(ok(undefined)));
 		const onOpenChange = vi.fn();
 		render(() => (
 			<ChangeRoleDialog
@@ -168,7 +169,7 @@ describe("ChangeRoleDialog", () => {
 		// (`choice() === undefined` is false) while `eventFor` now returns
 		// undefined for it, so `confirm()` bailed — nothing happened and the
 		// dialog didn't even close.
-		const onMove = vi.fn();
+		const onMove = vi.fn(() => Promise.resolve(ok(undefined)));
 		const [open, setOpen] = createSignal(true);
 		const [states, setStates] = createSignal<string[]>(["former.active"]);
 		render(() => (
@@ -220,6 +221,33 @@ describe("ChangeRoleDialog", () => {
 				event: "GRANT_CORE",
 			});
 		});
+	});
+
+	it("a refused move stays open and shows the reason inside the dialog", async () => {
+		const onOpenChange = vi.fn();
+		const onMove = vi.fn(() =>
+			Promise.resolve(
+				err({
+					code: "IllegalTransition",
+					message: "That change is not possible right now.",
+				})
+			)
+		);
+		render(() => (
+			<ChangeRoleDialog
+				open
+				onOpenChange={onOpenChange}
+				count={1}
+				states={["member.active"]}
+				onMove={onMove}
+			/>
+		));
+		clickSegmentItem("core");
+		await clickChangeRole();
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"That change is not possible right now."
+		);
+		expect(onOpenChange).not.toHaveBeenCalledWith(false);
 	});
 
 	// When the specific event is illegal (GRANT_CORE is not an edge from

@@ -1,19 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { assertLength } from "./validate.ts";
+import { checkLength } from "./validate.ts";
 
-describe("assertLength", () => {
-	it("throws when the value is longer than max", () => {
-		expect(() => {
-			assertLength("a".repeat(201), 200, "Name");
-		}).toThrow("Name is too long (max 200 characters).");
+describe("checkLength", () => {
+	it("is an Err when the value is longer than max", () => {
+		const result = checkLength("a".repeat(201), 200);
+		expect(result.isErr() && result.error.type).toBe("FieldTooLong");
 	});
-	it("accepts undefined and values at the limit", () => {
-		expect(() => {
-			assertLength(undefined, 1, "x");
-		}).not.toThrow();
-		expect(() => {
-			assertLength("ab", 2, "x");
-		}).not.toThrow();
+	it("is Ok for undefined and values at the limit", () => {
+		expect(checkLength(undefined, 1).isOk()).toBe(true);
+		expect(checkLength("ab", 2).isOk()).toBe(true);
 	});
 });

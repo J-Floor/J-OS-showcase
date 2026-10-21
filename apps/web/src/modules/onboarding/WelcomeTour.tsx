@@ -3,6 +3,7 @@ import { useMutation } from "convex-solidjs";
 import { createEffect } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
+import { ignoreFailure } from "../../lib/call.ts";
 import { useQuery } from "../../shared/data/useQuery.ts";
 
 import { doorsIntroPending, type DoorsIntroPerson } from "./doorIntroState.ts";
@@ -70,7 +71,9 @@ export function WelcomeTour() {
 				details.status === "dismissed" ||
 				details.status === "completed"
 			) {
-				void setTourSeen.mutateAsync({}).catch(() => {});
+				// Closed already, so a failed save has no area to show in; the
+				// tour just comes back next session.
+				ignoreFailure(setTourSeen.mutateAsync({}));
 			}
 		},
 	});

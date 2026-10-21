@@ -59,7 +59,7 @@ test("rejects start date after end date on create and update", async () => {
 			startDate: start,
 			endDate: end,
 		})
-	).rejects.toThrow(/start date must be on or before/i);
+	).rejects.toThrow(/ProjectDatesOutOfOrder/);
 
 	// A valid project (start 06-05 ≤ end 06-10), then an update pushing the start
 	// past the end is rejected.
@@ -73,7 +73,7 @@ test("rejects start date after end date on create and update", async () => {
 			id,
 			startDate: Date.parse("2026-06-20"),
 		})
-	).rejects.toThrow(/start date must be on or before/i);
+	).rejects.toThrow(/ProjectDatesOutOfOrder/);
 });
 
 test("emails a leader assigned on create", async () => {
@@ -156,21 +156,21 @@ test("create and update reject an over-long name or description", async () => {
 	const asBoard = await board(backend);
 	await expect(
 		asBoard.mutation(api.projects.create, { name: "n".repeat(201) })
-	).rejects.toThrow("Project name is too long (max 200 characters).");
+	).rejects.toThrow(/FieldTooLong/);
 	await expect(
 		asBoard.mutation(api.projects.create, {
 			name: "ok",
 			description: "d".repeat(5001),
 		})
-	).rejects.toThrow("Description is too long (max 5000 characters).");
+	).rejects.toThrow(/FieldTooLong/);
 	const id = await asBoard.mutation(api.projects.create, { name: "Fine" });
 	await expect(
 		asBoard.mutation(api.projects.update, { id, name: "n".repeat(201) })
-	).rejects.toThrow("Project name is too long (max 200 characters).");
+	).rejects.toThrow(/FieldTooLong/);
 	await expect(
 		asBoard.mutation(api.projects.update, {
 			id,
 			description: "d".repeat(5001),
 		})
-	).rejects.toThrow("Description is too long (max 5000 characters).");
+	).rejects.toThrow(/FieldTooLong/);
 });

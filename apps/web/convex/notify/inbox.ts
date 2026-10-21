@@ -15,6 +15,7 @@ import {
 	NOTIFICATIONS_PAGE_SIZE,
 	UNREAD_COUNT_CAP,
 } from "../lib/constants.ts";
+import { refuse, unwrap } from "../lib/result.ts";
 import { COMMUNITY_TIERS } from "../lib/roles.ts";
 
 /**
@@ -94,7 +95,7 @@ export const record = internalMutation({
 export const firstPageFloor = query({
 	args: {},
 	handler: async (context): Promise<{ since: number | null }> => {
-		const person = await requireRole(context, COMMUNITY_TIERS);
+		const person = unwrap(await requireRole(context, COMMUNITY_TIERS));
 		const rows = await context.db
 			.query("notifications")
 			.withIndex("by_personId_and_createdAt", (range) =>
@@ -115,7 +116,7 @@ export const firstPageFloor = query({
 export const listSince = query({
 	args: { since: v.union(v.number(), v.null()) },
 	handler: async (context, { since }): Promise<InboxRow[]> => {
-		const person = await requireRole(context, COMMUNITY_TIERS);
+		const person = unwrap(await requireRole(context, COMMUNITY_TIERS));
 		const rows = await context.db
 			.query("notifications")
 			.withIndex("by_personId_and_createdAt", (range) =>
@@ -136,7 +137,7 @@ export const listBefore = query({
 		context,
 		{ before, paginationOpts }
 	): Promise<PaginationResult<InboxRow>> => {
-		const person = await requireRole(context, COMMUNITY_TIERS);
+		const person = unwrap(await requireRole(context, COMMUNITY_TIERS));
 		const result = await context.db
 			.query("notifications")
 			.withIndex("by_personId_and_createdAt", (range) =>
@@ -153,7 +154,7 @@ export const listBefore = query({
 export const unreadCount = query({
 	args: {},
 	handler: async (context): Promise<number> => {
-		const person = await requireRole(context, COMMUNITY_TIERS);
+		const person = unwrap(await requireRole(context, COMMUNITY_TIERS));
 		const rows = await context.db
 			.query("notifications")
 			.withIndex("by_personId_and_readAt", (range) =>
@@ -168,10 +169,10 @@ export const unreadCount = query({
 export const markRead = mutation({
 	args: { id: v.id("notifications") },
 	handler: async (context, { id }): Promise<null> => {
-		const person = await requireRole(context, COMMUNITY_TIERS);
+		const person = unwrap(await requireRole(context, COMMUNITY_TIERS));
 		const row = await context.db.get(id);
-		if (!row) throw new Error("Not found");
-		if (row.personId !== person._id) throw new Error("Forbidden");
+		if (!row) return refuse({ type: "NotificationNotFound" });
+		if (row.personId !== person._id) refuse({ type: "Forbidden" });
 		if (row.readAt === undefined)
 			await context.db.patch(id, { readAt: Date.now() });
 		return null;
@@ -208,7 +209,7 @@ async function markBatchRead(
 export const markAllRead = mutation({
 	args: {},
 	handler: async (context): Promise<null> => {
-		const person = await requireRole(context, COMMUNITY_TIERS);
+		const person = unwrap(await requireRole(context, COMMUNITY_TIERS));
 		await markBatchRead(context, person._id);
 		return null;
 	},

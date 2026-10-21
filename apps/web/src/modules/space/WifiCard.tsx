@@ -1,11 +1,14 @@
-import { Button, Input, Skeleton, Status } from "@j-os/design-system";
+import { Button, Input, Skeleton } from "@j-os/design-system";
 import { useMutation } from "convex-solidjs";
 import { Show, createSignal, onMount } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
 import { SSID_MAX, WIFI_PASSWORD_MAX } from "../../../convex/lib/validate.ts";
 import { useAbility } from "../../lib/ability.tsx";
+import { call, ignoreFailure } from "../../lib/call.ts";
+import { createActionError } from "../../shared/createActionError.ts";
 import { useQuery } from "../../shared/data/useQuery.ts";
+import { InlineError } from "../../shared/InlineError.tsx";
 
 import { SpaceCard } from "./SpaceCard.tsx";
 import styles from "./WifiCard.module.scss";
@@ -19,6 +22,7 @@ function createWifiEditing(credentials: {
 	const [editing, setEditing] = createSignal(false);
 	const [ssidDraft, setSsidDraft] = createSignal("");
 	const [passwordDraft, setPasswordDraft] = createSignal("");
+	const { error, trackResult, clear } = createActionError();
 	const updateWifi = useMutation(api.wifi.update);
 
 	return {
@@ -33,25 +37,30 @@ function createWifiEditing(credentials: {
 			setSsidDraft(current?.ssid ?? "");
 			setPasswordDraft(current?.password ?? "");
 			updateWifi.reset();
+			clear();
 			setEditing(true);
 		},
 		cancelEditing: (): void => {
 			setEditing(false);
 			updateWifi.reset();
+			clear();
 		},
-		save: (): void => {
+		error,
+		save: async (): Promise<void> => {
 			// `wifi.get` is reactive, so a successful update flows straight
-			// back into `credentials` — no local cache to reconcile. Errors
-			// (e.g. an empty field) stay in `updateWifi.error()` and keep the
-			// form open.
-			void updateWifi
-				.mutateAsync({ ssid: ssidDraft(), password: passwordDraft() })
-				.then(() => {
-					setEditing(false);
-				})
-				.catch(() => {
-					// Surfaced via updateWifi.error(); nothing further to do here.
-				});
+			// back into `credentials` — no local cache to reconcile. A failure
+			// (e.g. an empty field) shows in the form, which stays open.
+			const result = await trackResult(
+				call(
+					updateWifi.mutateAsync({
+						ssid: ssidDraft(),
+						password: passwordDraft(),
+					}),
+					"Could not save the Wi-Fi details."
+				)
+			);
+			if (result.isErr()) return;
+			setEditing(false);
 		},
 	};
 }
@@ -62,7 +71,7 @@ function WifiEditForm(props: { edit: ReturnType<typeof createWifiEditing> }) {
 			class={styles.editForm}
 			onSubmit={(event) => {
 				event.preventDefault();
-				props.edit.save();
+				void props.edit.save();
 			}}
 		>
 			<Input
@@ -81,13 +90,7 @@ function WifiEditForm(props: { edit: ReturnType<typeof createWifiEditing> }) {
 					props.edit.setPasswordDraft(event.currentTarget.value)
 				}
 			/>
-			<Show when={props.edit.updateWifi.error()}>
-				{(err) => (
-					<Status status="error">
-						<span>{err().message}</span>
-					</Status>
-				)}
-			</Show>
+			<InlineError message={props.edit.error()} />
 			<div class={styles.editActions}>
 				<Button
 					type="button"
@@ -127,7 +130,8 @@ export function WifiCard() {
 	// the "first open" the board audit records. Fire-and-forget; the server
 	// keeps only the first one.
 	onMount(() => {
-		void logWifiOpen.mutateAsync({}).catch(() => {});
+		// The audit log is best effort: a failure has nobody to tell.
+		ignoreFailure(logWifiOpen.mutateAsync({}));
 	});
 
 	function canEditWifi(): boolean {

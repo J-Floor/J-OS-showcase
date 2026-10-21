@@ -1,3 +1,5 @@
+import { Result } from "neverthrow";
+
 import { emailError } from "../../shared/isValidEmail.ts";
 
 import { normalizeUrl } from "./links.ts";
@@ -22,17 +24,19 @@ export type SignUpValues = {
 	whyJoin: string;
 };
 
+const parseUrl = Result.fromThrowable(
+	(value: string) => new URL(normalizeUrl(value)),
+	() => "not a URL"
+);
+
 function isValidUrl(value: string): boolean {
-	try {
-		const url = new URL(normalizeUrl(value));
-		// Require a dotted host so "foo" alone is still rejected.
-		return (
+	return parseUrl(value).match(
+		(url) =>
+			// Require a dotted host so "foo" alone is still rejected.
 			(url.protocol === "http:" || url.protocol === "https:") &&
-			url.hostname.includes(".")
-		);
-	} catch {
-		return false;
-	}
+			url.hostname.includes("."),
+		() => false
+	);
 }
 
 // Lenient international phone check: allow +, digits, spaces, hyphens, parens

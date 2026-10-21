@@ -111,7 +111,7 @@ describe("reapplyDecision", () => {
 	it("never returns reuse for a state the machine has no REAPPLY edge from", () => {
 		// A guest whose window closed mid-onboarding, before the nightly sweep
 		// expired them. "reuse" here would dispatch REAPPLY from
-		// guest.onboarding and throw IllegalTransitionError on a public endpoint.
+		// guest.onboarding, an illegal transition, on a public endpoint.
 		expect(
 			reapplyDecision(
 				person({

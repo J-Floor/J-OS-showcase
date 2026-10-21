@@ -22,11 +22,14 @@ import {
 import { api } from "../../../../convex/_generated/api";
 import type { Doc } from "../../../../convex/_generated/dataModel";
 import type { PersonStatus } from "../../../../convex/lib/derive.ts";
+import { call } from "../../../lib/call.ts";
 import {
 	FREE_TEXT_SIZE,
 	SHORT_TEXT_SIZE,
 } from "../../../shared/columnSizes.ts";
+import { createActionError } from "../../../shared/createActionError.ts";
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
+import { InlineError } from "../../../shared/InlineError.tsx";
 import { formatDate } from "../../../shared/time.ts";
 import { useApplicationDecisions } from "../actions/applicationDecisions.ts";
 import { noteAuthor } from "../noteAuthor.ts";
@@ -151,7 +154,7 @@ export function ScoreCell(props: { row: ApplicationRow }) {
 	const currentPerson = useContext(CurrentPersonContext);
 	// The score is global — shared by all board members — so it's a single
 	// entry, not one per board member.
-	const { setDraft, draft, display, commit } = useScoreDraft({
+	const { setDraft, draft, display, commit, error } = useScoreDraft({
 		personId: () => props.row._id,
 		currentScore: () => props.row.board?.score,
 		canScore: () => Boolean(currentPerson()),
@@ -192,6 +195,7 @@ export function ScoreCell(props: { row: ApplicationRow }) {
 			{/* Peek hint: a digit sets the ringed row's score. `inline` shows it
 			    only while peeking; the CSS limits it to the focused row. */}
 			<Kbd label="0–9" inline class={styles.scoreKbd} />
+			<InlineError message={error()} />
 		</div>
 	);
 }
@@ -217,15 +221,33 @@ export function NotesCell(props: {
 	const boardLevel = useBoardLevel();
 	const addNote = useMutation(api.people.addNote);
 	const [draft, setDraft] = createSignal("");
+	const { error: noteError, trackResult } = createActionError();
+	let isSaving = false;
+	let refusedText: string | undefined;
 
 	function latest() {
 		const log = props.row.board?.noteLog ?? [];
 		return log.length > 0 ? log[log.length - 1] : undefined;
 	}
-	function submit(): void {
+	async function submit(isRetry: boolean): Promise<void> {
 		const text = draft().trim();
-		if (!text) return;
-		void addNote.mutateAsync({ id: props.row._id, text });
+		// Enter and blur both submit; the draft outlives the save, so
+		// without this one note would be sent twice. After a refusal only
+		// Enter sends the same text again, not every blur.
+		if (!text || isSaving || (!isRetry && text === refusedText)) return;
+		isSaving = true;
+		const result = await trackResult(
+			call(
+				addNote.mutateAsync({ id: props.row._id, text }),
+				"Could not save the note."
+			)
+		);
+		isSaving = false;
+		if (result.isErr()) {
+			refusedText = text;
+			return;
+		}
+		refusedText = undefined;
 		setDraft("");
 	}
 
@@ -269,10 +291,11 @@ export function NotesCell(props: {
 				onKeyDown={(event) => {
 					if (event.key !== "Enter") return;
 					event.preventDefault();
-					submit();
+					void submit(true);
 				}}
-				onBlur={submit}
+				onBlur={() => void submit(false)}
 			/>
+			<InlineError message={noteError()} />
 		</div>
 	);
 }

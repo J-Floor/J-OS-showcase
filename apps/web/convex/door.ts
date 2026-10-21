@@ -6,6 +6,7 @@ import { mutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import { requireRole } from "./lib/authGuard.ts";
 import type { DoorOverride } from "./lib/derive.ts";
+import { invariant, unwrap } from "./lib/result.ts";
 import { BOARD_LEVEL } from "./lib/roles.ts";
 import { currentActorId } from "./lifecycle.ts";
 import { doorOverride } from "./schema.ts";
@@ -37,7 +38,7 @@ export async function applyDoorOverride(
 	reason?: string
 ): Promise<void> {
 	const person = await context.db.get(personId);
-	if (!person) throw new Error("Person not found");
+	invariant(person, "Person not found");
 	const actorId = await currentActorId(context);
 	const now = Date.now();
 
@@ -79,7 +80,7 @@ export const setOverride = mutation({
 		reason: v.optional(v.string()),
 	},
 	handler: async (context, { personId, override, reason }) => {
-		await requireRole(context, BOARD_LEVEL);
+		unwrap(await requireRole(context, BOARD_LEVEL));
 		await applyDoorOverride(context, personId, override, reason);
 		return null;
 	},

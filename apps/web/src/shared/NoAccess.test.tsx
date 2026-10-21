@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
+import { ok } from "neverthrow";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 type SessionState = {
@@ -10,11 +11,12 @@ const mocks = vi.hoisted(() => {
 	const sessionState: SessionState = { data: null, isPending: false };
 	return {
 		signOut: vi.fn(() => Promise.resolve()),
+		toasterCreate: vi.fn(),
 		navigate: vi.fn(),
 		sessionState,
 	};
 });
-const { signOut, navigate } = mocks;
+const { signOut, navigate, toasterCreate } = mocks;
 
 function readSessionState(): SessionState {
 	return mocks.sessionState;
@@ -27,8 +29,9 @@ vi.mock("../lib/auth.ts", () => ({
 	},
 }));
 vi.mock("../lib/push.ts", () => ({
-	disablePush: () => Promise.resolve(),
+	disablePush: () => Promise.resolve(ok()),
 }));
+vi.mock("./toaster.ts", () => ({ toaster: { create: mocks.toasterCreate } }));
 vi.mock("@solidjs/router", () => ({ useNavigate: () => mocks.navigate }));
 
 import { NoAccess } from "./NoAccess.tsx";
@@ -38,6 +41,7 @@ afterEach(() => {
 	mocks.sessionState = { data: null, isPending: false };
 	signOut.mockClear();
 	navigate.mockClear();
+	toasterCreate.mockClear();
 });
 
 describe("NoAccess", () => {
@@ -70,5 +74,16 @@ describe("NoAccess", () => {
 			expect(navigate).toHaveBeenCalledWith("/signin", { replace: true });
 		});
 		expect(signOut).toHaveBeenCalledTimes(1);
+	});
+
+	it("shows a failed sign-out in the card, not in a toast", async () => {
+		signOut.mockRejectedValueOnce(new Error("offline"));
+		render(() => <NoAccess />);
+		fireEvent.click(screen.getByRole("button", { name: /Sign out/ }));
+		expect(
+			await screen.findByText("Could not sign out. Try again.")
+		).toBeInTheDocument();
+		expect(navigate).not.toHaveBeenCalled();
+		expect(toasterCreate).not.toHaveBeenCalled();
 	});
 });

@@ -1,6 +1,7 @@
 import { internal } from "./_generated/api";
 import { action } from "./_generated/server";
 import { ACTIVE_PROVIDER, CAPACITY } from "./lib/occupancy/index.ts";
+import { refuse, unwrap } from "./lib/result.ts";
 
 export type OccupancyAnswer =
 	| { enabled: false }
@@ -13,10 +14,13 @@ export type OccupancyAnswer =
 export const current = action({
 	args: {},
 	handler: async (context): Promise<OccupancyAnswer> => {
-		if (!(await context.runQuery(internal.people.callerInCommunity, {})))
-			throw new Error("Forbidden");
+		const isInCommunity = await context.runQuery(
+			internal.people.callerInCommunity,
+			{}
+		);
+		if (!isInCommunity) refuse({ type: "Forbidden" });
 		if (!ACTIVE_PROVIDER) return { enabled: false };
-		const count = await ACTIVE_PROVIDER.count(Date.now());
+		const count = unwrap(await ACTIVE_PROVIDER.count(Date.now()));
 		return { enabled: true, count, capacity: CAPACITY };
 	},
 });

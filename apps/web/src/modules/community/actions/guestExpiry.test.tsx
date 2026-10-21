@@ -6,12 +6,14 @@ import {
 	screen,
 	waitFor,
 } from "@solidjs/testing-library";
+import { errAsync, okAsync, type ResultAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
+import type { ClientError } from "../../../lib/call.ts";
 
 const { approveAsGuest } = vi.hoisted(() => ({
-	approveAsGuest: vi.fn(() => Promise.resolve(null)),
+	approveAsGuest: vi.fn((): ResultAsync<null, ClientError> => okAsync(null)),
 }));
 
 vi.mock("./triage.ts", () => ({ useTriage: () => ({ approveAsGuest }) }));
@@ -57,13 +59,13 @@ if (!("ResizeObserver" in globalThis)) {
 }
 
 /** Stands in for the "Make guest" button on a row or in the drawer. */
-function Harness() {
+function Harness(props: { ids: Id<"people">[] }) {
 	const request = useGuestExpiry();
 	return (
 		<button
 			type="button"
 			onClick={() => {
-				request(["applicant1" as Id<"people">]);
+				request(props.ids);
 			}}
 		>
 			make guest
@@ -75,10 +77,12 @@ function Harness() {
  *  for it. The dialog stays MOUNTED while closed (that is what lets it animate
  *  in and out), so waiting on the `dialog` role — which ignores a hidden
  *  subtree — is what actually proves it opened. */
-async function open(): Promise<HTMLElement> {
+async function open(
+	ids = ["applicant1" as Id<"people">]
+): Promise<HTMLElement> {
 	render(() => (
 		<GuestExpiryProvider>
-			<Harness />
+			<Harness ids={ids} />
 		</GuestExpiryProvider>
 	));
 	fireEvent.click(screen.getByRole("button", { name: /make guest/i }));
@@ -128,5 +132,58 @@ describe("the make-guest dialog", () => {
 		// The one field that is genuinely required: a guest with no host has
 		// nobody to ask when something goes wrong.
 		expect(await open()).toBeDisabled();
+	});
+
+	it("keeps the dialog open and shows why when approving is refused", async () => {
+		approveAsGuest.mockReturnValueOnce(
+			errAsync({ code: "Forbidden", message: "You can't do that." })
+		);
+		await open();
+		chooseHost();
+		const grant = await waitFor(() => {
+			const button = screen.getByRole("button", {
+				name: /grant guest access/i,
+			});
+			expect(button).not.toBeDisabled();
+			return button;
+		});
+		fireEvent.click(grant);
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"You can't do that."
+		);
+		expect(screen.getByRole("dialog")).toBeInTheDocument();
+	});
+
+	it("a retry after a partial approval skips the ones already approved", async () => {
+		approveAsGuest
+			.mockReturnValueOnce(okAsync(null))
+			.mockReturnValueOnce(
+				errAsync({ code: "Forbidden", message: "You can't do that." })
+			);
+		await open(["applicant1", "applicant2"] as Id<"people">[]);
+		chooseHost();
+		const grant = await waitFor(() => {
+			const button = screen.getByRole("button", {
+				name: /grant guest access/i,
+			});
+			expect(button).not.toBeDisabled();
+			return button;
+		});
+		fireEvent.click(grant);
+		await screen.findByRole("alert");
+		approveAsGuest.mockClear();
+
+		fireEvent.click(
+			screen.getByRole("button", { name: /grant guest access/i })
+		);
+		await waitFor(() => {
+			expect(approveAsGuest).toHaveBeenCalledTimes(1);
+		});
+		expect(approveAsGuest).toHaveBeenCalledWith(
+			"applicant2",
+			undefined,
+			"board1",
+			false
+		);
 	});
 });

@@ -129,6 +129,26 @@ describe("registerVisitor", () => {
 		expect(all).toHaveLength(1);
 	});
 
+	it("an unreachable reCAPTCHA is RecaptchaUnavailable, not a failed check, and writes nothing", async () => {
+		process.env.RECAPTCHA_SECRET = "secret";
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(() => Promise.reject(new Error("network down")))
+		);
+		const backend = createTester();
+		const eventId = await seedEvent(backend);
+		await expect(
+			backend.action(api.visitors.registerVisitor, {
+				...VISITOR_INPUT,
+				eventId,
+			})
+		).rejects.toThrow("RecaptchaUnavailable");
+		const all = await backend.run((context) =>
+			context.db.query("people").collect()
+		);
+		expect(all).toHaveLength(1);
+	});
+
 	it("a failed reCAPTCHA does not spend the global publicSubmit cap", async () => {
 		process.env.RECAPTCHA_SECRET = "secret";
 		stubRecaptcha({ success: false, action: "visitor", score: 0 });
@@ -144,7 +164,7 @@ describe("registerVisitor", () => {
 				...VISITOR_INPUT,
 				eventId,
 			})
-		).rejects.toThrow("Couldn't verify");
+		).rejects.toThrow("RecaptchaFailed");
 		const { ok } = await backend.run((context) =>
 			rateLimiter.limit(context, "publicSubmit")
 		);
@@ -255,7 +275,7 @@ describe("registerVisitor", () => {
 				email: "not-an-email",
 				eventId,
 			})
-		).rejects.toThrow("valid email");
+		).rejects.toThrow("InvalidEmail");
 		const all = await backend.run((context) =>
 			context.db.query("people").collect()
 		);
@@ -274,7 +294,7 @@ describe("registerVisitor", () => {
 				firstName: "a".repeat(201),
 				eventId,
 			})
-		).rejects.toThrow("First name is required.");
+		).rejects.toThrow("FirstNameRequired");
 		const result = await backend.action(api.visitors.registerVisitor, {
 			...VISITOR_INPUT,
 			firstName: "a".repeat(200),
