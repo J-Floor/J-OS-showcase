@@ -27,7 +27,7 @@ import {
 	type ApplicationRow,
 } from "../columns/applicationColumns.tsx";
 import { useApplications } from "../data/useApplications.ts";
-import { ScoreField } from "../drawers/ScoreField.tsx";
+import { ScoreField } from "../sheets/ScoreField.tsx";
 
 import { RosterTab, type RosterBatchProps } from "./RosterTab.tsx";
 import type { TabProps } from "./TabProps.ts";
@@ -52,7 +52,7 @@ const DIGIT_KEYS = [
  * Applications tab: the pipeline as one grouped roster — `To score`, `Queue`,
  * `Denied` — with batch triage (deny / make guest / make member / undo).
  *
- * The roster + drawer scaffold is {@link RosterTab}; this file owns what is
+ * The roster + sheet scaffold is {@link RosterTab}; this file owns what is
  * application-specific: the make-guest expiry dialog provider, the "current
  * person" context its cells read, the decision descriptors, and the selection
  * bar. The `GuestExpiryProvider` wraps the whole tab so the row cells and the
@@ -213,7 +213,7 @@ function ApplicationBatchActions(props: {
 /**
  * 0–9 set the ringed applicant's score outright (the score is shared, so a
  * digit overwrites it, same as the cell). Inert unless a row is ringed — no
- * drawer, no selection, this tab on screen — because `focused()` is `undefined`
+ * sheet, no selection, this tab on screen — because `focused()` is `undefined`
  * otherwise. `n` drops focus into the ringed row's note composer; only the live
  * table has a `data-focused` row, so the document query resolves to the right
  * one.
@@ -286,7 +286,7 @@ function ApplicationsRoster(props: TabProps): JSX.Element {
 					{ id: "createdAt", desc: true },
 				]}
 				actions={decisions.actions}
-				footerLead={(person) => <ScoreField person={person} />}
+				footerLead={(person) => <ScoreField person={person()} />}
 				focusedRowKeys={(focused) => {
 					useApplicationRowKeys(focused, setScore);
 				}}

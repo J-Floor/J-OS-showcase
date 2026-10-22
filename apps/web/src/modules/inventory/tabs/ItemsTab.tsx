@@ -18,8 +18,8 @@ import {
 	useItemTypes,
 	useItems,
 } from "../data/inventoryData.ts";
-import { ItemDrawer } from "../drawers/ItemDrawer.tsx";
 import { printInventoryList } from "../print/printInventoryList.ts";
+import { ItemSheet } from "../sheets/ItemSheet.tsx";
 
 import { InventoryTab } from "./InventoryTab.tsx";
 
@@ -105,16 +105,16 @@ export function ItemsTab(props: {
 			newItemAssetTag={props.newItemAssetTag}
 			enableRowSelection
 			batchActions={batchActions}
-			renderDrawer={(drawer) => (
-				<ItemDrawer
-					open={drawer.open()}
-					onOpenChange={drawer.onOpenChange}
-					item={drawer.row()}
+			renderSheet={(sheet) => (
+				<ItemSheet
+					open={sheet.open()}
+					onOpenChange={sheet.onOpenChange}
+					item={sheet.row()}
 					itemTypes={types.data() ?? []}
 					items={items.data() ?? []}
-					initialAssetTag={drawer.initialAssetTag()}
+					initialAssetTag={sheet.initialAssetTag()}
 					loading={props.selection.loading()}
-					nav={drawer.nav}
+					nav={sheet.nav}
 				/>
 			)}
 		/>

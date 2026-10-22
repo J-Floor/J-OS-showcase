@@ -12,6 +12,15 @@
 	border: none;
 }
 
+/* Touch long-press shows the tooltip: keep the OS from claiming the same hold
+   for its own callout / text selection. */
+@media (hover: none) {
+	.trigger {
+		-webkit-touch-callout: none;
+		user-select: none;
+	}
+}
+
 .positioner {
 	pointer-events: none;
 }

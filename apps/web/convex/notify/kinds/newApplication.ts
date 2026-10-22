@@ -27,7 +27,7 @@ export const newApplication = defineKind({
 		const { html, text } = boardNewApplication({
 			applicantName,
 			venture,
-			// Straight to the applicant's drawer, not the Applications roster.
+			// Straight to the applicant's sheet, not the Applications roster.
 			reviewUrl: personUrl(personId),
 			manageUrl: manageNotificationsUrl(),
 			logoUrl: emailUrls().logoUrl,

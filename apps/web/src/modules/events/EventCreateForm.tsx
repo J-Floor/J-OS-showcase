@@ -13,7 +13,7 @@ import { call } from "../../lib/call.ts";
 import { createActionError } from "../../shared/createActionError.ts";
 import { InlineError } from "../../shared/InlineError.tsx";
 
-import styles from "./EventDrawer.module.scss";
+import styles from "./EventSheet.module.scss";
 
 const DEFAULT_START_TIME = "00:01";
 const DEFAULT_END_TIME = "23:59";

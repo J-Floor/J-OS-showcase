@@ -14,8 +14,10 @@ import { Dynamic } from "solid-js/web";
 
 import { ICONS } from "../../icons.ts";
 import { createHoverIntent } from "../../utils/hoverIntent.ts";
+import { MORPH_KEY, MORPH_TITLE } from "../../utils/morphPairing.ts";
 import { Checkbox } from "../Checkbox/Checkbox.tsx";
 import { Icon } from "../Icon/Icon.tsx";
+import { MORPH_OF } from "../Morph/Morph.tsx";
 
 import { ACTIONS_COLUMN_ID, SELECT_COLUMN_ID } from "./columnTracks.ts";
 import type { GridFocus } from "./gridFocus.ts";
@@ -55,16 +57,51 @@ export function hasActions<Data extends Record<string, unknown>>(
 		.some((column) => column.id === ACTIONS_COLUMN_ID);
 }
 
-/** The column whose cells are row headers: the first visible one after the
- *  selection column, when `headerColumn` is on. */
-function rowHeaderColumnId<Data extends Record<string, unknown>>(
+/** The first visible column that shows text: not the selection or actions
+ *  column, nor an editable one (`disableRowClick`). Its cells are the row's
+ *  title: row headers when `headerColumn` is on, and the text that flies
+ *  into a sheet's title when the row morphs into one. Read reactively, so it
+ *  moves on when a column is hidden. */
+function titleColumnId<Data extends Record<string, unknown>>(
 	context: RowContext<Data>
 ): string | undefined {
-	return context.props.headerColumn === true
-		? context.table
-				.getVisibleLeafColumns()
-				.find((column) => column.id !== SELECT_COLUMN_ID)?.id
-		: undefined;
+	return context.table.getVisibleLeafColumns().find((column) => {
+		const definition = column.columnDef as JfColumnDefinition<Data>;
+		return (
+			column.id !== SELECT_COLUMN_ID &&
+			column.id !== ACTIONS_COLUMN_ID &&
+			definition.disableRowClick !== true
+		);
+	})?.id;
+}
+
+/** Wraps a cell's content so a morph can pair it with the sheet value
+ *  showing the same field. The content, not the cell: the cell's padding
+ *  would make the two ends of a flight hold the line at different heights,
+ *  so the text would show twice at two sizes. The title cell's content
+ *  flies on its own, as the title; it still carries its column id, so a
+ *  sheet showing that field apart (a person's first-name half) takes it
+ *  there instead of its title. */
+function MorphContent(props: {
+	columnId: string;
+	isTitle: boolean;
+	children: JSX.Element;
+}): JSX.Element {
+	return (
+		<span
+			class={props.isTitle ? styles.morphTitle : styles.morphValue}
+			{...{
+				get [MORPH_TITLE]() {
+					return props.isTitle ? props.columnId : undefined;
+				},
+				get [MORPH_KEY]() {
+					return props.isTitle ? undefined : props.columnId;
+				},
+			}}
+		>
+			{props.children}
+		</span>
+	);
 }
 
 function renderCell<Data extends Record<string, unknown>>(
@@ -76,15 +113,23 @@ function renderCell<Data extends Record<string, unknown>>(
 	const definition = column.columnDef as JfColumnDefinition<Data>;
 	const isSelect = column.id === SELECT_COLUMN_ID;
 	const isActions = column.id === ACTIONS_COLUMN_ID;
-	const isRowHeader = column.id === rowHeaderColumnId(context);
+	function isTitle(): boolean {
+		return column.id === titleColumnId(context);
+	}
+	function isRowHeader(): boolean {
+		return isTitle() && context.props.headerColumn === true;
+	}
 	// In a grouped table the grouping column's value is shown in the group
 	// header row, so the leaf cell for that column is left blank to avoid a
 	// redundant repeat.
 	const isGroupedColumn = context.props.groupBy === column.id;
+	function content(): JSX.Element {
+		return flexRender(column.columnDef.cell, cell.getContext());
+	}
 	return (
 		<Dynamic
-			component={isRowHeader ? "th" : "td"}
-			role={isRowHeader ? "rowheader" : cellRole(context)}
+			component={isRowHeader() ? "th" : "td"}
+			role={isRowHeader() ? "rowheader" : cellRole(context)}
 			class={clsx(
 				isSelect && styles.selectCell,
 				isActions && styles.actionsCell
@@ -103,7 +148,15 @@ function renderCell<Data extends Record<string, unknown>>(
 				when={isSelect}
 				fallback={
 					<Show when={!isGroupedColumn} fallback={null}>
-						{flexRender(column.columnDef.cell, cell.getContext())}
+						{/* The actions cell shows no value to pair. */}
+						<Show when={!isActions} fallback={content()}>
+							<MorphContent
+								columnId={column.id}
+								isTitle={isTitle()}
+							>
+								{content()}
+							</MorphContent>
+						</Show>
 					</Show>
 				}
 			>
@@ -147,6 +200,12 @@ export function renderRow<Data extends Record<string, unknown>>(
 			class={clsx(props.onRowClick && styles.clickable)}
 			data-state={row.getIsSelected() ? "selected" : undefined}
 			data-focused={focus.isRowFocused(row) ? "true" : undefined}
+			{...{
+				[MORPH_OF]:
+					typeof row.original._id === "string"
+						? row.original._id
+						: undefined,
+			}}
 			onPointerEnter={hoverIntent.onPointerEnter}
 			onPointerLeave={hoverIntent.onPointerLeave}
 			onClick={(event) => {

@@ -5,10 +5,10 @@ import {
 } from "@j-os/design-system";
 import { Show, createSignal, type JSX } from "solid-js";
 
-import { createDrawerNav } from "../../../lib/createDrawerNav.ts";
+import { createSheetNav } from "../../../lib/createSheetNav.ts";
 import type { EntitySelection } from "../../../shared/entity/createEntitySelection.ts";
 import type { EntityDescriptor } from "../../../shared/entity/entityDescriptor.ts";
-import type { DrawerNavState } from "../../../shared/entity/EntityDrawerHeader.tsx";
+import type { SheetNavState } from "../../../shared/entity/EntitySheetHeader.tsx";
 import { useRowPrefetch } from "../../../shared/entity/useRowPrefetch.ts";
 
 export function InventoryTab<
@@ -16,36 +16,36 @@ export function InventoryTab<
 >(props: {
 	data: () => Row[] | undefined;
 	columns: () => JfColumnDefinition<Row>[];
-	/** Drawer open/close/current-row/URL state — the single source of truth,
+	/** Sheet open/close/current-row/URL state — the single source of truth,
 	 *  created once per tab in `InventoryPage`. Replaces the old internal
 	 *  open/editingId signals and the `requestNew`/`requestOpenItem` nonces. */
 	selection: EntitySelection<Row>;
-	/** This tab's entity descriptor; its `prefetch` warms the drawer's queries on
+	/** This tab's entity descriptor; its `prefetch` warms the sheet's queries on
 	 *  row hover and keyboard focus. */
 	descriptor?: EntityDescriptor<Row>;
 	/** Asset-tag prefill for a create-mode open (items only). Read only while the
-	 *  drawer is open in create mode. */
+	 *  sheet is open in create mode. */
 	newItemAssetTag?: () => string | undefined;
 	/** Items tab only: checkboxes + header select-all. Types/categories omit this. */
 	enableRowSelection?: boolean;
 	/** Selection-bar contents. Only rendered when row selection is on. */
 	batchActions?: (props: BatchActionsRenderProps<Row>) => JSX.Element;
-	renderDrawer: (args: {
+	renderSheet: (args: {
 		open: () => boolean;
 		onOpenChange: (isOpen: boolean) => void;
 		row: () => Row | undefined;
 		initialAssetTag: () => string | undefined;
-		nav: DrawerNavState;
+		nav: SheetNavState;
 	}) => JSX.Element;
 }): JSX.Element {
 	const [displayed, setDisplayed] = createSignal<Row[]>([]);
 	// eslint-disable-next-line solid/reactivity -- the descriptor is fixed for this tab
 	const prefetchRow = useRowPrefetch(props.descriptor);
 
-	// Nav walks the DISPLAYED rows by `_id`. `selection.selectedId()` is the
+	// Nav walks the DISPLAYED rows by `_id`. `selection.requestedId()` is the
 	// slug (the asset tag for items), which would never match a row's `_id`, so
 	// the current id is taken from the resolved row instead.
-	const nav = createDrawerNav({
+	const nav = createSheetNav({
 		items: displayed,
 		currentId: () => props.selection.selected()?._id,
 		onSelect: (row) => {
@@ -57,14 +57,14 @@ export function InventoryTab<
 	// (not values), so reading `open()` / `selected()` / the prefill is deferred
 	// into the child's own render. Reading the values here instead would put
 	// those reads in this render-prop call site, which Solid re-runs on every
-	// signal change — disposing and recreating the drawer instead of updating it
+	// signal change — disposing and recreating the sheet instead of updating it
 	// in place.
 	// eslint-disable-next-line solid/reactivity -- intentional single call outside a tracked scope; the callback takes accessors, so no reactive read happens here
-	const drawer = props.renderDrawer({
+	const sheet = props.renderSheet({
 		open: () => props.selection.open(),
 		onOpenChange: (isOpen) => {
-			// The drawer only ever asks to close (it has no self-open trigger);
-			// closing must go through the selection so it clears selectedId and
+			// The sheet only ever asks to close (it has no self-open trigger);
+			// closing must go through the selection so it clears requestedId and
 			// the URL param — otherwise the row lingers and re-opens on refetch.
 			if (!isOpen) props.selection.close();
 		},
@@ -103,7 +103,7 @@ export function InventoryTab<
 					</Table.BatchActions>
 				</Show>
 			</Table.Root>
-			{drawer}
+			{sheet}
 		</>
 	);
 }

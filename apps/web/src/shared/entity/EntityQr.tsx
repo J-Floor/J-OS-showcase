@@ -53,7 +53,7 @@ export function EntityQrActions(props: {
 }
 
 /**
- * Drawer block: rendered QR + Copy link Button + Download button. No ability
+ * Sheet block: rendered QR + Copy link Button + Download button. No ability
  * gate inside — callers wrap in `<Can>`. Ported from the events "QR & link"
  * accordion body.
  */

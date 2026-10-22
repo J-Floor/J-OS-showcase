@@ -8,9 +8,10 @@ class ResizeObserverStub {
 	disconnect(): void {}
 }
 
-globalThis.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver;
+globalThis.ResizeObserver ??=
+	ResizeObserverStub as unknown as typeof ResizeObserver;
 
-// Tables and drawers defer their bodies by one paint in the browser. Tests
+// Tables and sheets defer their bodies by one paint in the browser. Tests
 // assert synchronously on content, so render it at once here. Deferred's own
 // test turns this off locally.
 setDeferredImmediate(true);

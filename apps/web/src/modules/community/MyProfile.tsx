@@ -42,10 +42,10 @@ function sanitizePhone(value: string): string {
 /**
  * A non-board member's own editable profile. Reads the caller's live row from
  * `getCurrentPerson` each render (never a snapshot — apps/web/AGENTS.md's
- * drawer-snapshot rule) and saves each field via the self-scoped
+ * sheet-snapshot rule) and saves each field via the self-scoped
  * `updateOwnProfile`. Name/email are read-only; the application answers
  * (whyJoin/pastBuilt) are not rendered. Field editors are the SAME shared
- * components the board drawer uses, so the two never drift.
+ * components the board sheet uses, so the two never drift.
  */
 export function MyProfile() {
 	const me = useQuery(api.people.getCurrentPerson, {});

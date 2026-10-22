@@ -37,10 +37,10 @@ const {
 }));
 
 // `ItemsTab`/`ItemTypesTab`/`CategoriesTab` are fully mocked so these tests
-// never render the real table/drawer stack (Select, canvas QR codes, etc.) —
+// never render the real table/sheet stack (Select, canvas QR codes, etc.) —
 // but each mock renders a `role="dialog"` whenever the REAL
 // `createEntitySelection` it's handed (built by `InventoryPage`, not mocked)
-// reports a row open. That way the tests assert the observable drawer output
+// reports a row open. That way the tests assert the observable sheet output
 // of the actual migrated selection wiring, not an internal prop shape.
 vi.mock("./tabs/ItemsTab.tsx", () => ({
 	ItemsTab: (props: {
@@ -294,7 +294,7 @@ const furnitureCategory = {
 	name: "Furniture",
 };
 
-test("a deep-link item param opens the item drawer once the item is loaded", async () => {
+test("a deep-link item param opens the item sheet once the item is loaded", async () => {
 	itemsData.current = [chairItem];
 	renderAt("/inventory?tab=items&item=A00001");
 	expect(await screen.findByRole("dialog")).toHaveTextContent("A00001");
@@ -306,34 +306,34 @@ test("scanning a full deep-link URL opens the matching item", async () => {
 	detectThenHang("https://x.test/inventory?tab=items&item=A00001");
 	renderAs("board");
 	fireEvent.click(screen.getByRole("button", { name: /Scan QR/ }));
-	// The scan dialog and the item drawer are both `role="dialog"`, and the
+	// The scan dialog and the item sheet are both `role="dialog"`, and the
 	// scan-to-item handoff is async (resolves the tag, closes the scanner,
-	// opens the drawer) — `findByRole` alone would grab whichever dialog is
+	// opens the sheet) — `findByRole` alone would grab whichever dialog is
 	// mounted on its first check. Keep asserting until the one on screen is
-	// the item drawer.
+	// the item sheet.
 	await waitFor(() => {
 		expect(screen.getByRole("dialog")).toHaveTextContent("A00001");
 	});
 });
 
-test("a deep-link type param opens the item-type drawer", async () => {
+test("a deep-link type param opens the item-type sheet", async () => {
 	itemTypesData.current = [chairType];
 	renderAt("/inventory?tab=types&type=itemTypes:chair");
 	expect(await screen.findByRole("dialog")).toHaveTextContent("Chair");
 });
 
-test("a deep-link category param opens the category drawer", async () => {
+test("a deep-link category param opens the category sheet", async () => {
 	categoriesData.current = [furnitureCategory];
 	renderAt("/inventory?tab=categories&category=itemCategories:furniture");
 	expect(await screen.findByRole("dialog")).toHaveTextContent("Furniture");
 });
 
-test("switching tabs closes the open drawer and does not reopen it on switching back (#63)", async () => {
+test("switching tabs closes the open sheet and does not reopen it on switching back (#63)", async () => {
 	itemsData.current = [chairItem];
 	renderAt("/inventory?tab=items&item=A00001");
 	expect(await screen.findByRole("dialog")).toHaveTextContent("A00001");
 
-	// A manual tab switch is a new subject: the item drawer (a Portal, still
+	// A manual tab switch is a new subject: the item sheet (a Portal, still
 	// mounted on the now-hidden Items tab) must close rather than float over
 	// the tab the user just asked for.
 	fireEvent.click(screen.getByRole("tab", { name: "Item types" }));
@@ -343,7 +343,7 @@ test("switching tabs closes the open drawer and does not reopen it on switching 
 
 	// Switching back must not reopen it from a lingering `?item=` param —
 	// `close()` only writes the URL while its own tab is active, so without an
-	// explicit clear the stale param would silently reopen the drawer here.
+	// explicit clear the stale param would silently reopen the sheet here.
 	fireEvent.click(screen.getByRole("tab", { name: "Items" }));
 	await waitFor(() => {
 		expect(screen.getByText("items-tab")).toBeInTheDocument();
@@ -351,7 +351,7 @@ test("switching tabs closes the open drawer and does not reopen it on switching 
 	expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });
 
-test("a command-palette navigation to another tab closes the previous tab's drawer (#63)", async () => {
+test("a command-palette navigation to another tab closes the previous tab's sheet (#63)", async () => {
 	itemsData.current = [chairItem];
 	itemTypesData.current = [chairType];
 	let navigate!: ReturnType<typeof useNavigate>;
@@ -377,21 +377,21 @@ test("a command-palette navigation to another tab closes the previous tab's draw
 		</MemoryRouter>
 	));
 
-	// The item drawer opens from the inbound deep-link.
+	// The item sheet opens from the inbound deep-link.
 	expect(await screen.findByRole("dialog")).toHaveTextContent("A00001");
 
 	// A command-palette navigation changes `?tab=` WITHOUT going through the
 	// Tabs' own `urlParam.set` (which is the only place that used to close the
-	// siblings). The item drawer — a still-mounted Portal on the now-hidden
-	// Items tab — must close rather than float under the type drawer.
+	// siblings). The item sheet — a still-mounted Portal on the now-hidden
+	// Items tab — must close rather than float under the type sheet.
 	navigate("/inventory?tab=types&type=itemTypes:chair", { scroll: false });
 
-	// The type drawer opens...
+	// The type sheet opens...
 	await waitFor(() => {
 		expect(screen.getByText("Item type Chair")).toBeInTheDocument();
 	});
-	// ...and the item drawer is gone. `queryByText` matches hidden nodes too, so
-	// a drawer left open inside the now-hidden Items tab would still be found —
+	// ...and the item sheet is gone. `queryByText` matches hidden nodes too, so
+	// a sheet left open inside the now-hidden Items tab would still be found —
 	// this is the assertion that goes red without the close-when-inactive fix.
 	expect(screen.queryByText("Item A00001")).not.toBeInTheDocument();
 });

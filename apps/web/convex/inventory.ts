@@ -109,10 +109,10 @@ function byName<T extends { name: string }>(a: T, b: T): number {
 }
 /* eslint-enable id-length -- conventional comparator parameter names */
 
-/** A drawer just lists what belongs to its parent — bound the read so a
+/** A sheet just lists what belongs to its parent — bound the read so a
  *  category/type with a huge number of children can't blow a query's read
  *  limit. */
-const DRAWER_LIST_CAP = 200;
+const SHEET_LIST_CAP = 200;
 
 /** A delete guard only needs to know whether any child exists. */
 const DELETE_GUARD_PROBE = 1;
@@ -225,7 +225,7 @@ export const listItemTypesByCategory = query({
 			.withIndex("by_category", (range) =>
 				range.eq("categoryId", categoryId)
 			)
-			.take(DRAWER_LIST_CAP);
+			.take(SHEET_LIST_CAP);
 		return rows
 			.map((row) => ({ _id: row._id, name: row.name }))
 			.sort(byName);
@@ -326,7 +326,7 @@ export const listItemsByType = query({
 		const rows = await context.db
 			.query("items")
 			.withIndex("by_type", (range) => range.eq("typeId", typeId))
-			.take(DRAWER_LIST_CAP);
+			.take(SHEET_LIST_CAP);
 		return (
 			rows
 				.map((row) => ({ _id: row._id, assetTag: row.assetTag }))

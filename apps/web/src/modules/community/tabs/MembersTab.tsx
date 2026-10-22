@@ -97,16 +97,16 @@ function MemberBatchActions(props: {
 
 /**
  * Members tab: members / board / kicked-out grouped, with batch triage and a
- * change-role dialog. The roster + drawer scaffold is {@link RosterTab}; this
+ * change-role dialog. The roster + sheet scaffold is {@link RosterTab}; this
  * file owns what is member-specific — the change-role flows and the selection
  * bar.
  *
  * Change role has two flows, two dialogs. The BATCH one (`roleOpen`) lives in the
  * selection bar over the checked rows. The SINGLE one (`singleRoleOpen` +
- * `roleTarget`) is for the `R` key and the drawer footer — those act on one
+ * `roleTarget`) is for the `R` key and the sheet footer — those act on one
  * person, who has no checkbox selection, so the batch dialog (mounted only while
  * rows are selected) never opened for them; this one is passed as `extra` so it
- * exists to be opened for the drawer/focused person.
+ * exists to be opened for the sheet/focused person.
  */
 export function MembersTab(props: TabProps): JSX.Element {
 	const members = useMembers();

@@ -14,12 +14,12 @@ export type RosterActionOutcome = SettledAction | undefined;
  * within one — `M` means "make them a member" on both Applications and Guests,
  * and that is the point.
  */
-export type ShortcutScope = "applications" | "members" | "guests" | "drawer";
+export type ShortcutScope = "applications" | "members" | "guests" | "sheet";
 
 /**
  * One action, in one object.
  *
- * The row's icon button, the drawer's decision bar and the key binding all read
+ * The row's icon button, the sheet's decision bar and the key binding all read
  * this. Splitting them let the same action mean different things depending on
  * where it was invoked from, which is the bug the decisions hook already warns
  * about in its own comment.

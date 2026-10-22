@@ -72,7 +72,7 @@ function DoorAccessChoice(props: {
 			<span class={styles.doorHint}>
 				{props.isAllowed
 					? "The app opens the doors for them for as long as their access window lasts."
-					: "The app will not open the doors for them. A board member can allow it later from their drawer."}
+					: "The app will not open the doors for them. A board member can allow it later from their sheet."}
 			</span>
 		</div>
 	);

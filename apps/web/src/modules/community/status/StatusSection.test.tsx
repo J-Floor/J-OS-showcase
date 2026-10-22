@@ -75,7 +75,7 @@ function dateField(): HTMLElement | null {
 	return document.querySelector('[data-scope="date-input"]');
 }
 
-test("reads as text until the drawer is unlocked", () => {
+test("reads as text until the sheet is unlocked", () => {
 	render(() => <StatusSection status={status()} person={guest()} />);
 	expect(screen.getByText("Access until")).toBeInTheDocument();
 	expect(dateField()).toBeNull();
@@ -125,9 +125,9 @@ function signedStatus(state: "signed" | "missing"): PersonStatus {
 	return { ...status(), facts: [{ id: "agreement", state }] };
 }
 
-test("the signed agreement opens from the drawer", async () => {
-	// The roster row has had a "View agreement" button all along; the drawer
-	// had none, so reading a member's agreement meant closing the drawer and
+test("the signed agreement opens from the sheet", async () => {
+	// The roster row has had a "View agreement" button all along; the sheet
+	// had none, so reading a member's agreement meant closing the sheet and
 	// finding their row again.
 	const tab = {
 		opener: {} as unknown,

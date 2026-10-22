@@ -396,10 +396,10 @@ async function resolveEmailChange(
  * Workflow (tier, stage, access window, door) is NOT here: those are machine
  * events and their own mutations.
  *
- * `email` IS here — the drawer has always offered it — but it is guarded. It is
+ * `email` IS here — the sheet has always offered it — but it is guarded. It is
  * the identity key: `requireRole` (`lib/authGuard.ts`) and
  * `personForCurrentUser` (`people.ts`) both look a person up by `by_email` with
- * `.unique()`. Before this task the drawer's email field edited an
+ * `.unique()`. Before this task the sheet's email field edited an
  * `applications` row and could not lock anyone out; now a board typo would, and
  * a collision would make `.unique()` throw for BOTH people. Hence the explicit
  * uniqueness check.
@@ -842,7 +842,7 @@ export type PersonRow = Doc<"people"> & {
 };
 
 /**
- * Attach the single status readout to every row, so the table, the drawer and
+ * Attach the single status readout to every row, so the table, the sheet and
  * the row grouping cannot tell three different stories. Resolves `door.byId` to
  * a name where there is one — only rows with an override pay for that read.
  *
@@ -1163,7 +1163,7 @@ async function unmarkBoardStep(
  * Undo {@link markBoardStepDone} for these people: clear the step and the
  * timeline row it wrote, so the board task is open again. Only a tick with no
  * actor — one made from the CLI — is cleared; a board member's own tick from
- * the drawer is left alone and reported as `keptByBoard`.
+ * the sheet is left alone and reported as `keptByBoard`.
  */
 export const unmarkBoardStepDone = internalMutation({
 	args: { stepId: v.string(), emails: v.array(v.string()) },
@@ -1242,7 +1242,7 @@ export const getAgreementUrl = query({
 });
 
 // Board-gated: the events a person attended, for the "Came from" line in the
-// drawer. Joins `eventAttendance` (`by_person`) to `events`; an attendance row
+// sheet. Joins `eventAttendance` (`by_person`) to `events`; an attendance row
 // whose event was since deleted is skipped rather than surfaced as a broken
 // reference.
 export const attendedEvents = query({

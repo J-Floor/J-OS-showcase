@@ -40,6 +40,23 @@ test("forwards ref to the underlying input", () => {
 	expect(element).toBe(screen.getByRole("textbox"));
 });
 
+test("rootRef is the whole field around the input", () => {
+	let root: HTMLDivElement | undefined;
+	render(() => (
+		<Input
+			label="Q"
+			rootRef={(node) => {
+				root = node;
+			}}
+		/>
+	));
+	const input = screen.getByRole("textbox");
+	expect(root).toBeInstanceOf(HTMLDivElement);
+	expect(root).not.toBe(input.parentElement);
+	expect(root?.contains(input)).toBe(true);
+	expect(root?.contains(screen.getByText("Q"))).toBe(true);
+});
+
 test("clicking the wrapper focuses the input", () => {
 	render(() => <Input label="Q" />);
 	const input = screen.getByRole("textbox");

@@ -49,7 +49,7 @@ function Harness(props: { onResult: (isConfirmed: boolean) => void }) {
  * fix reverted. A test that cannot fail is worse than no test.
  *
  * Verified by hand instead, in Chrome on 2026-08-04 against this branch: with
- * a person drawer open, pressing "Turn down" opened the confirm dialog with
+ * a person sheet open, pressing "Turn down" opened the confirm dialog with
  * `document.activeElement` reporting the "Turn down" confirm button — not
  * Cancel, not the close trigger. Enter activating a focused button is native
  * browser behaviour and needs no assertion of ours.

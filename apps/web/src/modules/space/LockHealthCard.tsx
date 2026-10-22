@@ -87,14 +87,18 @@ export function LockHealthCard(): JSX.Element {
 			title="Doors"
 			helpText="Whether the space's smart locks are reachable right now."
 			note={
-				<p class={styles.note} data-tone={tone()}>
-					<Show
-						when={summary()}
-						fallback={failure() ?? "Checking door status…"}
-					>
-						{(loadedSummary) => loadedSummary().detail}
-					</Show>
-				</p>
+				// The per-lock list below already names each door's state, so
+				// the summary line only shows when there is no list.
+				<Show when={!(summary() && reading()?.locks)}>
+					<p class={styles.note} data-tone={tone()}>
+						<Show
+							when={summary()}
+							fallback={failure() ?? "Checking door status…"}
+						>
+							{(loadedSummary) => loadedSummary().detail}
+						</Show>
+					</p>
+				</Show>
 			}
 		>
 			<div class={styles.stack}>

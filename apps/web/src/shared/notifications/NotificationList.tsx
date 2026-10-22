@@ -96,7 +96,7 @@ function NotificationRow(props: {
 /** Below the last row: the skeleton card while a page loads, a retry when it
  *  failed, and the sentinel that asks for the next page. */
 function LoadMoreFooter(props: { inbox: Inbox }): JSX.Element {
-	// No `root`: the drawer body's `overflow` clips the sentinel until it is
+	// No `root`: the sheet body's `overflow` clips the sentinel until it is
 	// scrolled to, which the observer respects.
 	const [atEnd, setAtEnd] = createSignal(false);
 	function watchEnd(element: HTMLDivElement): void {
@@ -158,8 +158,8 @@ function LoadMoreFooter(props: { inbox: Inbox }): JSX.Element {
 }
 
 /**
- * The drawer's notification history: rows grouped by day, unread ones
- * marked. A click closes the drawer, opens the row's page and marks it read
+ * The sheet's notification history: rows grouped by day, unread ones
+ * marked. A click closes the sheet, opens the row's page and marks it read
  * without waiting; older rows load a page at a time as the end scrolls into view.
  */
 export function NotificationList(props: {

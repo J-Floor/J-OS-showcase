@@ -8,7 +8,7 @@
 }
 
 /* The most recent note, shown above the composer: author avatar + one clamped
-   line of text (the whole note is in the drawer's thread). */
+   line of text (the whole note is in the sheet's thread). */
 .latest {
 	display: flex;
 	flex-wrap: nowrap;

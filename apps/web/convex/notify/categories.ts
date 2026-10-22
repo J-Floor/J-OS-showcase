@@ -38,7 +38,7 @@ export type CategoryInfo = {
 	label: string;
 	description: string;
 	/** Tiers that can receive this category, which is the set the settings
-	 *  drawer shows it to. */
+	 *  sheet shows it to. */
 	tiers: readonly Tier[];
 	/** Shown under the row, e.g. which reminder has no email side. */
 	note?: string;

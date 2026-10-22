@@ -18,13 +18,13 @@ type Failure = { message: string; personId: PersonId | undefined };
 type TabState = {
 	failure: () => Failure | null;
 	setFailure: (failure: Failure | null) => void;
-	/** The person the drawer shows right now, if it is open. */
+	/** The person the sheet shows right now, if it is open. */
 	shown: string | undefined;
 };
 
 /** Keyed by tab, at module level: the actions that fail (row buttons, the
- *  drawer's decision bar, key bindings, batch runs) and the two areas that
- *  show it (the strip above the table, the drawer footer) sit in different
+ *  sheet's decision bar, key bindings, batch runs) and the two areas that
+ *  show it (the strip above the table, the sheet footer) sit in different
  *  parts of a tab's tree, and each tab must keep its own failure. */
 const tabs = new Map<ShortcutScope, TabState>();
 
@@ -38,7 +38,7 @@ function tabState(scope: ShortcutScope): TabState {
 }
 
 /**
- * Tell the tab which person its drawer shows (`undefined` when closed).
+ * Tell the tab which person its sheet shows (`undefined` when closed).
  * Changing it drops the old failure: it belonged to someone else, or to the
  * strip above a table that is now covered.
  */
@@ -55,7 +55,7 @@ export function setShownPerson(
  * Await a roster action, showing its failure where the board is looking.
  * Resolves to whether it was refused, so a caller can stop a batch or keep a
  * ring in place.
- * An answer for a person the drawer has since moved off is dropped.
+ * An answer for a person the sheet has since moved off is dropped.
  */
 export async function settleRosterAction(
 	scope: ShortcutScope,
@@ -71,7 +71,7 @@ export async function settleRosterAction(
 }
 
 /**
- * The tab's last failed action, in the drawer footer (`personId` = who it
+ * The tab's last failed action, in the sheet footer (`personId` = who it
  * shows) or in the strip above the table (`personId` omitted).
  */
 export function RosterActionError(props: {
@@ -81,7 +81,7 @@ export function RosterActionError(props: {
 	function message(): string | null {
 		const failure = tabState(props.scope).failure();
 		if (!failure) return null;
-		// The strip (no `personId`) shows whatever failed; the drawer only what
+		// The strip (no `personId`) shows whatever failed; the sheet only what
 		// concerns its person or a whole batch.
 		return props.personId === undefined ||
 			failure.personId === undefined ||

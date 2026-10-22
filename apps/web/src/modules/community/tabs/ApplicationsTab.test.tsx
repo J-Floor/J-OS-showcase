@@ -7,7 +7,10 @@ import {
 	cleanup,
 } from "@solidjs/testing-library";
 import { okAsync } from "neverthrow";
+import { createSignal } from "solid-js";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
+
+import { keyedIn, keyedValue } from "../../../../test-stubs/morphKeys.tsx";
 
 // apps/web does not run vitest in `globals` mode, so `@solidjs/testing-library`'s
 // own auto-cleanup — which only registers itself when it finds a GLOBAL
@@ -46,7 +49,7 @@ vi.mock("../columns/applicationColumns.tsx", async () => {
 		// Mirror the real applicationColumns' grouping column: `triageGroup`,
 		// `dataType: "enum"` with `enumOptions` ordered toScore → queue → denied.
 		// That order is load-bearing — it fixes the on-screen group order the
-		// selection and drawer-nav tests below assert against. `state` has no
+		// selection and sheet-nav tests below assert against. `state` has no
 		// column of its own (the tab filters the data instead), so none here.
 		applicationColumns: () => [
 			{
@@ -84,8 +87,8 @@ vi.mock("../columns/applicationColumns.tsx", async () => {
 // hook to a no-data accessor so the table renders without the Convex client.
 vi.mock("convex-solidjs", () => ({
 	useQuery: () => ({ data: () => {} }),
-	// The shared drawer opens mutations of its own (the board's door override,
-	// the onboarding step "Done" button); this tab used to render a drawer that
+	// The shared sheet opens mutations of its own (the board's door override,
+	// the onboarding step "Done" button); this tab used to render a sheet that
 	// had none.
 	useMutation: () => ({
 		mutateAsync: () => Promise.resolve(),
@@ -99,7 +102,7 @@ vi.mock("convex-solidjs", () => ({
 }));
 
 /** The three tabs share one query shape now, so these rows carry the status
- *  readout and agreement flag the shared drawer renders from. */
+ *  readout and agreement flag the shared sheet renders from. */
 function status(stage: "queued" | "denied" | "verified") {
 	return {
 		tier: "prospect" as const,
@@ -168,9 +171,16 @@ const rows = [
 	},
 ];
 
+/** The roster as the query last pushed it; a test re-pushes it to stand in
+ *  for a refetch (new row objects, same people). */
+const [liveRows, setLiveRows] = createSignal(rows);
+afterEach(() => {
+	setLiveRows(rows);
+});
+
 vi.mock("../data/useApplications.ts", () => ({
 	useApplications: () => ({
-		data: () => rows,
+		data: () => liveRows(),
 		error: () => {},
 		isLoading: () => false,
 		isStale: () => false,
@@ -280,7 +290,7 @@ describe("ApplicationsTab", () => {
 		).not.toBeInTheDocument();
 	});
 
-	test("clicking an application row opens the drawer showing that applicant's email", async () => {
+	test("clicking an application row opens the sheet showing that applicant's email", async () => {
 		const { container } = renderWithSelection((selection) => (
 			<ApplicationsTab selection={selection} />
 		));
@@ -298,7 +308,7 @@ describe("ApplicationsTab", () => {
 		});
 	});
 
-	test("application detail drawer shows expanded fields (description, why-join)", async () => {
+	test("application detail sheet shows expanded fields (description, why-join)", async () => {
 		const { container } = renderWithSelection((selection) => (
 			<ApplicationsTab selection={selection} />
 		));
@@ -323,7 +333,7 @@ describe("ApplicationsTab", () => {
 		).toBeInTheDocument();
 	});
 
-	test("application detail drawer shows human-readable labels for vertical, productStage and fundingStage", async () => {
+	test("application detail sheet shows human-readable labels for vertical, productStage and fundingStage", async () => {
 		const { container } = renderWithSelection((selection) => (
 			<ApplicationsTab selection={selection} />
 		));
@@ -349,7 +359,7 @@ describe("ApplicationsTab", () => {
 		expect(screen.getAllByText("Raised pre-seed")[0]).toBeInTheDocument();
 	});
 
-	test("application detail drawer body contains no inputs or textareas (read-only)", async () => {
+	test("application detail sheet body contains no inputs or textareas (read-only)", async () => {
 		const { container } = renderWithSelection((selection) => (
 			<ApplicationsTab selection={selection} />
 		));
@@ -383,13 +393,13 @@ describe("ApplicationsTab", () => {
 		).toBeInTheDocument();
 	});
 
-	test("drawer has Prev (disabled) and Next arrows; Next advances to second row", async () => {
+	test("sheet has Prev (disabled) and Next arrows; Next advances to second row", async () => {
 		const { container } = renderWithSelection((selection) => (
 			<ApplicationsTab selection={selection} />
 		));
 
 		// Click the first data row (Grace, the leading "To score" group) to open
-		// the drawer
+		// the sheet
 		const graceCell = within(container).getAllByText("Grace")[0];
 		fireEvent.click(graceCell);
 
@@ -399,29 +409,29 @@ describe("ApplicationsTab", () => {
 			).toBeInTheDocument();
 		});
 
-		// Locate the Drawer's dialog content panel. ApplicationsTab also renders a
+		// Locate the Sheet's dialog content panel. ApplicationsTab also renders a
 		// GuestExpiryProvider which adds a second (closed) Dialog to the DOM, so
 		// `document.querySelector` may return the wrong one. Find the one that
-		// contains the expected applicant email (i.e. the open drawer).
-		// Note: disabled DrawerNav buttons are wrapped in MakeDisablable's Tooltip span,
+		// contains the expected applicant email (i.e. the open sheet).
+		// Note: disabled SheetNav buttons are wrapped in MakeDisablable's Tooltip span,
 		// which makes them inaccessible to the standard AT query; use `hidden: true`.
 		const allDialogContents = document.querySelectorAll<HTMLElement>(
 			'[data-scope="dialog"][data-part="content"]'
 		);
-		const drawerContent = Array.from(allDialogContents).find((element) =>
+		const sheetContent = Array.from(allDialogContents).find((element) =>
 			element.textContent.includes("grace@example.com")
 		);
-		expect(drawerContent).not.toBeUndefined();
+		expect(sheetContent).not.toBeUndefined();
 
-		// Both arrows render in the drawer header
-		const prevButton = within(drawerContent ?? document.body).getByRole(
+		// Both arrows render in the sheet header
+		const prevButton = within(sheetContent ?? document.body).getByRole(
 			"button",
 			{
 				name: /previous/i,
 				hidden: true,
 			}
 		);
-		const nextButton = within(drawerContent ?? document.body).getByRole(
+		const nextButton = within(sheetContent ?? document.body).getByRole(
 			"button",
 			{
 				name: /next/i,
@@ -437,22 +447,22 @@ describe("ApplicationsTab", () => {
 			expect(nextButton).not.toBeDisabled();
 		});
 
-		// Click Next → drawer should now show the second displayed row's email
+		// Click Next → sheet should now show the second displayed row's email
 		// ("To score"'s Grace → Queue's Ada, ahead of the Denied group).
 		fireEvent.click(nextButton);
-		// Assert inside THIS drawer panel: earlier tests in this file leave their
-		// own portalled drawers (also showing Ada) in the document, so a global
+		// Assert inside THIS sheet panel: earlier tests in this file leave their
+		// own portalled sheets (also showing Ada) in the document, so a global
 		// query would pass whether or not Next actually advanced.
 		await waitFor(() => {
 			expect(
-				within(drawerContent ?? document.body).getByText(
+				within(sheetContent ?? document.body).getByText(
 					"ada@example.com"
 				)
 			).toBeInTheDocument();
 		});
 	});
 
-	test("pressing X denies the applicant the open drawer is showing", async () => {
+	test("pressing X denies the applicant the open sheet is showing", async () => {
 		deny.mockClear();
 		const { container } = renderWithSelection((selection) => (
 			<ApplicationsTab selection={selection} />
@@ -467,8 +477,8 @@ describe("ApplicationsTab", () => {
 			).toBeInTheDocument();
 		});
 
-		// The drawer being open is enough on its own to make the scope
-		// "active" — no `active` prop needed — and the open drawer's person
+		// The sheet being open is enough on its own to make the scope
+		// "active" — no `active` prop needed — and the open sheet's person
 		// wins the key over anything else on the roster underneath it.
 		fireEvent.keyDown(document, { key: "x" });
 		await waitFor(() => {
@@ -476,7 +486,7 @@ describe("ApplicationsTab", () => {
 		});
 	});
 
-	test("X does nothing while this tab is not the one on screen and no drawer is open", async () => {
+	test("X does nothing while this tab is not the one on screen and no sheet is open", async () => {
 		deny.mockClear();
 		renderWithSelection((selection) => (
 			<ApplicationsTab selection={selection} />
@@ -516,5 +526,53 @@ describe("ApplicationsTab", () => {
 		// row at mount, and the ArrowDown then steps it one on; not asserting a
 		// specific id, since the `active` gate is what this test pins.
 		expect(["app1", "app2", "app3"]).toContain(deny.mock.calls[0][0]);
+	});
+
+	test("the sheet's score box is the one element keyed score, in either mode", async () => {
+		const { container } = renderWithSelection((selection) => (
+			<ApplicationsTab selection={selection} />
+		));
+		// Ada is scored, so the Info section's read-only Score row renders too;
+		// only the footer's score field may claim the key the roster's Score
+		// column carries.
+		fireEvent.click(within(container).getAllByText("Ada")[0]);
+		await waitFor(() => {
+			expect(
+				screen.getAllByText("ada@example.com")[0]
+			).toBeInTheDocument();
+		});
+		const panel =
+			document.querySelector<HTMLElement>(
+				'[data-scope="dialog"][data-part="content"][data-state="open"]'
+			) ?? document.body;
+		function scoreBoxes(): HTMLElement[] {
+			return keyedIn(panel, "score");
+		}
+		expect(scoreBoxes()).toHaveLength(1);
+		expect(scoreBoxes()[0].querySelector("input")).toHaveValue("8");
+
+		fireEvent.keyDown(document, { key: "e" });
+		await waitFor(() => {
+			expect(
+				within(panel).getByDisplayValue("Engine Co")
+			).toBeInTheDocument();
+		});
+		expect(scoreBoxes()).toHaveLength(1);
+	});
+
+	test("a roster refetch keeps the sheet's score box mounted", async () => {
+		// A morph target replaced mid-flight makes the browser skip the whole
+		// transition; scoring then closing refetches the roster during it.
+		const { container } = renderWithSelection((selection) => (
+			<ApplicationsTab selection={selection} />
+		));
+		fireEvent.click(within(container).getAllByText("Ada")[0]);
+		await waitFor(() => {
+			expect(keyedValue(document, "score")).not.toBeNull();
+		});
+		const box = keyedValue(document, "score");
+		setLiveRows(rows.map((row) => ({ ...row })));
+		expect(keyedValue(document, "score")).toBe(box);
+		expect(box?.isConnected).toBe(true);
 	});
 });

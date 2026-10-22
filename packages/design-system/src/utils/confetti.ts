@@ -33,8 +33,8 @@ export function fireConfetti(origin?: HTMLElement | { x: number; y: number }) {
 		decay: 0.9,
 		scalar: 0.6,
 		ticks: 30, // ~0.5s lifetime at 60fps
-		// Above overlays (drawers/dialogs at --jf-z-index-overlay-base: 1000,
-		// tooltips at 1100) so a burst from inside a drawer isn't hidden behind it.
+		// Above overlays (sheets/dialogs at --jf-z-index-overlay-base: 1000,
+		// tooltips at 1100) so a burst from inside a sheet isn't hidden behind it.
 		zIndex: 2000,
 		disableForReducedMotion: true,
 	});

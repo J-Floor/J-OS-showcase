@@ -44,6 +44,9 @@ export type InputProps = PropsWithDisabling<
 			trailing?: JSX.Element;
 			/** Alias for `onInput`, for consistency with other components. */
 			onValueChange?: InputChangeHandler;
+			/** The whole field's element (label, box and hints), e.g. what
+			 *  an overlay opens from (`morphFrom`). `ref` is the input. */
+			rootRef?: (element: HTMLDivElement) => void;
 		}
 >;
 
@@ -67,6 +70,7 @@ export function Input(props: InputProps): JSX.Element {
 		"onValueChange",
 		"onInput",
 		"ref",
+		"rootRef",
 	]);
 	// Route the MakeField props (label/helper/error + field semantics + the full
 	// disabling set) to MakeField via the shared splitter; `readOnly`/`id`/`ids`
@@ -101,7 +105,7 @@ export function Input(props: InputProps): JSX.Element {
 	}
 
 	return (
-		<MakeField {...makeFieldProps} {...fieldExtra}>
+		<MakeField {...makeFieldProps} {...fieldExtra} ref={own.rootRef}>
 			<div
 				class={styles.inputWrapper}
 				onClick={handleWrapperClick}

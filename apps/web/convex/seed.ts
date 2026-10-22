@@ -641,7 +641,7 @@ function formerRows({
 }
 
 /**
- * A plausible audit trail for one seeded person, so the drawer's History
+ * A plausible audit trail for one seeded person, so the sheet's History
  * section has something to render.
  *
  * Without this every seeded row's History is empty, which makes the section
@@ -854,7 +854,7 @@ export const run = internalMutation({
 		const boardIds = await seedBoard(context, args.boardEmail, now);
 
 		// One board member owns every seeded override and audit entry, so the
-		// drawer shows a name rather than degrading to "the board".
+		// sheet shows a name rather than degrading to "the board".
 		const actorId = boardIds[1] ?? boardIds[0];
 
 		// Everyone who went through an application.

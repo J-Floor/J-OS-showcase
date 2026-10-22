@@ -47,13 +47,13 @@ export function InventoryPage() {
 						// Only ever called for a tab the USER picked (zag emits
 						// `onValueChange` from its own events, never from a
 						// controlled value change). All three tabs stay mounted
-						// once visited, so an open drawer is a Portal floating
+						// once visited, so an open sheet is a Portal floating
 						// over whatever tab is now on screen — close it. And
 						// clear all three link params explicitly: a selection's
 						// own `close()` only writes the URL while it is still the
 						// active tab, so the other two would otherwise keep a
 						// stale `?type=`/`?category=` that silently reopens the
-						// wrong drawer when the user switches back to them.
+						// wrong sheet when the user switches back to them.
 						selections.closeAll();
 						setParams({
 							tab: value,

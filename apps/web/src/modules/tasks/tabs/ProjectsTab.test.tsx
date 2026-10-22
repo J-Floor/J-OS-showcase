@@ -17,8 +17,8 @@ vi.mock("../../../shared/data/boardLevel.tsx", () => ({
 vi.mock("../timeline/ProjectTimeline.tsx", () => ({
 	ProjectTimeline: () => null,
 }));
-vi.mock("../drawers/ProjectDrawer.tsx", () => ({ ProjectDrawer: () => null }));
-vi.mock("../drawers/TaskDrawer.tsx", () => ({ TaskDrawer: () => null }));
+vi.mock("../sheets/ProjectSheet.tsx", () => ({ ProjectSheet: () => null }));
+vi.mock("../sheets/TaskSheet.tsx", () => ({ TaskSheet: () => null }));
 
 import { ProjectsTab } from "./ProjectsTab.tsx";
 

@@ -2,7 +2,7 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import type { QuerySpec } from "../../shared/data/queryKeeper.ts";
 
-/* The inventory drawers' per-row queries, read by the drawer hooks in
+/* The inventory sheets' per-row queries, read by the sheet hooks in
    `data/inventoryData.ts` and prefetched by the descriptors in `entity.ts`. */
 
 export const itemsByTypeQuery: QuerySpec<

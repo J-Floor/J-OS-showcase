@@ -19,7 +19,7 @@ import type { PersonRow } from "./insights/metrics.ts";
 
 const row = { _id: "p1" } as unknown as PersonRow;
 
-it("prefetches the drawer's attended events for a viewer of applications", () => {
+it("prefetches the sheet's attended events for a viewer of applications", () => {
 	prefetch.mockClear();
 	personEntity.prefetch?.(
 		row,

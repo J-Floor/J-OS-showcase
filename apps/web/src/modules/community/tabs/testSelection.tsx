@@ -52,8 +52,8 @@ export function renderWithSelection(
 	return { ...result, url: () => location?.search ?? "" };
 }
 
-/** The drawer panel Ark is actually showing. Closed content stays in the DOM,
- *  so "is the text there" is not the same question as "is the drawer open". */
+/** The sheet panel Ark is actually showing. Closed content stays in the DOM,
+ *  so "is the text there" is not the same question as "is the sheet open". */
 export function openPanel(): HTMLElement | null {
 	return document.querySelector<HTMLElement>(
 		'[data-scope="dialog"][data-part="content"][data-state="open"]'

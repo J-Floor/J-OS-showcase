@@ -194,7 +194,7 @@ describe("personStatus", () => {
 		}
 	});
 
-	it("still reports tier, stage and door as FACTS, for the drawer", () => {
+	it("still reports tier, stage and door as FACTS, for the sheet", () => {
 		const status = personStatus(person(), ["member"], NOW);
 		expect(status.facts.map((fact) => fact.id)).toEqual([
 			"role",
@@ -256,7 +256,7 @@ describe("personStatus", () => {
 				formerReason: reason,
 			});
 			expect(personStatus(fixture, [], NOW).flags).toEqual([]);
-			// The drawer still spells it out, since no heading is beside it.
+			// The sheet still spells it out, since no heading is beside it.
 			expect(personStatus(fixture, [], NOW).facts).toContainEqual({
 				id: "former",
 				reason,
@@ -369,7 +369,7 @@ describe("personStatus", () => {
 		).toBe(0);
 	});
 
-	it("puts the same day count on the drawer's line as on `sinceDays`", () => {
+	it("puts the same day count on the sheet's line as on `sinceDays`", () => {
 		const status = personStatus(
 			person({ stageSince: NOW - 23 * DAY }),
 			["member"],

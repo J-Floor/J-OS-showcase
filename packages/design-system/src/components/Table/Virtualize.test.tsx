@@ -182,9 +182,9 @@ describe("Table virtualisation", () => {
 	});
 
 	it("reports every row to onDisplayedRowsChange, not just the rendered window", () => {
-		// The property that makes virtualisation safe here. Drawer prev/next,
+		// The property that makes virtualisation safe here. Sheet prev/next,
 		// shift-click ranges and the batch action bar all walk this list; if it
-		// shrank to the visible window, paging through the drawer would stop at
+		// shrank to the visible window, paging through the sheet would stop at
 		// the bottom of the screen and a select-all would silently miss rows.
 		const parent = measurableScrollParent(300);
 		const seen: Row[][] = [];
@@ -200,7 +200,7 @@ describe("Table virtualisation", () => {
 			</div>
 		));
 		expect(seen.at(-1)).toHaveLength(200);
-		// And in group order, so "next" in the drawer matches what the eye sees.
+		// And in group order, so "next" in the sheet matches what the eye sees.
 		expect(seen.at(-1)?.[0]?.group).toBe("a");
 	});
 

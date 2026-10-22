@@ -90,7 +90,7 @@ export function createGridElement(): GridElement {
 	};
 }
 
-// Becoming the live table (mount, its tab shown, its drawer closed, a
+// Becoming the live table (mount, its tab shown, its sheet closed, a
 // selection cleared) makes it the thing keys go to, so it takes focus. Not
 // from a tab reached by keyboard: arrowing along a tablist selects each tab
 // in turn, and pulling focus away would strand the keyboard on the first

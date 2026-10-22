@@ -9,11 +9,20 @@ import {
 import { errAsync, okAsync, type ResultAsync } from "neverthrow";
 import { afterEach, expect, test, vi } from "vitest";
 
+import {
+	keyedAround,
+	keyedIn,
+	keyedValue,
+	morphKeyOf,
+	sheetSkeleton,
+	titleAround,
+	titleKeyOf,
+} from "../../../../test-stubs/morphKeys.tsx";
 import type { ClientError } from "../../../lib/call.ts";
 import { ConfirmProvider } from "../../../shared/confirm.tsx";
 import type { MemberRow } from "../columns/memberColumns.tsx";
 
-// Ark's Dialog (the Drawer) mounts a Portal into document.body; unmount it
+// Ark's Dialog (the Sheet) mounts a Portal into document.body; unmount it
 // between tests so nodes don't accumulate and slow later queries under load.
 afterEach(cleanup);
 
@@ -212,7 +221,7 @@ test("selecting all three rows and clicking Kick out calls kickOut for both live
 	expect(kickOutMock).not.toHaveBeenCalledWith("p2");
 });
 
-test("MemberManagement: clicking a row opens the drawer showing that person's email", async () => {
+test("MemberManagement: clicking a row opens the sheet showing that person's email", async () => {
 	const { container } = renderWithSelection((selection) => (
 		<MembersTab selection={selection} />
 	));
@@ -227,7 +236,7 @@ test("MemberManagement: clicking a row opens the drawer showing that person's em
 	});
 });
 
-test("MemberManagement: drawer body contains no inputs or textareas (read-only)", async () => {
+test("MemberManagement: sheet body contains no inputs or textareas (read-only)", async () => {
 	const { container } = renderWithSelection((selection) => (
 		<MembersTab selection={selection} />
 	));
@@ -236,8 +245,8 @@ test("MemberManagement: drawer body contains no inputs or textareas (read-only)"
 	fireEvent.click(adaCell);
 
 	// Wait for the panel to be OPEN, not merely for the person's details to be
-	// somewhere in the document: a drawer that mounts shut is held closed for
-	// one task, so zag sees a real false-to-true change (see Drawer).
+	// somewhere in the document: a sheet that mounts shut is held closed for
+	// one task, so zag sees a real false-to-true change (see Sheet).
 	await waitFor(() => {
 		expect(openPanel()).not.toBeNull();
 	});
@@ -257,31 +266,31 @@ test("MemberManagement: drawer body contains no inputs or textareas (read-only)"
 	expect(editables[0]).toHaveAttribute("placeholder", "Add a note…");
 });
 
-test("MemberManagement: drawer has Prev (disabled) and Next arrows; Next advances to second row", async () => {
+test("MemberManagement: sheet has Prev (disabled) and Next arrows; Next advances to second row", async () => {
 	const { container } = renderWithSelection((selection) => (
 		<MembersTab selection={selection} />
 	));
 
-	// Click the first data row to open the drawer
+	// Click the first data row to open the sheet
 	const adaCell = within(container).getAllByText("Ada")[0];
 	fireEvent.click(adaCell);
 
-	// The panel, not merely the person's details: a drawer that mounts shut is
+	// The panel, not merely the person's details: a sheet that mounts shut is
 	// held closed for one task so zag sees a real false-to-true change (see
-	// Drawer), and its header does not exist until it is actually open.
+	// Sheet), and its header does not exist until it is actually open.
 	await waitFor(() => {
 		expect(openPanel()).not.toBeNull();
 	});
 
-	// Locate the dialog content panel; the Drawer uses a plain <header> inside it
+	// Locate the dialog content panel; the Sheet uses a plain <header> inside it
 	// (not Ark's Dialog.Header), so we scope to the content panel and find the
-	// DrawerNav buttons (Previous / Next) within it.
-	// Note: disabled DrawerNav buttons are wrapped in MakeDisablable's Tooltip span,
+	// SheetNav buttons (Previous / Next) within it.
+	// Note: disabled SheetNav buttons are wrapped in MakeDisablable's Tooltip span,
 	// which makes them inaccessible to the standard AT query; use `hidden: true`.
 	const dialogContent = openPanel();
 	expect(dialogContent).not.toBeNull();
 
-	// Both arrows render in the drawer header
+	// Both arrows render in the sheet header
 	const prevButton = within(dialogContent ?? document.body).getByRole(
 		"button",
 		{
@@ -305,7 +314,7 @@ test("MemberManagement: drawer has Prev (disabled) and Next arrows; Next advance
 		expect(nextButton).not.toBeDisabled();
 	});
 
-	// Click Next → drawer should now show the second row's email. Second in
+	// Click Next → sheet should now show the second row's email. Second in
 	// display order is Grace (p3): both p1 and p3 are "not_onboarded", ahead of
 	// Alan's "kicked_out" group.
 	fireEvent.click(nextButton);
@@ -445,7 +454,7 @@ test("Venture column renders venture.name for a person with no projectName (the 
 	expect(screen.getByText("Engine Co")).toBeInTheDocument();
 });
 
-test("opens a person's drawer when the URL named them", async () => {
+test("opens a person's sheet when the URL named them", async () => {
 	// Global search links to `?person=<id>`; the page's selection reads it and
 	// hands it down. Without this the link lands on the tab and the board still
 	// has to find the row by eye.
@@ -457,9 +466,9 @@ test("opens a person's drawer when the URL named them", async () => {
 	});
 });
 
-test("a deep link opened while the roster loads shows the drawer skeleton", async () => {
+test("a deep link opened while the roster loads shows the sheet skeleton", async () => {
 	// The deep-link id can arrive before the roster's query has answered, so
-	// the drawer must open on the loading skeleton, not a blank name.
+	// the sheet must open on the loading skeleton, not a blank name.
 	isMembersLoading = true;
 	renderWithSelection(
 		(selection) => <MembersTab selection={selection} active />,
@@ -468,34 +477,32 @@ test("a deep link opened while the roster loads shows the drawer skeleton", asyn
 	await waitFor(() => {
 		expect(openPanel()).not.toBeNull();
 	});
-	expect(
-		document.querySelector("[data-drawer-skeleton]")
-	).toBeInTheDocument();
+	expect(sheetSkeleton()).toBeInTheDocument();
 	// Shaped like the loaded PersonDetail, not the generic bars.
 	expect(screen.getByText("Email")).toBeInTheDocument();
 });
 
-test("a person from another roster opens no drawer here", async () => {
+test("a person from another roster opens no sheet here", async () => {
 	// All three tabs share one selection and stay mounted, so a tab whose loaded
 	// roster lacks the person must stay shut — and must not shimmer forever
 	// waiting for a row that is never coming.
 	renderWithSelection((selection) => <MembersTab selection={selection} />, {
 		path: "/community?person=missing",
 	});
-	// Wait for the drawer's panel to exist, then judge it: a bare timer would
-	// race the Drawer's own mount timer.
+	// Wait for the sheet's panel to exist, then judge it: a bare timer would
+	// race the Sheet's own mount timer.
 	await waitFor(() => {
 		expect(
 			document.querySelector('[data-scope="dialog"][data-part="content"]')
 		).not.toBeNull();
 	});
 	expect(openPanel()).toBeNull();
-	expect(document.querySelectorAll("[data-drawer-skeleton]")).toHaveLength(0);
+	expect(sheetSkeleton()).toBeNull();
 });
 
 test("opening a row from the table puts them in the URL", async () => {
 	// Opening someone from the TABLE has to put them in the address bar, or the
-	// drawer cannot be linked to or reloaded into.
+	// sheet cannot be linked to or reloaded into.
 	const { container, url } = renderWithSelection((selection) => (
 		<MembersTab selection={selection} />
 	));
@@ -507,8 +514,8 @@ test("opening a row from the table puts them in the URL", async () => {
 	});
 });
 
-test("closes its drawer when the person leaves the URL", async () => {
-	// The page closes the selection when a tab is picked. A drawer left open
+test("closes its sheet when the person leaves the URL", async () => {
+	// The page closes the selection when a tab is picked. A sheet left open
 	// reappears stacked under the next one.
 	let selection!: PersonSelection;
 	renderWithSelection(
@@ -562,7 +569,7 @@ test("batch Kick out's confirm names the count that will actually be affected, n
 	expect(screen.queryByText(/Revoke access for 3 person\(s\)\?/)).toBeNull();
 });
 
-test("pressing K kicks out the person the open drawer is showing", async () => {
+test("pressing K kicks out the person the open sheet is showing", async () => {
 	kickOutMock.mockClear();
 	const { container } = renderWithSelection((selection) => (
 		<MembersTab selection={selection} />
@@ -576,8 +583,8 @@ test("pressing K kicks out the person the open drawer is showing", async () => {
 		expect(openPanel()).not.toBeNull();
 	});
 
-	// The drawer being open is enough on its own to make the scope "active"
-	// — no `active` prop needed — and the open drawer's person wins the key
+	// The sheet being open is enough on its own to make the scope "active"
+	// — no `active` prop needed — and the open sheet's person wins the key
 	// over anything else on the roster underneath it.
 	fireEvent.keyDown(document, { key: "k" });
 	await waitFor(() => {
@@ -585,7 +592,7 @@ test("pressing K kicks out the person the open drawer is showing", async () => {
 	});
 });
 
-test("K does nothing while this tab is not the one on screen and no drawer is open", async () => {
+test("K does nothing while this tab is not the one on screen and no sheet is open", async () => {
 	kickOutMock.mockClear();
 	renderWithSelection((selection) => <MembersTab selection={selection} />);
 
@@ -628,7 +635,7 @@ test("K kicks out the focused row once this tab is marked active", async () => {
 	});
 });
 
-test("a refused batch kick out shows why, stops, keeps the selection and clears when the drawer opens", async () => {
+test("a refused batch kick out shows why, stops, keeps the selection and clears when the sheet opens", async () => {
 	kickOutMock.mockClear();
 	kickOutMock.mockReturnValueOnce(
 		errAsync({ code: "Forbidden", message: "You can't do that." })
@@ -654,10 +661,60 @@ test("a refused batch kick out shows why, stops, keeps the selection and clears 
 	expect(screen.getAllByRole("checkbox")[1]).toBeChecked();
 	expect(screen.getAllByRole("checkbox")[2]).toBeChecked();
 
-	// Opening someone's drawer drops a failure that was not theirs.
+	// Opening someone's sheet drops a failure that was not theirs.
 	fireEvent.click(within(container).getAllByText("Alan")[0]);
 	await waitFor(() => {
 		expect(openPanel()).not.toBeNull();
 	});
 	expect(screen.queryByRole("alert")).toBeNull();
+});
+
+test("the row's name cells and the sheet title's name halves carry the same field keys", async () => {
+	const { container } = renderWithSelection((selection) => (
+		<MembersTab selection={selection} />
+	));
+	// The row's title cell flies by its column id; the last name is a keyed
+	// cell.
+	const title = within(container)
+		.getAllByText("Ada")
+		.map((element) => titleAround(element))
+		.find((element) => element !== null);
+	expect(titleKeyOf(title)).toBe("firstName");
+	expect(
+		morphKeyOf(keyedAround(within(container).getAllByText("Lovelace")[0]))
+	).toBe("lastName");
+
+	fireEvent.click(within(container).getAllByText("Ada")[0]);
+	await waitFor(() => {
+		expect(openPanel()).not.toBeNull();
+	});
+	const sheetTitle = openPanel()?.querySelector('[data-part="title"]');
+	expect(sheetTitle).toHaveTextContent("Ada Lovelace");
+	expect(keyedValue(sheetTitle, "firstName")).toHaveTextContent(/^Ada$/);
+	expect(keyedValue(sheetTitle, "lastName")).toHaveTextContent(/^Lovelace$/);
+});
+
+test("the Venture cell and the sheet's Venture value share a key, and every key is claimed once in edit mode", async () => {
+	const { container } = renderWithSelection((selection) => (
+		<MembersTab selection={selection} />
+	));
+	expect(
+		morphKeyOf(keyedAround(within(container).getByText("Engine Co")))
+	).toBe("ventureName");
+
+	fireEvent.click(within(container).getAllByText("Ada")[0]);
+	await waitFor(() => {
+		expect(openPanel()).not.toBeNull();
+	});
+	const panel = openPanel() ?? document.body;
+	expect(keyedValue(panel, "ventureName")).toHaveTextContent("Engine Co");
+
+	fireEvent.keyDown(document, { key: "e" });
+	await waitFor(() => {
+		expect(
+			within(panel).getByDisplayValue("Engine Co")
+		).toBeInTheDocument();
+	});
+	for (const key of ["firstName", "lastName", "ventureName", "email"])
+		expect(keyedIn(panel, key)).toHaveLength(1);
 });

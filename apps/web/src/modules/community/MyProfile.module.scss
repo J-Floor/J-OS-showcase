@@ -1,6 +1,6 @@
 /* The profile is a single reading column, not a full-bleed form. Left
    unconstrained, every field input stretched the whole page width (the board
-   drawer constrains these same editors to ~360px; at page width they looked
+   sheet constrains these same editors to ~360px; at page width they looked
    comical). Cap it at a comfortable form width. */
 .form {
 	display: flex;

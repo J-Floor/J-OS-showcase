@@ -337,7 +337,7 @@ export default defineSchema({
 		// shown to anyone whose door access is granted. Per person, so it
 		// follows them across devices.
 		doorsIntroSeenAt: v.optional(v.number()),
-		// Per-category push/email switches from the Notifications drawer. A
+		// Per-category push/email switches from the Notifications sheet. A
 		// missing category (or a missing object) means the default: both on.
 		notificationPrefs: v.optional(notificationPrefsValidator),
 		// --- lifecycle machine state (see docs/lifecycle.md) ---

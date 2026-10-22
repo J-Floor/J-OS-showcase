@@ -3,7 +3,12 @@
 @include typo.primitives;
 
 :root {
+	--jf-animation-duration-fast: 120ms;
 	--jf-animation-duration-default: 200ms;
+	--jf-animation-duration-morph: 250ms;
+	--jf-animation-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+	--jf-animation-ease-enter: cubic-bezier(0.05, 0.7, 0.1, 1);
+	--jf-animation-ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15);
 }
 
 body {

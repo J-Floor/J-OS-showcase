@@ -223,7 +223,7 @@ export const list = query({
 			)
 			.collect();
 		// Same shape as the Members and Guests rosters: all three tabs read one
-		// table now, so they get one row type and share one detail drawer.
+		// table now, so they get one row type and share one detail sheet.
 		return withStatus(context, prospects);
 	},
 });
@@ -332,7 +332,7 @@ export const decide = mutation({
 			)
 		);
 		// After the approval, so the audit row reads as a decision made about a
-		// guest rather than about an applicant. Same writer as the drawer's own
+		// guest rather than about an applicant. Same writer as the sheet's own
 		// control, so the trail is identical either way.
 		if (decision.kind === "guest" && decision.blockDoor === true) {
 			await applyDoorOverride(

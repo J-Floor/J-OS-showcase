@@ -10,10 +10,10 @@ import {
 /**
  * Binds one scope's action keys.
  *
- * Target resolution, in order: the open drawer's person, then the checked rows,
+ * Target resolution, in order: the open sheet's person, then the checked rows,
  * then the focused row, then nothing. Focus and a checked selection are already
  * mutually exclusive in the table, so at most one of those two can be set — the
- * order is what makes the drawer win over both.
+ * order is what makes the sheet win over both.
  *
  * Registered with `createHotkeys` (the plural primitive), not a `for` loop of
  * individual `createHotkey` calls: a plain loop reads `opts.actions()` outside
@@ -28,8 +28,8 @@ import {
  */
 export function createActionKeys<Person>(options: {
 	actions: () => ActionDescriptor<Person>[];
-	/** The person the open drawer is showing, if any. */
-	drawerPerson: () => Person | undefined;
+	/** The person the open sheet is showing, if any. */
+	sheetPerson: () => Person | undefined;
 	/** The checked rows, empty when nothing is checked. */
 	selected: () => Person[];
 	/** The row the focus ring is on, if any. */
@@ -52,7 +52,7 @@ export function createActionKeys<Person>(options: {
 			)
 				return;
 
-			const person = options.drawerPerson();
+			const person = options.sheetPerson();
 			if (person !== undefined) {
 				if (!action.can(person)) return;
 				event.preventDefault();

@@ -81,7 +81,7 @@
 	);
 
 	// Modal/overlay scrim — flat black, theme-independent (sits over content in
-	// both themes). Shared by Dialog, Tour and the mobile Drawer backdrop.
+	// both themes). Shared by Dialog, Tour and the mobile Sheet backdrop.
 	--jf-surface-bg-scrim: rgb(0 0 0 / 50%);
 	--jf-fg-strong: light-dark(var(--core-grey-1000), var(--core-grey-50));
 	--jf-fg-default: light-dark(var(--core-grey-900), var(--core-grey-100));

@@ -1,14 +1,15 @@
-import type { JfColumnDefinition } from "@j-os/design-system";
+import { fieldColumn, type JfColumnDefinition } from "@j-os/design-system";
 
 import type { Doc } from "../../../convex/_generated/dataModel";
 import { SITE_TIMEZONE } from "../../../convex/lib/time.ts";
 import { actionsColumnSize } from "../community/columns/RowActions.tsx";
 
 import { EventRowActions } from "./EventRowActions.tsx";
+import { eventFields } from "./fields.ts";
 
 // The space is physically in SITE_TIMEZONE, so a travelling admin must see the
 // event's Zurich date, not their browser's. Format the stored instant in that
-// zone (matches the drawer, which renders the *Local wall-clock in the same zone).
+// zone (matches the sheet, which renders the *Local wall-clock in the same zone).
 const dateFormat = new Intl.DateTimeFormat(undefined, {
 	dateStyle: "medium",
 	timeZone: SITE_TIMEZONE,
@@ -37,7 +38,7 @@ function eventPhase(event: Doc<"events">, now: number): string {
 /**
  * Events table columns: name, start/end dates, and a trailing actions column
  * (copy link / download QR) mirroring the community roster's actions column —
- * `disableRowClick` so those buttons don't also open the drawer.
+ * `disableRowClick` so those buttons don't also open the sheet.
  */
 export function eventColumns(): JfColumnDefinition<Doc<"events">>[] {
 	// Captured once when the columns are built (Table reads config once at
@@ -58,23 +59,24 @@ export function eventColumns(): JfColumnDefinition<Doc<"events">>[] {
 		},
 		// The name takes what the dates leave; the dates are exactly as wide
 		// as the longest date they show.
-		{ accessorKey: "name", header: "Name", dataType: "string" },
-		{
+		fieldColumn(eventFields.name, {
+			accessorKey: "name",
+			dataType: "string",
+		}),
+		fieldColumn(eventFields.startsAt, {
 			accessorKey: "startsAt",
-			header: "Starts",
 			dataType: "date",
 			size: "content",
 			cell: (info) => formatEventDate(info.row.original.startsAt),
 			measureText: (row) => formatEventDate(row.startsAt),
-		},
-		{
+		}),
+		fieldColumn(eventFields.endsAt, {
 			accessorKey: "endsAt",
-			header: "Ends",
 			dataType: "date",
 			size: "content",
 			cell: (info) => formatEventDate(info.row.original.endsAt),
 			measureText: (row) => formatEventDate(row.endsAt),
-		},
+		}),
 		{
 			id: "actions",
 			header: "",

@@ -50,8 +50,8 @@ function createAssigneeFilter() {
 }
 
 /** What the shared tab bar tells the tabs. The "+" and "Today" buttons bump a
- *  counter; each tab opens its create drawer (or recentres) in response — the
- *  trigger lives in the shared bar, the drawer state stays inside the tab that
+ *  counter; each tab opens its create sheet (or recentres) in response — the
+ *  trigger lives in the shared bar, the sheet state stays inside the tab that
  *  owns it. */
 function createToolbarState() {
 	const [newTaskRequest, setNewTaskRequest] = createSignal(0);

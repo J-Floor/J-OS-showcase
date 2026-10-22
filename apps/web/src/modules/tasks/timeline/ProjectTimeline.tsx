@@ -41,8 +41,13 @@ type ProjectTimelineProps = {
 	/** Bumped by the toolbar "Today" button to recentre on today. */
 	jumpToday: Accessor<number>;
 	onSelect: (id: Id<"projects">) => void;
-	/** Drag across the "New" row to create a project with that date range. */
-	onCreateRange: (startMs: number, endMs: number) => void;
+	/** Drag across the "New" row to create a project with that date range,
+	 *  out of `from` (the dragged range). */
+	onCreateRange: (
+		startMs: number,
+		endMs: number,
+		from: HTMLElement | null
+	) => void;
 };
 
 /** The laid-out timeline, each bar's label details, and what scrolling and
@@ -99,8 +104,8 @@ function createTimelineModel(props: ProjectTimelineProps) {
 		}),
 		newDrag: createNewRangeDrag({
 			timeline,
-			onCreateRange: (startMs, endMs) => {
-				props.onCreateRange(startMs, endMs);
+			onCreateRange: (startMs, endMs, from) => {
+				props.onCreateRange(startMs, endMs, from);
 			},
 		}),
 	};

@@ -4,6 +4,7 @@
    `createEntitySelection`'s `rows` option, which reads them inside its own
    effects. There is no JSX or event handler here for the plugin to recognise
    as a tracked scope. */
+import { viewTransition } from "@j-os/design-system";
 import {
 	MemoryRouter,
 	Router,
@@ -14,7 +15,7 @@ import {
 } from "@solidjs/router";
 import { cleanup, render, waitFor } from "@solidjs/testing-library";
 import { createComponent, createEffect, createSignal } from "solid-js";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, onTestFinished, test, vi } from "vitest";
 
 import { createEntitySelection } from "./createEntitySelection.ts";
 
@@ -81,12 +82,12 @@ test("inbound ?x=id opens optimistically before rows load, resolves once they ar
 	history.set({ value: "/anything?x=a1", replace: true });
 	const bag = renderHarness(rows, { history });
 
-	// Rows haven't loaded yet — opens immediately anyway; the drawer shows a
+	// Rows haven't loaded yet — opens immediately anyway; the sheet shows a
 	// skeleton (selected() undefined) instead of flashing the create form.
 	await waitFor(() => {
 		expect(bag.sel?.open()).toBe(true);
 	});
-	expect(bag.sel?.selectedId()).toBe("a1");
+	expect(bag.sel?.requestedId()).toBe("a1");
 	expect(bag.sel?.selected()).toBeUndefined();
 
 	setRows([rowA]);
@@ -95,7 +96,7 @@ test("inbound ?x=id opens optimistically before rows load, resolves once they ar
 	});
 });
 
-test("close clears open and selectedId and removes the param (replace:true)", async () => {
+test("close clears open and requestedId and removes the param (replace:true)", async () => {
 	const [rows] = createSignal<Row[] | undefined>([rowA, rowB]);
 	const bag = renderHarness(rows);
 
@@ -111,7 +112,7 @@ test("close clears open and selectedId and removes the param (replace:true)", as
 	await waitFor(() => {
 		expect(bag.sel?.open()).toBe(false);
 	});
-	expect(bag.sel?.selectedId()).toBeUndefined();
+	expect(bag.sel?.requestedId()).toBeUndefined();
 	await waitFor(() => {
 		expect(bag.search?.()).not.toContain("x=");
 	});
@@ -120,7 +121,7 @@ test("close clears open and selectedId and removes the param (replace:true)", as
 test("re-selecting the same id after close re-opens it (bug #60 regression)", async () => {
 	const [rows] = createSignal<Row[] | undefined>([rowA]);
 	// A base entry to be on: close() pops the entry the open pushed (as in the
-	// real app, where the drawer always opens from some page).
+	// real app, where the sheet always opens from some page).
 	const history = createMemoryHistory();
 	history.set({ value: "/events", replace: true });
 	const bag = renderHarness(rows, { history });
@@ -138,14 +139,14 @@ test("re-selecting the same id after close re-opens it (bug #60 regression)", as
 		expect(bag.sel?.open()).toBe(false);
 	});
 
-	// The regression: close() must clear selectedId, not just the URL param —
-	// otherwise the inbound-param effect sees selectedId() === wanted and skips
+	// The regression: close() must clear requestedId, not just the URL param —
+	// otherwise the inbound-param effect sees requestedId() === wanted and skips
 	// reopening.
 	bag.sel?.openRow(rowA);
 	await waitFor(() => {
 		expect(bag.sel?.open()).toBe(true);
 	});
-	expect(bag.sel?.selectedId()).toBe("a1");
+	expect(bag.sel?.requestedId()).toBe("a1");
 });
 
 test("closes when the open row vanishes from the live list", async () => {
@@ -155,7 +156,7 @@ test("closes when the open row vanishes from the live list", async () => {
 	const bag = renderHarness(rows, { history });
 
 	bag.sel?.openRow(rowA);
-	// Let the open settle (URL pushed) before the row vanishes — the drawer was
+	// Let the open settle (URL pushed) before the row vanishes — the sheet was
 	// genuinely open and on screen, then the row is deleted.
 	await waitFor(() => {
 		expect(bag.search?.()).toContain("x=a1");
@@ -166,7 +167,7 @@ test("closes when the open row vanishes from the live list", async () => {
 	await waitFor(() => {
 		expect(bag.sel?.open()).toBe(false);
 	});
-	expect(bag.sel?.selectedId()).toBeUndefined();
+	expect(bag.sel?.requestedId()).toBeUndefined();
 });
 
 test("openCreate opens the create form with the reserved ?x=new sentinel", async () => {
@@ -180,10 +181,10 @@ test("openCreate opens the create form with the reserved ?x=new sentinel", async
 
 	bag.sel?.openCreate();
 	await waitFor(() => {
-		expect(bag.sel?.selectedId()).toBeUndefined();
+		expect(bag.sel?.requestedId()).toBeUndefined();
 	});
 	expect(bag.sel?.open()).toBe(true);
-	// `selected()` stays undefined (the sentinel matches no row), so the drawer
+	// `selected()` stays undefined (the sentinel matches no row), so the sheet
 	// renders the create form. The param is the `new` sentinel — create is now
 	// URL-linked so the Back button can close it (not a row id, though).
 	expect(bag.sel?.selected()).toBeUndefined();
@@ -203,29 +204,29 @@ test("reopening the same row via an inbound nav after close works (command-palet
 	await waitFor(() => {
 		expect(bag.sel?.open()).toBe(true);
 	});
-	expect(bag.sel?.selectedId()).toBe("a1");
+	expect(bag.sel?.requestedId()).toBe("a1");
 
 	bag.sel?.close();
 	await waitFor(() => {
 		expect(bag.sel?.open()).toBe(false);
 	});
-	// close() must clear selectedId (not just the URL), or the inbound effect
-	// sees selectedId === wanted and refuses to reopen the same row.
-	expect(bag.sel?.selectedId()).toBeUndefined();
+	// close() must clear requestedId (not just the URL), or the inbound effect
+	// sees requestedId === wanted and refuses to reopen the same row.
+	expect(bag.sel?.requestedId()).toBeUndefined();
 	// Let the close's URL write settle (a real reopen is seconds later).
 	await waitFor(() => {
 		expect(bag.search?.()).not.toContain("x=a1");
 	});
 
-	// Palette navigates to the same URL again — the drawer must reopen.
+	// Palette navigates to the same URL again — the sheet must reopen.
 	history.set({ value: "/events?x=a1" });
 	await waitFor(() => {
 		expect(bag.sel?.open()).toBe(true);
 	});
-	expect(bag.sel?.selectedId()).toBe("a1");
+	expect(bag.sel?.requestedId()).toBe("a1");
 });
 
-test("system Back closes the drawer and stays on the page", async () => {
+test("system Back closes the sheet and stays on the page", async () => {
 	const [rows] = createSignal<Row[] | undefined>([rowA, rowB]);
 	const history = createMemoryHistory();
 	history.set({ value: "/events", replace: true });
@@ -243,9 +244,9 @@ test("system Back closes the drawer and stays on the page", async () => {
 	await waitFor(() => {
 		expect(bag.sel?.open()).toBe(false);
 	});
-	expect(bag.sel?.selectedId()).toBeUndefined();
+	expect(bag.sel?.requestedId()).toBeUndefined();
 	expect(bag.search?.()).not.toContain("x=");
-	// Still on the same page — Back closed the drawer, it did not navigate away.
+	// Still on the same page — Back closed the sheet, it did not navigate away.
 	expect(bag.pathname?.()).toBe("/events");
 });
 
@@ -259,13 +260,13 @@ test("stepping row→row does not stack history: one Back closes to the page", a
 	await waitFor(() => {
 		expect(bag.search?.()).toContain("x=a1");
 	});
-	// Step to another row while the drawer is open — must REPLACE, not push.
+	// Step to another row while the sheet is open — must REPLACE, not push.
 	bag.sel?.openRow(rowB);
 	await waitFor(() => {
 		expect(bag.search?.()).toContain("x=b1");
 	});
 
-	// One Back returns to the page with the drawer closed — NOT to rowA (which
+	// One Back returns to the page with the sheet closed — NOT to rowA (which
 	// would prove stepping stacked an extra entry).
 	history.back();
 	await waitFor(() => {
@@ -286,7 +287,7 @@ test("close(false) clears in place without popping history (programmatic close d
 		expect(bag.search?.()).toContain("x=a1");
 	});
 
-	// A tab switch closes the drawer and then writes its own new URL — a
+	// A tab switch closes the sheet and then writes its own new URL — a
 	// history traversal here would race that write. close(false) must only
 	// clear state + param in place, leaving the current entry (and its `tab`)
 	// intact rather than navigating back.
@@ -318,7 +319,7 @@ test("close() consumes the pushed entry (pops history), staying on the page", as
 	expect(bag.pathname?.()).toBe("/events");
 });
 
-test("a deep-linked drawer closes in place without leaving the app", async () => {
+test("a deep-linked sheet closes in place without leaving the app", async () => {
 	const [rows] = createSignal<Row[] | undefined>([rowA, rowB]);
 	const history = createMemoryHistory();
 	// Cold landing directly on the deep link — the hook pushed no entry.
@@ -333,13 +334,13 @@ test("a deep-linked drawer closes in place without leaving the app", async () =>
 	await waitFor(() => {
 		expect(bag.sel?.open()).toBe(false);
 	});
-	expect(bag.sel?.selectedId()).toBeUndefined();
+	expect(bag.sel?.requestedId()).toBeUndefined();
 	expect(bag.search?.()).not.toContain("x=");
 	// Closed in place: still on the events page, not navigated out of the app.
 	expect(bag.pathname?.()).toBe("/events");
 });
 
-test("Back closes a drawer reached by navigating in from another page, staying on the list", async () => {
+test("Back closes a sheet reached by navigating in from another page, staying on the list", async () => {
 	// Cold-inbound synthesis rewrites the real `window.history`, so this one
 	// runs under the window-bound Router (jsdom implements History).
 	window.history.replaceState(null, "", "/home");
@@ -440,10 +441,10 @@ test("a same-list pick stays one Back deep even when the page rewrites another p
 		bag.sel = createEntitySelection<Row>({ rows, param: "x" });
 		bag.navigate = useNavigate();
 		const [params, setParams] = useSearchParams();
-		// What Community's tab-follow does: once the drawer opens, put the
+		// What Community's tab-follow does: once the sheet opens, put the
 		// row's tab in the URL with `replace`.
 		createEffect(() => {
-			if (bag.sel?.selectedId() !== undefined && params.tab !== "t2")
+			if (bag.sel?.requestedId() !== undefined && params.tab !== "t2")
 				setParams({ tab: "t2" }, { replace: true });
 		});
 		return null;
@@ -478,7 +479,7 @@ test("a same-list pick stays one Back deep even when the page rewrites another p
 	});
 });
 
-test("Back closes the create drawer opened via openCreate", async () => {
+test("Back closes the create sheet opened via openCreate", async () => {
 	const [rows] = createSignal<Row[] | undefined>([rowA, rowB]);
 	const history = createMemoryHistory();
 	history.set({ value: "/events", replace: true });
@@ -511,14 +512,14 @@ test("a custom slugOf, not _id, drives the inbound match, selected(), and close-
 	await waitFor(() => {
 		expect(bag.sel?.open()).toBe(true);
 	});
-	expect(bag.sel?.selectedId()).toBe("TAG-1");
+	expect(bag.sel?.requestedId()).toBe("TAG-1");
 	expect(bag.sel?.selected()?._id).toBe("id1");
 
 	setRows([]);
 	await waitFor(() => {
 		expect(bag.sel?.open()).toBe(false);
 	});
-	expect(bag.sel?.selectedId()).toBeUndefined();
+	expect(bag.sel?.requestedId()).toBeUndefined();
 });
 
 test("openRow opens immediately before rows load; selected() fills in when they arrive", async () => {
@@ -530,7 +531,7 @@ test("openRow opens immediately before rows load; selected() fills in when they 
 	bag.sel?.openRow(rowA);
 	// Open now, even though rows are still loading.
 	expect(bag.sel?.open()).toBe(true);
-	expect(bag.sel?.selectedId()).toBe("a1");
+	expect(bag.sel?.requestedId()).toBe("a1");
 	expect(bag.sel?.selected()).toBeUndefined();
 
 	setRows([rowA, rowB]);
@@ -548,7 +549,7 @@ test("a cold inbound ?x=a1 opens loading before rows, resolves when they load", 
 	await waitFor(() => {
 		expect(bag.sel?.open()).toBe(true);
 	});
-	expect(bag.sel?.selectedId()).toBe("a1");
+	expect(bag.sel?.requestedId()).toBe("a1");
 	expect(bag.sel?.selected()).toBeUndefined();
 
 	setRows([rowA, rowB]);
@@ -557,7 +558,7 @@ test("a cold inbound ?x=a1 opens loading before rows, resolves when they load", 
 	});
 });
 
-test("optimistically-opened drawer closes if the loaded list turns out to lack the id (dead link)", async () => {
+test("optimistically-opened sheet closes if the loaded list turns out to lack the id (dead link)", async () => {
 	const [rows, setRows] = createSignal<Row[] | undefined>(undefined);
 	const history = createMemoryHistory();
 	history.set({ value: "/events?x=a1", replace: true });
@@ -574,13 +575,13 @@ test("optimistically-opened drawer closes if the loaded list turns out to lack t
 	await waitFor(() => {
 		expect(bag.sel?.open()).toBe(false);
 	});
-	expect(bag.sel?.selectedId()).toBeUndefined();
+	expect(bag.sel?.requestedId()).toBeUndefined();
 	await waitFor(() => {
 		expect(bag.search?.()).not.toContain("x=a1");
 	});
 });
 
-test("a dead deep-link with rows already loaded at mount clears the stale param and opens no drawer", async () => {
+test("a dead deep-link with rows already loaded at mount clears the stale param and opens no sheet", async () => {
 	const [rows] = createSignal<Row[] | undefined>([rowA, rowB]);
 	const history = createMemoryHistory();
 	// Rows are loaded (not undefined) from the very first render — the
@@ -592,7 +593,7 @@ test("a dead deep-link with rows already loaded at mount clears the stale param 
 		expect(bag.search?.()).not.toContain("x=missing");
 	});
 	expect(bag.sel?.open()).toBe(false);
-	expect(bag.sel?.selectedId()).toBeUndefined();
+	expect(bag.sel?.requestedId()).toBeUndefined();
 });
 
 test("a valid deep-link with rows already loaded at mount still opens", async () => {
@@ -604,7 +605,7 @@ test("a valid deep-link with rows already loaded at mount still opens", async ()
 	await waitFor(() => {
 		expect(bag.sel?.open()).toBe(true);
 	});
-	expect(bag.sel?.selectedId()).toBe("a1");
+	expect(bag.sel?.requestedId()).toBe("a1");
 	expect(bag.sel?.selected()).toEqual(rowA);
 	expect(bag.search?.()).toContain("x=a1");
 });
@@ -642,4 +643,91 @@ test("loading() is true only while a real row is selected but not yet resolved; 
 	bag.sel?.openCreate();
 	expect(bag.sel?.creating()).toBe(true);
 	expect(bag.sel?.loading()).toBe(false);
+});
+
+/** Installs a View Transitions fake whose transitions finish only when the
+ *  returned `finish` is called. */
+function holdTransitions(): { finish: () => void; restore: () => void } {
+	const resolvers: (() => void)[] = [];
+	const finished = new Promise<void>((resolve) => {
+		resolvers.push(resolve);
+	});
+	Object.assign(document, {
+		startViewTransition: (update: () => Promise<void> | void) => {
+			const updated = Promise.resolve().then(update);
+			return { finished, updateCallbackDone: updated, ready: updated };
+		},
+	});
+	vi.stubGlobal("matchMedia", () => ({ matches: false }));
+	return {
+		finish: () => {
+			for (const resolve of resolvers) resolve();
+		},
+		restore: () => {
+			Reflect.deleteProperty(document, "startViewTransition");
+			vi.unstubAllGlobals();
+		},
+	};
+}
+
+test("a closed sheet keeps showing its row until its close transition finishes", async () => {
+	const transitions = holdTransitions();
+	onTestFinished(transitions.restore);
+	const [rows] = createSignal<Row[] | undefined>([rowA, rowB]);
+	const bag = renderHarness(rows);
+	bag.sel?.openRow(rowA);
+	await waitFor(() => {
+		expect(bag.search?.()).toContain("x=a1");
+	});
+
+	// The sheet's close morph: started right as the selection closes.
+	bag.sel?.close(false);
+	void viewTransition(() => {});
+	expect(bag.sel?.open()).toBe(false);
+	expect(bag.sel?.requestedId()).toBeUndefined();
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	expect(bag.sel?.selected()).toEqual(rowA);
+	// For a sheet that looks its row up itself (the roster does).
+	expect(bag.sel?.shownId()).toBe("a1");
+	expect(bag.sel?.creating()).toBe(false);
+	expect(bag.sel?.loading()).toBe(false);
+
+	transitions.finish();
+	await waitFor(() => {
+		expect(bag.sel?.selected()).toBeUndefined();
+	});
+	expect(bag.sel?.shownId()).toBeUndefined();
+});
+
+test("without a close transition the row is let go at once; a reopen shows the new row", async () => {
+	const [rows] = createSignal<Row[] | undefined>([rowA, rowB]);
+	const bag = renderHarness(rows);
+	bag.sel?.openRow(rowA);
+	await waitFor(() => {
+		expect(bag.search?.()).toContain("x=a1");
+	});
+	bag.sel?.close(false);
+	await waitFor(() => {
+		expect(bag.sel?.selected()).toBeUndefined();
+	});
+	bag.sel?.openCreate();
+	expect(bag.sel?.selected()).toBeUndefined();
+	expect(bag.sel?.creating()).toBe(true);
+});
+
+test("opening the create form while a close still holds the old row shows the create form", async () => {
+	const transitions = holdTransitions();
+	onTestFinished(transitions.restore);
+	const [rows] = createSignal<Row[] | undefined>([rowA]);
+	const bag = renderHarness(rows);
+	bag.sel?.openRow(rowA);
+	await waitFor(() => {
+		expect(bag.search?.()).toContain("x=a1");
+	});
+	bag.sel?.close(false);
+	void viewTransition(() => {});
+	bag.sel?.openCreate();
+	expect(bag.sel?.selected()).toBeUndefined();
+	expect(bag.sel?.creating()).toBe(true);
+	transitions.finish();
 });

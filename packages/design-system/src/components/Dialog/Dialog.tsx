@@ -5,6 +5,11 @@ import { Portal } from "solid-js/web";
 
 import { ICONS } from "../../icons.ts";
 import {
+	type MorphOverlayProps,
+	createMorphPresence,
+	overlayMorphOptions,
+} from "../../utils/morphPresence.ts";
+import {
 	getPartStyles,
 	type WithPartClasses,
 } from "../../utils/partStyling.ts";
@@ -132,27 +137,28 @@ function firstDialogFocusable(content: HTMLElement | null): HTMLElement | null {
 }
 
 /**
- * Dialog root, with one behaviour added: an opening dialog focuses its first
- * real control — the segment in "Change role", the host field, a confirm button
- * — falling back to the content element itself when it has none.
+ * Dialog root. Two behaviours added:
  *
- * Ark's own focus trap would otherwise land on the first tabbable descendant,
- * which is the close button baked into `Content`. That button is an `IconButton`
- * carrying a tooltip that opens on focus, and on programmatic focus mid-open the
- * tooltip measured a not-yet-laid-out 0×0 trigger and placed itself at the page
- * origin. {@link firstDialogFocusable} skips the close button by its
- * CSS-module `styles.close` class — NOT its `data-part`, which the tooltip
- * trigger overwrites — so the trap lands on the first MEANINGFUL control instead,
- * and
- * when there is none, the content fallback keeps the close button unfocused, so
- * that stray tooltip never returns. (A screen reader still gets the title, which
- * labels the content.)
- *
- * Consumer props are spread AFTER, so passing `initialFocusEl` explicitly (the
- * confirm button, a specific field) still wins.
+ * - An opening dialog focuses its first real control (see the notes on
+ *   {@link firstDialogFocusable}). Consumer props are spread AFTER, so an
+ *   explicit `initialFocusEl` still wins.
+ * - It morphs out of the element that opened it and back into it on close
+ *   (`createMorphPresence`); see {@link MorphOverlayProps}.
  */
-function Root(props: ArkDialog.RootProps) {
+function Root(
+	props: Omit<ArkDialog.RootProps, "open" | "defaultOpen"> &
+		MorphOverlayProps & {
+			/** Controlled only: the morph needs to own when Ark sees it open. */
+			open: boolean;
+		}
+) {
+	const [local, rest] = splitProps(props, ["open", "morph", "morphFrom"]);
 	let contentElement: HTMLElement | null = null;
+	const presence = createMorphPresence({
+		open: () => local.open,
+		content: () => contentElement,
+		...overlayMorphOptions(local),
+	});
 	return (
 		<ContentReference.Provider
 			value={{
@@ -166,7 +172,9 @@ function Root(props: ArkDialog.RootProps) {
 				initialFocusEl={() =>
 					firstDialogFocusable(contentElement) ?? contentElement
 				}
-				{...props}
+				restoreFocus={false}
+				{...rest}
+				open={presence.shown()}
 			/>
 		</ContentReference.Provider>
 	);

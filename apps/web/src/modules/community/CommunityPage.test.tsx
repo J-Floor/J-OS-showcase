@@ -18,7 +18,7 @@ afterEach(cleanup);
 // screen) is picked up rather than frozen at mount.
 type Recorded = {
 	selection?: PersonSelection;
-	selectedId?: string;
+	requestedId?: string;
 	active?: boolean;
 };
 const applicationsProps: Recorded = {};
@@ -27,14 +27,14 @@ const guestsProps: Recorded = {};
 function reset(): void {
 	for (const recorded of [applicationsProps, membersProps, guestsProps]) {
 		recorded.selection = undefined;
-		recorded.selectedId = undefined;
+		recorded.requestedId = undefined;
 		recorded.active = undefined;
 	}
 }
 function record(into: Recorded, props: TabProps): void {
 	createEffect(() => {
 		into.selection = props.selection;
-		into.selectedId = props.selection.selectedId();
+		into.requestedId = props.selection.requestedId();
 		into.active = props.active;
 	});
 }
@@ -274,7 +274,7 @@ test("hands a ?person= deep link to the tab that person lives in", async () => {
 			"true"
 		);
 	});
-	expect(membersProps.selectedId).toBe("p1");
+	expect(membersProps.requestedId).toBe("p1");
 });
 
 test("passes no person when the URL names none", () => {
@@ -283,13 +283,13 @@ test("passes no person when the URL names none", () => {
 	// The stub must have rendered and recorded a selection, or the assertion
 	// below would pass without anything having been asked.
 	expect(membersProps.selection).toBeDefined();
-	expect(membersProps.selectedId).toBeUndefined();
+	expect(membersProps.requestedId).toBeUndefined();
 });
 
 test("gives every tab the same selection, and only the person's tab is active", async () => {
-	// The sequence that produced stacked drawers: visit a tab (panels are lazily
+	// The sequence that produced stacked sheets: visit a tab (panels are lazily
 	// mounted but never unmounted), then open somebody. All three tabs now share
-	// ONE selection; which of them shows a drawer is each tab's own check of its
+	// ONE selection; which of them shows a sheet is each tab's own check of its
 	// own rows, covered by the tab tests.
 	reset();
 	const { history } = renderAtPath("/community?tab=guests");
@@ -326,5 +326,5 @@ test("keeps the deep link on a URL whose tab param is nonsense", async () => {
 			"true"
 		);
 	});
-	expect(membersProps.selectedId).toBe("p1");
+	expect(membersProps.requestedId).toBe("p1");
 });

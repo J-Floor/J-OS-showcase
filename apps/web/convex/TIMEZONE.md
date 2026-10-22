@@ -33,7 +33,7 @@ caller-supplied `*Local` carries its own IANA zone inside the IXDTF string
 mutations throw `` `Event times must be in ${SITE_TIMEZONE}.` `` before
 deriving the cached epoch. This closes a real disagreement: without the
 guard, a board caller embedding e.g. `[America/Los_Angeles]` would have the
-table format the cached epoch in Zurich while the drawer formats the stored
+table format the cached epoch in Zurich while the sheet formats the stored
 zone verbatim — two different times for the same row.
 
 **The read path does not re-validate a stored zone.** Every writer of

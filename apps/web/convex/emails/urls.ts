@@ -67,7 +67,7 @@ export function homeUrl(): string {
 	return `${siteUrl()}/`;
 }
 
-/** The Notifications drawer (`NotificationsHost` opens it from this param). */
+/** The Notifications sheet (`NotificationsHost` opens it from this param). */
 export function manageNotificationsUrl(): string {
 	return `${siteUrl()}/?notifications=open`;
 }

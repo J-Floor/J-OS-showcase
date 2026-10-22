@@ -8,6 +8,7 @@ import {
 	SHORT_TEXT_SIZE,
 } from "../../../shared/columnSizes.ts";
 import { formatDate } from "../../../shared/time.ts";
+import { personFields } from "../fields.ts";
 
 import {
 	applicationColumns,
@@ -52,7 +53,7 @@ test("shows the first link only, and counts the rest", () => {
 	expect(screen.getAllByRole("link")).toHaveLength(1);
 	expect(screen.getByRole("link")).toHaveTextContent("GitHub");
 	expect(screen.queryByText("Site")).not.toBeInTheDocument();
-	// The count is what says there is more to see in the drawer.
+	// The count is what says there is more to see in the sheet.
 	expect(screen.getByText("+2")).toBeInTheDocument();
 });
 
@@ -96,7 +97,7 @@ test("falls back to the URL when a link has no label", () => {
  * The venture columns exist because they used to live on the Applications tab
  * only: the moment somebody was approved, the board could no longer scan for
  * who was building what, or read back why anyone joined, without opening a
- * drawer per row. They are one shared definition now — which is also what keeps
+ * sheet per row. They are one shared definition now — which is also what keeps
  * the clamp and the one-link treatment identical, and a missing clamp is not
  * cosmetic: a table row is as tall as its tallest cell.
  */
@@ -244,4 +245,35 @@ test("the roster actions columns are display columns with fixed widths", () => {
 		expect(actions).not.toHaveProperty("enableSorting");
 		expect(actions).not.toHaveProperty("enableColumnFilter");
 	}
+});
+
+test("every roster column showing a person field takes its id and header from that field", () => {
+	// The column id is the key a morph pairs the cell on; the sheet marks its
+	// value with the same field. One definition for both ends, so neither the
+	// key nor the header can drift from the other.
+	const fieldsByKey = new Map<string, { key: string; label: string }>(
+		Object.values(personFields).map((field) => [field.key, field])
+	);
+	const shown = new Set<string>();
+	for (const columns of [
+		memberColumns(),
+		guestColumns([]),
+		applicationColumns(),
+	]) {
+		for (const column of columns) {
+			const field = column.id ? fieldsByKey.get(column.id) : undefined;
+			if (!field) continue;
+			shown.add(field.key);
+			expect(column.header).toBe(field.label);
+		}
+	}
+	// Every field is some roster's column.
+	expect([...shown].sort((left, right) => left.localeCompare(right))).toEqual(
+		[...fieldsByKey.keys()].sort((left, right) => left.localeCompare(right))
+	);
+	// The column copy is the field's label: header text is unchanged.
+	expect(personFields.score).toMatchObject({ key: "score", label: "Score" });
+	expect(personFields.vertical.label).toBe("Vertical");
+	expect(personFields.createdAt.label).toBe("Date");
+	expect(personFields.ventureName.label).toBe("Venture");
 });

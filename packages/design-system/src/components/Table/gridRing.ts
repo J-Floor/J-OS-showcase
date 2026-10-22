@@ -75,8 +75,8 @@ export function createGridRing<Data extends Record<string, unknown>>(options: {
 	const [ring, setRing] = createSignal<RingState>(INITIAL_RING);
 
 	/** Whether arrows and Enter act on the ring. Not while a checkbox selection
-	 *  owns the keys, a caller has suppressed it (an open drawer, an off-screen
-	 *  tab), or a drawer pins it. */
+	 *  owns the keys, a caller has suppressed it (an open sheet, an off-screen
+	 *  tab), or a sheet pins it. */
 	function ringLive(): boolean {
 		return isLive(ring());
 	}
@@ -89,7 +89,7 @@ export function createGridRing<Data extends Record<string, unknown>>(options: {
 
 	// The ring is real-focus only. A row is stamped `data-focused` (and reported
 	// through `onFocusedRowChange`) only while focus is somewhere within this
-	// table, or while an open drawer pins it. With focus on a topbar button or a
+	// table, or while an open sheet pins it. With focus on a topbar button or a
 	// filter, nothing is stamped, so the ring, the row-scoped letter shortcuts
 	// and their chips all go quiet together instead of the ring promising keys
 	// that no longer reach it. Focus INSIDE a row (the note input `N` opens)

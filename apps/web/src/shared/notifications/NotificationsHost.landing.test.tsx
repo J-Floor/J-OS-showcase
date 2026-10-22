@@ -18,9 +18,9 @@ vi.mock("../../lib/auth.ts", () => ({ authClient: {} }));
 vi.mock("../../lib/push.ts", () => ({
 	resyncPush: () => Promise.resolve(ok()),
 }));
-vi.mock("./NotificationsDrawer.tsx", () => ({
-	NotificationsDrawer: (props: { open: boolean }) => (
-		<div data-testid="drawer" data-open={String(props.open)} />
+vi.mock("./NotificationsSheet.tsx", () => ({
+	NotificationsSheet: (props: { open: boolean }) => (
+		<div data-testid="sheet" data-open={String(props.open)} />
 	),
 }));
 
@@ -44,7 +44,7 @@ function Shell(props: ParentProps) {
 	);
 }
 
-test("/?notifications=open ends on the landing page with the drawer open", async () => {
+test("/?notifications=open ends on the landing page with the sheet open", async () => {
 	const history = createMemoryHistory();
 	history.set({ value: "/?notifications=open", replace: true });
 	render(() => (
@@ -61,14 +61,14 @@ test("/?notifications=open ends on the landing page with the drawer open", async
 	));
 	expect(await screen.findByText("tasks page")).toBeInTheDocument();
 	await waitFor(() => {
-		expect(screen.getByTestId("drawer").dataset.open).toBe("true");
+		expect(screen.getByTestId("sheet").dataset.open).toBe("true");
 	});
 	await waitFor(() => {
 		expect(history.get()).toMatch(/^\/tasks\??$/);
 	});
 });
 
-test("an unknown URL redirects too, and still ends with the drawer open", async () => {
+test("an unknown URL redirects too, and still ends with the sheet open", async () => {
 	const history = createMemoryHistory();
 	history.set({ value: "/nope?notifications=open", replace: true });
 	render(() => (
@@ -85,6 +85,6 @@ test("an unknown URL redirects too, and still ends with the drawer open", async 
 	));
 	expect(await screen.findByText("tasks page")).toBeInTheDocument();
 	await waitFor(() => {
-		expect(screen.getByTestId("drawer").dataset.open).toBe("true");
+		expect(screen.getByTestId("sheet").dataset.open).toBe("true");
 	});
 });

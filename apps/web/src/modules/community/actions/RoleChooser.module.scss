@@ -1,7 +1,7 @@
 @use "@j-os/design-system/breakpoints" as bp;
 
 /* The group hugs its options rather than spanning the container: it sits in a
-   stretch flex column, both in the dialog and in the drawer's status list, and
+   stretch flex column, both in the dialog and in the sheet's status list, and
    a full-width track puts the last option a long way from the first.
 
    zag's segment group defaults to `orientation="vertical"`, so these stack —

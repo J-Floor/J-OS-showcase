@@ -142,6 +142,18 @@ export default tseslint.config(
             "Avoid .toLowerCase() for UI text; use 'text-transform: lowercase' in the CSS module file instead. If this is purely for business logic, you can disable this rule (eslint-disable-next-line no-restricted-syntax).",
         },
       ],
+      // The design system's viewTransition.ts is the one caller (exempted in
+      // its eslint config): it caps every wait, joins concurrent transitions
+      // and falls back on browsers without the API.
+      "no-restricted-properties": [
+        "error",
+        {
+          object: "document",
+          property: "startViewTransition",
+          message:
+            "Use viewTransition (or morph) from @j-os/design-system instead of calling the View Transitions API directly.",
+        },
+      ],
       "no-implicit-coercion": ["warn", { allow: ["!!"] }],
     },
   },
@@ -319,6 +331,8 @@ export default tseslint.config(
       complexity: "off",
       "sonarjs/cognitive-complexity": "off",
       "max-params": "off",
+      // Tests fake document.startViewTransition.
+      "no-restricted-properties": "off",
     },
   },
 

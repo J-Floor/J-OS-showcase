@@ -19,7 +19,7 @@ type Kept = {
 
 /**
  * Convex drops a query's result the moment its last subscriber leaves, so a
- * page revisit or a drawer re-open waits a full round trip. The keeper holds a
+ * page revisit or a sheet re-open waits a full round trip. The keeper holds a
  * no-op subscription for a while after that, so `localQueryResult` still hits
  * and the next reader gets data on its first fetch. In memory only.
  *
@@ -115,8 +115,8 @@ export function keptCount(): number {
 	return kept.size;
 }
 
-/** A drawer's per-row query: the function and how one row's id becomes its
- *  args. The drawer reads it and a descriptor prefetches it through the same
+/** A sheet's per-row query: the function and how one row's id becomes its
+ *  args. The sheet reads it and a descriptor prefetches it through the same
  *  spec, so both land on the same keeper key. */
 export type QuerySpec<Q extends FunctionReference<"query">, Key> = {
 	query: Q;

@@ -5,6 +5,7 @@ import {
 	Kbd,
 	NumberInput,
 	Skeleton,
+	fieldColumn,
 	type JfColumnDefinition,
 } from "@j-os/design-system";
 import { useMutation } from "convex-solidjs";
@@ -32,6 +33,7 @@ import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
 import { InlineError } from "../../../shared/InlineError.tsx";
 import { formatDate } from "../../../shared/time.ts";
 import { useApplicationDecisions } from "../actions/applicationDecisions.ts";
+import { personFields } from "../fields.ts";
 import { noteAuthor } from "../noteAuthor.ts";
 
 import styles from "./applicationColumns.module.scss";
@@ -45,7 +47,7 @@ import { ventureColumns } from "./ventureColumns.tsx";
 
 /**
  * All three tabs read one table and one query shape now, so an application row
- * IS a person row — which is what let the three separate detail drawers become
+ * IS a person row — which is what let the three separate detail sheets become
  * one. Kept as an alias rather than deleted: the name still says which tab's
  * columns these are.
  */
@@ -82,7 +84,7 @@ const DISABLED_REASON: Record<string, string> = {
 /** Per-row triage buttons for the Applications tab: make guest / make member /
  * turn down / undo. The decisions themselves — including which are on offer and
  * what each confirms — live in `useApplicationDecisions`, shared with the
- * drawer's decision bar. */
+ * sheet's decision bar. */
 function ApplicationActions(props: { row: ApplicationRow }) {
 	const decide = useApplicationDecisions();
 	return (
@@ -188,7 +190,7 @@ export function ScoreCell(props: { row: ApplicationRow }) {
 					// Discrete +/- press commits now; scrubber waits for release,
 					// typing (incl. backspacing to empty, which clears the score)
 					// for blur. The table cell has no clear button — it would crowd
-					// out the value at this width; the drawer's ScoreField has one.
+					// out the value at this width; the sheet's ScoreField has one.
 					if (editSource() === "button") commit();
 				}}
 			/>
@@ -204,7 +206,7 @@ export function ScoreCell(props: { row: ApplicationRow }) {
  * Applicant notes in the roster: the most recent board note (author avatar + one
  * clamped line) above a quick composer that APPENDS a new, attributed note. The
  * single-field editor this replaced overwrote one shared string; notes are an
- * authored thread now (the drawer shows the whole thing).
+ * authored thread now (the sheet shows the whole thing).
  *
  * The `data-note-cell` marker is what the `n` shortcut looks for — it focuses
  * the composer of the ringed row so a note can be added without the mouse.
@@ -337,39 +339,43 @@ export function applicationColumns(): JfColumnDefinition<ApplicationRow>[] {
 			enumOptions: triageGroupOptions,
 			accessorFn: triageGroupOf,
 		},
-		{ accessorKey: "firstName", header: "First name", dataType: "string" },
-		{ accessorKey: "lastName", header: "Last name", dataType: "string" },
-		{
-			id: "score",
-			header: "Score",
+		fieldColumn(personFields.firstName, {
+			accessorKey: "firstName",
+			dataType: "string",
+		}),
+		fieldColumn(personFields.lastName, {
+			accessorKey: "lastName",
+			dataType: "string",
+		}),
+		fieldColumn(personFields.score, {
 			dataType: "number",
 			disableRowClick: true,
 			size: 124,
 			accessorFn: (row) => row.board?.score ?? 0,
 			cell: (info) => <ScoreCell row={info.row.original} />,
-		},
-		{
-			id: "createdAt",
-			header: "Date",
+		}),
+		fieldColumn(personFields.createdAt, {
 			dataType: "date",
 			size: "content",
 			accessorFn: (row) => row.submittedAt ?? row._creationTime,
 			cell: (info) => submissionDateText(info.row.original),
 			measureText: submissionDateText,
-		},
-		{ accessorKey: "email", header: "Email", dataType: "string" },
-		{ accessorKey: "phone", header: "Phone", dataType: "string" },
-		{
-			id: "ventureName",
-			header: "Venture",
+		}),
+		fieldColumn(personFields.email, {
+			accessorKey: "email",
+			dataType: "string",
+		}),
+		fieldColumn(personFields.phone, {
+			accessorKey: "phone",
+			dataType: "string",
+		}),
+		fieldColumn(personFields.ventureName, {
 			dataType: "string",
 			size: SHORT_TEXT_SIZE,
 			measureText: false,
 			accessorFn: (row) => row.venture?.name ?? "",
-		},
-		{
-			id: "notes",
-			header: "Notes",
+		}),
+		fieldColumn(personFields.notes, {
 			dataType: "string",
 			disableRowClick: true,
 			size: FREE_TEXT_SIZE,
@@ -380,7 +386,7 @@ export function applicationColumns(): JfColumnDefinition<ApplicationRow>[] {
 				return log.length > 0 ? log[log.length - 1].text : "";
 			},
 			cell: (info) => <NotesCell row={info.row.original} />,
-		},
+		}),
 		...ventureColumns<ApplicationRow>(),
 		{
 			id: "actions",

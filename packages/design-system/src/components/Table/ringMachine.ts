@@ -9,7 +9,7 @@
  *
  * - `inert`: a checkbox selection owns the keys, or the caller suppressed the
  *   ring with nothing pinned. No ring.
- * - `pinned`: an open drawer shows this row. Shown, not interactive.
+ * - `pinned`: an open sheet shows this row. Shown, not interactive.
  * - `auto`: live, and nobody has placed the ring. It sits on the first row
  *   (with `autofocusFirstRow`), whichever row that currently is.
  * - `user`: live, and an arrow, an `advance()` or a released pin placed it.

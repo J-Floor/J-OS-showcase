@@ -79,7 +79,7 @@ describe("auth", () => {
 		).rejects.toThrow(/Forbidden/);
 	});
 
-	it("rejects a member on the drawer list queries", async () => {
+	it("rejects a member on the sheet list queries", async () => {
 		const backend = convexTest(schema, modules);
 		const asBoard = await seedBoard(backend);
 		const asMember = await seedMember(backend);

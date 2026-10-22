@@ -21,7 +21,7 @@ afterEach(() => {
 });
 
 describe("settleRosterAction", () => {
-	it("shows a refusal for the person the drawer shows", async () => {
+	it("shows a refusal for the person the sheet shows", async () => {
 		setShownPerson("members", ALICE);
 		render(() => <RosterActionError scope="members" personId={ALICE} />);
 		const settled = await settleRosterAction(
@@ -33,7 +33,7 @@ describe("settleRosterAction", () => {
 		expect(screen.getByRole("alert")).toHaveTextContent(REFUSAL.message);
 	});
 
-	it("drops a late refusal for a person the drawer no longer shows", async () => {
+	it("drops a late refusal for a person the sheet no longer shows", async () => {
 		setShownPerson("members", BOB);
 		render(() => <RosterActionError scope="members" />);
 		const settled = await settleRosterAction(

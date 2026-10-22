@@ -18,7 +18,7 @@ function guardedSetTimeout(
 }
 globalThis.setTimeout = guardedSetTimeout as unknown as typeof setTimeout;
 
-// See packages/design-system/vitest.setup.ts: design-system tables and drawers
+// See packages/design-system/vitest.setup.ts: design-system tables and sheets
 // defer their bodies by one paint; tests assert synchronously.
 //
 // DOM suites only. The Convex suites run under edge-runtime, where importing

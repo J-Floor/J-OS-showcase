@@ -44,6 +44,13 @@
 	inline-size: var(--sidebar-expanded);
 }
 
+/* Boot: while the splash logo unfolds into this rail (the design system's
+   unfoldLogo), the transition draws the border itself, so the rail's
+   snapshot carries only its contents. Colour only: the layout stays put. */
+:root[data-vt~="brand-unfold"] .sidebar {
+	border-color: transparent;
+}
+
 .brand {
 	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
 	display: flex;

@@ -29,7 +29,7 @@ import { LOCK_SLOTS } from "../../space/lockSlots.ts";
  * `convex/lib/derive.ts` decides what is true; this decides how it reads. The
  * split is deliberate: wording changes should not need a backend deploy, and
  * the machine's rules should be reviewable without wading through prose. Both
- * the table's Flags column and the drawer's Status section render from here, so
+ * the table's Flags column and the sheet's Status section render from here, so
  * they still cannot word the same fact two different ways.
  */
 
@@ -78,7 +78,7 @@ function byWhom(actorName: string | undefined): string {
 	return actorName ?? "the board";
 }
 
-/** "Member · Active" — the drawer's one-line summary of a whole status. */
+/** "Member · Active" — the sheet's one-line summary of a whole status. */
 export function headline(status: PersonStatus): string {
 	return `${TIER_LABEL[status.tier]} · ${STAGE_LABEL[status.stage]}`;
 }
@@ -107,11 +107,11 @@ export function flagLabel(flag: StatusFlag): string {
 			return BOARD_TASK_PENDING[flag.step];
 		// "Door forced open by X" read as though the physical door were
 		// standing open, when it means X can get in regardless of the rules.
-		// The drawer solved this with a "Door access" label carrying half the
+		// The sheet solved this with a "Door access" label carrying half the
 		// sentence; a flag has no label to lean on, so "Door access" has to be
 		// part of the flag's own words. "Blocked by X" still reads fine on its
-		// own, matching the drawer's Status line; the always-on case puts the
-		// actor in parentheses instead, exactly as the drawer's "Allowed
+		// own, matching the sheet's Status line; the always-on case puts the
+		// actor in parentheses instead, exactly as the sheet's "Allowed
 		// forever (X)" does.
 		case "door_suspended":
 			return `Door access blocked by ${byWhom(flag.actorName)}`;
@@ -291,7 +291,7 @@ export function factLine(fact: StatusFact): FactLine {
 }
 
 /**
- * What happened, in words, for the drawer's History section.
+ * What happened, in words, for the sheet's History section.
  *
  * The timeline used to print the machine's own tokens — "SIGN_AGREEMENT",
  * "member.active" — which is fine in an audit table and useless to a board
@@ -325,7 +325,7 @@ const EVENT_LABEL: Record<EventType, string> = {
  * vocabulary. The audit log keeps whatever was written at the time, so the
  * pre-statechart names outlive the code that wrote them — production holds 245
  * `SUBMIT` rows and 109 `SIGN_AGREEMENT` rows, and they were rendering as raw
- * tokens in the drawer's History section.
+ * tokens in the sheet's History section.
  *
  * These are history: nothing writes them any more, and nothing should. Deleting
  * an entry here does not delete the rows it names — it just makes them

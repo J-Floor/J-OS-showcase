@@ -37,7 +37,7 @@ test("anything inside an open dialog is a typing target", () => {
 });
 
 test("a control inside a dialog that opts out with data-shortcut-surface is NOT a typing target", () => {
-	// The person drawer marks itself so its bare-letter shortcuts and nav arrows
+	// The person sheet marks itself so its bare-letter shortcuts and nav arrows
 	// fire while focus rests in it — unlike a confirm dialog, deciding the thing
 	// it shows IS its job.
 	const button = element(

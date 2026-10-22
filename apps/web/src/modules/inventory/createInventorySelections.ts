@@ -21,10 +21,10 @@ export function activeInventoryTab(tab: unknown): InventoryTabKey {
 
 type SetParams = ReturnType<typeof useSearchParams>[1];
 
-/** Closes a tab's drawer the moment its tab stops being the active one. The
+/** Closes a tab's sheet the moment its tab stops being the active one. The
  *  user-click path (Tabs' `urlParam.set`) already closes all three, but a
  *  programmatic/command-palette navigation changes `?tab=` WITHOUT going
- *  through it — so the previous tab's drawer (a still-mounted Portal) would
+ *  through it — so the previous tab's sheet (a still-mounted Portal) would
  *  otherwise float over the newly opened one. Mirrors TasksTab/ProjectsTab. */
 function closeWhenTabInactive(
 	isActive: () => boolean,
@@ -42,7 +42,7 @@ function closeWhenTabInactive(
 }
 
 /**
- * One `createEntitySelection` per tab — the single source of the drawer's
+ * One `createEntitySelection` per tab — the single source of the sheet's
  * open/close/current-row/URL state for that tab. `InventoryTab` consumes it
  * directly; there is no `requestOpenItem`/`requestNew` bridge. Item links use
  * the asset tag (not `_id`), which survives a reseed/re-import.
@@ -111,9 +111,9 @@ export function createInventorySelections(options: {
 	return {
 		itemRows,
 		newItemTag,
-		/** Opens the create drawer, prefilled with `assetTag` when given. */
+		/** Opens the create sheet, prefilled with `assetTag` when given. */
 		openNewItem: (assetTag?: string): void => {
-			// Order matters: set the prefill before opening so the drawer's
+			// Order matters: set the prefill before opening so the sheet's
 			// `key()` (which folds in `initialAssetTag`) settles in one flip.
 			setNewItemTag(assetTag);
 			itemSelection.openCreate();
@@ -121,7 +121,7 @@ export function createInventorySelections(options: {
 		itemSelection,
 		typeSelection,
 		categorySelection,
-		/** The user picked a tab: closes all three drawers. */
+		/** The user picked a tab: closes all three sheets. */
 		closeAll() {
 			itemSelection.close(false);
 			typeSelection.close(false);

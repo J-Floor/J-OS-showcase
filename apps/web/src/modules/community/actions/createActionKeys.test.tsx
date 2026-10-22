@@ -18,7 +18,7 @@ afterEach(cleanup);
 type Person = { _id: string; deniable: boolean };
 
 function setup(options: {
-	drawerPerson?: Person;
+	sheetPerson?: Person;
 	selected?: Person[];
 	focused?: Person;
 	active?: boolean;
@@ -40,7 +40,7 @@ function setup(options: {
 	function Probe() {
 		createActionKeys<Person>({
 			actions: () => [deny],
-			drawerPerson: () => options.drawerPerson,
+			sheetPerson: () => options.sheetPerson,
 			selected: () => options.selected ?? [],
 			focused: () => options.focused,
 			onAdvance: () => advanced.push(1),
@@ -57,14 +57,14 @@ function person(id: string, isDeniable = true): Person {
 	return { _id: id, deniable: isDeniable };
 }
 
-test("the open drawer's person wins over everything else", () => {
+test("the open sheet's person wins over everything else", () => {
 	const { ran } = setup({
-		drawerPerson: person("drawer"),
+		sheetPerson: person("sheet"),
 		selected: [person("checked")],
 		focused: person("focused"),
 	});
 	fireEvent.keyDown(document, { key: "d" });
-	expect(ran).toEqual(["drawer"]);
+	expect(ran).toEqual(["sheet"]);
 });
 
 test("a checked selection wins over focus", async () => {
@@ -136,9 +136,9 @@ test("a held key fires once", () => {
 	expect(ran).toEqual(["focused"]);
 });
 
-test("an ineligible drawer person stops the key dead — it does not fall through to the selection or the focused row", async () => {
+test("an ineligible sheet person stops the key dead — it does not fall through to the selection or the focused row", async () => {
 	const { ran } = setup({
-		drawerPerson: person("drawer", false),
+		sheetPerson: person("sheet", false),
 		selected: [person("checked")],
 		focused: person("focused"),
 	});

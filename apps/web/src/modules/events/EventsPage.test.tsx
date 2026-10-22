@@ -37,7 +37,7 @@ const oneEvent = [
 		startsAt: Date.parse("2026-10-01T18:00:00Z"),
 		endsAt: Date.parse("2026-10-01T20:00:00Z"),
 		// Zurich wall-clock of the epochs above (CEST, +02 on 1 Oct) — required
-		// now that events `*Local` is non-optional and the drawer reads it.
+		// now that events `*Local` is non-optional and the sheet reads it.
 		startsAtLocal: "2026-10-01T20:00:00+02:00[Europe/Zurich]",
 		endsAtLocal: "2026-10-01T22:00:00+02:00[Europe/Zurich]",
 		createdBy: "person1",
@@ -180,7 +180,7 @@ test("board sees the New event button", () => {
 	).toBeInTheDocument();
 });
 
-test("board: clicking a row opens the detail drawer", async () => {
+test("board: clicking a row opens the detail sheet", async () => {
 	renderAs("board");
 	fireEvent.click(screen.getAllByText("Open House")[0]);
 	await waitFor(() => {
@@ -188,7 +188,7 @@ test("board: clicking a row opens the detail drawer", async () => {
 	});
 });
 
-test("board: New event opens the create drawer", async () => {
+test("board: New event opens the create sheet", async () => {
 	renderAs("board");
 	fireEvent.click(screen.getByRole("button", { name: /New event/ }));
 	await waitFor(() => {
@@ -197,7 +197,7 @@ test("board: New event opens the create drawer", async () => {
 	expect(screen.getByRole("button", { name: /^Create/ })).toBeInTheDocument();
 });
 
-test("closes the drawer if the open event disappears from the live list", async () => {
+test("closes the sheet if the open event disappears from the live list", async () => {
 	renderAs("board");
 	fireEvent.click(screen.getAllByText("Open House")[0]);
 	await waitFor(() => {
@@ -209,7 +209,7 @@ test("closes the drawer if the open event disappears from the live list", async 
 	});
 });
 
-test("a ?event= deep link (command palette / shared URL) opens the drawer", async () => {
+test("a ?event= deep link (command palette / shared URL) opens the sheet", async () => {
 	const history = createMemoryHistory();
 	history.set({ value: "/events?event=event1", replace: true });
 	render(() => (
@@ -229,10 +229,10 @@ test("a ?event= deep link (command palette / shared URL) opens the drawer", asyn
 	});
 });
 
-// PR #82 regression guard: a drawer close must actually clear the `?event=`
-// deep-link param, exercised through the drawer's own Close button — not a
+// PR #82 regression guard: a sheet close must actually clear the `?event=`
+// deep-link param, exercised through the sheet's own Close button — not a
 // mocked `onOpenChange` call.
-test("board: closing the drawer via the Close button clears ?event=", async () => {
+test("board: closing the sheet via the Close button clears ?event=", async () => {
 	const history = createMemoryHistory();
 	history.set({ value: "/events", scroll: false, replace: true });
 	render(() => (

@@ -24,13 +24,13 @@ import {
  *   whose shape is not known up front. Gate it with
  *   `visible={data() === undefined}`. Convex exposes a plain
  *   undefined-then-value accessor, not a suspending resource, so do not reach
- *   for Suspense here. `Drawer.Body`'s optional `skeleton` prop is the main
+ *   for Suspense here. `Sheet.Body`'s optional `skeleton` prop is the main
  *   consumer: a surface that knows the shape of its own loaded body passes
- *   placeholder markup, and `Drawer.Body` wraps it in this mode so the
+ *   placeholder markup, and `Sheet.Body` wraps it in this mode so the
  *   shimmer matches that shape instead of generic bars.
  * - **Manual** (no `visible`, no children): one shimmer bar whose shape is
  *   known up front. It is sized by a `width` preset (a share of the parent) or
- *   by the caller's `class`. Tables and drawers use this for skeletons that
+ *   by the caller's `class`. Tables and sheets use this for skeletons that
  *   must paint BEFORE the real content is built, since measuring would mean
  *   building it.
  */

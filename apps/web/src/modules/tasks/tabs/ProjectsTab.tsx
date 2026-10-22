@@ -9,15 +9,15 @@ import {
 } from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
-import { createDrawerNav } from "../../../lib/createDrawerNav.ts";
+import { createSheetNav } from "../../../lib/createSheetNav.ts";
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
 import { createEntitySelection } from "../../../shared/entity/createEntitySelection.ts";
 import { personName } from "../data/taskHelpers.ts";
 import type { Project, Task } from "../data/tasksData.tsx";
 import { useProjects, useTasks } from "../data/tasksData.tsx";
-import { ProjectDrawer } from "../drawers/ProjectDrawer.tsx";
-import { TaskDrawer } from "../drawers/TaskDrawer.tsx";
 import { ProjectCard } from "../ProjectCard.tsx";
+import { ProjectSheet } from "../sheets/ProjectSheet.tsx";
+import { TaskSheet } from "../sheets/TaskSheet.tsx";
 import { ProjectTimeline } from "../timeline/ProjectTimeline.tsx";
 import { undatedProjects, type ViewMode } from "../timeline/timeline.ts";
 
@@ -36,11 +36,33 @@ type ProjectsTabProps = {
 	onNeedTab: (slug: string) => void;
 };
 
+/** The date range a create sheet opens with, and what it opens out of when
+ *  nothing was clicked (a range dragged on the timeline). */
+function createRangeDraft() {
+	const [start, setStart] = createSignal<number | undefined>();
+	const [end, setEnd] = createSignal<number | undefined>();
+	const [from, setFrom] = createSignal<HTMLElement | null>(null);
+	return {
+		start,
+		end,
+		from,
+		set(
+			startMs: number | undefined,
+			endMs: number | undefined,
+			source: HTMLElement | null
+		): void {
+			setStart(startMs);
+			setEnd(endMs);
+			setFrom(source);
+		},
+	};
+}
+
 /**
- * The project drawer's selection, with deep-linking: opening a project writes
+ * The project sheet's selection, with deep-linking: opening a project writes
  * `?project=<id>`; an inbound `?project=<id>` opens it (switching to this tab
  * first via `onNeedTab` if needed); closing clears the param. Also the date
- * range a create drawer opens with, and `onLeave` for what to drop when the
+ * range a create sheet opens with, and `onLeave` for what to drop when the
  * tab stops being the one on screen.
  */
 function createProjectSelection(options: {
@@ -60,8 +82,7 @@ function createProjectSelection(options: {
 			props.onNeedTab(slug);
 		},
 	});
-	const [createStart, setCreateStart] = createSignal<number | undefined>();
-	const [createEnd, setCreateEnd] = createSignal<number | undefined>();
+	const draft = createRangeDraft();
 
 	// Leaving this tab abandons whatever it had open — see the matching effect
 	// in TasksTab for why this (not the selection's own `close`) is what clears
@@ -81,21 +102,24 @@ function createProjectSelection(options: {
 		)
 	);
 
-	const projNav = createDrawerNav({
+	const projNav = createSheetNav({
 		items: all,
-		currentId: projSel.selectedId,
+		currentId: projSel.requestedId,
 		onSelect: (project) => {
 			projSel.openRow(project);
 		},
 	});
 
-	function openNewWithRange(startMs?: number, endMs?: number) {
-		setCreateStart(startMs);
-		setCreateEnd(endMs);
+	function openNewWithRange(
+		startMs?: number,
+		endMs?: number,
+		from: HTMLElement | null = null
+	) {
+		draft.set(startMs, endMs, from);
 		projSel.openCreate();
 	}
 
-	// Open the create drawer when the tab-bar "+ Project" button fires.
+	// Open the create sheet when the tab-bar "+ Project" button fires.
 	createEffect(
 		on(
 			() => props.requestNew(),
@@ -108,22 +132,27 @@ function createProjectSelection(options: {
 
 	return {
 		projSel,
-		drawerNav: {
+		sheetNav: {
 			hasPrev: projNav.hasPrev,
 			hasNext: projNav.hasNext,
 			onPrev: projNav.prev,
 			onNext: projNav.next,
 		},
-		createStart,
-		createEnd,
+		createStart: draft.start,
+		createEnd: draft.end,
+		createFrom: draft.from,
 		// The timeline hands back an id, not a row (it doesn't hold row objects).
 		openProject: (id: Id<"projects">): void => {
 			const project = all().find((proj) => proj._id === id);
 			if (project) projSel.openRow(project);
 		},
 		// Drag across the timeline's "New" row → create a project over that range.
-		openNewRange: (startMs: number, endMs: number): void => {
-			openNewWithRange(startMs, endMs);
+		openNewRange: (
+			startMs: number,
+			endMs: number,
+			from: HTMLElement | null
+		): void => {
+			openNewWithRange(startMs, endMs, from);
 		},
 	};
 }
@@ -142,8 +171,10 @@ function UndatedProjects(props: {
 			<ul>
 				<For each={props.projects}>
 					{(project) => (
-						<li class={local.undatedItem}>
+						<li>
 							<ProjectCard
+								isBoxed
+								id={project._id}
 								name={project.name}
 								leaderName={props.leaderName(project)}
 								taskCount={props.taskCount(project)}
@@ -159,7 +190,7 @@ function UndatedProjects(props: {
 	);
 }
 
-/** A task opened from inside a project's drawer — a nested view, not the
+/** A task opened from inside a project's sheet — a nested view, not the
  *  tab's own URL-linked selection (that stays on the Tasks tab's `?task=`). */
 function createNestedTask(options: { tasks: Accessor<Task[] | undefined> }) {
 	const [taskOpen, setTaskOpen] = createSignal(false);
@@ -193,7 +224,7 @@ export function ProjectsTab(props: ProjectsTabProps): JSX.Element {
 	const selection = createProjectSelection({
 		props,
 		rows: projects.data,
-		// Also closes the nested task-from-a-project drawer, local state
+		// Also closes the nested task-from-a-project sheet, local state
 		// outside the selection entirely.
 		onLeave: () => {
 			nestedTask.setTaskOpen(false);
@@ -236,7 +267,7 @@ export function ProjectsTab(props: ProjectsTabProps): JSX.Element {
 					}}
 				/>
 			</Show>
-			<ProjectDrawer
+			<ProjectSheet
 				open={projSel.open()}
 				onOpenChange={(isOpen) => {
 					if (!isOpen) projSel.close();
@@ -245,18 +276,19 @@ export function ProjectsTab(props: ProjectsTabProps): JSX.Element {
 				loading={projSel.loading()}
 				initialStart={selection.createStart()}
 				initialEnd={selection.createEnd()}
+				morphFrom={selection.createFrom}
 				people={boardLevel.data() ?? []}
 				projects={all()}
 				tasks={tasks.data()}
 				onTaskClick={(task) => {
-					// Transitioning to the nested task drawer, not returning to
+					// Transitioning to the nested task sheet, not returning to
 					// the list — clear in place, don't pop history.
 					projSel.close(false);
 					nestedTask.open(task);
 				}}
-				nav={selection.drawerNav}
+				nav={selection.sheetNav}
 			/>
-			<TaskDrawer
+			<TaskSheet
 				open={nestedTask.taskOpen()}
 				onOpenChange={nestedTask.setTaskOpen}
 				task={nestedTask.editingTask()}

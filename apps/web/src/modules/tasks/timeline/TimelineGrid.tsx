@@ -1,4 +1,4 @@
-import { Icon, IconButton } from "@j-os/design-system";
+import { Icon, IconButton, Morph, morphTitle } from "@j-os/design-system";
 import { For, Show, type Accessor } from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -36,6 +36,7 @@ export function TimelineLabels(
 				{(bar) => (
 					<div class={styles.labelRow}>
 						<ProjectCard
+							id={bar.id}
 							name={bar.name}
 							leaderName={props.leaderName(bar)}
 							taskCount={props.taskCount(bar)}
@@ -159,6 +160,47 @@ function TimelineGridLines(props: TimelineProps) {
 	);
 }
 
+/** One project's bar. It shows the project: a click opens its sheet out of
+ *  the bar, and the sheet closes back into it. */
+function TimelineBarView(
+	props: TimelineProps & {
+		bar: TimelineBar;
+		barDrag: ReturnType<typeof createBarDrag>;
+	}
+) {
+	return (
+		<Morph
+			of={props.bar.id}
+			asChild={(morph) => (
+				<div
+					{...morph()}
+					class={styles.bar}
+					style={{
+						left: px(
+							props.barDrag.barLeft(props.bar, props.timeline())
+						),
+						width: px(
+							props.barDrag.barWidth(props.bar, props.timeline())
+						),
+					}}
+					title={props.bar.name}
+					onPointerDown={(event) => {
+						props.barDrag.barPointerDown(event, props.bar);
+					}}
+					onPointerMove={props.barDrag.barPointerMove}
+					onPointerUp={props.barDrag.barPointerUp}
+				>
+					<span class={styles.handle} data-handle="start" />
+					<span class={styles.barLabel} {...morphTitle}>
+						{props.bar.name}
+					</span>
+					<span class={styles.handle} data-handle="end" />
+				</div>
+			)}
+		/>
+	);
+}
+
 /** The bars area: gridlines, a draggable bar per project, and the "New"
  *  row you drag across to create a project. */
 export function TimelineBody(
@@ -176,27 +218,11 @@ export function TimelineBody(
 			<For each={timeline().bars}>
 				{(bar) => (
 					<div class={styles.row}>
-						<div
-							class={styles.bar}
-							style={{
-								left: px(
-									props.barDrag.barLeft(bar, timeline())
-								),
-								width: px(
-									props.barDrag.barWidth(bar, timeline())
-								),
-							}}
-							title={bar.name}
-							onPointerDown={(event) => {
-								props.barDrag.barPointerDown(event, bar);
-							}}
-							onPointerMove={props.barDrag.barPointerMove}
-							onPointerUp={props.barDrag.barPointerUp}
-						>
-							<span class={styles.handle} data-handle="start" />
-							<span class={styles.barLabel}>{bar.name}</span>
-							<span class={styles.handle} data-handle="end" />
-						</div>
+						<TimelineBarView
+							bar={bar}
+							timeline={props.timeline}
+							barDrag={props.barDrag}
+						/>
 					</div>
 				)}
 			</For>
@@ -215,6 +241,7 @@ export function TimelineBody(
 				<Show when={props.newDrag.newRange()}>
 					{(range) => (
 						<div
+							ref={props.newDrag.setPreview}
 							class={styles.newPreview}
 							style={{
 								left: px(

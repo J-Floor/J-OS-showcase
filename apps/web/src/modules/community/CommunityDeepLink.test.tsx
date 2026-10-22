@@ -105,7 +105,7 @@ function applicant(id: string, firstName: string) {
 }
 
 /** Two unscored applicants, so the pipeline has a row to open and a neighbour
- *  for the drawer's Next arrow to move to. */
+ *  for the sheet's Next arrow to move to. */
 const applicantRows = [
 	applicant("a1", "Zed"),
 	applicant("a2", "Yan"),
@@ -202,7 +202,7 @@ function renderAtPath(path: string) {
 	return { ...result, url: () => history.get() };
 }
 
-test("a ?person= link opens that person's drawer, on the tab they live in", async () => {
+test("a ?person= link opens that person's sheet, on the tab they live in", async () => {
 	// The link names only the person. Which tab they belong to is a fact about
 	// them, read off the rosters here — global search used to guess it and put
 	// the guess in the URL, where nothing could correct it.
@@ -210,11 +210,11 @@ test("a ?person= link opens that person's drawer, on the tab they live in", asyn
 	await waitFor(() => {
 		expect(screen.getByText("alan@example.com")).toBeInTheDocument();
 	});
-	// And it got there by actually switching tabs, not by opening a drawer over
+	// And it got there by actually switching tabs, not by opening a sheet over
 	// the wrong table. `activeTab()` resolves this straight from the rosters on
 	// the very first render (so Members, not Applications, is what mounts), but
 	// the deep-link effect still pins `?tab=members` into the URL a tick later
-	// — otherwise closing the drawer clears `?person=` and, with no `?tab=` of
+	// — otherwise closing the sheet clears `?person=` and, with no `?tab=` of
 	// its own, the board would fall back to Applications under it.
 	expect(url()).toContain("tab=members");
 });
@@ -229,7 +229,7 @@ test("a link naming the wrong tab still opens on the right one", async () => {
 	});
 });
 
-test("drops a ?person= that names nobody instead of opening an empty drawer", async () => {
+test("drops a ?person= that names nobody instead of opening an empty sheet", async () => {
 	const { url } = renderAtPath("/community?person=deleted");
 	// Every roster has answered and no row has that id, so the link is dead.
 	// Leaving it in the URL would re-fire on every reload.
@@ -245,7 +245,7 @@ test("picking a different tab abandons the link instead of snapping back", async
 		expect(screen.getByText("alan@example.com")).toBeInTheDocument();
 	});
 
-	// A tab change is a change of subject: the drawer closes and the link goes
+	// A tab change is a change of subject: the sheet closes and the link goes
 	// with it. Following the link is two steps — switch tab, then open — and a
 	// click landing between them used to let the second step finish and drag
 	// the board straight back to Members.
@@ -323,7 +323,7 @@ function renderApp(start: string) {
 test("Back from a link followed in from another page lands on the person's tab", async () => {
 	// Under the window-bound Router, so the list entry the selection puts behind
 	// a cold link is really written to `window.history`. That entry has to carry
-	// the tab the page moved the person to, or Back closes the drawer onto
+	// the tab the page moved the person to, or Back closes the sheet onto
 	// Applications instead of the roster they were found in.
 	window.history.replaceState(null, "", "/tasks");
 	// Code-split exactly as `communityModule` does: the page mounts after the
@@ -366,7 +366,7 @@ test("Back from a link followed in from another page lands on the person's tab",
 	);
 });
 
-test("opens the drawer when the link is followed from another page", async () => {
+test("opens the sheet when the link is followed from another page", async () => {
 	const { url } = renderApp("/tasks");
 	fireEvent.click(screen.getByRole("button", { name: "go" }));
 	await waitFor(() => {
@@ -377,7 +377,7 @@ test("opens the drawer when the link is followed from another page", async () =>
 	});
 });
 
-test("opens the drawer when the link is followed from inside the console", async () => {
+test("opens the sheet when the link is followed from inside the console", async () => {
 	// No page mount this time: same route, new query string — and the tab the
 	// board is looking at is not the one the person lives on.
 	renderApp("/community?tab=guests");
@@ -415,7 +415,7 @@ test("?person= while rosters load shows a skeleton and mounts no panel", async (
 
 	// The cold-load-a-shared-link path: once the rosters answer, the skeleton
 	// gives way to the Members panel — not a skeleton-then-Applications
-	// flicker — and the drawer opens on it.
+	// flicker — and the sheet opens on it.
 	shared.setLoaded(true);
 	await waitFor(() => {
 		expect(screen.getByText("alan@example.com")).toBeInTheDocument();
@@ -434,9 +434,9 @@ test("?person= while rosters load shows a skeleton and mounts no panel", async (
 	expect(document.querySelector('[id$="content-applications"]')).toBeNull();
 });
 
-test("Back closes a drawer opened from the roster and stays on the tab", async () => {
-	// The drawer owns the history entry its open pushed, so Back pops it and the
-	// drawer closes — it used to leave the page, because each tab kept its own
+test("Back closes a sheet opened from the roster and stays on the tab", async () => {
+	// The sheet owns the history entry its open pushed, so Back pops it and the
+	// sheet closes — it used to leave the page, because each tab kept its own
 	// copy of the selection and none of them owned an entry.
 	const { history, url } = renderApp("/community?tab=members");
 	fireEvent.click(await screen.findByText("Alan"));
@@ -455,7 +455,7 @@ test("Back closes a drawer opened from the roster and stays on the tab", async (
 	expect(url()).not.toContain("person=");
 });
 
-test("the same person opens again after the drawer is closed", async () => {
+test("the same person opens again after the sheet is closed", async () => {
 	renderApp("/community?tab=guests");
 	fireEvent.click(screen.getByRole("button", { name: "go" }));
 	await waitFor(() => {
@@ -476,10 +476,10 @@ test("the same person opens again after the drawer is closed", async () => {
 	expect(screen.getByText("alan@example.com")).toBeInTheDocument();
 });
 
-test("opening a row on a tab-less /community keeps ?person= and the drawer closes", async () => {
+test("opening a row on a tab-less /community keeps ?person= and the sheet closes", async () => {
 	// The default sidebar link carries no `?tab=`. Opening a row used to race
 	// the tab-follow write against the router's own `?person=` write: the tab
-	// write merged against the stale URL, dropped the person, and the drawer
+	// write merged against the stale URL, dropped the person, and the sheet
 	// stayed open with nothing in the URL to close.
 	shared.applicants = true;
 	const { url } = renderAtPath("/community");
@@ -508,7 +508,7 @@ test("opening a row on a tab-less /community keeps ?person= and the drawer close
 	);
 });
 
-test("Next in the drawer does not stack history: one Back closes it", async () => {
+test("Next in the sheet does not stack history: one Back closes it", async () => {
 	shared.applicants = true;
 	const { history, url } = renderApp("/community?tab=applications");
 	fireEvent.click(await screen.findByText("Zed"));
@@ -567,7 +567,7 @@ describe("Enter on the roster", () => {
 		expect(screen.getByText("alan@example.com")).toBeInTheDocument();
 	});
 
-	test("reopens the same person after the drawer is closed", async () => {
+	test("reopens the same person after the sheet is closed", async () => {
 		renderAtPath("/community?tab=members");
 		await waitFor(() => {
 			expect(focusedGrid()).not.toBeNull();
@@ -577,11 +577,11 @@ describe("Enter on the roster", () => {
 			expect(openPanel()).not.toBeNull();
 		});
 
-		fireEvent.click(screen.getByRole("button", { name: /close/i }));
+		fireEvent.click(await screen.findByRole("button", { name: /close/i }));
 		await waitFor(() => {
 			expect(openPanel()).toBeNull();
 		});
-		// Closing the drawer hands focus back to the table, which keeps its ring.
+		// Closing the sheet hands focus back to the table, which keeps its ring.
 		await waitFor(() => {
 			expect(focusedGrid()).not.toBeNull();
 		});

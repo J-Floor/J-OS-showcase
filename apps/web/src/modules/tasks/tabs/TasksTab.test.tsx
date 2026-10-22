@@ -23,7 +23,7 @@ vi.mock("../kanban/KanbanBoard.tsx", () => ({
 		return null;
 	},
 }));
-vi.mock("../drawers/TaskDrawer.tsx", () => ({ TaskDrawer: () => null }));
+vi.mock("../sheets/TaskSheet.tsx", () => ({ TaskSheet: () => null }));
 
 import { TasksTab } from "./TasksTab.tsx";
 

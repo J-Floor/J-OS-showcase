@@ -10,7 +10,7 @@ import type { ActionDescriptor, RosterActionOutcome } from "./shortcuts.ts";
 import { useTriage } from "./triage.ts";
 
 /**
- * What the board can do to a member from the roster or the drawer.
+ * What the board can do to a member from the roster or the sheet.
  *
  * `can` is the single gating rule: the row button, the batch bar and the key
  * binding all ask it, so a kicked-out member cannot be kicked out again from

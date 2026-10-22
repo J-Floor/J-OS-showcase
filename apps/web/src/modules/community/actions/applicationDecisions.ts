@@ -78,7 +78,7 @@ function describeActions(
  * The four decisions the board can take on an application, and whether each is
  * available.
  *
- * Shared by the roster row's icon buttons and the drawer's decision bar. The
+ * Shared by the roster row's icon buttons and the sheet's decision bar. The
  * confirms, the wording of them, and the fact that "Make guest" goes through
  * the expiry-and-door dialog rather than approving straight away all live here
  * — two copies would let the same button mean two different things depending on

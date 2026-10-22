@@ -23,8 +23,8 @@ export function useItems() {
 }
 
 /**
- * The type's items, for the item-type drawer's items accordion. Subscribes
- * only while `typeId()` is defined — pass `undefined` (drawer closed, or a
+ * The type's items, for the item-type sheet's items accordion. Subscribes
+ * only while `typeId()` is defined — pass `undefined` (sheet closed, or a
  * create-mode/unsaved type) and this skips both the initial fetch and the
  * live subscription rather than issuing a query with a throwaway id.
  */
@@ -40,7 +40,7 @@ export function useItemsByType(typeId: () => Id<"itemTypes"> | undefined) {
 }
 
 /**
- * The category's item types, for the category drawer's item-types
+ * The category's item types, for the category sheet's item-types
  * accordion. Same lazy-subscription contract as {@link useItemsByType}.
  */
 export function useItemTypesByCategory(

@@ -59,18 +59,18 @@ type Bag = {
 	search?: () => string;
 };
 
-function drawerText(
-	drawer: {
+function sheetText(
+	sheet: {
 		open: () => boolean;
 		row: () => Row | undefined;
 		initialAssetTag: () => string | undefined;
 	},
-	selectedId: string | undefined
+	requestedId: string | undefined
 ): string {
-	if (!drawer.open()) return "closed";
-	return selectedId !== undefined && drawer.row() === undefined
-		? `drawer:loading:${selectedId}`
-		: `drawer:${drawer.row()?._id ?? "new"}:${drawer.initialAssetTag() ?? ""}`;
+	if (!sheet.open()) return "closed";
+	return requestedId !== undefined && sheet.row() === undefined
+		? `sheet:loading:${requestedId}`
+		: `sheet:${sheet.row()?._id ?? "new"}:${sheet.initialAssetTag() ?? ""}`;
 }
 
 // Renders InventoryTab driven by a REAL createEntitySelection (not a signal
@@ -88,7 +88,7 @@ function renderHarness(options?: {
 		selectedCount: number;
 		selectedRows: Row[];
 	}) => JSX.Element;
-	renderDrawer?: (args: {
+	renderSheet?: (args: {
 		open: () => boolean;
 		onOpenChange: (isOpen: boolean) => void;
 		row: () => Row | undefined;
@@ -117,10 +117,10 @@ function renderHarness(options?: {
 				newItemAssetTag={options?.newItemAssetTag}
 				enableRowSelection={options?.enableRowSelection}
 				batchActions={options?.batchActions}
-				renderDrawer={
-					options?.renderDrawer ??
-					((drawer) => (
-						<div>{drawerText(drawer, sel.selectedId())}</div>
+				renderSheet={
+					options?.renderSheet ??
+					((sheet) => (
+						<div>{sheetText(sheet, sel.requestedId())}</div>
 					))
 				}
 			/>
@@ -136,7 +136,7 @@ function renderHarness(options?: {
 	return bag;
 }
 
-test("openCreate with a prefill tag opens the new-item drawer prefilled", async () => {
+test("openCreate with a prefill tag opens the new-item sheet prefilled", async () => {
 	const [tag, setTag] = createSignal<string>();
 	const bag = renderHarness({ newItemAssetTag: tag });
 	expect(screen.getByText("closed")).toBeInTheDocument();
@@ -144,10 +144,10 @@ test("openCreate with a prefill tag opens the new-item drawer prefilled", async 
 	setTag("A00001");
 	bag.sel?.openCreate();
 
-	expect(await screen.findByText("drawer:new:A00001")).toBeInTheDocument();
+	expect(await screen.findByText("sheet:new:A00001")).toBeInTheDocument();
 });
 
-test("openRow opens the row's drawer with no prefill tag", async () => {
+test("openRow opens the row's sheet with no prefill tag", async () => {
 	const [tag] = createSignal<string>("A00001");
 	const bag = renderHarness({
 		rows: () => [{ _id: "i1", name: "Chair" }],
@@ -157,24 +157,24 @@ test("openRow opens the row's drawer with no prefill tag", async () => {
 	bag.sel?.openRow({ _id: "i1", name: "Chair" });
 
 	// Editing an existing row must ignore the create-mode prefill tag.
-	expect(await screen.findByText("drawer:i1:")).toBeInTheDocument();
+	expect(await screen.findByText("sheet:i1:")).toBeInTheDocument();
 });
 
-test("a deep-link ?item= opens the drawer instantly, showing loading (not the create form) until the row arrives", async () => {
+test("a deep-link ?item= opens the sheet instantly, showing loading (not the create form) until the row arrives", async () => {
 	const [rows, setRows] = createSignal<Row[] | undefined>(undefined);
 	const history = createMemoryHistory();
 	history.set({ value: "/inventory?item=i1", replace: true });
 	const bag = renderHarness({ rows, history });
 
-	// Instant-open: the drawer opens for the row before `rows` resolves —
+	// Instant-open: the sheet opens for the row before `rows` resolves —
 	// never "closed", and never the create form (which would show
-	// "drawer:new:").
-	expect(await screen.findByText("drawer:loading:i1")).toBeInTheDocument();
+	// "sheet:new:").
+	expect(await screen.findByText("sheet:loading:i1")).toBeInTheDocument();
 	expect(bag.sel?.open()).toBe(true);
 	expect(bag.sel?.selected()).toBeUndefined();
 
 	setRows([{ _id: "i1", name: "Chair" }]);
-	expect(await screen.findByText("drawer:i1:")).toBeInTheDocument();
+	expect(await screen.findByText("sheet:i1:")).toBeInTheDocument();
 	expect(bag.sel?.open()).toBe(true);
 	expect(bag.sel?.selected()).toEqual({ _id: "i1", name: "Chair" });
 });
@@ -187,10 +187,10 @@ test("a deep-link for a nonexistent id closes once the row's absence is confirme
 
 	// Still opens optimistically while the list is loading.
 	expect(
-		await screen.findByText("drawer:loading:missing")
+		await screen.findByText("sheet:loading:missing")
 	).toBeInTheDocument();
 
-	// Once the list loads WITHOUT the id, it's a dead link — the drawer must
+	// Once the list loads WITHOUT the id, it's a dead link — the sheet must
 	// close rather than fall back to showing the create form.
 	setRows([{ _id: "i1", name: "Chair" }]);
 	await waitFor(() => {
@@ -199,13 +199,13 @@ test("a deep-link for a nonexistent id closes once the row's absence is confirme
 	expect(bag.sel?.open()).toBe(false);
 });
 
-test("keeps the same drawer dialog node across a data() refetch while open", async () => {
+test("keeps the same sheet dialog node across a data() refetch while open", async () => {
 	const [rows, setRows] = createSignal<Row[]>([{ _id: "i1", name: "Chair" }]);
 	renderHarness({
 		rows,
-		renderDrawer: (drawer) => (
-			<Show when={drawer.open()}>
-				<div role="dialog">{drawer.row()?.name ?? "new"}</div>
+		renderSheet: (sheet) => (
+			<Show when={sheet.open()}>
+				<div role="dialog">{sheet.row()?.name ?? "new"}</div>
 			</Show>
 		),
 	}).sel?.openRow({ _id: "i1", name: "Chair" });
@@ -219,29 +219,29 @@ test("keeps the same drawer dialog node across a data() refetch while open", asy
 
 // C1 regression: the old bridge (`itemOpenCommand()` derived from `selected()`,
 // fed to a `requestOpenItem` effect) re-fired on every rows() refetch because
-// closing never cleared the selection — so the drawer reopened by itself after
-// you closed it and any item was edited. The drawer is now driven straight off
-// the selection, and close() clears both selectedId and the URL param.
-test("closing the drawer keeps it closed across a later refetch (no self-reopen)", async () => {
+// closing never cleared the selection — so the sheet reopened by itself after
+// you closed it and any item was edited. The sheet is now driven straight off
+// the selection, and close() clears both requestedId and the URL param.
+test("closing the sheet keeps it closed across a later refetch (no self-reopen)", async () => {
 	const [rows, setRows] = createSignal<Row[]>([{ _id: "i1", name: "Chair" }]);
-	// A base page to be on: opening a drawer pushes a history entry and closing
+	// A base page to be on: opening a sheet pushes a history entry and closing
 	// pops it (as in the real app, where the tab is always reached from a page).
 	const history = createMemoryHistory();
 	history.set({ value: "/inventory", replace: true });
 	const bag = renderHarness({
 		rows,
 		history,
-		renderDrawer: (drawer) => (
+		renderSheet: (sheet) => (
 			<div>
-				<Show when={drawer.open()}>
+				<Show when={sheet.open()}>
 					<span role="dialog">open</span>
 				</Show>
 				<button
 					onClick={() => {
-						drawer.onOpenChange(false);
+						sheet.onOpenChange(false);
 					}}
 				>
-					close-drawer
+					close-sheet
 				</button>
 			</div>
 		),
@@ -254,8 +254,8 @@ test("closing the drawer keeps it closed across a later refetch (no self-reopen)
 		expect(bag.search?.()).toContain("item=i1");
 	});
 
-	// Close exactly the way the real drawer does — via onOpenChange(false).
-	fireEvent.click(screen.getByRole("button", { name: "close-drawer" }));
+	// Close exactly the way the real sheet does — via onOpenChange(false).
+	fireEvent.click(screen.getByRole("button", { name: "close-sheet" }));
 	await waitFor(() => {
 		expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 	});
@@ -266,7 +266,7 @@ test("closing the drawer keeps it closed across a later refetch (no self-reopen)
 		expect(bag.search?.()).not.toContain("item=");
 	});
 
-	// A refetch (someone edits an item) must NOT resurrect the drawer.
+	// A refetch (someone edits an item) must NOT resurrect the sheet.
 	setRows([{ _id: "i1", name: "Chair v2" }]);
 	await new Promise((resolve) => setTimeout(resolve, 0));
 	expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -313,7 +313,7 @@ test("header select-all checks every visible row and shows the batch bar", async
 	}
 });
 
-test("clicking a row checkbox does not open the drawer", async () => {
+test("clicking a row checkbox does not open the sheet", async () => {
 	renderHarness({
 		rows: () => THREE_ROWS,
 		enableRowSelection: true,
@@ -342,7 +342,7 @@ test("shows a table skeleton while data is undefined, real rows once loaded", as
 	expect(document.querySelectorAll("[data-skeleton-row]")).toHaveLength(0);
 });
 
-test("hovering an item-type row prefetches its items with the drawer's args", () => {
+test("hovering an item-type row prefetches its items with the sheet's args", () => {
 	prefetch.mockClear();
 	renderHarness({
 		rows: () => [{ _id: "t1", name: "Drill" }],

@@ -1,0 +1,507 @@
+/* Every View Transition rule in the app. The pseudo-elements below only match
+   on the document root, so CSS modules cannot scope them. Names are fixed
+   (`jf-page`, `jf-tab`, `jf-morph`, `jf-morph-scrim`, `jf-morph-source`,
+   `jf-morph-title`, `jf-morph-part-0` to `-7`, `jf-sheet-body`,
+   `jf-brand-frame`, `jf-brand-mark`); `data-vt` on <html> is a space-separated list of kinds
+   for the running transition. See
+   docs/superpowers/specs/2026-10-22-motion-view-transitions-design.md. */
+
+$slide-distance: 24px;
+$scale-from: 0.9;
+$contents-hidden-until: 66%;
+$fill-switch: 30%;
+
+/* One per name in PART_NAMES (viewTransition.ts); morph.test.ts checks. */
+$part-flights: 8;
+$page-scale-from: 0.92;
+$page-faded-out-by: 35%;
+
+/* A morph's groups, bottom to top: the overlay's scrim, the trigger's
+   content fading where it is,
+   the surface growing over it, the text flying on top. Explicit, or they
+   stack in the tree order of their named elements. */
+$layer-scrim: 0;
+$layer-source: 1;
+$layer-surface: 2;
+$layer-text: 3;
+
+/* The snapshots of `$name` keep their natural size, pinned to the box's
+   top-left and clipped to it, so the box can grow or shrink around them
+   without stretching them. `$images`: which of `old`, `new`. */
+@mixin pinned-snapshots($name, $images...) {
+	&::view-transition-image-pair(#{$name}) {
+		overflow: clip;
+	}
+
+	@each $image in $images {
+		&::view-transition-#{$image}(#{$name}) {
+			inline-size: auto;
+			block-size: auto;
+			object-fit: none;
+			object-position: left top;
+		}
+	}
+}
+
+/* Only named elements animate. Without this the whole page crossfades, and
+   the sidebar and topbar shimmer on every change. */
+:root[data-vt] {
+	view-transition-name: none;
+}
+
+/* The overlay holding the snapshots must not take the pointer: the page under
+   it keeps its hover state (the sidebar rail would collapse on a `mouseleave`
+   mid page change) and keeps taking clicks. */
+::view-transition {
+	pointer-events: none;
+}
+
+/* A morph source while its overlay is open: the overlay IS that element now. */
+[data-morph-hidden] {
+	visibility: hidden;
+}
+
+/* An open's source, and its cells that paint their own fill, for the length
+   of the morph (morph.ts, MORPH_PINNED): Chrome drops the page's hover state
+   as a View Transition starts, so the hovered row would lose its fill in the
+   live frame and in the old snapshot, a blink before the morph. The colours
+   are the ones it had at the start, value-only vars it carries inline. Above
+   every component rule (a row's selected fill, a sticky cell's base fill):
+   it freezes what was on screen. */
+[data-morph-pinned] {
+	/* stylelint-disable declaration-no-important -- a freeze of the painted look for one transition; it must beat each component's own state rules, which this global sheet cannot name */
+	background-color: var(--jf-morph-pin-bg) !important;
+	border-color: var(--jf-morph-pin-border) !important;
+	/* stylelint-enable declaration-no-important */
+}
+
+/* A container end without its own surface, for the snapshot it is
+   `jf-morph-source` in (morph.ts, MORPH_STRIPPED), and its cells that paint
+   their own fill: the ghost, exactly over it, carries the surface into the
+   morph, so the snapshot holds only the content that fades where it is.
+   After the pin, which it beats. */
+[data-morph-stripped] {
+	/* stylelint-disable declaration-no-important -- the surface leaves with the ghost for one transition; it must beat each component's own state rules and the pin */
+	background: none !important;
+	border-color: transparent !important;
+	box-shadow: none !important;
+	outline: none !important;
+	/* stylelint-enable declaration-no-important */
+}
+
+/* The surface leaves, and comes back, at once: a component's own transition
+   (a button's fill) would fade it while the ghost already carries it, so the
+   trigger flashed empty, then filled again. `data-morph-settling` holds the
+   transitions off while the strip goes (morph.ts). */
+[data-morph-stripped],
+[data-morph-settling] {
+	/* stylelint-disable-next-line declaration-no-important -- beats each component's own transition for one style change */
+	transition: none !important;
+}
+
+/* The stand-in a surface morph puts over its trigger's border box (morph.ts,
+   MORPH_GHOST): named in a snapshot, it gives the morph the trigger's box.
+   Geometry and surface are value-only vars it carries inline. */
+[data-morph-ghost] {
+	--jf-ghost-ring: inset 0 0 0 var(--jf-ghost-border-width)
+		var(--jf-ghost-border-color);
+
+	position: fixed;
+	inset-block-start: var(--jf-ghost-top);
+	inset-inline-start: var(--jf-ghost-left);
+	inline-size: var(--jf-ghost-width);
+	block-size: var(--jf-ghost-height);
+	pointer-events: none;
+	background-color: var(--jf-ghost-background);
+	border-radius: var(--jf-ghost-radius);
+	box-shadow: var(--jf-ghost-ring);
+}
+
+/* The morphing card takes the pointer (the rest of the overlay does not): a
+   second click on a closing sheet's X lands on it, which does nothing,
+   instead of falling through to the row beneath and opening another record. */
+::view-transition-group(jf-morph) {
+	z-index: $layer-surface;
+	pointer-events: auto;
+}
+
+/* Morph, and the boot unfold (`jf-brand-frame` is the logo's frame, then
+   the sidebar rail; `jf-brand-mark` is the logo's J, then the sidebar
+   monogram). The groups animate the boxes; boxes and snapshots share one
+   duration and curve, or the content runs ahead of its box, and the J lands
+   as the rail settles. */
+::view-transition-group(jf-morph),
+::view-transition-group(jf-brand-frame),
+::view-transition-old(jf-brand-frame),
+::view-transition-new(jf-brand-frame),
+::view-transition-group(jf-brand-mark),
+::view-transition-old(jf-brand-mark),
+::view-transition-new(jf-brand-mark) {
+	animation-duration: var(--jf-animation-duration-morph);
+	animation-timing-function: var(--jf-animation-ease-standard);
+}
+
+/* Box look (the default): a row or a button opens up into the overlay
+   instead of stretching. The source fades out fast; the overlay fades in
+   with the box. */
+:root:not([data-vt~="morph-scale"]) {
+	@include pinned-snapshots(jf-morph, old, new);
+
+	&::view-transition-old(jf-morph) {
+		animation: jf-vt-fade-out var(--jf-animation-duration-fast)
+			var(--jf-animation-ease-standard) both;
+	}
+
+	&::view-transition-new(jf-morph) {
+		animation: jf-vt-fade-in var(--jf-animation-duration-morph)
+			var(--jf-animation-ease-standard) both;
+	}
+}
+
+/* Scale look (the palette): the browser's own geometry. Both snapshots scale
+   with the box's width while they crossfade, so the search field visibly
+   grows into the palette. */
+:root[data-vt~="morph-scale"]::view-transition-old(jf-morph),
+:root[data-vt~="morph-scale"]::view-transition-new(jf-morph) {
+	animation-duration: var(--jf-animation-duration-morph);
+	animation-timing-function: var(--jf-animation-ease-standard);
+}
+
+/* Surface morph (the box look, morph.ts): the box the browser animates is
+   drawn live on the image pair, its fill, border and corner moving from the
+   one end's surface to the other's (`--jf-morph-from-*`, `--jf-morph-to-*`,
+   set on <html> for the transition), like the boot frame below. The border
+   is an inset shadow, so the pair's content box is its whole box. */
+:root[data-vt~="morph-grow"],
+:root[data-vt~="morph-shrink"] {
+	&::view-transition-image-pair(jf-morph) {
+		/* The two ends' borders (the keyframe starts at the first). */
+		--jf-morph-ring-from: inset 0 0 0 var(--jf-morph-from-border-width)
+			var(--jf-morph-from-border-color);
+		--jf-morph-ring-to: inset 0 0 0 var(--jf-morph-to-border-width)
+			var(--jf-morph-to-border-color);
+
+		background-color: var(--jf-morph-to-background);
+		border-radius: var(--jf-morph-to-radius);
+		box-shadow: var(--jf-morph-ring-to);
+	}
+}
+
+:root[data-vt~="morph-grow"]::view-transition-image-pair(jf-morph) {
+	animation: jf-vt-morph-surface-grow var(--jf-animation-duration-morph)
+		var(--jf-animation-ease-standard) both;
+}
+
+:root[data-vt~="morph-shrink"]::view-transition-image-pair(jf-morph) {
+	animation: jf-vt-morph-surface-shrink var(--jf-animation-duration-morph)
+		var(--jf-animation-ease-standard) both;
+}
+
+/* Open: the old snapshot is the trigger's ghost, so it hides; the target's
+   content, pinned top-left in the growing box, fades in over the last part. */
+:root[data-vt~="morph-grow"] {
+	&::view-transition-old(jf-morph) {
+		opacity: 0;
+		animation: none;
+	}
+
+	&::view-transition-new(jf-morph) {
+		animation: jf-vt-contents-in var(--jf-animation-duration-morph)
+			var(--jf-animation-ease-standard) both;
+	}
+}
+
+/* Close: the reverse. The card's content fades out fast (the box look's
+   rule); the new snapshot is the trigger's ghost, so it hides. */
+:root[data-vt~="morph-shrink"]::view-transition-new(jf-morph) {
+	opacity: 0;
+	animation: none;
+}
+
+/* The overlay's scrim (morph.ts, MORPH_SCRIM) fades with the morph. Left to
+   its own CSS transition it runs while the browser captures the page, which
+   it does not paint: the first painted frame showed it nearly opaque, so
+   the whole page darkened at once. */
+::view-transition-group(jf-morph-scrim) {
+	z-index: $layer-scrim;
+	animation-duration: var(--jf-animation-duration-morph);
+	animation-timing-function: var(--jf-animation-ease-standard);
+}
+
+/* The trigger's own content (a row, a button) does not travel: it fades out
+   where it is as the open starts, and back in where it is as a close ends.
+   What stays behind should not compete with what flies. Stripped of its own surface (the ghost carries it),
+   so only text and icons fade, under the surface: the growing card covers
+   what it leaves (a bar's handles, a dashed preview) instead of them
+   painting over it. */
+::view-transition-group(jf-morph-source) {
+	z-index: $layer-source;
+}
+
+/* A snapshot ignores its ancestors' clipping: a row scrolled sideways is
+   captured whole. Cut it to what was on screen (morph.ts sets the inset). */
+::view-transition-old(jf-morph-source),
+::view-transition-new(jf-morph-source) {
+	clip-path: var(--jf-morph-source-clip);
+}
+
+:root[data-vt]::view-transition-old(jf-morph-source) {
+	animation: jf-vt-fade-out var(--jf-animation-duration-fast)
+		var(--jf-animation-ease-enter) both;
+}
+
+:root[data-vt]::view-transition-new(jf-morph-source) {
+	animation: jf-vt-fade-in var(--jf-animation-duration-fast)
+		var(--jf-animation-ease-exit)
+		calc(
+			var(--jf-animation-duration-morph) - var(
+					--jf-animation-duration-fast
+				)
+		)
+		both;
+}
+
+/* Text that flies on its own, above the box: the title (`jf-morph-title`)
+   and each value paired by its field key (`jf-morph-part-N`). The browser's
+   geometry moves and scales them, with the morph's duration and curve. The
+   snapshots scale by the line's height, left-aligned, so a short text
+   ("Jane") into a long one ("Jane Doe") does not stretch. One whose target
+   turned out to have none fades out where it is, with its source. */
+@mixin text-flight($name) {
+	::view-transition-group(#{$name}) {
+		z-index: $layer-text;
+		animation-duration: var(--jf-animation-duration-morph);
+		animation-timing-function: var(--jf-animation-ease-standard);
+	}
+
+	::view-transition-old(#{$name}),
+	::view-transition-new(#{$name}) {
+		inline-size: auto;
+		block-size: 100%;
+		object-fit: fill;
+		object-position: left top;
+		animation-duration: var(--jf-animation-duration-morph);
+		animation-timing-function: var(--jf-animation-ease-standard);
+	}
+
+	:root[data-vt]::view-transition-old(#{$name}):only-child {
+		animation: jf-vt-fade-out var(--jf-animation-duration-fast)
+			var(--jf-animation-ease-enter) both;
+	}
+}
+
+@include text-flight(jf-morph-title);
+
+@for $part from 0 to $part-flights {
+	@include text-flight(jf-morph-part-#{$part});
+}
+
+/* No source: scale up from, or down to, the page centre. The overlays are
+   centred, so the element's own centre is the page centre. */
+:root[data-vt]::view-transition-new(jf-morph):only-child {
+	animation: jf-vt-scale-in var(--jf-animation-duration-default)
+		var(--jf-animation-ease-enter) both;
+}
+
+:root[data-vt]::view-transition-old(jf-morph):only-child {
+	animation: jf-vt-scale-out var(--jf-animation-duration-fast)
+		var(--jf-animation-ease-exit) both;
+}
+
+/* Boot: the splash logo unfolds into the sidebar (brandUnfold.ts). With a
+   sidebar to land on (kind `brand-unfold`), the frame is drawn live
+   on the image pair, which fills the group, while the browser moves and
+   sizes the group: the stroke stays crisp and thins from the logo's stroke
+   and corner (px, set on <html> for the transition) to the rail's. An inset
+   shadow, not a border, so the pair's content box is its whole box and the
+   rail's snapshot needs no offset. The splash frame's snapshot hides; the
+   rail's (its border made transparent by the Sidebar) keeps its own size,
+   pinned top-left and clipped by the growing box like the box morph, and
+   fades in over the last third, so the nav lands with the frame. Without a
+   sidebar, the splash's snapshots just fade out (the browser default). */
+:root[data-vt~="brand-unfold"] {
+	@include pinned-snapshots(jf-brand-frame, new);
+
+	&::view-transition-old(jf-brand-frame) {
+		opacity: 0;
+		animation: none;
+	}
+
+	&::view-transition-image-pair(jf-brand-frame) {
+		/* The rail's ring, and the logo's (its keyframe start). */
+		--jf-brand-ring: inset 0 0 0 var(--jf-border-width-interactive)
+			var(--jf-fg-strong);
+		--jf-brand-ring-from: inset 0 0 0 var(--jf-brand-stroke)
+			var(--jf-fg-strong);
+
+		border-radius: var(--jf-radius-container);
+		box-shadow: var(--jf-brand-ring);
+		animation: jf-vt-brand-frame var(--jf-animation-duration-morph)
+			var(--jf-animation-ease-standard) both;
+	}
+
+	&::view-transition-new(jf-brand-frame) {
+		animation: jf-vt-contents-in var(--jf-animation-duration-morph)
+			var(--jf-animation-ease-standard) both;
+	}
+}
+
+/* Page change: a fade through. The old page fades out over the first part;
+   the new one then fades in while growing to its size from its top edge, the
+   one against the topbar, so that edge stays put and the page settles down
+   from under the topbar rather than towards it. */
+:root[data-vt~="page"]::view-transition-old(jf-page) {
+	animation: jf-vt-fade-through-out var(--jf-animation-duration-default)
+		var(--jf-animation-ease-standard) both;
+}
+
+:root[data-vt~="page"]::view-transition-new(jf-page) {
+	transform-origin: center top;
+	animation: jf-vt-fade-through-in var(--jf-animation-duration-default)
+		var(--jf-animation-ease-standard) both;
+}
+
+/* Tab slide. The group keeps the panel's box; the pair is clipped to it. */
+::view-transition-image-pair(jf-tab),
+::view-transition-image-pair(jf-sheet-body) {
+	overflow: clip;
+}
+
+/* A slide of `$name` for the kind `$kind`: the old snapshot leaves
+   towards `$out`, the new one comes in from `$in` (keyframes from
+   `slide-keyframes`). */
+@mixin slide($kind, $name, $out, $in) {
+	:root[data-vt~="#{$kind}"]::view-transition-old(#{$name}) {
+		animation: jf-vt-out-#{$out} var(--jf-animation-duration-default)
+			var(--jf-animation-ease-standard) both;
+	}
+
+	:root[data-vt~="#{$kind}"]::view-transition-new(#{$name}) {
+		animation: jf-vt-in-#{$in} var(--jf-animation-duration-default)
+			var(--jf-animation-ease-standard) both;
+	}
+}
+
+@include slide(tab-forward, jf-tab, start, end);
+@include slide(tab-back, jf-tab, end, start);
+
+/* Sheet prev/next. */
+@include slide(sheet-next, jf-sheet-body, up, below);
+@include slide(sheet-prev, jf-sheet-body, down, above);
+
+@media (prefers-reduced-motion: reduce) {
+	::view-transition-group(*),
+	::view-transition-old(*),
+	::view-transition-new(*) {
+		animation: none;
+	}
+}
+
+@keyframes jf-vt-fade-out {
+	to {
+		opacity: 0;
+	}
+}
+
+@keyframes jf-vt-fade-in {
+	from {
+		opacity: 0;
+	}
+}
+
+/* stylelint-disable plugin/no-low-performance-animation-properties -- the boot frame and the morph surface animate their paint once, on one pseudo-element each; drawing it live is what keeps the stroke crisp while the box scales */
+@keyframes jf-vt-brand-frame {
+	from {
+		border-radius: var(--jf-brand-corner);
+		box-shadow: var(--jf-brand-ring-from);
+	}
+}
+
+/* The fill changes near the trigger's end, not across the whole morph: a
+   trigger without a fill (a table row) would otherwise leave a see-through
+   veil growing on open, and an opaque box sitting over the row's own content
+   to the very end of a close. Corner and border move over the whole morph. */
+@keyframes jf-vt-morph-surface-grow {
+	0% {
+		background-color: var(--jf-morph-from-background);
+		border-radius: var(--jf-morph-from-radius);
+		box-shadow: var(--jf-morph-ring-from);
+	}
+
+	#{$fill-switch} {
+		background-color: var(--jf-morph-to-background);
+	}
+}
+
+@keyframes jf-vt-morph-surface-shrink {
+	0% {
+		background-color: var(--jf-morph-from-background);
+		border-radius: var(--jf-morph-from-radius);
+		box-shadow: var(--jf-morph-ring-from);
+	}
+
+	#{100% - $fill-switch} {
+		background-color: var(--jf-morph-from-background);
+	}
+}
+/* stylelint-enable plugin/no-low-performance-animation-properties */
+
+@keyframes jf-vt-contents-in {
+	0%,
+	#{$contents-hidden-until} {
+		opacity: 0;
+	}
+}
+
+@keyframes jf-vt-fade-through-out {
+	#{$page-faded-out-by},
+	100% {
+		opacity: 0;
+	}
+}
+
+@keyframes jf-vt-fade-through-in {
+	0%,
+	#{$page-faded-out-by} {
+		opacity: 0;
+		transform: scale($page-scale-from);
+	}
+}
+
+@keyframes jf-vt-scale-in {
+	from {
+		opacity: 0;
+		transform: scale($scale-from);
+	}
+}
+
+@keyframes jf-vt-scale-out {
+	to {
+		opacity: 0;
+		transform: scale($scale-from);
+	}
+}
+
+/* One slide's pair: out towards `$out`, `$slide-distance` along `$axis`
+   (`$sign` -1: back, up), and in from `$in`, the same distance the other
+   way, so both move in one direction. */
+@mixin slide-keyframes($out, $in, $axis, $sign) {
+	@keyframes jf-vt-out-#{$out} {
+		to {
+			opacity: 0;
+			transform: translate#{$axis }($sign * $slide-distance);
+		}
+	}
+
+	@keyframes jf-vt-in-#{$in} {
+		from {
+			opacity: 0;
+			transform: translate#{$axis }(-$sign * $slide-distance);
+		}
+	}
+}
+
+@include slide-keyframes(start, end, X, -1);
+@include slide-keyframes(end, start, X, 1);
+@include slide-keyframes(up, below, Y, -1);
+@include slide-keyframes(down, above, Y, 1);

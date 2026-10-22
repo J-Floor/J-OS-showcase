@@ -42,7 +42,7 @@ function withReadState(
 
 /**
  * The caller's notification history, paged like the door log
- * (`useFlooredLog`): the floor is read on the first open (the drawer is
+ * (`useFlooredLog`): the floor is read on the first open (the sheet is
  * mounted for the whole shell, so not at app start). Read state shows at once
  * and rolls back if the server refuses.
  */
@@ -93,7 +93,7 @@ export function useInbox(open: Accessor<boolean>): Inbox {
 			ids.filter((id) => !confirmed.has(id) && !pending.get(id)),
 			false
 		);
-		// The rows are in a drawer that may be closed, and a failed mark-read
+		// The rows are in a sheet that may be closed, and a failed mark-read
 		// must not block the navigation: a toast is where it can be seen.
 		toaster.create({ type: "error", title: result.error.message });
 	}

@@ -416,12 +416,12 @@ describe("rendering", () => {
 		const guest = recipient("g1");
 		const host = recipient("h1", "Hal");
 		const base = { guestId: "g1" as Id<"people">, guestName: "Gus Guest" };
-		const guestDrawer = "https://j.floor/community?person=g1";
+		const guestSheet = "https://j.floor/community?person=g1";
 		const soon = { ...base, untilDate: "6 October 2026" };
 		expect(KINDS.guestExpiringSoon.push(soon, guest).url).toBe(
 			"https://j.floor/space"
 		);
-		expect(KINDS.guestExpiringSoon.push(soon, host).url).toBe(guestDrawer);
+		expect(KINDS.guestExpiringSoon.push(soon, host).url).toBe(guestSheet);
 		expect(KINDS.guestExpiringSoon.email?.(soon, guest)?.html).toContain(
 			'href="https://j.floor/space"'
 		);
@@ -434,7 +434,7 @@ describe("rendering", () => {
 			expect(
 				KINDS.guestAccessChanged.push(payload, host).url,
 				change
-			).toBe(guestDrawer);
+			).toBe(guestSheet);
 			expect(
 				KINDS.guestAccessChanged.email?.(payload, guest)?.html,
 				change
@@ -445,11 +445,11 @@ describe("rendering", () => {
 			"https://j.floor/"
 		);
 		expect(KINDS.guestAccessChanged.push(upgraded, host).url).toBe(
-			guestDrawer
+			guestSheet
 		);
 		expect(KINDS.guestExpired.push(base, guest).url).toBe(
 			"https://j.floor/"
 		);
-		expect(KINDS.guestExpired.push(base, host).url).toBe(guestDrawer);
+		expect(KINDS.guestExpired.push(base, host).url).toBe(guestSheet);
 	});
 });

@@ -63,7 +63,7 @@ describe("fixImportedDates", () => {
 	});
 
 	it("puts the signature after the approval, not alongside it", async () => {
-		// Both timestamps are stand-ins. Identical ones would leave the drawer's
+		// Both timestamps are stand-ins. Identical ones would leave the sheet's
 		// timeline free to print "Signed the agreement" above "Approved as a
 		// member", which is a story that cannot have happened.
 		const backend = convexTest(schema, modules);

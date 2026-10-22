@@ -125,20 +125,20 @@ export type TableRootProps<Data extends Record<string, unknown>> = {
 	autofocusFirstRow?: boolean;
 	/**
 	 * Clear and disable the row-focus ring while true. For when something else owns
-	 * the keyboard and the person it acts on — an open detail drawer, say: a ring
-	 * left glowing under it would claim a row is the target when the drawer is, and
+	 * the keyboard and the person it acts on — an open detail sheet, say: a ring
+	 * left glowing under it would claim a row is the target when the sheet is, and
 	 * Enter would reopen it stacked on top. Mutually exclusive with the ring the
 	 * same way a checkbox selection is.
 	 */
 	suppressFocus?: boolean;
 	/**
-	 * Pin the ring to a specific row by `_id` — the person an open detail drawer
-	 * is showing — so the table stays visually in sync as the drawer pages
+	 * Pin the ring to a specific row by `_id` — the person an open detail sheet
+	 * is showing — so the table stays visually in sync as the sheet pages
 	 * person to person, and that row is scrolled into view. Shown but NOT
 	 * interactive: a pinned ring is inert, so arrows and Enter do nothing while
-	 * it is pinned (the drawer owns them), whether or not `suppressFocus` is
+	 * it is pinned (the sheet owns them), whether or not `suppressFocus` is
 	 * set. When the pin releases (`undefined`), the ring stays where it landed,
-	 * so closing the drawer leaves you on that row. Accessor so it stays live.
+	 * so closing the sheet leaves you on that row. Accessor so it stays live.
 	 */
 	activeRowId?: () => string | undefined;
 	/** The row the focus ring is on, or `undefined` when it is nowhere. */

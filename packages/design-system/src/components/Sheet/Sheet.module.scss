@@ -1,0 +1,228 @@
+@use "../../styles/animation" as anim;
+@use "../../styles/breakpoints" as bp;
+@use "../../styles/overlay";
+@use "../../styles/utils" as utils;
+
+$closed-scale: 0.96;
+$stack-step: 0.04;
+
+.backdrop {
+	position: fixed;
+	inset: 0;
+
+	/* Ark mirrors the Content's stack index onto the Backdrop as `--layer-index`.
+	   Without that term every overlay resolves to the same 999 and the LAST one
+	   opened is not necessarily on top: a Dialog opened from inside a Sheet had
+	   its backdrop painted behind the Sheet, dimming the page but not the thing
+	   it was covering. Ported from EmboUI, which hit exactly this.
+
+	   `* 2` is the stride, and it is load-bearing. Backdrop-base (999) sits ONE
+	   below overlay-base (1000), so with a stride of 1 a layer's backdrop
+	   (999 + N+1) exactly tied the layer below it's content (1000 + N) and DOM
+	   order decided — the sheet, opened first, won and the dialog's backdrop
+	   fell behind it. A stride of 2 gives each layer its own 2-wide band, so a
+	   higher backdrop always clears the lower content. */
+	z-index: calc(
+		var(--jf-z-index-overlay-backdrop-base) + var(--layer-index, 0) * 2
+	);
+	background-color: var(--jf-surface-bg-scrim);
+	transition: opacity var(--jf-animation-duration-default) ease-in-out;
+
+	/* A morph fades the scrim (`jf-morph-scrim`): its own fade would play
+	   inside that one, so it would fade twice over. */
+	:root[data-vt~="morph"] & {
+		transition: none;
+	}
+
+	&[data-state="open"] {
+		opacity: 1;
+
+		/* Mounted already open, or shown out of `hidden` (display: none
+		   while closed): either way its first frame has no closed style to
+		   transition from without this. */
+		@starting-style {
+			opacity: 0;
+		}
+	}
+
+	&[data-state="closed"] {
+		pointer-events: none;
+		opacity: 0;
+	}
+}
+
+.positioner {
+	@include overlay.centred-overlay-positioner;
+
+	pointer-events: none;
+
+	@include bp.phone {
+		padding: var(--jf-spacing-near);
+	}
+}
+
+.content {
+	/* The value the positioner above mirrors as `--z-index`. Without a z-index
+	   here there is nothing to mirror, the positioner falls back to the base,
+	   and the backdrop — which DOES carry a layer index — ties with it and
+	   paints over the sheet. */
+	z-index: calc(var(--jf-z-index-overlay-base) + var(--layer-index, 0) * 2);
+	display: flex;
+	flex-direction: column;
+	inline-size: min(640px, 100%);
+	block-size: min(85dvb, 100%);
+	pointer-events: auto;
+	background: var(--jf-surface-bg-base);
+	border: 1px solid var(--jf-border-subtle);
+	border-radius: var(--jf-radius-floating-container);
+	box-shadow: var(--jf-shadow-surface-elevation);
+
+	/* A sheet opened from inside another sheet stacks on it: Ark mirrors the
+	   number of layers above this one as `--nested-layer-count`, and the lower
+	   card steps back. `scale` and `translate` are separate properties from
+	   `transform`, so this composes with the open/close transform below.
+	   The stacked origin is `top center`, but the plain pop-in must stay
+	   centred. Un-stacking keeps the stacked origin until `scale` is back to 1
+	   (a delayed, instant swap), or the card jumps as it grows back. */
+	--origin-delay: var(--jf-animation-duration-default);
+
+	scale: calc(1 - $stack-step * var(--nested-layer-count, 0));
+	translate: 0 calc(-1 * var(--jf-spacing-far) * var(--nested-layer-count, 0));
+	transition:
+		opacity var(--jf-animation-duration-default)
+			var(--jf-animation-ease-standard),
+		transform var(--jf-animation-duration-default)
+			var(--jf-animation-ease-standard),
+		scale var(--jf-animation-duration-default)
+			var(--jf-animation-ease-standard),
+		translate var(--jf-animation-duration-default)
+			var(--jf-animation-ease-standard),
+		transform-origin 0s var(--origin-delay);
+
+	/* A morph is doing the animating; the pop-in would play inside it. The
+	   upper sheet's close morph is exactly when this one un-stacks, so the
+	   origin swap stays delayed here too. */
+	:root[data-vt~="morph"] & {
+		transition:
+			scale var(--jf-animation-duration-default)
+				var(--jf-animation-ease-standard),
+			translate var(--jf-animation-duration-default)
+				var(--jf-animation-ease-standard),
+			transform-origin 0s var(--origin-delay);
+	}
+
+	&[data-has-nested] {
+		--origin-delay: 0s;
+
+		transform-origin: top center;
+	}
+
+	@include bp.phone {
+		inline-size: 100%;
+		block-size: 100%;
+	}
+
+	&[data-state="open"] {
+		opacity: 1;
+		transform: scale(1);
+
+		/* A sheet that mounts already open (a deep link) is first inserted
+		   open, and the transition has no closed style to start from. This
+		   gives the first frame one, so it animates like every later open. */
+		@starting-style {
+			opacity: 0;
+			transform: scale($closed-scale);
+		}
+	}
+
+	&[data-state="closed"] {
+		pointer-events: none;
+		opacity: 0;
+
+		/* Unfocusable once closed, but painted through the fade-out: see
+		   `unfocusable-after-close`. */
+		transform: scale($closed-scale);
+
+		@include anim.unfocusable-after-close(
+			opacity var(--jf-animation-duration-default)
+				var(--jf-animation-ease-standard),
+			transform var(--jf-animation-duration-default)
+				var(--jf-animation-ease-standard)
+		);
+	}
+}
+
+.header {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: var(--jf-spacing-far);
+}
+
+.headerActions {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	gap: var(--jf-spacing-close);
+	align-items: center;
+}
+
+.title {
+	margin: 0;
+}
+
+/* The title shimmer can't use a width preset: those are a share of the
+   parent, and an empty title shrinks to nothing in the header row. */
+.titleSkeleton {
+	inline-size: 12rem;
+	max-inline-size: 100%;
+	block-size: 1.25rem;
+}
+
+/* Present for accessible-name computation, hidden visually — the design
+   system's existing screenreader-only primitive (also used as the global
+   `.jf-util-screenreader` class in styles/base.scss), scoped here as a module
+   class instead of reaching for that global one. */
+.srOnly {
+	@include utils.screenreader;
+}
+
+.body {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+	padding: var(--jf-spacing-far);
+	/* stylelint-disable-next-line defensive-css/require-overscroll-behavior, defensive-css/require-scrollbar-gutter -- intentional for this scroll container */
+	overflow-block: auto;
+}
+
+.bodySkeleton {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-far);
+}
+
+.bodySkeletonRow {
+	display: grid;
+
+	/* Mirrors PropertyRow's label column so the skeleton reads as the same
+	   shape as the rows it stands in for. */
+	grid-template-columns: 140px 1fr;
+	align-items: center;
+	gap: var(--jf-spacing-near);
+
+	/* PropertyRow stacks its label above the value on a phone; so does this. */
+	@include bp.phone {
+		grid-template-columns: 1fr;
+	}
+}
+
+.footer {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+	display: flex;
+	gap: var(--jf-spacing-near);
+	justify-content: flex-end;
+	padding: var(--jf-spacing-far);
+	border-block-start: 1px solid var(--jf-border-subtle);
+}

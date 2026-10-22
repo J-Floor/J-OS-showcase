@@ -8,6 +8,7 @@ badge
 biotech
 block
 bolt
+box
 build
 calendar_month
 call
@@ -58,6 +59,7 @@ filter
 filter_list
 fingerprint
 flag
+flip
 forum
 function
 group
@@ -129,6 +131,7 @@ qr_code
 qr_code_2
 qr_code_scanner
 queue
+radio
 radio_button_unchecked
 refresh
 reminder
@@ -136,6 +139,7 @@ remove
 replay
 rocket_launch
 save
+scale
 scan
 schedule
 score
@@ -152,6 +156,7 @@ share
 shift
 shortcut
 skeleton
+source
 stack
 stairs
 star
@@ -162,8 +167,10 @@ stop
 style
 subject
 switch
+sync
 tab
 table
+tabs
 tag
 target
 task

@@ -46,7 +46,7 @@ test("a deep link names WHAT to open and never which tab", () => {
 	}
 });
 
-test("notification links: the event, the settings drawer, the door diagnostics, the space", () => {
+test("notification links: the event, the settings sheet, the door diagnostics, the space", () => {
 	vi.stubEnv("SITE_URL", "https://j.floor");
 	expect(eventUrl("e1")).toBe("https://j.floor/events?event=e1");
 	expect(manageNotificationsUrl()).toBe(

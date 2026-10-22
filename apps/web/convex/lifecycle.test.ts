@@ -640,7 +640,7 @@ describe("transition", () => {
 							kind: "newApplication",
 							payload: {
 								// The board's "Review application" button deep-links
-								// to this person's drawer, so the id has to travel
+								// to this person's sheet, so the id has to travel
 								// with the notification.
 								personId: id,
 								applicantName: "Ada Lovelace",

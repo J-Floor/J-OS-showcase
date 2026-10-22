@@ -81,8 +81,8 @@ vi.mock("../columns/itemColumns.tsx", () => ({
 	],
 }));
 
-vi.mock("../drawers/ItemDrawer.tsx", () => ({
-	ItemDrawer: () => null,
+vi.mock("../sheets/ItemSheet.tsx", () => ({
+	ItemSheet: () => null,
 }));
 
 vi.mock("../print/inventoryListPdf.ts", () => ({

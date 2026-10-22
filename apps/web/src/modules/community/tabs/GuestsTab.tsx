@@ -19,7 +19,7 @@ import type { TabProps } from "./TabProps.ts";
 
 /**
  * Guests tab: guest people in a selectable roster, with batch triage (kick out /
- * upgrade to member) over the checked rows. The roster + drawer scaffold is
+ * upgrade to member) over the checked rows. The roster + sheet scaffold is
  * {@link RosterTab}; this file supplies only what is guest-specific — the query,
  * the host-aware columns, the actions, and the selection bar.
  */

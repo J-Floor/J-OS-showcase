@@ -32,7 +32,8 @@ import { ICONS } from "../../shared/icons.ts";
 import { InlineError } from "../../shared/InlineError.tsx";
 
 import { eventsEntity } from "./entity.ts";
-import styles from "./EventDrawer.module.scss";
+import styles from "./EventSheet.module.scss";
+import { eventFields } from "./fields.ts";
 
 /** One row of an event's attendee list. */
 export type Attendee = FunctionReturnType<
@@ -56,8 +57,7 @@ function endLocal(event: Doc<"events">): string {
  *  lives, the patch that writes it, and the other end it may not cross. */
 const BOUNDARIES = {
 	start: {
-		icon: ICONS.start,
-		label: "Starts",
+		field: eventFields.startsAt,
 		timeLabel: "Start time (Zurich)",
 		local: startLocal,
 		patch: (local: string): EventPatch => ({ startsAtLocal: local }),
@@ -65,8 +65,7 @@ const BOUNDARIES = {
 			composed.utc <= event.endsAt,
 	},
 	end: {
-		icon: ICONS.end,
-		label: "Ends",
+		field: eventFields.endsAt,
 		timeLabel: "End time (Zurich)",
 		local: endLocal,
 		patch: (local: string): EventPatch => ({ endsAtLocal: local }),
@@ -76,7 +75,7 @@ const BOUNDARIES = {
 };
 
 /** One end of an event's time range: its zoned date and time, editable while
- *  the drawer is. A change that would put the start after the end is
+ *  the sheet is. A change that would put the start after the end is
  *  ignored. */
 function EventBoundaryRow(props: {
 	boundary: keyof typeof BOUNDARIES;
@@ -95,7 +94,7 @@ function EventBoundaryRow(props: {
 			void props.onPatch(boundary().patch(composed.local));
 	}
 	return (
-		<PropertyRow icon={boundary().icon} label={boundary().label}>
+		<PropertyRow field={boundary().field}>
 			<Show
 				when={props.isEditing()}
 				fallback={<span>{formatZoned(local())}</span>}

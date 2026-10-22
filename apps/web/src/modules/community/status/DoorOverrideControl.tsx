@@ -100,7 +100,7 @@ export function DoorOverrideControl(props: {
 	return (
 		<div class={styles.control}>
 			<Segment.Root
-				// Stacked, not scrolled: the drawer's value column is too narrow for
+				// Stacked, not scrolled: the sheet's value column is too narrow for
 				// three options side by side, and a segmented control you have to
 				// scroll hides the very choices it exists to show.
 				orientation="vertical"

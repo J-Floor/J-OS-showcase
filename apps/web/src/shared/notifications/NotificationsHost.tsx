@@ -3,7 +3,7 @@ import { createEffect, type JSX, onMount } from "solid-js";
 
 import { resyncPush } from "../../lib/push.ts";
 
-import { NotificationsDrawer } from "./NotificationsDrawer.tsx";
+import { NotificationsSheet } from "./NotificationsSheet.tsx";
 import {
 	isNotificationsOpen,
 	notificationsTab,
@@ -16,7 +16,7 @@ import {
 const PARAM = "notifications";
 
 /**
- * Mounted once in the shell. Opens the drawer from the deep link (then strips
+ * Mounted once in the shell. Opens the sheet from the deep link (then strips
  * the param, so a reload or a shared URL does not reopen it), and re-syncs
  * this device's push subscription on app start: push services rotate
  * endpoints, and this never prompts.
@@ -47,7 +47,7 @@ export function NotificationsHost(): JSX.Element {
 		});
 	});
 	return (
-		<NotificationsDrawer
+		<NotificationsSheet
 			open={isNotificationsOpen()}
 			tab={notificationsTab()}
 			onOpenChange={setNotificationsOpen}

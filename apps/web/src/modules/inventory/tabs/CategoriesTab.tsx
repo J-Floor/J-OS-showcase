@@ -4,8 +4,8 @@ import type { EntitySelection } from "../../../shared/entity/createEntitySelecti
 import { categoryColumns } from "../columns/categoryColumns.tsx";
 import type { Category } from "../data/inventoryData.ts";
 import { useCategories } from "../data/inventoryData.ts";
-import { CategoryDrawer } from "../drawers/CategoryDrawer.tsx";
 import { categoryEntity } from "../entity.ts";
+import { CategorySheet } from "../sheets/CategorySheet.tsx";
 
 import { InventoryTab } from "./InventoryTab.tsx";
 
@@ -19,13 +19,13 @@ export function CategoriesTab(props: {
 			columns={() => categoryColumns()}
 			selection={props.selection}
 			descriptor={categoryEntity}
-			renderDrawer={(drawer) => (
-				<CategoryDrawer
-					open={drawer.open()}
-					onOpenChange={drawer.onOpenChange}
-					category={drawer.row()}
+			renderSheet={(sheet) => (
+				<CategorySheet
+					open={sheet.open()}
+					onOpenChange={sheet.onOpenChange}
+					category={sheet.row()}
 					loading={props.selection.loading()}
-					nav={drawer.nav}
+					nav={sheet.nav}
 				/>
 			)}
 		/>

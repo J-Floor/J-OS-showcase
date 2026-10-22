@@ -10,7 +10,7 @@ import { eventsEntity } from "./entity.ts";
  * download the visitor QR — the same quick affordances the community roster
  * gives its rows. Board/admin only (`manage`/`Events`); a plain member's row
  * shows no actions. The column sets `disableRowClick`, so these never open the
- * detail drawer.
+ * detail sheet.
  */
 export function EventRowActions(props: { row: Doc<"events"> }) {
 	return (

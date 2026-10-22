@@ -25,8 +25,8 @@ const OFF_COPY = "Off. Turn on to get notifications here as well as by email.";
 const ON_COPY = "On.";
 
 /**
- * The drawer's always-visible device row: this device's push state, owned by
- * the drawer's `usePushDevice`, shown as one switch.
+ * The sheet's always-visible device row: this device's push state, owned by
+ * the sheet's `usePushDevice`, shown as one switch.
  */
 export function NotificationDeviceRow(props: {
 	device: PushDevice;

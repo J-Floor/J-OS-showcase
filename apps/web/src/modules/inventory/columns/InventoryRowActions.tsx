@@ -10,7 +10,7 @@ import { itemEntity } from "../entity.ts";
  * Trailing per-row actions for the items table: copy the item's deep-link and
  * download its QR — mirrors `EventRowActions`. Board/admin only
  * (`manage`/`Inventory`); the column sets `disableRowClick`, so these never
- * open the item drawer.
+ * open the item sheet.
  */
 export function InventoryRowActions(props: { row: Item }): JSX.Element {
 	return (

@@ -1,0 +1,21 @@
+/* The full-screen layer that centres a modal card (Dialog, Sheet). */
+@mixin centred-overlay-positioner {
+	position: fixed;
+	inset: 0;
+
+	/* The positioner is `position: fixed`, so it ALWAYS forms its own stacking
+	   context — whatever IT resolves to decides how the whole overlay stacks
+	   against sibling overlays in the portal root, no matter what `.content`
+	   says. Ark/zag mirrors the Content's computed z-index here as `--z-index`
+	   for exactly this purpose, so consume that and keep `.content` the single
+	   source of truth; the calc fallback only covers the first frame. */
+	z-index: var(
+		--z-index,
+		calc(var(--jf-z-index-overlay-base) + var(--layer-index, 0) * 2)
+	);
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row centering flex; wrapping not intended */
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: var(--jf-spacing-far);
+}

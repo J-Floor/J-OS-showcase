@@ -10,6 +10,7 @@ import {
 import { createSignal } from "solid-js";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
+import { defineFields } from "../../utils/fields.ts";
 import { setDeferredImmediate } from "../Deferred/Deferred.tsx";
 
 import { ANIMATED_COLUMNS } from "./columnLayout.ts";
@@ -23,6 +24,7 @@ import {
 	HEADER_LABEL_ATTR,
 	TEXT_CELL_ATTR,
 } from "./domContract.ts";
+import { fieldColumn } from "./fieldColumn.ts";
 import { Table } from "./Table.tsx";
 import type { JfColumnDefinition } from "./types.ts";
 
@@ -53,6 +55,7 @@ function data(): Row[] {
 	];
 }
 const loadedRows = data();
+const rowFields = defineFields({ computed: { label: "Computed" } });
 
 type IdRow = { id: string };
 const idColumns = [
@@ -104,6 +107,116 @@ test("onSelectedRowsChange fires with the checked rows, not written from inside 
 	await waitFor(() => {
 		expect(captured.map((row) => row.id)).toEqual(["a", "c"]);
 	});
+});
+
+test("a row with a string _id carries it for morph pairing", () => {
+	render(() => (
+		<Table.Root
+			columns={
+				[
+					{ accessorKey: "name", header: "Name", dataType: "string" },
+				] as never
+			}
+			data={[{ _id: "p1", name: "Ann" }, { name: "No id" }] as never}
+		/>
+	));
+	expect(screen.getByText("Ann").closest("tr")).toHaveAttribute(
+		"data-morph-of",
+		"p1"
+	);
+	expect(screen.getByText("No id").closest("tr")).not.toHaveAttribute(
+		"data-morph-of"
+	);
+});
+
+test("each row marks its first data cell's content as the morph title", () => {
+	render(() => <Table.Root columns={columns as never} data={loadedRows} />);
+	const titles = [
+		...document.querySelectorAll("tbody tr [data-morph-title]"),
+	].map((element) => element.textContent);
+	expect(titles).toEqual(["B", "A"]);
+});
+
+test("the title skips a leading editable column (disableRowClick)", () => {
+	const editableFirst = [
+		{
+			accessorKey: "score",
+			header: "Score",
+			dataType: "number",
+			disableRowClick: true,
+		},
+		{ accessorKey: "name", header: "Name", dataType: "string" },
+	];
+	render(() => (
+		<Table.Root columns={editableFirst as never} data={loadedRows} />
+	));
+	const titles = [
+		...document.querySelectorAll("tbody tr [data-morph-title]"),
+	].map((element) => element.textContent);
+	expect(titles).toEqual(["B", "A"]);
+});
+
+test("a hidden column (the grouped one) is not the title", () => {
+	type Grouped = { name: string; team: string };
+	const grouped = [
+		{
+			accessorKey: "team",
+			header: "Team",
+			dataType: "enum",
+			enumOptions: [{ label: "Red", value: "red" }],
+		},
+		{ accessorKey: "name", header: "Name", dataType: "string" },
+	];
+	render(() => (
+		<Table.Root
+			columns={grouped as never}
+			data={[{ name: "Ann", team: "red" }] as Grouped[]}
+			groupBy="team"
+		/>
+	));
+	const titles = [
+		...document.querySelectorAll("tbody tr [data-morph-title]"),
+	].map((element) => element.textContent);
+	expect(titles).toEqual(["Ann"]);
+});
+
+test("each data cell's content carries its column id as its morph key; the title cell's carries it as its title", () => {
+	render(() => (
+		<Table.Root
+			columns={
+				[
+					...columns,
+					fieldColumn(rowFields.computed, {
+						cell: () => "x",
+					}),
+				] as never
+			}
+			data={loadedRows}
+		/>
+	));
+	const firstRow = document.querySelector("tbody tr")!;
+	const cells = [...firstRow.querySelectorAll("td")];
+	const keys = cells.map(
+		(cell) =>
+			cell
+				.querySelector("[data-morph-key]")
+				?.getAttribute("data-morph-key") ?? null
+	);
+	// The title cell flies on its own, keyed by its column id.
+	expect(keys).toEqual([null, "score", "computed"]);
+	// The content, not the padded cell: both ends of a flight then hold the
+	// same line at the same height.
+	expect(cells.filter((cell) => cell.hasAttribute("data-morph-key"))).toEqual(
+		[]
+	);
+	expect(
+		firstRow
+			.querySelector("[data-morph-title]")
+			?.getAttribute("data-morph-title")
+	).toBe("name");
+	expect(screen.getAllByRole("columnheader").at(-1)).toHaveTextContent(
+		"Computed"
+	);
 });
 
 test("renders rows and sorts by column", () => {
@@ -1145,4 +1258,15 @@ describe("onRowHoverIntent", () => {
 		vi.advanceTimersByTime(1000);
 		expect(spy).not.toHaveBeenCalled();
 	});
+});
+
+test("a row a morph starts from keeps the look it had: no focus ring or bold until the morph lets go", () => {
+	const scss = readFileSync(
+		`${import.meta.dirname}/Table.module.scss`,
+		"utf8"
+	);
+	expect(scss).toContain(
+		'& tr[data-focused="true"]:not([data-morph-pinned]) {'
+	);
+	expect(scss).not.toContain('& tr[data-focused="true"] {');
 });

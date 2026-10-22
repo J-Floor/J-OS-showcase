@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { For, Show, createSignal, type JSX } from "solid-js";
 
 import { ICONS } from "../../icons.ts";
+import { type MorphOverlayProps } from "../../utils/morphPresence.ts";
 import { Dialog } from "../Dialog/Dialog.tsx";
 import { Highlight } from "../Highlight/Highlight.tsx";
 import { Icon } from "../Icon/Icon.tsx";
@@ -16,6 +17,7 @@ import {
 	createOpenHotkey,
 	createPaletteResults,
 	createRecents,
+	createPick,
 	resetOnOpen,
 	type PaletteGroup,
 } from "./CommandPalette.hooks.ts";
@@ -60,6 +62,11 @@ export type CommandPaletteItem = {
 
 export type CommandPaletteProps = {
 	open: boolean;
+	/**
+	 * Must update `open` synchronously. A pick closes first and runs its
+	 * `onSelect` inside that close, so a sheet it opens can take over the
+	 * picked row; a deferred update starts them in the wrong order.
+	 */
 	onOpenChange: (isOpen: boolean) => void;
 	items: CommandPaletteItem[];
 	placeholder?: string;
@@ -83,9 +90,13 @@ export type CommandPaletteProps = {
 	 */
 	shortcut?: Hotkey;
 	class?: string;
-};
+} & MorphOverlayProps;
 
 const DEFAULT_SHORTCUT: Hotkey = "Mod+K";
+
+function shortcutOr(shortcut: Hotkey | undefined): Hotkey {
+	return shortcut ?? DEFAULT_SHORTCUT;
+}
 
 /** The search input with its icon and, once there is a query, a clear button. */
 function SearchField(props: {
@@ -230,14 +241,10 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
 	let inputReference: HTMLInputElement | undefined;
 	const { recents, setRecents, select } = createRecents(props);
 
-	function shortcut(): Hotkey {
-		return props.shortcut ?? DEFAULT_SHORTCUT;
-	}
-
 	// The binding lives with the component that owns the hint. The library
 	// requires every unnamed modifier to be ABSENT, so this does not also fire
 	// on Ctrl+Shift+K and steal the browser's console.
-	createOpenHotkey(props, shortcut);
+	createOpenHotkey(props, () => shortcutOr(props.shortcut));
 
 	resetOnOpen(props, setSearch, setRecents);
 
@@ -246,13 +253,16 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
 		search,
 		recents
 	);
-	const { highlighted, setHighlighted, setListReference } =
+	const { highlighted, setHighlighted, setListReference, rowFor } =
 		createHighlight(visible);
+	const pick = createPick(props, select, rowFor);
 	createHighlightIntent(highlighted, search, visible);
 
 	return (
 		<Dialog.Root
 			open={props.open}
+			morph={props.morph}
+			morphFrom={props.morphFrom}
 			onOpenChange={(details) => {
 				props.onOpenChange(details.open);
 			}}
@@ -313,10 +323,7 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
 					// never fires — reopening the person you just closed did
 					// nothing. `onSelect` fires on every pick.
 					onSelect={(details) => {
-						const item = props.items.find(
-							(option) => option.value === details.itemValue
-						);
-						if (item) select(item);
+						pick(details.itemValue);
 					}}
 					class={styles.combobox}
 				>
@@ -332,11 +339,11 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
 						}}
 					/>
 					{/* `Combobox.List`, not `Combobox.Content`. Content is a
-				    dismissable LAYER, and nested inside the dialog's layer it is
-				    never the topmost one — Ark marks it `pointer-events: none`,
-				    so every row rendered fine and nothing could be clicked. The
-				    list is the plain listbox part, which is all a palette needs:
-				    the dialog already owns dismissal. */}
+					    dismissable LAYER, and nested inside the dialog's layer it is
+					    never the topmost one — Ark marks it `pointer-events: none`,
+					    so every row rendered fine and nothing could be clicked. The
+					    list is the plain listbox part, which is all a palette needs:
+					    the dialog already owns dismissal. */}
 					<Combobox.List
 						class={styles.content}
 						ref={setListReference}
@@ -347,7 +354,7 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
 							emptyMessage={props.emptyMessage}
 						/>
 					</Combobox.List>
-					<PaletteFooter shortcut={shortcut()} />
+					<PaletteFooter shortcut={shortcutOr(props.shortcut)} />
 				</Combobox.Root>
 			</Dialog.Content>
 		</Dialog.Root>

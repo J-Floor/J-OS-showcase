@@ -137,8 +137,8 @@ export type StatusFlag =
 	| { id: "door_forced_open"; actorName?: string };
 
 /**
- * One line of the drawer's Status section. Unlike {@link StatusFlag} these are
- * the full picture — the drawer is where you go to see everything — but they
+ * One line of the sheet's Status section. Unlike {@link StatusFlag} these are
+ * the full picture — the sheet is where you go to see everything — but they
  * stay one fact per line rather than a wrap of chips you have to decode.
  *
  * Same split as above: structure here, wording in the UI's copy module.
@@ -166,7 +166,7 @@ export type StatusFlagId = StatusFlag["id"];
 export type StatusFactId = StatusFact["id"];
 
 /**
- * An open board task. Carries the STEP ID as well as the label: the drawer's
+ * An open board task. Carries the STEP ID as well as the label: the sheet's
  * "Done" button dispatches `completeBoardStep({ stepId })`, and a handler that
  * hardcodes `"whatsapp"` because that is the only entry today is a bug waiting
  * for the second board step. The label comes from `BOARD_STEPS`, which is
@@ -182,7 +182,7 @@ export type PersonStatus = {
 	tone: Tone;
 	/** Exceptions only; empty for a settled person. Drives the Flags column. */
 	flags: StatusFlag[];
-	/** Every line of the drawer's Status section, in display order. */
+	/** Every line of the sheet's Status section, in display order. */
 	facts: StatusFact[];
 	boardTasks: BoardTask[];
 	/** Whole days spent in the current stage. 0 means "entered today". */
@@ -256,7 +256,7 @@ function statusFlags(
 		flags.push({ id: "agreement_missing", variant: required });
 	// Board work nobody else can see. It does not gate activation — a board
 	// member forgetting it must not hold anyone up — but it is the board's own
-	// backlog, and the drawer was the only place it appeared, which is exactly
+	// backlog, and the sheet was the only place it appeared, which is exactly
 	// the "invisible until you go looking" problem the column exists to fix.
 	for (const task of boardTasks)
 		flags.push({ id: "board_task_pending", step: task.id });
@@ -309,7 +309,7 @@ function statusFacts(
 }
 
 /**
- * The single status readout. Drives the drawer's Status section, the table's
+ * The single status readout. Drives the sheet's Status section, the table's
  * Flags column and the row grouping, so those three can never tell different
  * stories.
  *
@@ -317,7 +317,7 @@ function statusFacts(
  * {@link PersonStatus.flags} is "what would surprise the board about this row",
  * shown in the table where tier and stage are already on screen;
  * {@link PersonStatus.facts} is "everything about this person's state", shown
- * in the drawer where nothing else is. Neither is derived from the other, and
+ * in the sheet where nothing else is. Neither is derived from the other, and
  * the flag set is deliberately much smaller.
  *
  * `doorActorName` is optional because the function is pure: the caller resolves

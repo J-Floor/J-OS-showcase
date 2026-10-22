@@ -52,10 +52,21 @@ function setVisibility(state: DocumentVisibilityState) {
 test("renders the fetched online count and names an offline door", async () => {
 	render(() => <LockHealthCard />);
 	expect(await screen.findByText("1/2")).toBeInTheDocument();
-	expect(screen.getByText(/Upstairs offline —/)).toBeInTheDocument();
 	expect(screen.getByText("Doors")).toBeInTheDocument();
 	expect(screen.getByText("Downstairs online")).toBeInTheDocument();
 	expect(screen.getByText("Upstairs offline")).toBeInTheDocument();
+	// The per-lock list already says which door is offline; the summary line
+	// would repeat it.
+	expect(screen.queryByText(/Upstairs offline —/)).not.toBeInTheDocument();
+});
+
+test("without a per-lock list, the summary line names the offline door", async () => {
+	const withList = health.value;
+	health.value = { configured: 2, unavailable: [{ name: "Upstairs" }] };
+	render(() => <LockHealthCard />);
+	expect(await screen.findByText("1/2")).toBeInTheDocument();
+	expect(screen.getByText(/Upstairs offline —/)).toBeInTheDocument();
+	health.value = withList;
 });
 
 test("re-checks the doors every minute while on screen", async () => {

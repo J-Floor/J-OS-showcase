@@ -7,11 +7,13 @@ import {
 	createMemo,
 	createSignal,
 	onCleanup,
+	onMount,
 	useContext,
 } from "solid-js";
 
 import styles from "./JFloorProvider.module.scss";
 import "./styles/index.scss";
+import { trackActivation } from "./utils/activation.ts";
 
 export type Theme = "light" | "dark";
 
@@ -83,6 +85,10 @@ export function JFloorProvider(props: JFloorProviderProps): JSX.Element {
 
 	createEffect(() => {
 		document.documentElement.setAttribute("data-theme", theme());
+	});
+
+	onMount(() => {
+		onCleanup(trackActivation());
 	});
 
 	onCleanup(() => {

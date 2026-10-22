@@ -21,7 +21,7 @@
 	border-radius: var(--jf-radius-container);
 
 	/* Ark's `orientation="vertical"` stacks the options. Worth having where the
-     control sits in a narrow column (a drawer's value slot) and a row of
+     control sits in a narrow column (a sheet's value slot) and a row of
      options would either overflow or have to scroll — a scrolling segmented
      control hides its own options, which is the one thing it exists not to do.
      The group's height becomes its content's, and the sliding indicator

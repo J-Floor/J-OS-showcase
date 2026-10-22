@@ -58,7 +58,7 @@ if (!("ResizeObserver" in globalThis)) {
 	};
 }
 
-/** Stands in for the "Make guest" button on a row or in the drawer. */
+/** Stands in for the "Make guest" button on a row or in the sheet. */
 function Harness(props: { ids: Id<"people">[] }) {
 	const request = useGuestExpiry();
 	return (

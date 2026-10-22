@@ -18,7 +18,7 @@ export type EditableTextProps = {
 
 /**
  * Inline text editor that mirrors a server value and commits on blur — the
- * edit-in-place convention used across tables and detail drawers. Local edits
+ * edit-in-place convention used across tables and detail sheets. Local edits
  * live in a draft; committing per keystroke would refetch/re-render on every
  * character, so the value is written once on blur (and only if it changed).
  */

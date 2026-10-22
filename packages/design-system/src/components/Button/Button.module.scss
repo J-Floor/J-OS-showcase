@@ -26,7 +26,7 @@
 	inline-size: fit-content;
 
 	/* Sized to its content, but never wider than what it is given. Without this a
-     button in any constrained container — a grid track, a narrow drawer footer —
+     button in any constrained container — a grid track, a narrow sheet footer —
      overflows it outright, because `fit-content` ignores the space available and
      `.content` below refuses to wrap. A caller that wants it to FILL sets
      `inline-size: 100%`, which overrides the line above. */

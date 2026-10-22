@@ -172,7 +172,7 @@ describe("toEntry", () => {
 		expect(entry.title).toBe("Application turned down");
 		// The state the transition landed in, worded rather than dumped — and
 		// worded the way the board says it: the machine's tier is `prospect`,
-		// the tab and the drawer both call them applicants.
+		// the tab and the sheet both call them applicants.
 		expect(entry.detail).toBe("Now applicant, denied");
 	});
 });

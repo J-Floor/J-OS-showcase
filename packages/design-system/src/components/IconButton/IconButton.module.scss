@@ -68,7 +68,7 @@
    overhanging slightly. Non-interactive, so a click still lands on the button;
    above the hover `::before` (which sits at z-index -1).
 
-   Shown wherever the shortcut can fire — a topbar control, an open drawer, the
+   Shown wherever the shortcut can fire — a topbar control, an open sheet, the
    focused table row — and hidden only on the roster rows that are NOT focused (a
    bare-letter decision acts on the focused row, so a chip on every row would
    claim each one is the target). It follows the ring as the arrows move it, since
@@ -92,7 +92,7 @@
    a stable attribute Table sets, so referencing this component's own class
    beneath them is safe; the higher specificity (element + attribute + class)
    beats the base rule without `!important`. Everything not in a row — the topbar
-   export/peek buttons, the drawer's nav/lock/close — keeps its chip. */
+   export/peek buttons, the sheet's nav/lock/close — keeps its chip. */
 tr:not([data-focused="true"]) .peekBadge {
 	visibility: hidden;
 }

@@ -8,6 +8,9 @@ import {
 	type Accessor,
 } from "solid-js";
 
+import { MORPH_FROM } from "../../utils/morphPresence.ts";
+import { viewTransition } from "../../utils/viewTransition.ts";
+
 import {
 	addRecent,
 	readRecents,
@@ -188,6 +191,13 @@ export function createHighlight(visible: Accessor<CommandPaletteItem[]>) {
 	 * which is why it showed up in production and not on a dev roster.
 	 */
 	let listReference: HTMLElement | undefined;
+	function rowFor(value: string): HTMLElement | null {
+		return (
+			listReference?.querySelector<HTMLElement>(
+				`[role="option"][data-value="${CSS.escape(value)}"]`
+			) ?? null
+		);
+	}
 	createEffect(() => {
 		const value = highlighted();
 		if (value === null) return;
@@ -201,9 +211,7 @@ export function createHighlight(visible: Accessor<CommandPaletteItem[]>) {
 				listReference.scrollTop = 0;
 				return;
 			}
-			const row = listReference.querySelector(
-				`[role="option"][data-value="${CSS.escape(value)}"]`
-			);
+			const row = rowFor(value);
 			// jsdom does no layout and ships no `scrollIntoView`, so a test
 			// environment must not be the thing that throws here.
 			if (typeof row?.scrollIntoView === "function")
@@ -215,7 +223,7 @@ export function createHighlight(visible: Accessor<CommandPaletteItem[]>) {
 		listReference = element;
 	}
 
-	return { highlighted, setHighlighted, setListReference };
+	return { highlighted, setHighlighted, setListReference, rowFor };
 }
 
 /**
@@ -242,31 +250,49 @@ export function createHighlightIntent(
 	});
 }
 
-/** What was used last, and the pick handler that records it. */
+/** What was used last, and the handler that records a pick. */
 export function createRecents(
-	props: Pick<
-		CommandPaletteProps,
-		"recentsKey" | "maxRecents" | "onOpenChange"
-	>
+	props: Pick<CommandPaletteProps, "recentsKey" | "maxRecents">
 ) {
 	const [recents, setRecents] = createSignal<string[]>([]);
 
 	function select(item: CommandPaletteItem): void {
 		const key = props.recentsKey;
-		if (key !== undefined) {
-			const next = addRecent(
-				recents(),
-				item.value,
-				props.maxRecents ?? DEFAULT_MAX_RECENTS
-			);
-			setRecents(next);
-			writeRecents(key, next);
-		}
-		props.onOpenChange(false);
-		item.onSelect();
+		if (key === undefined) return;
+		const next = addRecent(
+			recents(),
+			item.value,
+			props.maxRecents ?? DEFAULT_MAX_RECENTS
+		);
+		setRecents(next);
+		writeRecents(key, next);
 	}
 
 	return { recents, setRecents, select };
+}
+
+/**
+ * The handler for a picked value: records it, closes the palette and runs the
+ * pick inside that close, so an overlay or page it opens joins the transition
+ * and the picked row grows into it.
+ */
+export function createPick(
+	props: Pick<CommandPaletteProps, "items" | "onOpenChange">,
+	select: (item: CommandPaletteItem) => void,
+	rowFor: (value: string) => HTMLElement | null
+): (value: string) => void {
+	return (value) => {
+		const item = props.items.find((option) => option.value === value);
+		if (!item) return;
+		select(item);
+		// Keyboard Enter keeps focus in the input, so the close cannot find
+		// the row by activation: mark it, and the palette closes into it.
+		rowFor(value)?.setAttribute(MORPH_FROM, "");
+		props.onOpenChange(false);
+		void viewTransition(() => {
+			item.onSelect();
+		});
+	};
 }
 
 /** Toggles the palette on its shortcut. */

@@ -8,7 +8,7 @@ import { createActionError } from "../../../shared/createActionError.ts";
 
 /**
  * The half-typed score a board member is editing, and how it reaches the
- * server. Shared by the roster's score cell and the drawer's score field so
+ * server. Shared by the roster's score cell and the sheet's score field so
  * the two commit rules cannot drift.
  *
  * While editing, the field shows the draft; otherwise it mirrors the server.

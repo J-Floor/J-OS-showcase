@@ -6,7 +6,7 @@ import type { ClientError } from "../lib/call.ts";
 /**
  * True when an answer arrives for someone other than the one shown now: the
  * screen has moved on, so the refusal must not appear against someone else.
- * Nobody on either side (a batch, a closed drawer) is never late.
+ * Nobody on either side (a batch, a closed sheet) is never late.
  */
 export function isLateAnswer(
 	askedFor: string | undefined,
@@ -30,7 +30,7 @@ const DEFAULT_SCOPE = "";
  * Only the latest attempt of a scope speaks for it: an earlier attempt that
  * fails after a later one of the same scope started is dropped, so a slow
  * refusal never shows over a newer save. Independent actions that share an
- * area (the fields of one drawer) pass their own `scope`, so one's success
+ * area (the fields of one sheet) pass their own `scope`, so one's success
  * never drops or clears another's failure; the area shows the most recent
  * failure. Actions on separate targets (rows, categories) belong in separate
  * areas, each beside its own control.

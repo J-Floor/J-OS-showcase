@@ -26,7 +26,7 @@ import { doorOverride } from "./schema.ts";
  *
  * Shared so that setting the door as part of another decision — approving
  * someone as a guest with access withheld — leaves exactly the same trail as
- * setting it from the drawer. Two code paths writing `door` two different ways
+ * setting it from the sheet. Two code paths writing `door` two different ways
  * is how an audit log starts lying.
  *
  * Caller must have checked authorisation; this does not.

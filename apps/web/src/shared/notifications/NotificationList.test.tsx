@@ -194,7 +194,7 @@ test("an unread row announces it is unread, a read row does not", () => {
 	).toBeNull();
 });
 
-test("clicking a row closes the drawer, opens its page and marks it read", () => {
+test("clicking a row closes the sheet, opens its page and marks it read", () => {
 	head.data = [TASK];
 	serve({ since: null });
 	const onClose = vi.fn();

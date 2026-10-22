@@ -50,7 +50,7 @@ describe("personEvents.listForPerson", () => {
 		// between the two rows above if scoping were dropped — a bare
 		// `.collect()` (no `by_person` filter) would pass the ordering
 		// assertions below unchanged, but this row must never appear in Ada's
-		// timeline: one board member's drawer showing another person's history
+		// timeline: one board member's sheet showing another person's history
 		// is the failure mode this query exists to prevent.
 		await backend.run(async (context) => {
 			const otherId = await context.db.insert("people", {

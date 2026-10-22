@@ -20,7 +20,7 @@ import { COMMUNITY_TIERS } from "../lib/roles.ts";
 
 /**
  * Notification history: every notification a person is sent, kept in the
- * `notifications` table for 90 days and shown in the Notifications drawer.
+ * `notifications` table for 90 days and shown in the Notifications sheet.
  * (`convex/notifications.ts` is the transactional emails, hence the
  * different name.) Every public function reads or writes the caller's rows
  * only. Pagination mirrors the door log (`convex/doorLog.ts`): a fixed floor,
@@ -112,7 +112,7 @@ export const firstPageFloor = query({
 });
 
 /** The caller's rows with `createdAt >= since` (all of them when null),
- *  newest first. The drawer's live head. */
+ *  newest first. The sheet's live head. */
 export const listSince = query({
 	args: { since: v.union(v.number(), v.null()) },
 	handler: async (context, { since }): Promise<InboxRow[]> => {

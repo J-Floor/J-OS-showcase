@@ -4,7 +4,7 @@
 // `?task=<id>`/`?project=<id>`, an inbound link switches to the right tab and
 // opens the row, and closing clears the param. Mirrors EventsPage's and
 // CommunityPage's own deep-link tests. The heavy visual children (kanban
-// board, timeline, drawers) are stubbed to capture props, so this exercises
+// board, timeline, sheets) are stubbed to capture props, so this exercises
 // the real `createEntitySelection` wiring inside TasksTab/ProjectsTab without
 // dragging in drag-and-drop/measurement-heavy UI.
 import { MemoryRouter, Route, createMemoryHistory } from "@solidjs/router";
@@ -93,11 +93,11 @@ vi.mock("./kanban/KanbanBoard.tsx", () => ({
 	},
 }));
 
-const taskDrawerProps: Rec[] = [];
-vi.mock("./drawers/TaskDrawer.tsx", () => ({
-	TaskDrawer: (props: Rec) => {
-		taskDrawerProps.push(props);
-		return <div>task-drawer</div>;
+const taskSheetProps: Rec[] = [];
+vi.mock("./sheets/TaskSheet.tsx", () => ({
+	TaskSheet: (props: Rec) => {
+		taskSheetProps.push(props);
+		return <div>task-sheet</div>;
 	},
 }));
 
@@ -109,11 +109,11 @@ vi.mock("./timeline/ProjectTimeline.tsx", () => ({
 	},
 }));
 
-const projectDrawerProps: Rec[] = [];
-vi.mock("./drawers/ProjectDrawer.tsx", () => ({
-	ProjectDrawer: (props: Rec) => {
-		projectDrawerProps.push(props);
-		return <div>project-drawer</div>;
+const projectSheetProps: Rec[] = [];
+vi.mock("./sheets/ProjectSheet.tsx", () => ({
+	ProjectSheet: (props: Rec) => {
+		projectSheetProps.push(props);
+		return <div>project-sheet</div>;
 	},
 }));
 
@@ -123,9 +123,9 @@ import { TasksPage } from "./TasksPage.tsx";
 
 afterEach(() => {
 	kanbanProps.length = 0;
-	taskDrawerProps.length = 0;
+	taskSheetProps.length = 0;
 	projectTimelineProps.length = 0;
-	projectDrawerProps.length = 0;
+	projectSheetProps.length = 0;
 });
 
 function renderAtPath(path: string) {
@@ -148,12 +148,12 @@ function renderAtPath(path: string) {
 	};
 }
 
-// `TaskDrawer` is mocked once but rendered by TWO components: the Tasks tab's
-// own (URL-linked) drawer, mounted first, and the Projects tab's nested
+// `TaskSheet` is mocked once but rendered by TWO components: the Tasks tab's
+// own (URL-linked) sheet, mounted first, and the Projects tab's nested
 // task-from-a-project view (unrelated to `?task=`), mounted second — so the
-// Tasks tab's props are always `taskDrawerProps[0]`, never `.at(-1)`.
-function mainTaskDrawerProps() {
-	return taskDrawerProps[0];
+// Tasks tab's props are always `taskSheetProps[0]`, never `.at(-1)`.
+function mainTaskSheetProps() {
+	return taskSheetProps[0];
 }
 
 test("opening a task writes ?task=<id>", async () => {
@@ -166,23 +166,23 @@ test("opening a task writes ?task=<id>", async () => {
 	await waitFor(() => {
 		expect(history.get()).toContain("task=task1");
 	});
-	expect(mainTaskDrawerProps().open).toBe(true);
+	expect(mainTaskSheetProps().open).toBe(true);
 });
 
-test("closing the task drawer clears ?task=", async () => {
+test("closing the task sheet clears ?task=", async () => {
 	const { history } = renderAtPath("/tasks?task=task1");
 	await waitFor(() => {
-		expect(mainTaskDrawerProps().open).toBe(true);
+		expect(mainTaskSheetProps().open).toBe(true);
 	});
 	expect(history.get()).toContain("task=task1");
-	const onOpenChange = mainTaskDrawerProps().onOpenChange as (
+	const onOpenChange = mainTaskSheetProps().onOpenChange as (
 		isOpen: boolean
 	) => void;
 	onOpenChange(false);
 	await waitFor(() => {
 		expect(history.get()).not.toContain("task=");
 	});
-	expect(mainTaskDrawerProps().open).toBe(false);
+	expect(mainTaskSheetProps().open).toBe(false);
 });
 
 test("an inbound /tasks?project=<id> switches to the Projects tab and opens it", async () => {
@@ -194,13 +194,13 @@ test("an inbound /tasks?project=<id> switches to the Projects tab and opens it",
 		);
 	});
 	await waitFor(() => {
-		expect(projectDrawerProps.at(-1)?.open).toBe(true);
+		expect(projectSheetProps.at(-1)?.open).toBe(true);
 	});
 	expect(
-		(projectDrawerProps.at(-1)?.project as typeof PROJECT1 | undefined)?._id
+		(projectSheetProps.at(-1)?.project as typeof PROJECT1 | undefined)?._id
 	).toBe("proj1");
 	// The Tasks tab, mounted behind it, never opened anything for this link.
-	expect(mainTaskDrawerProps().open).toBe(false);
+	expect(mainTaskSheetProps().open).toBe(false);
 });
 
 test("opening a project from the timeline writes ?project=<id>", async () => {
@@ -215,15 +215,15 @@ test("opening a project from the timeline writes ?project=<id>", async () => {
 	await waitFor(() => {
 		expect(history.get()).toContain("project=proj1");
 	});
-	expect(projectDrawerProps.at(-1)?.open).toBe(true);
+	expect(projectSheetProps.at(-1)?.open).toBe(true);
 });
 
-test("closing the project drawer clears ?project=", async () => {
+test("closing the project sheet clears ?project=", async () => {
 	const { history } = renderAtPath("/tasks?tab=projects&project=proj1");
 	await waitFor(() => {
-		expect(projectDrawerProps.at(-1)?.open).toBe(true);
+		expect(projectSheetProps.at(-1)?.open).toBe(true);
 	});
-	const onOpenChange = projectDrawerProps.at(-1)?.onOpenChange as (
+	const onOpenChange = projectSheetProps.at(-1)?.onOpenChange as (
 		isOpen: boolean
 	) => void;
 	onOpenChange(false);
@@ -232,7 +232,7 @@ test("closing the project drawer clears ?project=", async () => {
 	});
 });
 
-test("switching tabs by hand abandons the open task: URL and drawer both clear", async () => {
+test("switching tabs by hand abandons the open task: URL and sheet both clear", async () => {
 	const { history } = renderAtPath("/tasks");
 	await waitFor(() => {
 		expect(kanbanProps.length).toBeGreaterThan(0);
@@ -256,6 +256,6 @@ test("switching tabs by hand abandons the open task: URL and drawer both clear",
 	// the Tasks tab the moment this component re-mounted.
 	expect(history.get()).not.toContain("task=");
 	await waitFor(() => {
-		expect(mainTaskDrawerProps().open).toBe(false);
+		expect(mainTaskSheetProps().open).toBe(false);
 	});
 });

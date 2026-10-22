@@ -36,8 +36,8 @@ describe("the door line", () => {
 		);
 	});
 
-	it("words the flag the same way the drawer line does", () => {
-		// The table and the drawer must never describe the same override
+	it("words the flag the same way the sheet line does", () => {
+		// The table and the sheet must never describe the same override
 		// differently — that is how a board member ends up believing they are
 		// two separate situations.
 		expect(

@@ -27,9 +27,9 @@ export type EntityDescriptor<Row extends { _id: string }> = {
 	tabParam?: string; // defaults to "tab" when `tab` is set
 	/** Entities with a shareable QR (items, events). */
 	qr?: (row: Row) => { url: string; fileName: string };
-	/** Warms the drawer's extra queries for one row on hover, focus or palette
-	 *  highlight. `canPerform` gates queries the drawer only runs for some viewers. Arg
-	 *  objects must equal the drawer's own, or the keeper key differs. */
+	/** Warms the sheet's extra queries for one row on hover, focus or palette
+	 *  highlight. `canPerform` gates queries the sheet only runs for some viewers. Arg
+	 *  objects must equal the sheet's own, or the keeper key differs. */
 	prefetch?: (
 		row: Row,
 		canPerform: (action: Action, subject: Subject) => boolean

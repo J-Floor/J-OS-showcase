@@ -90,7 +90,7 @@ function CategoryRow(props: {
 }
 
 /**
- * The drawer's Categories tab: one card per category with its Push and Email
+ * The sheet's Categories tab: one card per category with its Push and Email
  * checkboxes. Push checkboxes are locked while push is off on this device
  * (`pushOn`); email reaches the person regardless, so Email stays editable.
  */

@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
+import { viewTransition } from "@j-os/design-system";
 import { MemoryRouter, Route } from "@solidjs/router";
 import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { AbilityProvider, type Role } from "../../../lib/ability.tsx";
 
@@ -88,4 +89,72 @@ test("leaving a module link before the hover delay cancels the prefetch", () => 
 	vi.advanceTimersByTime(1000);
 	vi.useRealTimers();
 	expect(prefetchModule).not.toHaveBeenCalled();
+});
+
+/** A transition that runs until `finish()`. */
+function holdTransition(): { finish: () => void } {
+	let finish!: () => void;
+	const finished = new Promise<void>((resolve) => {
+		finish = resolve;
+	});
+	Object.assign(document, {
+		startViewTransition: (update: () => unknown) => {
+			void Promise.resolve().then(update);
+			return { finished, updateCallbackDone: finished };
+		},
+	});
+	vi.stubGlobal("matchMedia", () => ({ matches: false }));
+	void viewTransition(() => {});
+	return { finish };
+}
+
+function rail(): HTMLElement {
+	return screen.getByRole("navigation");
+}
+
+describe("the rail's hover during a transition", () => {
+	afterEach(async () => {
+		// Let the held transition's cleanup run before the next test.
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		Reflect.deleteProperty(document, "startViewTransition");
+		vi.unstubAllGlobals();
+		vi.restoreAllMocks();
+	});
+
+	test("a mouseleave mid-transition does not collapse it; the end re-reads hover", async () => {
+		navLabels("board");
+		const nav = rail();
+		fireEvent.mouseEnter(nav);
+		const expanded = nav.className;
+		const transition = holdTransition();
+		fireEvent.mouseLeave(nav);
+		expect(nav.className).toBe(expanded);
+		vi.spyOn(nav, "matches").mockReturnValue(false);
+		transition.finish();
+		await vi.waitFor(() => {
+			expect(nav.className).not.toBe(expanded);
+		});
+	});
+
+	test("a pointer still over the rail at the end keeps it expanded", async () => {
+		navLabels("board");
+		const nav = rail();
+		fireEvent.mouseEnter(nav);
+		const expanded = nav.className;
+		const transition = holdTransition();
+		fireEvent.mouseLeave(nav);
+		vi.spyOn(nav, "matches").mockReturnValue(true);
+		transition.finish();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(nav.className).toBe(expanded);
+	});
+
+	test("without a transition a mouseleave collapses it", () => {
+		navLabels("board");
+		const collapsed = rail().className;
+		fireEvent.mouseEnter(rail());
+		expect(rail().className).not.toBe(collapsed);
+		fireEvent.mouseLeave(rail());
+		expect(rail().className).toBe(collapsed);
+	});
 });

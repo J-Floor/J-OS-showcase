@@ -30,6 +30,7 @@ import { LoadingScreen } from "../shared/LoadingScreen.tsx";
 import { NoAccess } from "../shared/NoAccess.tsx";
 import { Splash } from "../shared/Splash.tsx";
 
+import { createSplashHandoff } from "./splashHandoff.ts";
 import { useRole } from "./useRole.ts";
 
 type RoleData = ReturnType<ReturnType<typeof useRole>["data"]>;
@@ -94,7 +95,7 @@ export function LandingRedirect() {
 		// The query returns null, never undefined, once it has loaded.
 		<Show when={lastPath.data() !== undefined} fallback={<LoadingScreen />}>
 			{/* Carry the query along: `/?notifications=open` (the email footer
-			    link) must still open the drawer on whichever page this lands. */}
+			    link) must still open the sheet on whichever page this lands. */}
 			<Navigate href={`${target()}${location.search}`} />
 		</Show>
 	);
@@ -176,8 +177,21 @@ export function RoleGate(props: ParentProps) {
 		);
 	}
 
+	// The signed-in shell, the one with the sidebar the splash unfolds into.
+	function landsOnRail(): boolean {
+		return (
+			Boolean(session().data) &&
+			!(onboarding.data()?.needsOnboarding ?? false) &&
+			isAccessTier(role.data())
+		);
+	}
+	const { isShellShown, splashRef } = createSplashHandoff(
+		showSplash,
+		landsOnRail
+	);
+
 	return (
-		<Show when={!showSplash()} fallback={<Splash />}>
+		<Show when={isShellShown()} fallback={<Splash ref={splashRef} />}>
 			<Show when={session().data} fallback={<Navigate href="/signin" />}>
 				<AuthedContent
 					role={role.data}

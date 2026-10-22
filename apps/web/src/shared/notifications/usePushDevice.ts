@@ -10,7 +10,7 @@ import {
 } from "../../lib/push.ts";
 import { createActionError } from "../createActionError.ts";
 
-/** This device's push state, shared by the drawer's device row (which shows
+/** This device's push state, shared by the sheet's device row (which shows
  *  and toggles it) and the Categories tab (which locks Push while it's off). */
 export type PushDevice = {
 	support: Accessor<PushSupport>;
@@ -24,7 +24,7 @@ export type PushDevice = {
 };
 
 /**
- * Reads and toggles this device's push subscription. The drawer stays
+ * Reads and toggles this device's push subscription. The sheet stays
  * mounted for the whole shell, so the state is re-read on every open: push
  * may have been enabled elsewhere (the prompt pill).
  */

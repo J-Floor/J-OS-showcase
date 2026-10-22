@@ -1,4 +1,4 @@
-import type { JfColumnDefinition } from "@j-os/design-system";
+import { fieldColumn, type JfColumnDefinition } from "@j-os/design-system";
 import { Show } from "solid-js";
 
 import type { Doc } from "../../../../convex/_generated/dataModel";
@@ -11,6 +11,7 @@ import {
 	productStageOptions,
 	verticalOptions,
 } from "../../signup/options.ts";
+import { personFields } from "../fields.ts";
 import { VentureLink } from "../VentureLink.tsx";
 
 import styles from "./ventureColumns.module.scss";
@@ -27,7 +28,7 @@ type PersonLike = Doc<"people">;
  *
  * These lived only on the Applications tab, so the moment somebody was approved
  * the board could no longer scan for "who here is doing hardware" or read back
- * why anyone joined; they had to open a drawer per row. The drawer already
+ * why anyone joined; they had to open a sheet per row. The sheet already
  * shows this for the whole lifecycle (see `VentureDetail`) — the tables did not,
  * and the gap was purely that the column definitions sat in one tab's file.
  *
@@ -41,84 +42,69 @@ export function ventureColumns<
 	Row extends PersonLike,
 >(): JfColumnDefinition<Row>[] {
 	return [
-		{
-			id: "vertical",
-			header: "Vertical",
+		fieldColumn(personFields.vertical, {
 			dataType: "enum",
 			enumOptions: verticalOptions,
 			size: "content",
 			// The raw values, so the filter matches a person carrying several.
 			accessorFn: (row) => row.vertical ?? [],
-		},
-		freeTextColumn<Row>("description", "Description"),
-		freeTextColumn<Row>("pastBuilt", "Past built"),
-		freeTextColumn<Row>("whyJoin", "Why join"),
-		{
-			id: "productStage",
-			header: "Product stage",
+		}),
+		freeTextColumn<Row>("description"),
+		freeTextColumn<Row>("pastBuilt"),
+		freeTextColumn<Row>("whyJoin"),
+		fieldColumn(personFields.productStage, {
 			dataType: "enum",
 			enumOptions: productStageOptions,
 			accessorFn: (row) => row.venture?.productStage,
-		},
-		{
-			id: "fundingStage",
-			header: "Funding stage",
+		}),
+		fieldColumn(personFields.fundingStage, {
 			dataType: "enum",
 			enumOptions: fundingStageOptions,
 			accessorFn: (row) => row.venture?.fundingStage,
-		},
-		{
-			id: "teamSize",
-			header: "Team size",
+		}),
+		fieldColumn(personFields.teamSize, {
 			dataType: "number",
 			// Not `?? 0`: a founder who left the field blank would otherwise be
 			// indistinguishable from one who told us they work alone.
 			accessorFn: (row) => row.venture?.teamSize,
 			cell: (info) => teamSizeText(info.row.original),
 			measureText: teamSizeText,
-		},
-		{
-			id: "referral",
-			header: "Referral",
+		}),
+		fieldColumn(personFields.referral, {
 			dataType: "string",
 			size: SHORT_TEXT_SIZE,
 			measureText: false,
 			accessorFn: (row) => row.venture?.referral ?? "",
-		},
-		{
-			id: "links",
-			header: "Links",
+		}),
+		fieldColumn(personFields.links, {
 			dataType: "string",
 			disableRowClick: true,
 			size: LINKS_COLUMN_WIDTH,
 			measureText: false,
 			accessorFn: (row) => (row.venture?.links ?? []).length,
 			cell: (info) => <LinksCell venture={info.row.original.venture} />,
-		},
+		}),
 	];
 }
 
 /** A clamped free-text venture answer, sorted and filtered on its text. */
 function freeTextColumn<Row extends PersonLike>(
-	id: "description" | "pastBuilt" | "whyJoin",
-	header: string
+	id: "description" | "pastBuilt" | "whyJoin"
 ): JfColumnDefinition<Row> {
-	return {
-		id,
-		header,
+	return fieldColumn(personFields[id], {
 		dataType: "string",
 		size: FREE_TEXT_SIZE,
 		measureText: false,
 		accessorFn: (row) => row.venture?.[id] ?? "",
 		cell: (info) => clampCell(info.row.original.venture?.[id]),
-	};
+	});
 }
 
 function teamSizeText(row: PersonLike): string {
 	return String(row.venture?.teamSize ?? "—");
 }
 
-/** Long free text, clamped to a few lines; the drawer has all of it. */
+/** Long free text, clamped to a few lines; the sheet has all of it. */
 function clampCell(text: string | undefined) {
 	return <span class={styles.clamp}>{text ?? ""}</span>;
 }
@@ -129,7 +115,7 @@ function clampCell(text: string | undefined) {
  * This used to render every link stacked and free to wrap: someone with five
  * links and a long URL made a row several times the height of its neighbours —
  * and a table row is as tall as its tallest cell, so that one person stretched
- * every other column on the row with them. The drawer lists all of them, so the
+ * every other column on the row with them. The sheet lists all of them, so the
  * "+N" is what says there is more to go and look at.
  */
 function LinksCell(props: { venture: PersonLike["venture"] }) {

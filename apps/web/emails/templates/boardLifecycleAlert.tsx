@@ -18,7 +18,7 @@ export type Props = {
 
 /**
  * People whose lifecycle state disagrees with their data. The board opens the
- * list from here and goes straight to each person's drawer.
+ * list from here and goes straight to each person's sheet.
  */
 export function Template({
 	headline,

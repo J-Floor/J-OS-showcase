@@ -30,5 +30,8 @@ export default {
 		Monogram: { variant: "monogram", size: 48 },
 		"Muted logo": { color: "var(--jf-fg-muted)" },
 		"Animated reveal": { animated: true, size: 96 },
+		// The full logo is two stacked parts (frame + J, `data-logo-part`);
+		// at splash size any seam or offset between them would show.
+		"Splash size": { animated: true, size: 88, labelled: false },
 	},
 } satisfies Demo;

@@ -27,7 +27,7 @@ beforeAll(() => {
 afterEach(cleanup);
 
 import { ConfirmProvider } from "../../../shared/confirm.tsx";
-import { DecisionBar } from "../drawers/DecisionBar.tsx";
+import { DecisionBar } from "../sheets/DecisionBar.tsx";
 
 import {
 	useApplicationDecisions,

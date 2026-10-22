@@ -10,6 +10,7 @@ import { DoorsIntro } from "./modules/onboarding/DoorsIntro.tsx";
 import { WelcomeTour } from "./modules/onboarding/WelcomeTour.tsx";
 import { WhatsNew } from "./modules/onboarding/WhatsNew.tsx";
 import { LastPathTracker, ModuleRoutes, RoleGate } from "./routing/index.tsx";
+import { usePageTransitions } from "./routing/usePageTransitions.ts";
 import { AppErrorBoundary } from "./shared/AppErrorBoundary.tsx";
 import { Breadcrumbs } from "./shared/components/Breadcrumbs/Breadcrumbs.tsx";
 import { Sidebar } from "./shared/components/Sidebar/Sidebar.tsx";
@@ -36,6 +37,8 @@ import { ShortcutPeekButton } from "./shared/ShortcutPeekButton.tsx";
  *  left the header outside it, where `useConfirm` silently auto-confirms. The
  *  dialog portals to <body>, so wrapping `<main>` changes no layout. */
 function ShellBody(props: ParentProps) {
+	let page: HTMLDivElement | undefined;
+	usePageTransitions(() => page);
 	return (
 		<ConfirmProvider>
 			<main class={styles.main}>
@@ -66,7 +69,14 @@ function ShellBody(props: ParentProps) {
 				</header>
 				{/* The single scroll region: the shell, sidebar and header stay
 				    fixed; only this scrolls. */}
-				<div class={styles.content}>{props.children}</div>
+				<div
+					class={styles.content}
+					ref={(element) => {
+						page = element;
+					}}
+				>
+					{props.children}
+				</div>
 				{/* Floated at this column's foot (above the phone bottom bar),
 				    stacked top to bottom. */}
 				<PromptStack>
@@ -75,7 +85,7 @@ function ShellBody(props: ParentProps) {
 					</Can>
 					<InstallPwaPrompt />
 				</PromptStack>
-				{/* Staff get no notifications: no drawer, and no push re-sync. */}
+				{/* Staff get no notifications: no sheet, and no push re-sync. */}
 				<Can I="view" the="Notifications">
 					<AppErrorBoundary>
 						<NotificationsHost />

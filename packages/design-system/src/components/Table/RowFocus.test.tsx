@@ -80,7 +80,7 @@ test("autofocusFirstRow is off by default — nothing is focused on mount", () =
 });
 
 test("a pinned, suppressed ring ignores Enter even while the grid has focus", () => {
-	// Pinned + suppressed is how an open drawer looks: the ring IS shown on the
+	// Pinned + suppressed is how an open sheet looks: the ring IS shown on the
 	// pinned row and `ringRowId` is defined, so only the handler's `ringLive()`
 	// check stands between Enter and a stacked reopen.
 	const activated: string[] = [];
@@ -101,7 +101,7 @@ test("a pinned, suppressed ring ignores Enter even while the grid has focus", ()
 	expect(activated).toEqual([]);
 });
 
-test("suppressFocus clears the ring and blocks it (e.g. while a drawer is open)", () => {
+test("suppressFocus clears the ring and blocks it (e.g. while a sheet is open)", () => {
 	const [suppressed, setSuppressed] = createSignal(false);
 	render(() => (
 		<Table.Root
@@ -113,7 +113,7 @@ test("suppressFocus clears the ring and blocks it (e.g. while a drawer is open)"
 	));
 	press("ArrowDown");
 	expect(focused()).toBe("Ada");
-	// Drawer opens: the ring must clear, or Enter would reopen it stacked on top.
+	// Sheet opens: the ring must clear, or Enter would reopen it stacked on top.
 	setSuppressed(true);
 	expect(focused()).toBeNull();
 	// And arrows do nothing while suppressed.
@@ -153,8 +153,8 @@ test("moving the ring scrolls the newly-focused row into view", async () => {
 	}
 });
 
-test("activeRowId pins the ring while the drawer is open, follows it, and stays on close", () => {
-	// Models the drawer: ONE `open` signal drives both suppressFocus and the pin,
+test("activeRowId pins the ring while the sheet is open, follows it, and stays on close", () => {
+	// Models the sheet: ONE `open` signal drives both suppressFocus and the pin,
 	// exactly as RosterTab does — so on close they flip together and the ring is
 	// left where it landed rather than cleared.
 	const [open, setOpen] = createSignal(false);
@@ -170,20 +170,20 @@ test("activeRowId pins the ring while the drawer is open, follows it, and stays 
 	));
 	expect(focused()).toBeNull();
 
-	// Drawer opens on Grace (id "b"): interaction suppressed, ring pinned to her.
+	// Sheet opens on Grace (id "b"): interaction suppressed, ring pinned to her.
 	setPerson("b");
 	setOpen(true);
 	expect(focused()).toBe("Grace");
 
-	// Page to Hedy ("c") via the drawer — the ring follows.
+	// Page to Hedy ("c") via the sheet — the ring follows.
 	setPerson("c");
 	expect(focused()).toBe("Hedy");
 
-	// Arrows are inert while the drawer owns them.
+	// Arrows are inert while the sheet owns them.
 	press("ArrowUp");
 	expect(focused()).toBe("Hedy");
 
-	// Drawer closes — the ring STAYS on Hedy (not cleared, not reset to the top).
+	// Sheet closes — the ring STAYS on Hedy (not cleared, not reset to the top).
 	// The ring shows only with focus in the table, so give it focus first.
 	setOpen(false);
 	grid().focus();
@@ -570,11 +570,11 @@ test("going live does not take focus from a text field", async () => {
 	expect(document.activeElement).toBe(search);
 });
 
-test("closing the drawer (pin released) hands focus back to the table", async () => {
+test("closing the sheet (pin released) hands focus back to the table", async () => {
 	const [pinned, setPinned] = createSignal<string | undefined>("b");
 	render(() => (
 		<>
-			<button type="button">In drawer</button>
+			<button type="button">In sheet</button>
 			<Table.Root
 				columns={columns}
 				data={data}
@@ -584,7 +584,7 @@ test("closing the drawer (pin released) hands focus back to the table", async ()
 			/>
 		</>
 	));
-	screen.getByRole("button", { name: "In drawer" }).focus();
+	screen.getByRole("button", { name: "In sheet" }).focus();
 	setPinned(undefined);
 	await Promise.resolve();
 	expect(document.activeElement).toBe(grid());
@@ -749,10 +749,10 @@ test("leaving the table reports no focused row, and returning reports it again",
 	expect(seen).toEqual(["a", undefined, "a"]);
 });
 
-test("a pinned ring shows while focus is in the drawer", () => {
+test("a pinned ring shows while focus is in the sheet", () => {
 	render(() => (
 		<>
-			<button type="button">In drawer</button>
+			<button type="button">In sheet</button>
 			<Table.Root
 				columns={columns}
 				data={data}
@@ -762,7 +762,7 @@ test("a pinned ring shows while focus is in the drawer", () => {
 			/>
 		</>
 	));
-	screen.getByRole("button", { name: "In drawer" }).focus();
+	screen.getByRole("button", { name: "In sheet" }).focus();
 	expect(focused()).toBe("Hedy");
 });
 

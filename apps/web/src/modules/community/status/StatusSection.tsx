@@ -1,4 +1,11 @@
-import { Button, Icon, PropertyRow, Status } from "@j-os/design-system";
+import {
+	Button,
+	type FieldDefinition,
+	Icon,
+	morphPart,
+	PropertyRow,
+	Status,
+} from "@j-os/design-system";
 import { For, Match, Show, Switch, type JSX } from "solid-js";
 
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
@@ -8,8 +15,9 @@ import type {
 	StatusFact,
 } from "../../../../convex/lib/derive.ts";
 import { ICONS } from "../../../shared/icons.ts";
-import { RoleSection } from "../drawers/RoleSection.tsx";
+import { personFields } from "../fields.ts";
 import { useOpenAgreement } from "../openAgreement.ts";
+import { RoleSection } from "../sheets/RoleSection.tsx";
 
 import { AccessUntilControl, canExtendWindow } from "./AccessUntilControl.tsx";
 import { factLine, type FactLine } from "./copy.ts";
@@ -22,13 +30,24 @@ import styles from "./StatusSection.module.scss";
  * tone falls to "neutral", which maps to the default foreground — so there is
  * no branch here and no second colour table to keep in step with the tokens.
  */
-function StatusValue(props: { line: FactLine }): JSX.Element {
+function StatusValue(props: {
+	line: FactLine;
+	field?: FieldDefinition;
+}): JSX.Element {
 	return (
 		<Status status={props.line.tone}>
-			<span class={styles.value}>{props.line.value}</span>
+			<span class={styles.value} {...morphPart(props.field)}>
+				{props.line.value}
+			</span>
 		</Status>
 	);
 }
+
+/** The roster column a fact's value shows, worded differently here: the
+ *  Guests tab's "Time remaining" is this "Access until". */
+const FACT_FIELDS: Partial<Record<StatusFact["id"], FieldDefinition>> = {
+	access_until: personFields.timeRemaining,
+};
 
 /**
  * The end of this person's window, if that is what this fact is.
@@ -51,8 +70,8 @@ function accessAt(fact: StatusFact): { at: number } | undefined {
  * behind them, so they stay plain text rather than offering a control that
  * would open a blank tab and close it again.
  *
- * The roster row already has this in its actions column; the drawer did not,
- * so the only way to see a member's agreement was to close the drawer and find
+ * The roster row already has this in its actions column; the sheet did not,
+ * so the only way to see a member's agreement was to close the sheet and find
  * their row again.
  */
 function AgreementValue(props: {
@@ -93,7 +112,14 @@ function FactValue(props: {
 		return `${props.person.firstName} ${props.person.lastName}`.trim();
 	}
 	return (
-		<Switch fallback={<StatusValue line={factLine(props.fact)} />}>
+		<Switch
+			fallback={
+				<StatusValue
+					line={factLine(props.fact)}
+					field={FACT_FIELDS[props.fact.id]}
+				/>
+			}
+		>
 			<Match
 				when={
 					props.fact.id === "agreement" &&
@@ -108,7 +134,7 @@ function FactValue(props: {
 			{/* The role is a board decision like the two below it, so in edit
 			    mode this line becomes its control rather than the section
 			    growing a stray block underneath. An applicant is excluded: an
-			    application is decided with the drawer's footer buttons, and the
+			    application is decided with the sheet's footer buttons, and the
 			    chooser would offer destinations that skip them. */}
 			<Match
 				when={
@@ -148,7 +174,7 @@ function FactValue(props: {
 }
 
 /**
- * The drawer's Status section: one labelled line per fact, then whatever the
+ * The sheet's Status section: one labelled line per fact, then whatever the
  * board still owes this person.
  *
  * Values are text, not badges. A row of pills gives every line a different

@@ -28,7 +28,7 @@ const ATTENDEE_ROSTER_CAP = 500;
 
 /** Reject a caller-supplied `*Local` whose embedded IXDTF zone is not the
  *  site's. A board caller could embed e.g. `[America/Los_Angeles]`; the table
- *  formats the cached epoch in Zurich while the drawer formats the stored
+ *  formats the cached epoch in Zurich while the sheet formats the stored
  *  zone, so they'd silently disagree. Reject at the mutation boundary
  *  instead. */
 function checkSiteZone(local: string): Result<void, EventsError | InputError> {
@@ -190,14 +190,14 @@ export const updateEvent = mutation({
 		unwrap(checkLength(fields.name, NAME_MAX));
 		const existing = await context.db.get(eventId);
 		if (!existing) return refuse({ type: "EventNotFound" });
-		// Each drawer field commits on its own, so merge the supplied field(s)
+		// Each sheet field commits on its own, so merge the supplied field(s)
 		// over the current row and validate the RESULT — a lone Starts edit must
 		// not be allowed to invert the interval, and the name must not go blank.
 		const name =
 			fields.name === undefined ? existing.name : fields.name.trim();
 		if (name === "") refuse({ type: "EventNameRequired" });
 		// Patch a time field only when the caller supplied its `*Local`: each
-		// drawer field autosaves on its own, so a lone Starts edit must leave
+		// sheet field autosaves on its own, so a lone Starts edit must leave
 		// Ends (and its cached epoch) exactly as they were, and vice versa.
 		const { startsAt, endsAt } = mergedEventTimes(existing, fields);
 		if (startsAt > endsAt) refuse({ type: "EventStartAfterEnd" });
@@ -236,7 +236,7 @@ export const listEventAttendees = query({
 	> => {
 		unwrap(await requireRole(context, BOARD_LEVEL));
 		// Bounded like the delete sweep: turnout is unbounded in principle, so
-		// cap the roster the drawer loads rather than risk a transaction /
+		// cap the roster the sheet loads rather than risk a transaction /
 		// response-size limit on a popular event. ATTENDEE_ROSTER_CAP is far above
 		// any real J-floor event; a larger roster would want true pagination.
 		const rows = await context.db

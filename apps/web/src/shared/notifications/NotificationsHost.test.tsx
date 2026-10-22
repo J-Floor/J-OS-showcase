@@ -8,10 +8,10 @@ const { resync } = vi.hoisted(() => ({
 	resync: vi.fn(() => Promise.resolve(ok())),
 }));
 vi.mock("../../lib/push.ts", () => ({ resyncPush: resync }));
-vi.mock("./NotificationsDrawer.tsx", () => ({
-	NotificationsDrawer: (props: { open: boolean; tab: string }) => (
+vi.mock("./NotificationsSheet.tsx", () => ({
+	NotificationsSheet: (props: { open: boolean; tab: string }) => (
 		<div
-			data-testid="drawer"
+			data-testid="sheet"
 			data-open={String(props.open)}
 			data-tab={props.tab}
 		/>
@@ -46,10 +46,10 @@ function renderAt(url: string) {
 	return history;
 }
 
-test("?notifications=open opens the drawer and removes the param", async () => {
+test("?notifications=open opens the sheet and removes the param", async () => {
 	const history = renderAt("/tasks?notifications=open");
 	await waitFor(() => {
-		expect(screen.getByTestId("drawer").dataset.open).toBe("true");
+		expect(screen.getByTestId("sheet").dataset.open).toBe("true");
 	});
 	await waitFor(() => {
 		expect(history.get()).toMatch(/^\/tasks\??$/);
@@ -59,16 +59,16 @@ test("?notifications=open opens the drawer and removes the param", async () => {
 test("only the notifications param is stripped from the URL", async () => {
 	const history = renderAt("/tasks?a=1&notifications=open");
 	await waitFor(() => {
-		expect(screen.getByTestId("drawer").dataset.open).toBe("true");
+		expect(screen.getByTestId("sheet").dataset.open).toBe("true");
 	});
 	await waitFor(() => {
 		expect(history.get()).toBe("/tasks?a=1");
 	});
 });
 
-test("without the param the drawer stays shut", () => {
+test("without the param the sheet stays shut", () => {
 	renderAt("/tasks");
-	expect(screen.getByTestId("drawer").dataset.open).toBe("false");
+	expect(screen.getByTestId("sheet").dataset.open).toBe("false");
 });
 
 test("re-syncs this device's push subscription on mount", () => {
@@ -76,7 +76,7 @@ test("re-syncs this device's push subscription on mount", () => {
 	expect(resync).toHaveBeenCalledOnce();
 });
 
-test("the email footer's deep link opens the drawer on Categories", async () => {
+test("the email footer's deep link opens the sheet on Categories", async () => {
 	renderAt("/tasks?notifications=open");
 	await waitFor(() => {
 		expect(notificationsTab()).toBe("categories");
@@ -89,9 +89,9 @@ test("opening from the bell or the menu lands on Inbox", () => {
 	expect(notificationsTab()).toBe("inbox");
 });
 
-test("the deep link hands the drawer the Categories tab", async () => {
+test("the deep link hands the sheet the Categories tab", async () => {
 	renderAt("/tasks?notifications=open");
 	await waitFor(() => {
-		expect(screen.getByTestId("drawer").dataset.tab).toBe("categories");
+		expect(screen.getByTestId("sheet").dataset.tab).toBe("categories");
 	});
 });

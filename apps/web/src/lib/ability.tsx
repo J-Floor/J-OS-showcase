@@ -39,7 +39,7 @@ export type Subject =
 	// The Space page's Wi-Fi, occupancy, countdown and house rules: everything but the door.
 	| "SpaceInfo"
 	| "Events"
-	// The bell, the push prompt and the notifications drawer.
+	// The bell, the push prompt and the notifications sheet.
 	| "Notifications"
 	| "Tasks"
 	| "Inventory";

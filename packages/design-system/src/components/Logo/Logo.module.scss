@@ -1,3 +1,5 @@
+@use "sass:math";
+
 .root {
 	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
 	display: inline-flex;
@@ -12,10 +14,44 @@
 	color: var(--jf-fg-strong);
 }
 
+/* The frame's box (FRAME_VIEW_BOX in Logo.tsx), and the J's 60x60 square
+   inside it (the monogram's box, moved to where the J sits;
+   FULL_MARK_VIEW_BOX). */
+$view-width: 131.221;
+$view-height: 296;
+$mark-x: 35.8959;
+$mark-y: 42.1884;
+$mark-size: 60;
+
 .svg {
 	display: block;
 	inline-size: auto;
 	block-size: 1em;
+}
+
+/* One part (an element of its own, so a View Transition can name it). */
+.part {
+	display: block;
+}
+
+/* The full lockup: the frame sets the box, the J sits over it. */
+.full {
+	position: relative;
+	display: block;
+}
+
+.fullMark {
+	position: absolute;
+	inset-block-start: math.percentage(math.div($mark-y, $view-height));
+	inset-inline-start: math.percentage(math.div($mark-x, $view-width));
+	inline-size: math.percentage(math.div($mark-size, $view-width));
+	block-size: math.percentage(math.div($mark-size, $view-height));
+}
+
+.fill {
+	display: block;
+	inline-size: 100%;
+	block-size: 100%;
 }
 
 /* Reveal: a rectangle mask grows up from the bottom (animating the clip rect's

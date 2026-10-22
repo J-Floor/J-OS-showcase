@@ -11,12 +11,12 @@ import { ICONS } from "../../shared/icons.ts";
 
 import { eventsEntity } from "./entity.ts";
 import { eventColumns } from "./eventColumns.tsx";
-import { EventDrawer } from "./EventDrawer.tsx";
+import { EventSheet } from "./EventSheet.tsx";
 import styles from "./EventsPage.module.scss";
 
 /**
  * Events module: a table of events (read-only for any member with space
- * access), with a board/admin "New event" action and a row-detail drawer.
+ * access), with a board/admin "New event" action and a row-detail sheet.
  * Same shell as the Community console — no page title of its own (the sidebar
  * labels it); the top bar holds the primary action on the right.
  */
@@ -63,7 +63,7 @@ export function EventsPage() {
 					/>
 				</Show>
 			</div>
-			<EventDrawer
+			<EventSheet
 				open={open()}
 				onOpenChange={(isOpen) => {
 					if (!isOpen) close();

@@ -17,15 +17,3 @@
 		list-style: none;
 	}
 }
-
-.undatedItem {
-	background: var(--jf-surface-bg-base);
-	border: var(--jf-border-width-subtle) solid var(--jf-border-subtle);
-	border-radius: var(--jf-radius-container);
-
-	@media (hover: hover) {
-		&:hover {
-			border-color: var(--jf-border-strong);
-		}
-	}
-}

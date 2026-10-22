@@ -12,6 +12,10 @@ const baseRestrictedSyntax = baseConfig
   .map((entry) => entry.rules?.["no-restricted-syntax"])
   .find(Boolean)
   .slice(1);
+const baseRestrictedProperties = baseConfig
+  .map((entry) => entry.rules?.["no-restricted-properties"])
+  .find(Boolean)
+  .slice(1);
 
 export default [
   { ignores: ["dist/**", "convex/_generated/**"] },
@@ -100,6 +104,7 @@ export default [
       ],
       "no-restricted-properties": [
         "error",
+        ...baseRestrictedProperties,
         { property: "_unsafeUnwrap", message: UNSAFE_UNWRAP_MESSAGE },
         {
           property: "_unsafeUnwrapErr",

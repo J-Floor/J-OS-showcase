@@ -90,8 +90,8 @@ export {
 } from "./components/MakeDisablable/MakeDisablable.tsx";
 export { Popover } from "./components/Popover/Popover.tsx";
 export { Dialog } from "./components/Dialog/Dialog.tsx";
-export { Drawer } from "./components/Drawer/Drawer.tsx";
-export { DrawerNav } from "./components/DrawerNav/DrawerNav.tsx";
+export { Sheet } from "./components/Sheet/Sheet.tsx";
+export { SheetNav } from "./components/SheetNav/SheetNav.tsx";
 export { PropertyRow } from "./components/PropertyRow/PropertyRow.tsx";
 export { Menu } from "./components/Menu/Menu.tsx";
 export {
@@ -114,6 +114,14 @@ export {
 	type SwapIconButtonProps,
 } from "./components/SwapIconButton/SwapIconButton.tsx";
 export { fireConfetti } from "./utils/confetti.ts";
+export {
+	activeTransition,
+	afterTransition,
+	canAnimate,
+	viewTransition,
+} from "./utils/viewTransition.ts";
+export { unfoldLogo } from "./utils/brandUnfold.ts";
+export { hasLayoutBox } from "./utils/visibleArea.ts";
 export {
 	Confetti,
 	type ConfettiProps,
@@ -177,6 +185,28 @@ export {
 	type ComboboxItem,
 	type ComboboxRootProps,
 } from "./components/Combobox/Combobox.tsx";
+export { Morph } from "./components/Morph/Morph.tsx";
+export { morphTitle } from "./utils/morphPairing.ts";
+/**
+ * The attributes a morph pairs on, for tests that assert an app marks a
+ * column, a sheet row and a card with the same field. App code spreads
+ * `morphPart` / `morphTitle` and never writes these itself.
+ */
+export {
+	MORPH_KEY,
+	MORPH_OF,
+	MORPH_TITLE,
+	SHEET_SKELETON,
+} from "./utils/morphPairing.ts";
+/** The row-actions column's id: a test rendering a table without the
+ *  actions' app context drops the column by it. */
+export { ACTIONS_COLUMN_ID } from "./components/Table/columnTracks.ts";
+export {
+	defineFields,
+	morphPart,
+	type FieldDefinition,
+} from "./utils/fields.ts";
+export { fieldColumn } from "./components/Table/fieldColumn.ts";
 export { ICONS } from "./icons.ts";
 export type { RangeFilterValue } from "./components/Table/filter.ts";
 export {

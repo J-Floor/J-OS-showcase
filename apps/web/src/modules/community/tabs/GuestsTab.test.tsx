@@ -13,7 +13,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { GuestRow } from "../columns/guestColumns.tsx";
 
-// Ark's Dialog (the Drawer) mounts a Portal into document.body; unmount it
+// Ark's Dialog (the Sheet) mounts a Portal into document.body; unmount it
 // between tests so nodes don't accumulate and slow later queries under load.
 afterEach(cleanup);
 
@@ -167,7 +167,7 @@ test("upgrading a selected guest calls upgradeToMember with the row id", async (
 	});
 });
 
-test("clicking a row opens the drawer showing that guest's email", async () => {
+test("clicking a row opens the sheet showing that guest's email", async () => {
 	const { container } = renderWithSelection((selection) => (
 		<GuestsTab selection={selection} />
 	));
@@ -181,7 +181,7 @@ test("clicking a row opens the drawer showing that guest's email", async () => {
 	});
 });
 
-test("drawer body contains no inputs or textareas (read-only)", async () => {
+test("sheet body contains no inputs or textareas (read-only)", async () => {
 	const { container } = renderWithSelection((selection) => (
 		<GuestsTab selection={selection} />
 	));
@@ -210,12 +210,12 @@ test("drawer body contains no inputs or textareas (read-only)", async () => {
 	expect(editables[0]).toHaveAttribute("placeholder", "Add a note…");
 });
 
-test("drawer has Prev (disabled) and Next arrows; Next advances to second row", async () => {
+test("sheet has Prev (disabled) and Next arrows; Next advances to second row", async () => {
 	const { container } = renderWithSelection((selection) => (
 		<GuestsTab selection={selection} />
 	));
 
-	// Click the first data row to open the drawer
+	// Click the first data row to open the sheet
 	const adaCell = within(container).getAllByText("Ada")[0];
 	fireEvent.click(adaCell);
 
@@ -223,17 +223,17 @@ test("drawer has Prev (disabled) and Next arrows; Next advances to second row", 
 		expect(screen.getAllByText("guest@example.com")[0]).toBeInTheDocument();
 	});
 
-	// Locate the dialog content panel; the Drawer uses a plain <header> inside it
+	// Locate the dialog content panel; the Sheet uses a plain <header> inside it
 	// (not Ark's Dialog.Header), so we scope to the content panel and find the
-	// DrawerNav buttons (Previous / Next) within it.
-	// Note: disabled DrawerNav buttons are wrapped in MakeDisablable's Tooltip span,
+	// SheetNav buttons (Previous / Next) within it.
+	// Note: disabled SheetNav buttons are wrapped in MakeDisablable's Tooltip span,
 	// which makes them inaccessible to the standard AT query; use `hidden: true`.
 	const dialogContent = document.querySelector<HTMLElement>(
 		'[data-scope="dialog"][data-part="content"]'
 	);
 	expect(dialogContent).not.toBeNull();
 
-	// Both arrows render in the drawer header
+	// Both arrows render in the sheet header
 	const prevButton = within(dialogContent ?? document.body).getByRole(
 		"button",
 		{
@@ -257,7 +257,7 @@ test("drawer has Prev (disabled) and Next arrows; Next advances to second row", 
 		expect(nextButton).not.toBeDisabled();
 	});
 
-	// Click Next → drawer should now show the second row's email
+	// Click Next → sheet should now show the second row's email
 	fireEvent.click(nextButton);
 	await waitFor(() => {
 		expect(screen.getAllByText("alan@example.com")[0]).toBeInTheDocument();
@@ -275,7 +275,7 @@ test("an expired guest stays on the Guests tab, grouped under Expired", () => {
 	expect(within(container).getAllByText("Grace")[0]).toBeInTheDocument();
 });
 
-test("pressing M upgrades the guest the open drawer is showing", async () => {
+test("pressing M upgrades the guest the open sheet is showing", async () => {
 	upgradeToMember.mockClear();
 	const { container } = renderWithSelection((selection) => (
 		<GuestsTab selection={selection} />
@@ -287,8 +287,8 @@ test("pressing M upgrades the guest the open drawer is showing", async () => {
 		expect(screen.getAllByText("guest@example.com")[0]).toBeInTheDocument();
 	});
 
-	// The drawer being open is enough on its own to make the scope "active"
-	// — no `active` prop needed — and the open drawer's person wins the key
+	// The sheet being open is enough on its own to make the scope "active"
+	// — no `active` prop needed — and the open sheet's person wins the key
 	// over anything else on the roster underneath it.
 	fireEvent.keyDown(document, { key: "m" });
 	await waitFor(() => {
@@ -296,7 +296,7 @@ test("pressing M upgrades the guest the open drawer is showing", async () => {
 	});
 });
 
-test("M does nothing while this tab is not the one on screen and no drawer is open", async () => {
+test("M does nothing while this tab is not the one on screen and no sheet is open", async () => {
 	upgradeToMember.mockClear();
 	renderWithSelection((selection) => <GuestsTab selection={selection} />);
 
@@ -382,7 +382,7 @@ test("a letter does not act on a row whose focused node was removed without a fo
 	expect(upgradeToMember).not.toHaveBeenCalled();
 });
 
-test("dismissing the drawer clears the person from the URL", async () => {
+test("dismissing the sheet clears the person from the URL", async () => {
 	const { container, url } = renderWithSelection((selection) => (
 		<GuestsTab selection={selection} />
 	));
@@ -391,9 +391,9 @@ test("dismissing the drawer clears the person from the URL", async () => {
 		expect(url()).toContain("person=p1");
 	});
 
-	// Dismissing is the user closing the drawer, so the entry the open pushed is
+	// Dismissing is the user closing the sheet, so the entry the open pushed is
 	// popped and the param goes with it.
-	fireEvent.click(screen.getByRole("button", { name: /close/i }));
+	fireEvent.click(await screen.findByRole("button", { name: /close/i }));
 	await waitFor(() => {
 		expect(url()).not.toContain("person=");
 	});

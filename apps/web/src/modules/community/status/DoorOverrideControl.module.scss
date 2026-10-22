@@ -1,4 +1,4 @@
-/* Control plus its explanation, stacked in the drawer's value column. */
+/* Control plus its explanation, stacked in the sheet's value column. */
 .control {
 	display: flex;
 	flex-flow: column wrap;
@@ -6,7 +6,7 @@
 	inline-size: 100%;
 }
 
-/* The drawer's value column is narrow, so the three options stack rather than
+/* The sheet's value column is narrow, so the three options stack rather than
    scroll — see Segment's vertical orientation. */
 .segment {
 	inline-size: 100%;

@@ -1,4 +1,8 @@
-import { Confetti, type JfColumnDefinition } from "@j-os/design-system";
+import {
+	Confetti,
+	fieldColumn,
+	type JfColumnDefinition,
+} from "@j-os/design-system";
 import { For } from "solid-js";
 
 import type { Doc } from "../../../../convex/_generated/dataModel";
@@ -6,6 +10,7 @@ import type { PersonStatus } from "../../../../convex/lib/derive.ts";
 import { SHORT_TEXT_SIZE } from "../../../shared/columnSizes.ts";
 import { formatDistance } from "../../../shared/time.ts";
 import { useGuestActions } from "../actions/guestActions.ts";
+import { personFields } from "../fields.ts";
 
 import { NotesCell } from "./applicationColumns.tsx";
 import { flagsColumn } from "./flagsColumn.tsx";
@@ -49,7 +54,7 @@ const statusOptions = [
 /**
  * Per-row actions for the Guests tab: upgrade to member / kick out / view
  * agreement. Labels, icons, availability and key bindings all come from
- * `useGuestActions`, shared with the batch bar and the drawer footer — this
+ * `useGuestActions`, shared with the batch bar and the sheet footer — this
  * component just renders whatever it offers, in one consistent order with the
  * Members tab.
  */
@@ -103,41 +108,41 @@ export function guestColumns(
 			enumOptions: statusOptions,
 			accessorFn: (row) => guestStatus(row),
 		},
-		{ accessorKey: "firstName", header: "First name", dataType: "string" },
-		{ accessorKey: "lastName", header: "Last name", dataType: "string" },
+		fieldColumn(personFields.firstName, {
+			accessorKey: "firstName",
+			dataType: "string",
+		}),
+		fieldColumn(personFields.lastName, {
+			accessorKey: "lastName",
+			dataType: "string",
+		}),
 		flagsColumn<GuestRow>(),
-		{
-			id: "ventureName",
-			header: "Venture",
+		fieldColumn(personFields.ventureName, {
 			dataType: "string",
 			size: SHORT_TEXT_SIZE,
 			measureText: false,
 			accessorFn: (row) => row.venture?.name ?? "",
-		},
-		{
+		}),
+		fieldColumn(personFields.hostedById, {
 			// Editable: the board member who vouches for this guest. Inline-editable
 			// by any board member; click is kept on the cell (not the row) so editing
-			// doesn't open the detail drawer.
+			// doesn't open the detail sheet.
 			//
 			// Filters on the host's ID, not their name. The cell renders the name, so
 			// a rename never breaks a saved filter — and the legacy `hostedBy` string
 			// (imported rows whose host was never resolved) falls into an
 			// "Unresolved" bucket rather than dragging every unresolved name into the
 			// option list one at a time.
-			id: "hostedById",
-			header: "Hosted by",
 			dataType: "enum",
 			enumOptions: hosts,
 			disableRowClick: true,
 			size: 180,
 			accessorFn: (row) => hostValue(row),
 			cell: (info) => <HostSelectCell row={info.row.original} />,
-		},
-		{
+		}),
+		fieldColumn(personFields.notes, {
 			// The board's attributed notes thread (shared with the other tabs). The
 			// Guests tab doesn't bind the `n` shortcut, so no peek chip is shown.
-			id: "notes",
-			header: "Notes",
 			dataType: "string",
 			disableRowClick: true,
 			size: { min: 240, weight: 2 },
@@ -147,12 +152,10 @@ export function guestColumns(
 			cell: (info) => (
 				<NotesCell row={info.row.original} showShortcutHint={false} />
 			),
-		},
+		}),
 		...ventureColumns<GuestRow>(),
 		joinedColumn<GuestRow>(),
-		{
-			id: "timeRemaining",
-			header: "Time remaining",
+		fieldColumn(personFields.timeRemaining, {
 			dataType: "number",
 			size: "content",
 			// Coalesce to 0 so the accessor's value type is `number` (keeps the
@@ -161,7 +164,7 @@ export function guestColumns(
 			cell: (info) => timeRemainingText(info.row.original),
 			measureText: timeRemainingText,
 			measureVolatile: true,
-		},
+		}),
 		{
 			id: "actions",
 			header: "",

@@ -1,4 +1,4 @@
-import type { JfColumnDefinition } from "@j-os/design-system";
+import { fieldColumn, type JfColumnDefinition } from "@j-os/design-system";
 import { ok, type Result } from "neverthrow";
 import { For, createSignal } from "solid-js";
 
@@ -11,6 +11,7 @@ import { ChangeRoleDialog } from "../actions/ChangeRoleDialog.tsx";
 import type { RoleMove } from "../actions/ChangeRoleDialog.tsx";
 import { useMemberActions } from "../actions/memberActions.ts";
 import { type TriageResult, useTriage } from "../actions/triage.ts";
+import { personFields } from "../fields.ts";
 
 import { flagsColumn } from "./flagsColumn.tsx";
 import { joinedColumn } from "./joinedColumn.ts";
@@ -193,17 +194,21 @@ export function memberColumns(): JfColumnDefinition<MemberRow>[] {
 			enumOptions: groupOptions,
 			accessorFn: (row) => memberGroup(row),
 		},
-		{ accessorKey: "firstName", header: "First name", dataType: "string" },
-		{ accessorKey: "lastName", header: "Last name", dataType: "string" },
+		fieldColumn(personFields.firstName, {
+			accessorKey: "firstName",
+			dataType: "string",
+		}),
+		fieldColumn(personFields.lastName, {
+			accessorKey: "lastName",
+			dataType: "string",
+		}),
 		flagsColumn<MemberRow>(),
-		{
-			id: "ventureName",
-			header: "Venture",
+		fieldColumn(personFields.ventureName, {
 			dataType: "string",
 			size: SHORT_TEXT_SIZE,
 			measureText: false,
 			accessorFn: (row) => row.venture?.name ?? "",
-		},
+		}),
 		...ventureColumns<MemberRow>(),
 		joinedColumn<MemberRow>(),
 		{

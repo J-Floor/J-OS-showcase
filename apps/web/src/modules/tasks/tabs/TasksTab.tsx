@@ -1,19 +1,19 @@
 import { createEffect, createSignal, on, type JSX } from "solid-js";
 
 import type { Doc } from "../../../../convex/_generated/dataModel";
-import { createDrawerNav } from "../../../lib/createDrawerNav.ts";
+import { createSheetNav } from "../../../lib/createSheetNav.ts";
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
 import { createEntitySelection } from "../../../shared/entity/createEntitySelection.ts";
 import { filterTasksByAssignee } from "../data/taskHelpers.ts";
 import { useCurrentPerson, useProjects, useTasks } from "../data/tasksData.tsx";
-import { TaskDrawer } from "../drawers/TaskDrawer.tsx";
 import { KanbanBoard } from "../kanban/KanbanBoard.tsx";
 import type { TaskStatus } from "../kanban/onDrop.ts";
+import { TaskSheet } from "../sheets/TaskSheet.tsx";
 
 import styles from "./TabShared.module.scss";
 
 /** The tasks, and those shown on the board, narrowed by the assignee filter.
- *  Drives the kanban and the drawer's prev/next nav so navigation stays within
+ *  Drives the kanban and the sheet's prev/next nav so navigation stays within
  *  the visible set; the edited task itself still resolves from the full
  *  list. */
 function useVisibleTasks(options: { assigneeFilter: () => string }) {
@@ -57,7 +57,7 @@ export function TasksTab(props: {
 	// Bidirectional deep-linking: opening a task writes `?task=<id>`; an
 	// inbound `?task=<id>` opens it (switching to this tab first via
 	// `onNeedTab` if needed); closing clears the param.
-	const { selected, selectedId, open, loading, openRow, openCreate, close } =
+	const { selected, requestedId, open, loading, openRow, openCreate, close } =
 		createEntitySelection<Doc<"tasks">>({
 			rows: tasks.data,
 			param: "task",
@@ -71,7 +71,7 @@ export function TasksTab(props: {
 	// selection itself is a no-op once `active` is already false, so it can't
 	// clear its own URL param on the way out; the page does that (it owns both
 	// tabs' params). This just drops the LOCAL open/selected state so the
-	// drawer doesn't linger, hidden, behind the tab that's now on screen.
+	// sheet doesn't linger, hidden, behind the tab that's now on screen.
 	createEffect(
 		on(
 			() => props.active(),
@@ -82,25 +82,25 @@ export function TasksTab(props: {
 		)
 	);
 
-	// Status the create drawer opens with (a column "+" prefills its own status;
+	// Status the create sheet opens with (a column "+" prefills its own status;
 	// the big CTA uses backlog). Nothing is created until the user hits Create.
 	const [createStatus, setCreateStatus] = createSignal<TaskStatus>("backlog");
 
-	const nav = createDrawerNav({
+	const nav = createSheetNav({
 		items: () => visibleTasks() ?? [],
-		currentId: selectedId,
+		currentId: requestedId,
 		onSelect: (task) => {
 			openRow(task);
 		},
 	});
 
-	// Column "+": open the create drawer prefilled with that column's status.
+	// Column "+": open the create sheet prefilled with that column's status.
 	function addToColumn(status: TaskStatus) {
 		setCreateStatus(status);
 		openCreate();
 	}
 
-	// Open the create drawer when the tab-bar "+ Task" button fires (defer so it
+	// Open the create sheet when the tab-bar "+ Task" button fires (defer so it
 	// doesn't open on mount).
 	createEffect(
 		on(
@@ -121,7 +121,7 @@ export function TasksTab(props: {
 				onCardClick={openRow}
 				onAddTask={addToColumn}
 			/>
-			<TaskDrawer
+			<TaskSheet
 				open={open()}
 				onOpenChange={(isOpen) => {
 					if (!isOpen) close();

@@ -4,8 +4,8 @@ import type { EntitySelection } from "../../../shared/entity/createEntitySelecti
 import { itemTypeColumns } from "../columns/itemTypeColumns.tsx";
 import type { ItemType } from "../data/inventoryData.ts";
 import { useCategories, useItemTypes } from "../data/inventoryData.ts";
-import { ItemTypeDrawer } from "../drawers/ItemTypeDrawer.tsx";
 import { itemTypeEntity } from "../entity.ts";
+import { ItemTypeSheet } from "../sheets/ItemTypeSheet.tsx";
 
 import { InventoryTab } from "./InventoryTab.tsx";
 
@@ -20,14 +20,14 @@ export function ItemTypesTab(props: {
 			columns={() => itemTypeColumns(types.data() ?? [])}
 			selection={props.selection}
 			descriptor={itemTypeEntity}
-			renderDrawer={(drawer) => (
-				<ItemTypeDrawer
-					open={drawer.open()}
-					onOpenChange={drawer.onOpenChange}
-					itemType={drawer.row()}
+			renderSheet={(sheet) => (
+				<ItemTypeSheet
+					open={sheet.open()}
+					onOpenChange={sheet.onOpenChange}
+					itemType={sheet.row()}
 					categories={categories.data() ?? []}
 					loading={props.selection.loading()}
-					nav={drawer.nav}
+					nav={sheet.nav}
 				/>
 			)}
 		/>

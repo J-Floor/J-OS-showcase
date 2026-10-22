@@ -63,10 +63,7 @@ them; run
 Everything runs at `--max-warnings 0`; the lint output names the rule. What
 the output can't tell you is how to respond:
 
-- **Never split a file only to get under `max-lines`.** Split along a real
-  seam (a function doing two things, a component with a nameable part). A
-  cohesive module gets a `max-lines: off` entry in `eslint.config.js`
-  instead.
+- Lint exceptions and `max-lines`: see the root `AGENTS.md`.
 - **A `jscpd` failure means extract the shared part.** Don't reshuffle lines
   until the detector stops matching.
 - **`no-unnecessary-condition` on a `??` or a guard means the type is right

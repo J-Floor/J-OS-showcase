@@ -3,7 +3,7 @@
 // `lifecycleMigration` wrote `stageSince: person.stageSince ?? now`, and the
 // field did not exist before that migration, so the `??` fell through for every
 // row. Production carried 250 of 251 people on a single instant — 2026-08-02
-// 14:14:54Z — which the drawer honestly reported as "Since: Today" for all of
+// 14:14:54Z — which the sheet honestly reported as "Since: Today" for all of
 // them, and which would have marched to "Yesterday", "2 days ago" in lockstep
 // forever.
 //

@@ -1,6 +1,7 @@
 import {
 	Combobox,
 	EditableText,
+	type FieldDefinition,
 	NumberInput,
 	PropertyRow,
 	Select,
@@ -25,9 +26,11 @@ import {
 	verticalOptions,
 } from "../signup/options.ts";
 
+import { personFields } from "./fields.ts";
+
 /** Shared, presentational editors for the venture/profile fields. Each takes a
  * value and an `onCommit`; the caller wires `onCommit` to whichever mutation it
- * owns (board `people.update` in the drawer, `updateOwnProfile` in MyProfile).
+ * owns (board `people.update` in the sheet, `updateOwnProfile` in MyProfile).
  * Extracted so the two editors cannot drift — they must offer the same fields. */
 
 export function PhoneField(props: {
@@ -35,7 +38,7 @@ export function PhoneField(props: {
 	onCommit: (v: string) => void;
 }) {
 	return (
-		<PropertyRow icon={ICONS.phone} label="Phone">
+		<PropertyRow field={personFields.phone}>
 			<EditableText
 				value={props.value ?? ""}
 				maxLength={PHONE_MAX}
@@ -45,16 +48,20 @@ export function PhoneField(props: {
 	);
 }
 
-/** The venture-name row. `label` is a prop because the board drawer calls it
- * "Venture" (matching its read-only view) while the member profile calls it
- * "Company" — same editor, different surface copy. */
+/** The venture-name row. The board sheet shows it as the roster's Venture
+ * field (so it pairs with that column); the member profile passes its own
+ * `label`, "Company" — same editor, different surface copy. */
 export function CompanyField(props: {
 	value?: string;
-	label: string;
+	label?: string;
 	onCommit: (v: string) => void;
 }) {
 	return (
-		<PropertyRow icon={ICONS.venture} label={props.label}>
+		<PropertyRow
+			{...(props.label === undefined
+				? { field: personFields.ventureName }
+				: { icon: ICONS.venture, label: props.label })}
+		>
 			<EditableText
 				value={props.value ?? ""}
 				maxLength={VENTURE_NAME_MAX}
@@ -69,7 +76,7 @@ export function DescriptionRow(props: {
 	onCommit: (v: string) => void;
 }) {
 	return (
-		<PropertyRow icon={ICONS.description} label="Description">
+		<PropertyRow field={personFields.description}>
 			<EditableText
 				multiline
 				maxLength={TEXT_MAX}
@@ -85,7 +92,7 @@ export function TeamSizeField(props: {
 	onCommit: (n: number | undefined) => void;
 }) {
 	return (
-		<PropertyRow icon={ICONS.teamSize} label="Team size">
+		<PropertyRow field={personFields.teamSize}>
 			<NumberInput
 				min={1}
 				value={
@@ -128,8 +135,7 @@ export function VerticalField(props: {
 
 /** Generic single-select stage row backing Product/Funding stage. */
 function StageSelect<T extends string>(props: {
-	icon: string;
-	label: string;
+	field: FieldDefinition;
 	options: { value: T; label: string }[];
 	value?: T;
 	onCommit: (v: T | undefined) => void;
@@ -141,7 +147,7 @@ function StageSelect<T extends string>(props: {
 		}))
 	);
 	return (
-		<PropertyRow icon={props.icon} label={props.label}>
+		<PropertyRow field={props.field}>
 			<Select.Root
 				placeholder="Pick one"
 				allowClearing
@@ -163,8 +169,7 @@ export function ProductStageField(props: {
 }) {
 	return (
 		<StageSelect
-			icon={ICONS.productStage}
-			label="Product stage"
+			field={personFields.productStage}
 			options={productStageOptions}
 			value={props.value}
 			onCommit={props.onCommit}
@@ -178,8 +183,7 @@ export function FundingStageField(props: {
 }) {
 	return (
 		<StageSelect
-			icon={ICONS.fundingStage}
-			label="Funding stage"
+			field={personFields.fundingStage}
 			options={fundingStageOptions}
 			value={props.value}
 			onCommit={props.onCommit}
@@ -192,7 +196,7 @@ export function WhyJoinField(props: {
 	onCommit: (v: string) => void;
 }) {
 	return (
-		<PropertyRow icon={ICONS.whyJoin} label="Why join">
+		<PropertyRow field={personFields.whyJoin}>
 			<EditableText
 				multiline
 				value={props.value ?? ""}
@@ -207,7 +211,7 @@ export function PastBuiltField(props: {
 	onCommit: (v: string) => void;
 }) {
 	return (
-		<PropertyRow icon={ICONS.pastBuilt} label="Past built">
+		<PropertyRow field={personFields.pastBuilt}>
 			<EditableText
 				multiline
 				value={props.value ?? ""}
@@ -222,7 +226,7 @@ export function ReferralField(props: {
 	onCommit: (v: string) => void;
 }) {
 	return (
-		<PropertyRow icon={ICONS.share} label="Referral">
+		<PropertyRow field={personFields.referral}>
 			<EditableText value={props.value ?? ""} onCommit={props.onCommit} />
 		</PropertyRow>
 	);

@@ -1,5 +1,14 @@
-import { cleanup, render, screen } from "@solidjs/testing-library";
-import { afterEach, expect, test } from "vitest";
+import { cleanup, render, screen, waitFor } from "@solidjs/testing-library";
+import { createSignal } from "solid-js";
+import { afterEach, expect, onTestFinished, test } from "vitest";
+
+import {
+	fakeViewTransitions,
+	mockLayoutBoxes,
+	namedIds,
+	restoreViewTransitions,
+} from "../../test/viewTransitionFakes.ts";
+import type { EntityId } from "../Morph/Morph.tsx";
 
 import { Dialog } from "./Dialog.tsx";
 
@@ -45,4 +54,52 @@ test("renders the title and content the caller passed", () => {
 	const dialog = screen.getByRole("dialog");
 	expect(dialog).toHaveAccessibleName("Change role");
 	expect(screen.getByText("Pick a destination.")).toBeInTheDocument();
+});
+
+test("morph={false} still opens and closes", async () => {
+	const [open, setOpen] = createSignal(false);
+	render(() => (
+		<Dialog.Root open={open()} morph={false}>
+			<Dialog.Content>
+				<Dialog.Title>Plain</Dialog.Title>
+			</Dialog.Content>
+		</Dialog.Root>
+	));
+	setOpen(true);
+	expect(await screen.findByRole("dialog")).toHaveAttribute(
+		"data-state",
+		"open"
+	);
+	setOpen(false);
+	await waitFor(() => {
+		expect(screen.getByRole("dialog", { hidden: true })).toHaveAttribute(
+			"data-state",
+			"closed"
+		);
+	});
+});
+
+test("given an entity, closes into the on-screen element showing it", async () => {
+	const names: string[] = [];
+	mockLayoutBoxes();
+	fakeViewTransitions({
+		sync: true,
+		onSnapshot: () => names.push(...namedIds("[data-morph-of]")),
+	});
+	onTestFinished(restoreViewTransitions);
+	const [open, setOpen] = createSignal(true);
+	render(() => (
+		<>
+			<div id="row" data-morph-of="t1" />
+			<Dialog.Root open={open()} morph={"t1" as EntityId}>
+				<Dialog.Content>
+					<Dialog.Title>Task</Dialog.Title>
+				</Dialog.Content>
+			</Dialog.Root>
+		</>
+	));
+	setOpen(false);
+	await waitFor(() => {
+		expect(names).toEqual(["row"]);
+	});
 });

@@ -69,7 +69,7 @@ function toRoleMove(
  * Pick a destination for one or many people, and turn it into the event that
  * gets there.
  *
- * Lives apart from {@link ChangeRoleDialog} because the drawer offers the same
+ * Lives apart from {@link ChangeRoleDialog} because the sheet offers the same
  * choice inline: unlocking a member or guest used to show every other field as
  * editable while their role — the one thing the board actually changes — stayed
  * frozen text. Two copies of this would drift, and the part that must not drift

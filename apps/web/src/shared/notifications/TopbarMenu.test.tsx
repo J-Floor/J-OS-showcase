@@ -96,7 +96,7 @@ test("renders one kebab trigger labelled More", () => {
 	expect(screen.getAllByRole("button", { name: "More" })).toHaveLength(1);
 });
 
-test("the bell opens the notifications drawer", () => {
+test("the bell opens the notifications sheet", () => {
 	render(() => (
 		<JFloorProvider>
 			<NotificationsBell />
@@ -106,7 +106,7 @@ test("the bell opens the notifications drawer", () => {
 	expect(isNotificationsOpen()).toBe(true);
 });
 
-test("opening the menu lists its items, and Notifications opens the drawer", async () => {
+test("opening the menu lists its items, and Notifications opens the sheet", async () => {
 	render(() => (
 		<JFloorProvider>
 			<AbilityProvider role="member">

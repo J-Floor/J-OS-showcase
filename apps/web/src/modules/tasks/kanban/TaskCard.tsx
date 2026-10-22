@@ -1,13 +1,34 @@
-import { Icon } from "@j-os/design-system";
+import { Icon, Morph, morphPart, morphTitle } from "@j-os/design-system";
 import { For, Show, type JSX } from "solid-js";
 
 import { ICONS } from "../../../shared/icons.ts";
 import { assigneeNames, formatDate, projectName } from "../data/taskHelpers.ts";
 import type { Person, Project, Task } from "../data/tasksData.tsx";
+import { taskFields } from "../fields.ts";
 
 import styles from "./TaskCard.module.scss";
 
 const CLICK_SLOP_PX = 5;
+
+function Assignees(props: { names: string[] }): JSX.Element {
+	return (
+		<span class={styles.assignees} {...morphPart(taskFields.assigneeIds)}>
+			<Icon>{ICONS.assignees}</Icon>
+			<span>
+				<For each={props.names}>
+					{(name, index) => (
+						<>
+							<span>{name}</span>
+							<Show when={index() !== props.names.length - 1}>
+								,{" "}
+							</Show>
+						</>
+					)}
+				</For>
+			</span>
+		</span>
+	);
+}
 
 export function TaskCard(props: {
 	task: Task;
@@ -30,7 +51,7 @@ export function TaskCard(props: {
 	}
 
 	// Distinguish a click from a drag: solid-dnd fires a native click after a
-	// drag ends, which would otherwise open the drawer. Ignore clicks where the
+	// drag ends, which would otherwise open the sheet. Ignore clicks where the
 	// pointer moved more than a few px between down and up.
 	let downX = 0;
 	let downY = 0;
@@ -48,48 +69,46 @@ export function TaskCard(props: {
 	}
 
 	return (
-		<article
-			classList={{ [styles.card]: true, [styles.pointer]: props.pointer }}
-			onPointerDown={onPointerDown}
-			onClick={onClick}
-		>
-			<h4 class={styles.title}>{props.task.title}</h4>
-			<div class={styles.meta}>
-				<Show when={!props.hideProject && project()}>
-					<span class={styles.project}>
-						<Icon>{ICONS.project}</Icon>
-						{project()}
-					</span>
-				</Show>
-				<Show when={names().length}>
-					<span class={styles.assignees}>
-						<Icon>{ICONS.assignees}</Icon>
-						<span>
-							<For each={names()}>
-								{(name) => (
-									<>
-										<span>{name}</span>
-										<Show
-											when={
-												names().indexOf(name) !==
-												names().length - 1
-											}
-										>
-											,{" "}
-										</Show>
-									</>
-								)}
-							</For>
-						</span>
-					</span>
-				</Show>
-				<Show when={due()}>
-					<span class={styles.due}>
-						<Icon>{ICONS.date}</Icon>
-						{due()}
-					</span>
-				</Show>
-			</div>
-		</article>
+		<Morph
+			of={props.task._id}
+			asChild={(morph) => (
+				<article
+					{...morph()}
+					classList={{
+						[styles.card]: true,
+						[styles.pointer]: props.pointer,
+					}}
+					onPointerDown={onPointerDown}
+					onClick={onClick}
+				>
+					<h4 class={styles.title} {...morphTitle}>
+						{props.task.title}
+					</h4>
+					<div class={styles.meta}>
+						<Show when={!props.hideProject && project()}>
+							<span
+								class={styles.project}
+								{...morphPart(taskFields.projectId)}
+							>
+								<Icon>{ICONS.project}</Icon>
+								{project()}
+							</span>
+						</Show>
+						<Show when={names().length}>
+							<Assignees names={names()} />
+						</Show>
+						<Show when={due()}>
+							<span
+								class={styles.due}
+								{...morphPart(taskFields.dueDate)}
+							>
+								<Icon>{ICONS.date}</Icon>
+								{due()}
+							</span>
+						</Show>
+					</div>
+				</article>
+			)}
+		/>
 	);
 }

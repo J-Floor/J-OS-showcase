@@ -12,7 +12,7 @@ import { eventAttendeesQuery } from "./queries.ts";
 import { visitorUrl } from "./visitorUrl.ts";
 
 // Fixed to the site zone, not the browser's — a travelling admin must see the
-// same date here as in the table/drawer (both Zurich), not their host TZ.
+// same date here as in the table/sheet (both Zurich), not their host TZ.
 const dateFormat = new Intl.DateTimeFormat(undefined, {
 	dateStyle: "medium",
 	timeZone: SITE_TIMEZONE,

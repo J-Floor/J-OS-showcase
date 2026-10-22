@@ -51,7 +51,7 @@ const REPAIRABLE_EVENTS = new Set([
  * The board approved them a day after they applied.
  *
  * The signature lands a minute later rather than at the same instant: both
- * timestamps are stand-ins, and two identical ones would leave the drawer's
+ * timestamps are stand-ins, and two identical ones would leave the sheet's
  * timeline free to print "Signed the agreement" above "Approved as a member".
  * A minute is not a claim about how long they took — it is the smallest thing
  * that keeps the order true.
@@ -160,7 +160,7 @@ export const preview = internalQuery({
 });
 
 /** Moves both the events and the signatures off the bad day, together — the
- *  drawer's timeline and the agreement record describe the same act, and one
+ *  sheet's timeline and the agreement record describe the same act, and one
  *  repaired without the other is two dates for one signature. */
 export const run = internalMutation({
 	args: { dryRun: v.optional(v.boolean()) },

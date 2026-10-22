@@ -342,7 +342,7 @@ function emailOf(
 }
 
 describe("lifecycleAlert email", () => {
-	it("gives each person their own escaped paragraph linking their drawer", () => {
+	it("gives each person their own escaped paragraph linking their sheet", () => {
 		vi.stubEnv("SITE_URL", "https://app.example.com");
 		const mail = emailOf({
 			headline: "2 people have an inconsistent status",

@@ -10,15 +10,9 @@ import type { Hotkey } from "@tanstack/solid-hotkeys";
 import { Show, createMemo, createSignal, type JSX } from "solid-js";
 
 import { ICONS } from "../icons.ts";
-import { morph } from "../viewTransition/morph.ts";
 
 import styles from "./GlobalSearch.module.scss";
 import { SearchSources, pageItems, tabItems } from "./sources.tsx";
-
-/** `base`, plus the shared view-transition name when `isCarrying` is true. */
-function withMorph(base: string, isCarrying: boolean): string {
-	return isCarrying ? `${base} ${styles.morph}` : base;
-}
 
 /** One string, bound by the palette and rendered by the field's hint. */
 const SEARCH_SHORTCUT: Hotkey = "Mod+K";
@@ -26,9 +20,11 @@ const SEARCH_SHORTCUT: Hotkey = "Mod+K";
 function SearchField(props: {
 	class: string;
 	onOpen: () => void;
+	setRoot: (element: HTMLElement) => void;
 }): JSX.Element {
 	return (
 		<Input
+			rootRef={props.setRoot}
 			// `label=""` is falsy, so MakeField renders no <label> at all
 			// and the field would reach a screen reader unnamed. The visible
 			// design has no label — the magnifier and the placeholder carry
@@ -67,8 +63,9 @@ function SearchField(props: {
  * happens. That keeps one search box on screen instead of two that behave
  * differently.
  *
- * The palette morphs out of whichever search control is on screen; see
- * `morph.ts`.
+ * The palette morphs out of whichever search control was clicked; the design
+ * system's `Dialog` does that. ⌘K clicks nothing, so it opens out of whichever
+ * control is on screen.
  *
  * The palette stays mounted while closed, because it owns the ⌘K binding and a
  * component that is not there cannot open itself. Its DATA sources are what
@@ -80,71 +77,26 @@ export function GlobalSearch(): JSX.Element {
 	const [open, setOpen] = createSignal(false);
 	const [entities, setEntities] = createSignal<CommandPaletteItem[]>([]);
 
-	/**
-	 * A header control: it carries the morph while the palette is closed, and is
-	 * hidden while it is open. Without the hide, the field stays in the header's
-	 * "after" snapshot, so the morph played on top of a second copy of the search
-	 * box and the palette looked duplicated.
-	 */
-	function headerControl(base: string): string {
-		return open()
-			? `${base} ${styles.hiddenWhileOpen}`
-			: withMorph(base, true);
-	}
-
 	// Order matters: it is the order a blank palette lists them in, and the
 	// tie-break when several things score the same.
-	const items = createMemo(() =>
-		[...pageItems(navigate), ...tabItems(navigate), ...entities()].map(
-			(item) => ({
-				...item,
-				// Run the selection only after the palette has actually closed,
-				// so navigation (a drawer deep link) is not followed by the
-				// modal's focus restore stealing focus back to the header.
-				onSelect: () => {
-					void settled.then(item.onSelect);
-				},
-			})
-		)
-	);
+	const items = createMemo(() => [
+		...pageItems(navigate),
+		...tabItems(navigate),
+		...entities(),
+	]);
 
-	// `open()` only flips inside the morph's deferred callback, so requests are
-	// compared against the last one made. Callbacks run in order, so the final
-	// state is the last request. Known limit: ⌘K sends `!props.open`, so a
-	// second ⌘K inside the ~1-frame pending window repeats the same request and
-	// is ignored.
-	let isTarget = false;
-	let settled: Promise<void> = Promise.resolve();
-	// Where focus was before the palette opened. Without a morph the dialog puts
-	// it back on close. Inside a View Transition the palette's combobox refocuses
-	// its own input a frame later, while that input is still focusable, and the
-	// caret stayed in the closed palette, swallowing every keystroke.
-	let opener: HTMLElement | null = null;
-
-	function setOpenMorphing(isNext: boolean): void {
-		if (isNext === isTarget) return;
-		isTarget = isNext;
-		if (isNext) {
-			opener =
-				document.activeElement instanceof HTMLElement
-					? document.activeElement
-					: null;
-			settled = morph(() => setOpen(true));
-			return;
-		}
-		const stranded = document.activeElement;
-		settled = morph(() => setOpen(false)).then(() => {
-			// Only while focus is still where the palette left it.
-			if (document.activeElement === stranded) opener?.focus();
-		});
-	}
+	let field: HTMLElement | undefined;
+	let compact: HTMLElement | undefined;
 
 	return (
 		<>
 			<SearchField
-				class={headerControl(styles.field)}
+				class={styles.field}
+				setRoot={(element) => {
+					field = element;
+				}}
 				onOpen={() => {
-					setOpenMorphing(true);
+					setOpen(true);
 				}}
 			/>
 			{/*
@@ -162,10 +114,13 @@ export function GlobalSearch(): JSX.Element {
 			 * already makes.
 			 */}
 			<IconButton
-				class={headerControl(styles.compact)}
+				ref={(element: HTMLElement) => {
+					compact = element;
+				}}
+				class={styles.compact}
 				tooltipLabel="Search"
 				onClick={() => {
-					setOpenMorphing(true);
+					setOpen(true);
 				}}
 			>
 				{ICONS.search}
@@ -175,8 +130,8 @@ export function GlobalSearch(): JSX.Element {
 			</Show>
 			<CommandPalette
 				open={open()}
-				onOpenChange={setOpenMorphing}
-				class={withMorph(styles.palette, open())}
+				onOpenChange={setOpen}
+				morphFrom={() => [field, compact]}
 				shortcut={SEARCH_SHORTCUT}
 				items={items()}
 				placeholder="Search pages, people, tasks…"

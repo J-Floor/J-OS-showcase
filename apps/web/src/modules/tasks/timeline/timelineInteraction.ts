@@ -1,3 +1,4 @@
+import { afterTransition } from "@j-os/design-system";
 import {
 	createEffect,
 	createSignal,
@@ -333,7 +334,7 @@ export function createBarDrag(options: {
 			if (!info) return;
 			const dx = event.clientX - info.startX;
 			const dayWidth = options.timeline()?.dayWidth ?? 1;
-			// A near-stationary pointer is a click → open the drawer.
+			// A near-stationary pointer is a click → open the sheet.
 			if (Math.abs(dx) < CLICK_SLOP_PX) {
 				options.onSelect(info.id);
 				return;
@@ -355,14 +356,20 @@ export function createBarDrag(options: {
  *  date range. */
 export function createNewRangeDrag(options: {
 	timeline: Accessor<Timeline | null>;
-	/** Drag across the "New" row to create a project with that date range. */
-	onCreateRange: (startMs: number, endMs: number) => void;
+	/** Drag across the "New" row to create a project with that date range;
+	 *  `from` is the dragged range's preview, which the sheet opens out of. */
+	onCreateRange: (
+		startMs: number,
+		endMs: number,
+		from: HTMLElement | null
+	) => void;
 }) {
 	const [newRange, setNewRange] = createSignal<{
 		a: number;
 		b: number;
 	} | null>(null);
 	let newAnchor: number | null = null;
+	let preview: HTMLElement | null = null;
 
 	function offsetFromEvent(event: PointerEvent): number {
 		const rect = (
@@ -374,6 +381,9 @@ export function createNewRangeDrag(options: {
 
 	return {
 		newRange,
+		setPreview: (element: HTMLElement): void => {
+			preview = element;
+		},
 		newPointerDown: (event: PointerEvent): void => {
 			(event.currentTarget as HTMLElement).setPointerCapture(
 				event.pointerId
@@ -390,15 +400,23 @@ export function createNewRangeDrag(options: {
 			const anchor = newAnchor;
 			const offset = offsetFromEvent(event);
 			newAnchor = null;
-			setNewRange(null);
 			const timeline = options.timeline();
-			if (!timeline) return;
+			if (!timeline) {
+				setNewRange(null);
+				return;
+			}
 			const lo = Math.min(anchor, offset);
 			const hi = Math.max(anchor, offset);
+			// The sheet opens out of the preview, so it stays until that
+			// morph has finished (at once without one).
 			options.onCreateRange(
 				timeline.rangeStartMs + lo * DAY_MS,
-				timeline.rangeStartMs + hi * DAY_MS
+				timeline.rangeStartMs + hi * DAY_MS,
+				preview
 			);
+			void afterTransition().then(() => {
+				if (newAnchor === null) setNewRange(null);
+			});
 		},
 	};
 }

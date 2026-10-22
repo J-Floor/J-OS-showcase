@@ -1,8 +1,14 @@
 import { Tabs as ArkTabs } from "@ark-ui/solid";
 import clsx from "clsx";
-import { Show, splitProps, type JSX } from "solid-js";
+import { Show, createSignal, splitProps, type JSX } from "solid-js";
+
+import { moveName } from "../../utils/viewTransition.ts";
 
 import styles from "./Tabs.module.scss";
+
+type ValueChangeDetails = Parameters<
+	NonNullable<ArkTabs.RootProps["onValueChange"]>
+>[0];
 
 /**
  * Binds the active tab to a URL search param. The component owns the
@@ -22,16 +28,52 @@ type TabsUrlParameter<K extends string = string> = {
 	keys?: readonly K[];
 };
 
+/** The parts of THIS root, not of a Tabs nested inside one of its panels. */
+function ownParts(
+	root: HTMLElement,
+	part: "trigger" | "content"
+): HTMLElement[] {
+	return [
+		...root.querySelectorAll<HTMLElement>(
+			`[data-scope="tabs"][data-part="${part}"]`
+		),
+	].filter(
+		(element) =>
+			element.closest('[data-scope="tabs"][data-part="root"]') === root
+	);
+}
+
+/** zag marks a trigger with `data-value` but a panel with nothing, so
+ *  `Content` adds `data-tab-value`. */
+function panel(root: HTMLElement, value: string): HTMLElement | undefined {
+	return ownParts(root, "content").find(
+		(element) => element.dataset.tabValue === value
+	);
+}
+
+/**
+ * Tabs root. Controlled inside: Ark gets `current()`, and a change flips it
+ * inside a View Transition, because with uncontrolled Ark the panel has
+ * already swapped when `onValueChange` fires and there is nothing left to
+ * capture. The panel slides in the direction of the trigger order.
+ */
 function Root<K extends string = string>(
 	props: ArkTabs.RootProps & { value?: K; urlParam?: TabsUrlParameter<K> }
 ) {
-	const [local, rest] = splitProps(props, ["urlParam"]);
+	const [local, rest] = splitProps(props, [
+		"urlParam",
+		"value",
+		"onValueChange",
+		"ref",
+	]);
+	const [inner, setInner] = createSignal<string | undefined>(
+		rest.defaultValue ?? undefined
+	);
+	let rootElement: HTMLElement | undefined;
 
-	// With `urlParam`, the active tab is derived from the URL and writes flow
-	// back through the injected setter. Without it, behave as a plain Ark Root.
 	function value(): string | undefined {
 		const urlParameter = local.urlParam;
-		if (!urlParameter) return rest.value ?? undefined;
+		if (!urlParameter) return local.value ?? inner();
 		const current = urlParameter.get();
 		return typeof current === "string" &&
 			(!urlParameter.keys ||
@@ -40,14 +82,45 @@ function Root<K extends string = string>(
 			: urlParameter.fallback;
 	}
 
+	function change(details: ValueChangeDetails): void {
+		const next = details.value;
+		const urlParameter = local.urlParam;
+		const onChange = local.onValueChange;
+		const previous = value();
+		const root = rootElement;
+		function apply(): void {
+			setInner(next);
+			urlParameter?.set(next as K);
+			onChange?.(details);
+		}
+		if (!root || previous === undefined) {
+			apply();
+			return;
+		}
+		const order = ownParts(root, "trigger").map(
+			(element) => element.dataset.value
+		);
+		const isForward = order.indexOf(next) > order.indexOf(previous);
+		void moveName({
+			from: panel(root, previous),
+			to: () => panel(root, next),
+			name: "jf-tab",
+			kind: isForward ? "tab-forward" : "tab-back",
+			update: apply,
+		});
+	}
+
 	return (
 		<ArkTabs.Root
 			{...rest}
-			value={value()}
-			onValueChange={(details) => {
-				local.urlParam?.set(details.value as K);
-				rest.onValueChange?.(details);
+			ref={(element: HTMLElement) => {
+				rootElement = element;
+				(local.ref as ((target: HTMLElement) => void) | undefined)?.(
+					element
+				);
 			}}
+			value={value()}
+			onValueChange={change}
 		/>
 	);
 }
@@ -71,7 +144,11 @@ function Trigger(props: ArkTabs.TriggerProps) {
 
 function Content(props: ArkTabs.ContentProps) {
 	return (
-		<ArkTabs.Content {...props} class={clsx(styles.content, props.class)}>
+		<ArkTabs.Content
+			{...props}
+			data-tab-value={props.value}
+			class={clsx(styles.content, props.class)}
+		>
 			{props.children}
 		</ArkTabs.Content>
 	);

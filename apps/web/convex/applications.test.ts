@@ -421,7 +421,7 @@ describe("applications.decide", () => {
 		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person?.tier).toBe("guest");
 		expect(person?.door?.override).toBe("force_off");
-		// Logged the same way the drawer's own control logs it, so the history
+		// Logged the same way the sheet's own control logs it, so the history
 		// does not depend on which surface the decision was made from.
 		const events = await backend.run(async (context) =>
 			context.db

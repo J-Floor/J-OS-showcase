@@ -66,7 +66,7 @@ state that wrote it, and nothing unwrites it: `RE_ADMIT` and `REAPPLY` both leav
 field **inside the derivation**, not at each call site. `personStatus()` reads
 `formerReason` only when `tier === "former"`, so no screen can forget the guard
 and badge a current member as kicked out — which is what happened when the guard
-lived in the drawer.
+lived in the sheet.
 
 ## Changing the machine
 
@@ -105,7 +105,7 @@ disagreeing.
 ## Things that will surprise you
 
 **The board's WhatsApp step does not gate activation.** It is tracked, it is
-visible in the drawer, and a board member forgetting it cannot hold anyone up.
+visible in the sheet, and a board member forgetting it cannot hold anyone up.
 It lives in `boardSteps`, deliberately separate from the person's own steps.
 
 **Promotion does not touch the door.** A guest becoming a member re-opens the
@@ -127,13 +127,13 @@ which was wrong — a heading that states something false about a row is not
 repaired by a badge further along the same row, because the heading is read
 first and believed.
 
-**The table shows exceptions, the drawer shows everything.** `personStatus()`
+**The table shows exceptions, the sheet shows everything.** `personStatus()`
 returns both `flags` and `facts`, and they are not two views of one list. A
 `flag` is something the tab, the group header and the other columns do NOT
 already say — a missing agreement, a board door override, an outstanding board
 to-do — so most rows have none, and an empty Flags cell is the signal that there
 is nothing to know. `facts` is the full readout, one labelled line each, and only
-the drawer renders it. When you add to the status, decide which of the two it is;
+the sheet renders it. When you add to the status, decide which of the two it is;
 adding it to both is how the table went back to restating its neighbours.
 
 Neither carries any wording. `derive.ts` returns ids and enums; every
@@ -149,7 +149,7 @@ only signal that someone has been sitting somewhere too long.
 ## The audit log
 
 Every transition, email, board task, self-serve step and field edit writes a
-`personEvents` row. The drawer renders it as a timeline, with field edits
+`personEvents` row. The sheet renders it as a timeline, with field edits
 collapsed by default so the shape of someone's history stays legible.
 
 If you add a write that a board member might later ask "who did that, and when"

@@ -13,7 +13,7 @@ export { MOVES } from "./roleMoves.ts";
 export type { RoleMove } from "./roleMoves.ts";
 
 /**
- * The batch/row way to change a role: the same chooser the drawer shows inline
+ * The batch/row way to change a role: the same chooser the sheet shows inline
  * (see {@link RoleChooser}), wrapped in a dialog with its own confirm.
  */
 export function ChangeRoleDialog(props: {

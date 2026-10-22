@@ -297,7 +297,7 @@ describe("door.setOverride", () => {
 });
 
 /**
- * The Flags column, the drawer's Status line and the drawer's override control
+ * The Flags column, the sheet's Status line and the sheet's override control
  * all claim to describe the same thing, and were reported as disagreeing. This
  * pins the server half: one read after the change carries the new flag AND the
  * new fact, so any disagreement on screen is the client rendering a stale copy.
