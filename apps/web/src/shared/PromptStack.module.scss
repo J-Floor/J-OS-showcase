@@ -2,8 +2,8 @@
 
 /* Floats at the foot of the content column (`.main` is `position: relative`).
    On a phone `.main` sits above the bottom bar, so the stack clears it without
-   needing the bar's height, and rises above a page's floating tab toolbar
-   (Tabs.Bar) while one shows. */
+   needing the bar's height, and rises above a page's floating toolbar
+   (FloatingToolbar, also Tabs.Actions) while one shows. */
 .stack {
 	position: absolute;
 	inset-inline: 0;

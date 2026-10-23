@@ -20,6 +20,7 @@ export {
 export { Icon, type IconProps } from "./components/Icon/Icon.tsx";
 export { Kbd, type KbdProps } from "./components/Kbd/Kbd.tsx";
 export { isTypingTarget } from "./utils/typingTarget.ts";
+export { OWN_GESTURES_ATTR } from "./utils/swipe.ts";
 export { createHoverIntent, HOVER_INTENT_MS } from "./utils/hoverIntent.ts";
 export {
 	ShortcutPeekProvider,
@@ -100,6 +101,10 @@ export {
 } from "./components/MakeField/MakeField.tsx";
 export { List } from "./components/List/List.tsx";
 export { Tabs } from "./components/Tabs/Tabs.tsx";
+export {
+	FloatingToolbar,
+	type FloatingToolbarProps,
+} from "./components/FloatingToolbar/FloatingToolbar.tsx";
 export { Segment } from "./components/Segment/Segment.tsx";
 export {
 	Accordion,

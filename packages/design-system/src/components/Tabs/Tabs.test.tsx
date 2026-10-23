@@ -1,11 +1,14 @@
+import { readFileSync } from "node:fs";
+
 import { render, screen, fireEvent, waitFor } from "@solidjs/testing-library";
-import { afterEach, vi } from "vitest";
+import { afterEach, describe, vi } from "vitest";
 
 import {
 	fakeViewTransitions,
 	restoreViewTransitions,
 	transitionSettled,
 } from "../../test/viewTransitionFakes.ts";
+import { OWN_GESTURES_ATTR } from "../../utils/swipe.ts";
 
 import { Tabs } from "./Tabs.tsx";
 
@@ -236,4 +239,194 @@ test("Bar scrolls the active trigger into view, and again when it changes", asyn
 		delete (Element.prototype as { scrollIntoView?: unknown })
 			.scrollIntoView;
 	}
+});
+
+function pointer(
+	type: string,
+	target: Element,
+	x: number,
+	pointerType = "touch"
+): void {
+	target.dispatchEvent(
+		new PointerEvent(type, {
+			bubbles: true,
+			pointerId: 1,
+			pointerType,
+			isPrimary: true,
+			clientX: x,
+			clientY: 100,
+		})
+	);
+}
+
+/** A finger moving 120px left (to the next tab) or right (back). */
+function swipe(
+	target: Element,
+	way: "left" | "right",
+	pointerType = "touch"
+): void {
+	pointer("pointerdown", target, 200, pointerType);
+	pointer("pointerup", target, way === "left" ? 80 : 320, pointerType);
+}
+
+describe("swipe", () => {
+	test("a swipe left on a panel moves to the next tab, sliding forward", async () => {
+		const kinds = fakeTransition();
+		threeTabs("a");
+		swipe(screen.getByText("PanelA"), "left");
+		await waitFor(() => {
+			expect(screen.getByText("PanelB")).toBeVisible();
+		});
+		expect(kinds).toEqual(["tab-forward"]);
+	});
+
+	test("a swipe right moves to the previous tab, sliding back", async () => {
+		const kinds = fakeTransition();
+		threeTabs("b");
+		swipe(screen.getByText("PanelB"), "right");
+		await waitFor(() => {
+			expect(screen.getByText("PanelA")).toBeVisible();
+		});
+		expect(kinds).toEqual(["tab-back"]);
+	});
+
+	test("does nothing past the first or the last tab", () => {
+		const onValueChange = vi.fn();
+		render(() => (
+			<Tabs.Root defaultValue="a" onValueChange={onValueChange}>
+				<Tabs.List>
+					<Tabs.Trigger value="a">A</Tabs.Trigger>
+					<Tabs.Trigger value="b">B</Tabs.Trigger>
+				</Tabs.List>
+				<Tabs.Content value="a">PanelA</Tabs.Content>
+				<Tabs.Content value="b">PanelB</Tabs.Content>
+			</Tabs.Root>
+		));
+		swipe(screen.getByText("PanelA"), "right");
+		expect(onValueChange).not.toHaveBeenCalled();
+	});
+
+	test("goes through the change path: urlParam writes, onValueChange fires", async () => {
+		const set = vi.fn();
+		const onValueChange = vi.fn();
+		render(() => (
+			<Tabs.Root
+				urlParam={{ get: () => "b", set, fallback: "a" }}
+				onValueChange={onValueChange}
+			>
+				<Tabs.List>
+					<Tabs.Trigger value="a">A</Tabs.Trigger>
+					<Tabs.Trigger value="b">B</Tabs.Trigger>
+				</Tabs.List>
+				<Tabs.Content value="a">PanelA</Tabs.Content>
+				<Tabs.Content value="b">PanelB</Tabs.Content>
+			</Tabs.Root>
+		));
+		swipe(screen.getByText("PanelB"), "right");
+		await waitFor(() => {
+			expect(set).toHaveBeenCalledWith("a");
+		});
+		expect(onValueChange).toHaveBeenCalledWith(
+			expect.objectContaining({ value: "a" })
+		);
+	});
+
+	test("skips a disabled tab", async () => {
+		render(() => (
+			<Tabs.Root defaultValue="a">
+				<Tabs.List>
+					<Tabs.Trigger value="a">A</Tabs.Trigger>
+					<Tabs.Trigger value="b" disabled>
+						B
+					</Tabs.Trigger>
+					<Tabs.Trigger value="c">C</Tabs.Trigger>
+				</Tabs.List>
+				<Tabs.Content value="a">PanelA</Tabs.Content>
+				<Tabs.Content value="b">PanelB</Tabs.Content>
+				<Tabs.Content value="c">PanelC</Tabs.Content>
+			</Tabs.Root>
+		));
+		swipe(screen.getByText("PanelA"), "left");
+		await waitFor(() => {
+			expect(screen.getByText("PanelC")).toBeVisible();
+		});
+	});
+
+	test("a mouse drag, a swipe on the tab bar or on content with its own drags does nothing", () => {
+		const onValueChange = vi.fn();
+		render(() => (
+			<Tabs.Root defaultValue="a" onValueChange={onValueChange}>
+				<Tabs.List>
+					<Tabs.Trigger value="a">A</Tabs.Trigger>
+					<Tabs.Trigger value="b">B</Tabs.Trigger>
+				</Tabs.List>
+				<Tabs.Content value="a">
+					PanelA
+					<div {...{ [OWN_GESTURES_ATTR]: "" }}>Card</div>
+				</Tabs.Content>
+				<Tabs.Content value="b">PanelB</Tabs.Content>
+			</Tabs.Root>
+		));
+		swipe(screen.getByText("Card"), "left");
+		swipe(screen.getByRole("tablist"), "left");
+		swipe(screen.getByText("PanelA"), "left", "mouse");
+		expect(onValueChange).not.toHaveBeenCalled();
+	});
+
+	test("a swipe inside a nested tabs moves the inner tabs only", async () => {
+		const outer = vi.fn();
+		render(() => (
+			<Tabs.Root defaultValue="a" onValueChange={outer}>
+				<Tabs.List>
+					<Tabs.Trigger value="a">OuterA</Tabs.Trigger>
+					<Tabs.Trigger value="b">OuterB</Tabs.Trigger>
+				</Tabs.List>
+				<Tabs.Content value="a">
+					<Tabs.Root defaultValue="x">
+						<Tabs.List>
+							<Tabs.Trigger value="x">InnerX</Tabs.Trigger>
+							<Tabs.Trigger value="y">InnerY</Tabs.Trigger>
+						</Tabs.List>
+						<Tabs.Content value="x">PanelX</Tabs.Content>
+						<Tabs.Content value="y">PanelY</Tabs.Content>
+					</Tabs.Root>
+				</Tabs.Content>
+				<Tabs.Content value="b">PanelB</Tabs.Content>
+			</Tabs.Root>
+		));
+		swipe(screen.getByText("PanelX"), "left");
+		await waitFor(() => {
+			expect(screen.getByText("PanelY")).toBeVisible();
+		});
+		expect(outer).not.toHaveBeenCalled();
+	});
+});
+
+describe("stylesheet", () => {
+	const scss = readFileSync(
+		`${import.meta.dirname}/Tabs.module.scss`,
+		"utf8"
+	);
+
+	test("the bar never shrinks inside a bounded flex column", () => {
+		// A phone bar clips overflow, which drops its automatic minimum height
+		// to 0; in Space's bounded console that collapsed it to 0px.
+		expect(scss).toMatch(/\.bar\s*\{[^}]*flex-shrink: 0;/);
+	});
+
+	test("a panel leaves room at its end for the floating toolbar", () => {
+		// The pill floats over the page; a panel the page scrolls through
+		// ends far enough below its last row for that row to clear it.
+		expect(scss).toMatch(
+			/\.content\s*\{[^}]*padding-block: var\(--jf-spacing-far\) var\(--jf-floating-toolbar-offset\);/
+		);
+	});
+
+	test("a panel leaves sideways pans to the swipe, keeping scroll and zoom", () => {
+		// Left to the browser, a sideways pan ends in pointercancel before it
+		// is long enough to be a swipe.
+		expect(scss).toMatch(
+			/\.content\s*\{[^}]*touch-action: pan-y pinch-zoom;/
+		);
+	});
 });

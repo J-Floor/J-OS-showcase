@@ -1270,3 +1270,15 @@ test("a row a morph starts from keeps the look it had: no focus ring or bold unt
 	);
 	expect(scss).not.toContain('& tr[data-focused="true"] {');
 });
+
+test("the rows leave room at their end for a floating toolbar", () => {
+	// Inside the scroll box, so a bounded table keeps its full height and only
+	// its scroll range grows; the last row scrolls clear of the pill.
+	const scss = readFileSync(
+		`${import.meta.dirname}/Table.module.scss`,
+		"utf8"
+	);
+	expect(scss).toMatch(
+		/\n\.table \{[^}]*padding-block-end: var\(--jf-floating-toolbar-offset\);/
+	);
+});

@@ -35,6 +35,12 @@ function eventPhase(event: Doc<"events">, now: number): string {
 	return now > event.endsAt ? "past" : "current";
 }
 
+/** Newest first, in every phase group: the groups render over the one sorted
+ *  row model, so a sort orders the rows within each group. Applied as the
+ *  table's initial column sort, so the header shows it and a sort the user
+ *  picks replaces it. */
+export const EVENTS_DEFAULT_SORT = [{ id: "startsAt", desc: true }];
+
 /**
  * Events table columns: name, start/end dates, and a trailing actions column
  * (copy link / download QR) mirroring the community roster's actions column —

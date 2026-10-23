@@ -7,6 +7,7 @@ import {
 import { type JSX, Show, splitProps } from "solid-js";
 
 import { ICONS } from "../../icons.ts";
+import { OWN_GESTURES_ATTR } from "../../utils/swipe.ts";
 import { Icon } from "../Icon/Icon.tsx";
 
 import styles from "./SignaturePad.module.scss";
@@ -117,7 +118,11 @@ export function SignaturePad(props: SignaturePadProps): JSX.Element {
 				<Ark.Label class={styles.label}>{own.label}</Ark.Label>
 			</Show>
 			<Ark.Control class={styles.control}>
-				<Ark.Segment class={styles.segment} />
+				{/* Drawing drags; a tab swipe must not start here. */}
+				<Ark.Segment
+					class={styles.segment}
+					{...{ [OWN_GESTURES_ATTR]: "" }}
+				/>
 				<ClearButton onClear={handleClear} />
 				<Ark.Guide class={styles.guide} />
 			</Ark.Control>

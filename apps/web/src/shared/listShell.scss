@@ -46,4 +46,8 @@
 	flex: 1;
 	flex-direction: column;
 	min-block-size: 0;
+
+	/* A tab panel's end room for the floating toolbar would shorten the table
+	   again; the table's own rows reserve it inside its scroll box. */
+	padding-block-end: 0;
 }

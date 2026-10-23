@@ -1,4 +1,10 @@
-import { Button, EmptyState, Icon, Table } from "@j-os/design-system";
+import {
+	Button,
+	EmptyState,
+	FloatingToolbar,
+	Icon,
+	Table,
+} from "@j-os/design-system";
 import { Show } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
@@ -10,7 +16,7 @@ import { useRowPrefetch } from "../../shared/entity/useRowPrefetch.ts";
 import { ICONS } from "../../shared/icons.ts";
 
 import { eventsEntity } from "./entity.ts";
-import { eventColumns } from "./eventColumns.tsx";
+import { EVENTS_DEFAULT_SORT, eventColumns } from "./eventColumns.tsx";
 import { EventSheet } from "./EventSheet.tsx";
 import styles from "./EventsPage.module.scss";
 
@@ -18,7 +24,8 @@ import styles from "./EventsPage.module.scss";
  * Events module: a table of events (read-only for any member with space
  * access), with a board/admin "New event" action and a row-detail sheet.
  * Same shell as the Community console — no page title of its own (the sidebar
- * labels it); the top bar holds the primary action on the right.
+ * labels it); the top bar holds the primary action on the right, floating
+ * over the page on a phone.
  */
 export function EventsPage() {
 	const events = useQuery(api.events.listEvents, {});
@@ -34,9 +41,11 @@ export function EventsPage() {
 		<div class={styles.console}>
 			<div class={styles.bar}>
 				<Can I="create" the="Events">
-					<Button onClick={openCreate}>
-						<Icon>{ICONS.add}</Icon> New event
-					</Button>
+					<FloatingToolbar>
+						<Button onClick={openCreate}>
+							<Icon>{ICONS.add}</Icon> New event
+						</Button>
+					</FloatingToolbar>
 				</Can>
 			</div>
 			<div class={styles.panel}>
@@ -53,6 +62,7 @@ export function EventsPage() {
 					<Table.Root
 						columns={eventColumns()}
 						data={events.data()}
+						initialColumnSorting={EVENTS_DEFAULT_SORT}
 						groupBy="phase"
 						focusableRows
 						suppressFocus={open()}

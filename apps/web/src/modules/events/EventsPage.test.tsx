@@ -163,6 +163,64 @@ test("groups events into Future / Current / Past accordion sections", () => {
 	expect(screen.getByText("Past")).toBeInTheDocument();
 });
 
+test("lists the newest event first in every phase group, whatever order the query sends", () => {
+	const now = Date.now();
+	const DAY = 86_400_000;
+	function event(id: string, name: string, startsIn: number) {
+		return {
+			...oneEvent[0],
+			_id: id,
+			name,
+			startsAt: now + startsIn * DAY,
+			endsAt: now + (startsIn + 1) * DAY,
+		};
+	}
+	setRows([
+		event("f1", "Sooner Fest", 2),
+		event("p1", "Older Fest", -20),
+		event("f2", "Later Fest", 9),
+		event("p2", "Recent Fest", -5),
+	]);
+	renderAs("board");
+	const names = screen
+		.getAllByText(/Fest$/)
+		.map((element) => element.textContent);
+	expect(names).toEqual([
+		"Later Fest",
+		"Sooner Fest",
+		"Recent Fest",
+		"Older Fest",
+	]);
+});
+
+test("a column sort the user picks replaces the default", async () => {
+	const now = Date.now();
+	const DAY = 86_400_000;
+	setRows([
+		{
+			...oneEvent[0],
+			_id: "a",
+			name: "Alpha Fest",
+			startsAt: now + 2 * DAY,
+			endsAt: now + 3 * DAY,
+		},
+		{
+			...oneEvent[0],
+			_id: "b",
+			name: "Bravo Fest",
+			startsAt: now + 9 * DAY,
+			endsAt: now + 10 * DAY,
+		},
+	]);
+	renderAs("board");
+	fireEvent.click(screen.getByRole("button", { name: /Sort by Name/ }));
+	await waitFor(() => {
+		expect(
+			screen.getAllByText(/Fest$/).map((element) => element.textContent)
+		).toEqual(["Alpha Fest", "Bravo Fest"]);
+	});
+});
+
 test("does not render a redundant page title", () => {
 	renderAs("board");
 	expect(screen.queryByRole("heading", { name: /^Events$/ })).toBeNull();
@@ -178,6 +236,18 @@ test("board sees the New event button", () => {
 	expect(
 		screen.getByRole("button", { name: /New event/ })
 	).toBeInTheDocument();
+});
+
+test("board: New event sits in the page's floating toolbar", () => {
+	renderAs("board");
+	expect(
+		screen.getByRole("button", { name: /New event/ }).parentElement
+	).toHaveAttribute("data-part", "floating-toolbar");
+});
+
+test("a member gets no floating toolbar (an empty one would still float)", () => {
+	renderAs("member");
+	expect(document.querySelector('[data-part="floating-toolbar"]')).toBeNull();
 });
 
 test("board: clicking a row opens the detail sheet", async () => {

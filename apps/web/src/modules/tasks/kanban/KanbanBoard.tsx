@@ -1,4 +1,10 @@
-import { Button, Dialog, IconButton, Query } from "@j-os/design-system";
+import {
+	Button,
+	Dialog,
+	IconButton,
+	OWN_GESTURES_ATTR,
+	Query,
+} from "@j-os/design-system";
 import {
 	DragDropProvider,
 	DragDropSensors,
@@ -229,6 +235,8 @@ function Board(props: {
 			<div
 				ref={selection.setBoardElement}
 				class={styles.board}
+				// Cards drag and the background draws a marquee: never a tab swipe.
+				{...{ [OWN_GESTURES_ATTR]: "" }}
 				onPointerDown={(event) => {
 					selection.onPointerDown(event);
 				}}

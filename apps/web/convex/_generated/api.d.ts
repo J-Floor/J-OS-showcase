@@ -38,6 +38,7 @@ import type * as emails_generated_approvalMember from "../emails/generated/appro
 import type * as emails_generated_boardDoorAlert from "../emails/generated/boardDoorAlert.js";
 import type * as emails_generated_boardLifecycleAlert from "../emails/generated/boardLifecycleAlert.js";
 import type * as emails_generated_boardNewApplication from "../emails/generated/boardNewApplication.js";
+import type * as emails_generated_boardOccupancyAlert from "../emails/generated/boardOccupancyAlert.js";
 import type * as emails_generated_confirmEmailChange from "../emails/generated/confirmEmailChange.js";
 import type * as emails_generated_emailChanged from "../emails/generated/emailChanged.js";
 import type * as emails_generated_eventInvite from "../emails/generated/eventInvite.js";
@@ -204,6 +205,7 @@ declare const fullApi: ApiFromModules<{
   "emails/generated/boardDoorAlert": typeof emails_generated_boardDoorAlert;
   "emails/generated/boardLifecycleAlert": typeof emails_generated_boardLifecycleAlert;
   "emails/generated/boardNewApplication": typeof emails_generated_boardNewApplication;
+  "emails/generated/boardOccupancyAlert": typeof emails_generated_boardOccupancyAlert;
   "emails/generated/confirmEmailChange": typeof emails_generated_confirmEmailChange;
   "emails/generated/emailChanged": typeof emails_generated_emailChanged;
   "emails/generated/eventInvite": typeof emails_generated_eventInvite;

@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { OWN_GESTURES_ATTR } from "@j-os/design-system";
 import { cleanup, render, screen } from "@solidjs/testing-library";
 import { afterEach, beforeAll, expect, test, vi } from "vitest";
 
@@ -92,4 +93,19 @@ test("opens scrolled to today when every project is months ago", () => {
 	const scroller = container.querySelector<HTMLElement>(`.${styles.scroll}`);
 	expect(scroller?.scrollLeft).toBeGreaterThan(0);
 	expect(container.querySelector(`.${styles.today}`)).not.toBeNull();
+});
+
+test("bars and the new-range row handle their own drags, so a tab swipe never starts on them", () => {
+	const now = Date.now();
+	const project = {
+		_id: "p1",
+		name: "Roof",
+		startDate: now - DAY_MS,
+		endDate: now + DAY_MS,
+	};
+	const { container } = timeline([project as never]);
+	expect(screen.getByTitle("Roof")).toHaveAttribute(OWN_GESTURES_ATTR);
+	expect(container.querySelector(`.${styles.newRow}`)).toHaveAttribute(
+		OWN_GESTURES_ATTR
+	);
 });

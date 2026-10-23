@@ -1,4 +1,10 @@
-import { Icon, IconButton, Morph, morphTitle } from "@j-os/design-system";
+import {
+	Icon,
+	IconButton,
+	Morph,
+	OWN_GESTURES_ATTR,
+	morphTitle,
+} from "@j-os/design-system";
 import { For, Show, type Accessor } from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -175,6 +181,8 @@ function TimelineBarView(
 				<div
 					{...morph()}
 					class={styles.bar}
+					// Dragged to move or resize: never a tab swipe.
+					{...{ [OWN_GESTURES_ATTR]: "" }}
 					style={{
 						left: px(
 							props.barDrag.barLeft(props.bar, props.timeline())
@@ -228,6 +236,8 @@ export function TimelineBody(
 			</For>
 			<div
 				class={styles.newRow}
+				// Dragged across to create a project: never a tab swipe.
+				{...{ [OWN_GESTURES_ATTR]: "" }}
 				onPointerDown={(event) => {
 					props.newDrag.newPointerDown(event);
 				}}

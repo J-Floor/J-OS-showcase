@@ -7,12 +7,16 @@ import {
 	createMemo,
 	createSignal,
 	on,
+	onCleanup,
+	onMount,
 	splitProps,
 	type ComponentProps,
 	type JSX,
 } from "solid-js";
 
+import { listenForSwipe, type SwipeDirection } from "../../utils/swipe.ts";
 import { moveName } from "../../utils/viewTransition.ts";
+import { FloatingToolbar } from "../FloatingToolbar/FloatingToolbar.tsx";
 
 import styles from "./Tabs.module.scss";
 
@@ -61,11 +65,56 @@ function panel(root: HTMLElement, value: string): HTMLElement | undefined {
 	);
 }
 
+/** The enabled tab a swipe lands on, if any. A finger moving left pulls the
+ *  next panel in. */
+function neighbour(
+	root: HTMLElement,
+	current: string | undefined,
+	direction: SwipeDirection
+): string | undefined {
+	if (current === undefined) return undefined;
+	const order = ownParts(root, "trigger")
+		.filter((element) => !element.hasAttribute("data-disabled"))
+		.map((element) => element.dataset.value);
+	const at = order.indexOf(current);
+	if (at === -1) return undefined;
+	return order[direction === "left" ? at + 1 : at - 1];
+}
+
+/** Swipes on `root`'s own panels (not its bar, not a nested tabs' panel)
+ *  call `change` like a trigger click. Returns the cleanup. */
+function swipeBetweenTabs(
+	root: HTMLElement,
+	value: () => string | undefined,
+	change: (details: ValueChangeDetails) => void
+): () => void {
+	return listenForSwipe(root, {
+		startsHere: (target) => {
+			const panelElement = target.closest(
+				'[data-scope="tabs"][data-part="content"]'
+			);
+			return (
+				panelElement instanceof HTMLElement &&
+				ownParts(root, "content").includes(panelElement)
+			);
+		},
+		onSwipe: (direction) => {
+			const next = neighbour(root, value(), direction);
+			if (next !== undefined) change({ value: next });
+		},
+	});
+}
+
 /**
  * Tabs root. Controlled inside: Ark gets `current()`, and a change flips it
  * inside a View Transition, because with uncontrolled Ark the panel has
  * already swapped when `onValueChange` fires and there is nothing left to
  * capture. The panel slides in the direction of the trigger order.
+ *
+ * A sideways swipe (touch or pen) on one of its own panels moves to the next
+ * or previous enabled tab through the same change, so it slides and writes
+ * the URL param as a click does. See `utils/swipe.ts` for what never starts
+ * a swipe.
  */
 function Root<K extends string = string>(
 	props: ArkTabs.RootProps & { value?: K; urlParam?: TabsUrlParameter<K> }
@@ -119,6 +168,11 @@ function Root<K extends string = string>(
 			update: apply,
 		});
 	}
+
+	onMount(() => {
+		if (rootElement)
+			onCleanup(swipeBetweenTabs(rootElement, value, change));
+	});
 
 	return (
 		<ArkTabs.Root
@@ -181,9 +235,9 @@ function Actions(props: { value?: string; children: JSX.Element }) {
 						props.value === undefined || api().value === props.value
 					}
 				>
-					<div data-part="tab-actions" class={styles.actions}>
+					<FloatingToolbar data-part="tab-actions">
 						{props.children}
-					</div>
+					</FloatingToolbar>
 				</Show>
 			)}
 		</ArkTabs.Context>
@@ -193,11 +247,8 @@ function Actions(props: { value?: string; children: JSX.Element }) {
 /**
  * The tab row: a `List` followed by its `Actions`. On a wide screen the
  * actions sit at the row's end. On a phone the list scrolls sideways within
- * the page and the active tab's actions float as a pill at the foot of the
- * nearest positioned ancestor (the app's content column, above its bottom
- * bar), so nothing between that ancestor and the bar may be positioned.
- * While the pill shows, `--jf-floating-toolbar-offset` on the root holds the
- * height it takes, for the other bottom floaters to clear it.
+ * the page and the active tab's actions are a `FloatingToolbar`: a pill at
+ * the foot of the nearest positioned ancestor (see its contract).
  */
 function Bar(props: Omit<ComponentProps<"div">, "ref">) {
 	const tabs = useTabsContext();

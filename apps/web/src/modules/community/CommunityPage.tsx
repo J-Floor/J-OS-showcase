@@ -180,7 +180,9 @@ function CommunityPanels(props: {
 			<Tabs.Content value="insights" class={styles.panel}>
 				<InsightsTab />
 			</Tabs.Content>
-			<Tabs.Content value="profile" class={styles.panel}>
+			{/* Not a bounded panel: the form grows and the page scrolls, so the
+			    panel's own end room clears the floating toolbar. */}
+			<Tabs.Content value="profile">
 				<MyProfile />
 			</Tabs.Content>
 		</Show>

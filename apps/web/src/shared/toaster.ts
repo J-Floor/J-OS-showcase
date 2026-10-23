@@ -4,7 +4,7 @@ const EDGE_OFFSET = "1rem";
 
 /** For a failure with no area of its own to show it in. Mounted once, in
  *  `index.tsx`. Fixed to the viewport, so on a phone it rises above the bottom
- *  bar and a page's floating tab toolbar while they show. */
+ *  bar and a page's floating toolbar while they show. */
 export const toaster = createToaster({
 	placement: "bottom-end",
 	offsets: {

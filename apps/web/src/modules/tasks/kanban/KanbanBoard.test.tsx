@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { OWN_GESTURES_ATTR } from "@j-os/design-system";
 import { cleanup, render } from "@solidjs/testing-library";
 import { afterEach, beforeAll, expect, test, vi } from "vitest";
 
@@ -19,6 +20,7 @@ vi.mock("convex-solidjs", () => ({
 	useQuery: () => ({ data: () => {} }),
 }));
 
+import styles from "./KanbanBoard.module.scss";
 import { KanbanBoard } from "./KanbanBoard.tsx";
 
 function board(tasks: never[] | undefined) {
@@ -51,4 +53,11 @@ test("tasks empty: counts read 0 and no skeletons", () => {
 		(element) => element.textContent.trim() === "0"
 	);
 	expect(zeros).toHaveLength(3);
+});
+
+test("the board handles its own drags (cards, marquee), so a tab swipe never starts on it", () => {
+	const { container } = board([]);
+	expect(container.querySelector(`.${styles.board}`)).toHaveAttribute(
+		OWN_GESTURES_ATTR
+	);
 });
