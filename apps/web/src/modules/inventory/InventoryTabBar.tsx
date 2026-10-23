@@ -4,7 +4,6 @@ import type { Accessor } from "solid-js";
 import { ICONS } from "../../shared/icons.ts";
 
 import type { Item } from "./data/inventoryData.ts";
-import styles from "./InventoryPage.module.scss";
 import { printInventoryList } from "./print/printInventoryList.ts";
 
 /** The tab triggers, and each tab's header actions: print and scan and new
@@ -24,33 +23,31 @@ export function InventoryTabBar(props: {
 	}
 
 	return (
-		<div class={styles.tabBar}>
+		<Tabs.Bar>
 			<Tabs.List>
 				<Tabs.Trigger value="items">Items</Tabs.Trigger>
 				<Tabs.Trigger value="types">Item types</Tabs.Trigger>
 				<Tabs.Trigger value="categories">Categories</Tabs.Trigger>
 			</Tabs.List>
 			<Tabs.Actions value="items">
-				<div class={styles.actions}>
-					<IconButton
-						tooltipLabel="Print inventory list"
-						disabled={(props.itemRows()?.length ?? 0) === 0}
-						disabledReason={
-							props.itemRows() === undefined
-								? "Loading items…"
-								: "No items to print"
-						}
-						onClick={printAll}
-					>
-						{ICONS.print}
-					</IconButton>
-					<Button variant="secondary" onClick={props.onScan}>
-						<Icon>qr_code_scanner</Icon> Scan QR
-					</Button>
-					<Button onClick={props.onNewItem}>
-						<Icon>{ICONS.add}</Icon> New item
-					</Button>
-				</div>
+				<IconButton
+					tooltipLabel="Print inventory list"
+					disabled={(props.itemRows()?.length ?? 0) === 0}
+					disabledReason={
+						props.itemRows() === undefined
+							? "Loading items…"
+							: "No items to print"
+					}
+					onClick={printAll}
+				>
+					{ICONS.print}
+				</IconButton>
+				<Button variant="secondary" onClick={props.onScan}>
+					<Icon>qr_code_scanner</Icon> Scan QR
+				</Button>
+				<Button onClick={props.onNewItem}>
+					<Icon>{ICONS.add}</Icon> New item
+				</Button>
 			</Tabs.Actions>
 			<Tabs.Actions value="types">
 				<Button onClick={props.onNewType}>
@@ -62,6 +59,6 @@ export function InventoryTabBar(props: {
 					<Icon>{ICONS.add}</Icon> New category
 				</Button>
 			</Tabs.Actions>
-		</div>
+		</Tabs.Bar>
 	);
 }

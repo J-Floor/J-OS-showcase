@@ -97,10 +97,15 @@
 	scrollbar-gutter: stable;
 
 	/* Narrower gutters, and no reserved scrollbar band: a phone's scrollbar is
-	   an overlay that takes no width, so `stable` only ever costs space here. */
+	   an overlay that takes no width, so `stable` only ever costs space here.
+	   The foot also leaves room for a page's floating tab toolbar, so the last
+	   row can scroll clear of it. The bottom bar is in flow below this column,
+	   so it needs no room here. */
 	@include bp.phone {
 		padding-inline: var(--jf-spacing-far);
-		padding-block-end: var(--jf-spacing-far);
+		padding-block-end: calc(
+			var(--jf-spacing-far) + var(--jf-floating-toolbar-offset)
+		);
 		scrollbar-gutter: auto;
 	}
 }

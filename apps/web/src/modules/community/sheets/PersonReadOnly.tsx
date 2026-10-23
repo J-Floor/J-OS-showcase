@@ -39,6 +39,7 @@ export function ReadOnlyDetail(props: { person: Doc<"people"> }) {
 	}
 	return (
 		<div>
+			<BoardDetail person={person()} />
 			<PropertyRow field={personFields.email}>
 				<span>{person().email}</span>
 			</PropertyRow>
@@ -51,11 +52,6 @@ export function ReadOnlyDetail(props: { person: Doc<"people"> }) {
 			    only for the people who have an end date — it is a fact about
 			    their standing, not a profile field, and it read as a permanent
 			    "—" on everyone who never expires. */}
-			<PropertyRow icon={ICONS.vertical} label="Verticals">
-				<span {...morphPart(personFields.vertical)}>
-					{verticalsLabel(person().vertical) || "—"}
-				</span>
-			</PropertyRow>
 			<PropertyRow field={personFields.ventureName}>
 				<span>{person().venture?.name ?? "—"}</span>
 			</PropertyRow>
@@ -64,9 +60,13 @@ export function ReadOnlyDetail(props: { person: Doc<"people"> }) {
 					<HostName person={person()} />
 				</PropertyRow>
 			</Show>
+			<PropertyRow icon={ICONS.vertical} label="Verticals">
+				<span {...morphPart(personFields.vertical)}>
+					{verticalsLabel(person().vertical) || "—"}
+				</span>
+			</PropertyRow>
 			<AttendedEvents personId={person()._id} />
 			<VentureDetail person={person()} />
-			<BoardDetail person={person()} />
 		</div>
 	);
 }

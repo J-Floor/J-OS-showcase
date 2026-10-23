@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 
+import { DAYS_PER_WEEK } from "../../../../convex/lib/constants.ts";
 import type { Project } from "../data/tasksData.tsx";
 
 import {
@@ -56,7 +57,8 @@ test("buildTimeline returns null when nothing is fully dated", () => {
 });
 
 test("week mode: range snaps to Mondays, bar offset/span correct", () => {
-	const timeline = buildTimeline([projectA], WEEK, ms("2026-06-15"));
+	// Today inside the data, so it doesn't widen the range.
+	const timeline = buildTimeline([projectA], WEEK, ms("2026-06-11"));
 	expect(timeline).not.toBeNull();
 	if (!timeline) return;
 	// pad 0: range = Mon 2026-06-08 .. end of maxEnd's week (Sun 2026-06-14) = 7d.
@@ -85,11 +87,31 @@ test("week mode: range snaps to Mondays, bar offset/span correct", () => {
 	expect(timeline.ticks.map((tick) => tick.label)).toEqual(["8 Jun"]);
 });
 
-test("today marker: in-range gives an offset, out-of-range gives null", () => {
+test("today marker: today inside the projects gives its offset", () => {
 	const inRange = buildTimeline([projectA], WEEK, ms("2026-06-10"));
 	expect(inRange?.todayOffset).toBe(2); // 06-10 is 2 days after 06-08
-	const outOfRange = buildTimeline([projectA], WEEK, ms("2026-07-01"));
-	expect(outOfRange?.todayOffset).toBeNull();
+});
+
+test.each<ViewMode>(["day", "week", "month"])(
+	"%s mode: the range reaches today when every project is months before it",
+	(mode) => {
+		const today = ms("2026-10-23");
+		const timeline = buildTimeline([projectA], mode, today);
+		expect(timeline).not.toBeNull();
+		if (!timeline) return;
+		expect(timeline.todayOffset).not.toBeNull();
+		expect(timeline.todayOffset).toBeGreaterThanOrEqual(0);
+		expect(timeline.todayOffset).toBeLessThan(timeline.totalDays);
+		// The projects still start the range.
+		expect(timeline.bars[0].offset).toBeGreaterThanOrEqual(0);
+		expect(timeline.bars[0].offset).toBeLessThan(DAYS_PER_WEEK * 5);
+	}
+);
+
+test("the range reaches back to today when every project is after it", () => {
+	const timeline = buildTimeline([projectA], WEEK, ms("2026-02-02"));
+	expect(timeline?.todayOffset).toBe(0);
+	expect(timeline?.bars[0].offset).toBeGreaterThan(0);
 });
 
 test("day mode: one tick per day across the range", () => {
@@ -119,7 +141,7 @@ test("month mode: full-month range, month band, no bottom ticks", () => {
 
 test("pad adds units each side and weekend flags appear in day mode", () => {
 	// Base week range = 06-08..06-14 (7d); +1 week each side = 06-01..06-21 = 21d.
-	const padded = buildTimeline([projectA], WEEK, ms("2026-06-15"), {
+	const padded = buildTimeline([projectA], WEEK, ms("2026-06-11"), {
 		before: 1,
 		after: 1,
 	});

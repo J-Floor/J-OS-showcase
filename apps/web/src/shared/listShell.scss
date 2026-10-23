@@ -1,8 +1,6 @@
-@use "@j-os/design-system/breakpoints" as bp;
-
 /* Shared list-page shell (Events/Community/Inventory): a full-height flex
    column so the table's sticky header works, a tab/action bar, and a
-   growing panel.
+   growing panel. The tab/action bar itself is the design system's Tabs.Bar.
 
    The console fills the shell's scroll region so the table inside it has a
    height to work against. That height is the whole condition for a sticky
@@ -23,19 +21,6 @@
 	flex-flow: column nowrap;
 	block-size: 100%;
 	min-block-size: 0;
-}
-
-/* Tab row: tab triggers on one side, page actions on the other. */
-@mixin tab-bar {
-	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
-	display: flex;
-	gap: var(--jf-spacing-near);
-	align-items: center;
-	justify-content: space-between;
-
-	@include bp.phone {
-		flex-wrap: wrap;
-	}
 }
 
 /* The panel is the height the table inherits. `min-block-size: 0` because a

@@ -74,7 +74,7 @@ export function SpacePage() {
 
 	return (
 		<Tabs.Root class={styles.console} urlParam={urlParameter()}>
-			<div class={styles.tabBar}>
+			<Tabs.Bar class={styles.tabBar}>
 				<Tabs.List>
 					<Tabs.Trigger value="access">Access</Tabs.Trigger>
 					<For each={infoTabs()}>
@@ -106,7 +106,7 @@ export function SpacePage() {
 						</Tabs.Actions>
 					)}
 				</For>
-			</div>
+			</Tabs.Bar>
 			<Tabs.Content value="access">
 				<div class={styles.grid}>
 					<UnlockCard />

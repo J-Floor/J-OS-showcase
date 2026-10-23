@@ -1,8 +1,10 @@
 import { afterTransition } from "@j-os/design-system";
 import {
+	batch,
 	createEffect,
 	createSignal,
 	on,
+	onCleanup,
 	untrack,
 	type Accessor,
 } from "solid-js";
@@ -101,8 +103,39 @@ export function createProjectOverrides(options: {
 	};
 }
 
-/** Scroll behaviour: grows the range when scrolled toward an edge, keeps the
- *  viewport anchored when it grows on the left, and jumps to today. */
+/** The scroll element, and whether it has a size. It is a signal because it
+ *  mounts inside a `<Show>`, after the timeline may already exist. A hidden
+ *  tab keeps its panel mounted under `display: none`, where setting
+ *  scrollLeft does nothing, so `isShown` waits for the panel to be shown. */
+function createObservedElement() {
+	const [element, setElement] = createSignal<HTMLDivElement>();
+	const [isShown, setIsShown] = createSignal(false);
+	let observer: ResizeObserver | undefined;
+	onCleanup(() => {
+		observer?.disconnect();
+	});
+	return {
+		element,
+		isShown,
+		mount: (scrollElement: HTMLDivElement): void => {
+			batch(() => {
+				setIsShown(false);
+				setElement(scrollElement);
+			});
+			observer?.disconnect();
+			observer = new ResizeObserver((entries) => {
+				setIsShown(
+					entries.some((entry) => entry.contentRect.width > 0)
+				);
+			});
+			observer.observe(scrollElement);
+		},
+	};
+}
+
+/** Scroll behaviour: opens on today, grows the range when scrolled toward an
+ *  edge, keeps the viewport anchored when it grows on the left, and jumps to
+ *  today from the toolbar. */
 export function createTimelineScroll(options: {
 	mode: Accessor<ViewMode>;
 	padding: ReturnType<typeof createTimelinePadding>;
@@ -111,7 +144,10 @@ export function createTimelineScroll(options: {
 	jumpToday: Accessor<number>;
 }) {
 	const { padding } = options;
-	let scrollElement: HTMLDivElement | undefined;
+	const { element, isShown, mount } = createObservedElement();
+	// Until the first jump the element sits at scrollLeft 0, the padded past,
+	// which the left edge would otherwise take as a scroll into it.
+	const [hasJumped, setHasJumped] = createSignal(false);
 	let growLeftFrom: number | null = null;
 
 	function step(): number {
@@ -121,6 +157,7 @@ export function createTimelineScroll(options: {
 	// Keep the viewport anchored when the range grows on the left.
 	createEffect(
 		on(padding.padBefore, () => {
+			const scrollElement = element();
 			if (!(scrollElement && growLeftFrom !== null)) {
 				return;
 			}
@@ -133,6 +170,7 @@ export function createTimelineScroll(options: {
 
 	// Scroll the given day offset toward the left of the viewport.
 	function scrollToOffset(offset: number, dayWidth: number): void {
+		const scrollElement = element();
 		if (scrollElement)
 			scrollElement.scrollLeft = Math.max(
 				0,
@@ -140,17 +178,29 @@ export function createTimelineScroll(options: {
 			);
 	}
 
+	function scrollToToday(timeline: Timeline): void {
+		if (timeline.todayOffset !== null)
+			scrollToOffset(timeline.todayOffset, timeline.dayWidth);
+	}
+
+	// Open on today, once the timeline exists and its scroll element is shown.
+	// Checking the flag first stops the effect tracking every timeline change
+	// after; a remount clears the flag, which runs it again.
+	createEffect(() => {
+		if (hasJumped()) return;
+		const timeline = options.timeline();
+		if (!(timeline && isShown())) return;
+		setHasJumped(true);
+		scrollToToday(timeline);
+	});
+
 	// "Jump to today" from the toolbar (bumped nonce).
 	createEffect(
 		on(
 			() => options.jumpToday(),
 			() => {
 				const timeline = options.timeline();
-				if (
-					timeline?.todayOffset !== null &&
-					timeline?.todayOffset !== undefined
-				)
-					scrollToOffset(timeline.todayOffset, timeline.dayWidth);
+				if (timeline) scrollToToday(timeline);
 			},
 			{ defer: true }
 		)
@@ -158,17 +208,23 @@ export function createTimelineScroll(options: {
 
 	return {
 		scrollToOffset,
-		setScrollElement: (element: HTMLDivElement): void => {
-			scrollElement = element;
+		setScrollElement: (scrollElement: HTMLDivElement): void => {
+			// A remounted element starts at the far left again.
+			batch(() => {
+				setHasJumped(false);
+				mount(scrollElement);
+			});
 		},
 		onScroll: (): void => {
-			const element = scrollElement;
-			if (!element) return;
-			if (element.scrollLeft < EDGE) {
-				growLeftFrom = element.scrollWidth;
+			const scrollElement = element();
+			if (!(scrollElement && hasJumped())) return;
+			if (scrollElement.scrollLeft < EDGE) {
+				growLeftFrom = scrollElement.scrollWidth;
 				padding.setPadBefore((current) => current + step());
 			} else if (
-				element.scrollWidth - element.scrollLeft - element.clientWidth <
+				scrollElement.scrollWidth -
+					scrollElement.scrollLeft -
+					scrollElement.clientWidth <
 				EDGE
 			) {
 				padding.setPadAfter((current) => current + step());

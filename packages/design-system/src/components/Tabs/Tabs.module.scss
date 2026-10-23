@@ -1,3 +1,72 @@
+@use "../../styles/breakpoints" as bp;
+
+/* The floating pill's height: one control row plus its padding. Fixed, so the
+   offset the other bottom floaters read is known without measuring. */
+$pill-block-size: calc(
+	var(--jf-dimension-short-component-height) + 2 * var(--jf-spacing-close)
+);
+
+/* Triggers on one side, the active tab's actions on the other. */
+.bar {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single row; on a phone the list scrolls instead */
+	display: flex;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+	justify-content: space-between;
+	min-inline-size: 0;
+	max-inline-size: 100%;
+
+	/* The list scrolls sideways inside the page rather than widening it. The
+	   actions are out of flow by now, so the list is all that scrolls. */
+	@include bp.phone {
+		overflow: auto hidden;
+		overscroll-behavior: contain auto;
+		scrollbar-gutter: auto;
+		scrollbar-width: none;
+	}
+}
+
+.actions {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- one row of controls */
+	display: flex;
+	flex-shrink: 0;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+
+	/* A floating toolbar: a pill centred at the foot of the nearest positioned
+	   ancestor. Absolute, not fixed, so it lands in the same box as the app's
+	   prompt stack, above the bottom bar, and escapes the bar's scroll clip. */
+	@include bp.phone {
+		position: absolute;
+		inset-inline: 0;
+		inset-block-end: var(--jf-spacing-far);
+		z-index: 9;
+		box-sizing: border-box;
+		inline-size: fit-content;
+		max-inline-size: calc(100% - 2 * var(--jf-spacing-far));
+		block-size: $pill-block-size;
+		padding: var(--jf-spacing-close);
+		margin-inline: auto;
+		overflow: auto hidden;
+		overscroll-behavior: contain auto;
+		scrollbar-gutter: auto;
+		scrollbar-width: none;
+		background: var(--jf-surface-bg-raised);
+		border: var(--jf-border-width-decorative) solid var(--jf-border-subtle);
+		border-radius: var(--jf-radius-full);
+		box-shadow: var(--jf-shadow-surface-elevation);
+	}
+}
+
+/* Prompts and toasts read this to sit above the pill. */
+@include bp.phone {
+	:root:has(.actions) {
+		--jf-floating-toolbar-offset: calc(
+			#{$pill-block-size} + var(--jf-spacing-near)
+		);
+	}
+}
+
 .list {
 	position: relative;
 	display: inline-flex;

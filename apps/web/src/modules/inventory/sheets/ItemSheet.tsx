@@ -203,7 +203,8 @@ function CopyFromItemButton(props: {
 }
 
 /** The asset tag: two fields that only take a tag while creating, read-only
- *  text for an existing item (its tag is its slug). */
+ *  text for an existing item (its tag is its slug), unkeyed because the
+ *  sheet title already shows it and carries the row's title flight. */
 function AssetTagField(props: {
 	item?: Item;
 	assetTag: ItemForm["assetTag"];
@@ -214,7 +215,10 @@ function AssetTagField(props: {
 		<Show
 			when={props.item === undefined}
 			fallback={
-				<PropertyRow field={itemFields.assetTag}>
+				<PropertyRow
+					icon={itemFields.assetTag.icon}
+					label={itemFields.assetTag.label}
+				>
 					<span>{props.item!.assetTag}</span>
 				</PropertyRow>
 			}
@@ -346,7 +350,7 @@ export function ItemSheet(props: ItemSheetProps): JSX.Element {
 				initialFocusEl={() => tagElement ?? null}
 			>
 				<EntitySheetHeader
-					title={isEdit() ? "Item" : "New item"}
+					title={props.item?.assetTag ?? "New item"}
 					loading={props.loading}
 					nav={props.nav}
 					isEdit={isEdit()}

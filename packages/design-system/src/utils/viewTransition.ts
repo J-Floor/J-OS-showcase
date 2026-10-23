@@ -15,21 +15,23 @@
  */
 export const SETTLE_CAP_MS = 50;
 
+const PART_PREFIX = "jf-morph-part-";
+
 /**
- * The names of the value flights a morph may run, one value each: their
- * count is the most that fly at once (`MAX_PART_FLIGHTS` in morph.ts), and
- * viewTransition.scss's `$part-flights` matches it (morph.test.ts checks).
+ * The class every value flight carries: viewTransition.scss styles them all
+ * through it, so any number may fly. A browser without
+ * `view-transition-class` ignores it and flies them with its default look.
  */
-export const PART_NAMES = [
-	"jf-morph-part-0",
-	"jf-morph-part-1",
-	"jf-morph-part-2",
-	"jf-morph-part-3",
-	"jf-morph-part-4",
-	"jf-morph-part-5",
-	"jf-morph-part-6",
-	"jf-morph-part-7",
-] as const;
+export const PART_CLASS = "jf-morph-part";
+
+/** A value flight's name: `jf-morph-part-` and its field key. */
+export type PartName = `${typeof PART_PREFIX}${string}`;
+
+/** The flight name of the value keyed `key`, escaped into a valid CSS
+ *  ident; distinct keys keep distinct names. */
+export function partName(key: string): PartName {
+	return `${PART_PREFIX}${CSS.escape(key)}`;
+}
 
 export type TransitionName =
 	| "jf-page"
@@ -38,7 +40,7 @@ export type TransitionName =
 	| "jf-morph-scrim"
 	| "jf-morph-source"
 	| "jf-morph-title"
-	| (typeof PART_NAMES)[number]
+	| PartName
 	| "jf-sheet-body"
 	| "jf-brand-frame"
 	| "jf-brand-mark";
@@ -217,6 +219,22 @@ function warnDuplicate(session: Session, name: TransitionName): void {
 	);
 }
 
+/** Sets `name` on `element`, with the part class when it is a part's. */
+function writeName(element: HTMLElement, name: TransitionName): void {
+	element.style.setProperty("view-transition-name", name);
+	if (name.startsWith(PART_PREFIX)) {
+		element.style.setProperty("view-transition-class", PART_CLASS);
+	} else {
+		element.style.removeProperty("view-transition-class");
+	}
+}
+
+function clearName(element: HTMLElement): void {
+	element.style.removeProperty("view-transition-name");
+	element.style.removeProperty("view-transition-class");
+	owner.delete(element);
+}
+
 /** Frees the name `element` holds in this session, if any. */
 function release(session: Session, element: HTMLElement): void {
 	const held = session.named.get(element);
@@ -235,14 +253,12 @@ function createScope(session: Session): TransitionScope {
 			release(session, element);
 			session.holders.set(name, element);
 			session.named.set(element, name);
-			element.style.setProperty("view-transition-name", name);
+			writeName(element, name);
 			owner.set(element, session);
 		},
 		unname(element) {
 			release(session, element);
-			if (owner.get(element) !== session) return;
-			element.style.removeProperty("view-transition-name");
-			owner.delete(element);
+			if (owner.get(element) === session) clearName(element);
 		},
 		kind(kind) {
 			const opposite = OPPOSITE_KIND[kind];
@@ -262,9 +278,7 @@ function createScope(session: Session): TransitionScope {
 
 function cleanUp(session: Session): void {
 	for (const element of session.named.keys()) {
-		if (owner.get(element) !== session) continue;
-		element.style.removeProperty("view-transition-name");
-		owner.delete(element);
+		if (owner.get(element) === session) clearName(element);
 	}
 	if (latest !== session) return;
 	delete document.documentElement.dataset.vt;

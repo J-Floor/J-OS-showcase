@@ -56,7 +56,12 @@
 .labelRow {
 	display: flex;
 	flex-flow: row nowrap;
+
+	/* A card taller than the row (a large root font size against the fixed
+	   px row height) clips at the bottom, keeping its title in view. Plain
+	   `center` is the fallback where `safe` is unsupported. */
 	align-items: center;
+	align-items: safe center;
 	block-size: var(--row-h);
 	padding-inline-end: var(--jf-spacing-close);
 	overflow: hidden;

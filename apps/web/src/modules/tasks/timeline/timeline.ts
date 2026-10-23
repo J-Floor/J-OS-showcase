@@ -146,8 +146,8 @@ export function undatedProjects(projects: readonly Project[]): Project[] {
 type Range = { start: number; end: number };
 
 /** The range the timeline lays out: the data extent, clamped to a window
- *  around `today`, snapped to whole weeks/months, padded for scroll room, and
- *  capped. */
+ *  around `today` and always reaching today, snapped to whole weeks/months,
+ *  padded for scroll room, and capped. */
 function visibleRange(
 	dated: DatedProject[],
 	mode: ViewMode,
@@ -165,11 +165,15 @@ function visibleRange(
 			today + halfWindow
 		);
 	}
-	const minStart = clampToWindow(
-		Math.min(...dated.map((project) => project.startDate))
+	// Today is part of the extent, so the timeline can open on it even when
+	// every project is in the past or the future.
+	const minStart = Math.min(
+		today,
+		clampToWindow(Math.min(...dated.map((project) => project.startDate)))
 	);
-	const maxEnd = clampToWindow(
-		Math.max(...dated.map((project) => project.endDate))
+	const maxEnd = Math.max(
+		today,
+		clampToWindow(Math.max(...dated.map((project) => project.endDate)))
 	);
 
 	// Snap the visible range to whole weeks/months so gridlines fall on clean

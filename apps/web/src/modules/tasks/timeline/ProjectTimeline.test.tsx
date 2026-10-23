@@ -2,7 +2,10 @@
 import { cleanup, render, screen } from "@solidjs/testing-library";
 import { afterEach, beforeAll, expect, test, vi } from "vitest";
 
-afterEach(cleanup);
+afterEach(() => {
+	cleanup();
+	vi.unstubAllGlobals();
+});
 
 beforeAll(() => {
 	if (!("ResizeObserver" in globalThis)) {
@@ -19,6 +22,9 @@ vi.mock("convex-solidjs", () => ({
 	useQuery: () => ({ data: () => {} }),
 }));
 
+import { DAY_MS } from "../../../../convex/lib/constants.ts";
+
+import styles from "./ProjectTimeline.module.scss";
 import { ProjectTimeline } from "./ProjectTimeline.tsx";
 
 function timeline(projects: never[] | undefined) {
@@ -47,4 +53,43 @@ test("projects empty: empty copy, no skeleton", () => {
 	timeline([]);
 	expect(screen.getByText(EMPTY_COPY)).toBeInTheDocument();
 	expect(document.querySelector("[data-skeleton-list]")).toBeNull();
+});
+
+const FOUR_MONTHS = 120 * DAY_MS;
+const LAID_OUT_WIDTH = 300;
+
+test("opens scrolled to today when every project is months ago", () => {
+	// No layout here: report the scroll element's size once it is observed.
+	const resizes: (() => void)[] = [];
+	vi.stubGlobal(
+		"ResizeObserver",
+		class {
+			readonly callback: ResizeObserverCallback;
+			constructor(callback: ResizeObserverCallback) {
+				this.callback = callback;
+			}
+			observe() {
+				const entry = {
+					contentRect: { width: LAID_OUT_WIDTH },
+				} as ResizeObserverEntry;
+				resizes.push(() => {
+					this.callback([entry], {} as ResizeObserver);
+				});
+			}
+			unobserve() {}
+			disconnect() {}
+		}
+	);
+	const now = Date.now();
+	const project = {
+		_id: "p1",
+		name: "Roof",
+		startDate: now - FOUR_MONTHS - DAY_MS * 3,
+		endDate: now - FOUR_MONTHS,
+	};
+	const { container } = timeline([project as never]);
+	for (const resize of resizes) resize();
+	const scroller = container.querySelector<HTMLElement>(`.${styles.scroll}`);
+	expect(scroller?.scrollLeft).toBeGreaterThan(0);
+	expect(container.querySelector(`.${styles.today}`)).not.toBeNull();
 });

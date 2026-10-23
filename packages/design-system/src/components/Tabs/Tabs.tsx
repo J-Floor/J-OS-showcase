@@ -1,6 +1,16 @@
 import { Tabs as ArkTabs } from "@ark-ui/solid";
+import { useTabsContext } from "@ark-ui/solid/tabs";
 import clsx from "clsx";
-import { Show, createSignal, splitProps, type JSX } from "solid-js";
+import {
+	Show,
+	createEffect,
+	createMemo,
+	createSignal,
+	on,
+	splitProps,
+	type ComponentProps,
+	type JSX,
+} from "solid-js";
 
 import { moveName } from "../../utils/viewTransition.ts";
 
@@ -157,22 +167,73 @@ function Content(props: ArkTabs.ContentProps) {
 /**
  * Declarative, tab-scoped slot for tab-bar controls — the sibling of
  * `Content`, but for the bar instead of the panel. Renders its children only
- * while `value` is the active tab, reading the active value from the tabs
- * machine (so it follows the same source of truth as the triggers). Place it
- * inside the tab bar, wherever the controls should sit.
+ * while `value` is the active tab (on every tab when `value` is omitted),
+ * reading the active value from the tabs machine (so it follows the same
+ * source of truth as the triggers). Place it inside a `Bar`, after the list;
+ * a bar shows one at a time.
  */
-function Actions(props: { value: string; children: JSX.Element }) {
+function Actions(props: { value?: string; children: JSX.Element }) {
 	return (
 		<ArkTabs.Context>
 			{(api) => (
-				<Show when={api().value === props.value}>{props.children}</Show>
+				<Show
+					when={
+						props.value === undefined || api().value === props.value
+					}
+				>
+					<div data-part="tab-actions" class={styles.actions}>
+						{props.children}
+					</div>
+				</Show>
 			)}
 		</ArkTabs.Context>
 	);
 }
 
+/**
+ * The tab row: a `List` followed by its `Actions`. On a wide screen the
+ * actions sit at the row's end. On a phone the list scrolls sideways within
+ * the page and the active tab's actions float as a pill at the foot of the
+ * nearest positioned ancestor (the app's content column, above its bottom
+ * bar), so nothing between that ancestor and the bar may be positioned.
+ * While the pill shows, `--jf-floating-toolbar-offset` on the root holds the
+ * height it takes, for the other bottom floaters to clear it.
+ */
+function Bar(props: Omit<ComponentProps<"div">, "ref">) {
+	const tabs = useTabsContext();
+	// The machine's api object changes on every state update; follow the value.
+	const active = createMemo(() => tabs().value);
+	let bar: HTMLDivElement | undefined;
+
+	createEffect(
+		on(active, (value) => {
+			if (!bar || value === null) return;
+			const trigger = [
+				...bar.querySelectorAll<HTMLElement>(
+					'[data-scope="tabs"][data-part="trigger"]'
+				),
+			].find((element) => element.dataset.value === value);
+			// jsdom ships no `scrollIntoView`; a test must not be what throws.
+			if (typeof trigger?.scrollIntoView === "function")
+				trigger.scrollIntoView({ block: "nearest", inline: "nearest" });
+		})
+	);
+
+	return (
+		<div
+			{...props}
+			ref={(element) => {
+				bar = element;
+			}}
+			data-part="tab-bar"
+			class={clsx(styles.bar, props.class)}
+		/>
+	);
+}
+
 export const Tabs = {
 	Root,
+	Bar,
 	List,
 	Trigger,
 	Content,

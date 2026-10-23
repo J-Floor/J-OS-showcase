@@ -117,6 +117,16 @@ export function guestColumns(
 			dataType: "string",
 		}),
 		flagsColumn<GuestRow>(),
+		fieldColumn(personFields.timeRemaining, {
+			dataType: "number",
+			size: "content",
+			// Coalesce to 0 so the accessor's value type is `number` (keeps the
+			// JfColumnDefinition generics happy); the cell branches on the raw field.
+			accessorFn: (row) => row.accessUntil ?? 0,
+			cell: (info) => timeRemainingText(info.row.original),
+			measureText: timeRemainingText,
+			measureVolatile: true,
+		}),
 		fieldColumn(personFields.ventureName, {
 			dataType: "string",
 			size: SHORT_TEXT_SIZE,
@@ -140,6 +150,7 @@ export function guestColumns(
 			accessorFn: (row) => hostValue(row),
 			cell: (info) => <HostSelectCell row={info.row.original} />,
 		}),
+		...ventureColumns<GuestRow>(),
 		fieldColumn(personFields.notes, {
 			// The board's attributed notes thread (shared with the other tabs). The
 			// Guests tab doesn't bind the `n` shortcut, so no peek chip is shown.
@@ -153,18 +164,7 @@ export function guestColumns(
 				<NotesCell row={info.row.original} showShortcutHint={false} />
 			),
 		}),
-		...ventureColumns<GuestRow>(),
 		joinedColumn<GuestRow>(),
-		fieldColumn(personFields.timeRemaining, {
-			dataType: "number",
-			size: "content",
-			// Coalesce to 0 so the accessor's value type is `number` (keeps the
-			// JfColumnDefinition generics happy); the cell branches on the raw field.
-			accessorFn: (row) => row.accessUntil ?? 0,
-			cell: (info) => timeRemainingText(info.row.original),
-			measureText: timeRemainingText,
-			measureVolatile: true,
-		}),
 		{
 			id: "actions",
 			header: "",

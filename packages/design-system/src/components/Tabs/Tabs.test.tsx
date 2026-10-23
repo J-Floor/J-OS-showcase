@@ -151,3 +151,89 @@ test("nested tabs: the outer switch uses the outer order and names the outer pan
 		document.querySelectorAll('[style*="jf-tab"]').length
 	).toBeLessThanOrEqual(1);
 });
+
+function barWithActions(initial: string) {
+	render(() => (
+		<Tabs.Root defaultValue={initial}>
+			<Tabs.Bar data-testid="bar">
+				<Tabs.List>
+					<Tabs.Trigger value="a">A</Tabs.Trigger>
+					<Tabs.Trigger value="b">B</Tabs.Trigger>
+					<Tabs.Trigger value="c">C</Tabs.Trigger>
+				</Tabs.List>
+				<Tabs.Actions value="a">
+					<button type="button">ActionA</button>
+				</Tabs.Actions>
+				<Tabs.Actions value="b">
+					<button type="button">ActionB</button>
+				</Tabs.Actions>
+			</Tabs.Bar>
+		</Tabs.Root>
+	));
+}
+
+function actionParts(): NodeListOf<Element> {
+	return screen
+		.getByTestId("bar")
+		.querySelectorAll('[data-part="tab-actions"]');
+}
+
+test("Bar holds the list and the active tab's actions once, in one actions part", () => {
+	barWithActions("a");
+	const bar = screen.getByTestId("bar");
+	expect(bar).toHaveAttribute("data-part", "tab-bar");
+	expect(bar).toContainElement(screen.getByRole("tablist"));
+	expect(actionParts()).toHaveLength(1);
+	expect(actionParts()[0]).toContainElement(screen.getByText("ActionA"));
+	expect(screen.getAllByText("ActionA")).toHaveLength(1);
+});
+
+test("no actions part while the active tab has no actions", async () => {
+	barWithActions("a");
+	fireEvent.click(screen.getByText("C"));
+	await waitFor(() => {
+		expect(actionParts()).toHaveLength(0);
+	});
+});
+
+test("Actions without a value show on every tab", async () => {
+	render(() => (
+		<Tabs.Root defaultValue="a">
+			<Tabs.Bar>
+				<Tabs.List>
+					<Tabs.Trigger value="a">A</Tabs.Trigger>
+					<Tabs.Trigger value="b">B</Tabs.Trigger>
+				</Tabs.List>
+				<Tabs.Actions>Always</Tabs.Actions>
+			</Tabs.Bar>
+		</Tabs.Root>
+	));
+	expect(screen.getByText("Always")).toBeInTheDocument();
+	fireEvent.click(screen.getByText("B"));
+	await waitFor(() => {
+		expect(screen.getByRole("tab", { name: "B" })).toHaveAttribute(
+			"data-selected"
+		);
+	});
+	expect(screen.getByText("Always")).toBeInTheDocument();
+});
+
+test("Bar scrolls the active trigger into view, and again when it changes", async () => {
+	const scrolled: string[] = [];
+	Element.prototype.scrollIntoView = function record(this: Element) {
+		scrolled.push(this.textContent);
+	};
+	try {
+		barWithActions("a");
+		await waitFor(() => {
+			expect(scrolled).toEqual(["A"]);
+		});
+		fireEvent.click(screen.getByText("C"));
+		await waitFor(() => {
+			expect(scrolled).toEqual(["A", "C"]);
+		});
+	} finally {
+		delete (Element.prototype as { scrollIntoView?: unknown })
+			.scrollIntoView;
+	}
+});

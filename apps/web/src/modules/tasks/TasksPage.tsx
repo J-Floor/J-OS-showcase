@@ -12,7 +12,6 @@ import { ASSIGNEE_FILTER_ALL, ASSIGNEE_FILTER_ME } from "./data/taskHelpers.ts";
 import { useCurrentPerson } from "./data/tasksData.tsx";
 import { ProjectsTab } from "./tabs/ProjectsTab.tsx";
 import { TasksTab } from "./tabs/TasksTab.tsx";
-import styles from "./TasksPage.module.scss";
 import { ProjectTabActions, TasksTabActions } from "./TasksTabActions.tsx";
 import type { ViewMode } from "./timeline/timeline.ts";
 
@@ -111,7 +110,7 @@ export function TasksPage() {
 					keys: TAB_KEYS,
 				}}
 			>
-				<div class={styles.tabBar}>
+				<Tabs.Bar>
 					<Tabs.List>
 						<Tabs.Trigger value="tasks">Tasks</Tabs.Trigger>
 						<Tabs.Trigger value="projects">Projects</Tabs.Trigger>
@@ -132,7 +131,7 @@ export function TasksPage() {
 							onNewProject={toolbar.requestNewProject}
 						/>
 					</Tabs.Actions>
-				</div>
+				</Tabs.Bar>
 				<Tabs.Content value="tasks">
 					<TasksTab
 						requestNew={toolbar.newTaskRequest}

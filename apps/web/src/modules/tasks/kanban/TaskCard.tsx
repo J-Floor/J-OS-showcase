@@ -85,6 +85,9 @@ export function TaskCard(props: {
 						{props.task.title}
 					</h4>
 					<div class={styles.meta}>
+						<Show when={names().length}>
+							<Assignees names={names()} />
+						</Show>
 						<Show when={!props.hideProject && project()}>
 							<span
 								class={styles.project}
@@ -93,9 +96,6 @@ export function TaskCard(props: {
 								<Icon>{ICONS.project}</Icon>
 								{project()}
 							</span>
-						</Show>
-						<Show when={names().length}>
-							<Assignees names={names()} />
 						</Show>
 						<Show when={due()}>
 							<span

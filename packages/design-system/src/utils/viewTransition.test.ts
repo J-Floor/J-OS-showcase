@@ -10,10 +10,12 @@ import {
 } from "../test/viewTransitionFakes.ts";
 
 import {
+	PART_CLASS,
 	SETTLE_CAP_MS,
 	type TransitionScope,
 	afterTransition,
 	isTransitionRunning,
+	partName,
 	viewTransition,
 } from "./viewTransition.ts";
 
@@ -96,6 +98,63 @@ test("sets kinds and names for the transition and clears them after", async () =
 	});
 	await done;
 	expect(element.style.getPropertyValue("view-transition-name")).toBe("");
+});
+
+test("a part name carries the part class for the transition, and both clear after", async () => {
+	const { finishAll } = fakeTransitions();
+	const part = document.createElement("div");
+	const page = document.createElement("div");
+	const done = viewTransition(() => {}, {
+		names: [
+			[part, partName("dueDate")],
+			[page, "jf-page"],
+		],
+	});
+	expect(part.style.getPropertyValue("view-transition-name")).toBe(
+		"jf-morph-part-dueDate"
+	);
+	expect(part.style.getPropertyValue("view-transition-class")).toBe(
+		PART_CLASS
+	);
+	expect(page.style.getPropertyValue("view-transition-class")).toBe("");
+	await vi.waitFor(() => {
+		finishAll();
+		expect(document.documentElement.dataset.vt).toBeUndefined();
+	});
+	await done;
+	expect(part.style.getPropertyValue("view-transition-name")).toBe("");
+	expect(part.style.getPropertyValue("view-transition-class")).toBe("");
+});
+
+test("unname and a rename to another kind of name drop the part class", async () => {
+	const endings = indexedTransitions();
+	const renamed = document.createElement("div");
+	const unnamed = document.createElement("div");
+	const done = viewTransition((scope) => {
+		scope.name(renamed, partName("status"));
+		scope.name(renamed, "jf-morph-title");
+		scope.name(unnamed, partName("owner"));
+		scope.unname(unnamed);
+	});
+	await transitionSettled();
+	expect(renamed.style.getPropertyValue("view-transition-name")).toBe(
+		"jf-morph-title"
+	);
+	expect(renamed.style.getPropertyValue("view-transition-class")).toBe("");
+	expect(unnamed.style.getPropertyValue("view-transition-name")).toBe("");
+	expect(unnamed.style.getPropertyValue("view-transition-class")).toBe("");
+	endings[0]?.finish();
+	await done;
+});
+
+test("a key that is not a CSS ident is escaped, and distinct keys keep distinct names", () => {
+	expect(partName("dueDate")).toBe("jf-morph-part-dueDate");
+	const keys = ["a.b", "a b", "a_b", "1st", "a\\.b", "naïve", "x:y"];
+	const names = keys.map((key) => partName(key));
+	for (const name of names) expect(name).toMatch(/^jf-morph-part-/);
+	expect(partName("a.b")).toBe(String.raw`jf-morph-part-a\.b`);
+	expect(new Set(names).size).toBe(keys.length);
+	expect(keys.map((key) => partName(key))).toEqual(names);
 });
 
 test("a call during a running update joins it instead of starting another", async () => {

@@ -481,7 +481,9 @@ describe("Sheet", () => {
 			expect(
 				seen[0].names.some((name) => name.startsWith("skeleton:"))
 			).toBe(false);
-			expect(seen[0].names).not.toContain("jf-morph-part-0");
+			expect(
+				seen[0].names.some((name) => name.startsWith("jf-morph-part-"))
+			).toBe(false);
 			expect(seen[0].kinds.split(" ")).toContain("morph-grow");
 			// Once the real fields are in, a reopen pairs them.
 			await new Promise((resolve) => setTimeout(resolve, 20));
@@ -494,7 +496,11 @@ describe("Sheet", () => {
 				);
 			setOpen(true);
 			await transitionSettled();
-			expect(seen.at(-1)?.names).toContain("jf-morph-part-0");
+			expect(
+				seen
+					.at(-1)
+					?.names.some((name) => name.startsWith("jf-morph-part-"))
+			).toBe(true);
 		});
 
 		test("with nothing activated, opens out of morphFrom", async () => {

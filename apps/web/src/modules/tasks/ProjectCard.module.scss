@@ -35,18 +35,48 @@
 	text-overflow: ellipsis;
 }
 
+/* One line, always: the timeline's label rows are a fixed height, and a meta
+   row that wrapped (a narrow phone column, a long leader name) made the card
+   taller than its row, which clipped the title off the top. The leader name
+   gives way first; the task count keeps its size. */
 .meta {
+	container: project-meta / inline-size;
 	display: flex;
-	flex-flow: row wrap;
+	flex-flow: row nowrap;
 	gap: var(--jf-spacing-near);
+	min-inline-size: 0;
+	overflow: hidden;
 	color: var(--jf-fg-muted);
 }
+
+/* The narrowest meta row that still shows a few letters of the leader's name
+   beside the task count. */
+$leader-min-meta-width: 8rem;
 
 .item {
 	@include typo.jf-typo-body-small;
 
 	display: inline-flex;
 	flex-wrap: nowrap;
+	flex-shrink: 0;
 	gap: var(--jf-spacing-close);
 	align-items: center;
+	white-space: nowrap;
+}
+
+.leader {
+	flex-shrink: 1;
+	min-inline-size: 0;
+	overflow: hidden;
+
+	/* Narrower (a phone's label column), the name would ellipse to nothing
+	   and leave a lone icon: drop the leader, keep the count. */
+	@container project-meta (width < #{$leader-min-meta-width}) {
+		display: none;
+	}
+}
+
+.leaderName {
+	overflow: hidden;
+	text-overflow: ellipsis;
 }

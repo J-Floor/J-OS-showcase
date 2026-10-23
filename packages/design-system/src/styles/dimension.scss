@@ -11,4 +11,14 @@
 	/* Plot height for `Chart`. A token rather than a prop so a dense dashboard
 	   can shrink every chart at once by re-declaring it on the grid. */
 	--jf-dimension-chart-height: 180px;
+
+	/* Room a phone's floating tab toolbar (Tabs.Bar) takes at the foot of the
+	   content column. Tabs raises it on the root while a toolbar shows; the
+	   other bottom floaters (prompts, toasts) add it to their offset. */
+	--jf-floating-toolbar-offset: 0px;
+
+	/* Height of the app's phone bottom navigation bar, for anything fixed to
+	   the viewport's foot (toasts) to clear it. The bar sets it while it is
+	   on screen; 0 everywhere else. */
+	--jf-bottom-nav-height: 0px;
 }

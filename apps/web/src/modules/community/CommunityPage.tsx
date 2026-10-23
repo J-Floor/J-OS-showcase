@@ -136,7 +136,7 @@ function useRosterTabs() {
 
 function CommunityTabBar() {
 	return (
-		<div class={styles.tabBar}>
+		<Tabs.Bar>
 			<Tabs.List>
 				<Tabs.Trigger value="applications">Applications</Tabs.Trigger>
 				<Tabs.Trigger value="members">Members</Tabs.Trigger>
@@ -144,8 +144,11 @@ function CommunityTabBar() {
 				<Tabs.Trigger value="insights">Insights</Tabs.Trigger>
 				<Tabs.Trigger value="profile">My profile</Tabs.Trigger>
 			</Tabs.List>
-			<ExportActions />
-		</div>
+			{/* Spans all three rosters, so it belongs to no one tab. */}
+			<Tabs.Actions>
+				<ExportActions />
+			</Tabs.Actions>
+		</Tabs.Bar>
 	);
 }
 

@@ -275,7 +275,7 @@ test("a task card's fields carry the keys of the task sheet's rows", () => {
 	));
 	const card = document.querySelector("article")!;
 	const cardKeys = keyedIn(card).map((element) => morphKeyOf(element));
-	expect(cardKeys).toEqual(["projectId", "assigneeIds", "dueDate"]);
+	expect(cardKeys).toEqual(["assigneeIds", "projectId", "dueDate"]);
 	for (const key of cardKeys) {
 		expect(
 			keyedValue(document.querySelector('[role="dialog"]'), key ?? "")

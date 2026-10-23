@@ -181,16 +181,16 @@ export function EditableDetail(props: { person: Doc<"people"> }) {
 					patch({ ventureName: value });
 				}}
 			/>
+			{/* Hosting stays here — guest-only, board-managed, not a shared field. */}
+			<Show when={person().tier === "guest"}>
+				<HostedByRow person={person()} saveError={saveError} />
+			</Show>
 			<VerticalField
 				value={person().vertical}
 				onCommit={(value) => {
 					patch({ vertical: value });
 				}}
 			/>
-			{/* Hosting stays here — guest-only, board-managed, not a shared field. */}
-			<Show when={person().tier === "guest"}>
-				<HostedByRow person={person()} saveError={saveError} />
-			</Show>
 			<VentureEditor person={person()} patch={patch} />
 			<InlineError message={saveError.error()} />
 		</div>

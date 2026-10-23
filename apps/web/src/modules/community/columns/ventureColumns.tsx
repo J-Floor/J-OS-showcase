@@ -70,12 +70,6 @@ export function ventureColumns<
 			cell: (info) => teamSizeText(info.row.original),
 			measureText: teamSizeText,
 		}),
-		fieldColumn(personFields.referral, {
-			dataType: "string",
-			size: SHORT_TEXT_SIZE,
-			measureText: false,
-			accessorFn: (row) => row.venture?.referral ?? "",
-		}),
 		fieldColumn(personFields.links, {
 			dataType: "string",
 			disableRowClick: true,
@@ -83,6 +77,12 @@ export function ventureColumns<
 			measureText: false,
 			accessorFn: (row) => (row.venture?.links ?? []).length,
 			cell: (info) => <LinksCell venture={info.row.original.venture} />,
+		}),
+		fieldColumn(personFields.referral, {
+			dataType: "string",
+			size: SHORT_TEXT_SIZE,
+			measureText: false,
+			accessorFn: (row) => row.venture?.referral ?? "",
 		}),
 	];
 }

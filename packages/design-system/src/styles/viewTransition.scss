@@ -1,8 +1,9 @@
 /* Every View Transition rule in the app. The pseudo-elements below only match
    on the document root, so CSS modules cannot scope them. Names are fixed
    (`jf-page`, `jf-tab`, `jf-morph`, `jf-morph-scrim`, `jf-morph-source`,
-   `jf-morph-title`, `jf-morph-part-0` to `-7`, `jf-sheet-body`,
-   `jf-brand-frame`, `jf-brand-mark`); `data-vt` on <html> is a space-separated list of kinds
+   `jf-morph-title`, `jf-sheet-body`, `jf-brand-frame`, `jf-brand-mark`),
+   but for the value flights: `jf-morph-part-<key>`, all of class
+   `jf-morph-part`; `data-vt` on <html> is a space-separated list of kinds
    for the running transition. See
    docs/superpowers/specs/2026-10-22-motion-view-transitions-design.md. */
 
@@ -10,9 +11,6 @@ $slide-distance: 24px;
 $scale-from: 0.9;
 $contents-hidden-until: 66%;
 $fill-switch: 30%;
-
-/* One per name in PART_NAMES (viewTransition.ts); morph.test.ts checks. */
-$part-flights: 8;
 $page-scale-from: 0.92;
 $page-faded-out-by: 35%;
 
@@ -262,11 +260,15 @@ $layer-text: 3;
 }
 
 /* Text that flies on its own, above the box: the title (`jf-morph-title`)
-   and each value paired by its field key (`jf-morph-part-N`). The browser's
+   and each value paired by its field key (`jf-morph-part-<key>`, matched by
+   its class, so any number fly). The browser's
    geometry moves and scales them, with the morph's duration and curve. The
    snapshots scale by the line's height, left-aligned, so a short text
    ("Jane") into a long one ("Jane Doe") does not stretch. One whose target
-   turned out to have none fades out where it is, with its source. */
+   turned out to have none fades out where it is, with its source.
+   `$name`: a name, or `*.class`. Each include is its own rules: a browser
+   that does not know classes drops only the class rules, and still flies
+   the values with its default look. */
 @mixin text-flight($name) {
 	::view-transition-group(#{$name}) {
 		z-index: $layer-text;
@@ -291,10 +293,7 @@ $layer-text: 3;
 }
 
 @include text-flight(jf-morph-title);
-
-@for $part from 0 to $part-flights {
-	@include text-flight(jf-morph-part-#{$part});
-}
+@include text-flight("*.jf-morph-part");
 
 /* No source: scale up from, or down to, the page centre. The overlays are
    centred, so the element's own centre is the page centre. */

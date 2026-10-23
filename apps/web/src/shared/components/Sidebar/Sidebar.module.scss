@@ -1,6 +1,19 @@
 @use "@j-os/design-system/breakpoints" as bp;
 @use "@j-os/design-system/typography" as typo;
 
+/* Phone bottom bar contents, top to bottom: its border, its padding, an
+   item's padding, the h5 glyph, the item gap and the body-small label line.
+   The bar is exactly this tall, so the height it publishes is never stale. */
+$nav-icon-size: 1.5rem;
+$nav-label-line: 0.75rem * 1.5;
+$nav-item-content: calc(
+	#{$nav-icon-size} + var(--jf-spacing-close) + #{$nav-label-line}
+);
+$nav-padding: calc(2 * var(--jf-spacing-close) + 2 * var(--jf-spacing-near));
+$nav-block-size: calc(
+	var(--jf-border-width-decorative) + #{$nav-padding} + #{$nav-item-content}
+);
+
 .sidebar {
 	--sidebar-collapsed: 72px;
 	--sidebar-expanded: 240px;
@@ -153,6 +166,11 @@
  * unconditional `.brand`/`.icon`/`.label` rules win and the bar keeps its rail
  * styling. */
 @include bp.phone {
+	/* Published for what is fixed to the viewport's foot (the toaster). */
+	:root:has(.sidebar) {
+		--jf-bottom-nav-height: #{$nav-block-size};
+	}
+
 	.sidebar,
 	.sidebar.expanded {
 		/* Last in the stacked shell (`.shell` turns into a column). `order`,
@@ -163,7 +181,7 @@
 		flex-direction: row;
 		justify-content: space-around;
 		inline-size: auto;
-		block-size: auto;
+		block-size: var(--jf-bottom-nav-height);
 
 		/* The bar's own padding stays minimal — the tap target is grown on the
 		   items instead, so the extra height is touchable rather than dead

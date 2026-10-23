@@ -42,6 +42,8 @@ import {
 	sheetKeys,
 	sheetSkeleton,
 	tableRowKeys,
+	titleAround,
+	titleKeyOf,
 } from "../../../../test-stubs/morphKeys.tsx";
 import { itemColumns } from "../columns/itemColumns.tsx";
 import type { Item, ItemType } from "../data/inventoryData.ts";
@@ -168,7 +170,8 @@ test("asset tag is read-only in edit mode and editing another field autosaves wi
 	// tag is the slug, and autosaving it on blur would change the slug out from
 	// under `selected()` and slam the sheet shut mid-edit.
 	expect(screen.queryByRole("group", { name: "Asset tag" })).toBeNull();
-	expect(screen.getByText("A00001")).toBeInTheDocument();
+	// Shown twice: the sheet title, and the read-only tag row.
+	expect(screen.getAllByText("A00001")).toHaveLength(2);
 
 	// Editing another field still autosaves that field only...
 	const description = screen.getByLabelText("Description");
@@ -328,9 +331,26 @@ test("morph: the item's columns pair with the sheet values showing the same fiel
 			items={[chair]}
 		/>
 	));
-	// The title cell flies into the asset tag value (the header says
-	// "Item"); the category has no row of its own (it follows the type).
-	expect(sheetKeys()).toEqual(["assetTag", "typeName", "description"]);
+	// The asset tag column is the row's title: it flies into the sheet title
+	// (the asset tag), so the body's tag row carries no key of its own; the
+	// category has no row either (it follows the type).
+	expect(sheetKeys()).toEqual(["typeName", "description"]);
+	const title = titleAround(screen.getByRole("heading", { name: "A00001" }));
+	expect(title).not.toBeNull();
+	expect(titleKeyOf(title)).toBe("");
+});
+
+test("the header shows the item's asset tag in edit mode, not 'Item'", () => {
+	render(() => (
+		<ItemSheet
+			open
+			onOpenChange={() => {}}
+			item={chair}
+			itemTypes={[chairType]}
+		/>
+	));
+	expect(screen.getByRole("heading", { name: "A00001" })).toBeInTheDocument();
+	expect(screen.queryByRole("heading", { name: "Item" })).toBeNull();
 });
 
 test("morph: the loading skeleton's plain-label rows carry no key", () => {

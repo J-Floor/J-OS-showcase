@@ -6,11 +6,11 @@ import {
 	titleIn,
 } from "./morphPairing.ts";
 import {
-	PART_NAMES,
 	type TransitionScope,
 	canAnimate,
 	isTransitionRunning,
 	moveName,
+	partName,
 	runningScope,
 	surfaceError,
 } from "./viewTransition.ts";
@@ -60,10 +60,6 @@ export const MORPH_SCRIM = "data-morph-scrim";
 const MORPH_SETTLING = "data-morph-settling";
 
 const PIN_VARS = ["--jf-morph-pin-bg", "--jf-morph-pin-border"] as const;
-
-/** The most values that fly at once, one per part name. Internal: exported
- *  for its tests. */
-export const MAX_PART_FLIGHTS = PART_NAMES.length;
 
 /** A control that takes typing: a morph out of (or into) one scales. */
 const TEXT_CONTROL = `input:not([type="checkbox"], [type="radio"]), textarea, [role="combobox"], [role="textbox"]`;
@@ -508,6 +504,7 @@ class MorphEnds {
 	/** What {@link strip} stripped; let go in {@link cleanUp}. */
 	private stripped: HTMLElement[] = [];
 	private targetValues: Map<string, HTMLElement> | undefined;
+	private closeValues: Map<string, HTMLElement> | undefined;
 	private readonly options: MorphOptions;
 
 	constructor(options: MorphOptions) {
@@ -600,6 +597,16 @@ class MorphEnds {
 
 	/** The target's value with `key`, if any, and only if all of it is on
 	 *  screen (a row's cell scrolled out of its table must not take one). */
+	/** Whether a close's value with `key` has somewhere to land: the row it
+	 *  closes into shows that key on screen. One that has none is not named,
+	 *  so it shrinks with the card rather than lingering where it was. An
+	 *  open's values always fly: its target is not rendered yet. */
+	landsOnClose(key: string): boolean {
+		if (!this.isClosing) return true;
+		this.closeValues ??= keyedValues(this.options.to(), true);
+		return fullyVisibleOrNull(this.closeValues.get(key) ?? null) !== null;
+	}
+
 	valueFor(key: string): HTMLElement | null {
 		this.targetValues ??= keyedValues(this.target, true);
 		return fullyVisibleOrNull(this.targetValues.get(key) ?? null);
@@ -657,7 +664,7 @@ function scrimOf(card: HTMLElement | null): HTMLElement | null {
 	return null;
 }
 
-/** The source's values that fly, at most {@link MAX_PART_FLIGHTS}. */
+/** The source's values that fly: every keyed one fully on screen. */
 function flyingValues(
 	from: HTMLElement | null,
 	ends: MorphEnds
@@ -667,8 +674,8 @@ function flyingValues(
 	const flying: [string, HTMLElement][] = [];
 	if (!from || !hasFlights) return flying;
 	for (const entry of keyedValues(from)) {
-		if (flying.length === MAX_PART_FLIGHTS) break;
-		if (isFullyVisible(entry[1])) flying.push(entry);
+		if (isFullyVisible(entry[1]) && ends.landsOnClose(entry[0]))
+			flying.push(entry);
 	}
 	return flying;
 }
@@ -690,7 +697,8 @@ function flyingValues(
  * place, under the growing surface; a source without one stays live and
  * the target grows out of its box. A close is the reverse. Each keyed
  * value of the source (a table cell) flies into the target's value with the
- * same key (a sheet field), `jf-morph-part-0` to `-7`. An open's source
+ * same key (a sheet field), each named by its key (`jf-morph-part-<key>`,
+ * class `jf-morph-part`). An open's source
  * keeps its look for the transition ({@link MORPH_PINNED}).
  *
  * A closing overlay (`direction: "close"`) offers a handoff (see
@@ -723,10 +731,10 @@ export function morph(options: MorphOptions): Promise<{ handedOff: boolean }> {
 				to: () => (title ? ends.titleTarget(title) : null),
 				name: "jf-morph-title",
 			},
-			...values.map(([key, value], index) => ({
+			...values.map(([key, value]) => ({
 				from: value,
 				to: () => ends.valueFor(key),
-				name: PART_NAMES[index],
+				name: partName(key),
 			})),
 		],
 		kind: "morph",

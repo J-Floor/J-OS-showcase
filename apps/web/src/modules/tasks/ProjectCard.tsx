@@ -46,11 +46,13 @@ export function ProjectCard(props: {
 						<Show when={props.leaderName}>
 							{(name) => (
 								<span
-									class={styles.item}
+									class={`${styles.item} ${styles.leader}`}
 									{...morphPart(projectFields.leaderId)}
 								>
 									<Icon>{ICONS.person}</Icon>
-									{name()}
+									<span class={styles.leaderName}>
+										{name()}
+									</span>
 								</span>
 							)}
 						</Show>

@@ -12,7 +12,6 @@ import {
 } from "../test/viewTransitionFakes.ts";
 
 import {
-	MAX_PART_FLIGHTS,
 	MORPH_GHOST,
 	MORPH_SCRIM,
 	MORPH_STRIPPED,
@@ -21,7 +20,7 @@ import {
 	morph,
 } from "./morph.ts";
 import { MORPH_KEY, MORPH_TITLE, SHEET_SKELETON } from "./morphPairing.ts";
-import { viewTransition } from "./viewTransition.ts";
+import { PART_CLASS, viewTransition } from "./viewTransition.ts";
 
 /** The named elements at each new snapshot. */
 function fakeTransitions(): string[][] {
@@ -324,6 +323,16 @@ function heldNames(): Record<string, string> {
 	return held;
 }
 
+/** Each element's id and its view-transition class, for those with one. */
+function heldClasses(): Record<string, string> {
+	const held: Record<string, string> = {};
+	for (const node of document.querySelectorAll<HTMLElement>("*")) {
+		const value = node.style.getPropertyValue("view-transition-class");
+		if (value) held[node.id] = value;
+	}
+	return held;
+}
+
 function rootVariable(name: string): string {
 	return document.documentElement.style.getPropertyValue(name);
 }
@@ -338,6 +347,7 @@ function recordSurface() {
 		ghosts: number;
 		pins: number;
 		stripped: string[];
+		classes: Record<string, string>;
 	};
 	const seen = { old: [] as Snapshot[], new: [] as Snapshot[] };
 	function take(): Snapshot {
@@ -353,6 +363,7 @@ function recordSurface() {
 					`[${MORPH_STRIPPED}]`
 				),
 			].map((node) => node.id),
+			classes: heldClasses(),
 		};
 	}
 	fakeViewTransitions({
@@ -568,13 +579,27 @@ test("a cell flies into the sheet value with the same key", async () => {
 	const sheet = sheetWithFields(["dueDate", "status"]);
 	await morph({ from: row, to: () => sheet, update: () => {} });
 	expect(seen.old[0].names).toMatchObject({
-		"jf-morph-part-0": "cell-0",
-		"jf-morph-part-1": "cell-1",
+		"jf-morph-part-status": "cell-0",
+		"jf-morph-part-dueDate": "cell-1",
 	});
 	expect(seen.new[0].names).toMatchObject({
-		"jf-morph-part-0": "field-1",
-		"jf-morph-part-1": "field-0",
+		"jf-morph-part-status": "field-1",
+		"jf-morph-part-dueDate": "field-0",
 	});
+});
+
+test("a close flies only the sheet values its row shows: the rest shrink with the card", async () => {
+	const seen = recordSurface();
+	const sheet = sheetWithFields(["status", "notes"]);
+	const row = rowWithCells(["status"]);
+	await morph({
+		from: sheet,
+		to: () => row,
+		direction: "close",
+		update: () => {},
+	});
+	expect(seen.old[0].names).toHaveProperty("jf-morph-part-status");
+	expect(seen.old[0].names).not.toHaveProperty("jf-morph-part-notes");
 });
 
 test("keys pair exactly: another case or spelling does not fly", async () => {
@@ -584,7 +609,7 @@ test("keys pair exactly: another case or spelling does not fly", async () => {
 	await morph({ from: row, to: () => sheet, update: () => {} });
 	expect(seen.new[0].names).toEqual({
 		"jf-morph": "sheet",
-		"jf-morph-part-0": "field-0",
+		"jf-morph-part-status": "field-0",
 	});
 });
 
@@ -597,7 +622,7 @@ test("a value without a key never flies", async () => {
 	sheet.append(plain);
 	await morph({ from: row, to: () => sheet, update: () => {} });
 	expect(Object.values(seen.new[0].names)).not.toContain("plain");
-	expect(seen.new[0].names["jf-morph-part-0"]).toBeUndefined();
+	expect(seen.new[0].names["jf-morph-part-status"]).toBeUndefined();
 });
 
 test("the same key twice in one end: the first wins, with a dev warning", async () => {
@@ -606,21 +631,41 @@ test("the same key twice in one end: the first wins, with a dev warning", async 
 	const row = rowWithCells(["status"]);
 	const sheet = sheetWithFields(["status", "status"]);
 	await morph({ from: row, to: () => sheet, update: () => {} });
-	expect(seen.new[0].names["jf-morph-part-0"]).toBe("field-0");
+	expect(seen.new[0].names["jf-morph-part-status"]).toBe("field-0");
 	expect(warn).toHaveBeenCalledWith(expect.stringContaining('"status"'));
 });
 
-test("at most eight values fly", async () => {
+test("every fully visible keyed value flies, named by its key, with the part class", async () => {
 	const seen = recordSurface();
-	const keys = Array.from({ length: 10 }, (_, index) => `col${index}`);
+	const keys = Array.from({ length: 12 }, (_, index) => `col${index}`);
 	const row = rowWithCells(keys);
 	const sheet = sheetWithFields(keys);
 	await morph({ from: row, to: () => sheet, update: () => {} });
-	const parts = Object.keys(seen.new[0].names).filter((name) =>
-		name.startsWith("jf-morph-part-")
+	const cells = keys.map((_, index) => `cell-${index}`);
+	const fields = keys.map((_, index) => `field-${index}`);
+	keys.forEach((key, index) => {
+		expect(seen.old[0].names[`jf-morph-part-${key}`]).toBe(cells[index]);
+		expect(seen.new[0].names[`jf-morph-part-${key}`]).toBe(fields[index]);
+	});
+	expect(seen.old[0].classes).toEqual(
+		Object.fromEntries(cells.map((id) => [id, PART_CLASS]))
 	);
-	expect(parts).toHaveLength(8);
-	expect(seen.new[0].names["jf-morph-part-7"]).toBe("field-7");
+	expect(seen.new[0].classes).toEqual(
+		Object.fromEntries(fields.map((id) => [id, PART_CLASS]))
+	);
+	expect(heldClasses()).toEqual({});
+	expect(heldNames()).toEqual({});
+});
+
+test("a key that is not a CSS ident flies under its escaped name", async () => {
+	const seen = recordSurface();
+	const row = rowWithCells(["a.b", "a b"]);
+	const sheet = sheetWithFields(["a b", "a.b"]);
+	await morph({ from: row, to: () => sheet, update: () => {} });
+	expect(seen.new[0].names).toMatchObject({
+		[String.raw`jf-morph-part-a\.b`]: "field-1",
+		[String.raw`jf-morph-part-a\ b`]: "field-0",
+	});
 });
 
 test("nothing inside a placeholder pairs or is named: the surface still morphs", async () => {
@@ -651,7 +696,7 @@ test("with real content in place of the placeholder, the values pair", async () 
 	skeleton.append(marked("placeholder-0", MORPH_KEY, "status"));
 	sheet.prepend(skeleton);
 	await morph({ from: row, to: () => sheet, update: () => {} });
-	expect(seen.new[0].names["jf-morph-part-0"]).toBe("field-0");
+	expect(seen.new[0].names["jf-morph-part-status"]).toBe("field-0");
 });
 
 test("a value inside a hidden (closed) section does not pair; a hidden end still does", async () => {
@@ -712,13 +757,13 @@ test("a title split into keyed halves closes each half into its cell, the first 
 		update: () => {},
 	});
 	expect(seen.old[0].names).toMatchObject({
-		"jf-morph-part-0": "first-half",
-		"jf-morph-part-1": "last-half",
+		"jf-morph-part-firstName": "first-half",
+		"jf-morph-part-lastName": "last-half",
 	});
 	expect(Object.values(seen.old[0].names)).not.toContain("sheet-title");
 	expect(seen.new[0].names).toMatchObject({
-		"jf-morph-part-0": "cell-title",
-		"jf-morph-part-1": "cell-last",
+		"jf-morph-part-firstName": "cell-title",
+		"jf-morph-part-lastName": "cell-last",
 	});
 });
 
@@ -1290,8 +1335,9 @@ test("a stripped or settling element runs no transition: the strip lands, and le
 	);
 });
 
-test("the stylesheet styles exactly as many part flights as may fly", () => {
-	expect(scssNumber("part-flights")).toBe(MAX_PART_FLIGHTS);
+test("the stylesheet styles every part flight by its class, never a fixed list of names", () => {
+	expect(STYLES).toContain(`@include text-flight("*.${PART_CLASS}");`);
+	expect(STYLES).not.toMatch(/jf-morph-part-\d|part-flights/);
 });
 
 test("a page change fades through: out first, then in while growing", () => {
