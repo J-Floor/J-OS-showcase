@@ -42,6 +42,7 @@ export type TransitionName =
 	| "jf-morph-title"
 	| PartName
 	| "jf-sheet-body"
+	| "jf-brand-backdrop"
 	| "jf-brand-frame"
 	| "jf-brand-mark";
 
@@ -57,7 +58,8 @@ export type TransitionKind =
 	| "sheet-next"
 	| "sheet-prev"
 	| "brand"
-	| "brand-unfold";
+	| "brand-unfold"
+	| "brand-reveal";
 
 export type TransitionScope = {
 	/**

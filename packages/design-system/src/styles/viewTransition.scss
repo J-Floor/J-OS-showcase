@@ -1,7 +1,8 @@
 /* Every View Transition rule in the app. The pseudo-elements below only match
    on the document root, so CSS modules cannot scope them. Names are fixed
    (`jf-page`, `jf-tab`, `jf-morph`, `jf-morph-scrim`, `jf-morph-source`,
-   `jf-morph-title`, `jf-sheet-body`, `jf-brand-frame`, `jf-brand-mark`),
+   `jf-morph-title`, `jf-sheet-body`, `jf-brand-backdrop`, `jf-brand-frame`,
+   `jf-brand-mark`),
    but for the value flights: `jf-morph-part-<key>`, all of class
    `jf-morph-part`; `data-vt` on <html> is a space-separated list of kinds
    for the running transition. See
@@ -345,6 +346,43 @@ $layer-text: 3;
 	}
 }
 
+/* Boot on a phone, where no sidebar shows the monogram (kind `brand-reveal`):
+   the logo's frame becomes the screen. The browser grows the group from the
+   logo's box to the viewport and scales the app's snapshot with it, so the
+   app appears inside the frame and grows until it is the screen. The frame's
+   stroke and corner shrink to nothing on the way; an outline, not an inset
+   shadow, because an inset shadow paints under the app's snapshot. */
+:root[data-vt~="brand-reveal"] {
+	&::view-transition-old(jf-brand-frame) {
+		opacity: 0;
+		animation: none;
+	}
+
+	&::view-transition-new(jf-brand-frame) {
+		animation: none;
+	}
+
+	&::view-transition-image-pair(jf-brand-frame) {
+		overflow: clip;
+		animation: jf-vt-brand-reveal var(--jf-animation-duration-morph)
+			var(--jf-animation-ease-standard) both;
+	}
+}
+
+/* The splash behind the logo (brandUnfold.ts). A reveal keeps it over the
+   app until the frame has grown to the screen, so the app is only ever seen
+   inside the frame; otherwise it goes at once, as the app is already there. */
+:root[data-vt]:not([data-vt~="brand-reveal"])::view-transition-old(
+		jf-brand-backdrop
+	) {
+	opacity: 0;
+	animation: none;
+}
+
+:root[data-vt~="brand-reveal"]::view-transition-old(jf-brand-backdrop) {
+	animation: none;
+}
+
 /* Page change: a fade through. The old page fades out over the first part;
    the new one then fades in while growing to its size from its top edge, the
    one against the topbar, so that edge stays put and the page settles down
@@ -413,6 +451,20 @@ $layer-text: 3;
 	from {
 		border-radius: var(--jf-brand-corner);
 		box-shadow: var(--jf-brand-ring-from);
+	}
+}
+
+@keyframes jf-vt-brand-reveal {
+	from {
+		border-radius: var(--jf-brand-corner);
+		outline: var(--jf-brand-stroke) solid var(--jf-fg-strong);
+		outline-offset: calc(-1 * var(--jf-brand-stroke));
+	}
+
+	to {
+		border-radius: 0;
+		outline: 0 solid transparent;
+		outline-offset: 0;
 	}
 }
 

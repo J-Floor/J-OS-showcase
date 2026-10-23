@@ -9,16 +9,24 @@ import {
 } from "solid-js";
 
 import { isUpdating } from "../lib/pwaUpdates.ts";
-import { BRAND_FRAME } from "../shared/components/Sidebar/brandFrame.ts";
+import {
+	BRAND_FRAME,
+	BRAND_SCREEN,
+} from "../shared/components/Sidebar/brandFrame.ts";
 
 function sidebarRail(): HTMLElement | null {
 	return document.querySelector<HTMLElement>(`[${BRAND_FRAME}]`);
 }
 
+function appScreen(): HTMLElement | null {
+	return document.querySelector<HTMLElement>(`[${BRAND_SCREEN}]`);
+}
+
 /**
  * The boot gate's swap from the splash to the shell. The shell follows
  * `showSplash` through its own signal, so the swap can run inside a View
- * Transition: the splash logo unfolds into the sidebar (`unfoldLogo`). The
+ * Transition: the splash logo unfolds into the sidebar, or on a phone its
+ * frame grows into the screen (`unfoldLogo`). The
  * swap happens exactly when it did before; the transition only wraps it.
  *
  * `landsOnRail` says whether the shell about to show has the sidebar (a
@@ -53,7 +61,12 @@ export function createSplashHandoff(
 				flip();
 				return;
 			}
-			void unfoldLogo({ logo: splash, landing: sidebarRail, flip });
+			void unfoldLogo({
+				logo: splash,
+				landing: sidebarRail,
+				screen: appScreen,
+				flip,
+			});
 		})
 	);
 	return {

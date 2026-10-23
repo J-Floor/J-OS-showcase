@@ -61,6 +61,7 @@ function layOut(isHidden: (element: Element) => boolean = () => false): void {
 
 function mountLogo(): HTMLElement {
 	const logo = document.createElement("div");
+	logo.id = "splash";
 	logo.innerHTML = `
 		<span id="logo-frame" ${LOGO_PART}="frame"></span>
 		<span id="logo-mark" ${LOGO_PART}="mark"></span>`;
@@ -95,6 +96,7 @@ test("the logo's frame and J become the landing's frame and monogram", async () 
 	const logo = mountLogo();
 	await unfoldLogo({ logo, landing, flip: flipFrom(logo) });
 	expect(seen.old).toEqual({
+		"jf-brand-backdrop": "splash",
 		"jf-brand-frame": "logo-frame",
 		"jf-brand-mark": "logo-mark",
 	});
@@ -123,6 +125,7 @@ test("a landing with no box is not named: the logo only fades", async () => {
 	const logo = mountLogo();
 	await unfoldLogo({ logo, landing, flip: flipFrom(logo) });
 	expect(seen.old).toEqual({
+		"jf-brand-backdrop": "splash",
 		"jf-brand-frame": "logo-frame",
 		"jf-brand-mark": "logo-mark",
 	});
@@ -136,6 +139,48 @@ test("a landing without its monogram on screen is not named either", async () =>
 	const logo = mountLogo();
 	await unfoldLogo({ logo, landing, flip: flipFrom(logo) });
 	expect(seen.new).toEqual({});
+});
+
+/** The flip on a phone: the logo leaves, a screen arrives whose rail shows
+ *  no monogram (the bottom bar hides it). */
+function flipToScreen(logo: HTMLElement): () => void {
+	return () => {
+		flipFrom(logo)();
+		const screen = document.createElement("div");
+		screen.id = "screen";
+		document.body.append(screen);
+	};
+}
+
+function screen(): HTMLElement | null {
+	return document.getElementById("screen");
+}
+
+test("with no monogram to land on, the logo's frame grows into the screen", async () => {
+	const seen = recordSnapshots();
+	layOut((element) => element.id === "monogram");
+	const logo = mountLogo();
+	await unfoldLogo({ logo, landing, screen, flip: flipToScreen(logo) });
+	expect(seen.old).toEqual({
+		"jf-brand-backdrop": "splash",
+		"jf-brand-frame": "logo-frame",
+		"jf-brand-mark": "logo-mark",
+	});
+	// The J has nowhere to go: it fades with the logo.
+	expect(seen.new).toEqual({ "jf-brand-frame": "screen" });
+	expect(seen.kinds).toBe("brand brand-reveal");
+});
+
+test("a rail with its monogram still wins over the screen", async () => {
+	const seen = recordSnapshots();
+	layOut();
+	const logo = mountLogo();
+	await unfoldLogo({ logo, landing, screen, flip: flipToScreen(logo) });
+	expect(seen.new).toEqual({
+		"jf-brand-frame": "rail",
+		"jf-brand-mark": "monogram",
+	});
+	expect(seen.kinds).toBe("brand brand-unfold");
 });
 
 test("without View Transitions the flip is instant", () => {

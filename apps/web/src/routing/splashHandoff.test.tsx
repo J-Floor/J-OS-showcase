@@ -3,6 +3,7 @@ import { createRoot, createSignal } from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
 
 import { setUpdatingForTest } from "../lib/pwaUpdates.ts";
+import { BRAND_SCREEN } from "../shared/components/Sidebar/brandFrame.ts";
 
 import { createSplashHandoff } from "./splashHandoff.ts";
 
@@ -71,6 +72,19 @@ test("a shell with the sidebar unfolds the logo in a transition", async () => {
 	await vi.waitFor(() => {
 		expect(gate.isShellShown()).toBe(true);
 	});
+	gate.dispose();
+});
+
+test("the logo lands on the marked shell where no sidebar shows its monogram (a phone)", async () => {
+	const designSystem = await import("@j-os/design-system");
+	const unfold = vi.spyOn(designSystem, "unfoldLogo");
+	fakeTransitions();
+	const gate = handoff({ isWanted: true });
+	const shell = document.createElement("div");
+	shell.setAttribute(BRAND_SCREEN, "");
+	document.body.append(shell);
+	gate.setWanted(false);
+	expect(unfold.mock.calls[0]?.[0].screen?.()).toBe(shell);
 	gate.dispose();
 });
 

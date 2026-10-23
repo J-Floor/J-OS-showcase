@@ -13,6 +13,7 @@ import { LastPathTracker, ModuleRoutes, RoleGate } from "./routing/index.tsx";
 import { usePageTransitions } from "./routing/usePageTransitions.ts";
 import { AppErrorBoundary } from "./shared/AppErrorBoundary.tsx";
 import { Breadcrumbs } from "./shared/components/Breadcrumbs/Breadcrumbs.tsx";
+import { BRAND_SCREEN } from "./shared/components/Sidebar/brandFrame.ts";
 import { Sidebar } from "./shared/components/Sidebar/Sidebar.tsx";
 import { ConfirmProvider } from "./shared/confirm.tsx";
 import { BoardLevelProvider } from "./shared/data/boardLevel.tsx";
@@ -98,7 +99,7 @@ function ShellBody(props: ParentProps) {
 
 function AdminShell(props: ParentProps) {
 	return (
-		<div class={styles.shell}>
+		<div class={styles.shell} {...{ [BRAND_SCREEN]: "" }}>
 			<AppErrorBoundary>
 				<ShellWarmup />
 			</AppErrorBoundary>
