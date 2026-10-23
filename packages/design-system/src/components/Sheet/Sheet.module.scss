@@ -56,8 +56,10 @@ $stack-step: 0.04;
 
 	pointer-events: none;
 
+	/* A phone shows the sheet full screen: a margin this thin only made it
+	   look cramped. */
 	@include bp.phone {
-		padding: var(--jf-spacing-near);
+		padding: 0;
 	}
 }
 
@@ -117,9 +119,14 @@ $stack-step: 0.04;
 		transform-origin: top center;
 	}
 
+	/* Full screen, so a screen rather than a card: no edges. The morph reads
+	   this surface, so it grows into a square, edge-to-edge sheet. */
 	@include bp.phone {
 		inline-size: 100%;
 		block-size: 100%;
+		border: none;
+		border-radius: 0;
+		box-shadow: none;
 	}
 
 	&[data-state="open"] {

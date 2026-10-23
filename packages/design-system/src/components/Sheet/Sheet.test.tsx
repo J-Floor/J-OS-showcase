@@ -652,3 +652,30 @@ test("its scrim runs no fade of its own while a morph fades it", () => {
 		/:root\[data-vt~="morph"\] & \{\s*transition: none;\s*\}/
 	);
 });
+
+test("on a phone it fills the screen: no margin around it, no card edges", () => {
+	const styles = readFileSync(
+		`${import.meta.dirname}/Sheet.module.scss`,
+		"utf8"
+	);
+	/** The `bp.phone` block inside the top-level rule `selector`. */
+	function phoneBlock(selector: string): string {
+		const start = styles.indexOf(`\n${selector} {`);
+		const rule = styles.slice(start, styles.indexOf("\n}\n", start));
+		const phone = rule.indexOf("@include bp.phone {");
+		return phone === -1
+			? ""
+			: rule.slice(phone, rule.indexOf("\t}", phone));
+	}
+	expect(phoneBlock(".positioner")).toContain("padding: 0;");
+	const content = phoneBlock(".content");
+	for (const declaration of [
+		"inline-size: 100%;",
+		"block-size: 100%;",
+		"border: none;",
+		"border-radius: 0;",
+		"box-shadow: none;",
+	]) {
+		expect(content).toContain(declaration);
+	}
+});
