@@ -41,6 +41,16 @@ test("records a button activated with Enter", () => {
 	expect(recentActivation()?.id).toBe("new");
 });
 
+test("records the active descendant a focused widget names on Enter", () => {
+	document.body.innerHTML = `<table id="grid" tabindex="0" aria-activedescendant="r1"><tr role="row" id="r1"><td>x</td></tr></table>`;
+	document
+		.getElementById("grid")
+		?.dispatchEvent(
+			new KeyboardEvent("keydown", { key: "Enter", bubbles: true })
+		);
+	expect(recentActivation()?.id).toBe("r1");
+});
+
 test("ignores other keys", () => {
 	document.body.innerHTML = `<button id="new">New</button>`;
 	document

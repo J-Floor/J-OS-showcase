@@ -15,10 +15,20 @@ const ACTIVATABLE = `button, a, ${ENTITY_ROW}`;
 
 let last: { element: HTMLElement; at: number } | undefined;
 
+/** What a widget holding focus for its items (a grid's ring row) names as
+ *  its current item through `aria-activedescendant`; the key acts on that
+ *  item, not on the widget. */
+function activeDescendant(target: Element): Element | null {
+	const id = target.getAttribute("aria-activedescendant");
+	return id ? target.ownerDocument.getElementById(id) : null;
+}
+
 function record(event: Event): void {
 	const target = event.target;
 	if (!(target instanceof Element)) return;
-	const element = target.closest<HTMLElement>(ACTIVATABLE);
+	const acted =
+		(event.type === "keydown" ? activeDescendant(target) : null) ?? target;
+	const element = acted.closest<HTMLElement>(ACTIVATABLE);
 	if (element) last = { element, at: Date.now() };
 }
 
