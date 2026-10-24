@@ -29,7 +29,11 @@
 /* Rubber-band selection rectangle drawn over the board. */
 .marquee {
 	position: absolute;
+	inset-block-start: var(--marquee-y);
+	inset-inline-start: var(--marquee-x);
 	z-index: 2;
+	inline-size: var(--marquee-w);
+	block-size: var(--marquee-h);
 	pointer-events: none;
 	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
 	background-color: rgb(128 128 128 / 12%);
@@ -38,7 +42,7 @@
 }
 
 .cardWrap[data-selected] {
-	outline: 2px solid var(--jf-fg-strong);
+	outline: var(--jf-border-width-accessibility) solid var(--jf-fg-strong);
 	outline-offset: 2px;
 	border-radius: var(--jf-radius-container);
 }
@@ -68,7 +72,7 @@
 	gap: var(--jf-spacing-near);
 	min-block-size: 120px;
 	padding: var(--jf-spacing-near);
-	outline: 2px dashed transparent;
+	outline: var(--jf-border-width-accessibility) dashed transparent;
 	outline-offset: -2px;
 	background: var(--jf-surface-bg-sunken);
 	border-radius: var(--jf-radius-container);
@@ -113,4 +117,5 @@
 
 .cardWrap {
 	touch-action: none;
+	transform: var(--drag-transform);
 }

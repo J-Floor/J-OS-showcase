@@ -9,7 +9,7 @@
 	   without blocks (jsdom / unmeasurable) the children stay visible. */
 	&[data-measured] {
 		* {
-			/* stylelint-disable-next-line declaration-no-important */
+			/* stylelint-disable-next-line declaration-no-important -- hides every descendant's text, whatever colour its own rule sets */
 			color: transparent !important;
 		}
 
@@ -44,10 +44,19 @@
 	}
 }
 
+/* Geometry comes from the measured leaf as custom properties; a square leaf
+   sets no `--r` and takes the container radius. */
 .block {
 	@extend %shimmer;
 
 	position: absolute;
+	/* stylelint-disable logical-css/require-logical-properties -- the geometry is a measured `getBoundingClientRect` box, which is physical (x from the left, y from the top) in any writing direction */
+	top: var(--y);
+	left: var(--x);
+	width: var(--w);
+	height: var(--h);
+	/* stylelint-enable logical-css/require-logical-properties */
+	border-radius: var(--r, var(--jf-radius-container));
 }
 
 /* Manual mode: one bar whose shape is known up front. Width is a preset (a
@@ -80,12 +89,12 @@
 @keyframes jf-skeleton-fade {
 	0%,
 	100% {
-		/* stylelint-disable-next-line scale-unlimited/declaration-strict-value */
+		/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- the pulse's low point; no opacity token for an animation level */
 		opacity: 0.15;
 	}
 
 	50% {
-		/* stylelint-disable-next-line scale-unlimited/declaration-strict-value */
+		/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- the pulse's high point; no opacity token for an animation level */
 		opacity: 0.35;
 	}
 }

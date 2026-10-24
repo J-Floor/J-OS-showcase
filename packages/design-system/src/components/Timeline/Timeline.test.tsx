@@ -17,7 +17,7 @@ const entries: TimelineEntry[] = [
 		id: "2",
 		at: 1_800_000_000_000,
 		kind: "Transitions",
-		title: "Approved as guest",
+		title: "Marked as reviewed",
 		actor: "Marc",
 	},
 	{
@@ -38,7 +38,7 @@ const entries: TimelineEntry[] = [
 test("renders newest first", () => {
 	render(() => <Timeline entries={entries} />);
 	const titles = screen.getAllByRole("listitem").map((li) => li.textContent);
-	expect(titles[0]).toContain("Approved as guest");
+	expect(titles[0]).toContain("Marked as reviewed");
 	expect(titles[1]).toContain("Email sent: approval");
 });
 
@@ -73,7 +73,7 @@ test("a kind can be filtered OUT, which one boolean could never do", async () =>
 		expect(screen.queryByText("Email sent: approval")).toBeNull();
 	});
 	// Turning one kind off leaves the others alone.
-	expect(screen.getByText("Approved as guest")).toBeInTheDocument();
+	expect(screen.getByText("Marked as reviewed")).toBeInTheDocument();
 });
 
 test("collapseMuted={false} shows every kind immediately", () => {
@@ -99,13 +99,55 @@ test("toggling a kind back off hides it again", async () => {
 	});
 });
 
-test("renders nothing crash-worthy for an empty timeline", () => {
+test("an empty timeline shows the EmptyState default, not a bare list", () => {
 	render(() => <Timeline entries={[]} />);
 	expect(screen.queryAllByRole("listitem")).toHaveLength(0);
 	expect(screen.queryByRole("button")).toBeNull();
-	// Pins the deviation from a bare empty <ul>: a real fallback message, not
-	// just "no rows and no buttons" (which a silently-empty list also satisfies).
-	expect(screen.getByText("No history yet.")).toBeInTheDocument();
+	expect(screen.getByRole("heading")).toBeInTheDocument();
+	expect(screen.queryByText("No history yet.")).toBeNull();
+});
+
+test("a Timeline.Empty replaces the default empty state", () => {
+	render(() => (
+		<Timeline entries={[]}>
+			<Timeline.Empty>
+				<p>Nothing logged</p>
+			</Timeline.Empty>
+		</Timeline>
+	));
+	expect(screen.getByText("Nothing logged")).toBeInTheDocument();
+	expect(screen.queryByRole("heading")).toBeNull();
+});
+
+test("a Timeline.Empty stays out while there are entries", () => {
+	render(() => (
+		<Timeline entries={entries}>
+			<Timeline.Empty>
+				<p>Nothing logged</p>
+			</Timeline.Empty>
+		</Timeline>
+	));
+	expect(screen.queryByText("Nothing logged")).toBeNull();
+	expect(screen.getAllByRole("listitem").length).toBeGreaterThan(0);
+});
+
+test("filters hiding every entry show No matches, and Clear filters brings them all back", async () => {
+	const onlyMuted: TimelineEntry[] = [
+		{
+			id: "1",
+			at: 1_700_000_000_000,
+			kind: "Field edits",
+			title: "Notes changed",
+			muted: true,
+		},
+	];
+	render(() => <Timeline entries={onlyMuted} />);
+	expect(screen.getByText("No matches")).toBeInTheDocument();
+	fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+	await waitFor(() => {
+		expect(screen.getByText("Notes changed")).toBeInTheDocument();
+	});
+	expect(screen.queryByText("No matches")).toBeNull();
 });
 
 test("shows a human-readable date for each entry", () => {

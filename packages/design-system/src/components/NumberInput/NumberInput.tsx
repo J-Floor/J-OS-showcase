@@ -4,31 +4,39 @@ import {
 	type NumberInputInputProps,
 	type UseNumberInputContext,
 } from "@ark-ui/solid/number-input";
-import { type JSX, Show, mergeProps } from "solid-js";
+import { type JSX, Show, mergeProps, splitProps } from "solid-js";
 
 import { ICONS } from "../../icons.ts";
 import { type PropsWithDisabling } from "../../utils/disablingProps.ts";
-import { splitMakeFieldProps } from "../../utils/makeFieldProps.ts";
+import {
+	createFieldControl,
+	splitMakeFieldProps,
+} from "../../utils/makeFieldProps.ts";
 import { splitArkProps } from "../../utils/splitArkProps.ts";
-import { type TriggerProps } from "../../utils/triggerProps.ts";
+import type { MakeFieldOwnProps } from "../../utils/types.ts";
 import { Icon, type IconProps } from "../Icon/Icon.tsx";
 import { IconButton } from "../IconButton/IconButton.tsx";
 import { MakeField, type MakeFieldProps } from "../MakeField/MakeField.tsx";
 
 import styles from "./NumberInput.module.scss";
 
-// MakeField extends Field.Root's div-typed HTML props, which collide with the
-// ark NumberInput.Root props below. Keep MakeField's own additions + the Field
-// semantic props; let the ark Root own the rest.
-type MakeFieldOwnProps = Omit<
-	MakeFieldProps,
-	keyof JSX.HTMLAttributes<HTMLDivElement>
->;
+/** The props that belong on the `<input>`, not the Ark root's `<div>`: zag's
+ *  number-input has no placeholder, and focus events do not bubble. */
+const INPUT_KEYS = [
+	"placeholder",
+	"autofocus",
+	"onFocus",
+	"onBlur",
+	"onKeyDown",
+	"onKeyUp",
+] as const satisfies readonly (keyof NumberInputInputProps)[];
+
+type InputKey = (typeof INPUT_KEYS)[number];
 
 export type NumberInputProps = PropsWithDisabling<
 	MakeFieldOwnProps &
-		Omit<NumberInputRootProps, "min" | "max"> &
-		Pick<NumberInputInputProps, "placeholder"> & {
+		Omit<NumberInputRootProps, "min" | "max" | InputKey> &
+		Pick<NumberInputInputProps, InputKey> & {
 			/** Material Symbols ligature rendered before the input. */
 			leadingIconName?: IconProps["children"];
 			/** Hide the scrubber + increment/decrement control, allowing typing only. */
@@ -40,7 +48,7 @@ export type NumberInputProps = PropsWithDisabling<
 			/** Maximum value; a string is parsed to a number (throws on NaN). */
 			max?: string | number;
 			/** Ref forwarded to the underlying input element. */
-			ref?: HTMLInputElement | ((element: HTMLInputElement) => void);
+			ref?: NumberInputInputProps["ref"];
 		}
 >;
 
@@ -64,7 +72,7 @@ function parseBound(
 /** The button that empties the field, shown only while it has a value. */
 function ClearButton(props: {
 	context: UseNumberInputContext;
-	isDisabled: boolean | undefined;
+	isDisabled: MakeFieldProps["disabled"];
 }): JSX.Element {
 	return (
 		<Show when={!props.context().empty && !props.isDisabled}>
@@ -90,7 +98,7 @@ function StepControls(): JSX.Element {
 					<IconButton
 						tooltipLabel="Decrement"
 						disabledReason="Minimum allowed value reached"
-						triggerProps={arkProps() as TriggerProps}
+						triggerProps={arkProps()}
 					>
 						remove
 					</IconButton>
@@ -101,7 +109,7 @@ function StepControls(): JSX.Element {
 					<IconButton
 						tooltipLabel="Increment"
 						disabledReason="Maximum allowed value reached"
-						triggerProps={arkProps() as TriggerProps}
+						triggerProps={arkProps()}
 					>
 						{ICONS.add}
 					</IconButton>
@@ -118,9 +126,10 @@ function StepControls(): JSX.Element {
  *
  * Ported from EmboUI's NumberInput. React→Solid: no `forwardRef` (`ref` is a
  * plain prop forwarded to the input); EmboUI's double `onlyArkProps` is replaced
- * by `splitArkProps`/`splitProps`. String `min`/`max` are parsed to numbers
- * (throwing on a non-numeric string, same message as EmboUI). `onlyAllowTyping`
- * hides scrubber + control.
+ * by `splitArkProps`/`splitProps`: `INPUT_KEYS` go to the `<input>`, the rest
+ * to the Ark root. String `min`/`max` are parsed to numbers (throwing on a
+ * non-numeric string, same message as EmboUI). `onlyAllowTyping` hides
+ * scrubber + control.
  *
  * Inc/dec triggers: each ark `Increment`/`DecrementTrigger` renders an
  * {@link IconButton} via `asChild`, passing ark's trigger props through
@@ -129,8 +138,6 @@ function StepControls(): JSX.Element {
  * MakeDisablable) for free — no hand-rolled trigger button.
  */
 export function NumberInput(props: NumberInputProps): JSX.Element {
-	let inputElement: HTMLInputElement | undefined;
-
 	// Consumer-only props (handled here) vs. everything forwarded to ark Root.
 	const [own, rest] = splitArkProps(props, [
 		"leadingIconName",
@@ -141,11 +148,10 @@ export function NumberInput(props: NumberInputProps): JSX.Element {
 		"max",
 	]);
 	// MakeField/Field semantics (incl. the full disabling set) route to MakeField
-	// for the dim + reason tooltip; the rest spreads on the ark Root. `disabled`
-	// is ALSO forwarded to the ark Root below so zag disables the input + inc/dec
-	// triggers (they only get `[disabled]` — and the dimmed `.trigger[disabled]`
-	// styling — when the Root is disabled).
-	const [makeFieldProps, arkRest] = splitMakeFieldProps(rest);
+	// for the dim + reason tooltip; the input's own props go to the `<input>`;
+	// the rest spreads on the ark Root.
+	const [makeFieldProps, afterMakeField] = splitMakeFieldProps(rest);
+	const [inputProps, arkRest] = splitProps(afterMakeField, INPUT_KEYS);
 	// Override min/max with their parsed numeric forms (throws on NaN); forward
 	// `disabled` to the ark Root so the input + triggers are actually disabled.
 	const rootProps = mergeProps(arkRest, {
@@ -159,16 +165,7 @@ export function NumberInput(props: NumberInputProps): JSX.Element {
 			return makeFieldProps.disabled;
 		},
 	});
-
-	function setReference(element: HTMLInputElement) {
-		inputElement = element;
-		const reference = own.ref;
-		if (typeof reference === "function") reference(element);
-	}
-
-	function handleWrapperClick() {
-		inputElement?.focus();
-	}
+	const control = createFieldControl<HTMLInputElement>(() => own.ref);
 
 	return (
 		<MakeField {...makeFieldProps}>
@@ -178,13 +175,18 @@ export function NumberInput(props: NumberInputProps): JSX.Element {
 				</Show>
 				<div
 					class={styles.inputWrapper}
-					onClick={handleWrapperClick}
+					onClick={() => {
+						control.focus();
+					}}
 					data-invalid={makeFieldProps.invalid ? "true" : undefined}
 				>
 					<Show when={own.leadingIconName}>
 						{(name) => <Icon class={styles.icon}>{name()}</Icon>}
 					</Show>
-					<ArkNumberInput.Input ref={setReference} />
+					<ArkNumberInput.Input
+						{...inputProps}
+						ref={control.setReference}
+					/>
 					<Show when={own.allowClearing}>
 						<ArkNumberInput.Context>
 							{(context) => (

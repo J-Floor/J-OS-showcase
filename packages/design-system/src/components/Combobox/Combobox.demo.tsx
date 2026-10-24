@@ -1,13 +1,10 @@
 import { Combobox } from "@j-os/design-system";
+import { For } from "solid-js";
 
+import { FRAMEWORKS } from "../../../demo/fixtures.ts";
 import type { Demo } from "../../../demo/types.ts";
 
-const items = [
-	{ value: "solid", label: "Solid" },
-	{ value: "react", label: "React" },
-	{ value: "vue", label: "Vue" },
-	{ value: "svelte", label: "Svelte" },
-];
+const frameworks = FRAMEWORKS;
 
 export default {
 	title: "Combobox",
@@ -18,19 +15,33 @@ export default {
 			helperText={p.helperText}
 			errorText={p.errorText}
 			allowClearing={p.allowClearing}
-			sameWidth={p.sameWidth}
+			positioning={{ sameWidth: p.sameWidth }}
 			multiple={p.multiple}
 			invalid={p.invalid}
 			required={p.required}
 			disabled={p.disabled}
-			items={items}
-		/>
+		>
+			<For each={frameworks}>
+				{(framework) => (
+					<Combobox.Option value={framework.value}>
+						<Combobox.OptionText>
+							{framework.name}
+						</Combobox.OptionText>
+						<Combobox.OptionDescription>
+							{framework.note}
+						</Combobox.OptionDescription>
+					</Combobox.Option>
+				)}
+			</For>
+			<Combobox.Empty>{p.emptyText}</Combobox.Empty>
+		</Combobox.Root>
 	),
 	controls: {
 		label: { type: "text", default: "Framework" },
 		placeholder: { type: "text", default: "Pick one" },
 		helperText: { type: "text", default: "Type to filter, or pick one." },
 		errorText: { type: "text", default: "Selection required." },
+		emptyText: { type: "text", default: "No framework matches" },
 		allowClearing: { type: "boolean", default: true },
 		sameWidth: { type: "boolean", default: true },
 		multiple: { type: "boolean", default: false },

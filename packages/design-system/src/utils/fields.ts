@@ -13,7 +13,7 @@ export type FieldDefinition<Key extends string = string> = {
 	readonly icon?: string;
 };
 
-type FieldSpec = { readonly label: string; readonly icon?: string };
+type FieldSpec = Omit<FieldDefinition, "key">;
 
 type Fields<Specs extends Record<string, FieldSpec>> = {
 	readonly [Key in keyof Specs & string]: FieldDefinition<Key> & Specs[Key];

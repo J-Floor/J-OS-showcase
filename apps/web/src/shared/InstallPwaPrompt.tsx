@@ -1,10 +1,16 @@
-import { Button, Icon, IconButton, Popover } from "@j-os/design-system";
+import {
+	Button,
+	type ButtonProps,
+	FloatingToolbar,
+	Icon,
+	IconButton,
+	Popover,
+} from "@j-os/design-system";
 import { type JSX, Match, Show, Switch } from "solid-js";
 
 import { createDismissed } from "../lib/dismissed.ts";
 
 import { ICONS } from "./icons.ts";
-import styles from "./InstallPwaPrompt.module.scss";
 import {
 	isAppInstalled,
 	type InstallMethod,
@@ -41,12 +47,11 @@ const STEPS: Record<StepsMethod, () => JSX.Element> = {
 
 function PillButton(props: {
 	onClick?: () => void;
-	triggerProps?: object;
+	triggerProps?: ButtonProps["triggerProps"];
 }): JSX.Element {
 	return (
 		<Button
-			{...props.triggerProps}
-			class={styles.install}
+			triggerProps={props.triggerProps}
 			variant="tertiary"
 			onClick={props.onClick}
 		>
@@ -97,7 +102,7 @@ export function InstallPwaPrompt() {
 
 	return (
 		<Show when={show()}>
-			<div class={styles.pill}>
+			<FloatingToolbar>
 				<Switch>
 					<Match when={method() === "prompt"}>
 						<PillButton onClick={() => void runInstallPrompt()} />
@@ -108,9 +113,7 @@ export function InstallPwaPrompt() {
 								<Popover.ClickTrigger
 									asChild={(triggerProps) => (
 										<PillButton
-											triggerProps={
-												triggerProps() as object
-											}
+											triggerProps={triggerProps()}
 										/>
 									)}
 								/>
@@ -129,7 +132,7 @@ export function InstallPwaPrompt() {
 				<IconButton tooltipLabel="Dismiss" onClick={dismiss}>
 					{ICONS.close}
 				</IconButton>
-			</div>
+			</FloatingToolbar>
 		</Show>
 	);
 }

@@ -104,6 +104,7 @@ export function DoorOverrideControl(props: {
 				// three options side by side, and a segmented control you have to
 				// scroll hides the very choices it exists to show.
 				orientation="vertical"
+				aria-label="Door access"
 				class={styles.segment}
 				// Controlled by the server value, never by local state: if the
 				// mutation fails or the board cancels the dialog, the control must

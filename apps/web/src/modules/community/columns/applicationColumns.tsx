@@ -176,7 +176,8 @@ export function ScoreCell(props: { row: ApplicationRow }) {
 	return (
 		<div class={styles.scoreCell}>
 			<NumberInput
-				label=""
+				label="Score"
+				labelHidden
 				min={0}
 				max={11}
 				disabled={!currentPerson()}
@@ -277,8 +278,8 @@ export function NotesCell(props: {
 				)}
 			</Show>
 			<Input
-				label=""
-				aria-label="Add a note"
+				label="Add a note"
+				labelHidden
 				placeholder="Add a note…"
 				value={draft()}
 				// Peek hint: `N` focuses this composer on the ringed row. `inline`

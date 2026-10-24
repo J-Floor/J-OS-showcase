@@ -81,6 +81,9 @@ function trim(value: number): string {
 	return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
+/** A series value's stacked bottom and top. */
+export type StackedCell = { base: number; top: number };
+
 /**
  * The stacked top and bottom of every series value, per row.
  *
@@ -92,7 +95,7 @@ function trim(value: number): string {
 export function stackRows(
 	data: ChartDatum[],
 	series: ChartSeries[]
-): { base: number; top: number }[][] {
+): StackedCell[][] {
 	return data.map((row) => {
 		const runningByStack = new Map<string, number>();
 		return series.map((entry) => {
@@ -114,7 +117,7 @@ export function numberAt(row: ChartDatum, key: string): number {
 }
 
 /** The largest stacked top across every row, i.e. what the y axis must reach. */
-export function maxOf(stacked: { base: number; top: number }[][]): number {
+export function maxOf(stacked: StackedCell[][]): number {
 	let max = 0;
 	for (const row of stacked)
 		for (const cell of row) max = Math.max(max, cell.top);

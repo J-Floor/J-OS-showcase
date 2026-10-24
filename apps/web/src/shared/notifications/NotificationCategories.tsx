@@ -63,6 +63,11 @@ function CategoryRow(props: {
 				<Checkbox
 					checked={props.row.push}
 					disabled={!props.isPushOn || isPending()}
+					disabledReason={
+						isPending()
+							? "Saving…"
+							: "Turn on push for this device first."
+					}
 					onCheckedChange={(details) => {
 						void toggle("push", details.checked === true);
 					}}
@@ -73,6 +78,7 @@ function CategoryRow(props: {
 					<Checkbox
 						checked={props.row.email}
 						disabled={isPending()}
+						disabledReason="Saving…"
 						onCheckedChange={(details) => {
 							void toggle("email", details.checked === true);
 						}}

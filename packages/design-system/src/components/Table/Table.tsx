@@ -3,13 +3,19 @@ import type {
 	Row as TanRow,
 	RowSelectionState,
 	SortingState,
+	TableOptions,
 	Table as TanTable,
 } from "@tanstack/solid-table";
 import clsx from "clsx";
 import { type Accessor, type JSX, createEffect } from "solid-js";
 
-import { BatchActions } from "./BatchActions.tsx";
+import {
+	BatchActions,
+	SelectionProvider,
+	useSelection,
+} from "./BatchActions.tsx";
 import { createColumnLayout, createTracksSettled } from "./columnLayout.ts";
+import { Empty, emptyPart } from "./Empty.tsx";
 import { createGridFocus } from "./gridFocus.ts";
 import { createTable } from "./hooks.ts";
 import { createRangeSelection } from "./rangeSelection.ts";
@@ -42,14 +48,14 @@ export type TableRootProps<Data extends Record<string, unknown>> = {
 	/** Enable a leading selection column + tri-state select-all. */
 	enableRowSelection?: boolean;
 	/**
-	 * A row's stable id, keying its selection and its column measurement.
-	 * Defaults to the row's `_id` when it is a string (every Convex
-	 * document), else its index. Give one for other data whose rows can be
-	 * inserted or removed. Ids must be unique: two rows sharing one share
-	 * their selection, their focus and their measured width. The same id
-	 * keys focus and `activeRowId`.
+	 * A row's stable id (TanStack's `row.id`), keying its selection, its
+	 * column measurement, its focus (`activeRowId`, `aria-activedescendant`)
+	 * and the detail view it morphs into. Ids must be unique: two rows
+	 * sharing one share all of these. Required: an index would hand a row's
+	 * selection, focus and width to another row when one is inserted above
+	 * it. Only data that never changes may key rows by index.
 	 */
-	getRowId?: (row: Data, index: number) => string;
+	getRowId: NonNullable<TableOptions<Data>["getRowId"]>;
 	/** Make the header stick to the top on scroll. @default true */
 	stickyHeader?: boolean;
 	/**
@@ -101,12 +107,9 @@ export type TableRootProps<Data extends Record<string, unknown>> = {
 	 * Called whenever the checked-row selection changes. Passes the original
 	 * data objects, empty when nothing is checked.
 	 *
-	 * A callback rather than something read out of a render prop: a consumer
-	 * that wants the current selection as a plain signal (not just inside
-	 * `Table.BatchActions`' children) would otherwise have to call its own
-	 * setter from inside that render prop's body — which runs during Solid's
-	 * render pass, so writing a signal there is a write-during-render, the same
-	 * re-entrancy risk `onDisplayedRowsChange` exists to avoid for the row list.
+	 * For using the selection outside the table. Anything among the table's
+	 * children (a `Table.BatchActions` bar's actions) reads it with
+	 * `Table.useSelection` instead.
 	 */
 	onSelectedRowsChange?: (rows: Data[]) => void;
 	/**
@@ -118,27 +121,27 @@ export type TableRootProps<Data extends Record<string, unknown>> = {
 	focusableRows?: boolean;
 	/**
 	 * Put the ring on the first row as soon as there is one, instead of waiting
-	 * for the first ↑/↓. For a triage queue you land on ready to act; a plain
+	 * for the first ↑/↓. For a work queue you land on ready to act; a plain
 	 * data table would rather open with nothing selected, so this is off by
 	 * default and only meaningful alongside `focusableRows`.
 	 */
 	autofocusFirstRow?: boolean;
 	/**
 	 * Clear and disable the row-focus ring while true. For when something else owns
-	 * the keyboard and the record it acts on — an open detail sheet, say: a ring
-	 * left glowing under it would claim a row is the target when the sheet is, and
+	 * the keyboard and the row it acts on — an open detail view, say: a ring
+	 * left glowing under it would claim a row is the target when the view is, and
 	 * Enter would reopen it stacked on top. Mutually exclusive with the ring the
 	 * same way a checkbox selection is.
 	 */
 	suppressFocus?: boolean;
 	/**
-	 * Pin the ring to a specific row by `_id` — the record an open detail sheet
-	 * is showing — so the table stays visually in sync as the sheet pages
-	 * record to record, and that row is scrolled into view. Shown but NOT
+	 * Pin the ring to a specific row by its id (see `getRowId`) — the row an
+	 * open detail view is showing — so the table stays visually in sync as the
+	 * view pages row to row, and that row is scrolled into view. Shown but NOT
 	 * interactive: a pinned ring is inert, so arrows and Enter do nothing while
-	 * it is pinned (the sheet owns them), whether or not `suppressFocus` is
+	 * it is pinned (the view owns them), whether or not `suppressFocus` is
 	 * set. When the pin releases (`undefined`), the ring stays where it landed,
-	 * so closing the sheet leaves you on that row. Accessor so it stays live.
+	 * so closing the view leaves you on that row. Accessor so it stays live.
 	 */
 	activeRowId?: () => string | undefined;
 	/** The row the focus ring is on, or `undefined` when it is nowhere. */
@@ -152,24 +155,10 @@ export type TableRootProps<Data extends Record<string, unknown>> = {
 	 */
 	focusApi?: (api: { advance: () => void }) => void;
 	class?: string;
-	/** `Table.BatchActions` is detected among children; other children render below. */
+	/** Parts (`Table.BatchActions`, `Table.Empty`) and anything else, rendered
+	 *  below the table. `Table.Empty` renders in the body instead. */
 	children?: JSX.Element;
 };
-
-/**
- * The id focus and `activeRowId` match a row by: the same `row.id` that
- * keys its selection (see `getRowId`). Without a `getRowId`, a row with
- * no string `_id` has only its index, which a push can hand to another
- * row, so it gets no id and is never focused (see `isRowFocused` in
- * gridFocus.ts).
- */
-function focusRowId<Data extends Record<string, unknown>>(
-	props: Pick<TableRootProps<Data>, "getRowId">,
-	row: TanRow<Data>
-): string | undefined {
-	if (props.getRowId !== undefined) return row.id;
-	return typeof row.original._id === "string" ? row.id : undefined;
-}
 
 /**
  * Focus and a checkbox selection are mutually exclusive. Checking anything
@@ -219,8 +208,8 @@ function createTableModel<Data extends Record<string, unknown>>(
 		// Table instance, so reading them eagerly here is intentional.
 		// eslint-disable-next-line solid/reactivity -- static table config, read once at setup
 		columns: props.columns,
-		initialSorting: props.initialColumnSorting,
-		initialFilters: props.initialColumnFilters,
+		initialColumnSorting: props.initialColumnSorting,
+		initialColumnFilters: props.initialColumnFilters,
 		// eslint-disable-next-line solid/reactivity -- static table config, read once at setup
 		enableRowSelection: props.enableRowSelection,
 		// eslint-disable-next-line solid/reactivity -- static table config, read once at setup
@@ -242,13 +231,13 @@ function createTableModel<Data extends Record<string, unknown>>(
 		 * ordered by the column sort (e.g. score desc), while the screen is
 		 * bucketed by group in the grouped column's own order. Walking the flat
 		 * model made ArrowDown jump between groups and stranded the first
-		 * visual group's rows at the very end of the traversal — "To score"
-		 * sits at the top of the screen but scores 0, so it sorted last and
-		 * could not be reached by arrowing down from the top. Walking the
-		 * displayed order is what makes the ring move the way the eye reads.
+		 * visual group's rows at the very end of the traversal — a group at
+		 * the top of the screen whose rows sort last could not be reached by
+		 * arrowing down from the top. Walking the displayed order is what
+		 * makes the ring move the way the eye reads.
 		 */
 		rows: groups.displayedLeafRows,
-		rowId: (row) => focusRowId(props, row),
+		rowId: (row) => row.id,
 		selectionActive: () => hasCheckedRows(rowSelection()),
 	});
 
@@ -359,7 +348,7 @@ export function Root<Data extends Record<string, unknown>>(
 		groups: model.groups,
 		focus,
 		selection: model.selection,
-		rowId: (row) => focusRowId(props, row),
+		rowId: (row) => row.id,
 		loading,
 		scroll: viewport.scroll,
 		renderItems: model.renderItems,
@@ -367,45 +356,49 @@ export function Root<Data extends Record<string, unknown>>(
 	};
 
 	return (
-		<div class={styles.tableWrapper}>
-			{/* The scroll box: every table needs one, grouped or not, or it
+		<emptyPart.Scope>
+			<div class={styles.tableWrapper}>
+				{/* The scroll box: every table needs one, grouped or not, or it
 			    clips inside `.tableWrapper` (overflow: clip) and cannot
 			    scroll — rows past the fold and columns past the viewport are
 			    simply cut off (phone especially). The box is what the sticky
 			    header sticks to. */}
-			<div class={styles.scrollBox} ref={viewport.scroll.ref}>
-				<table
-					ref={viewport.tableRef}
-					class={clsx(styles.table, props.class)}
-					role={props.focusableRows === true ? "grid" : "table"}
-					{...focus.gridAttributes()}
-					data-sticky-header={stickyHeader() ? "true" : "false"}
-					data-animate-tracks={
-						viewport.haveTracksSettled() ? "true" : undefined
-					}
-					style={{
-						"--jf-table-tracks": layout().tracks,
-						"--jf-table-floor": `${String(layout().floor)}px`,
-						...layout().widths,
-					}}
+				<div class={styles.scrollBox} ref={viewport.scroll.ref}>
+					<table
+						ref={viewport.tableRef}
+						class={clsx(styles.table, props.class)}
+						role={props.focusableRows === true ? "grid" : "table"}
+						{...focus.gridAttributes()}
+						data-sticky-header={stickyHeader() ? "true" : "false"}
+						data-animate-tracks={
+							viewport.haveTracksSettled() ? "true" : undefined
+						}
+						style={{
+							"--jf-table-tracks": layout().tracks,
+							"--jf-table-floor": `${String(layout().floor)}px`,
+							...layout().widths,
+						}}
+					>
+						<TableHead table={table} />
+						<tbody role="rowgroup" ref={viewport.bodyRef}>
+							<TableBody context={body} />
+						</tbody>
+					</table>
+				</div>
+				<SelectionProvider
+					table={table}
+					rowSelection={model.rowSelection}
 				>
-					<TableHead table={table} />
-					<tbody role="rowgroup" ref={viewport.bodyRef}>
-						<TableBody context={body} />
-					</tbody>
-				</table>
+					{props.children}
+				</SelectionProvider>
 			</div>
-			<BatchActions.Provider
-				table={table}
-				rowSelection={model.rowSelection}
-			>
-				{props.children}
-			</BatchActions.Provider>
-		</div>
+		</emptyPart.Scope>
 	);
 }
 
 export const Table = {
 	Root,
-	BatchActions: BatchActions.Component,
+	BatchActions,
+	Empty,
+	useSelection,
 };

@@ -108,3 +108,15 @@ test("an empty stack holds nothing that could take a click", () => {
 	expect(stack?.textContent).toBe("");
 	expect(screen.queryAllByRole("button")).toHaveLength(0);
 });
+
+test("each prompt is a floating toolbar pill of the stack", async () => {
+	fireBeforeInstallPrompt();
+	renderStack();
+	await screen.findByText("Install app");
+	for (const label of ["Install app", "Enable notifications"]) {
+		const pill = screen
+			.getByText(label)
+			.closest('[data-part="floating-toolbar"]');
+		expect(pill).toHaveAttribute("data-floating");
+	}
+});

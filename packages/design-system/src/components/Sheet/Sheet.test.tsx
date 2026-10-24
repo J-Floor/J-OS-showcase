@@ -50,7 +50,10 @@ function recordEntityNames(): string[] {
 	return names;
 }
 
-const FILLED = "background-color: rgb(0, 0, 0)";
+/** jsdom loads no stylesheet: a morph source paints its background inline. */
+function fill(element: HTMLElement): void {
+	element.style.setProperty("background-color", "rgb(0, 0, 0)");
+}
 
 async function openFromButton(morph: false | undefined): Promise<{
 	opener: HTMLElement | null;
@@ -62,7 +65,7 @@ async function openFromButton(morph: false | undefined): Promise<{
 	render(() => (
 		<>
 			{/* Filled: a container, which the sheet takes the place of. */}
-			<button id="opener" style={FILLED}>
+			<button id="opener" ref={fill}>
 				Open
 			</button>
 			<Sheet.Root open={open()} onOpenChange={setOpen} morph={morph}>
@@ -148,13 +151,16 @@ describe("Sheet", () => {
 		).toBeInTheDocument();
 	});
 
-	test("Body with a skeleton prop shows the placeholder shape, not the generic bars or children", () => {
+	test("a Sheet.Skeleton shows its placeholder shape while loading, not the generic bars or children", () => {
 		render(() => (
 			<Sheet.Root open onOpenChange={() => {}}>
 				<Sheet.Header>
 					<Sheet.Title>T</Sheet.Title>
 				</Sheet.Header>
-				<Sheet.Body loading skeleton={<p>placeholder shape</p>}>
+				<Sheet.Skeleton>
+					<p>placeholder shape</p>
+				</Sheet.Skeleton>
+				<Sheet.Body loading>
 					<p>real fields</p>
 				</Sheet.Body>
 			</Sheet.Root>
@@ -173,6 +179,109 @@ describe("Sheet", () => {
 		expect(
 			document.querySelectorAll(`[${SHEET_SKELETON_ROW}]`)
 		).toHaveLength(0);
+	});
+
+	test("a Sheet.Skeleton goes once the body has loaded", () => {
+		const [loading, setLoading] = createSignal(true);
+		render(() => (
+			<Sheet.Root open onOpenChange={() => {}}>
+				<Sheet.Skeleton>
+					<p>placeholder shape</p>
+				</Sheet.Skeleton>
+				<Sheet.Body loading={loading()}>
+					<p>real fields</p>
+				</Sheet.Body>
+			</Sheet.Root>
+		));
+		expect(screen.getByText("placeholder shape")).toBeInTheDocument();
+		setLoading(false);
+		expect(screen.queryByText("placeholder shape")).toBeNull();
+		expect(
+			document.querySelector(`[${SHEET_SKELETON}]`)
+		).not.toBeInTheDocument();
+		expect(screen.getByText("real fields")).toBeInTheDocument();
+	});
+
+	test("a Sheet.Skeleton's placeholder is built once", () => {
+		const built = vi.fn();
+		function Placeholder(): JSX.Element {
+			built();
+			return <p>placeholder shape</p>;
+		}
+		render(() => (
+			<Sheet.Root open onOpenChange={() => {}}>
+				<Sheet.Skeleton>
+					<Placeholder />
+				</Sheet.Skeleton>
+				<Sheet.Body loading>
+					<p>real fields</p>
+				</Sheet.Body>
+			</Sheet.Root>
+		));
+		expect(screen.getByText("placeholder shape")).toBeInTheDocument();
+		expect(built).toHaveBeenCalledTimes(1);
+	});
+
+	test("a Sheet.Skeleton placed after the body still replaces the generic bars", () => {
+		render(() => (
+			<Sheet.Root open onOpenChange={() => {}}>
+				<Sheet.Body loading>
+					<p>real fields</p>
+				</Sheet.Body>
+				<Sheet.Skeleton>
+					<p>placeholder shape</p>
+				</Sheet.Skeleton>
+			</Sheet.Root>
+		));
+		expect(screen.getByText("placeholder shape")).toBeInTheDocument();
+		expect(
+			document.querySelectorAll(`[${SHEET_SKELETON_ROW}]`)
+		).toHaveLength(0);
+	});
+
+	test("a second Sheet.Skeleton is refused", () => {
+		expect(() =>
+			render(() => (
+				<Sheet.Root open onOpenChange={() => {}}>
+					<Sheet.Skeleton>
+						<p>one</p>
+					</Sheet.Skeleton>
+					<Sheet.Skeleton>
+						<p>two</p>
+					</Sheet.Skeleton>
+					<Sheet.Body loading>
+						<p>real fields</p>
+					</Sheet.Body>
+				</Sheet.Root>
+			))
+		).toThrow("one Sheet.Skeleton");
+	});
+
+	test("classOverride restyles the backdrop, positioner and content", () => {
+		render(() => (
+			<Sheet.Root
+				open
+				onOpenChange={() => {}}
+				classOverride={{
+					backdropClass: "my-backdrop",
+					positionerClass: "my-positioner",
+					contentClass: "my-content",
+				}}
+			>
+				<Sheet.Body>body</Sheet.Body>
+			</Sheet.Root>
+		));
+		for (const [part, name] of [
+			["backdrop", "my-backdrop"],
+			["positioner", "my-positioner"],
+			["content", "my-content"],
+		]) {
+			expect(
+				document.querySelector(
+					`[data-scope="dialog"][data-part="${part}"]`
+				)
+			).toHaveClass(name);
+		}
 	});
 
 	test("Title with loading shows a shimmer, not the text", () => {
@@ -463,7 +572,10 @@ describe("Sheet", () => {
 						<Sheet.Header>
 							<Sheet.Title>Task</Sheet.Title>
 						</Sheet.Header>
-						<Sheet.Body skeleton={<Fields />}>
+						<Sheet.Skeleton>
+							<Fields />
+						</Sheet.Skeleton>
+						<Sheet.Body>
 							<Fields />
 						</Sheet.Body>
 					</Sheet.Root>
@@ -511,7 +623,7 @@ describe("Sheet", () => {
 			const [open, setOpen] = createSignal(false);
 			render(() => (
 				<>
-					<button id="bell" style={FILLED}>
+					<button id="bell" ref={fill}>
 						Bell
 					</button>
 					<Sheet.Root

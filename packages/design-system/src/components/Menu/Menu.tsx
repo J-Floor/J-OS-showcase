@@ -1,6 +1,12 @@
 import { Menu as ArkMenu } from "@ark-ui/solid";
 import clsx from "clsx";
+import { splitProps } from "solid-js";
 import { Portal } from "solid-js/web";
+
+import {
+	getPartStyles,
+	type WithPartClasses,
+} from "../../utils/partStyling.ts";
 
 import styles from "./Menu.module.scss";
 
@@ -11,15 +17,28 @@ import styles from "./Menu.module.scss";
  * (Root / Trigger / Content / Item / ItemGroup / Separator) is unchanged.
  * `Item` requires a `value` (ark uses it for keyboard typeahead + `onSelect`).
  */
-function Content(props: ArkMenu.ContentProps) {
+export type MenuContentProps = ArkMenu.ContentProps &
+	WithPartClasses<"positioner" | "content">;
+
+function Content(props: MenuContentProps) {
+	const [local, rest] = splitProps(props, [
+		"classOverride",
+		"class",
+		"children",
+	]);
 	return (
 		<Portal>
-			<ArkMenu.Positioner class={styles.positioner}>
+			<ArkMenu.Positioner
+				class={getPartStyles(styles, local, "positioner")}
+			>
 				<ArkMenu.Content
-					{...props}
-					class={clsx(styles.content, props.class)}
+					{...rest}
+					class={clsx(
+						getPartStyles(styles, local, "content"),
+						local.class
+					)}
 				>
-					{props.children}
+					{local.children}
 				</ArkMenu.Content>
 			</ArkMenu.Positioner>
 		</Portal>
@@ -27,28 +46,31 @@ function Content(props: ArkMenu.ContentProps) {
 }
 
 function Item(props: ArkMenu.ItemProps) {
+	const [local, rest] = splitProps(props, ["children", "class"]);
 	return (
-		<ArkMenu.Item {...props} class={clsx(styles.item, props.class)}>
-			{props.children}
+		<ArkMenu.Item {...rest} class={clsx(styles.item, local.class)}>
+			{local.children}
 		</ArkMenu.Item>
 	);
 }
 
 function ItemGroup(props: ArkMenu.ItemGroupProps) {
+	const [local, rest] = splitProps(props, ["children", "class"]);
 	return (
-		<ArkMenu.ItemGroup {...props} class={clsx(styles.group, props.class)}>
-			{props.children}
+		<ArkMenu.ItemGroup {...rest} class={clsx(styles.group, local.class)}>
+			{local.children}
 		</ArkMenu.ItemGroup>
 	);
 }
 
 function ItemGroupLabel(props: ArkMenu.ItemGroupLabelProps) {
+	const [local, rest] = splitProps(props, ["children", "class"]);
 	return (
 		<ArkMenu.ItemGroupLabel
-			{...props}
-			class={clsx(styles.groupLabel, props.class)}
+			{...rest}
+			class={clsx(styles.groupLabel, local.class)}
 		>
-			{props.children}
+			{local.children}
 		</ArkMenu.ItemGroupLabel>
 	);
 }

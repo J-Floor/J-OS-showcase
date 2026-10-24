@@ -1,3 +1,5 @@
+@use "@j-os/design-system/breakpoints" as bp;
+
 .actions {
 	display: flex;
 	flex-wrap: wrap;
@@ -5,7 +7,7 @@
 	justify-content: flex-end;
 	margin-block-start: var(--jf-spacing-away);
 
-	@media (width <= 600px) {
+	@include bp.phone {
 		position: sticky;
 		inset-block-end: 0;
 		flex-direction: column;

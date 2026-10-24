@@ -155,7 +155,7 @@ export function ProjectTimeline(props: ProjectTimelineProps): JSX.Element {
 										<div
 											class={styles.canvas}
 											style={{
-												width: px(
+												"--canvas-w": px(
 													current().totalDays *
 														current().dayWidth
 												),

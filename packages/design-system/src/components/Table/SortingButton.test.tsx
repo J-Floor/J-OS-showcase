@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@solidjs/testing-library";
 
 import { Table } from "./Table.tsx";
+import { rowIndex } from "./testRowIds.ts";
 import type { JfColumnDefinition } from "./types.ts";
 
 // jsdom workarounds for ark/zag (Tooltip) used by header buttons.
@@ -21,6 +22,7 @@ const columns: JfColumnDefinition<Row>[] = [
 test("each sort button is named for the column it sorts", () => {
 	render(() => (
 		<Table.Root
+			getRowId={rowIndex}
 			columns={columns}
 			data={[
 				{ name: "B", score: 1 },
@@ -40,6 +42,7 @@ test("each sort button is named for the column it sorts", () => {
 test("clicking the named button sorts that column", () => {
 	render(() => (
 		<Table.Root
+			getRowId={rowIndex}
 			columns={columns}
 			data={[
 				{ name: "B", score: 1 },
@@ -55,6 +58,7 @@ test("clicking the named button sorts that column", () => {
 test("a second click sorts the column descending", () => {
 	render(() => (
 		<Table.Root
+			getRowId={rowIndex}
 			columns={columns}
 			data={[
 				{ name: "B", score: 1 },
@@ -78,6 +82,7 @@ test("a second click sorts the column descending", () => {
 test("an empty header names the sort button by the column id", () => {
 	render(() => (
 		<Table.Root
+			getRowId={rowIndex}
 			columns={[{ accessorKey: "name", header: "", dataType: "string" }]}
 			data={[{ name: "B", score: 1 }]}
 		/>

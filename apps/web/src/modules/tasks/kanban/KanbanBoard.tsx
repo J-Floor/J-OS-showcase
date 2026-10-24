@@ -58,7 +58,7 @@ function DraggableCard(props: {
 				[styles.grouping]: props.grouped,
 				[styles.dragActive]: draggable.isActiveDraggable,
 			}}
-			style={{ transform: transform() }}
+			style={{ "--drag-transform": transform() }}
 			data-task-id={props.task._id}
 			data-selected={props.selected ? "" : undefined}
 		>
@@ -188,10 +188,10 @@ function MarqueeOutline(props: {
 				<div
 					class={styles.marquee}
 					style={{
-						left: `${String(marquee().x)}px`,
-						top: `${String(marquee().y)}px`,
-						width: `${String(marquee().w)}px`,
-						height: `${String(marquee().h)}px`,
+						"--marquee-x": `${String(marquee().x)}px`,
+						"--marquee-y": `${String(marquee().y)}px`,
+						"--marquee-w": `${String(marquee().w)}px`,
+						"--marquee-h": `${String(marquee().h)}px`,
 					}}
 				/>
 			)}

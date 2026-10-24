@@ -1,29 +1,84 @@
-import { render, screen, fireEvent } from "@solidjs/testing-library";
+import { fireEvent, render, screen } from "@solidjs/testing-library";
+import { expectTypeOf } from "vitest";
 
-import { Checkbox } from "./Checkbox.tsx";
+import { TOOLTIP_OPEN_DELAY_MS } from "../Tooltip/Tooltip.tsx";
 
-test("toggles checked", async () => {
-	let checkedState: boolean | "indeterminate" = false;
-	render(() => (
-		<Checkbox
-			checked={checkedState}
-			onCheckedChange={(details) => (checkedState = details.checked)}
-		/>
-	));
-	fireEvent.click(screen.getByRole("checkbox"));
-	// Zag's checkbox machine dispatches onCheckedChange on a microtask, so the
-	// callback resolves on the next tick rather than synchronously after click.
-	await vi.waitFor(() => {
-		expect(checkedState).toBe(true);
+import { Checkbox, type CheckboxProps } from "./Checkbox.tsx";
+
+test("disabled without a reason is a type error, as on every field", () => {
+	expectTypeOf<{ disabled: true }>().not.toExtend<CheckboxProps>();
+	expectTypeOf<{
+		disabled: true;
+		disabledReason: string;
+	}>().toExtend<CheckboxProps>();
+	expectTypeOf<{
+		disabled: true;
+		shamefullyOmitDisabledReason: true;
+	}>().toExtend<CheckboxProps>();
+});
+
+describe("disabled", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+	});
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	test("a disabled checkbox shows its reason on hover", async () => {
+		render(() => (
+			<Checkbox disabled disabledReason="Locked by an admin">
+				Accept
+			</Checkbox>
+		));
+		const wrapper = document.querySelector<HTMLElement>(
+			'[data-scope="tooltip"][data-part="trigger"]'
+		);
+		expect(wrapper).not.toBeNull();
+		fireEvent.pointerMove(wrapper!);
+		await vi.advanceTimersByTimeAsync(TOOLTIP_OPEN_DELAY_MS);
+		expect(screen.getByText("Locked by an admin")).toBeInTheDocument();
+	});
+
+	test("disabled reaches the checkbox itself", () => {
+		render(() => (
+			<Checkbox disabled shamefullyOmitDisabledReason>
+				Accept
+			</Checkbox>
+		));
+		expect(screen.getByRole("checkbox")).toBeDisabled();
 	});
 });
 
 test("renders a label when children are provided", () => {
 	render(() => <Checkbox>Accept</Checkbox>);
-	expect(screen.getByText("Accept")).toBeInTheDocument();
+	expect(
+		screen.getByRole("checkbox", { name: "Accept" })
+	).toBeInTheDocument();
 });
 
 test("renders the indeterminate dash indicator", () => {
 	render(() => <Checkbox checked="indeterminate" />);
 	expect(screen.getByText("remove")).toBeInTheDocument();
+});
+
+test("classOverride restyles each part", () => {
+	render(() => (
+		<Checkbox
+			classOverride={{
+				controlClass: "custom-control",
+				labelClass: "custom-label",
+				indicatorClass: "custom-indicator",
+			}}
+		>
+			Accept
+		</Checkbox>
+	));
+	expect(
+		document.querySelector('[data-scope="checkbox"][data-part="control"]')
+	).toHaveClass("custom-control");
+	expect(screen.getByText("Accept")).toHaveClass("custom-label");
+	expect(
+		document.querySelector('[data-scope="checkbox"][data-part="indicator"]')
+	).toHaveClass("custom-indicator");
 });

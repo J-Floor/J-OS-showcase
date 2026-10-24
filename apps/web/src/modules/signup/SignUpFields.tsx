@@ -4,11 +4,9 @@ import {
 	NumberInput,
 	Select,
 	TextArea,
-	type SelectItem,
 } from "@j-os/design-system";
 import { For, Show } from "solid-js";
 
-import { SelectOptionList } from "../../shared/components/SelectOptionList.tsx";
 import { ICONS } from "../../shared/icons.ts";
 
 import {
@@ -23,16 +21,6 @@ import styles from "./SignUp.module.scss";
 import { EXTRA_LINK_INDEXES, type SignUpForm } from "./signUpForm.ts";
 
 type FieldsProps = { form: SignUpForm };
-
-const PRODUCT_STAGE_ITEMS: SelectItem[] = productStageOptions.map((option) => ({
-	value: option.value,
-	title: option.label,
-}));
-
-const FUNDING_STAGE_ITEMS: SelectItem[] = fundingStageOptions.map((option) => ({
-	value: option.value,
-	title: option.label,
-}));
 
 /** Who is applying: name, email and phone. */
 export function IdentityFields(props: FieldsProps) {
@@ -154,7 +142,6 @@ export function StageFields(props: FieldsProps) {
 				required
 				disabled={props.form.submitting()}
 				disabledReason="Submitting…"
-				options={PRODUCT_STAGE_ITEMS}
 				value={
 					props.form.fields.productStage() === ""
 						? []
@@ -167,7 +154,13 @@ export function StageFields(props: FieldsProps) {
 				}
 				{...props.form.errProps(props.form.errors().productStage)}
 			>
-				<SelectOptionList options={PRODUCT_STAGE_ITEMS} />
+				<For each={productStageOptions}>
+					{(option) => (
+						<Select.Option value={option.value}>
+							{option.label}
+						</Select.Option>
+					)}
+				</For>
 			</Select.Root>
 
 			<Select.Root
@@ -178,7 +171,6 @@ export function StageFields(props: FieldsProps) {
 				required
 				disabled={props.form.submitting()}
 				disabledReason="Submitting…"
-				options={FUNDING_STAGE_ITEMS}
 				value={
 					props.form.fields.fundingStage() === ""
 						? []
@@ -191,7 +183,13 @@ export function StageFields(props: FieldsProps) {
 				}
 				{...props.form.errProps(props.form.errors().fundingStage)}
 			>
-				<SelectOptionList options={FUNDING_STAGE_ITEMS} />
+				<For each={fundingStageOptions}>
+					{(option) => (
+						<Select.Option value={option.value}>
+							{option.label}
+						</Select.Option>
+					)}
+				</For>
 			</Select.Root>
 		</>
 	);
@@ -209,16 +207,20 @@ export function IndustryField(props: FieldsProps) {
 			required
 			disabled={props.form.submitting()}
 			disabledReason="Submitting…"
-			items={verticalOptions.map((option) => ({
-				value: option.value,
-				label: option.label,
-			}))}
 			value={props.form.fields.verticals()}
 			onValueChange={(details) =>
 				props.form.fields.setVerticals(details.value as Vertical[])
 			}
 			{...props.form.errProps(props.form.errors().verticals)}
-		/>
+		>
+			<For each={verticalOptions}>
+				{(option) => (
+					<Combobox.Option value={option.value}>
+						{option.label}
+					</Combobox.Option>
+				)}
+			</For>
+		</Combobox.Root>
 	);
 }
 

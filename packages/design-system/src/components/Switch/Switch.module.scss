@@ -58,10 +58,6 @@
 		outline: var(--jf-border-width-accessibility) solid var(--jf-fg-strong);
 		outline-offset: var(--jf-border-width-accessibility);
 	}
-
-	&[data-disabled] {
-		opacity: var(--jf-opacity-disabled);
-	}
 }
 
 .thumb {

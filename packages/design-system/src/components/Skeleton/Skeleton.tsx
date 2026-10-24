@@ -22,12 +22,12 @@ import {
  *   `visible`, else the children. The children are rendered hidden and each
  *   leaf's box is measured, so this suits content that is cheap to build and
  *   whose shape is not known up front. Gate it with
- *   `visible={data() === undefined}`. Convex exposes a plain
- *   undefined-then-value accessor, not a suspending resource, so do not reach
- *   for Suspense here. `Sheet.Body`'s optional `skeleton` prop is the main
- *   consumer: a surface that knows the shape of its own loaded body passes
- *   placeholder markup, and `Sheet.Body` wraps it in this mode so the
- *   shimmer matches that shape instead of generic bars.
+ *   `visible={data() === undefined}`. A data source that exposes a plain
+ *   undefined-then-value accessor, not a suspending resource, needs no
+ *   Suspense here. `Sheet.Skeleton` is the main consumer: a surface
+ *   that knows the shape of its own loaded body passes placeholder markup,
+ *   and the sheet wraps it in this mode so the shimmer matches that shape
+ *   instead of generic bars.
  * - **Manual** (no `visible`, no children): one shimmer bar whose shape is
  *   known up front. It is sized by a `width` preset (a share of the parent) or
  *   by the caller's `class`. Tables and sheets use this for skeletons that
@@ -101,13 +101,13 @@ function Shimmer(props: { children: JSX.Element }): JSX.Element {
 						<span
 							class={styles.block}
 							style={{
-								left: `${rect.x}px`,
-								top: `${rect.y}px`,
-								width: `${rect.width}px`,
-								height: `${rect.height}px`,
-								"border-radius":
+								"--x": `${rect.x}px`,
+								"--y": `${rect.y}px`,
+								"--w": `${rect.width}px`,
+								"--h": `${rect.height}px`,
+								"--r":
 									rect.borderRadius === "0px"
-										? "var(--jf-radius-container)"
+										? undefined
 										: rect.borderRadius,
 							}}
 						/>

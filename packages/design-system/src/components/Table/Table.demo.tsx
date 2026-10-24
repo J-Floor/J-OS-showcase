@@ -1,5 +1,5 @@
 import { Show, createSignal, onCleanup, type JSX } from "solid-js";
-import { Button, Icon, Table } from "@j-os/design-system";
+import { Button, EmptyState, Icon, Table } from "@j-os/design-system";
 
 import type { JfColumnDefinition } from "@j-os/design-system";
 
@@ -47,6 +47,7 @@ function EndlessTable(): JSX.Element {
 		<div class={styles.endless}>
 			<Table.Root
 				columns={endlessColumns}
+				getRowId={(row) => row.id}
 				data={rows()}
 				groupBy="batch"
 				virtualize
@@ -64,7 +65,7 @@ function EndlessTable(): JSX.Element {
 	);
 }
 
-type Person = {
+type Item = {
 	name: string;
 	role: string;
 	age: number;
@@ -77,7 +78,7 @@ type Person = {
  *  share of the rest), `"content"`, a fixed width, and a floor with a weight
  *  for free text that should wrap rather than grow. The role column stores
  *  keys and shows (and is sized by) its option labels. */
-const columns: JfColumnDefinition<Person>[] = [
+const columns: JfColumnDefinition<Item>[] = [
 	{ accessorKey: "name", header: "Name", dataType: "string" },
 	{
 		accessorKey: "role",
@@ -114,7 +115,7 @@ const columns: JfColumnDefinition<Person>[] = [
 	},
 ];
 
-const data: Person[] = [
+const data: Item[] = [
 	{
 		name: "Ada Lovelace",
 		role: "eng",
@@ -141,6 +142,41 @@ const data: Person[] = [
 	},
 ];
 
+/** The batch bar's actions, reading the checked rows from the table. */
+function SelectionActions(): JSX.Element {
+	const selection = Table.useSelection<Item>();
+	return (
+		<>
+			<Button
+				onClick={() =>
+					// eslint-disable-next-line no-console -- demo action
+					console.log(
+						"Promote:",
+						selection.rows().map((row) => row.name)
+					)
+				}
+			>
+				<Icon>arrow_upward</Icon>Promote {selection.count()}
+			</Button>
+			<Button
+				variant="secondary"
+				onClick={() => {
+					// eslint-disable-next-line no-console -- demo action
+					console.log("Export:", selection.rows());
+					selection.clear();
+				}}
+			>
+				<Icon>download</Icon>Export
+			</Button>
+		</>
+	);
+}
+
+function tableData(p: { loading?: boolean; empty?: boolean }) {
+	if (p.loading) return undefined;
+	return p.empty ? [] : data;
+}
+
 export default {
 	title: "Table",
 	// `enableRowSelection`, `groupBy` and `headerColumn` are read once when
@@ -155,47 +191,27 @@ export default {
 			>
 				<Table.Root
 					columns={columns}
-					data={p.loading ? undefined : data}
+					data={tableData(p)}
+					getRowId={(row) => row.name}
 					enableRowSelection={p.enableRowSelection}
 					stickyHeader={p.stickyHeader}
 					headerColumn={p.headerColumn}
 					groupBy={p.grouped ? "role" : undefined}
 				>
-					{/* Render-prop receives the live selection; the bar shows only
-				    when at least one row is selected. */}
+					{/* The bar shows only while a row is checked; its actions
+					    read the selection with Table.useSelection. */}
 					<Table.BatchActions>
-						{(batch) => (
-							<>
-								<Button
-									onClick={() =>
-										// eslint-disable-next-line no-console -- demo action
-										console.log(
-											"Promote:",
-											batch.selectedRows.map(
-												(r) => r.name
-											)
-										)
-									}
-								>
-									<Icon>arrow_upward</Icon>Promote{" "}
-									{batch.selectedCount}
-								</Button>
-								<Button
-									variant="secondary"
-									onClick={() => {
-										// eslint-disable-next-line no-console -- demo action
-										console.log(
-											"Export:",
-											batch.selectedRows
-										);
-										batch.clearSelection();
-									}}
-								>
-									<Icon>download</Icon>Export
-								</Button>
-							</>
-						)}
+						<SelectionActions />
 					</Table.BatchActions>
+					<Show when={p.customEmpty}>
+						<Table.Empty>
+							<EmptyState
+								icon="add"
+								title="No entries yet"
+								description="Add the first one to get started."
+							/>
+						</Table.Empty>
+					</Show>
 				</Table.Root>
 			</Show>
 		</Show>
@@ -206,6 +222,8 @@ export default {
 		headerColumn: { type: "boolean", default: false },
 		grouped: { type: "boolean", default: false },
 		loading: { type: "boolean", default: false },
+		empty: { type: "boolean", default: false },
+		customEmpty: { type: "boolean", default: false },
 		endless: { type: "boolean", default: false },
 	},
 	presets: {
@@ -213,6 +231,8 @@ export default {
 		"Grouped by role": { grouped: true },
 		"Row headers": { headerColumn: true },
 		Loading: { loading: true },
+		"No rows": { empty: true },
+		"Custom empty state": { empty: true, customEmpty: true },
 		"Load more at the end": { endless: true },
 	},
 } satisfies Demo;

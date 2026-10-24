@@ -33,8 +33,8 @@ export function createGridFocus<Data extends Record<string, unknown>>(options: {
 	props: GridFocusProps<Data>;
 	/** The rows the ring can land on, in render order. */
 	rows: () => TanRow<Data>[];
-	/** The row's id (see `focusRowId` in Table.tsx), or `undefined` when it has none. */
-	rowId: (row: TanRow<Data>) => string | undefined;
+	/** The row's id: its `row.id`, from `getRowId`. */
+	rowId: (row: TanRow<Data>) => string;
 	/** Whether a checkbox selection owns the keys. */
 	selectionActive: () => boolean;
 }): GridFocus<Data> {
@@ -55,18 +55,9 @@ export function createGridFocus<Data extends Record<string, unknown>>(options: {
 		setFocusWithin,
 	} = createGridRing({ ...options, grid });
 
-	/**
-	 * Whether the focus ring is shown on this row.
-	 *
-	 * Not a plain `rowId(row) === stampedRowId()`: both sides can independently
-	 * be `undefined` — a row with no usable `_id`, and the ring hidden or
-	 * nowhere — and those two `undefined`s must never be treated as equal to
-	 * each other, or every row with no id would render as focused before any
-	 * keypress.
-	 */
+	/** Whether the focus ring is shown on this row. */
 	function isRowFocused(row: TanRow<Data>): boolean {
-		const id = rowId(row);
-		return id !== undefined && id === stampedRowId();
+		return rowId(row) === stampedRowId();
 	}
 
 	scrollRingRowIntoView(ringRowId, domIdFor);

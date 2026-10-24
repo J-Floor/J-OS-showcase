@@ -6,14 +6,14 @@ import {
 	PropertyRow,
 	Select,
 } from "@j-os/design-system";
-import { createMemo } from "solid-js";
+import { For } from "solid-js";
 
 import {
 	PHONE_MAX,
 	TEXT_MAX,
 	VENTURE_NAME_MAX,
 } from "../../../convex/lib/validate.ts";
-import { SelectOptionList } from "../../shared/components/SelectOptionList.tsx";
+import { LabelledOptions } from "../../shared/components/LabelledOptions.tsx";
 import { ICONS } from "../../shared/icons.ts";
 import type {
 	FundingStage,
@@ -40,6 +40,7 @@ export function PhoneField(props: {
 	return (
 		<PropertyRow field={personFields.phone}>
 			<EditableText
+				label={personFields.phone.label}
 				value={props.value ?? ""}
 				maxLength={PHONE_MAX}
 				onCommit={props.onCommit}
@@ -63,6 +64,7 @@ export function CompanyField(props: {
 				: { icon: ICONS.venture, label: props.label })}
 		>
 			<EditableText
+				label={props.label ?? personFields.ventureName.label}
 				value={props.value ?? ""}
 				maxLength={VENTURE_NAME_MAX}
 				onCommit={props.onCommit}
@@ -78,6 +80,7 @@ export function DescriptionRow(props: {
 	return (
 		<PropertyRow field={personFields.description}>
 			<EditableText
+				label={personFields.description.label}
 				multiline
 				maxLength={TEXT_MAX}
 				value={props.value ?? ""}
@@ -94,6 +97,8 @@ export function TeamSizeField(props: {
 	return (
 		<PropertyRow field={personFields.teamSize}>
 			<NumberInput
+				label={personFields.teamSize.label}
+				labelHidden
 				min={1}
 				value={
 					typeof props.value === "number" ? String(props.value) : ""
@@ -117,18 +122,24 @@ export function VerticalField(props: {
 	return (
 		<PropertyRow icon={ICONS.vertical} label="Verticals">
 			<Combobox.Root
+				label="Verticals"
+				labelHidden
 				placeholder="Pick one or more"
 				multiple
 				allowClearing
-				items={verticalOptions.map((option) => ({
-					value: option.value,
-					label: option.label,
-				}))}
 				value={props.value ?? []}
 				onValueChange={(details) => {
 					props.onCommit(details.value as Vertical[]);
 				}}
-			/>
+			>
+				<For each={verticalOptions}>
+					{(option) => (
+						<Combobox.Option value={option.value}>
+							{option.label}
+						</Combobox.Option>
+					)}
+				</For>
+			</Combobox.Root>
 		</PropertyRow>
 	);
 }
@@ -140,24 +151,19 @@ function StageSelect<T extends string>(props: {
 	value?: T;
 	onCommit: (v: T | undefined) => void;
 }) {
-	const selectItems = createMemo(() =>
-		props.options.map((option) => ({
-			value: option.value,
-			title: option.label,
-		}))
-	);
 	return (
 		<PropertyRow field={props.field}>
 			<Select.Root
+				label={props.field.label}
+				labelHidden
 				placeholder="Pick one"
 				allowClearing
-				options={selectItems()}
 				value={props.value ? [props.value] : []}
 				onValueChange={(details) => {
 					props.onCommit(details.value[0] as T | undefined);
 				}}
 			>
-				<SelectOptionList options={selectItems()} />
+				<LabelledOptions options={props.options} />
 			</Select.Root>
 		</PropertyRow>
 	);
@@ -198,6 +204,7 @@ export function WhyJoinField(props: {
 	return (
 		<PropertyRow field={personFields.whyJoin}>
 			<EditableText
+				label={personFields.whyJoin.label}
 				multiline
 				value={props.value ?? ""}
 				onCommit={props.onCommit}
@@ -213,6 +220,7 @@ export function PastBuiltField(props: {
 	return (
 		<PropertyRow field={personFields.pastBuilt}>
 			<EditableText
+				label={personFields.pastBuilt.label}
 				multiline
 				value={props.value ?? ""}
 				onCommit={props.onCommit}
@@ -227,7 +235,11 @@ export function ReferralField(props: {
 }) {
 	return (
 		<PropertyRow field={personFields.referral}>
-			<EditableText value={props.value ?? ""} onCommit={props.onCommit} />
+			<EditableText
+				label={personFields.referral.label}
+				value={props.value ?? ""}
+				onCommit={props.onCommit}
+			/>
 		</PropertyRow>
 	);
 }

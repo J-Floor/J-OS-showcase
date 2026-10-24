@@ -14,12 +14,13 @@ import { Dynamic } from "solid-js/web";
 
 import { ICONS } from "../../icons.ts";
 import { createHoverIntent } from "../../utils/hoverIntent.ts";
-import { MORPH_KEY, MORPH_TITLE } from "../../utils/morphPairing.ts";
+import { MORPH_KEY, MORPH_OF, MORPH_TITLE } from "../../utils/morphPairing.ts";
 import { Checkbox } from "../Checkbox/Checkbox.tsx";
 import { Icon } from "../Icon/Icon.tsx";
-import { MORPH_OF } from "../Morph/Morph.tsx";
 
 import { ACTIONS_COLUMN_ID, SELECT_COLUMN_ID } from "./columnTracks.ts";
+import { COLUMN_ID_ATTR, TEXT_CELL_ATTR } from "./domContract.ts";
+import { EmptyContent } from "./Empty.tsx";
 import type { GridFocus } from "./gridFocus.ts";
 import type { RangeSelection } from "./rangeSelection.ts";
 import type { RowGroup, RowGroups } from "./rowGroups.ts";
@@ -34,9 +35,9 @@ export type RowContext<Data extends Record<string, unknown>> = {
 	groups: RowGroups<Data>;
 	focus: Pick<GridFocus<Data>, "isRowFocused" | "rowDomId">;
 	selection: RangeSelection<Data>;
-	/** The id a row is matched by (focus, and the sheet that closes into
-	 *  it); `undefined` for a row with none. */
-	rowId: (row: TanRow<Data>) => string | undefined;
+	/** The id a row is matched by (focus, and the detail view that closes
+	 *  into it): its `row.id`. */
+	rowId: (row: TanRow<Data>) => string;
 };
 
 /** A focusable table is an ARIA grid, whose cells are `gridcell`s. */
@@ -83,8 +84,8 @@ function titleColumnId<Data extends Record<string, unknown>>(
  *  would make the two ends of a flight hold the line at different heights,
  *  so the text would show twice at two sizes. The title cell's content
  *  flies on its own, as the title; it still carries its column id, so a
- *  sheet showing that field apart (a person's first-name half) takes it
- *  there instead of its title. */
+ *  detail view that shows that field apart from its title takes it there
+ *  instead. */
 function MorphContent(props: {
 	columnId: string;
 	isTitle: boolean;
@@ -137,8 +138,10 @@ function renderCell<Data extends Record<string, unknown>>(
 				isSelect && styles.selectCell,
 				isActions && styles.actionsCell
 			)}
-			data-column-id={column.id}
-			data-text-cell={isSelect || isActions ? undefined : ""}
+			{...{
+				[COLUMN_ID_ATTR]: column.id,
+				[TEXT_CELL_ATTR]: isSelect || isActions ? undefined : "",
+			}}
 			data-disable-row-click={
 				isSelect || definition.disableRowClick ? "true" : undefined
 			}
@@ -180,15 +183,18 @@ function renderCell<Data extends Record<string, unknown>>(
 	);
 }
 
-/** `measured` is supplied only by the virtual body, which needs each row to
- *  report its height and carry its index. */
+/** What the virtual body hands a row: its index, and the ref through which
+ *  it reports its height. */
+export type MeasuredRow = {
+	index: number;
+	ref: (element: HTMLTableRowElement) => void;
+};
+
+/** `measured` is supplied only by the virtual body. */
 export function renderRow<Data extends Record<string, unknown>>(
 	context: RowContext<Data>,
 	row: TanRow<Data>,
-	measured?: {
-		index: number;
-		ref: (element: HTMLTableRowElement) => void;
-	}
+	measured?: MeasuredRow
 ): JSX.Element {
 	const { props, focus } = context;
 	const hoverIntent = createHoverIntent(() => {
@@ -217,12 +223,12 @@ export function renderRow<Data extends Record<string, unknown>>(
 	);
 }
 
-export function GroupHeaderRow<Data extends Record<string, unknown>>(rowProps: {
-	context: RowContext<Data>;
-	group: RowGroup<Data>;
-	index?: number;
-	ref?: (element: HTMLTableRowElement) => void;
-}): JSX.Element {
+export function GroupHeaderRow<Data extends Record<string, unknown>>(
+	rowProps: {
+		context: RowContext<Data>;
+		group: RowGroup<Data>;
+	} & Partial<MeasuredRow>
+): JSX.Element {
 	function expanded() {
 		return rowProps.context.groups.isGroupExpanded(rowProps.group.key);
 	}
@@ -279,7 +285,7 @@ export function EmptyRow<Data extends Record<string, unknown>>(rowProps: {
 				role={cellRole(rowProps.context)}
 				colSpan={columnCount(rowProps.context.table)}
 			>
-				No results.
+				<EmptyContent table={rowProps.context.table} />
 			</td>
 		</tr>
 	);

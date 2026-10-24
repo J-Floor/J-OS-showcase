@@ -1,0 +1,6 @@
+/* The demo's size slider and colour field are free values, so the wrapper
+   hands them down as custom properties and the logo reads them. */
+.logo {
+	font-size: var(--demo-size);
+	color: var(--demo-color);
+}

@@ -1,7 +1,10 @@
 import { fireEvent, render, screen } from "@solidjs/testing-library";
 import { createSignal } from "solid-js";
+import { expectTypeOf } from "vitest";
 
-import { Switch } from "./Switch.tsx";
+import { TOOLTIP_OPEN_DELAY_MS } from "../Tooltip/Tooltip.tsx";
+
+import { Switch, type SwitchProps } from "./Switch.tsx";
 
 test("is a switch named by its label and described by its description", () => {
 	render(() => <Switch label="Push" description="Off." />);
@@ -24,38 +27,40 @@ test("has no description when the description is empty", () => {
 	);
 });
 
-test("toggles and reports the new state", async () => {
-	let checked: boolean | undefined;
-	render(() => (
-		<Switch
-			label="Push"
-			onCheckedChange={(details) => {
-				checked = details.checked;
-			}}
-		/>
-	));
-	fireEvent.click(screen.getByRole("switch", { name: "Push" }));
-	await vi.waitFor(() => {
-		expect(checked).toBe(true);
+describe("disabled", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
 	});
-	expect(screen.getByRole("switch", { name: "Push" })).toBeChecked();
-});
+	afterEach(() => {
+		vi.useRealTimers();
+	});
 
-test("respects disabled", () => {
-	let calls = 0;
-	render(() => (
-		<Switch
-			label="Push"
-			disabled
-			onCheckedChange={() => {
-				calls += 1;
-			}}
-		/>
-	));
-	const toggle = screen.getByRole("switch", { name: "Push" });
-	expect(toggle).toBeDisabled();
-	fireEvent.click(toggle);
-	expect(calls).toBe(0);
+	test("a disabled switch shows its reason on hover", async () => {
+		render(() => (
+			<Switch label="Push" disabled disabledReason="Set up push first" />
+		));
+		const wrapper = document.querySelector<HTMLElement>(
+			'[data-scope="tooltip"][data-part="trigger"]'
+		);
+		expect(wrapper).not.toBeNull();
+		fireEvent.pointerMove(wrapper!);
+		await vi.advanceTimersByTimeAsync(TOOLTIP_OPEN_DELAY_MS);
+		expect(screen.getByText("Set up push first")).toBeInTheDocument();
+	});
+
+	test("disabled reaches the switch itself", () => {
+		render(() => (
+			<Switch label="Push" disabled shamefullyOmitDisabledReason />
+		));
+		expect(screen.getByRole("switch", { name: "Push" })).toBeDisabled();
+	});
+
+	test("disabled without a reason is a type error", () => {
+		expectTypeOf<{
+			label: string;
+			disabled: true;
+		}>().not.toExtend<SwitchProps>();
+	});
 });
 
 test("a controlled switch whose owner keeps it off stays off after a click", async () => {

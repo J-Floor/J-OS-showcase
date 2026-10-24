@@ -1,6 +1,12 @@
 import { Field, type FieldRootProps } from "@ark-ui/solid/field";
 import clsx from "clsx";
-import { createUniqueId, type JSX, Show, splitProps } from "solid-js";
+import {
+	createEffect,
+	createUniqueId,
+	type JSX,
+	Show,
+	splitProps,
+} from "solid-js";
 
 import {
 	separateDisablingProps,
@@ -16,28 +22,26 @@ import { Status } from "../Status/Status.tsx";
 import styles from "./MakeField.module.scss";
 
 export type MakeFieldProps = Omit<FieldRootProps, "asChild"> & {
-	/** Field label. */
-	label?: string;
+	/** Field label: the control's accessible name, so it is required. */
+	label: string;
+	/** Hide the label visually; it stays in the DOM as the accessible name. */
+	labelHidden?: boolean;
 	/** Helper text shown below the field while it is valid. */
 	helperText?: string;
 	/** Error text shown below the field while it is invalid. */
 	errorText?: string;
-	/** Whether the field is in an invalid state. */
-	invalid?: boolean;
-	/** Whether the field is required. */
-	required?: boolean;
 	/** Called when the label is clicked. */
 	onLabelClicked?: () => void;
 	/** Called to focus the underlying field (e.g. from the required indicator). */
 	focusField?: () => void;
-	/** Field content (input, select, etc.). */
-	children?: JSX.Element;
-} & DisablingState &
+} & Omit<DisablingState, "disabled"> &
 	WithPartClasses<"label" | "helperText" | "errorText" | "requiredIndicator">;
 
 /**
  * Shared field wrapper (label + helper/error text + invalid state) over
  * `@ark-ui/solid` Field. Input / NumberInput / Select extend `MakeFieldProps`.
+ * The label is always rendered, since it names the control; `labelHidden`
+ * only takes it out of the visual layout.
  *
  * Ported from EmboUI's MakeField. React→Solid: no `forwardRef`; `props` kept
  * un-destructured for reactivity; `splitProps` separates consumer-only props
@@ -49,6 +53,7 @@ export function MakeField(props: MakeFieldProps): JSX.Element {
 	const [others, disabling] = separateDisablingProps(props);
 	const [, rootProps] = splitProps(others, [
 		"label",
+		"labelHidden",
 		"helperText",
 		"errorText",
 		"onLabelClicked",
@@ -56,6 +61,15 @@ export function MakeField(props: MakeFieldProps): JSX.Element {
 		"children",
 		"classOverride",
 	]);
+
+	createEffect(() => {
+		if (import.meta.env.DEV && !props.label.trim()) {
+			// eslint-disable-next-line no-console -- a warning for the developer, not the user
+			console.warn(
+				"MakeField: an empty label leaves the control unnamed. Pass a real label, with labelHidden if it should not show."
+			);
+		}
+	});
 
 	const generatedId = createUniqueId();
 	function sharedBaseId(): string {
@@ -82,14 +96,13 @@ export function MakeField(props: MakeFieldProps): JSX.Element {
 				class={clsx(styles.field, rootProps.class)}
 			>
 				<Status status={props.invalid ? "error" : "neutral"}>
-					<Show when={props.label}>
-						<Field.Label
-							class={getPartStyles(styles, props, "label")}
-							onClick={() => props.onLabelClicked?.()}
-						>
-							{props.label}
-						</Field.Label>
-					</Show>
+					<Field.Label
+						class={getPartStyles(styles, props, "label")}
+						data-hidden={props.labelHidden ? "" : undefined}
+						onClick={() => props.onLabelClicked?.()}
+					>
+						{props.label}
+					</Field.Label>
 					<Field.RequiredIndicator
 						class={getPartStyles(
 							styles,

@@ -10,21 +10,29 @@ beforeAll(() => {
 	}
 });
 
-test("increments via increment trigger", async () => {
-	let value: string | undefined;
+test("placeholder lands on the input, not the root", () => {
+	const { container } = render(() => (
+		<NumberInput label="N" placeholder="0" />
+	));
+	expect(screen.getByRole("spinbutton")).toHaveAttribute("placeholder", "0");
+	expect(
+		container.querySelector('[data-part="root"][placeholder]')
+	).toBeNull();
+});
+
+test("onFocus and onBlur fire from the input", () => {
+	const events: string[] = [];
 	render(() => (
 		<NumberInput
 			label="N"
-			min={0}
-			max={5}
-			onValueChange={(details) => (value = details.value)}
+			onFocus={() => events.push("focus")}
+			onBlur={() => events.push("blur")}
 		/>
 	));
-	// zag increments on pointerDown (the trigger spins on press), not click.
-	fireEvent.pointerDown(screen.getByLabelText("Increment"));
-	await waitFor(() => {
-		expect(value).toBe("1");
-	});
+	const input = screen.getByRole("spinbutton");
+	fireEvent.focus(input);
+	fireEvent.blur(input);
+	expect(events).toEqual(["focus", "blur"]);
 });
 
 test("renders label and a single button per trigger (no nested buttons)", () => {

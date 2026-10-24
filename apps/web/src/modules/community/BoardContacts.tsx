@@ -21,5 +21,13 @@ const columns: JfColumnDefinition<Contact>[] = [
  * see other members. */
 export function BoardContacts() {
 	const contacts = useQuery(api.people.listBoardContacts, {});
-	return <Table.Root columns={columns} data={contacts.data()} />;
+	return (
+		<Table.Root
+			columns={columns}
+			data={contacts.data()}
+			// The directory carries no ids (only names and phones reach a
+			// member), and its rows are never selected or opened.
+			getRowId={(_, index) => String(index)}
+		/>
+	);
 }

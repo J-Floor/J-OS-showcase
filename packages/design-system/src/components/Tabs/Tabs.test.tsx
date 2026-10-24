@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 
 import { render, screen, fireEvent, waitFor } from "@solidjs/testing-library";
+import { Show, createContext, createSignal, useContext } from "solid-js";
 import { afterEach, describe, vi } from "vitest";
 
 import {
@@ -8,7 +9,12 @@ import {
 	restoreViewTransitions,
 	transitionSettled,
 } from "../../test/viewTransitionFakes.ts";
+import { PHONE_QUERY } from "../../utils/media.ts";
 import { OWN_GESTURES_ATTR } from "../../utils/swipe.ts";
+import {
+	FloatingStack,
+	FloatingStackProvider,
+} from "../FloatingStack/FloatingStack.tsx";
 
 import { Tabs } from "./Tabs.tsx";
 
@@ -32,12 +38,14 @@ test("switches panel on tab click", async () => {
 test("Actions render only for the active tab", async () => {
 	render(() => (
 		<Tabs.Root defaultValue="a">
-			<Tabs.List>
-				<Tabs.Trigger value="a">A</Tabs.Trigger>
-				<Tabs.Trigger value="b">B</Tabs.Trigger>
-			</Tabs.List>
-			<Tabs.Actions value="a">ActionsA</Tabs.Actions>
-			<Tabs.Actions value="b">ActionsB</Tabs.Actions>
+			<Tabs.Bar>
+				<Tabs.List>
+					<Tabs.Trigger value="a">A</Tabs.Trigger>
+					<Tabs.Trigger value="b">B</Tabs.Trigger>
+				</Tabs.List>
+				<Tabs.Actions value="a">ActionsA</Tabs.Actions>
+				<Tabs.Actions value="b">ActionsB</Tabs.Actions>
+			</Tabs.Bar>
 		</Tabs.Root>
 	));
 	expect(screen.getByText("ActionsA")).toBeInTheDocument();
@@ -47,6 +55,257 @@ test("Actions render only for the active tab", async () => {
 		expect(screen.getByText("ActionsB")).toBeInTheDocument();
 	});
 	expect(screen.queryByText("ActionsA")).not.toBeInTheDocument();
+});
+
+/** Each tab declares its own actions inside its panel. */
+function actionsInPanels(onA: () => void, onB: () => void) {
+	render(() => (
+		<Tabs.Root defaultValue="a">
+			<Tabs.Bar data-testid="bar">
+				<Tabs.List>
+					<Tabs.Trigger value="a">A</Tabs.Trigger>
+					<Tabs.Trigger value="b">B</Tabs.Trigger>
+				</Tabs.List>
+			</Tabs.Bar>
+			<Tabs.Content value="a" data-testid="panel-a">
+				<Tabs.Actions value="a">
+					<button type="button" onClick={onA}>
+						ActionA
+					</button>
+				</Tabs.Actions>
+				PanelA
+			</Tabs.Content>
+			<Tabs.Content value="b" data-testid="panel-b">
+				<Tabs.Actions value="b">
+					<button type="button" onClick={onB}>
+						ActionB
+					</button>
+				</Tabs.Actions>
+				PanelB
+			</Tabs.Content>
+		</Tabs.Root>
+	));
+}
+
+test("Actions declared inside a panel render in the bar while that tab is active", async () => {
+	actionsInPanels(vi.fn(), vi.fn());
+	const bar = screen.getByTestId("bar");
+	expect(bar).toContainElement(screen.getByText("ActionA"));
+	expect(screen.getByTestId("panel-a")).not.toContainElement(
+		screen.getByText("ActionA")
+	);
+	expect(screen.queryByText("ActionB")).not.toBeInTheDocument();
+	fireEvent.click(screen.getByText("B"));
+	await waitFor(() => {
+		expect(bar).toContainElement(screen.getByText("ActionB"));
+	});
+	expect(screen.queryByText("ActionA")).not.toBeInTheDocument();
+});
+
+test("Actions declared inside a panel keep their handlers", async () => {
+	const onA = vi.fn();
+	const onB = vi.fn();
+	actionsInPanels(onA, onB);
+	fireEvent.click(screen.getByText("ActionA"));
+	expect(onA).toHaveBeenCalledOnce();
+	fireEvent.click(screen.getByText("B"));
+	await waitFor(() => {
+		expect(screen.getByText("ActionB")).toBeInTheDocument();
+	});
+	fireEvent.click(screen.getByText("ActionB"));
+	expect(onB).toHaveBeenCalledOnce();
+	expect(onA).toHaveBeenCalledOnce();
+});
+
+test("Actions see the context of the place they are declared", () => {
+	const Scope = createContext("bar");
+	function Reader() {
+		return <span>{useContext(Scope)}</span>;
+	}
+	render(() => (
+		<Tabs.Root defaultValue="a">
+			<Tabs.Bar data-testid="bar">
+				<Tabs.List>
+					<Tabs.Trigger value="a">A</Tabs.Trigger>
+				</Tabs.List>
+			</Tabs.Bar>
+			<Tabs.Content value="a">
+				<Scope.Provider value="panel">
+					<Tabs.Actions value="a">
+						<Reader />
+					</Tabs.Actions>
+				</Scope.Provider>
+			</Tabs.Content>
+		</Tabs.Root>
+	));
+	expect(screen.getByTestId("bar")).toHaveTextContent("panel");
+});
+
+test("Actions outside a Tabs.Root throw", () => {
+	expect(() => render(() => <Tabs.Actions>Lost</Tabs.Actions>)).toThrow(
+		/Tabs.Root/
+	);
+});
+
+test("each part builds its children once", () => {
+	let built = 0;
+	function Probe() {
+		built += 1;
+		return <span>probe</span>;
+	}
+	render(() => (
+		<Tabs.Root defaultValue="a">
+			<Tabs.Bar>
+				<Tabs.List>
+					<Tabs.Trigger value="a">
+						<Probe />
+					</Tabs.Trigger>
+					<Probe />
+				</Tabs.List>
+			</Tabs.Bar>
+			<Tabs.Content value="a">
+				<Probe />
+			</Tabs.Content>
+		</Tabs.Root>
+	));
+	expect(built).toBe(3);
+});
+
+test("an Actions declared in a panel shows once", () => {
+	render(() => (
+		<Tabs.Root defaultValue="a">
+			<Tabs.Bar>
+				<Tabs.List>
+					<Tabs.Trigger value="a">A</Tabs.Trigger>
+				</Tabs.List>
+			</Tabs.Bar>
+			<Tabs.Content value="a">
+				<Tabs.Actions value="a">Once</Tabs.Actions>
+			</Tabs.Content>
+		</Tabs.Root>
+	));
+	expect(screen.getAllByText("Once")).toHaveLength(1);
+});
+
+/** Bar holds a global Actions; panel A declares two, the first behind a
+ *  `Show` so it mounts after the second. */
+function layeredActions() {
+	const [isShown, setIsShown] = createSignal(false);
+	render(() => (
+		<Tabs.Root defaultValue="a">
+			<Tabs.Bar data-testid="bar">
+				<Tabs.List>
+					<Tabs.Trigger value="a">A</Tabs.Trigger>
+				</Tabs.List>
+				<Tabs.Actions>Global</Tabs.Actions>
+			</Tabs.Bar>
+			<Tabs.Content value="a">
+				<Show when={isShown()}>
+					<Tabs.Actions value="a">First</Tabs.Actions>
+				</Show>
+				<Tabs.Actions value="a">Second</Tabs.Actions>
+			</Tabs.Content>
+		</Tabs.Root>
+	));
+	return (isFirstShown: boolean): void => {
+		setIsShown(isFirstShown);
+	};
+}
+
+function barActionTexts(): string[] {
+	return [
+		...screen
+			.getByTestId("bar")
+			.querySelectorAll('[data-part="tab-actions"]'),
+	].map((element) => element.textContent);
+}
+
+test("Actions that unmount leave the bar", () => {
+	const showFirst = layeredActions();
+	showFirst(true);
+	expect(barActionTexts()).toContain("First");
+	showFirst(false);
+	expect(barActionTexts()).toEqual(["Global", "Second"]);
+	expect(screen.queryByText("First")).not.toBeInTheDocument();
+});
+
+test("the bar shows Actions in declaration order, not mount order", () => {
+	const showFirst = layeredActions();
+	expect(barActionTexts()).toEqual(["Global", "Second"]);
+	showFirst(true);
+	expect(barActionTexts()).toEqual(["Global", "First", "Second"]);
+});
+
+test("in development, Actions under a root with no Bar warn once", () => {
+	const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+	try {
+		render(() => (
+			<Tabs.Root defaultValue="a">
+				<Tabs.List>
+					<Tabs.Trigger value="a">A</Tabs.Trigger>
+				</Tabs.List>
+				<Tabs.Actions value="a">One</Tabs.Actions>
+				<Tabs.Actions>Two</Tabs.Actions>
+			</Tabs.Root>
+		));
+		expect(warn).toHaveBeenCalledOnce();
+		expect(warn.mock.calls[0]?.[0]).toMatch(/Tabs.Bar/);
+	} finally {
+		warn.mockRestore();
+	}
+});
+
+test("Actions under a root with a Bar do not warn", () => {
+	const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+	try {
+		actionsInPanels(vi.fn(), vi.fn());
+		expect(warn).not.toHaveBeenCalled();
+	} finally {
+		warn.mockRestore();
+	}
+});
+
+test("on a phone the active tab's actions join the floating stack and follow the tab", async () => {
+	vi.stubGlobal("matchMedia", (query: string) => ({
+		matches: query === PHONE_QUERY,
+		addEventListener: () => {},
+		removeEventListener: () => {},
+	}));
+	try {
+		render(() => (
+			<FloatingStackProvider>
+				<Tabs.Root defaultValue="a">
+					<Tabs.Bar data-testid="bar">
+						<Tabs.List>
+							<Tabs.Trigger value="a">A</Tabs.Trigger>
+							<Tabs.Trigger value="b">B</Tabs.Trigger>
+						</Tabs.List>
+					</Tabs.Bar>
+					<Tabs.Content value="a">
+						<Tabs.Actions value="a">ActionA</Tabs.Actions>
+					</Tabs.Content>
+					<Tabs.Content value="b">
+						<Tabs.Actions value="b">ActionB</Tabs.Actions>
+					</Tabs.Content>
+				</Tabs.Root>
+				<FloatingStack>
+					<p>pill</p>
+				</FloatingStack>
+			</FloatingStackProvider>
+		));
+		const stack = document.querySelector('[data-part="floating-stack"]');
+		expect(stack).toContainElement(screen.getByText("ActionA"));
+		expect(screen.getByTestId("bar")).not.toContainElement(
+			screen.getByText("ActionA")
+		);
+		fireEvent.click(screen.getByText("B"));
+		await waitFor(() => {
+			expect(stack).toContainElement(screen.getByText("ActionB"));
+		});
+		expect(screen.queryByText("ActionA")).not.toBeInTheDocument();
+	} finally {
+		vi.unstubAllGlobals();
+	}
 });
 
 afterEach(async () => {

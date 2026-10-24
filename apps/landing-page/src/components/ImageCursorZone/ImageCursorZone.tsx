@@ -33,7 +33,8 @@ export function ImageCursorZone(props: ParentProps<{ label?: string }>) {
 					<span
 						class={styles.cursor}
 						style={{
-							transform: `translate(${String(cursorPoint().x)}px, ${String(cursorPoint().y)}px) translate(-50%, -50%)`,
+							"--cursor-x": `${String(cursorPoint().x)}px`,
+							"--cursor-y": `${String(cursorPoint().y)}px`,
 						}}
 						aria-hidden="true"
 					>

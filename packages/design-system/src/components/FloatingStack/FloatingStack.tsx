@@ -36,6 +36,15 @@ export function useFloatingStackSlot():
 	return useContext(SlotContext)?.slot;
 }
 
+/** Set around a `FloatingStack`'s own children: a toolbar among them is
+ *  already in the stack. */
+const InStackContext = createContext(false);
+
+/** Whether the caller is one of a `FloatingStack`'s own children. */
+export function useInFloatingStack(): boolean {
+	return useContext(InStackContext);
+}
+
 /**
  * Lets a `FloatingToolbar` anywhere inside it join the `FloatingStack`
  * inside it: wrap the page and the stack, which usually sit side by side
@@ -82,7 +91,8 @@ function publishRoom(stack: HTMLElement): void {
  * scrolling areas leave it free at their end and other bottom-anchored
  * floaters clear it. Mount one per app, in the box the pills float in, and
  * wrap it with the page in a {@link FloatingStackProvider} so the page's
- * toolbar finds it (without one, only toolbars inside the stack do). The
+ * toolbar finds it. A `FloatingToolbar` among its own children is a pill
+ * where it sits, on every screen, so an app floats its own prompts. The
  * stack takes no pointer events itself, so the page under its gaps keeps
  * taking clicks; each pill does.
  */
@@ -105,7 +115,9 @@ export function FloatingStack(props: ParentProps): JSX.Element {
 					stack = element;
 				}}
 			>
-				{props.children}
+				<InStackContext.Provider value>
+					{props.children}
+				</InStackContext.Provider>
 				<div class={styles.slot} ref={own.setSlot} />
 			</div>
 		</SlotContext.Provider>

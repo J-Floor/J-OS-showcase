@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from "@solidjs/testing-library";
 
 import { Table } from "./Table.tsx";
+import { rowIndex } from "./testRowIds.ts";
 
 if (!(Element.prototype as { scrollTo?: unknown }).scrollTo) {
 	Element.prototype.scrollTo = () => {};
@@ -28,7 +29,12 @@ const data = [
 
 test("renders a group header row per group; collapses on click", () => {
 	render(() => (
-		<Table.Root columns={columns as never} data={data} groupBy="state" />
+		<Table.Root
+			getRowId={rowIndex}
+			columns={columns as never}
+			data={data}
+			groupBy="state"
+		/>
 	));
 	expect(screen.getByText(/pending/i)).toBeInTheDocument();
 	expect(screen.getByText(/denied/i)).toBeInTheDocument();

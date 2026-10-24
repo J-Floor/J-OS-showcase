@@ -12,6 +12,13 @@
 	   can shrink every chart at once by re-declaring it on the grid. */
 	--jf-dimension-chart-height: 180px;
 
+	/* `PropertyRow`'s label column. */
+	--jf-dimension-property-label: 140px;
+
+	/* Narrowest a `Menu` panel gets, so short item lists still read as a
+	   menu rather than a tooltip. */
+	--jf-dimension-menu-min: 12rem;
+
 	/* Room a `FloatingStack` takes at the foot of the box it floats in: its
 	   height plus its inset while it holds anything, else 0. The stack keeps
 	   it on the root; scrolling areas (table rows, tab panels) leave it free

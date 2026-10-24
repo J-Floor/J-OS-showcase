@@ -20,7 +20,8 @@
 	"scripts": {
 		"test": "vitest run",
 		"format": "prettier --write \"src/**/*.{ts,tsx,scss}\" --ignore-path ../../.prettierignore",
-		"lint": "bun run lint:logic && bun run lint:style",
+		"lint": "bun run lint:logic && bun run lint:style && bun run lint:bundles",
+		"lint:bundles": "bun scripts/check-bundles.ts",
 		"lint:logic": "eslint \"src/**/*.{ts,tsx}\" --cache --max-warnings 0",
 		"lint:style": "stylelint \"src/**/*.scss\" --cache --allow-empty-input --max-warnings 0",
 		"lint:style:ci": "bun run lint:style --custom-formatter @csstools/stylelint-formatter-github",

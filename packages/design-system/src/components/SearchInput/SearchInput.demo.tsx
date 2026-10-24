@@ -9,8 +9,8 @@ export default {
 		const [q, setQ] = createSignal(p.value);
 		return (
 			<SearchInput
-				label=""
-				aria-label="Search"
+				label="Search"
+				labelHidden
 				placeholder={p.placeholder}
 				value={q()}
 				onValueChange={setQ}

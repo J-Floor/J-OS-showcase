@@ -1,13 +1,12 @@
-import { Select } from "@j-os/design-system";
+import { Icon, Select } from "@j-os/design-system";
+import { For } from "solid-js";
 
+import { FRAMEWORKS } from "../../../demo/fixtures.ts";
 import type { Demo } from "../../../demo/types.ts";
 
-const options = [
-	{ value: "solid", title: "Solid" },
-	{ value: "react", title: "React" },
-	{ value: "vue", title: "Vue" },
-	{ value: "svelte", title: "Svelte" },
-];
+const frameworks = FRAMEWORKS.map((framework) =>
+	framework.value === "svelte" ? { ...framework, disabled: true } : framework
+);
 
 export default {
 	title: "Select",
@@ -18,17 +17,37 @@ export default {
 			helperText={p.helperText}
 			errorText={p.errorText}
 			allowClearing={p.allowClearing}
-			sameWidth={p.sameWidth}
+			multiple={p.multiple}
+			positioning={{ sameWidth: p.sameWidth }}
 			invalid={p.invalid}
 			required={p.required}
 			disabled={p.disabled}
-			options={options}
 		>
-			<Select.Content>
-				{options.map((option) => (
-					<Select.Option value={option.value} title={option.title} />
-				))}
-			</Select.Content>
+			<For each={frameworks}>
+				{(framework) =>
+					p.rich ? (
+						<Select.Option
+							value={framework.value}
+							disabled={framework.disabled}
+						>
+							<Icon>code</Icon>
+							<Select.OptionText>
+								{framework.name}
+							</Select.OptionText>
+							<Select.OptionDescription>
+								{framework.note}
+							</Select.OptionDescription>
+						</Select.Option>
+					) : (
+						<Select.Option
+							value={framework.value}
+							disabled={framework.disabled}
+						>
+							{framework.name}
+						</Select.Option>
+					)
+				}
+			</For>
 		</Select.Root>
 	),
 	controls: {
@@ -37,12 +56,16 @@ export default {
 		helperText: { type: "text", default: "Choose your stack." },
 		errorText: { type: "text", default: "Selection required." },
 		allowClearing: { type: "boolean", default: true },
+		multiple: { type: "boolean", default: false },
+		rich: { type: "boolean", default: false },
 		sameWidth: { type: "boolean", default: true },
 		invalid: { type: "boolean", default: false },
 		required: { type: "boolean", default: false },
 		disabled: { type: "boolean", default: false },
 	},
 	presets: {
+		Multiple: { multiple: true },
+		"Rich options": { rich: true },
 		Error: { invalid: true },
 		Disabled: { disabled: true },
 	},

@@ -76,6 +76,7 @@
 }
 
 .bar {
+	rx: var(--jf-radius-button);
 	fill: var(--series);
 	stroke: none;
 }

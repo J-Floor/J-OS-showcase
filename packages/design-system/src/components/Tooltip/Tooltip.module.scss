@@ -12,6 +12,13 @@
 	border: none;
 }
 
+/* `Tooltip.Anchor`'s span: shrink-wrapped so the tooltip points at its child.
+   Zero specificity, so a caller's `class` wins whatever the stylesheet order. */
+:where(.anchor) {
+	display: inline-flex;
+	flex-wrap: nowrap;
+}
+
 /* Touch long-press shows the tooltip: keep the OS from claiming the same hold
    for its own callout / text selection. */
 @media (hover: none) {

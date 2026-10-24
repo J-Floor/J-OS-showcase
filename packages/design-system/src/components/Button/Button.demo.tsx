@@ -15,11 +15,7 @@ export default {
 			disabledReason={p.disabledReason}
 			isLoading={p.isLoading}
 			as={isPill(p.variant) ? "a" : undefined}
-			href={
-				isPill(p.variant)
-					? "https://app.thejfloor.com/sign-up"
-					: undefined
-			}
+			href={isPill(p.variant) ? "https://example.com/sign-up" : undefined}
 		>
 			{p.label}
 			{p.showArrow ? <Icon>arrow_outward</Icon> : null}

@@ -138,7 +138,9 @@ function renderList(
 }
 
 function rowOf(title: string): HTMLElement {
-	const item = screen.getByText(title).closest("li");
+	const item = screen
+		.getByText(title)
+		.closest<HTMLElement>(`[role="listitem"]`);
 	if (!item) throw new Error(`no row for ${title}`);
 	return item;
 }

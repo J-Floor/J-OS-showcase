@@ -7,52 +7,146 @@ import {
 	LONG_PRESS_MS,
 	LONG_PRESS_SLOP_PX,
 } from "./longPress.ts";
-import { Tooltip } from "./Tooltip.tsx";
+import { TOOLTIP_OPEN_DELAY_MS, Tooltip } from "./Tooltip.tsx";
 
-test("shows content on hover", async () => {
-	render(() => (
-		<Tooltip tooltipContent="hi">
-			<button>t</button>
-		</Tooltip>
-	));
-	fireEvent.pointerMove(screen.getByText("t"));
-	expect(await screen.findByText("hi")).toBeInTheDocument();
-});
+/** Hover the trigger and wait out the open delay on the fake clock. */
+async function hoverOpen(trigger: HTMLElement): Promise<void> {
+	fireEvent.pointerMove(trigger);
+	await vi.advanceTimersByTimeAsync(TOOLTIP_OPEN_DELAY_MS);
+}
 
-/**
- * The positioner is portalled to `<body>`. Positioned absolutely it belongs to
- * the document's scrollable overflow, and its first, unmeasured placement sits
- * past the right edge of a phone viewport — which widened the page and made
- * Chrome for Android load a deep-linked sheet zoomed out, in desktop layout.
- * Fixed keeps it out of the document's overflow entirely.
- */
-test("positions the tooltip against the viewport, not the document", async () => {
-	render(() => (
-		<Tooltip tooltipContent="hi">
-			<button>t</button>
-		</Tooltip>
-	));
-	fireEvent.pointerMove(screen.getByText("t"));
-	await screen.findByText("hi");
-	const positioner = document.querySelector(
-		'[data-scope="tooltip"][data-part="positioner"]'
-	);
-	expect(positioner).not.toBeNull();
-	expect((positioner as HTMLElement).style.position).toBe("fixed");
-});
+describe("hover", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+	});
+	afterEach(() => {
+		vi.useRealTimers();
+	});
 
-test("a caller's own positioning still wins", async () => {
-	render(() => (
-		<Tooltip tooltipContent="hi" positioning={{ strategy: "absolute" }}>
-			<button>t</button>
-		</Tooltip>
-	));
-	fireEvent.pointerMove(screen.getByText("t"));
-	await screen.findByText("hi");
-	const positioner = document.querySelector(
-		'[data-scope="tooltip"][data-part="positioner"]'
-	);
-	expect((positioner as HTMLElement).style.position).toBe("absolute");
+	test("opens once the hover delay has passed", async () => {
+		render(() => (
+			<Tooltip tooltipContent="hi">
+				<button>t</button>
+			</Tooltip>
+		));
+		fireEvent.pointerMove(screen.getByText("t"));
+		await vi.advanceTimersByTimeAsync(TOOLTIP_OPEN_DELAY_MS - 1);
+		expect(screen.queryByText("hi")).toBeNull();
+		await vi.advanceTimersByTimeAsync(1);
+		expect(screen.getByText("hi")).toBeInTheDocument();
+	});
+
+	/**
+	 * The positioner is portalled to `<body>`. Positioned absolutely it belongs
+	 * to the document's scrollable overflow, and its first, unmeasured placement
+	 * sits past the right edge of a phone viewport, which widens the page.
+	 * Fixed keeps it out of the document's overflow entirely.
+	 */
+	test("positions the tooltip against the viewport, not the document", async () => {
+		render(() => (
+			<Tooltip tooltipContent="hi">
+				<button>t</button>
+			</Tooltip>
+		));
+		await hoverOpen(screen.getByText("t"));
+		const positioner = document.querySelector(
+			'[data-scope="tooltip"][data-part="positioner"]'
+		);
+		expect(positioner).not.toBeNull();
+		expect((positioner as HTMLElement).style.position).toBe("fixed");
+	});
+
+	test("a caller's own positioning still wins", async () => {
+		render(() => (
+			<Tooltip tooltipContent="hi" positioning={{ strategy: "absolute" }}>
+				<button>t</button>
+			</Tooltip>
+		));
+		await hoverOpen(screen.getByText("t"));
+		const positioner = document.querySelector(
+			'[data-scope="tooltip"][data-part="positioner"]'
+		);
+		expect((positioner as HTMLElement).style.position).toBe("absolute");
+	});
+
+	describe("Tooltip.Anchor", () => {
+		test("its child becomes the trigger and shows the label on hover", async () => {
+			render(() => (
+				<Tooltip.Anchor label="Clear">
+					<button type="button">x</button>
+				</Tooltip.Anchor>
+			));
+			await hoverOpen(screen.getByText("x"));
+			expect(screen.getByRole("tooltip")).toHaveTextContent("Clear");
+		});
+
+		test("focusing the child opens the label", async () => {
+			render(() => (
+				<Tooltip.Anchor label="Clear">
+					<button type="button">x</button>
+				</Tooltip.Anchor>
+			));
+			// Tooltips open on keyboard focus only: tab in, as a keyboard user does.
+			fireEvent.keyDown(document, { key: "Tab" });
+			screen.getByText("x").focus();
+			await vi.advanceTimersByTimeAsync(0);
+			expect(screen.getByRole("tooltip")).toHaveTextContent("Clear");
+		});
+
+		test("triggerTabIndex lands on the anchor, so focusing it opens the label", async () => {
+			render(() => (
+				<Tooltip.Anchor label="Clear" triggerTabIndex={0}>
+					<button type="button" disabled>
+						x
+					</button>
+				</Tooltip.Anchor>
+			));
+			const anchor = screen.getByText("x").parentElement!;
+			expect(anchor).toHaveAttribute("tabindex", "0");
+			fireEvent.keyDown(document, { key: "Tab" });
+			anchor.focus();
+			await vi.advanceTimersByTimeAsync(0);
+			expect(screen.getByRole("tooltip")).toHaveTextContent("Clear");
+		});
+
+		test("the anchor span is the trigger and the child keeps its own id", () => {
+			render(() => (
+				<Tooltip.Anchor label="Clear" class="custom">
+					<button type="button" id="own">
+						x
+					</button>
+				</Tooltip.Anchor>
+			));
+			const child = screen.getByText("x");
+			expect(child.id).toBe("own");
+			const anchor = child.parentElement!;
+			expect(anchor).toHaveAttribute("data-part", "trigger");
+			expect(anchor).toHaveClass("custom");
+		});
+
+		test("disabled keeps it closed", async () => {
+			render(() => (
+				<Tooltip.Anchor label="Clear" disabled>
+					<button type="button">x</button>
+				</Tooltip.Anchor>
+			));
+			await hoverOpen(screen.getByText("x"));
+			expect(screen.queryByText("Clear")).toBeNull();
+		});
+
+		test("the child keeps its own click", () => {
+			const onClick = vi.fn();
+			render(() => (
+				<Tooltip.Anchor label="Clear">
+					<button type="button" onClick={onClick}>
+						x
+					</button>
+				</Tooltip.Anchor>
+			));
+			fireEvent.click(screen.getByText("x"));
+			expect(onClick).toHaveBeenCalledTimes(1);
+		});
+	});
 });
 
 test("closed tooltip content is not in the DOM", () => {

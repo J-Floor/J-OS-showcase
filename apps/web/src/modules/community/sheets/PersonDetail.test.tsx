@@ -304,6 +304,10 @@ test('clicking "Done" on a board task dispatches the step id to completeBoardSte
 	});
 });
 
+/** What a text query skips to find the visible copy of a label: an editor's
+ *  own hidden label (plus the testing library's defaults). */
+const VISUALLY_HIDDEN = "script, style, [data-hidden]";
+
 test("edit mode offers every field the read-only view shows", () => {
 	// The Applications sheet used to be a separate component. Folding it into
 	// this one meant porting BOTH halves, and the first pass only did the
@@ -331,8 +335,11 @@ test("edit mode offers every field the read-only view shows", () => {
 			editing
 		/>
 	));
+	// Each editor also names itself with a hidden label of the same text.
 	for (const label of labels)
-		expect(screen.getByText(label)).toBeInTheDocument();
+		expect(
+			screen.getByText(label, { ignore: VISUALLY_HIDDEN })
+		).toBeInTheDocument();
 });
 
 // Production redacts a plain Error's message; only a ConvexError's data
@@ -631,8 +638,12 @@ test("edit mode keys its editors like the read-only view and leaves the name to 
 	expect(counts.has("firstName")).toBe(false);
 	expect(counts.has("lastName")).toBe(false);
 	// The visible labels are unchanged.
-	expect(screen.getByText("First name")).toBeInTheDocument();
-	expect(screen.getByText("Venture")).toBeInTheDocument();
+	expect(
+		screen.getByText("First name", { ignore: VISUALLY_HIDDEN })
+	).toBeInTheDocument();
+	expect(
+		screen.getByText("Venture", { ignore: VISUALLY_HIDDEN })
+	).toBeInTheDocument();
 });
 
 test("no keyed value is rendered inside a collapsed section", () => {

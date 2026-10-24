@@ -46,6 +46,7 @@ export function NotificationDeviceRow(props: {
 				description={copy()}
 				checked={props.device.pushOn()}
 				disabled={!props.device.canToggle() || props.device.busy()}
+				disabledReason={props.device.busy() ? "Saving…" : copy()}
 				onCheckedChange={(details) => {
 					void (details.checked
 						? props.device.enable()

@@ -53,8 +53,11 @@ export function ModuleRoutes() {
 					info={{ title: entry.label }}
 					component={() => {
 						const View = entry.view;
+						// A path change within one module keeps this boundary
+						// mounted, so the path is its reset key.
+						const location = useLocation();
 						return (
-							<AppErrorBoundary>
+							<AppErrorBoundary resetKey={location.pathname}>
 								<Can
 									I="view"
 									the={entry.subject}

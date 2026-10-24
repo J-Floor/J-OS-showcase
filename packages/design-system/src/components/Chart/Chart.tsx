@@ -1,6 +1,8 @@
 import clsx from "clsx";
 import { Show, type JSX } from "solid-js";
 
+import { createSlotPart } from "../../utils/presence.tsx";
+
 import styles from "./Chart.module.scss";
 import {
 	createChartGeometry,
@@ -45,10 +47,15 @@ export type ChartProps = {
 	 * automatically in that case and this prop is rarely needed.
 	 */
 	hideLegend?: boolean;
-	/** Shown in place of the plot when `data` is empty. */
-	emptyMessage?: string;
+	/** Parts: a `Chart.Empty` replaces the default empty message. */
+	children?: JSX.Element;
 	class?: string;
 };
+
+/** `Chart.Empty`: shown in place of the plot when `data` is empty, instead
+ *  of the default message. */
+const emptyPart = createSlotPart("Chart", "Empty", "Chart");
+
 /**
  * A small multi-series chart: lines, areas and bars over a shared category
  * axis, in the design system's validated series palette.
@@ -63,6 +70,18 @@ export type ChartProps = {
  * property of the data.
  */
 export function Chart(props: ChartProps): JSX.Element {
+	return (
+		<emptyPart.Scope>
+			{props.children}
+			<ChartFigure {...props} />
+		</emptyPart.Scope>
+	);
+}
+
+Chart.Empty = emptyPart.Part;
+
+/** The plot, or the empty content when there is no data. */
+function ChartFigure(props: ChartProps): JSX.Element {
 	const size = createMeasuredSize();
 	const { geometry, ticks } = createChartGeometry(props, size);
 	const { hover, hoveredRow, onPointer, clearHover } =
@@ -75,9 +94,9 @@ export function Chart(props: ChartProps): JSX.Element {
 			<Show
 				when={props.data.length > 0}
 				fallback={
-					<p class={styles.empty}>
-						{props.emptyMessage ?? "Nothing to show yet."}
-					</p>
+					<div class={styles.empty}>
+						<emptyPart.Slot fallback="Nothing to show yet." />
+					</div>
 				}
 			>
 				<div class={styles.plot} ref={size.measure}>

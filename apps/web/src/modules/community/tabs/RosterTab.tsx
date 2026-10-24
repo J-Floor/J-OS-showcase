@@ -1,10 +1,10 @@
 import {
-	type BatchActionsRenderProps,
 	Sheet,
 	SheetNav,
 	type JfColumnDefinition,
 	morphPart,
 	Table,
+	type TableSelection,
 } from "@j-os/design-system";
 import { type JSX, Show, createEffect, createSignal, on } from "solid-js";
 
@@ -39,10 +39,21 @@ export type RunBatch<Row> = (
 	clearSelection: () => void
 ) => Promise<void>;
 
-/** What a tab's selection bar is handed: the Table's own render props plus the
+/** What a tab's selection bar is handed: the table's selection plus the
  *  shared {@link RunBatch}. */
 export type RosterBatchProps<Row extends Record<string, unknown>> =
-	BatchActionsRenderProps<Row> & { runBatch: RunBatch<Row> };
+	TableSelection<Row> & { runBatch: RunBatch<Row> };
+
+/** The selection bar's contents: reads the table's selection and hands it,
+ *  with the tab's {@link RunBatch}, to the tab's `batchActions`. */
+function RosterBatchBar<Row extends PersonRow>(props: {
+	batchActions: (batch: RosterBatchProps<Row>) => JSX.Element;
+	runBatch: RunBatch<Row>;
+}): JSX.Element {
+	const selection = Table.useSelection<Row>();
+	// eslint-disable-next-line solid/reactivity -- called once; the batch hands out accessors, read inside the bar's own JSX
+	return props.batchActions({ ...selection, runBatch: props.runBatch });
+}
 
 /**
  * What this tab does with the page-wide person selection: the row it names in
@@ -143,10 +154,10 @@ function RosterSheet<Row extends PersonRow>(props: {
 					<Sheet.Close />
 				</Sheet.HeaderActions>
 			</Sheet.Header>
-			<Sheet.Body
-				loading={props.isLoading}
-				skeleton={<PersonDetailPlaceholder />}
-			>
+			<Sheet.Skeleton>
+				<PersonDetailPlaceholder />
+			</Sheet.Skeleton>
+			<Sheet.Body loading={props.isLoading}>
 				<Show when={props.selected}>
 					{(person) => (
 						<PersonDetail
@@ -409,6 +420,7 @@ export function RosterTab<Row extends PersonRow>(
 			<Table.Root
 				columns={props.columns()}
 				data={props.data()}
+				getRowId={(row) => row._id}
 				groupBy={props.groupBy}
 				virtualize
 				initialColumnSorting={props.initialColumnSorting}
@@ -436,13 +448,11 @@ export function RosterTab<Row extends PersonRow>(
 					selection.openRow(row);
 				}}
 			>
-				<Table.BatchActions<Row>>
-					{(batch) =>
-						props.batchActions({
-							...batch,
-							runBatch: batchRunner(props.scope),
-						})
-					}
+				<Table.BatchActions>
+					<RosterBatchBar
+						batchActions={props.batchActions}
+						runBatch={batchRunner(props.scope)}
+					/>
 				</Table.BatchActions>
 			</Table.Root>
 			<RosterSheet

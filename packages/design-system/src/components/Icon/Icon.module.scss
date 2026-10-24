@@ -24,7 +24,8 @@
 	user-select: none;
 	direction: ltr;
 	-webkit-font-smoothing: antialiased;
-	transition: font-variation-settings 0.08s ease-in-out;
+	transition: font-variation-settings var(--jf-animation-duration-fast)
+		ease-in-out;
 
 	&[data-fill] {
 		font-variation-settings:

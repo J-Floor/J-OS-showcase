@@ -2,12 +2,14 @@ import { Logo } from "@j-os/design-system";
 
 import type { Demo } from "../../../demo/types.ts";
 
+import styles from "./Logo.demo.module.scss";
+
 export default {
 	title: "Logo",
-	// inline style: continuous numeric font-size slider + arbitrary user-entered colour, no sensible class breakpoints
 	render: (p) => (
-		<span style={{ "font-size": `${p.size}px`, color: p.color }}>
+		<span style={{ "--demo-size": `${p.size}px`, "--demo-color": p.color }}>
 			<Logo
+				class={styles.logo}
 				variant={p.variant}
 				animated={p.animated}
 				title={p.labelled ? "J floor" : undefined}

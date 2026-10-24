@@ -10,7 +10,7 @@ export default {
 		<Menu.Root>
 			<Menu.Trigger
 				asChild={(triggerProps) => (
-					<Button {...(triggerProps() as object)} variant="secondary">
+					<Button triggerProps={triggerProps()} variant="secondary">
 						Actions<Icon>expand_more</Icon>
 					</Button>
 				)}

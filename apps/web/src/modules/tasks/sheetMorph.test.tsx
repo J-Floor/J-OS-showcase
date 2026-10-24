@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { JFloorProvider } from "@j-os/design-system";
+import { JFloorProvider, Tabs } from "@j-os/design-system";
 import { MemoryRouter, Route } from "@solidjs/router";
 import {
 	cleanup,
@@ -139,13 +139,13 @@ function renderProjectsTab() {
 				<Route
 					path="*"
 					component={() => (
-						<ProjectsTab
-							requestNew={() => 0}
-							mode={() => "week"}
-							jumpToday={() => 0}
-							active={() => true}
-							onNeedTab={() => {}}
-						/>
+						<Tabs.Root value="projects">
+							<Tabs.Bar />
+							<ProjectsTab
+								active={() => true}
+								onNeedTab={() => {}}
+							/>
+						</Tabs.Root>
 					)}
 				/>
 			</MemoryRouter>

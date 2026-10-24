@@ -96,8 +96,8 @@ export function SpacePage() {
 					{(tab) => (
 						<Tabs.Actions value={tab.value}>
 							<SearchInput
-								label=""
-								aria-label={RULES_SEARCH_LABEL}
+								label={RULES_SEARCH_LABEL}
+								labelHidden
 								placeholder={RULES_SEARCH_LABEL}
 								class={styles.search}
 								value={rulesQuery()}

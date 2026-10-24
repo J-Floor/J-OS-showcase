@@ -9,7 +9,7 @@ const iconByStatus: Record<TStatus, string> = {
 	error: ICONS.error,
 	warning: ICONS.warning,
 	info: ICONS.info,
-	neutral: "crop_square",
+	neutral: ICONS.placeholder,
 };
 
 const StatusContext = createContext<Accessor<string>>();

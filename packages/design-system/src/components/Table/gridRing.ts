@@ -44,7 +44,7 @@ export type GridFocusProps<Data extends Record<string, unknown>> = Pick<
 export function createGridRing<Data extends Record<string, unknown>>(options: {
 	props: GridFocusProps<Data>;
 	rows: () => TanRow<Data>[];
-	rowId: (row: TanRow<Data>) => string | undefined;
+	rowId: (row: TanRow<Data>) => string;
 	selectionActive: () => boolean;
 	grid: GridElement;
 }): {

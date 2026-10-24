@@ -24,10 +24,10 @@ type PeekContext = {
 const Context = createContext<PeekContext>();
 
 /**
- * Holds the one "shortcut chips are visible" boolean for the whole app.
+ * Holds the one "shortcut chips are visible" boolean for the whole page.
  *
  * Two things can raise it and they are independent: holding Alt (transient, the
- * Windows access-key idiom) and the topbar toggle (sticky). Either alone is
+ * Windows access-key idiom) and a toggle control (sticky). Either alone is
  * enough, so releasing Alt does not switch off a latched peek.
  */
 export function ShortcutPeekProvider(props: {

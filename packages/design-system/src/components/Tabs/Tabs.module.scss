@@ -42,7 +42,7 @@
 	block-size: 2px;
 	background-color: var(--jf-border-strong);
 	transition-duration: var(--jf-animation-duration-default);
-	/* stylelint-disable-next-line plugin/no-low-performance-animation-properties */
+	/* stylelint-disable-next-line plugin/no-low-performance-animation-properties -- the indicator slides and resizes between tabs; a transform cannot follow a tab's width */
 	transition-property: width, left, inline-size, inset-inline-start;
 }
 
@@ -83,6 +83,6 @@
 	touch-action: pan-y pinch-zoom;
 
 	&:focus-visible {
-		outline: 1px solid var(--jf-border-strong);
+		outline: var(--jf-border-width-decorative) solid var(--jf-border-strong);
 	}
 }

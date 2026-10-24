@@ -6,6 +6,7 @@ export default {
 	title: "EditableText",
 	render: (p) => (
 		<EditableText
+			label={p.label}
 			value="Edit me"
 			placeholder={p.placeholder}
 			multiline={p.multiline}
@@ -14,6 +15,7 @@ export default {
 		/>
 	),
 	controls: {
+		label: { type: "text", default: "Title" },
 		placeholder: { type: "text", default: "Type something" },
 		multiline: { type: "boolean", default: false },
 		maxLength: { type: "number", default: 20 },

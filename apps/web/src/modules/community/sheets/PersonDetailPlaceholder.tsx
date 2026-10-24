@@ -3,7 +3,7 @@ import { Accordion, PropertyRow } from "@j-os/design-system";
 import { ICONS } from "../../../shared/icons.ts";
 
 /**
- * Placeholder field layout passed to `Sheet.Body`'s `skeleton` while the
+ * Placeholder field layout shown by `Sheet.Skeleton` while the
  * roster is still loading — a deep link can open the sheet before the
  * roster query has answered. Shaped like the loaded `PersonDetail` (its
  * Status/Info/Notes/History sections, with a handful of `PropertyRow`s

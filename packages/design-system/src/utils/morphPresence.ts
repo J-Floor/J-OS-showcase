@@ -9,7 +9,8 @@ import {
 } from "solid-js";
 
 import { recentActivation } from "./activation.ts";
-import { claimHandoff, hasContainer, morph } from "./morph.ts";
+import { claimHandoff, hasContainer, joinHandoff, morph } from "./morph.ts";
+import { MORPH_HIDDEN, MORPH_PICKED } from "./morphNames.ts";
 import { ENTITY_ROW, findMorphTarget } from "./morphPairing.ts";
 import { canAnimate } from "./viewTransition.ts";
 import { hasLayoutBox } from "./visibleArea.ts";
@@ -47,10 +48,7 @@ export function overlayMorphOptions(props: MorphOverlayProps) {
 	};
 }
 
-/** Marks the row a palette pick closes into (Enter leaves focus in the input). */
-export const MORPH_FROM = "data-morph-from";
-/** A morph source while its overlay is open; viewTransition.scss hides it. */
-export const MORPH_HIDDEN = "data-morph-hidden";
+export { MORPH_HIDDEN, MORPH_PICKED };
 
 /** A row picked inside an overlay, the close's source: an entity row, or
  *  any list item (a palette result that shows no entity, a page). */
@@ -104,18 +102,9 @@ function openFrom(options: {
 	return outside(content, recentActivation()) ?? outside(content, fallback);
 }
 
-/** Opens as the target of a handoff that already named this overlay. Its
- *  look joins the closer's transition and wins: the target decides. */
-function morphClaimed(
-	content: () => HTMLElement | null,
-	update: () => void
-): void {
-	void morph({ from: null, to: content, claimed: true, update });
-}
-
 function closeFrom(content: HTMLElement | null): HTMLElement | null {
 	return (
-		content?.querySelector<HTMLElement>(`[${MORPH_FROM}]`) ??
+		content?.querySelector<HTMLElement>(`[${MORPH_PICKED}]`) ??
 		activatedInside(content) ??
 		content
 	);
@@ -130,8 +119,8 @@ function closeTo(
 		: (closeTarget?.() ?? null);
 }
 
-function clearMorphFrom(content: HTMLElement | null): void {
-	content?.querySelector(`[${MORPH_FROM}]`)?.removeAttribute(MORPH_FROM);
+function clearPicked(content: HTMLElement | null): void {
+	content?.querySelector(`[${MORPH_PICKED}]`)?.removeAttribute(MORPH_PICKED);
 }
 
 /**
@@ -216,7 +205,7 @@ function show(state: PresenceState, options: PresenceOptions): void {
 	}
 	if (!state.isClosing && claimHandoff(options.content)) {
 		state.source = null;
-		morphClaimed(options.content, () => {
+		void joinHandoff(() => {
 			state.setShown(true);
 		});
 		return;
@@ -246,7 +235,7 @@ function hide(state: PresenceState, options: PresenceOptions): void {
 	if (!options.enabled()) {
 		unhideSource(closingSource);
 		state.setShown(false);
-		clearMorphFrom(content);
+		clearPicked(content);
 		restoreFocus(state.opener, content);
 		return;
 	}
@@ -261,7 +250,7 @@ function hide(state: PresenceState, options: PresenceOptions): void {
 		},
 	}).then(({ handedOff }) => {
 		state.isClosing = false;
-		clearMorphFrom(content);
+		clearPicked(content);
 		if (!handedOff && !state.isRequested) {
 			restoreFocus(state.opener, content);
 		}

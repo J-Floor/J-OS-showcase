@@ -1,6 +1,6 @@
 /* Success state: the glyph turns success-coloured and pops in. The extra
    descendant selector beats IconButton's inherited foreground colour. */
-.success [data-icon] {
+.swapIconButton[data-success] [data-icon] {
 	color: var(--jf-success-fg);
 	animation: swap-icon-pop 0.2s ease-out;
 }

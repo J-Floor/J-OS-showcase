@@ -96,8 +96,12 @@ export function TimelineHeader(props: TimelineProps) {
 						<div
 							class={styles.bandCell}
 							style={{
-								left: px(month.offset * timeline().dayWidth),
-								width: px(month.span * timeline().dayWidth),
+								"--cell-start": px(
+									month.offset * timeline().dayWidth
+								),
+								"--cell-size": px(
+									month.span * timeline().dayWidth
+								),
 							}}
 						>
 							<span>{month.label}</span>
@@ -119,8 +123,12 @@ export function TimelineHeader(props: TimelineProps) {
 								),
 							}}
 							style={{
-								left: px(tk.offset * timeline().dayWidth),
-								width: px(tk.span * timeline().dayWidth),
+								"--cell-start": px(
+									tk.offset * timeline().dayWidth
+								),
+								"--cell-size": px(
+									tk.span * timeline().dayWidth
+								),
 							}}
 						>
 							<span>{tk.label}</span>
@@ -146,7 +154,9 @@ function TimelineGridLines(props: TimelineProps) {
 						<div
 							class={styles.monthLine}
 							style={{
-								left: px(month.offset * timeline().dayWidth),
+								"--line-start": px(
+									month.offset * timeline().dayWidth
+								),
 							}}
 						/>
 					</Show>
@@ -156,7 +166,7 @@ function TimelineGridLines(props: TimelineProps) {
 				<div
 					class={styles.today}
 					style={{
-						left: px(
+						"--line-start": px(
 							(timeline().todayOffset ?? 0) * timeline().dayWidth
 						),
 					}}
@@ -184,10 +194,10 @@ function TimelineBarView(
 					// Dragged to move or resize: never a tab swipe.
 					{...{ [OWN_GESTURES_ATTR]: "" }}
 					style={{
-						left: px(
+						"--bar-start": px(
 							props.barDrag.barLeft(props.bar, props.timeline())
 						),
-						width: px(
+						"--bar-size": px(
 							props.barDrag.barWidth(props.bar, props.timeline())
 						),
 					}}
@@ -254,11 +264,11 @@ export function TimelineBody(
 							ref={props.newDrag.setPreview}
 							class={styles.newPreview}
 							style={{
-								left: px(
+								"--preview-start": px(
 									Math.min(range().a, range().b) *
 										timeline().dayWidth
 								),
-								width: px(
+								"--preview-size": px(
 									(Math.abs(range().a - range().b) + 1) *
 										timeline().dayWidth
 								),

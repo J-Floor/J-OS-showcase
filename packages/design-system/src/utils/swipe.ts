@@ -1,3 +1,5 @@
+import { CONTENT_EDITABLE, FORM_CONTROL } from "./focusable.ts";
+
 /**
  * A sideways swipe with a finger or a pen, for moving between views (tabs).
  *
@@ -24,12 +26,8 @@ const SWIPE_MIN_DISTANCE = 48;
 const HORIZONTAL_RATIO = 2;
 
 const OWN_GESTURE_SELECTOR = [
-	"input",
-	"textarea",
-	"select",
-	'[contenteditable="" i]',
-	'[contenteditable="true" i]',
-	'[contenteditable="plaintext-only" i]',
+	FORM_CONTROL,
+	CONTENT_EDITABLE,
 	'[draggable="true"]',
 	`[${OWN_GESTURES_ATTR}]`,
 ].join(", ");

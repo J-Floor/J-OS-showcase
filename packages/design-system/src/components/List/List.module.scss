@@ -1,4 +1,5 @@
 @use "../../styles/typography" as typo;
+@use "../../styles/utils";
 
 .list {
 	display: flex;
@@ -6,8 +7,6 @@
 	gap: var(--jf-spacing-close);
 	align-items: flex-start;
 	padding: var(--jf-spacing-close);
-	margin: 0;
-	list-style: none;
 	background: var(--jf-surface-bg-base);
 	border-radius: var(--jf-radius-container);
 	box-shadow: var(--jf-shadow-surface-elevation);
@@ -21,12 +20,6 @@
 	inline-size: 100%;
 	padding: var(--jf-spacing-near);
 	border-radius: var(--jf-radius-container);
-
-	@media (hover: hover) {
-		&:hover {
-			background-color: var(--jf-surface-bg-overlay);
-		}
-	}
 }
 
 .itemText {
@@ -45,7 +38,6 @@
 	max-inline-size: 100%;
 	overflow: hidden;
 	text-overflow: ellipsis;
-	line-height: 1rem;
 	color: var(--jf-fg-strong);
 	white-space: nowrap;
 }
@@ -56,7 +48,6 @@
 	max-inline-size: 100%;
 	overflow: hidden;
 	text-overflow: ellipsis;
-	line-height: 1rem;
 	color: var(--jf-fg-muted);
 	white-space: nowrap;
 }
@@ -66,6 +57,18 @@
 	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal icon size; no design token for this value */
 	font-size: 1.5rem;
 	color: var(--jf-fg-default);
+}
+
+/* Whatever the row is written with before its text: an icon, an avatar. */
+.leftContent {
+	display: inline-flex;
+	flex-wrap: nowrap;
+	flex-shrink: 0;
+	align-items: center;
+
+	[data-icon] {
+		color: var(--jf-fg-default);
+	}
 }
 
 .rightItems {
@@ -100,8 +103,14 @@
 	border: none;
 	border-radius: inherit;
 
-	&:focus-visible {
-		outline: solid 2px var(--jf-fg-default);
+	@include utils.focus-outline;
+
+	/* Only a row that does something looks like it does: an inert row takes
+	   neither the pointer nor the hover colour. */
+	@media (hover: hover) {
+		&:hover {
+			background-color: var(--jf-surface-bg-overlay);
+		}
 	}
 }
 

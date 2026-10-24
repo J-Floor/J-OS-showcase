@@ -4,6 +4,7 @@ import {
 	type SignaturePadRootProps,
 	useSignaturePadContext,
 } from "@ark-ui/solid/signature-pad";
+import clsx from "clsx";
 import { type JSX, Show, splitProps } from "solid-js";
 
 import { ICONS } from "../../icons.ts";
@@ -16,7 +17,6 @@ import styles from "./SignaturePad.module.scss";
  * Our own additions to the ark SignaturePad Root props:
  * - `onChange` replaces `onDrawEnd` (we convert draw-end → PNG data URL).
  * - `label` renders the ark Label part above the control.
- * - `class` is re-declared so we can merge it with our root style.
  *
  * Everything else in `SignaturePadRootProps` passes through: `drawing` (stroke
  * colour/options), `disabled`, `readOnly`, `required`, `name`, `paths`,
@@ -24,12 +24,11 @@ import styles from "./SignaturePad.module.scss";
  */
 export type SignaturePadProps = Omit<
 	SignaturePadRootProps,
-	"onDrawEnd" | "onChange" | "class" | "children"
+	"onDrawEnd" | "onChange" | "children"
 > & {
 	/** Fires with a PNG data URL when a stroke ends, or null when cleared. */
 	onChange: (pngDataUrl: string | null) => void;
 	label?: string;
-	class?: string;
 };
 
 // The Clear button lives INSIDE ark's `control` element, which owns the native
@@ -69,8 +68,7 @@ function ClearButton(props: { onClear: () => void }): JSX.Element {
 
 /**
  * Drawn-signature capture, wrapping ark-ui's signature-pad. Emits the drawing
- * as a PNG data URL via `onChange` (null on clear). Used by the onboarding
- * document step; the PNG is stamped into the generated agreement PDF.
+ * as a PNG data URL via `onChange` (null on clear), for e-signature capture.
  *
  * All `SignaturePadRootProps` not listed in the `Omit` above pass through to
  * the ark Root: `drawing` (stroke colour/options), `disabled`, `readOnly`,
@@ -111,7 +109,7 @@ export function SignaturePad(props: SignaturePadProps): JSX.Element {
 	return (
 		<Ark.Root
 			{...rootProps}
-			class={own.class ? `${styles.root} ${own.class}` : styles.root}
+			class={clsx(styles.root, own.class)}
 			onDrawEnd={handleDrawEnd}
 		>
 			<Show when={own.label}>

@@ -2,6 +2,7 @@
  * SCSS nesting -> native CSS nesting; --embo-* -> --jf-* (grayscale, no brand hue). */
 
 @use "../../styles/typography" as typo;
+@use "../../styles/utils";
 
 /* --- BaseButton parts --- */
 
@@ -50,9 +51,7 @@
 		text-transform: uppercase;
 	}
 
-	&:focus-visible {
-		outline: solid 2px var(--jf-border-strong);
-	}
+	@include utils.focus-outline;
 
 	&[data-loading="true"] {
 		.content {
@@ -74,7 +73,8 @@
 		}
 	}
 
-	&[disabled] {
+	/* A loading button is disabled too, but keeps the `wait` cursor. */
+	&[disabled]:not([data-loading="true"]) {
 		cursor: not-allowed;
 
 		* {
@@ -119,10 +119,7 @@
 
 .primary.button {
 	background-color: var(--jf-fg-strong);
-
-	* {
-		color: var(--jf-inverted-fg);
-	}
+	color: var(--jf-inverted-fg);
 
 	&:not([data-loading="true"], [disabled]) {
 		@media (hover: hover) {
@@ -151,19 +148,13 @@
 
 .secondary.button {
 	background-color: var(--jf-surface-bg-overlay);
-
-	* {
-		color: var(--jf-fg-default);
-	}
+	color: var(--jf-fg-default);
 
 	&:not([data-loading="true"], [disabled]) {
 		@media (hover: hover) {
 			&:hover {
 				background-color: var(--jf-surface-bg-raised);
-
-				* {
-					color: var(--jf-fg-strong);
-				}
+				color: var(--jf-fg-strong);
 			}
 		}
 
@@ -173,11 +164,10 @@
 	}
 }
 
-/* Marketing pills (thejfloor.com). Both are sampled from the live site, which
- * uses colours no semantic token models, so they live in local custom
- * properties consumed through `var()`. The font goes through
+/* Marketing pills. Their colours are ones no semantic token models, so they
+ * live in local custom properties consumed through `var()`. The font goes through
  * `--button-pill-font` so a consuming app can supply its marketing face
- * (the landing page sets Inter) without the design system shipping it. */
+ * without the design system shipping it. */
 .pill.button,
 .pill-light.button {
 	--pill-font-size: 1rem;
@@ -203,7 +193,7 @@
 	}
 }
 
-/* "Apply to join": solid grey capsule, white regular label + trailing arrow. */
+/* Solid grey capsule, white regular label + trailing arrow. */
 .pill.button {
 	--pill-bg: rgb(134 131 130);
 	--pill-fg: var(--core-grey-0);
@@ -221,17 +211,15 @@
 		gap: var(--pill-gap);
 	}
 
-	* {
-		color: var(--pill-fg);
-	}
+	color: var(--pill-fg);
 
-	/* The live trailing arrow is warm white, a hair off the label's white. */
+	/* The trailing arrow is warm white, a hair off the label's white. */
 	svg {
 		color: var(--core-warm-white);
 	}
 }
 
-/* "Contact": light off-white capsule with a dark regular label. */
+/* Light off-white capsule with a dark regular label. */
 .pill-light.button {
 	--pill-bg: rgb(227 222 219);
 	--pill-fg: var(--core-grey-900);
@@ -242,18 +230,12 @@
 	border-radius: var(--pill-radius);
 	background-color: var(--pill-bg);
 	font-weight: var(--pill-weight);
-
-	* {
-		color: var(--pill-fg);
-	}
+	color: var(--pill-fg);
 }
 
 .tertiary.button {
 	background-color: transparent;
-
-	* {
-		color: var(--jf-fg-default);
-	}
+	color: var(--jf-fg-default);
 
 	.content {
 		padding-inline: 0;
@@ -265,19 +247,13 @@
 				/* Match secondary's resting fill so tertiary gains a visible
 				   hover surface (was transparent → no feedback). */
 				background-color: var(--jf-surface-bg-overlay);
-
-				* {
-					color: var(--jf-fg-strong);
-				}
+				color: var(--jf-fg-strong);
 			}
 		}
 
 		&:active {
 			background-color: var(--jf-surface-bg-raised);
-
-			* {
-				color: var(--jf-fg-strong);
-			}
+			color: var(--jf-fg-strong);
 		}
 	}
 }

@@ -25,15 +25,12 @@ export function ThemeSwitch(): JSX.Element {
 	onMount(() => {
 		isMounted = true;
 	});
-	function iconClass(): string {
-		return isMounted ? `${styles.icon} ${styles.animate}` : styles.icon;
-	}
 	return (
 		<Tooltip
 			tooltipContent="Toggle theme"
 			asChild={(tip) => (
 				<button
-					{...(tip() as object)}
+					{...tip()}
 					type="button"
 					class={styles.switch}
 					onClick={toggle}
@@ -47,12 +44,18 @@ export function ThemeSwitch(): JSX.Element {
 						when={isDark()}
 						keyed
 						fallback={
-							<span class={iconClass()}>
+							<span
+								class={styles.icon}
+								data-animated={isMounted ? "" : undefined}
+							>
 								<Icon>{ICONS.lightMode}</Icon>
 							</span>
 						}
 					>
-						<span class={iconClass()}>
+						<span
+							class={styles.icon}
+							data-animated={isMounted ? "" : undefined}
+						>
 							<Icon>{ICONS.darkMode}</Icon>
 						</span>
 					</Show>

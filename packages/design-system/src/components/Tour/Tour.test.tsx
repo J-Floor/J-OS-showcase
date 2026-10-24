@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@solidjs/testing-library";
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@solidjs/testing-library";
 import { afterEach, expect, test } from "vitest";
 
 afterEach(cleanup);
@@ -31,6 +37,8 @@ if (!("visualViewport" in globalThis)) {
 
 import { Tour, useTour, type TourStep } from "../../index.ts";
 
+import { type UseTourReturn } from "./Tour.tsx";
+
 const steps: TourStep[] = [
 	{
 		id: "welcome",
@@ -51,6 +59,75 @@ function IdleTourHarness() {
 	const tour = useTour({ steps });
 	return <Tour tour={tour} />;
 }
+
+test("an action button is named by its visible label, not by its action", async () => {
+	render(() => <StartedTourHarness />);
+	expect(
+		await screen.findByRole("button", { name: "Start" })
+	).toBeInTheDocument();
+});
+
+test("focus goes back to where it was once the tour ends", async () => {
+	let tour: UseTourReturn | undefined;
+	function Harness() {
+		const handle = useTour({ steps });
+		tour = handle;
+		return (
+			<>
+				<button type="button">Before</button>
+				<Tour tour={handle} />
+			</>
+		);
+	}
+	render(() => <Harness />);
+	const before = screen.getByRole("button", { name: "Before" });
+	before.focus();
+	tour?.().start();
+	const start = await screen.findByRole("button", { name: "Start" });
+	start.focus();
+	const close = document.querySelector<HTMLElement>(
+		'[data-scope="tour"][data-part="close-trigger"]'
+	);
+	close?.focus();
+	fireEvent.click(close!);
+	await waitFor(() => {
+		expect(screen.queryByText("Hello there")).toBeNull();
+	});
+	await waitFor(() => {
+		expect(document.activeElement).toBe(before);
+	});
+});
+
+function OverriddenTourHarness() {
+	const tour = useTour({ steps });
+	tour().start();
+	return (
+		<Tour
+			tour={tour}
+			classOverride={{
+				backdropClass: "my-backdrop",
+				spotlightClass: "my-spotlight",
+				positionerClass: "my-positioner",
+				contentClass: "my-content",
+			}}
+		/>
+	);
+}
+
+test("classOverride restyles each part", async () => {
+	render(() => <OverriddenTourHarness />);
+	await screen.findByText("Hello there");
+	for (const [part, name] of [
+		["backdrop", "my-backdrop"],
+		["spotlight", "my-spotlight"],
+		["positioner", "my-positioner"],
+		["content", "my-content"],
+	]) {
+		expect(
+			document.querySelector(`[data-scope="tour"][data-part="${part}"]`)
+		).toHaveClass(name);
+	}
+});
 
 test("renders the active step's title once started", async () => {
 	render(() => <StartedTourHarness />);

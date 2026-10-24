@@ -7,8 +7,8 @@ function Harness() {
 	const [query, setQuery] = createSignal("");
 	return (
 		<SearchInput
-			label=""
-			aria-label="Search rules"
+			label="Search rules"
+			labelHidden
 			value={query()}
 			onValueChange={setQuery}
 		/>
@@ -19,8 +19,8 @@ test("reports typed text as a plain string", () => {
 	let got = "";
 	render(() => (
 		<SearchInput
-			label=""
-			aria-label="Q"
+			label="Q"
+			labelHidden
 			value=""
 			onValueChange={(value) => (got = value)}
 		/>
@@ -33,12 +33,7 @@ test("reports typed text as a plain string", () => {
 
 test("shows the search icon", () => {
 	render(() => (
-		<SearchInput
-			label=""
-			aria-label="Q"
-			value=""
-			onValueChange={() => {}}
-		/>
+		<SearchInput label="Q" labelHidden value="" onValueChange={() => {}} />
 	));
 	const icon = document.querySelector("[data-icon]");
 	expect(icon).toHaveTextContent("search");
@@ -48,8 +43,8 @@ test("hands the input element to a consumer ref", () => {
 	let element: HTMLInputElement | undefined;
 	render(() => (
 		<SearchInput
-			label=""
-			aria-label="Q"
+			label="Q"
+			labelHidden
 			value=""
 			ref={(input: HTMLInputElement) => (element = input)}
 			onValueChange={() => {}}
@@ -61,8 +56,8 @@ test("hands the input element to a consumer ref", () => {
 test("applies a consumer class alongside its own", () => {
 	render(() => (
 		<SearchInput
-			label=""
-			aria-label="Q"
+			label="Q"
+			labelHidden
 			value=""
 			class="consumer"
 			onValueChange={() => {}}

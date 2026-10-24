@@ -1,4 +1,5 @@
 @use "../../styles/typography" as typo;
+@use "../MakeField/field.mixins" as field;
 
 /* DateInput.RootProvider is a transparent wrapper (MakeField's Field.Root is
    the real chrome around it). */
@@ -6,25 +7,13 @@
 	display: contents;
 }
 
-/* Bordered box holding the icon + segmented input. */
+/* The shared field shell holding the icon + segmented input: the same box
+   and 2px focus/invalid ring as every other field. */
 .control {
-	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
-	display: flex;
+	@include field.shell;
+
 	gap: var(--jf-spacing-near);
-	align-items: center;
-	padding-inline: var(--jf-spacing-near);
 	cursor: text;
-	background-color: var(--jf-surface-bg-base);
-	border: 1px solid var(--jf-border-strong);
-	border-radius: var(--jf-radius-button);
-
-	&:focus-within {
-		border-color: var(--jf-fg-strong);
-	}
-
-	&[data-invalid="true"] {
-		border-color: var(--jf-error-fg);
-	}
 
 	&[data-disabled] {
 		cursor: not-allowed;
@@ -42,7 +31,6 @@
 	display: flex;
 	flex: 1 1 auto;
 	align-items: center;
-	padding-block: var(--jf-spacing-near);
 	color: var(--jf-fg-default);
 
 	@include typo.jf-typo-body-regular;

@@ -99,3 +99,32 @@ test("without a stack it stays where the page placed it, on a phone too", () => 
 	expect(screen.getByTestId("page")).toContainElement(toolbar);
 	expect(toolbar).not.toHaveAttribute("data-floating");
 });
+
+/** A stack whose own children are a toolbar, beside a page with one. */
+function renderStackedToolbar() {
+	render(() => (
+		<FloatingStackProvider>
+			<main data-testid="page">
+				<FloatingToolbar data-testid="page-toolbar">x</FloatingToolbar>
+			</main>
+			<FloatingStack>
+				<FloatingToolbar data-testid="stacked">y</FloatingToolbar>
+			</FloatingStack>
+		</FloatingStackProvider>
+	));
+}
+
+test.each([
+	["a wide screen", false],
+	["a phone", true],
+])(
+	"among the stack's own children it is a pill where it is placed, on %s",
+	(_, isPhone) => {
+		viewport(isPhone);
+		renderStackedToolbar();
+		const stacked = screen.getByTestId("stacked");
+		const stack = document.querySelector('[data-part="floating-stack"]');
+		expect(stack?.firstElementChild).toBe(stacked);
+		expect(stacked).toHaveAttribute("data-floating");
+	}
+);

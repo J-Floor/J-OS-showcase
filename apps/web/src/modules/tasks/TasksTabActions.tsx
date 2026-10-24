@@ -1,19 +1,18 @@
 import { Button, Icon, Select } from "@j-os/design-system";
-import type { Accessor } from "solid-js";
+import { For, type Accessor } from "solid-js";
 
-import { SelectOptionList } from "../../shared/components/SelectOptionList.tsx";
 import { ICONS } from "../../shared/icons.ts";
 
 import styles from "./TasksPage.module.scss";
 import type { ViewMode } from "./timeline/timeline.ts";
 
 const VIEW_OPTIONS = [
-	{ value: "day", title: "Day" },
-	{ value: "week", title: "Week" },
-	{ value: "month", title: "Month" },
+	{ value: "day", label: "Day" },
+	{ value: "week", label: "Week" },
+	{ value: "month", label: "Month" },
 ];
 
-type Option = { value: string; title: string };
+type Option = { value: string; label: string };
 
 /** The Tasks tab's header: the assignee filter and "New task". */
 export function TasksTabActions(props: {
@@ -25,14 +24,20 @@ export function TasksTabActions(props: {
 	return (
 		<div class={styles.taskControls}>
 			<Select.Root
-				options={props.options()}
+				label="Assignee"
+				labelHidden
 				value={[props.assignee()]}
-				sameWidth={false}
 				onValueChange={(details) => {
 					props.onAssigneeChange(details.value[0]);
 				}}
 			>
-				<SelectOptionList options={props.options()} />
+				<For each={props.options()}>
+					{(option) => (
+						<Select.Option value={option.value}>
+							{option.label}
+						</Select.Option>
+					)}
+				</For>
 			</Select.Root>
 			<Button onClick={props.onNewTask}>
 				<Icon>{ICONS.add}</Icon> New task
@@ -55,13 +60,20 @@ export function ProjectTabActions(props: {
 				<Icon>today</Icon> Today
 			</Button>
 			<Select.Root
-				options={VIEW_OPTIONS}
+				label="View"
+				labelHidden
 				value={[props.mode()]}
 				onValueChange={(details) => {
 					props.onModeChange(details.value[0] as ViewMode);
 				}}
 			>
-				<SelectOptionList options={VIEW_OPTIONS} />
+				<For each={VIEW_OPTIONS}>
+					{(option) => (
+						<Select.Option value={option.value}>
+							{option.label}
+						</Select.Option>
+					)}
+				</For>
 			</Select.Root>
 			<Button onClick={props.onNewProject}>
 				<Icon>{ICONS.add}</Icon> New project

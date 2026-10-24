@@ -1,6 +1,8 @@
 @use "sass:math";
 
-.root {
+/* `:where()` keeps the defaults at zero specificity, so a caller's `class`
+   always wins over them whatever order the stylesheets load in. */
+:where(.root) {
 	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
 	display: inline-flex;
 
@@ -63,17 +65,19 @@ $mark-size: 60;
 	fill: currentcolor;
 }
 
+$reveal: var(--jf-animation-duration-reveal) ease-out;
+
 @media (prefers-reduced-motion: no-preference) {
 	.clip {
-		animation: logo-grow-tall 700ms ease-out both;
+		animation: logo-grow-tall $reveal both;
 	}
 
 	.clipSquare {
-		animation: logo-grow-square 700ms ease-out both;
+		animation: logo-grow-square $reveal both;
 	}
 
 	.topEdge {
-		animation: logo-edge-rise 700ms ease-out both;
+		animation: logo-edge-rise $reveal both;
 	}
 }
 

@@ -1,22 +1,28 @@
-import type { Hotkey, Modifier } from "@tanstack/solid-hotkeys";
 import clsx from "clsx";
-import { type Accessor, type JSX, Show, splitProps } from "solid-js";
+import { type JSX, Show, splitProps } from "solid-js";
 
-import { type TriggerProps } from "../../utils/triggerProps.ts";
+import { separateDisablingProps } from "../../utils/disablingProps.ts";
+import { useShortcutPeek } from "../../utils/shortcutPeek.tsx";
+import { callHandler, type TriggerProps } from "../../utils/triggerProps.ts";
+import { type ShortcutHint } from "../../utils/types.ts";
 import { Badge } from "../Badge/Badge.tsx";
-import { BaseButton, type BaseButtonProps } from "../Button/BaseButton.tsx";
+import {
+	BaseButton,
+	type BaseButtonProps,
+	disablingWith,
+	useButtonLoading,
+} from "../Button/BaseButton.tsx";
 import { Icon } from "../Icon/Icon.tsx";
 import { Kbd } from "../Kbd/Kbd.tsx";
-import { useShortcutPeek } from "../ShortcutPeek/ShortcutPeek.tsx";
 import { Spinner } from "../Spinner/Spinner.tsx";
-import { Tooltip } from "../Tooltip/Tooltip.tsx";
+import { Tooltip, type TooltipProps } from "../Tooltip/Tooltip.tsx";
 
 import styles from "./IconButton.module.scss";
 
-/** The tooltip trigger prop the wrapping `<span>` hands down to the button. */
-type TooltipTriggerProps = { "aria-describedby"?: string };
-
-type ShortcutHint = Hotkey | Modifier;
+/** What Tooltip's `asChild` hands its trigger. */
+type TooltipTriggerAccessor = Parameters<
+	NonNullable<TooltipProps["asChild"]>
+>[0];
 
 export type IconButtonProps = {
 	/** Accessible label shown in the tooltip (and the button's accessible name). */
@@ -60,16 +66,17 @@ export type IconButtonProps = {
 	badgeLabel?: string;
 } & BaseButtonProps;
 
-/** The glyph (or spinner), the peek-shortcut chip and the corner badge. */
+/** The glyph (or, while the button loads, a spinner), the peek-shortcut chip
+ *  and the corner badge. */
 function ButtonContent(props: {
-	isLoading: boolean | undefined;
-	icon: string;
-	peekedShortcut: ShortcutHint | undefined;
-	badge: string | undefined;
+	icon: IconButtonProps["children"];
+	peekedShortcut: IconButtonProps["shortcut"];
+	badge: IconButtonProps["badge"];
 }): JSX.Element {
+	const isLoading = useButtonLoading();
 	return (
 		<>
-			<Show when={props.isLoading} fallback={<Icon>{props.icon}</Icon>}>
+			<Show when={isLoading()} fallback={<Icon>{props.icon}</Icon>}>
 				<Spinner />
 			</Show>
 			<Show when={props.peekedShortcut} keyed>
@@ -92,8 +99,8 @@ function ButtonContent(props: {
 
 /** The tooltip text, with the shortcut's chip beside it when there is one. */
 function TooltipLabel(props: {
-	label: string;
-	shortcut: ShortcutHint | undefined;
+	label: IconButtonProps["tooltipLabel"];
+	shortcut: IconButtonProps["shortcut"];
 }): JSX.Element {
 	return (
 		<Show when={props.shortcut} fallback={props.label} keyed>
@@ -106,11 +113,21 @@ function TooltipLabel(props: {
 	);
 }
 
-/** The button's accessible name: the label, plus the badge's meaning while a
- *  badge shows. */
+/** The button's accessible name: the caller's own `aria-label` when given,
+ *  none when the caller names it with `aria-labelledby`, else the label plus
+ *  the badge's meaning while a badge shows. */
 function accessibleName(
-	local: Pick<IconButtonProps, "tooltipLabel" | "badge" | "badgeLabel">
-): string {
+	local: Pick<
+		IconButtonProps,
+		| "tooltipLabel"
+		| "badge"
+		| "badgeLabel"
+		| "aria-label"
+		| "aria-labelledby"
+	>
+): string | undefined {
+	if (local["aria-label"] !== undefined) return local["aria-label"];
+	if (local["aria-labelledby"] !== undefined) return undefined;
 	return local.badge && local.badgeLabel
 		? `${local.tooltipLabel}, ${local.badgeLabel}`
 		: local.tooltipLabel;
@@ -119,9 +136,12 @@ function accessibleName(
 /** A button slotted into the tooltip's trigger: straight onto the button, or,
  *  when an outer machine owns the button, onto a wrapping span. */
 function renderTooltipTrigger(
-	tooltipProps: Accessor<object>,
+	tooltipProps: TooltipTriggerAccessor,
 	external: TriggerProps | undefined,
-	button: (triggerProps?: TriggerProps, extra?: object) => JSX.Element
+	button: (
+		triggerProps?: TriggerProps,
+		describedBy?: () => string | undefined
+	) => JSX.Element
 ): JSX.Element {
 	if (!external) {
 		return button(tooltipProps());
@@ -130,14 +150,7 @@ function renderTooltipTrigger(
 	// the tooltip's focus/blur as bubbling focusin/focusout, so the
 	// button's focus still reaches it. The description belongs on the
 	// focused element, so hand it down to the button.
-	function tip(): TooltipTriggerProps {
-		return tooltipProps();
-	}
-	const inner = button(external, {
-		get "aria-describedby"() {
-			return tip()["aria-describedby"];
-		},
-	});
+	const inner = button(external, () => tooltipProps()["aria-describedby"]);
 	return (
 		<span {...tooltipProps()} class={styles.tooltipTrigger}>
 			{inner}
@@ -145,11 +158,30 @@ function renderTooltipTrigger(
 	);
 }
 
+/** The bag's own click (an outer machine's toggle, the tooltip's close),
+ *  then the caller's, whose promise keeps the button loading. */
+function bothClicks(
+	bagClick: TriggerProps["onClick"],
+	ownClick: BaseButtonProps["onClick"]
+): BaseButtonProps["onClick"] {
+	return (event) => {
+		callHandler(bagClick, event);
+		return ownClick?.(event);
+	};
+}
+
+/** The caller's descriptions and the open tooltip's, as one id list. */
+function describedByIds(...ids: (string | undefined)[]): string | undefined {
+	const joined = ids.filter(Boolean).join(" ");
+	return joined === "" ? undefined : joined;
+}
+
 /**
  * A round, icon-only button with a tooltip label.
  *
  * Ported from EmboUI's IconButton. `children` is a Material Symbols ligature;
- * a {@link Spinner} replaces the {@link Icon} while loading.
+ * a {@link Spinner} replaces the {@link Icon} while loading, from `isLoading`
+ * or from an async `onClick` still pending.
  *
  * Composition (React→Solid a11y): the {@link BaseButton} IS the tooltip trigger
  * (via `Tooltip`'s `asChild` render prop) to avoid a `<button><button>` nesting.
@@ -160,10 +192,8 @@ function renderTooltipTrigger(
  * wrapping it (see the ark-solid-composition skill).
  */
 export function IconButton(props: IconButtonProps): JSX.Element {
-	// Keep `disabled` (and the disabling group) in `rest` so the strict
-	// PropsWithDisabling union reaches BaseButton intact; read props.disabled
-	// directly for the loading/tooltip gate.
-	const [local, rest] = splitProps(props, [
+	const [others, disabling] = separateDisablingProps(props);
+	const [local, rest] = splitProps(others, [
 		"tooltipLabel",
 		"shortcut",
 		"children",
@@ -173,6 +203,8 @@ export function IconButton(props: IconButtonProps): JSX.Element {
 		"triggerProps",
 		"badge",
 		"badgeLabel",
+		"aria-label",
+		"aria-describedby",
 	]);
 
 	const peek = useShortcutPeek();
@@ -182,53 +214,50 @@ export function IconButton(props: IconButtonProps): JSX.Element {
 	// While peeking (Alt held, or a peek toggle latched) each shortcut button
 	// shows its key as a small chip pinned to its own corner — NOT by force-opening
 	// its tooltip. Tooltips portal to `<body>` and position by floating-ui, so
-	// forcing dozens open at once stacked them above everything (the open sheet
+	// forcing dozens open at once stacked them above everything (an open overlay
 	// included) and they collided. A badge lives inside its own button's box, so a
-	// table chip stays in the table and a sheet chip stays in the sheet, with
+	// chip in a list stays in the list and one in an overlay stays there, with
 	// no portal, no z-index war and nothing to overlap. Bare (loading/disabled)
 	// buttons show none: a chip for a key that will not fire only misleads.
 	function peekShortcut(): ShortcutHint | undefined {
 		return peek.peeking() && !bare() ? local.shortcut : undefined;
 	}
 
+	function isDisabled(): boolean {
+		return (
+			Boolean(disabling.disabled) || Boolean(local.triggerProps?.disabled)
+		);
+	}
+
 	// The button carries ONE trigger's props: the external ones when given (so
 	// an outer ark machine stays registered even when no tooltip is shown), else
 	// the tooltip's.
-	function button(triggerProps?: TriggerProps, extra?: object): JSX.Element {
-		// Spread as a plain `object` (as the original tooltip-only path did): the
-		// bag carries ark `data-*`/handlers that
-		// don't line up with BaseButton's prop types, but are runtime-safe. Typing
-		// it as `object` adds them without tripping the strict PropsWithDisabling
-		// union (which a structural cast flattens and breaks).
-		//
-		// Disabled tooltip: a disabled native button doesn't fire hover, so when
-		// the button is bare-disabled the label tooltip is gone. Fall back to the
-		// label as the disabled REASON — MakeDisablable's span trigger surfaces it
-		// on hover even while disabled. An explicit `disabledReason` still wins.
-		// Only a disabled button needs the label fallback: BaseButton already keeps
-		// an enabled one free of a disabled reason. Spread untyped: a typed
-		// `disabledReason` prop trips the strict PropsWithDisabling union when
-		// `rest` already carries the disabling shape.
-		const isDisabled =
-			Boolean(props.disabled) || Boolean(local.triggerProps?.disabled);
-		const reasonProps = isDisabled
-			? ({
-					disabledReason: props.disabledReason ?? local.tooltipLabel,
-				} as object)
-			: {};
+	function button(
+		triggerProps?: TriggerProps,
+		describedBy?: () => string | undefined
+	): JSX.Element {
 		return (
 			<BaseButton
 				{...rest}
-				{...(triggerProps as object)}
-				{...extra}
-				{...reasonProps}
+				{...triggerProps}
+				// A disabled native button fires no hover, so the label stands
+				// in as the disabled reason (MakeDisablable shows it).
+				{...disablingWith(disabling, isDisabled(), local.tooltipLabel)}
+				aria-describedby={describedByIds(
+					local["aria-describedby"],
+					describedBy
+						? describedBy()
+						: triggerProps?.["aria-describedby"]
+				)}
 				isLoading={local.isLoading}
 				class={clsx(styles.iconButton, local.class)}
-				aria-label={accessibleName(local)}
-				onClick={local.onClick}
+				aria-label={accessibleName({
+					...local,
+					"aria-labelledby": props["aria-labelledby"],
+				})}
+				onClick={bothClicks(triggerProps?.onClick, local.onClick)}
 			>
 				<ButtonContent
-					isLoading={local.isLoading}
 					icon={local.children}
 					peekedShortcut={peekShortcut()}
 					badge={local.badge}
@@ -239,13 +268,11 @@ export function IconButton(props: IconButtonProps): JSX.Element {
 
 	// Drop the label tooltip while loading, while this button is disabled, or
 	// while the external (ark) trigger is disabled — the bare BaseButton still
-	// dims + reason-tooltips via MakeDisablable.
+	// dims + reason-tooltips via MakeDisablable. An async click keeps the
+	// tooltip: its pending state lives in this BaseButton, and swapping the
+	// tooltip out would remount a fresh one mid-click.
 	function bare(): boolean {
-		return (
-			Boolean(local.isLoading) ||
-			Boolean(props.disabled) ||
-			Boolean(local.triggerProps?.disabled)
-		);
+		return Boolean(local.isLoading) || isDisabled();
 	}
 
 	return (

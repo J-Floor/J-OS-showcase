@@ -1,4 +1,9 @@
-import { Query, Timeline, type TimelineEntry } from "@j-os/design-system";
+import {
+	EmptyState,
+	Query,
+	Timeline,
+	type TimelineEntry,
+} from "@j-os/design-system";
 import type { JSX } from "solid-js";
 
 import { api } from "../../../../convex/_generated/api";
@@ -140,7 +145,11 @@ export function PersonTimeline(props: { personId: Id<"people"> }): JSX.Element {
 		<Query.Root data={events.data()}>
 			<Query.Content of={events.data()}>
 				{(rows) => (
-					<Timeline entries={rows().map((row) => toEntry(row))} />
+					<Timeline entries={rows().map((row) => toEntry(row))}>
+						<Timeline.Empty>
+							<EmptyState title="No history yet" />
+						</Timeline.Empty>
+					</Timeline>
 				)}
 			</Query.Content>
 		</Query.Root>

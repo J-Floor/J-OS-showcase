@@ -1,4 +1,4 @@
-import { Timeline } from "@j-os/design-system";
+import { EmptyState, Timeline } from "@j-os/design-system";
 
 import type { Demo } from "../../../demo/types.ts";
 
@@ -7,15 +7,15 @@ const entries = [
 		id: "1",
 		at: 1_800_000_000_000,
 		kind: "Transitions",
-		title: "Promoted to member",
+		title: "Status changed to active",
 		actor: "Sara",
-		icon: "how_to_reg",
+		icon: "check_circle",
 	},
 	{
 		id: "2",
 		at: 1_799_000_000_000,
-		kind: "Board tasks",
-		title: "Added to WhatsApp group",
+		kind: "Comments",
+		title: "Comment added",
 		actor: "Marc",
 		icon: "chat",
 	},
@@ -23,7 +23,7 @@ const entries = [
 		id: "3",
 		at: 1_798_000_000_000,
 		kind: "Transitions",
-		title: "Signed guest agreement",
+		title: "Agreement signed",
 		icon: "draw",
 	},
 	{
@@ -39,11 +39,26 @@ const entries = [
 export default {
 	title: "Timeline",
 	render: (p) => (
-		<Timeline entries={entries} collapseMuted={p.collapseMuted} />
+		<Timeline
+			entries={p.empty ? [] : entries}
+			collapseMuted={p.collapseMuted}
+		>
+			{p.customEmpty ? (
+				<Timeline.Empty>
+					<EmptyState icon="history" title="No events yet" />
+				</Timeline.Empty>
+			) : null}
+		</Timeline>
 	),
-	controls: { collapseMuted: { type: "boolean", default: true } },
+	controls: {
+		collapseMuted: { type: "boolean", default: true },
+		empty: { type: "boolean", default: false },
+		customEmpty: { type: "boolean", default: false },
+	},
 	presets: {
 		Collapsed: { collapseMuted: true },
 		Expanded: { collapseMuted: false },
+		Empty: { empty: true },
+		"Custom empty": { empty: true, customEmpty: true },
 	},
 } satisfies Demo;

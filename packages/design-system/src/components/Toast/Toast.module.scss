@@ -31,14 +31,14 @@
 		block-size var(--jf-animation-duration-default),
 		box-shadow var(--jf-animation-duration-default);
 	/* stylelint-enable plugin/no-low-performance-animation-properties */
-	transition-timing-function: cubic-bezier(0.21, 1.02, 0.73, 1);
+	transition-timing-function: var(--jf-animation-ease-settle);
 
 	&[data-state="closed"] {
 		transition:
 			translate var(--jf-animation-duration-default),
 			scale var(--jf-animation-duration-default),
 			opacity var(--jf-animation-duration-default);
-		transition-timing-function: cubic-bezier(0.06, 0.71, 0.55, 1);
+		transition-timing-function: var(--jf-animation-ease-settle-exit);
 	}
 }
 

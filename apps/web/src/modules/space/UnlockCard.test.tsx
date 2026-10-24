@@ -672,6 +672,13 @@ async function pastFirstFresh() {
 	await vi.advanceTimersByTimeAsync(FRESH_MIN_AGE_MS + 1);
 }
 
+/** A checking refresh button is busy (a loading button takes no clicks), but
+ *  not disabled for a door hold: it carries no hold reason. */
+function expectBusyNotHeld(button: HTMLElement): void {
+	expect(button).toHaveAttribute("aria-busy", "true");
+	expect(button.closest("[data-disabled]")).toBeNull();
+}
+
 test("the refresh button re-checks fresh, shows loading, and the Unlock button returns when it reads locked", async () => {
 	vi.useFakeTimers({ shouldAdvanceTime: true });
 	try {
@@ -692,9 +699,7 @@ test("the refresh button re-checks fresh, shows loading, and the Unlock button r
 				/loading/
 			);
 		});
-		expect(
-			screen.getByRole("button", { name: REFRESH })
-		).not.toBeDisabled();
+		expectBusyNotHeld(screen.getByRole("button", { name: REFRESH }));
 		pending.resolve("locked");
 		expect(
 			await screen.findByRole("button", {
@@ -760,7 +765,7 @@ function freshCalls() {
 	);
 }
 
-test("a refresh within 5s of the last fresh request waits out the 5s, once, with loading and never disabled", async () => {
+test("a refresh within 5s of the last fresh request waits out the 5s, once, with loading and never held disabled", async () => {
 	vi.useFakeTimers({ shouldAdvanceTime: true });
 	try {
 		renderCard();
@@ -776,7 +781,7 @@ test("a refresh within 5s of the last fresh request waits out the 5s, once, with
 		expect(freshCalls()).toHaveLength(1);
 		const waiting = screen.getByRole("button", { name: REFRESH });
 		expect(waiting).toHaveClass(/loading/);
-		expect(waiting).not.toBeDisabled();
+		expectBusyNotHeld(waiting);
 		await vi.advanceTimersByTimeAsync(3000);
 		expect(freshCalls()).toHaveLength(1);
 		await vi.advanceTimersByTimeAsync(1000);

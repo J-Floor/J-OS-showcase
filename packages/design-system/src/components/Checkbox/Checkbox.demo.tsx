@@ -12,7 +12,7 @@ export default {
 					: p.state === "checked"
 			}
 			disabled={p.disabled}
-			disabledReason={p.disabledReason || undefined}
+			disabledReason={p.disabledReason}
 			invalid={p.invalid}
 			required={p.required}
 			readOnly={p.readOnly}

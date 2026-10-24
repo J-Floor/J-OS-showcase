@@ -34,8 +34,7 @@
 
 	&:focus-within,
 	&[data-invalid="true"] {
-		outline-style: solid;
-		outline-color: var(--jf-status-fg);
+		outline: var(--jf-border-width-accessibility) solid var(--jf-status-fg);
 	}
 }
 
@@ -87,6 +86,7 @@
 			padding-inline: var(--jf-spacing-near) var(--jf-spacing-close);
 
 			[data-icon] {
+				/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- glyph size only, smaller than every typography mixin's icon size so the dismiss icon fits the shell's fixed height */
 				font-size: 1rem;
 			}
 		}

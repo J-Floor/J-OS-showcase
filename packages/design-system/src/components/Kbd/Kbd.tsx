@@ -1,12 +1,9 @@
-import {
-	formatForDisplay,
-	type Hotkey,
-	type Modifier,
-} from "@tanstack/solid-hotkeys";
+import { formatForDisplay } from "@tanstack/solid-hotkeys";
 import clsx from "clsx";
 import { For, Show, type JSX } from "solid-js";
 
-import { useShortcutPeek } from "../ShortcutPeek/ShortcutPeek.tsx";
+import { useShortcutPeek } from "../../utils/shortcutPeek.tsx";
+import { type ShortcutHint } from "../../utils/types.ts";
 
 import styles from "./Kbd.module.scss";
 
@@ -19,9 +16,9 @@ type KbdShared = {
 	class?: string;
 	/**
 	 * A chip sitting inside a button rather than in its tooltip. Inline chips
-	 * appear only while peeking (Alt held, or the topbar toggle latched) —
-	 * always-on chips would add a keyboard hint to every button on screen, and
-	 * `DecisionBar` is already fighting for width at 480px.
+	 * appear only while peeking (Alt held, or a peek toggle latched):
+	 * always-on chips would add a keyboard hint to every button on screen, in
+	 * rows of buttons that have little width to spare.
 	 */
 	inline?: boolean;
 	/**
@@ -47,7 +44,7 @@ export type KbdProps = KbdShared &
 				 * bare modifier is not a registrable `Hotkey`, so nothing binds to
 				 * it.
 				 */
-				shortcut: Hotkey | Modifier;
+				shortcut: ShortcutHint;
 				label?: undefined;
 		  }
 		| {

@@ -1,3 +1,5 @@
+@use "../../styles/utils";
+
 .switch {
 	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
 	display: inline-flex;
@@ -18,10 +20,7 @@
 		background-color: var(--jf-surface-bg-overlay);
 	}
 
-	&:focus-visible {
-		outline: solid 2px var(--jf-fg-default);
-		outline-offset: 2px;
-	}
+	@include utils.focus-outline;
 }
 
 .icon {
@@ -29,9 +28,9 @@
 	display: inline-flex;
 }
 
-/* Added only after the first mount (see ThemeSwitch.tsx), so the glyph rotates +
+/* Set only after the first mount (see ThemeSwitch.tsx), so the glyph rotates +
    fades in on a real toggle but a fresh mount (e.g. on navigation) stays still. */
-.animate {
+.icon[data-animated] {
 	animation: theme-rotate-in 250ms ease-out;
 }
 

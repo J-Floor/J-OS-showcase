@@ -11,6 +11,13 @@ export function setDeferredImmediate(shouldBeImmediate: boolean): void {
 	isImmediate = shouldBeImmediate;
 }
 
+export type DeferredProps = {
+	/** What shows until the children are built (a skeleton); `Show`'s own. */
+	fallback: Parameters<typeof Show>[0]["fallback"];
+	children: JSX.Element;
+	hold?: boolean;
+};
+
 /**
  * Paint first, build second.
  *
@@ -33,11 +40,7 @@ export function setDeferredImmediate(shouldBeImmediate: boolean): void {
  * one skeleton instead of two stacked `<Show>`/`<Deferred>` pairs that both
  * render the same fallback.
  */
-export function Deferred(props: {
-	fallback: JSX.Element;
-	children: JSX.Element;
-	hold?: boolean;
-}): JSX.Element {
+export function Deferred(props: DeferredProps): JSX.Element {
 	const [ready, setReady] = createSignal(isImmediate);
 	onMount(() => {
 		if (ready()) return;

@@ -399,24 +399,24 @@ test("dismissing the sheet clears the person from the URL", async () => {
 	});
 });
 
-test("guests still loading: skeleton rows, not 'No results.'", () => {
+test("guests still loading: skeleton rows, not the empty state", () => {
 	guestsData = undefined;
 	try {
 		renderWithSelection((selection) => <GuestsTab selection={selection} />);
 		expect(
 			document.querySelectorAll("[data-skeleton-row]").length
 		).toBeGreaterThan(0);
-		expect(screen.queryByText("No results.")).toBeNull();
+		expect(screen.queryByText("Nothing here yet")).toBeNull();
 	} finally {
 		guestsData = [guestRow, guestRow2, expiredGuestRow];
 	}
 });
 
-test("guests loaded empty: shows 'No results.'", () => {
+test("guests loaded empty: shows the empty state", () => {
 	guestsData = [];
 	try {
 		renderWithSelection((selection) => <GuestsTab selection={selection} />);
-		expect(screen.getByText("No results.")).toBeInTheDocument();
+		expect(screen.getByText("Nothing here yet")).toBeInTheDocument();
 		expect(document.querySelectorAll("[data-skeleton-row]")).toHaveLength(
 			0
 		);

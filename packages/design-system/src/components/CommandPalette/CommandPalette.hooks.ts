@@ -8,7 +8,7 @@ import {
 	type Accessor,
 } from "solid-js";
 
-import { MORPH_FROM } from "../../utils/morphPresence.ts";
+import { MORPH_PICKED } from "../../utils/morphPresence.ts";
 import { viewTransition } from "../../utils/viewTransition.ts";
 
 import {
@@ -188,7 +188,7 @@ export function createHighlight(visible: Accessor<CommandPaletteItem[]>) {
 	 * animation had displaced and scrolled the list by that displacement,
 	 * opening the palette already scrolled past its own first result. Only on
 	 * the first open after a reload, and only with enough results to scroll —
-	 * which is why it showed up in production and not on a dev roster.
+	 * which is why it showed up in production and not on small dev data.
 	 */
 	let listReference: HTMLElement | undefined;
 	function rowFor(value: string): HTMLElement | null {
@@ -287,7 +287,7 @@ export function createPick(
 		select(item);
 		// Keyboard Enter keeps focus in the input, so the close cannot find
 		// the row by activation: mark it, and the palette closes into it.
-		rowFor(value)?.setAttribute(MORPH_FROM, "");
+		rowFor(value)?.setAttribute(MORPH_PICKED, "");
 		props.onOpenChange(false);
 		void viewTransition(() => {
 			item.onSelect();

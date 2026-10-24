@@ -1,0 +1,56 @@
+@use "../../styles/typography" as typo;
+
+.root {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-far);
+	padding: var(--jf-spacing-away);
+	background-color: var(--jf-surface-bg-raised);
+	border-radius: var(--jf-radius-container);
+}
+
+/* Title and description stack in the first column; the action sits at the
+   end of the title row, whatever comes under it. */
+.header {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	gap: var(--jf-spacing-close) var(--jf-spacing-near);
+	align-items: start;
+}
+
+.title {
+	@include typo.jf-typo-body-bold;
+
+	grid-column: 1;
+	margin: 0;
+	color: var(--jf-fg-strong);
+}
+
+.description {
+	@include typo.jf-typo-body-small;
+
+	grid-column: 1;
+	margin: 0;
+	color: var(--jf-fg-muted);
+}
+
+.action {
+	grid-row: 1 / span 2;
+	grid-column: 2;
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- a few controls on one line; they never wrap under the title */
+	display: flex;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+}
+
+.body {
+	flex: 1;
+	min-block-size: 0;
+}
+
+.footer {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+}

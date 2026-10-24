@@ -3,6 +3,7 @@ import { Show, createSignal } from "solid-js";
 import { expect, test, vi } from "vitest";
 
 import { Table } from "../Table/Table.tsx";
+import { rowId } from "../Table/testRowIds.ts";
 import type { JfColumnDefinition } from "../Table/types.ts";
 
 import { SheetNav } from "./SheetNav.tsx";
@@ -10,18 +11,18 @@ import { SheetNav } from "./SheetNav.tsx";
 /**
  * `Table`'s row-focus ring and `SheetNav`'s prev/next both bind ArrowUp/
  * ArrowDown. The table's keys are scoped to its own focused grid, the sheet's
- * to its own panel. With a sheet open over the roster, an ArrowDown meant to
- * step to the next PERSON must not also crawl the ring one row down underneath
- * it. Proven here against the real `Table` this app pairs `SheetNav` with.
+ * to its own panel. With a sheet open over a table, an ArrowDown meant to
+ * step to the next ROW's sheet must not also crawl the ring one row down
+ * underneath it. Proven here against the real `Table` `SheetNav` pairs with.
  */
 
-type Row = { _id: string; name: string };
+type Row = { id: string; name: string };
 const columns: JfColumnDefinition<Row>[] = [
 	{ accessorKey: "name", header: "Name", dataType: "string" },
 ];
 const data: Row[] = [
-	{ _id: "a", name: "Ada" },
-	{ _id: "b", name: "Grace" },
+	{ id: "a", name: "Ada" },
+	{ id: "b", name: "Grace" },
 ];
 
 function focusedRingId(): string | null {
@@ -29,8 +30,8 @@ function focusedRingId(): string | null {
 	return row?.querySelector("td:last-child")?.textContent ?? null;
 }
 
-/** The table plus a sheet panel that may or may not be open, both wired the
- *  way the community tabs actually wire them. */
+/** The table plus a sheet panel that may or may not be open, wired the way a
+ *  list page with a detail sheet wires them. */
 function Scene(props: { sheetOpen: boolean; onNext?: () => void }) {
 	const [focused, setFocused] = createSignal<Row>();
 	return (
@@ -38,6 +39,7 @@ function Scene(props: { sheetOpen: boolean; onNext?: () => void }) {
 			<Table.Root
 				columns={columns}
 				data={data}
+				getRowId={rowId}
 				focusableRows
 				onFocusedRowChange={setFocused}
 			/>
@@ -54,7 +56,7 @@ function Scene(props: { sheetOpen: boolean; onNext?: () => void }) {
 					/>
 				</div>
 			</Show>
-			<span data-testid="ring">{focused()?._id}</span>
+			<span data-testid="ring">{focused()?.id}</span>
 		</>
 	);
 }

@@ -11,16 +11,6 @@ vi.mock("./tabs/ProjectsTab.tsx", () => ({
 	ProjectsTab: () => <div>projects-tab</div>,
 }));
 
-// TasksPage now reads the board-level list + current person for the assignee filter; stub the
-// Convex client so those queries resolve to empty without a ConvexProvider.
-vi.mock("convex-solidjs", () => ({
-	useQuery: () => ({
-		data: () => {},
-		error: () => {},
-		isLoading: () => false,
-	}),
-}));
-
 if (!("ResizeObserver" in globalThis)) {
 	globalThis.ResizeObserver = class {
 		observe() {}

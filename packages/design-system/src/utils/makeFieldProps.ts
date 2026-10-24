@@ -1,28 +1,42 @@
 import { splitProps } from "solid-js";
 
-// The props MakeField consumes: label/helper/error text, the field semantics
-// (invalid/required), the full disabling set, and class. Everything else a
-// component receives is forwarded to its underlying control (ark Input /
-// NumberInput / Select root). Centralised here so every field component splits
-// the SAME keys — previously each listed them by hand and drifted (e.g. some
-// dropped `disabledReason`, so MakeDisablable never got the reason → no tooltip).
+import type { MakeFieldProps } from "../components/MakeField/MakeField.tsx";
+
+import { DISABLING_KEYS } from "./disablingProps.ts";
+
+// The props MakeField consumes: the label, helper/error text, the field
+// semantics (invalid/required), the full disabling set and class. Everything
+// else a component receives is forwarded to its control (ark Input /
+// NumberInput / Select root). Every field splits these same keys.
 const MAKE_FIELD_KEYS = [
 	"label",
+	"labelHidden",
 	"helperText",
 	"errorText",
 	"onLabelClicked",
 	"focusField",
 	"invalid",
 	"required",
-	"disabled",
-	"disabledReason",
-	"shamefullyOmitDisabledReason",
-	"disabledReasonTooltipId",
+	...DISABLING_KEYS,
 	"class",
 	"classOverride",
-] as const;
+] as const satisfies readonly (keyof MakeFieldProps)[];
 
-type MakeFieldKey = (typeof MAKE_FIELD_KEYS)[number];
+/** A prop MakeField consumes. */
+export type MakeFieldKey = (typeof MAKE_FIELD_KEYS)[number];
+
+// The Field.Root props a control that is itself a `Field.*` part leaves to
+// the root (Input, TextArea). Controls with their own Ark root (NumberInput,
+// Select, Combobox) keep them for that root instead.
+const FIELD_ROOT_KEYS = [
+	"readOnly",
+	"id",
+	"ids",
+	"target",
+] as const satisfies readonly (keyof MakeFieldProps)[];
+
+/** A Field.Root prop a `Field.*` control leaves to the root. */
+export type FieldRootKey = (typeof FIELD_ROOT_KEYS)[number];
 
 /**
  * Split the props {@link MakeField} consumes (label/helper/error, invalid,
@@ -47,4 +61,46 @@ export function splitMakeFieldProps<T extends object>(
 		Pick<T, Extract<keyof T, MakeFieldKey>>,
 		Omit<T, MakeFieldKey>,
 	];
+}
+
+/**
+ * {@link splitMakeFieldProps} for a control that is a `Field.*` part: also
+ * hands `readOnly`/`id`/`ids`/`target` to MakeField, whose `Field.Root` passes them to
+ * the control through context. Returns `[makeFieldProps, controlProps]`.
+ */
+export function splitFieldPartProps<T extends object>(
+	props: T
+): [
+	Pick<T, Extract<keyof T, MakeFieldKey | FieldRootKey>>,
+	Omit<T, MakeFieldKey | FieldRootKey>,
+] {
+	const split = splitProps(props, [
+		...MAKE_FIELD_KEYS,
+		...FIELD_ROOT_KEYS,
+	] as readonly (MakeFieldKey | FieldRootKey)[] as (keyof T)[]);
+	return split as unknown as [
+		Pick<T, Extract<keyof T, MakeFieldKey | FieldRootKey>>,
+		Omit<T, MakeFieldKey | FieldRootKey>,
+	];
+}
+
+/**
+ * The control element of a field, for the click-anywhere-to-focus box around
+ * it: `setReference` goes on the control as its `ref` (it also calls the
+ * consumer's own ref), and `focus` is the box's click handler.
+ */
+export function createFieldControl<Element extends HTMLElement>(
+	consumerReference: () => Element | ((element: Element) => void) | undefined
+): { setReference: (element: Element) => void; focus: () => void } {
+	let control: Element | undefined;
+	return {
+		setReference(element) {
+			control = element;
+			const reference = consumerReference();
+			if (typeof reference === "function") reference(element);
+		},
+		focus() {
+			control?.focus();
+		},
+	};
 }

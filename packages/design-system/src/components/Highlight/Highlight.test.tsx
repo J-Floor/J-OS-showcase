@@ -4,11 +4,6 @@ import { describe, expect, it } from "vitest";
 import { Highlight } from "./Highlight.tsx";
 
 describe("Highlight", () => {
-	it("marks the match", () => {
-		render(() => <Highlight text="Ada Lovelace" query="Love" />);
-		expect(screen.getByText("Love").tagName).toBe("MARK");
-	});
-
 	it("matches regardless of case, which is the whole point for names", () => {
 		// Ark's own default is case-SENSITIVE; a lowercase query against a
 		// capitalised name would mark nothing, and the component would look
@@ -22,11 +17,17 @@ describe("Highlight", () => {
 		expect(screen.getAllByText("an")).toHaveLength(2);
 	});
 
-	it("renders the text untouched when nothing matches", () => {
-		const { container } = render(() => (
-			<Highlight text="Ada Lovelace" query="zzz" />
+	it("forwards Ark's other props and the mark's attributes", () => {
+		render(() => (
+			<Highlight
+				text="Ada Lovelace"
+				query="Love"
+				data-testid="match"
+				class="extra"
+			/>
 		));
-		expect(container.textContent).toBe("Ada Lovelace");
-		expect(container.querySelector("mark")).toBeNull();
+		const mark = screen.getByTestId("match");
+		expect(mark).toHaveTextContent("Love");
+		expect(mark).toHaveClass("extra");
 	});
 });

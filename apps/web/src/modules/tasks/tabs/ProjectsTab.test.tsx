@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
+import { Tabs } from "@j-os/design-system";
 import { MemoryRouter, Route } from "@solidjs/router";
-import { cleanup, render, screen } from "@solidjs/testing-library";
+import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
 import { afterEach, expect, test, vi } from "vitest";
 
 const { projectRows } = vi.hoisted(() => ({
@@ -17,7 +18,11 @@ vi.mock("../../../shared/data/boardLevel.tsx", () => ({
 vi.mock("../timeline/ProjectTimeline.tsx", () => ({
 	ProjectTimeline: () => null,
 }));
-vi.mock("../sheets/ProjectSheet.tsx", () => ({ ProjectSheet: () => null }));
+vi.mock("../sheets/ProjectSheet.tsx", () => ({
+	ProjectSheet: (props: { open: boolean }) => (
+		<div data-testid="project-sheet" data-open={String(props.open)} />
+	),
+}));
 vi.mock("../sheets/TaskSheet.tsx", () => ({ TaskSheet: () => null }));
 
 import { ProjectsTab } from "./ProjectsTab.tsx";
@@ -33,13 +38,10 @@ function renderTab() {
 			<Route
 				path="*"
 				component={() => (
-					<ProjectsTab
-						requestNew={() => 0}
-						mode={() => "month"}
-						jumpToday={() => 0}
-						active={() => true}
-						onNeedTab={() => {}}
-					/>
+					<Tabs.Root value="projects">
+						<Tabs.Bar />
+						<ProjectsTab active={() => true} onNeedTab={() => {}} />
+					</Tabs.Root>
 				)}
 			/>
 		</MemoryRouter>
@@ -50,6 +52,19 @@ test("while projects load, the undated section renders nothing (the timeline sho
 	const { container } = renderTab();
 	expect(screen.queryByText("No dates set")).not.toBeInTheDocument();
 	expect(container.querySelector("[data-skeleton-list]")).toBeNull();
+});
+
+test("its New project and Today actions sit in the tab bar; New project opens the create sheet", () => {
+	const { container } = renderTab();
+	const bar = container.querySelector('[data-part="tab-actions"]');
+	const create = screen.getByRole("button", { name: /New project/ });
+	expect(bar).toContainElement(create);
+	expect(bar).toContainElement(screen.getByRole("button", { name: /Today/ }));
+	fireEvent.click(create);
+	expect(screen.getByTestId("project-sheet")).toHaveAttribute(
+		"data-open",
+		"true"
+	);
 });
 
 test("lists undated projects once loaded", () => {

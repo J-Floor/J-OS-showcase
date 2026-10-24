@@ -243,11 +243,11 @@ export function createRowVirtualizer<
 		 * A cached 0 is a trap the virtualiser cannot climb out of. A row of
 		 * height 0 adds nothing to the total size, so the window never extends
 		 * far enough to reach it, so it is never re-rendered, so it is never
-		 * re-measured. The Members roster settled with its last four items
+		 * re-measured. A grouped table once settled with its last four items
 		 * pinned at 0: `count` was 19 but `getTotalSize()` was 784 — exactly the
 		 * sum of the fifteen rows that HAD been measured — so the table ended at
 		 * row fifteen with no spacer beneath it and nothing left to scroll to.
-		 * Alumni and Kicked out simply were not on the page.
+		 * Its last two groups simply were not on the page.
 		 *
 		 * Falling back to the estimate keeps the row in the total, so the window
 		 * still reaches it, and the next measurement — taken once it is visible

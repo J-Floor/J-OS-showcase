@@ -28,6 +28,7 @@
 	font-weight: var(--cursor-weight);
 	white-space: nowrap;
 	pointer-events: none;
+	transform: translate(var(--cursor-x), var(--cursor-y)) translate(-50%, -50%);
 }
 
 .arrow {

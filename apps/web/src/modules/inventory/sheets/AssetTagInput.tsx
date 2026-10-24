@@ -190,7 +190,8 @@ export function AssetTagInput(props: AssetTagInputProps): JSX.Element {
 			<div class={styles.fields}>
 				<div class={styles.letter}>
 					<Input
-						aria-label="Asset tag letter"
+						label="Asset tag letter"
+						labelHidden
 						aria-required="true"
 						value={fields.letter()}
 						maxLength={1}
@@ -202,7 +203,8 @@ export function AssetTagInput(props: AssetTagInputProps): JSX.Element {
 				</div>
 				<div class={styles.number}>
 					<Input
-						aria-label="Asset tag number"
+						label="Asset tag number"
+						labelHidden
 						aria-required="true"
 						value={fields.digits()}
 						inputMode="numeric"

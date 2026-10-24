@@ -84,10 +84,7 @@ function renderHarness(options?: {
 	newItemAssetTag?: () => string | undefined;
 	enableRowSelection?: boolean;
 	descriptor?: EntityDescriptor<Row>;
-	batchActions?: (props: {
-		selectedCount: number;
-		selectedRows: Row[];
-	}) => JSX.Element;
+	batchActions?: (selection: { count: () => number }) => JSX.Element;
 	renderSheet?: (args: {
 		open: () => boolean;
 		onOpenChange: (isOpen: boolean) => void;
@@ -283,9 +280,7 @@ test("row selection adds a checkbox column and header select-all", async () => {
 	renderHarness({
 		rows: () => THREE_ROWS,
 		enableRowSelection: true,
-		batchActions: (batch) => (
-			<span>{`sel:${String(batch.selectedCount)}`}</span>
-		),
+		batchActions: (batch) => <span>{`sel:${String(batch.count())}`}</span>,
 	});
 	const checks = await screen.findAllByRole("checkbox");
 	// Header select-all plus one per row.
@@ -296,9 +291,7 @@ test("header select-all checks every visible row and shows the batch bar", async
 	renderHarness({
 		rows: () => THREE_ROWS,
 		enableRowSelection: true,
-		batchActions: (batch) => (
-			<span>{`sel:${String(batch.selectedCount)}`}</span>
-		),
+		batchActions: (batch) => <span>{`sel:${String(batch.count())}`}</span>,
 	});
 	const checks = await screen.findAllByRole("checkbox");
 	fireEvent.click(checks[0]);
@@ -317,9 +310,7 @@ test("clicking a row checkbox does not open the sheet", async () => {
 	renderHarness({
 		rows: () => THREE_ROWS,
 		enableRowSelection: true,
-		batchActions: (batch) => (
-			<span>{`sel:${String(batch.selectedCount)}`}</span>
-		),
+		batchActions: (batch) => <span>{`sel:${String(batch.count())}`}</span>,
 	});
 	expect(screen.getByText("closed")).toBeInTheDocument();
 	const checks = await screen.findAllByRole("checkbox");

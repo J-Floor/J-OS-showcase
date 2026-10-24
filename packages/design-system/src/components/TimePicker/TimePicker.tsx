@@ -16,6 +16,7 @@ import { ICONS } from "../../icons.ts";
 import { type PropsWithDisabling } from "../../utils/disablingProps.ts";
 import { splitMakeFieldProps } from "../../utils/makeFieldProps.ts";
 import { splitArkProps } from "../../utils/splitArkProps.ts";
+import type { MakeFieldOwnProps } from "../../utils/types.ts";
 import { Icon } from "../Icon/Icon.tsx";
 import { MakeField, type MakeFieldProps } from "../MakeField/MakeField.tsx";
 
@@ -37,29 +38,21 @@ const LOCALE = "en-GB";
 
 const DEFAULT_OUT_OF_RANGE_TEXT = "This time is outside the allowed range.";
 
-// MakeField extends Field.Root's div-typed HTML props, which collide with the
-// `class` we declare explicitly below. Keep MakeField's own additions + the
-// Field semantic props; drop the HTML div attributes it also inherits.
-type MakeFieldOwnProps = Omit<
-	MakeFieldProps,
-	keyof JSX.HTMLAttributes<HTMLDivElement>
->;
-
 export type TimePickerProps = PropsWithDisabling<
-	MakeFieldOwnProps & {
-		/** Controlled value as a 24-hour `"HH:MM"` string, or `null` when empty. */
-		value?: string | null;
-		/** Fired with the selected time as `"HH:MM"` (or `null` when cleared). */
-		onValueChange?: (value: string | null) => void;
-		/**
-		 * Earliest selectable time (inclusive), as `"HH:MM"`. An out-of-window
-		 * entry marks the field invalid rather than being clamped/rejected.
-		 */
-		minTime?: string;
-		/** Latest selectable time (inclusive), as `"HH:MM"` (see `minTime`). */
-		maxTime?: string;
-		class?: string;
-	}
+	MakeFieldOwnProps &
+		Pick<MakeFieldProps, "class"> & {
+			/** Controlled value as a 24-hour `"HH:MM"` string, or `null` when empty. */
+			value?: string | null;
+			/** Fired with the selected time as `"HH:MM"` (or `null` when cleared). */
+			onValueChange?: (value: string | null) => void;
+			/**
+			 * Earliest selectable time (inclusive), as `"HH:MM"`. An out-of-window
+			 * entry marks the field invalid rather than being clamped/rejected.
+			 */
+			minTime?: string;
+			/** Latest selectable time (inclusive), as `"HH:MM"` (see `minTime`). */
+			maxTime?: string;
+		}
 >;
 
 const OWN_KEYS = [

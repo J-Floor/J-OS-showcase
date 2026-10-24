@@ -4,34 +4,33 @@ import {
 	PropertyRow,
 	Select,
 } from "@j-os/design-system";
-import type { Accessor } from "solid-js";
+import { type Accessor } from "solid-js";
 
 import type { SyncedField } from "../../../lib/createSyncedField.ts";
 import { DescriptionField } from "../../../shared/components/DescriptionField.tsx";
-import { SelectOptionList } from "../../../shared/components/SelectOptionList.tsx";
+import { LabelledOptions } from "../../../shared/components/LabelledOptions.tsx";
 
 import styles from "./InventorySheet.module.scss";
 
-/** The required name box, saved as it is typed. `onElement` receives the
- *  input so the sheet can focus it on open. */
+/** The required name box, saved as it is typed; invalid while the form has
+ *  an error. `ref` receives the input so the sheet can focus it on open. */
 export function NameField(props: {
-	name: SyncedField<string>;
-	hasError: boolean;
-	onElement: (element: HTMLInputElement) => void;
+	form: { name: SyncedField<string>; formError: Accessor<unknown> };
+	ref: (element: HTMLInputElement) => void;
 }) {
 	return (
 		<Input
 			label="Name"
 			required
 			ref={(element: HTMLInputElement) => {
-				props.onElement(element);
+				props.ref(element);
 			}}
-			value={props.name.value()}
+			value={props.form.name.value()}
 			onInput={(event) => {
-				props.name.set(event.currentTarget.value);
+				props.form.name.set(event.currentTarget.value);
 			}}
-			onBlur={props.name.flush}
-			invalid={props.hasError}
+			onBlur={props.form.name.flush}
+			invalid={props.form.formError() !== null}
 		/>
 	);
 }
@@ -39,7 +38,7 @@ export function NameField(props: {
 /** One option of an {@link OptionSelect}. */
 type SelectOption<Value extends string> = {
 	value: Value;
-	title: string;
+	label: string;
 };
 
 /** The entity's description, marked as its `field` so the table's
@@ -76,15 +75,16 @@ export function OptionSelect<Value extends string>(props: {
 	return (
 		<PropertyRow field={props.property}>
 			<Select.Root
-				options={props.options}
+				label={props.property.label}
+				labelHidden
 				value={selected()}
 				placeholder={props.placeholder}
-				sameWidth
+				positioning={{ sameWidth: true }}
 				onValueChange={(details) => {
 					props.field.set(details.value[0] as Value | undefined);
 				}}
 			>
-				<SelectOptionList options={props.options} />
+				<LabelledOptions options={props.options} />
 			</Select.Root>
 		</PropertyRow>
 	);

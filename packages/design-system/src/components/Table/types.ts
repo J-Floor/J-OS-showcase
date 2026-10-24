@@ -3,6 +3,8 @@ import type {
 	DisplayColumnDef,
 } from "@tanstack/solid-table";
 
+import type { DistributiveOmit } from "../../utils/types.ts";
+
 /**
  * How wide a column is.
  *
@@ -54,9 +56,9 @@ type EnumValueFor<Value> = [Extract<NonNullable<Value>, EnumValue>] extends [
  * The enum arm for an `accessorKey` column, distributed over the row's keys,
  * so an option's `value` is bound to the field the column reads.
  *
- * Shallow keys (`keyof Data`), not EmboUI's `DeepKeys`: `DeepKeys` over the
- * Convex `people` document is a union TypeScript refuses to represent
- * (TS2590), and no J floor column reads a dotted path.
+ * Shallow keys (`keyof Data`), not EmboUI's `DeepKeys`: `DeepKeys` over a
+ * wide document type is a union TypeScript refuses to represent
+ * (TS2590), and no column here reads a dotted path.
  */
 type EnumByAccessorKey<Data> = {
 	[Key in keyof Data & string]: {
@@ -94,20 +96,11 @@ export type DataType =
 			readonly enumOptions: readonly EnumOption<EnumValue>[];
 	  };
 
-/**
- * `Omit` that distributes over a union. TanStack's `AccessorColumnDef` is
- * `AccessorKeyColumnDef | AccessorFnColumnDef`; the built-in `Omit` keeps only
- * the keys common to both and drops `accessorKey` and `accessorFn`.
- */
-type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
-	? Omit<T, K>
-	: never;
-
 /** TanStack's numeric sizing. `size` is replaced by {@link ColumnSize}; a
  *  bound is part of the size (`{ min: 250 }`), so `minSize`/`maxSize` go. */
 type TanStackSizingKeys = "size" | "minSize" | "maxSize";
 
-/** Fields the J floor adds to every column kind. */
+/** Fields this table adds to every column kind. */
 type ColumnExtras<Data> = {
 	/**
 	 * When true, clicking cells in this column will not trigger onRowClick.
@@ -138,7 +131,7 @@ type ColumnExtras<Data> = {
 };
 
 /** A display column may omit `dataType`. */
-type NoDataType = {
+export type NoDataType = {
 	readonly dataType?: undefined;
 	readonly enumOptions?: never;
 };
@@ -151,7 +144,7 @@ type NoAccessor = {
 };
 
 /**
- * A TanStack column definition with the J floor's additions.
+ * A TanStack column definition with this table's additions.
  *
  * - Accessor columns (`accessorKey`/`accessorFn`) require `dataType`, and an
  *   `enum` additionally requires `enumOptions` bound to the accessed field.

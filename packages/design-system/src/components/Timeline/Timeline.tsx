@@ -1,6 +1,10 @@
 import { createMemo, createSignal, For, Show, type JSX } from "solid-js";
 
-import { Icon } from "../Icon/Icon.tsx";
+import { ICONS } from "../../icons.ts";
+import { createSlotPart } from "../../utils/presence.tsx";
+import { Button } from "../Button/Button.tsx";
+import { EmptyState } from "../EmptyState/EmptyState.tsx";
+import { Icon, type IconProps } from "../Icon/Icon.tsx";
 
 import styles from "./Timeline.module.scss";
 
@@ -8,8 +12,8 @@ export type TimelineEntry = {
 	id: string;
 	/** Epoch ms. */
 	at: number;
-	/** Material Symbols ligature. Default "radio_button_unchecked". */
-	icon?: string;
+	/** Material Symbols ligature. Default `ICONS.event`. */
+	icon?: IconProps["children"];
 	title: string;
 	detail?: string;
 	actor?: string;
@@ -24,7 +28,15 @@ export type TimelineProps = {
 	entries: TimelineEntry[];
 	/** Start with every `muted` kind filtered out. Default true. */
 	collapseMuted?: boolean;
+	/** Parts: a `Timeline.Empty` replaces the default empty state. */
+	children?: JSX.Element;
 };
+
+/** `Timeline.Empty`: shown in place of the default empty state when there
+ *  are no entries. */
+const emptyPart = createSlotPart("Timeline", "Empty", "Timeline");
+
+const DEFAULT_ICON = ICONS.event;
 
 function formatDate(at: number): string {
 	return new Date(at).toLocaleDateString(undefined, {
@@ -42,7 +54,7 @@ function EntryRow(props: { entry: TimelineEntry }): JSX.Element {
 			classList={{ [styles.muted]: props.entry.muted }}
 		>
 			<span class={styles.rail}>
-				<Icon>{props.entry.icon ?? "radio_button_unchecked"}</Icon>
+				<Icon>{props.entry.icon ?? DEFAULT_ICON}</Icon>
 			</span>
 			<span class={styles.body}>
 				<span class={styles.title}>{props.entry.title}</span>
@@ -60,13 +72,45 @@ function EntryRow(props: { entry: TimelineEntry }): JSX.Element {
 	);
 }
 
+/** One toggle per kind, each with its entry count. */
+function KindFilters(props: {
+	kinds: { kind: string; count: number }[];
+	isOn: (kind: string) => boolean;
+	onToggle: (kind: string) => void;
+}): JSX.Element {
+	return (
+		<div class={styles.filters}>
+			<For each={props.kinds}>
+				{(group) => (
+					<button
+						type="button"
+						class={styles.toggle}
+						aria-pressed={props.isOn(group.kind)}
+						classList={{
+							[styles.toggleOff]: !props.isOn(group.kind),
+						}}
+						onClick={() => {
+							props.onToggle(group.kind);
+						}}
+					>
+						{group.kind} ({group.count})
+					</button>
+				)}
+			</For>
+		</div>
+	);
+}
+
 /**
  * Vertical history rail: newest first, one row per event, filtered by kind.
  *
- * The filter is per KIND, not one "show field edits" boolean: the spec's
- * timeline is read to answer "what happened to this person", and that means
- * being able to look at only the door events, or only the emails, as well as
- * hiding the noisy field edits. `collapseMuted` decides only the initial state.
+ * The filter is per KIND, not one "show muted entries" boolean, so a reader
+ * can look at one kind of event alone as well as hide the noisy ones.
+ * `collapseMuted` decides only the initial state.
+ *
+ * With no entries it shows an `EmptyState`, or a `Timeline.Empty` child
+ * when there is one. With entries that the filters hide, it says so and
+ * offers to clear the filters.
  */
 export function Timeline(props: TimelineProps): JSX.Element {
 	// Kinds the user has explicitly toggled. Absent = use the default for that
@@ -104,6 +148,12 @@ export function Timeline(props: TimelineProps): JSX.Element {
 		setOverrides((prev) => ({ ...prev, [kind]: !on(kind) }));
 	}
 
+	function clearFilters(): void {
+		setOverrides(
+			Object.fromEntries(kinds().map((group) => [group.kind, true]))
+		);
+	}
+
 	const visible = createMemo(() =>
 		[...props.entries]
 			// eslint-disable-next-line id-length -- conventional comparator parameter names
@@ -112,39 +162,33 @@ export function Timeline(props: TimelineProps): JSX.Element {
 	);
 
 	return (
-		<div class={styles.timeline}>
-			{/* One kind is not a filter, it is a label. */}
-			<Show when={kinds().length > 1}>
-				<div class={styles.filters}>
-					<For each={kinds()}>
-						{(group) => (
-							<button
-								type="button"
-								class={styles.toggle}
-								aria-pressed={on(group.kind)}
-								classList={{
-									[styles.toggleOff]: !on(group.kind),
-								}}
-								onClick={() => {
-									toggle(group.kind);
-								}}
-							>
-								{group.kind} ({group.count})
-							</button>
-						)}
-					</For>
-				</div>
-			</Show>
-			<Show
-				when={visible().length > 0}
-				fallback={<p class={styles.empty}>No history yet.</p>}
-			>
-				<ul class={styles.list}>
-					<For each={visible()}>
-						{(entry) => <EntryRow entry={entry} />}
-					</For>
-				</ul>
-			</Show>
-		</div>
+		<emptyPart.Scope>
+			{props.children}
+			<div class={styles.timeline}>
+				{/* One kind is not a filter, it is a label. */}
+				<Show when={kinds().length > 1}>
+					<KindFilters kinds={kinds()} isOn={on} onToggle={toggle} />
+				</Show>
+				<Show when={props.entries.length === 0}>
+					<emptyPart.Slot fallback={<EmptyState />} />
+				</Show>
+				<Show when={props.entries.length > 0 && visible().length === 0}>
+					<EmptyState icon={ICONS.noMatches} title="No matches">
+						<Button variant="secondary" onClick={clearFilters}>
+							Clear filters
+						</Button>
+					</EmptyState>
+				</Show>
+				<Show when={visible().length > 0}>
+					<ul class={styles.list}>
+						<For each={visible()}>
+							{(entry) => <EntryRow entry={entry} />}
+						</For>
+					</ul>
+				</Show>
+			</div>
+		</emptyPart.Scope>
 	);
 }
+
+Timeline.Empty = emptyPart.Part;

@@ -174,6 +174,7 @@ export function DiagnosticsTab(): JSX.Element {
 							<Table.Root
 								columns={columns}
 								data={rows()}
+								getRowId={(row) => row.id}
 								groupBy="day"
 								virtualize
 								loadingMore={log.loadingMore()}

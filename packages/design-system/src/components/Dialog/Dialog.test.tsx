@@ -55,6 +55,29 @@ test("renders the title and content the caller passed", () => {
 	expect(screen.getByText("Pick a destination.")).toBeInTheDocument();
 });
 
+test("each part builds its children once", () => {
+	let built = 0;
+	function Probe() {
+		built += 1;
+		return <span>probe</span>;
+	}
+	render(() => (
+		<Dialog.Root open>
+			<Dialog.Content>
+				<Dialog.Title>
+					<Probe />
+				</Dialog.Title>
+				<Dialog.Description>
+					<Probe />
+				</Dialog.Description>
+				<Probe />
+			</Dialog.Content>
+		</Dialog.Root>
+	));
+	expect(built).toBe(3);
+	expect(screen.getAllByText("probe")).toHaveLength(3);
+});
+
 test("morph={false} still opens and closes", async () => {
 	const [open, setOpen] = createSignal(false);
 	render(() => (

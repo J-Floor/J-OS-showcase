@@ -1,4 +1,4 @@
-import baseConfig from "@j-os/config-eslint";
+import baseConfig, { INLINE_STYLE_RESTRICTIONS } from "@j-os/config-eslint";
 import solid from "eslint-plugin-solid";
 
 import { HANDLE_RESULT, mustUseResult } from "./eslint/mustUseResult.js";
@@ -7,11 +7,20 @@ const neverthrowRules = { rules: { "must-use-result": mustUseResult } };
 
 const UNSAFE_UNWRAP_MESSAGE = `Handle the Result instead. ${HANDLE_RESULT}`;
 
+const NO_THROW = {
+  selector: "ThrowStatement",
+  message:
+    "Don't throw. Return err(...) for a failure a user can cause, or invariant(...) for a bug (convex/lib/result.ts).",
+};
+
 // A rule's options replace the base config's, so keep its selectors.
 const baseRestrictedSyntax = baseConfig
   .map((entry) => entry.rules?.["no-restricted-syntax"])
   .find(Boolean)
   .slice(1);
+const baseRestrictedImports = baseConfig
+  .map((entry) => entry.rules?.["no-restricted-imports"])
+  .find(Boolean)[1];
 const baseRestrictedProperties = baseConfig
   .map((entry) => entry.rules?.["no-restricted-properties"])
   .find(Boolean)
@@ -71,6 +80,7 @@ export default [
       "no-restricted-imports": [
         "error",
         {
+          ...baseRestrictedImports,
           paths: [
             {
               name: "convex-solidjs",
@@ -96,11 +106,7 @@ export default [
       "no-restricted-syntax": [
         "error",
         ...baseRestrictedSyntax,
-        {
-          selector: "ThrowStatement",
-          message:
-            "Don't throw. Return err(...) for a failure a user can cause, or invariant(...) for a bug (convex/lib/result.ts).",
-        },
+        NO_THROW,
       ],
       "no-restricted-properties": [
         "error",
@@ -110,6 +116,19 @@ export default [
           property: "_unsafeUnwrapErr",
           message: UNSAFE_UNWRAP_MESSAGE,
         },
+      ],
+    },
+  },
+  {
+    // Email clients read no stylesheet: jsx-email templates style inline.
+    files: ["emails/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...baseRestrictedSyntax.filter(
+          (entry) => !INLINE_STYLE_RESTRICTIONS.includes(entry),
+        ),
+        NO_THROW,
       ],
     },
   },

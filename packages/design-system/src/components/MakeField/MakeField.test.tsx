@@ -1,3 +1,4 @@
+import { Field } from "@ark-ui/solid/field";
 import { render, screen } from "@solidjs/testing-library";
 
 import { MakeField } from "./MakeField.tsx";
@@ -53,4 +54,63 @@ test("calls onLabelClicked when the label is clicked", () => {
 	));
 	screen.getByText("Click me").click();
 	expect(isClicked).toBe(true);
+});
+
+test("the label names the control", () => {
+	render(() => (
+		<MakeField label="Email">
+			<Field.Input />
+		</MakeField>
+	));
+	expect(screen.getByRole("textbox", { name: "Email" })).toBeInTheDocument();
+});
+
+test("labelHidden hides the label and keeps it as the control's name", () => {
+	render(() => (
+		<MakeField label="Email" labelHidden>
+			<Field.Input />
+		</MakeField>
+	));
+	expect(screen.getByRole("textbox", { name: "Email" })).toBeInTheDocument();
+	expect(screen.getByText("Email")).toHaveAttribute("data-hidden");
+});
+
+test("a visible label carries no hidden marker", () => {
+	render(() => (
+		<MakeField label="Email">
+			<Field.Input />
+		</MakeField>
+	));
+	expect(screen.getByText("Email")).not.toHaveAttribute("data-hidden");
+});
+
+test("labelHidden does not reach the field root as an attribute", () => {
+	const { container } = render(() => (
+		<MakeField label="Email" labelHidden>
+			<Field.Input />
+		</MakeField>
+	));
+	expect(container.querySelector("[labelhidden]")).toBeNull();
+});
+
+test("an empty label warns in development", () => {
+	const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+	render(() => (
+		<MakeField label="  ">
+			<Field.Input />
+		</MakeField>
+	));
+	expect(warn).toHaveBeenCalledWith(expect.stringContaining("labelHidden"));
+	warn.mockRestore();
+});
+
+test("a real label does not warn", () => {
+	const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+	render(() => (
+		<MakeField label="Email" labelHidden>
+			<Field.Input />
+		</MakeField>
+	));
+	expect(warn).not.toHaveBeenCalled();
+	warn.mockRestore();
 });

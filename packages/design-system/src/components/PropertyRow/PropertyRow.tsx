@@ -11,17 +11,21 @@ import styles from "./PropertyRow.module.scss";
  * a plain `label` and `icon` for a row no table shows (it never flies).
  */
 type PropertyRowLabel =
-	| { field: FieldDefinition; icon?: string; label?: never }
-	| { field?: never; icon: string; label: string };
+	| ({ field: FieldDefinition; label?: never } & Pick<
+			FieldDefinition,
+			"icon"
+	  >)
+	| ({ field?: never } & Pick<FieldDefinition, "label"> &
+			Required<Pick<FieldDefinition, "icon">>);
+
+export type PropertyRowProps = PropertyRowLabel & {
+	children: JSX.Element;
+	/** Forwarded to the row element (e.g. to anchor an effect to this row). */
+	ref?: JSX.HTMLAttributes<HTMLDivElement>["ref"];
+};
 
 /** Notion-style property row: leading icon + label on the left, control right. */
-export function PropertyRow(
-	props: PropertyRowLabel & {
-		children: JSX.Element;
-		/** Forwarded to the row element (e.g. to anchor an effect to this row). */
-		ref?: (element: HTMLDivElement) => void;
-	}
-): JSX.Element {
+export function PropertyRow(props: PropertyRowProps): JSX.Element {
 	function label(): string {
 		return props.field?.label ?? props.label ?? "";
 	}

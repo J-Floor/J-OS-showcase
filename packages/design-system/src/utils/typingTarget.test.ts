@@ -37,18 +37,18 @@ test("anything inside an open dialog is a typing target", () => {
 });
 
 test("a control inside a dialog that opts out with data-shortcut-surface is NOT a typing target", () => {
-	// The person sheet marks itself so its bare-letter shortcuts and nav arrows
+	// A detail sheet marks itself so its bare-letter shortcuts and nav arrows
 	// fire while focus rests in it — unlike a confirm dialog, deciding the thing
 	// it shows IS its job.
 	const button = element(
-		`<div role="dialog" data-state="open" data-shortcut-surface="true"><button>make guest</button></div>`
+		`<div role="dialog" data-state="open" data-shortcut-surface="true"><button>archive</button></div>`
 	).querySelector("button");
 	expect(isTypingTarget(button)).toBe(false);
 });
 
 test("an option inside a portaled listbox is a typing target", () => {
 	// A Select/Combobox list portals to <body>, outside any dialog — its Enter
-	// (pick) and arrows (move) must win over a roster row shortcut behind it.
+	// (pick) and arrows (move) must win over a list row shortcut behind it.
 	const option = element(
 		`<div role="listbox"><div role="option">Ada</div></div>`
 	).querySelector('[role="option"]');

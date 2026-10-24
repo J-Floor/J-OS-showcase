@@ -102,11 +102,11 @@ function StatusSectionItem(props: {
 		    colour it carried was misleading anyway — it went red for a
 		    missing agreement, which made a perfectly active member
 		    read as though their membership were the problem. */}
-			<Accordion.ItemTitle
-				subtitle={headline(props.person.status)}
-				shortcut="S"
-			>
+			<Accordion.ItemTitle shortcut="S">
 				Status
+				<Accordion.ItemSubtitle>
+					{headline(props.person.status)}
+				</Accordion.ItemSubtitle>
 			</Accordion.ItemTitle>
 			<Accordion.ItemContent class={styles.sectionBody}>
 				<StatusSection

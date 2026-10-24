@@ -20,7 +20,9 @@ function ControlWidget(props: {
 				<Input
 					label={props.name}
 					value={String(props.value)}
-					onValueChange={(event) => props.onChange(event.currentTarget.value)}
+					onValueChange={(event) =>
+						props.onChange(event.currentTarget.value)
+					}
 				/>
 			);
 		case "number":
@@ -28,14 +30,18 @@ function ControlWidget(props: {
 				<NumberInput
 					label={props.name}
 					value={String(props.value)}
-					onValueChange={(details) => props.onChange(details.valueAsNumber)}
+					onValueChange={(details) =>
+						props.onChange(details.valueAsNumber)
+					}
 				/>
 			);
 		case "boolean":
 			return (
 				<Checkbox
 					checked={Boolean(props.value)}
-					onCheckedChange={(details) => props.onChange(details.checked === true)}
+					onCheckedChange={(details) =>
+						props.onChange(details.checked === true)
+					}
 				>
 					{props.name}
 				</Checkbox>
@@ -44,16 +50,19 @@ function ControlWidget(props: {
 			return (
 				<Select.Root
 					label={props.name}
-					sameWidth
-					options={control.options.map((value) => ({ value, title: value }))}
+					positioning={{ sameWidth: true }}
 					value={[String(props.value)]}
-					onValueChange={(details) => props.onChange(details.value[0])}
+					onValueChange={(details) =>
+						props.onChange(details.value[0])
+					}
 				>
-					<Select.Content>
-						<For each={control.options}>
-							{(option) => <Select.Option value={option} title={option} />}
-						</For>
-					</Select.Content>
+					<For each={control.options}>
+						{(option) => (
+							<Select.Option value={option}>
+								{option}
+							</Select.Option>
+						)}
+					</For>
 				</Select.Root>
 			);
 	}
@@ -70,16 +79,15 @@ export function ControlsPanel(props: {
 		<div class={styles.controls}>
 			<Select.Root
 				label="Preset"
-				sameWidth
+				positioning={{ sameWidth: true }}
 				placeholder="Default"
-				options={props.presetNames.map((value) => ({ value, title: value }))}
 				onValueChange={(details) => props.onPreset(details.value[0])}
 			>
-				<Select.Content>
-					<For each={props.presetNames}>
-						{(name) => <Select.Option value={name} title={name} />}
-					</For>
-				</Select.Content>
+				<For each={props.presetNames}>
+					{(name) => (
+						<Select.Option value={name}>{name}</Select.Option>
+					)}
+				</For>
 			</Select.Root>
 
 			<div class={styles.controlList}>

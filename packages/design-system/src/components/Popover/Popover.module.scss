@@ -1,12 +1,15 @@
 @use "../../styles/animation" as anim;
 @use "../../styles/typography" as typo;
 
+/* The positioner stays in place, empty-looking, once the popover has
+   closed; only the content takes clicks. */
 .positioner {
 	pointer-events: none;
 }
 
 .content {
 	position: relative;
+	pointer-events: auto;
 
 	/* Layer via zag's `--layer-index` so it ranks above a parent overlay. */
 	z-index: calc(var(--jf-z-index-overlay-base) + var(--layer-index, 0));

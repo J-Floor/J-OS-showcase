@@ -1,3 +1,5 @@
+import { Show } from "solid-js";
+
 import { Accordion } from "@j-os/design-system";
 
 import type { Demo } from "../../../demo/types.ts";
@@ -9,10 +11,13 @@ export default {
 	render: (p) => (
 		<Accordion.Root multiple={p.multiple as boolean}>
 			<Accordion.Item value="solid">
-				<Accordion.ItemTitle
-					subtitle={p.showSubtitles ? "Ryan Carniato" : undefined}
-				>
+				<Accordion.ItemTitle>
 					Solid
+					<Show when={p.showSubtitles}>
+						<Accordion.ItemSubtitle>
+							Ryan Carniato
+						</Accordion.ItemSubtitle>
+					</Show>
 				</Accordion.ItemTitle>
 				<Accordion.ItemContent>
 					A declarative JavaScript library for building user
@@ -20,10 +25,13 @@ export default {
 				</Accordion.ItemContent>
 			</Accordion.Item>
 			<Accordion.Item value="react">
-				<Accordion.ItemTitle
-					subtitle={p.showSubtitles ? "Meta (Facebook)" : undefined}
-				>
+				<Accordion.ItemTitle>
 					React
+					<Show when={p.showSubtitles}>
+						<Accordion.ItemSubtitle>
+							Meta (Facebook)
+						</Accordion.ItemSubtitle>
+					</Show>
 				</Accordion.ItemTitle>
 				<Accordion.ItemContent>
 					A JavaScript library for building user interfaces with a
@@ -35,10 +43,13 @@ export default {
 				disabled
 				disabledReason="Not in the demo set yet"
 			>
-				<Accordion.ItemTitle
-					subtitle={p.showSubtitles ? "Rich Harris" : undefined}
-				>
+				<Accordion.ItemTitle>
 					Svelte (disabled)
+					<Show when={p.showSubtitles}>
+						<Accordion.ItemSubtitle>
+							Rich Harris
+						</Accordion.ItemSubtitle>
+					</Show>
 				</Accordion.ItemTitle>
 				<Accordion.ItemContent>
 					Cybernetically enhanced web apps.

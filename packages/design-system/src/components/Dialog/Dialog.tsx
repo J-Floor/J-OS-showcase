@@ -24,8 +24,19 @@ import styles from "./Dialog.module.scss";
  */
 const ContentReference = createContext<{
 	set: (element: HTMLElement) => void;
-	get: () => HTMLElement | null;
 }>();
+
+export type DialogContentProps = ArkDialog.ContentProps &
+	WithPartClasses<"backdrop" | "positioner" | "content" | "close">;
+
+export type DialogRootProps = Omit<
+	ArkDialog.RootProps,
+	"open" | "defaultOpen"
+> &
+	MorphOverlayProps & {
+		/** Controlled only: the morph needs to own when Ark sees it open. */
+		open: boolean;
+	};
 
 /**
  * Modal dialog. Ported from EmboUI's Dialog (React→Solid: `@ark-ui/react` →
@@ -34,10 +45,7 @@ const ContentReference = createContext<{
  * close button is baked into the top-trailing corner — so the authoring shape
  * (Root / Trigger / Content / Title / Description) is unchanged.
  */
-function Content(
-	props: ArkDialog.ContentProps &
-		WithPartClasses<"backdrop" | "positioner" | "content" | "close">
-) {
+function Content(props: DialogContentProps) {
 	const [local, rest] = splitProps(props, [
 		"classOverride",
 		"class",
@@ -65,7 +73,7 @@ function Content(
 					<ArkDialog.CloseTrigger
 						asChild={(closeProps) => (
 							<IconButton
-								{...(closeProps() as object)}
+								triggerProps={closeProps()}
 								tooltipLabel="Close"
 								class={getPartStyles(styles, local, "close")}
 							>
@@ -81,20 +89,22 @@ function Content(
 }
 
 function Title(props: ArkDialog.TitleProps) {
+	const [local, rest] = splitProps(props, ["children", "class"]);
 	return (
-		<ArkDialog.Title {...props} class={clsx(styles.title, props.class)}>
-			{props.children}
+		<ArkDialog.Title {...rest} class={clsx(styles.title, local.class)}>
+			{local.children}
 		</ArkDialog.Title>
 	);
 }
 
 function Description(props: ArkDialog.DescriptionProps) {
+	const [local, rest] = splitProps(props, ["children", "class"]);
 	return (
 		<ArkDialog.Description
-			{...props}
-			class={clsx(styles.description, props.class)}
+			{...rest}
+			class={clsx(styles.description, local.class)}
 		>
-			{props.children}
+			{local.children}
 		</ArkDialog.Description>
 	);
 }
@@ -118,10 +128,9 @@ const FOCUSABLE_SELECTOR = [
  * The first control an opening dialog should land on: the first focusable inside
  * its content that ISN'T the baked-in close button.
  *
- * The close button is skipped by its own `styles.close` class. (Not by the Ark
- * `close-trigger` data-part: the close IconButton is ALSO a tooltip trigger, and
- * the tooltip's `data-part="trigger"` overwrites Ark's on the merged element, so
- * that marker never survives.) Returns null when the close button is the only
+ * The close button is skipped by its own `styles.close` class, which a
+ * `classOverride.closeClass` adds to rather than replaces. Returns null when the
+ * close button is the only
  * focusable — a bare confirmation with no field — leaving the caller to fall back
  * to the content element.
  */
@@ -145,13 +154,7 @@ function firstDialogFocusable(content: HTMLElement | null): HTMLElement | null {
  * - It morphs out of the element that opened it and back into it on close
  *   (`createMorphPresence`); see {@link MorphOverlayProps}.
  */
-function Root(
-	props: Omit<ArkDialog.RootProps, "open" | "defaultOpen"> &
-		MorphOverlayProps & {
-			/** Controlled only: the morph needs to own when Ark sees it open. */
-			open: boolean;
-		}
-) {
+function Root(props: DialogRootProps) {
 	const [local, rest] = splitProps(props, ["open", "morph", "morphFrom"]);
 	let contentElement: HTMLElement | null = null;
 	const presence = createMorphPresence({
@@ -165,7 +168,6 @@ function Root(
 				set: (element) => {
 					contentElement = element;
 				},
-				get: () => contentElement,
 			}}
 		>
 			<ArkDialog.Root

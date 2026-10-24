@@ -2,6 +2,7 @@ import clsx from "clsx";
 import { For, Show, type JSX } from "solid-js";
 
 import styles from "./Chart.module.scss";
+import type { ChartProps } from "./Chart.tsx";
 import {
 	colourClass,
 	labelOf,
@@ -9,12 +10,7 @@ import {
 	type ChartGeometry,
 	type MarkPath,
 } from "./chartLayout.ts";
-import {
-	axisLabel,
-	numberAt,
-	type ChartDatum,
-	type ChartSeries,
-} from "./scale.ts";
+import { axisLabel, numberAt, type ChartDatum } from "./scale.ts";
 
 /** The parts of a `Chart`, each a plain render of what the layout hands it. */
 
@@ -83,7 +79,6 @@ export function Marks(props: {
 						y={bar.y}
 						width={bar.width}
 						height={bar.height}
-						rx="2"
 					>
 						<title>{bar.title}</title>
 					</rect>
@@ -94,11 +89,9 @@ export function Marks(props: {
 }
 
 /** The x-axis labels. */
-export function CategoryLabels(props: {
-	data: ChartDatum[];
-	xKey: string;
-	geometry: ChartGeometry;
-}): JSX.Element {
+export function CategoryLabels(
+	props: Pick<ChartProps, "data" | "xKey"> & { geometry: ChartGeometry }
+): JSX.Element {
 	return (
 		<For each={props.data}>
 			{(row, index) => (
@@ -130,14 +123,13 @@ export function CategoryLabels(props: {
 }
 
 /** The values of the hovered row, one line per series. */
-export function HoverTooltip(props: {
-	row: ChartDatum;
-	hover: number | undefined;
-	data: ChartDatum[];
-	xKey: string;
-	series: ChartSeries[];
-	formatted: (value: number) => string;
-}): JSX.Element {
+export function HoverTooltip(
+	props: Pick<ChartProps, "data" | "xKey" | "series"> &
+		Pick<ChartGeometry, "formatted"> & {
+			row: ChartDatum;
+			hover: number | undefined;
+		}
+): JSX.Element {
 	return (
 		<div
 			class={styles.tooltip}
@@ -168,7 +160,7 @@ export function HoverTooltip(props: {
 	);
 }
 
-export function Legend(props: { series: ChartSeries[] }): JSX.Element {
+export function Legend(props: Pick<ChartProps, "series">): JSX.Element {
 	return (
 		<ul class={styles.legend}>
 			<For each={props.series}>
@@ -193,13 +185,10 @@ export function Legend(props: { series: ChartSeries[] }): JSX.Element {
  * separate the hues. Not an extra: identity in a chart must never rest on
  * colour alone, and this guarantees it for every chart in the app at once.
  */
-export function AccessibleTable(props: {
-	label: string;
-	data: ChartDatum[];
-	xKey: string;
-	series: ChartSeries[];
-	formatted: (value: number) => string;
-}): JSX.Element {
+export function AccessibleTable(
+	props: Pick<ChartProps, "label" | "data" | "xKey" | "series"> &
+		Pick<ChartGeometry, "formatted">
+): JSX.Element {
 	return (
 		<table class={styles.srTable}>
 			<caption>{props.label}</caption>

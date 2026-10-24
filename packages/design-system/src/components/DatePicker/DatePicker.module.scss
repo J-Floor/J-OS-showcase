@@ -1,37 +1,21 @@
+@use "../../styles/animation" as anim;
 @use "../../styles/typography" as typo;
+@use "../MakeField/field.mixins" as field;
 
-.field {
-	display: flex;
-	flex-flow: column nowrap;
-	gap: var(--jf-spacing-close);
-}
-
-.label {
-	color: var(--jf-fg-strong);
-
-	@include typo.jf-typo-body-bold;
-}
-
-/* DateInput.Control + DatePicker.RootProvider are transparent wrappers. */
+/* DateInput.RootProvider, DateInput.Control and DatePicker.RootProvider are
+   transparent wrappers (MakeField's Field.Root is the real chrome). */
+.root,
 .control,
 .pickerRoot {
 	display: contents;
 }
 
-/* Bordered box holding the segmented input + the calendar trigger. */
+/* The shared field shell holding the segmented input + the calendar
+   trigger: the same box and 2px focus/invalid ring as every other field. */
 .pickerControl {
-	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
-	display: flex;
-	gap: var(--jf-spacing-near);
-	align-items: center;
-	padding-inline-end: var(--jf-spacing-near);
-	background-color: var(--jf-surface-bg-base);
-	border: 1px solid var(--jf-border-strong);
-	border-radius: var(--jf-radius-button);
+	@include field.shell;
 
-	&:focus-within {
-		border-color: var(--jf-fg-strong);
-	}
+	gap: var(--jf-spacing-near);
 }
 
 .segmentGroup {
@@ -39,8 +23,6 @@
 	display: flex;
 	flex: 1 1 auto;
 	align-items: center;
-	padding-block: var(--jf-spacing-near);
-	padding-inline: var(--jf-spacing-near);
 	color: var(--jf-fg-default);
 
 	@include typo.jf-typo-body-regular;
@@ -51,7 +33,7 @@
 	color: var(--jf-fg-default);
 	border-radius: var(--jf-radius-button);
 
-	&[data-placeholder] {
+	&[data-placeholder-shown] {
 		color: var(--jf-fg-muted);
 	}
 
@@ -89,8 +71,7 @@
 	/* Rank above any parent overlay (e.g. when opened inside a dialog) via the
 	   layer index zag sets on this content node. */
 	z-index: calc(var(--jf-z-index-overlay-base) + var(--layer-index, 0));
-	display: flex;
-	flex-flow: column nowrap;
+	flex-direction: column;
 	gap: var(--jf-spacing-near);
 	min-inline-size: 17.5rem;
 	padding: var(--jf-spacing-near);
@@ -101,20 +82,9 @@
 
 	@include typo.jf-typo-body-regular;
 
-	/* zag sets `hidden` + data-state="closed" when closed; the `display: flex`
-     above would otherwise override the [hidden] UA style and keep the calendar
-     on screen (so it never appeared to close). */
-	&[hidden] {
-		display: none;
-	}
-
-	&[data-state="open"] {
-		animation: datepicker-in 0.15s ease-out;
-	}
-
-	&[data-state="closed"] {
-		animation: datepicker-out 0.1s ease-in;
-	}
+	/* Stays mounted after the first open, so closing animates out instead of
+	   popping (the mixin also keeps the closed calendar out of focus). */
+	@include anim.popover-animation;
 }
 
 .view {
@@ -226,29 +196,5 @@
 	&[data-disabled] {
 		color: var(--jf-fg-subtle);
 		cursor: not-allowed;
-	}
-}
-
-@keyframes datepicker-in {
-	from {
-		opacity: 0;
-		transform: translateY(-4px);
-	}
-
-	to {
-		opacity: 1;
-		transform: translateY(0);
-	}
-}
-
-@keyframes datepicker-out {
-	from {
-		opacity: 1;
-		transform: translateY(0);
-	}
-
-	to {
-		opacity: 0;
-		transform: translateY(-4px);
 	}
 }

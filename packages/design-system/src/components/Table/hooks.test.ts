@@ -1,6 +1,7 @@
 import { createRoot, createSignal } from "solid-js";
 
 import { columnMeta, createTable } from "./hooks.ts";
+import { rowIndex } from "./testRowIds.ts";
 import type { JfColumnDefinition } from "./types.ts";
 
 type Row = { state: string; name: string };
@@ -21,6 +22,7 @@ function data(): Row[] {
 test("groupBy hides the grouped column and keeps a flat row model", () => {
 	createRoot((dispose) => {
 		const { table } = createTable<Row>({
+			getRowId: rowIndex,
 			data,
 			columns,
 			groupBy: "state",
@@ -46,6 +48,7 @@ test("groupBy hides the grouped column and keeps a flat row model", () => {
 test("the authored size is kept in meta, and an omitted one stays omitted", () => {
 	createRoot((dispose) => {
 		const { table } = createTable<Row>({
+			getRowId: rowIndex,
 			data,
 			columns: [
 				{
@@ -84,6 +87,7 @@ test("each dataType gets its filter", () => {
 	createRoot((dispose) => {
 		type Typed = { n: number; on: boolean; at: number; t: string };
 		const { table } = createTable<Typed>({
+			getRowId: rowIndex,
 			data: () => [
 				{
 					n: 1,
@@ -130,6 +134,7 @@ test("an enum row value no option covers warns once per column", () => {
 	const dispose = createRoot((disposeRoot) => {
 		type Flagged = { state: string; tags: string[] };
 		createTable<Flagged>({
+			getRowId: rowIndex,
 			data: () => [
 				{ state: "ok", tags: ["x", "zzz"] },
 				{ state: "", tags: [] },
@@ -166,6 +171,7 @@ test("an enum column warns once, even as new unmatched values arrive", () => {
 	const [rows, setRows] = createSignal<Stated[]>([{ state: "gone" }]);
 	const dispose = createRoot((disposeRoot) => {
 		createTable<Stated>({
+			getRowId: rowIndex,
 			data: rows,
 			columns: [
 				{
@@ -189,6 +195,7 @@ test("an actions column that is not last warns", () => {
 	const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 	createRoot((dispose) => {
 		createTable<Row>({
+			getRowId: rowIndex,
 			data,
 			columns: [
 				{ id: "actions", header: "", size: 84, cell: () => null },
@@ -202,6 +209,7 @@ test("an actions column that is not last warns", () => {
 	warn.mockClear();
 	createRoot((dispose) => {
 		createTable<Row>({
+			getRowId: rowIndex,
 			data,
 			columns: [
 				...columns,

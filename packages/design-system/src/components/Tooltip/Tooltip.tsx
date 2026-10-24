@@ -1,9 +1,11 @@
 import {
 	Tooltip as ArkTooltip,
+	type TooltipContentProps,
 	type TooltipRootProps,
 	type TooltipTriggerProps,
 	useTooltipContext,
 } from "@ark-ui/solid/tooltip";
+import clsx from "clsx";
 import { type JSX, onCleanup, onMount, splitProps } from "solid-js";
 import { Portal } from "solid-js/web";
 
@@ -15,19 +17,21 @@ import {
 import { attachLongPress } from "./longPress.ts";
 import styles from "./Tooltip.module.scss";
 
+export const TOOLTIP_OPEN_DELAY_MS = 250;
+
 export type TooltipProps = {
 	/** The text/markup to display in the tooltip. Tooltip is disabled when empty. */
 	tooltipContent: JSX.Element;
 	/** The action to execute when the trigger is clicked. */
-	onClick?: JSX.EventHandlerUnion<HTMLButtonElement, MouseEvent>;
+	onClick?: TooltipTriggerProps["onClick"];
 	/** `tabIndex` applied to the trigger. */
-	triggerTabIndex?: number;
+	triggerTabIndex?: TooltipTriggerProps["tabIndex"];
 	/** IDs for ID composition with other components (e.g. Dialog). */
 	ids?: TooltipRootProps["ids"];
 	/** Trigger content. */
 	children?: JSX.Element;
 	/** Class applied to the trigger element. */
-	class?: string;
+	class?: TooltipTriggerProps["class"];
 	/**
 	 * Render the trigger as the provided child element instead of the default
 	 * `<button>` (ark/solid render-function form: `(props) => <El {...props()} />`).
@@ -36,7 +40,7 @@ export type TooltipProps = {
 	 */
 	asChild?: TooltipTriggerProps["asChild"];
 	/** Ref forwarded to the content element. */
-	ref?: HTMLDivElement | ((element: HTMLDivElement) => void);
+	ref?: TooltipContentProps["ref"];
 } & Omit<TooltipRootProps, "ids" | "children"> &
 	WithPartClasses<"content" | "positioner">;
 
@@ -101,14 +105,10 @@ export function Tooltip(props: TooltipProps): JSX.Element {
 			 * part of the DOCUMENT's scrollable overflow — and on the frame it
 			 * first appears, floating-ui has not measured or flipped it yet, so
 			 * it lands past the right edge of a phone-width viewport. That
-			 * widened the page to 752px on a 448px screen, and Chrome for
-			 * Android picks the page scale from the document width AT LOAD:
-			 * deep-linking straight into a sheet — whose autofocused header
-			 * button opens its own tooltip — loaded the page zoomed out,
-			 * with a layout viewport wide enough that no phone media query
-			 * matched any more, so the sheet sat beside the table in the
-			 * desktop layout. Opening that same sheet by navigating to it was
-			 * fine: the scale was already settled.
+			 * widens the page, and Chrome for Android picks the page scale
+			 * from the document width AT LOAD: a deep link that autofocuses a
+			 * tooltip trigger on load came up zoomed out, with a layout
+			 * viewport too wide for any phone media query to match.
 			 *
 			 * A fixed positioner is laid out against the viewport and adds
 			 * nothing to the document's overflow, so the transient placement
@@ -117,17 +117,13 @@ export function Tooltip(props: TooltipProps): JSX.Element {
 			 */
 			positioning={{ strategy: "fixed", ...props.positioning }}
 			disabled={isDisabled()}
-			openDelay={250}
+			openDelay={TOOLTIP_OPEN_DELAY_MS}
 			closeDelay={0}
 			ids={props.ids}
 		>
 			<LongPress disabled={isDisabled} />
 			<ArkTooltip.Trigger
-				class={
-					props.class
-						? `${styles.trigger} ${props.class}`
-						: styles.trigger
-				}
+				class={clsx(styles.trigger, props.class)}
 				onClick={props.onClick}
 				tabIndex={props.triggerTabIndex}
 				asChild={props.asChild}
@@ -149,3 +145,53 @@ export function Tooltip(props: TooltipProps): JSX.Element {
 		</ArkTooltip.Root>
 	);
 }
+
+/**
+ * Props of {@link Tooltip.Anchor}: the tooltip's own props, minus what the
+ * anchor owns (the trigger slot, its content) and `ref`, which on `Tooltip`
+ * lands on the content and not on anything the caller renders.
+ *
+ * `triggerTabIndex` lands on the anchor span. A disabled child takes no focus;
+ * pass `triggerTabIndex={0}`, or wrap the control in MakeDisablable for a
+ * reason tooltip.
+ */
+export type TooltipAnchorProps = {
+	/** The text/markup to display in the tooltip. Tooltip is disabled when empty. */
+	label: TooltipProps["tooltipContent"];
+	/** The element the tooltip points at. It keeps its own props and handlers. */
+	children: JSX.Element;
+} & Omit<
+	TooltipProps,
+	"tooltipContent" | "children" | "asChild" | "onClick" | "ref"
+>;
+
+/**
+ * Point a tooltip at an element that is already something else's trigger (an
+ * Ark trigger, a button with its own handlers).
+ *
+ * zag finds a trigger by id and an element carries one id, so the child cannot
+ * also be the tooltip's trigger: a tight `<span>` wrapping it is (see the
+ * ark-solid-composition skill). The span is no tab stop of its own: zag binds
+ * the tooltip's focus/blur as bubbling focusin/focusout, so focusing the child
+ * opens it. `class` lands on the span,
+ * for a child that needs a box other than a shrink-wrapped inline one.
+ */
+function Anchor(props: TooltipAnchorProps): JSX.Element {
+	const [local, tooltipProps] = splitProps(props, [
+		"label",
+		"children",
+		"class",
+	]);
+	return (
+		<Tooltip
+			{...tooltipProps}
+			tooltipContent={local.label}
+			class={clsx(styles.anchor, local.class)}
+			asChild={(anchorProps) => (
+				<span {...anchorProps()}>{local.children}</span>
+			)}
+		/>
+	);
+}
+
+Tooltip.Anchor = Anchor;

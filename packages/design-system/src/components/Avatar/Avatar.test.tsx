@@ -33,3 +33,18 @@ test("initials: first and last word, uppercased", () => {
 	expect(initials(" prince ")).toBe("P");
 	expect(initials("")).toBe("");
 });
+
+test("forwards root attributes and merges the class", () => {
+	const { container } = render(() => (
+		<Avatar
+			name="Ada Lovelace"
+			title="Ada"
+			aria-label="Ada"
+			class="extra"
+		/>
+	));
+	const root = container.firstElementChild;
+	expect(root).toHaveAttribute("title", "Ada");
+	expect(root).toHaveAttribute("aria-label", "Ada");
+	expect(root).toHaveClass("extra");
+});

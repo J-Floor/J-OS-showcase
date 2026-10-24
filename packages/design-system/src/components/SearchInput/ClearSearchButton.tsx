@@ -21,7 +21,7 @@ export function ClearSearchButton(props: { onClear: () => void }): JSX.Element {
 			tooltipContent="Clear search"
 			asChild={(tipProps) => (
 				<button
-					{...(tipProps() as object)}
+					{...tipProps()}
 					type="button"
 					aria-label="Clear search"
 					class={styles.clear}

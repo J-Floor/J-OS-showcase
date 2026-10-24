@@ -24,7 +24,7 @@ import { DescriptionValue, NameField, OptionSelect } from "./InventoryForm.tsx";
 import { RelatedListSection } from "./RelatedListSection.tsx";
 
 /**
- * Placeholder field layout passed to `Sheet.Body`'s `skeleton` while
+ * Placeholder field layout shown by `Sheet.Skeleton` while
  * `loading` is true — an open row whose data hasn't arrived yet. Shaped like
  * the loaded field list (mirrors `EventFieldsPlaceholder`); literal
  * "placeholder" text, never real or create-form copy.
@@ -210,14 +210,13 @@ export function ItemTypeSheet(props: ItemTypeSheetProps): JSX.Element {
 					void form.deleteItemType();
 				}}
 			/>
-			<Sheet.Body
-				loading={props.loading}
-				skeleton={<ItemTypeFieldsPlaceholder />}
-			>
+			<Sheet.Skeleton>
+				<ItemTypeFieldsPlaceholder />
+			</Sheet.Skeleton>
+			<Sheet.Body loading={props.loading}>
 				<NameField
-					name={form.name}
-					hasError={form.formError() !== null}
-					onElement={(element) => {
+					form={form}
+					ref={(element) => {
 						nameElement = element;
 					}}
 				/>
@@ -226,7 +225,7 @@ export function ItemTypeSheet(props: ItemTypeSheetProps): JSX.Element {
 					placeholder="Choose a category"
 					options={props.categories.map((category) => ({
 						value: category._id,
-						title: category.name,
+						label: category.name,
 					}))}
 					field={form.categoryId}
 				/>

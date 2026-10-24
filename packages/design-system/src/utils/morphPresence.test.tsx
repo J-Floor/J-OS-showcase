@@ -13,11 +13,15 @@ import {
 import { trackActivation } from "./activation.ts";
 import {
 	MORPH_HIDDEN,
+	MORPH_PICKED,
 	type MorphFrom,
 	createMorphPresence,
 } from "./morphPresence.ts";
 
-const FILLED = "background-color: rgb(0, 0, 0)";
+/** jsdom loads no stylesheet: a morph source paints its background inline. */
+function fill(element: HTMLElement): void {
+	element.style.setProperty("background-color", "rgb(0, 0, 0)");
+}
 
 afterEach(() => {
 	restoreViewTransitions();
@@ -44,10 +48,10 @@ function setup(
 		return (
 			<>
 				{/* Filled: a container, which the overlay hides while open. */}
-				<button id="opener" style={FILLED}>
+				<button id="opener" ref={fill}>
 					Open
 				</button>
-				<button id="other" style={FILLED}>
+				<button id="other" ref={fill}>
 					Other
 				</button>
 				<button id="icon">i</button>
@@ -240,31 +244,31 @@ test("focus that moved elsewhere is not stolen on close", async () => {
 	expect(document.activeElement).toBe(other);
 });
 
-test("data-morph-from is cleared after close", async () => {
+test("the picked mark is cleared after close", async () => {
 	fakeViewTransitions();
 	const { setOpen } = setup();
 	const marked = document.createElement("span");
-	marked.dataset.morphFrom = "";
+	marked.setAttribute(MORPH_PICKED, "");
 	document.getElementById("content")?.append(marked);
 	setOpen(true);
 	await transitionSettled();
 	setOpen(false);
 	await transitionSettled();
-	expect(marked).not.toHaveAttribute("data-morph-from");
+	expect(marked).not.toHaveAttribute(MORPH_PICKED);
 });
 
-test("data-morph-from is cleared after a close with morph switched off", async () => {
+test("the picked mark is cleared after a close with morph switched off", async () => {
 	fakeViewTransitions();
 	const flag = { enabled: true };
 	const { setOpen } = setup(() => flag.enabled);
 	const marked = document.createElement("span");
-	marked.dataset.morphFrom = "";
+	marked.setAttribute(MORPH_PICKED, "");
 	document.getElementById("content")?.append(marked);
 	setOpen(true);
 	await transitionSettled();
 	flag.enabled = false;
 	setOpen(false);
-	expect(marked).not.toHaveAttribute("data-morph-from");
+	expect(marked).not.toHaveAttribute(MORPH_PICKED);
 });
 
 test("closeTarget is used when the source is gone", async () => {
@@ -315,10 +319,10 @@ function setupHandoff(isOpenedInsideClose = true) {
 		);
 		return (
 			<>
-				<button id="a-opener" style={FILLED}>
+				<button id="a-opener" ref={fill}>
 					A
 				</button>
-				<button id="b-source" style={FILLED}>
+				<button id="b-source" ref={fill}>
 					B
 				</button>
 				<div

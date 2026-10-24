@@ -34,6 +34,16 @@ if (!("ResizeObserver" in globalThis)) {
 	};
 }
 
+/** jsdom loads no stylesheet: the elements the palette morphs out of set
+ *  their painted look inline, from their ref. */
+function paint(declarations: Record<string, string>) {
+	return (element: HTMLElement): void => {
+		for (const [property, value] of Object.entries(declarations)) {
+			element.style.setProperty(property, value);
+		}
+	};
+}
+
 const onSelect = vi.fn();
 
 function items(): CommandPaletteItem[] {
@@ -47,14 +57,14 @@ function items(): CommandPaletteItem[] {
 		{
 			value: "p:ada",
 			label: "Ada Lovelace",
-			group: "People",
+			group: "Records",
 			keywords: ["ada@example.com"],
 			onSelect,
 		},
 		{
 			value: "p:grace",
 			label: "Grace Hopper",
-			group: "People",
+			group: "Records",
 			onSelect,
 		},
 	];
@@ -104,7 +114,7 @@ describe("CommandPalette", () => {
 			<CommandPalette open onOpenChange={() => {}} items={items()} />
 		));
 		expect(screen.getByText("Pages")).toBeInTheDocument();
-		expect(screen.getByText("People")).toBeInTheDocument();
+		expect(screen.getByText("Records")).toBeInTheDocument();
 		expect(screen.getByText("Tasks")).toBeInTheDocument();
 		expect(screen.getByText("Ada Lovelace")).toBeInTheDocument();
 	});
@@ -128,15 +138,22 @@ describe("CommandPalette", () => {
 
 	it("says so when nothing matches, rather than showing an empty box", async () => {
 		render(() => (
-			<CommandPalette
-				open
-				onOpenChange={() => {}}
-				items={items()}
-				emptyMessage="Nothing here."
-			/>
+			<CommandPalette open onOpenChange={() => {}} items={items()} />
 		));
 		await type("zzzzz");
+		expect(screen.getByText("No matches.")).toBeInTheDocument();
+	});
+
+	it("shows a CommandPalette.Empty child in place of the default", async () => {
+		render(() => (
+			<CommandPalette open onOpenChange={() => {}} items={items()}>
+				<CommandPalette.Empty>Nothing here.</CommandPalette.Empty>
+			</CommandPalette>
+		));
+		expect(screen.queryByText("Nothing here.")).toBeNull();
+		await type("zzzzz");
 		expect(screen.getByText("Nothing here.")).toBeInTheDocument();
+		expect(screen.queryByText("No matches.")).toBeNull();
 	});
 
 	it("offers what was chosen last, and only on a blank search", async () => {
@@ -150,7 +167,7 @@ describe("CommandPalette", () => {
 			/>
 		));
 		expect(screen.getByText("Recent")).toBeInTheDocument();
-		// Once, under Recent — not also under People. Ark keys rows by value, so
+		// Once, under Recent — not also under Records. Ark keys rows by value, so
 		// a duplicate would highlight both copies and make arrowing down look
 		// like it had stalled.
 		expect(
@@ -236,14 +253,14 @@ describe("CommandPalette", () => {
 					{
 						value: "p:alan",
 						label: "Alan Turing",
-						group: "People",
+						group: "Records",
 						searchOnly: true,
 						onSelect,
 					},
 				]}
 			/>
 		));
-		// Every person in the place is not a browsable list — and each row is a
+		// Every record of a kind is not a browsable list — and each row is a
 		// live listbox option, so an unfiltered dump is DOM nobody asked for.
 		expect(labels()).not.toContain("Alan Turing");
 
@@ -263,7 +280,7 @@ describe("CommandPalette", () => {
 					{
 						value: "p:alan",
 						label: "Alan Turing",
-						group: "People",
+						group: "Records",
 						searchOnly: true,
 						onSelect,
 					},
@@ -282,7 +299,7 @@ describe("CommandPalette", () => {
 			(_unused, index) => ({
 				value: `p:${String(index)}`,
 				label: `Ada ${String(index)}`,
-				group: "People",
+				group: "Records",
 				onSelect,
 			})
 		);
@@ -314,7 +331,7 @@ describe("CommandPalette", () => {
 		// is still animating in measured a rect the animation had displaced —
 		// so the palette opened already scrolled past its own first result.
 		// Only reproducible with enough results to scroll, which is why it
-		// showed up in production and not on a dev roster.
+		// showed up in production and not on small dev data.
 		const original = Object.getOwnPropertyDescriptor(
 			Element.prototype,
 			"scrollIntoView"
@@ -399,7 +416,7 @@ describe("CommandPalette", () => {
 					{
 						value: "p:ada",
 						label: "Ada Lovelace",
-						group: "People",
+						group: "Records",
 						onSelect: onSelect2,
 					},
 					...items(),
@@ -486,7 +503,7 @@ describe("while closed", () => {
 	// The palette stays mounted while closed (an overlay cannot gate its own
 	// mount). It used to run an ALWAYS-open combobox inside that closed dialog,
 	// and Ark focuses an open combobox's input on mount — so on every page load
-	// focus was pulled into the hidden search box, and the roster's arrow keys
+	// focus was pulled into the hidden search box, and a table's arrow keys
 	// drove the palette instead of the table's row focus (Alt-to-peek too). The
 	// combobox now tracks the dialog's open state.
 	//
@@ -530,14 +547,14 @@ function withSpies() {
 		{
 			value: "p:ada",
 			label: "Ada Lovelace",
-			group: "People",
+			group: "Records",
 			onSelect,
 			onHighlight: firstAction,
 		},
 		{
 			value: "p:adam",
 			label: "Adam Smith",
-			group: "People",
+			group: "Records",
 			onSelect,
 			onHighlight: secondAction,
 		},
@@ -618,7 +635,7 @@ async function openFromCompactIcon(isClicked: boolean) {
 		<>
 			<button
 				id="compact"
-				style={{ "background-color": "transparent", border: "0" }}
+				ref={paint({ "background-color": "transparent", border: "0" })}
 			>
 				search
 			</button>
@@ -716,10 +733,10 @@ describe("CommandPalette morph look", () => {
 			<>
 				<input
 					id="field"
-					style={{
+					ref={paint({
 						"background-color": "rgb(1, 2, 3)",
 						border: "1px solid rgb(0, 0, 0)",
-					}}
+					})}
 				/>
 				<CommandPalette
 					open={open()}
@@ -805,7 +822,7 @@ describe("CommandPalette morph handoff", () => {
 		fireEvent.click(await screen.findByText("Alpha"));
 		await waitFor(() => {
 			expect(
-				screen.getByText("Alpha").closest("[data-morph-from]")
+				screen.getByText("Alpha").closest("[data-morph-picked]")
 			).not.toBeNull();
 		});
 	});
@@ -820,7 +837,7 @@ describe("CommandPalette morph handoff", () => {
 			onStart: () =>
 				rowNames.push(
 					document
-						.querySelector<HTMLElement>("[data-morph-from]")
+						.querySelector<HTMLElement>("[data-morph-picked]")
 						?.style.getPropertyValue("view-transition-name") ??
 						"none"
 				),
@@ -847,7 +864,7 @@ describe("CommandPalette morph handoff", () => {
 					{/* The desktop search field the palette opens out of. */}
 					<input
 						id="field"
-						style={{ border: "1px solid rgb(0, 0, 0)" }}
+						ref={paint({ border: "1px solid rgb(0, 0, 0)" })}
 					/>
 					<div
 						id="sheet"

@@ -1,3 +1,5 @@
+import { CONTENT_EDITABLE } from "./focusable.ts";
+
 /**
  * Whether a keystroke belongs to something being typed into, rather than to a
  * shortcut.
@@ -71,14 +73,8 @@ export function isTypingTarget(target: EventTarget | null): boolean {
 	// past it to the outer `true`/`plaintext-only` ancestor and still reports
 	// editable. That's a false positive (treating a non-editable island as a
 	// typing target), which is the safe direction for this check, so it is left
-	// unhandled. The `i` flag makes the match ASCII case-insensitive, since the
-	// HTML attribute value is case-insensitive but CSS attribute matching is not.
-	if (
-		target.closest(
-			'[contenteditable="" i], [contenteditable="true" i], [contenteditable="plaintext-only" i]'
-		) !== null
-	)
-		return true;
+	// unhandled.
+	if (target.closest(CONTENT_EDITABLE) !== null) return true;
 	// An open overlay claims everything inside it, so a confirm/alert dialog's own
 	// controls count as typing targets and a second decision key cannot fire on
 	// the record behind it. EXCEPT a surface that opts out with

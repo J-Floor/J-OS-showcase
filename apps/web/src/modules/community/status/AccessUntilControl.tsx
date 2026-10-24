@@ -78,6 +78,8 @@ export function AccessUntilControl(props: {
 	return (
 		<>
 			<DatePicker
+				label="Access until"
+				labelHidden
 				// Controlled by the server value: if the board cancels the dialog
 				// or the mutation fails, the field snaps back to the window they
 				// actually have rather than showing a date nobody agreed to.

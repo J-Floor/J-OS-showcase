@@ -33,12 +33,12 @@ function MemberBatchActions(props: {
 	// The rows Kick out applies to — the SAME rule the per-row button
 	// and the `K` key ask, via `kickOutAction().can`.
 	function targets() {
-		return eligible(props.kickOutAction(), props.batch.selectedRows);
+		return eligible(props.kickOutAction(), props.batch.rows());
 	}
 
 	return (
 		<>
-			<Show when={props.batch.selectedRows.length > 0}>
+			<Show when={props.batch.rows().length > 0}>
 				<Button
 					onClick={() => {
 						props.onRoleOpenChange(true);
@@ -50,16 +50,16 @@ function MemberBatchActions(props: {
 			<ChangeRoleDialog
 				open={props.isRoleOpen}
 				onOpenChange={props.onRoleOpenChange}
-				count={props.batch.selectedRows.length}
-				states={props.batch.selectedRows.map<StateId>(
-					(row) => `${row.tier}.${row.stage}`
-				)}
+				count={props.batch.rows().length}
+				states={props.batch
+					.rows()
+					.map<StateId>((row) => `${row.tier}.${row.stage}`)}
 				onMove={(move) => {
 					// Read the tracked selection synchronously (before the
 					// promise) so `solid/reactivity` stays happy, then let
 					// the dialog await the whole batch before it closes.
-					const ids = props.batch.selectedRows.map((row) => row._id);
-					const clearSelection = props.batch.clearSelection;
+					const ids = props.batch.rows().map((row) => row._id);
+					const clearSelection = props.batch.clear;
 					return applyMove(triage, ids, move).then((result) => {
 						if (result.isOk()) clearSelection();
 						return result;
@@ -83,7 +83,7 @@ function MemberBatchActions(props: {
 								await props.batch.runBatch(
 									rows,
 									triage.kickOut,
-									props.batch.clearSelection
+									props.batch.clear
 								);
 						})();
 					}}

@@ -4,10 +4,10 @@
  * (the title, and each value paired with the other end's value showing the
  * same field). See morph.ts.
  */
+import { MORPH_KEY, MORPH_OF, MORPH_TITLE } from "./morphNames.ts";
 import { hasLayoutBox } from "./visibleArea.ts";
 
-/** The attribute naming the entity an element shows. */
-export const MORPH_OF = "data-morph-of";
+export { MORPH_KEY, MORPH_OF, MORPH_TITLE };
 
 /** An element that shows one entity and is a surface by what it is,
  *  whatever it paints: a table row, a `Morph`. */
@@ -34,24 +34,8 @@ export function findMorphTarget(of: string): HTMLElement | null {
 	return matches[0] ?? null;
 }
 
-/**
- * Marks the title inside a morph source or target; it flies on its own. Its
- * value may be a field key (a table's title cell carries its column id): the
- * title then flies into the target's value with that key when it has one
- * (a sheet's first-name half), else into the target's title.
- */
-export const MORPH_TITLE = "data-morph-title";
-
 /** Spread on the element holding a morph source's or target's title. */
 export const morphTitle = { [MORPH_TITLE]: "" } as const;
-
-/**
- * The field an element shows, by key (a table cell: its column id; a sheet
- * value: its `FieldDefinition`'s key). A morph flies each value of its
- * source into the target's value with the same key, compared exactly. Never
- * UI copy.
- */
-export const MORPH_KEY = "data-morph-key";
 
 /**
  * Marks a sheet's loading skeleton (either variant), also the hook a test

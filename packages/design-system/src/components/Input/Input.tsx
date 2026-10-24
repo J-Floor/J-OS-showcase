@@ -1,35 +1,22 @@
 import { Field, type FieldInputProps } from "@ark-ui/solid/field";
-import { type JSX, Show, splitProps } from "solid-js";
+import { type JSX, Show } from "solid-js";
 
 import { type PropsWithDisabling } from "../../utils/disablingProps.ts";
-import { splitMakeFieldProps } from "../../utils/makeFieldProps.ts";
+import {
+	createFieldControl,
+	splitFieldPartProps,
+} from "../../utils/makeFieldProps.ts";
 import { splitArkProps } from "../../utils/splitArkProps.ts";
+import type { FieldInputEvent, MakeFieldOwnProps } from "../../utils/types.ts";
 import { Icon, type IconProps } from "../Icon/Icon.tsx";
-import { MakeField, type MakeFieldProps } from "../MakeField/MakeField.tsx";
+import { MakeField } from "../MakeField/MakeField.tsx";
 
 import styles from "./Input.module.scss";
-
-/** Bound `onInput` event for an input element, matching ark's `Field.Input`. */
-type InputChangeEvent = InputEvent & {
-	currentTarget: HTMLInputElement;
-	target: HTMLInputElement;
-};
-/** Solid input change handler (`onInput`), narrowed to the input element. */
-type InputChangeHandler = (event: InputChangeEvent) => void;
 
 // Excludes type="number" since the consumer should use NumberInput instead.
 type CustomFieldInputProps = Omit<FieldInputProps, "type"> & {
 	type?: Exclude<JSX.InputHTMLAttributes<HTMLInputElement>["type"], "number">;
 };
-
-// MakeField extends Field.Root's div-typed HTML props, which collide with the
-// input-typed props below (`ref`, `onInput`, `children`, event handlers, etc.).
-// Keep MakeField's own additions + Field semantic props; let the input side own
-// the DOM attributes.
-type MakeFieldOwnProps = Omit<
-	MakeFieldProps,
-	keyof JSX.HTMLAttributes<HTMLDivElement>
->;
 
 export type InputProps = PropsWithDisabling<
 	MakeFieldOwnProps &
@@ -43,7 +30,7 @@ export type InputProps = PropsWithDisabling<
 			 */
 			trailing?: JSX.Element;
 			/** Alias for `onInput`, for consistency with other components. */
-			onValueChange?: InputChangeHandler;
+			onValueChange?: (event: FieldInputEvent<HTMLInputElement>) => void;
 			/** The whole field's element (label, box and hints), e.g. what
 			 *  an overlay opens from (`morphFrom`). `ref` is the input. */
 			rootRef?: (element: HTMLDivElement) => void;
@@ -61,8 +48,6 @@ export type InputProps = PropsWithDisabling<
  * forwarded to `Field.Input`. `type="number"` is excluded — use `NumberInput`.
  */
 export function Input(props: InputProps): JSX.Element {
-	let inputElement: HTMLInputElement | undefined;
-
 	// Consumer-only props (+ the props we handle ourselves) vs. the rest.
 	const [own, rest] = splitArkProps(props, [
 		"leadingIconName",
@@ -72,19 +57,14 @@ export function Input(props: InputProps): JSX.Element {
 		"ref",
 		"rootRef",
 	]);
-	// Route the MakeField props (label/helper/error + field semantics + the full
-	// disabling set) to MakeField via the shared splitter; `readOnly`/`id`/`ids`
-	// are Field.Root concerns MakeField also forwards. Everything else goes to
-	// `Field.Input`, which inherits invalid/required/disabled from Field.Root via
-	// context (no need to forward them to the input element).
-	const [makeFieldProps, afterMakeField] = splitMakeFieldProps(rest);
-	const [fieldExtra, inputForward] = splitProps(afterMakeField, [
-		"readOnly",
-		"id",
-		"ids",
-	]);
+	// MakeField takes the label/helper/error, the field semantics, the full
+	// disabling set and the Field.Root props (`readOnly`/`id`/`ids`).
+	// Everything else goes to `Field.Input`, which inherits invalid/required/
+	// disabled/readOnly from Field.Root via context.
+	const [makeFieldProps, inputForward] = splitFieldPartProps(rest);
+	const control = createFieldControl<HTMLInputElement>(() => own.ref);
 
-	function handleInput(event: InputChangeEvent): void {
+	function handleInput(event: FieldInputEvent<HTMLInputElement>): void {
 		const onInput = own.onInput;
 		if (typeof onInput === "function") {
 			onInput(event);
@@ -94,21 +74,13 @@ export function Input(props: InputProps): JSX.Element {
 		own.onValueChange?.(event);
 	}
 
-	function setReference(element: HTMLInputElement) {
-		inputElement = element;
-		const reference = props.ref;
-		if (typeof reference === "function") reference(element);
-	}
-
-	function handleWrapperClick() {
-		inputElement?.focus();
-	}
-
 	return (
-		<MakeField {...makeFieldProps} {...fieldExtra} ref={own.rootRef}>
+		<MakeField {...makeFieldProps} ref={own.rootRef}>
 			<div
 				class={styles.inputWrapper}
-				onClick={handleWrapperClick}
+				onClick={() => {
+					control.focus();
+				}}
 				data-invalid={props.invalid ? "true" : undefined}
 			>
 				<Show when={own.leadingIconName}>
@@ -117,7 +89,7 @@ export function Input(props: InputProps): JSX.Element {
 				<Field.Input
 					{...inputForward}
 					onInput={handleInput}
-					ref={setReference}
+					ref={control.setReference}
 				/>
 				<Show when={own.trailing}>
 					{(trailing) => (

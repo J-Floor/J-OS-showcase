@@ -110,8 +110,8 @@ export function BoardNotes(props: { person: Doc<"people"> }) {
 			</Show>
 			<div class={styles.composer}>
 				<TextArea
-					label=""
-					aria-label="Add a note"
+					label="Add a note"
+					labelHidden
 					placeholder="Add a note…"
 					autoresize
 					maxLength={TEXT_MAX}

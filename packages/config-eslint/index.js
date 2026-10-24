@@ -20,6 +20,35 @@ const GENERATED_IMPORT_PREFIXES = [
   ...Array.from({ length: MAX_PARENT_DEPTH }, (_, i) => "../".repeat(i + 1)),
 ];
 
+const INLINE_STYLE_MESSAGE =
+  "Style in the .module.scss file. An inline style may only be an object literal of `--*` custom properties that the SCSS reads (a data-* attribute or a class covers everything else).";
+const STYLE_ATTRIBUTE = "JSXAttribute[name.name='style']";
+const NON_OBJECT =
+  ":matches(Identifier, MemberExpression, CallExpression, Literal, TemplateLiteral)";
+const NOT_UNDEFINED = ":not(Identifier[name='undefined'])";
+
+/** `style` may only be an object literal (possibly behind a ternary) whose
+ *  keys are `--*` custom properties. Exported so a directory whose markup
+ *  must carry inline styles (email templates) can drop exactly these. */
+export const INLINE_STYLE_RESTRICTIONS = [
+  // style="color: red"
+  `${STYLE_ATTRIBUTE}[value.type='Literal']`,
+  // Anything but a literal object or a choice between them: style={"…"},
+  // style={`…`}, style={STYLE}, style={styles.box}, style={makeStyle()}.
+  `${STYLE_ATTRIBUTE} > JSXExpressionContainer > :not(ObjectExpression, ConditionalExpression, LogicalExpression)`,
+  // Any object under the attribute (a ternary branch or a spread literal
+  // included): a plain key other than `--*`, a shorthand, or a computed key
+  // not spelled `--…`. A spread variable is not checked here; type it
+  // `Record<`--${string}`, string>`.
+  `${STYLE_ATTRIBUTE} ObjectExpression > Property[computed=false][key.type='Literal'][key.value!=/^--/]`,
+  `${STYLE_ATTRIBUTE} ObjectExpression > Property[computed=false][key.type='Identifier']`,
+  `${STYLE_ATTRIBUTE} ObjectExpression > Property[computed=true]:not([key.type='TemplateLiteral'][key.quasis.0.value.raw=/^--/])`,
+  // A choice whose branch is not an object: style={on ? STYLE : undefined},
+  // style={on && makeStyle()}. `undefined` (no style) is allowed.
+  `${STYLE_ATTRIBUTE} > JSXExpressionContainer > ConditionalExpression > ${NON_OBJECT}:matches(.consequent, .alternate)${NOT_UNDEFINED}`,
+  `${STYLE_ATTRIBUTE} > JSXExpressionContainer > LogicalExpression > ${NON_OBJECT}.right${NOT_UNDEFINED}`,
+].map((selector) => ({ selector, message: INLINE_STYLE_MESSAGE }));
+
 export default tseslint.config(
   globalIgnores([
     "**/dist/**",
@@ -140,6 +169,29 @@ export default tseslint.config(
           selector: "CallExpression[callee.property.name='toLowerCase']",
           message:
             "Avoid .toLowerCase() for UI text; use 'text-transform: lowercase' in the CSS module file instead. If this is purely for business logic, you can disable this rule (eslint-disable-next-line no-restricted-syntax).",
+        },
+        ...INLINE_STYLE_RESTRICTIONS,
+        {
+          selector: "TSAsExpression > TSObjectKeyword",
+          message:
+            "Don't cast to `object` to silence a prop mismatch. Pass Ark asChild props to the component built for them (Button's `triggerProps`, Tooltip.Anchor) or fix the type.",
+        },
+        {
+          selector: "JSXAttribute[name.name='unmountOnExit']",
+          message:
+            "Don't unmount on exit: it kills the close animation. Keep the part mounted and drive visibility from `data-state` in CSS (lazyMount is fine).",
+        },
+      ],
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["../**/*.module.scss"],
+              message:
+                "Import only your own .module.scss. Share styles through a SCSS partial or mixin (`@use`), or render the other component.",
+            },
+          ],
         },
       ],
       // The design system's viewTransition.ts is the one caller (exempted in

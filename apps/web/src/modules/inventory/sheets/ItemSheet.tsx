@@ -35,7 +35,7 @@ import { CopyFromItemDialog } from "./CopyFromItemDialog.tsx";
 import { DescriptionValue, OptionSelect } from "./InventoryForm.tsx";
 
 /**
- * Placeholder field layout passed to `Sheet.Body`'s `skeleton` while
+ * Placeholder field layout shown by `Sheet.Skeleton` while
  * `loading` is true — an open row whose data hasn't arrived yet. Shaped like
  * the loaded field list (mirrors `EventFieldsPlaceholder`); literal
  * "placeholder" text, never real or create-form copy.
@@ -262,7 +262,7 @@ function ItemTypeSelect(props: {
 			placeholder="Choose a type"
 			options={props.itemTypes.map((itemType) => ({
 				value: itemType._id,
-				title: `${itemType.name} · ${itemType.categoryName}`,
+				label: `${itemType.name} · ${itemType.categoryName}`,
 			}))}
 			field={props.typeId}
 		/>
@@ -359,10 +359,10 @@ export function ItemSheet(props: ItemSheetProps): JSX.Element {
 						void form.deleteItem();
 					}}
 				/>
-				<Sheet.Body
-					loading={props.loading}
-					skeleton={<ItemFieldsPlaceholder />}
-				>
+				<Sheet.Skeleton>
+					<ItemFieldsPlaceholder />
+				</Sheet.Skeleton>
+				<Sheet.Body loading={props.loading}>
 					<Show when={!isEdit()}>
 						<CopyFromItemButton
 							hasNoItems={(props.items ?? []).length === 0}

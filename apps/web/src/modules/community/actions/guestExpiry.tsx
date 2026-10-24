@@ -57,6 +57,7 @@ function DoorAccessChoice(props: {
 				// side reads as the switch this is, where the
 				// stacked default reads as a list of choices.
 				orientation="horizontal"
+				aria-label="Allow door access"
 				class={styles.doorSegment}
 				value={props.isAllowed ? "yes" : "no"}
 				onValueChange={(details) => {
@@ -87,7 +88,7 @@ function GuestExpiryFooter(props: {
 		<div class={styles.footer}>
 			<Dialog.CloseTrigger
 				asChild={(closeProps) => (
-					<Button {...(closeProps() as object)} variant="tertiary">
+					<Button triggerProps={closeProps()} variant="tertiary">
 						Cancel
 					</Button>
 				)}

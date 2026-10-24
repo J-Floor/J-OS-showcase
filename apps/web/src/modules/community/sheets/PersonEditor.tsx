@@ -70,6 +70,7 @@ function EmailEditor(props: { person: Doc<"people"> }) {
 		<>
 			<PropertyRow field={personFields.email}>
 				<EditableText
+					label={personFields.email.label}
 					value={person().email}
 					onCommit={(value) => {
 						void commitEmail(value);
@@ -155,6 +156,7 @@ export function EditableDetail(props: { person: Doc<"people"> }) {
 			<EmailEditor person={person()} />
 			<PropertyRow icon={ICONS.name} label="First name">
 				<EditableText
+					label={personFields.firstName.label}
 					value={person().firstName}
 					onCommit={(value) => {
 						patch({ firstName: value });
@@ -163,6 +165,7 @@ export function EditableDetail(props: { person: Doc<"people"> }) {
 			</PropertyRow>
 			<PropertyRow icon={ICONS.name} label="Last name">
 				<EditableText
+					label={personFields.lastName.label}
 					value={person().lastName}
 					onCommit={(value) => {
 						patch({ lastName: value });

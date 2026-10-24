@@ -15,6 +15,15 @@ export type RangeFilterValue<T> =
 /** The two modes of a number, date or time filter. */
 export type FilterMode = RangeFilterValue<unknown>["mode"];
 
+const FILTER_MODES: readonly string[] = [
+	"exact",
+	"range",
+] satisfies FilterMode[];
+
+export function isFilterMode(value: unknown): value is FilterMode {
+	return typeof value === "string" && FILTER_MODES.includes(value);
+}
+
 /** A boolean filter's segment: no filter, or the value to keep. */
 type BooleanSegment = "any" | "true" | "false";
 
@@ -92,7 +101,7 @@ export function numberRangeColumnFilter<Data extends Record<string, unknown>>(
 	);
 }
 
-/** Epoch ms of a row's date value: J floor date columns hold timestamps, but
+/** Epoch ms of a row's date value: date columns hold timestamps, but
  *  a `Date` or a date string coerces too. */
 function timestampOf(value: unknown): number {
 	return typeof value === "number" ||
@@ -121,7 +130,7 @@ const DATE_SCALE: BoundScale = { lower: dayStart, upper: dayEnd };
  * Date filter over timestamp rows: an exact local day, or an inclusive range
  * of local days.
  *
- * Ported from EmboUI, which compares ISO strings. J floor date columns hold
+ * Ported from EmboUI, which compares ISO strings. Date columns here hold
  * epoch timestamps, so the row value is coerced and compared against the
  * day's local bounds.
  */
@@ -181,7 +190,7 @@ export function booleanEqualsColumnFilter<Data extends Record<string, unknown>>(
  * array; otherwise the row's value must be among the selected ones. Both sides
  * compare as strings, so number and boolean options match.
  *
- * A cell may hold SEVERAL values — a person's verticals, a row's status flags —
+ * A cell may hold SEVERAL values — a row's tags, its status flags —
  * in which case it matches when any one of them is selected, the way a tag
  * filter is expected to behave. EmboUI only handles scalars.
  */

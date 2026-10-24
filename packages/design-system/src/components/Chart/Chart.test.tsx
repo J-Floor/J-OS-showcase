@@ -67,10 +67,10 @@ describe("Chart", () => {
 				data={data}
 				xKey="month"
 				series={[{ key: "a" }]}
-				label="Joins"
+				label="Orders"
 			/>
 		));
-		expect(screen.getByRole("img", { name: "Joins" })).toBeInTheDocument();
+		expect(screen.getByRole("img", { name: "Orders" })).toBeInTheDocument();
 	});
 
 	it("mirrors every value in a table, so identity never rests on colour", () => {
@@ -79,15 +79,15 @@ describe("Chart", () => {
 				data={data}
 				xKey="month"
 				series={[
-					{ key: "a", label: "Members" },
-					{ key: "b", label: "Guests" },
+					{ key: "a", label: "Apples" },
+					{ key: "b", label: "Pears" },
 				]}
-				label="Roster"
+				label="Fruit"
 			/>
 		));
-		const table = screen.getByRole("table", { name: "Roster" });
-		expect(table).toHaveTextContent("Members");
-		expect(table).toHaveTextContent("Guests");
+		const table = screen.getByRole("table", { name: "Fruit" });
+		expect(table).toHaveTextContent("Apples");
+		expect(table).toHaveTextContent("Pears");
 		// Both rows, both series.
 		expect(screen.getAllByRole("row")).toHaveLength(3);
 	});
@@ -98,25 +98,58 @@ describe("Chart", () => {
 				data={data}
 				xKey="month"
 				series={[{ key: "a" }]}
-				label="Joins"
-				format={(value) => `${String(value)} people`}
+				label="Orders"
+				format={(value) => `${String(value)} units`}
 			/>
 		));
-		expect(screen.getByRole("table")).toHaveTextContent("2 people");
+		expect(screen.getByRole("table")).toHaveTextContent("2 units");
 	});
 
-	it("shows the empty message instead of an axis with nothing on it", () => {
+	it("shows a Chart.Empty child instead of an axis with nothing on it", () => {
 		render(() => (
 			<Chart
 				data={[]}
 				xKey="month"
 				series={[{ key: "a" }]}
-				label="Joins"
-				emptyMessage="No joins yet"
+				label="Orders"
+			>
+				<Chart.Empty>
+					<button type="button">Add the first</button>
+				</Chart.Empty>
+			</Chart>
+		));
+		expect(
+			screen.getByRole("button", { name: "Add the first" })
+		).toBeInTheDocument();
+		expect(screen.queryByText("Nothing to show yet.")).toBeNull();
+		expect(screen.queryByRole("img")).not.toBeInTheDocument();
+	});
+
+	it("falls back to a default empty message without a Chart.Empty", () => {
+		render(() => (
+			<Chart
+				data={[]}
+				xKey="month"
+				series={[{ key: "a" }]}
+				label="Orders"
 			/>
 		));
-		expect(screen.getByText("No joins yet")).toBeInTheDocument();
-		expect(screen.queryByRole("img")).not.toBeInTheDocument();
+		expect(screen.getByText("Nothing to show yet.")).toBeInTheDocument();
+	});
+
+	it("keeps Chart.Empty hidden while there is data", () => {
+		render(() => (
+			<Chart
+				data={data}
+				xKey="month"
+				series={[{ key: "a" }]}
+				label="Orders"
+			>
+				<Chart.Empty>none</Chart.Empty>
+			</Chart>
+		));
+		expect(screen.queryByText("none")).toBeNull();
+		expect(screen.getByRole("img")).toBeInTheDocument();
 	});
 
 	it("draws a legend for two series and none for one", () => {
@@ -125,7 +158,7 @@ describe("Chart", () => {
 				data={data}
 				xKey="month"
 				series={[{ key: "a" }, { key: "b" }]}
-				label="Roster"
+				label="Fruit"
 			/>
 		));
 		expect(screen.getByRole("list")).toBeInTheDocument();
@@ -135,7 +168,7 @@ describe("Chart", () => {
 				data={data}
 				xKey="month"
 				series={[{ key: "a" }]}
-				label="Roster"
+				label="Fruit"
 			/>
 		));
 		expect(screen.queryByRole("list")).not.toBeInTheDocument();

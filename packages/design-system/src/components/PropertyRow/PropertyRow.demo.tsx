@@ -6,12 +6,12 @@ export default {
 	title: "PropertyRow",
 	render: (p) => (
 		<PropertyRow icon={p.icon} label={p.label}>
-			<Input placeholder={p.placeholder} />
+			<Input label={p.label} labelHidden placeholder={p.placeholder} />
 		</PropertyRow>
 	),
 	controls: {
-		icon: { type: "text", default: "person" },
-		label: { type: "text", default: "Assignee" },
+		icon: { type: "text", default: "label" },
+		label: { type: "text", default: "Category" },
 		placeholder: { type: "text", default: "Empty" },
 	},
 	presets: {

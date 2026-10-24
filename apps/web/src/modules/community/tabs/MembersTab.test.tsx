@@ -339,7 +339,7 @@ test("MemberManagement: per-row Change role icon opens the role dialog with role
 	});
 	fireEvent.click(changeRoleBtns[0]);
 
-	// The dialog (unmountOnExit) mounts its content — incl. the Segment's five
+	// The dialog renders its content — incl. the Segment's five
 	// role options — asynchronously on open; wait for them to render.
 	await waitFor(() => {
 		expect(
@@ -371,7 +371,7 @@ test("MemberManagement: selecting rows and clicking batch Change role opens the 
 	});
 	fireEvent.click(changeRoleButton);
 
-	// ChangeRoleDialog (unmountOnExit) mounts its content asynchronously on open.
+	// ChangeRoleDialog renders its content asynchronously on open.
 	// legalEvents("member.onboarding") ∩ legalEvents("former.active") = { SET_ROLE }
 	// only, which still yields all four role destinations ("member" is not
 	// suppressed here, because the former row isn't a member).

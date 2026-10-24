@@ -173,8 +173,8 @@ function VirtualBody<Data extends Record<string, unknown>>(body: {
 	 * `getTotalSize()` on `@tanstack/solid-virtual` is a Solid signal (see
 	 * the wrapper's Proxy `handler.get` for `"getTotalSize"`) — reading it
 	 * subscribes, so this recomputes as measurements land and the total
-	 * grows. Trusting it keeps the scrollbar honest: the roster used to
-	 * cut off at row fifteen because the bottom pad was estimated from a
+	 * grows. Trusting it keeps the scrollbar honest: a grouped table used
+	 * to cut off at row fifteen because the bottom pad was estimated from a
 	 * row count that shrank whenever a group collapsed but didn't account
 	 * for the measured rows above.
 	 */
@@ -225,8 +225,8 @@ function VirtualBody<Data extends Record<string, unknown>>(body: {
 					// callback ONCE, when the condition first turns truthy,
 					// and never again while it merely changes from one
 					// truthy value to another — so a row rendered here kept
-					// its original cells forever. A door override changed on
-					// the server, the query pushed a fresh row model, and
+					// its original cells forever. A row's flag changed on
+					// the server, the data pushed a fresh row model, and
 					// the table went on showing the old flag. `keyed`
 					// re-renders whenever the item's identity changes, which
 					// (given the memo above) is exactly when it should.

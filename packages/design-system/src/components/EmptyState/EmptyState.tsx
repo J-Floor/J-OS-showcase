@@ -1,27 +1,21 @@
 import { type JSX } from "solid-js";
 
-import { ExceptionDisplay } from "../ExceptionDisplay/ExceptionDisplay.tsx";
-import { type TStatus } from "../Status/Status.tsx";
+import { ICONS } from "../../icons.ts";
+import {
+	ExceptionDisplay,
+	type ExceptionDisplayProps,
+} from "../ExceptionDisplay/ExceptionDisplay.tsx";
 
-export type EmptyStateProps = {
-	/** Status colour. Default "neutral". */
-	status?: TStatus;
-	/** Material Symbols ligature. Default "inbox". */
-	icon?: string;
-	/** Heading. Default "Nothing here yet". */
-	title?: string;
-	/** Optional detail/body. */
-	description?: JSX.Element;
-	/** Optional actions (e.g. a "Create" Button). */
-	children?: JSX.Element;
-};
+/** {@link ExceptionDisplayProps}, each optional. Defaults: `status` "neutral",
+ *  `icon` `ICONS.empty`, `title` "Nothing here yet". */
+export type EmptyStateProps = Partial<ExceptionDisplayProps>;
 
 /** Generic "nothing here" placeholder built on {@link ExceptionDisplay}. */
 export function EmptyState(props: EmptyStateProps): JSX.Element {
 	return (
 		<ExceptionDisplay
 			status={props.status ?? "neutral"}
-			icon={props.icon ?? "inbox"}
+			icon={props.icon ?? ICONS.empty}
 			title={props.title ?? "Nothing here yet"}
 			description={props.description}
 		>

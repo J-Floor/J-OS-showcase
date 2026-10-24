@@ -2,6 +2,7 @@ import { For, Index, type JSX } from "solid-js";
 
 import { Skeleton } from "../Skeleton/Skeleton.tsx";
 
+import { TEXT_CELL_ATTR } from "./domContract.ts";
 import styles from "./Table.module.scss";
 
 const WIDTHS = ["long", "medium", "short", "medium"] as const;
@@ -27,7 +28,7 @@ export function SkeletonRows(props: {
 					<Index each={Array.from({ length: props.columns })}>
 						{(_, columnIndex) => (
 							<td
-								data-text-cell=""
+								{...{ [TEXT_CELL_ATTR]: "" }}
 								class={
 									props.hasActions &&
 									columnIndex === props.columns - 1

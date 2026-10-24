@@ -1,6 +1,6 @@
 # Working in packages/design-system
 
-How to build and extend components (the four-file bundle, tokens, theming,
+How to build and extend components (the component bundle, tokens, theming,
 the harness to run) is in the `design-system` skill. These are the traps it
 doesn't prevent:
 
@@ -11,6 +11,9 @@ doesn't prevent:
   `-pill`), `--jf-border-width-decorative` (not `-thin`),
   `--jf-opacity-disabled` (not `-muted`), `jf-typo-body-regular` (not
   `jf-typo-body`). An unknown mixin fails only the build; lint and tests pass.
+- **There are no global `.jf-typo-*` classes.** A `class="jf-typo-h3"` in JSX
+  matches nothing and nothing flags it; the text just keeps its inherited type.
+  Type goes through the mixins only.
 - **Check a token pair actually differs before relying on the contrast.**
   `--jf-surface-bg-overlay` and `--jf-surface-bg-sunken` are both
   `--core-grey-100` in the light theme, so Segment's selected-option highlight

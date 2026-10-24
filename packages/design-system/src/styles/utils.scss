@@ -52,7 +52,8 @@
 
 @mixin focus-outline {
 	&:focus-visible {
-		outline: var(--jf-border-strong) solid 2px;
+		outline: var(--jf-border-width-accessibility) solid
+			var(--jf-border-strong);
 		outline-offset: 2px;
 	}
 }

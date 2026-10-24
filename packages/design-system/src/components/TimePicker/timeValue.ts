@@ -1,3 +1,4 @@
+import type { UseDateInputProps } from "@ark-ui/solid/date-input";
 import {
 	CalendarDateTime,
 	DateFormatter,
@@ -5,8 +6,12 @@ import {
 	Time,
 } from "@internationalized/date";
 
-/** The smallest segment shown by the field. */
-export type TimeGranularity = "minute" | "second";
+/** The smallest segment shown by the field: the time-of-day granularities of
+ *  the date-input machine. */
+export type TimeGranularity = Extract<
+	NonNullable<UseDateInputProps["granularity"]>,
+	"minute" | "second"
+>;
 
 // A `Time` is not a `DateValue`, but the zag date-input engine works in
 // `DateValue[]`. We bridge through a fixed epoch date: every value the machine

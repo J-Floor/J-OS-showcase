@@ -1,3 +1,5 @@
+@use "@j-os/design-system/breakpoints" as bp;
+
 .screen {
 	display: grid;
 	place-items: start center;
@@ -71,7 +73,7 @@
 	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
 	gap: calc((var(--jf-spacing-close) + var(--jf-spacing-detached)) / 2);
 
-	@media (width <= 32rem) {
+	@include bp.phone {
 		grid-template-columns: 1fr;
 	}
 }

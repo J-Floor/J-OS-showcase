@@ -2,18 +2,13 @@ import clsx from "clsx";
 import { Show, splitProps, type JSX } from "solid-js";
 
 import { ICONS } from "../../icons.ts";
+import type { DistributiveOmit } from "../../utils/types.ts";
 import { Input, type InputProps } from "../Input/Input.tsx";
 
 import { ClearSearchButton } from "./ClearSearchButton.tsx";
 import styles from "./SearchInput.module.scss";
 
-/** `Omit` per union member: `InputProps` is a `PropsWithDisabling` union, and a
- *  plain `Omit` flattens it so a spread back into `Input` no longer type-checks. */
-type OmitEach<T, K extends PropertyKey> = T extends unknown
-	? Omit<T, K>
-	: never;
-
-export type SearchInputProps = OmitEach<
+export type SearchInputProps = DistributiveOmit<
 	InputProps,
 	"value" | "onValueChange" | "onInput" | "trailing" | "leadingIconName"
 > & {

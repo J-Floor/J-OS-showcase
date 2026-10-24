@@ -183,6 +183,8 @@ function LinksEditor(props: {
 	return (
 		<div class={styles.links}>
 			<Input
+				label="Link 1"
+				labelHidden
 				type="url"
 				placeholder="https://…"
 				leadingIconName={ICONS.link}
@@ -196,6 +198,8 @@ function LinksEditor(props: {
 				{(index) => (
 					<Show when={slots()[index - 1].trim() !== ""}>
 						<Input
+							label={`Link ${index + 1}`}
+							labelHidden
 							type="url"
 							placeholder="https://… (optional)"
 							leadingIconName={ICONS.link}

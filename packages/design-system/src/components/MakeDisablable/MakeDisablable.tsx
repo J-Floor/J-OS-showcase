@@ -21,6 +21,10 @@ export type MakeDisablableProps = DisablingState &
  *  - disabled (no reason) → bare `<span class=disabled>`
  *  - else → children unchanged
  *
+ * Both disabled wrappers carry `data-disabled`. The dim only blocks the
+ * pointer: the wrapped control must get `disabled` itself to ignore the
+ * keyboard (`separateDisablingProps` hands it to both halves).
+ *
  * For the tooltip branch the J-OS `Tooltip` renders its trigger as a `<button>`
  * by default; to avoid nesting interactive elements (e.g. a `<button>` inside
  * the trigger button) we use the Tooltip's `asChild` render prop to make a
@@ -37,7 +41,10 @@ export function MakeDisablable(props: MakeDisablableProps): JSX.Element {
 			}
 			fallback={
 				<Show when={props.disabled} fallback={props.children}>
-					<span class={clsx(props.class, styles.disabled)}>
+					<span
+						class={clsx(props.class, styles.disabled)}
+						data-disabled=""
+					>
 						{props.children}
 					</span>
 				</Show>
@@ -55,6 +62,7 @@ export function MakeDisablable(props: MakeDisablableProps): JSX.Element {
 					<span
 						{...triggerProps()}
 						class={clsx(props.class, styles.disabled)}
+						data-disabled=""
 					>
 						{props.children}
 					</span>

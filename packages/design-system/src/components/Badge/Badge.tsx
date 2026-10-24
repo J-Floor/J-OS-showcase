@@ -1,15 +1,17 @@
 import clsx from "clsx";
-import type { JSX } from "solid-js";
+import { splitProps, type JSX } from "solid-js";
 
 import { Status, type TStatus } from "../Status/Status.tsx";
 
 import styles from "./Badge.module.scss";
 
-export type BadgeProps = {
+export type BadgeProps = Omit<
+	JSX.HTMLAttributes<HTMLSpanElement>,
+	"children"
+> & {
 	/** Status colour. Default "neutral". */
 	status?: TStatus;
 	children: JSX.Element;
-	class?: string;
 };
 
 /**
@@ -17,10 +19,11 @@ export type BadgeProps = {
  * pill reads those vars and never branches on the status value itself.
  */
 export function Badge(props: BadgeProps): JSX.Element {
+	const [local, rest] = splitProps(props, ["status", "class", "children"]);
 	return (
-		<Status status={props.status ?? "neutral"}>
-			<span class={clsx(styles.badge, props.class)}>
-				{props.children}
+		<Status status={local.status ?? "neutral"}>
+			<span {...rest} class={clsx(styles.badge, local.class)}>
+				{local.children}
 			</span>
 		</Status>
 	);

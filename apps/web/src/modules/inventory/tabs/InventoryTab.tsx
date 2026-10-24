@@ -1,7 +1,7 @@
 import {
 	Table,
-	type BatchActionsRenderProps,
 	type JfColumnDefinition,
+	type TableSelection,
 } from "@j-os/design-system";
 import { Show, createSignal, type JSX } from "solid-js";
 
@@ -10,6 +10,16 @@ import type { EntitySelection } from "../../../shared/entity/createEntitySelecti
 import type { EntityDescriptor } from "../../../shared/entity/entityDescriptor.ts";
 import type { SheetNavState } from "../../../shared/entity/EntitySheetHeader.tsx";
 import { useRowPrefetch } from "../../../shared/entity/useRowPrefetch.ts";
+
+/** The selection bar's contents: hands the table's selection to the tab's
+ *  `batchActions`. */
+function InventoryBatchBar<Row extends Record<string, unknown>>(props: {
+	batchActions?: (selection: TableSelection<Row>) => JSX.Element;
+}): JSX.Element {
+	const selection = Table.useSelection<Row>();
+	// eslint-disable-next-line solid/reactivity -- called once; the selection hands out accessors, read inside the bar's own JSX
+	return props.batchActions?.(selection) ?? null;
+}
 
 export function InventoryTab<
 	Row extends Record<string, unknown> & { _id: string },
@@ -29,7 +39,7 @@ export function InventoryTab<
 	/** Items tab only: checkboxes + header select-all. Types/categories omit this. */
 	enableRowSelection?: boolean;
 	/** Selection-bar contents. Only rendered when row selection is on. */
-	batchActions?: (props: BatchActionsRenderProps<Row>) => JSX.Element;
+	batchActions?: (selection: TableSelection<Row>) => JSX.Element;
 	renderSheet: (args: {
 		open: () => boolean;
 		onOpenChange: (isOpen: boolean) => void;
@@ -84,6 +94,7 @@ export function InventoryTab<
 			<Table.Root
 				columns={props.columns()}
 				data={props.data()}
+				getRowId={(row) => row._id}
 				onDisplayedRowsChange={setDisplayed}
 				onRowClick={(row) => {
 					props.selection.openRow(row);
@@ -98,8 +109,8 @@ export function InventoryTab<
 				enableRowSelection={props.enableRowSelection}
 			>
 				<Show when={props.enableRowSelection}>
-					<Table.BatchActions<Row>>
-						{(batch) => props.batchActions?.(batch) ?? null}
+					<Table.BatchActions>
+						<InventoryBatchBar batchActions={props.batchActions} />
 					</Table.BatchActions>
 				</Show>
 			</Table.Root>

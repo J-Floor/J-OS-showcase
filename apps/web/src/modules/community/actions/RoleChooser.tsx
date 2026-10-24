@@ -149,6 +149,7 @@ export function RoleChooser(props: {
 	return (
 		<>
 			<Segment.Root
+				aria-label="New role"
 				class={styles.segment}
 				value={choice() ?? ""}
 				onValueChange={(details) => {

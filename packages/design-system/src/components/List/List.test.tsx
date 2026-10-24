@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from "@solidjs/testing-library";
 import { vi } from "vitest";
 
+import { Icon } from "../Icon/Icon.tsx";
+
 import { List } from "./List.tsx";
 
 test("renders item title + description", () => {
@@ -30,7 +32,7 @@ test("renders a left icon ligature", () => {
 	expect(icon).toHaveAttribute("aria-hidden", "true");
 });
 
-test("Root renders a ul with each Item as a li", () => {
+test("Root is a list of list items without ul/li markup", () => {
 	const { container } = render(() => (
 		<List.Root>
 			<List.Item>
@@ -41,13 +43,40 @@ test("Root renders a ul with each Item as a li", () => {
 			</List.Item>
 		</List.Root>
 	));
-	expect(container.querySelector("ul")).toBeInTheDocument();
-	expect(container.querySelectorAll("li")).toHaveLength(2);
+	expect(screen.getByRole("list")).toBeInTheDocument();
+	expect(screen.getAllByRole("listitem")).toHaveLength(2);
+	expect(container.querySelector("ul, li")).toBeNull();
+});
+
+test("rows under a Root given another role claim no list item role", () => {
+	render(() => (
+		<List.Root role="presentation">
+			<List.Item>
+				<List.ItemTitle>A</List.ItemTitle>
+			</List.Item>
+		</List.Root>
+	));
+	expect(screen.queryByRole("list")).toBeNull();
+	expect(screen.queryByRole("listitem")).toBeNull();
+});
+
+test("Root forwards its attributes", () => {
+	render(() => (
+		<List.Root aria-label="Inbox" id="inbox">
+			<List.Item>
+				<List.ItemTitle>A</List.ItemTitle>
+			</List.Item>
+		</List.Root>
+	));
+	expect(screen.getByRole("list", { name: "Inbox" })).toHaveAttribute(
+		"id",
+		"inbox"
+	);
 });
 
 test("an item with onClick is one button that fires it, and the row is not a second tab stop", () => {
 	const onClick = vi.fn();
-	const { container } = render(() => (
+	render(() => (
 		<List.Root>
 			<List.Item onClick={onClick}>
 				<List.ItemTitle>Inbox</List.ItemTitle>
@@ -57,13 +86,13 @@ test("an item with onClick is one button that fires it, and the row is not a sec
 	));
 	fireEvent.click(screen.getByRole("button", { name: /Inbox/ }));
 	expect(onClick).toHaveBeenCalledOnce();
-	const item = container.querySelector("li");
+	const item = screen.getByRole("listitem");
 	expect(item).not.toHaveAttribute("tabindex");
 	expect(item).toHaveAttribute("data-clickable");
 });
 
-test("an item without onClick stays a focusable row with no button", () => {
-	const { container } = render(() => (
+test("an inert row is no tab stop and has no button", () => {
+	render(() => (
 		<List.Root>
 			<List.Item>
 				<List.ItemTitle>Inbox</List.ItemTitle>
@@ -71,7 +100,35 @@ test("an item without onClick stays a focusable row with no button", () => {
 		</List.Root>
 	));
 	expect(screen.queryByRole("button")).toBeNull();
-	expect(container.querySelector("li")).toHaveAttribute("tabindex", "0");
+	expect(screen.getByRole("listitem")).not.toHaveAttribute("tabindex");
+});
+
+test("content written before the text leads the row, content after it trails", () => {
+	render(() => (
+		<List.Root>
+			<List.Item>
+				<Icon>star</Icon>
+				<List.ItemTitle>Ada</List.ItemTitle>
+				<Icon>chevron_right</Icon>
+			</List.Item>
+		</List.Root>
+	));
+	const row = screen.getByRole("listitem");
+	const slots = Array.from(row.children).map((slot) => slot.textContent);
+	expect(slots).toEqual(["star", "Ada", "chevron_right"]);
+});
+
+test("a title takes rich children", () => {
+	render(() => (
+		<List.Root>
+			<List.Item>
+				<List.ItemTitle>
+					<strong>Bold</strong> name
+				</List.ItemTitle>
+			</List.Item>
+		</List.Root>
+	));
+	expect(screen.getByText("Bold").tagName).toBe("STRONG");
 });
 
 test("a wrapping description is marked so it can run over several lines", () => {

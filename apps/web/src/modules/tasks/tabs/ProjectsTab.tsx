@@ -1,3 +1,4 @@
+import { Tabs } from "@j-os/design-system";
 import {
 	For,
 	Show,
@@ -13,11 +14,12 @@ import { createSheetNav } from "../../../lib/createSheetNav.ts";
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
 import { createEntitySelection } from "../../../shared/entity/createEntitySelection.ts";
 import { personName } from "../data/taskHelpers.ts";
-import type { Project, Task } from "../data/tasksData.tsx";
+import type { Person, Project, Task } from "../data/tasksData.tsx";
 import { useProjects, useTasks } from "../data/tasksData.tsx";
 import { ProjectCard } from "../ProjectCard.tsx";
 import { ProjectSheet } from "../sheets/ProjectSheet.tsx";
 import { TaskSheet } from "../sheets/TaskSheet.tsx";
+import { ProjectTabActions } from "../TasksTabActions.tsx";
 import { ProjectTimeline } from "../timeline/ProjectTimeline.tsx";
 import { undatedProjects, type ViewMode } from "../timeline/timeline.ts";
 
@@ -25,9 +27,6 @@ import local from "./ProjectsTab.module.scss";
 import styles from "./TabShared.module.scss";
 
 type ProjectsTabProps = {
-	requestNew: () => number;
-	mode: Accessor<ViewMode>;
-	jumpToday: Accessor<number>;
 	/** Whether the Projects tab is the one on screen — gates the `?project=`
 	 *  read/write side of the entity selection below. */
 	active: () => boolean;
@@ -119,17 +118,6 @@ function createProjectSelection(options: {
 		projSel.openCreate();
 	}
 
-	// Open the create sheet when the tab-bar "+ Project" button fires.
-	createEffect(
-		on(
-			() => props.requestNew(),
-			() => {
-				openNewWithRange();
-			},
-			{ defer: true }
-		)
-	);
-
 	return {
 		projSel,
 		sheetNav: {
@@ -141,6 +129,9 @@ function createProjectSelection(options: {
 		createStart: draft.start,
 		createEnd: draft.end,
 		createFrom: draft.from,
+		openNew: (): void => {
+			openNewWithRange();
+		},
 		// The timeline hands back an id, not a row (it doesn't hold row objects).
 		openProject: (id: Id<"projects">): void => {
 			const project = all().find((proj) => proj._id === id);
@@ -211,6 +202,49 @@ function createNestedTask(options: { tasks: Accessor<Task[] | undefined> }) {
 	};
 }
 
+/** The timeline and its tab-bar controls: the day/week/month view and "Today"
+ *  live here, beside the timeline they drive; "New project" opens the tab's
+ *  create sheet. */
+function TimelineView(props: {
+	projects: Project[] | undefined;
+	people: Person[];
+	tasks: Task[] | undefined;
+	onSelect: (id: Id<"projects">) => void;
+	onCreateRange: (
+		startMs: number,
+		endMs: number,
+		from: HTMLElement | null
+	) => void;
+	onNewProject: () => void;
+}): JSX.Element {
+	const [mode, setMode] = createSignal<ViewMode>("day");
+	// The timeline recentres on today each time this count changes.
+	const [jumpToday, setJumpToday] = createSignal(0);
+	return (
+		<>
+			<Tabs.Actions value="projects">
+				<ProjectTabActions
+					mode={mode}
+					onModeChange={setMode}
+					onJumpToday={() => {
+						setJumpToday((count) => count + 1);
+					}}
+					onNewProject={props.onNewProject}
+				/>
+			</Tabs.Actions>
+			<ProjectTimeline
+				projects={props.projects}
+				people={props.people}
+				tasks={props.tasks}
+				mode={mode()}
+				jumpToday={jumpToday}
+				onSelect={props.onSelect}
+				onCreateRange={props.onCreateRange}
+			/>
+		</>
+	);
+}
+
 export function ProjectsTab(props: ProjectsTabProps): JSX.Element {
 	const projects = useProjects();
 	const boardLevel = useBoardLevel();
@@ -247,14 +281,13 @@ export function ProjectsTab(props: ProjectsTabProps): JSX.Element {
 
 	return (
 		<div class={styles.tab}>
-			<ProjectTimeline
+			<TimelineView
 				projects={projects.data()}
 				people={boardLevel.data() ?? []}
 				tasks={tasks.data()}
-				mode={props.mode()}
-				jumpToday={props.jumpToday}
 				onSelect={selection.openProject}
 				onCreateRange={selection.openNewRange}
+				onNewProject={selection.openNew}
 			/>
 			{/* While projects load, the timeline shows the skeleton. */}
 			<Show when={undated().length}>

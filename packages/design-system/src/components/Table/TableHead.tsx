@@ -15,6 +15,12 @@ import { type JSX, For, Show } from "solid-js";
 import { Checkbox } from "../Checkbox/Checkbox.tsx";
 
 import { ACTIONS_COLUMN_ID, SELECT_COLUMN_ID } from "./columnTracks.ts";
+import {
+	COLUMN_ID_ATTR,
+	HEADER_ACTIONS_ATTR,
+	HEADER_CELL_ATTR,
+	HEADER_LABEL_ATTR,
+} from "./domContract.ts";
 import { FilteringButton } from "./FilteringButton.tsx";
 import { SortingButton } from "./SortingButton.tsx";
 import styles from "./Table.module.scss";
@@ -42,13 +48,19 @@ function renderHeaderCell<Data extends Record<string, unknown>>(
 			role="columnheader"
 			scope="col"
 			aria-sort={ariaSort(column)}
-			data-column-id={column.id}
+			{...{ [COLUMN_ID_ATTR]: column.id }}
 		>
 			<Show
 				when={isSelect}
 				fallback={
-					<span class={styles.headerCell} data-header-cell="">
-						<span class={styles.headerLabel} data-header-label="">
+					<span
+						class={styles.headerCell}
+						{...{ [HEADER_CELL_ATTR]: "" }}
+					>
+						<span
+							class={styles.headerLabel}
+							{...{ [HEADER_LABEL_ATTR]: "" }}
+						>
 							{flexRender(
 								column.columnDef.header,
 								header.getContext()
@@ -56,7 +68,7 @@ function renderHeaderCell<Data extends Record<string, unknown>>(
 						</span>
 						<span
 							class={styles.headerActions}
-							data-header-actions=""
+							{...{ [HEADER_ACTIONS_ATTR]: "" }}
 						>
 							<Show when={column.getCanSort()}>
 								<SortingButton column={column} table={table} />

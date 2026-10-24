@@ -1,6 +1,7 @@
 import { createMemo, createSignal, onCleanup, type Accessor } from "solid-js";
 
 import styles from "./Chart.module.scss";
+import type { ChartProps } from "./Chart.tsx";
 import {
 	axisLabel,
 	maxOf,
@@ -9,6 +10,7 @@ import {
 	stackRows,
 	type ChartDatum,
 	type ChartSeries,
+	type StackedCell,
 } from "./scale.ts";
 
 /**
@@ -73,9 +75,6 @@ export type MarkPath = { className: string; line: string; area?: string };
 /** The drawable area inside the padding, in the SVG's user units. */
 type Plot = { x: number; y: number; w: number; h: number };
 
-/** A series value's stacked bottom and top. */
-type Cell = { base: number; top: number };
-
 /** The chart's coordinate system, as accessors so every read stays tracked. */
 export type ChartGeometry = {
 	plot: () => Plot;
@@ -84,7 +83,7 @@ export type ChartGeometry = {
 	 *  centre. */
 	bandCentre: (index: number) => number;
 	yOf: (value: number) => number;
-	cellAt: (rowIndex: number, seriesIndex: number) => Cell;
+	cellAt: (rowIndex: number, seriesIndex: number) => StackedCell;
 	formatted: (value: number) => string;
 };
 
@@ -216,12 +215,8 @@ function layoutMarks(
 
 /** The chart's coordinate system, built from the data and the plot's size. */
 export function createChartGeometry(
-	props: {
-		data: ChartDatum[];
-		series: ChartSeries[];
-		format?: (value: number) => string;
-	},
-	size: { width: Accessor<number>; height: Accessor<number> }
+	props: Pick<ChartProps, "data" | "series" | "format">,
+	size: Omit<ReturnType<typeof createMeasuredSize>, "measure">
 ): { geometry: ChartGeometry; ticks: Accessor<number[]> } {
 	const stacked = createMemo(() => stackRows(props.data, props.series));
 	const scale = createMemo(() => niceScale(maxOf(stacked())));
@@ -257,7 +252,7 @@ export function createChartGeometry(
 }
 
 /** The hovered category, and the handlers that move and clear it. */
-export function createHoverTracking(props: { data: ChartDatum[] }): {
+export function createHoverTracking(props: Pick<ChartProps, "data">): {
 	hover: Accessor<number | undefined>;
 	hoveredRow: Accessor<ChartDatum | undefined>;
 	onPointer: (event: PointerEvent) => void;
@@ -290,7 +285,7 @@ export function createHoverTracking(props: { data: ChartDatum[] }): {
 
 /** The bars, and the line and area paths, laid out in the geometry. */
 export function createChartShapes(
-	props: { data: ChartDatum[]; series: ChartSeries[] },
+	props: Pick<ChartProps, "data" | "series">,
 	geometry: ChartGeometry
 ): { bars: Accessor<BarRect[]>; marks: Accessor<MarkPath[]> } {
 	const barColumns = createMemo(() => barColumnIds(props.series));

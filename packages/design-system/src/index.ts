@@ -25,7 +25,7 @@ export { createHoverIntent, HOVER_INTENT_MS } from "./utils/hoverIntent.ts";
 export {
 	ShortcutPeekProvider,
 	useShortcutPeek,
-} from "./components/ShortcutPeek/ShortcutPeek.tsx";
+} from "./utils/shortcutPeek.tsx";
 export {
 	CommandPalette,
 	type CommandPaletteItem,
@@ -41,10 +41,27 @@ export { LOGO_PART, Logo, type LogoProps } from "./components/Logo/Logo.tsx";
 export {
 	Status,
 	useStatusIcon,
+	type StatusProps,
 	type TStatus,
 } from "./components/Status/Status.tsx";
 export { Avatar, type AvatarProps } from "./components/Avatar/Avatar.tsx";
 export { Badge, type BadgeProps } from "./components/Badge/Badge.tsx";
+export {
+	Card,
+	type CardActionProps,
+	type CardBodyProps,
+	type CardDescriptionProps,
+	type CardFooterProps,
+	type CardHeaderProps,
+	type CardRootProps,
+	type CardTitleProps,
+} from "./components/Card/Card.tsx";
+export type {
+	DistributiveOmit,
+	FieldInputEvent,
+	MakeFieldOwnProps,
+	ShortcutHint,
+} from "./utils/types.ts";
 export {
 	Skeleton,
 	type SkeletonProps,
@@ -53,9 +70,15 @@ export {
 	SkeletonList,
 	type SkeletonListProps,
 } from "./components/Skeleton/SkeletonList.tsx";
-export { Query } from "./components/Query/Query.tsx";
+export {
+	Query,
+	type QueryContentProps,
+	type QueryPartProps,
+	type QueryRootProps,
+} from "./components/Query/Query.tsx";
 export {
 	Deferred,
+	type DeferredProps,
 	setDeferredImmediate,
 } from "./components/Deferred/Deferred.tsx";
 export { Spinner, type SpinnerProps } from "./components/Spinner/Spinner.tsx";
@@ -84,23 +107,56 @@ export {
 	type BaseButtonProps,
 } from "./components/Button/BaseButton.tsx";
 export { Button, type ButtonProps } from "./components/Button/Button.tsx";
-export { Tooltip, type TooltipProps } from "./components/Tooltip/Tooltip.tsx";
+export {
+	Tooltip,
+	type TooltipAnchorProps,
+	type TooltipProps,
+} from "./components/Tooltip/Tooltip.tsx";
 export {
 	MakeDisablable,
 	type MakeDisablableProps,
 } from "./components/MakeDisablable/MakeDisablable.tsx";
-export { Popover } from "./components/Popover/Popover.tsx";
-export { Dialog } from "./components/Dialog/Dialog.tsx";
-export { Sheet } from "./components/Sheet/Sheet.tsx";
-export { SheetNav } from "./components/SheetNav/SheetNav.tsx";
-export { PropertyRow } from "./components/PropertyRow/PropertyRow.tsx";
-export { Menu } from "./components/Menu/Menu.tsx";
+export {
+	Popover,
+	type PopoverContentProps,
+} from "./components/Popover/Popover.tsx";
+export {
+	Dialog,
+	type DialogContentProps,
+	type DialogRootProps,
+} from "./components/Dialog/Dialog.tsx";
+export {
+	Sheet,
+	type SheetBodyProps,
+	type SheetRootProps,
+} from "./components/Sheet/Sheet.tsx";
+export {
+	SheetNav,
+	type SheetNavProps,
+} from "./components/SheetNav/SheetNav.tsx";
+export {
+	PropertyRow,
+	type PropertyRowProps,
+} from "./components/PropertyRow/PropertyRow.tsx";
+export { Menu, type MenuContentProps } from "./components/Menu/Menu.tsx";
 export {
 	MakeField,
 	type MakeFieldProps,
 } from "./components/MakeField/MakeField.tsx";
-export { List } from "./components/List/List.tsx";
-export { Tabs } from "./components/Tabs/Tabs.tsx";
+export {
+	List,
+	type ListItemDescriptionProps,
+	type ListItemProps,
+	type ListItemTitleProps,
+	type ListRootProps,
+} from "./components/List/List.tsx";
+export {
+	Tabs,
+	type TabsActionsProps,
+	type TabsBarProps,
+	type TabsRootProps,
+	type TabsUrlParameter,
+} from "./components/Tabs/Tabs.tsx";
 export {
 	FloatingToolbar,
 	type FloatingToolbarProps,
@@ -109,10 +165,18 @@ export {
 	FloatingStack,
 	FloatingStackProvider,
 } from "./components/FloatingStack/FloatingStack.tsx";
-export { Segment } from "./components/Segment/Segment.tsx";
+export {
+	Segment,
+	type SegmentItemProps,
+	type SegmentRootProps,
+} from "./components/Segment/Segment.tsx";
 export {
 	Accordion,
-	type ItemTitleProps as AccordionItemTitleProps,
+	type AccordionItemContentProps,
+	type AccordionItemProps,
+	type AccordionItemSubtitleProps,
+	type AccordionItemTitleProps,
+	type AccordionRootProps,
 } from "./components/Accordion/Accordion.tsx";
 export {
 	IconButton,
@@ -156,12 +220,21 @@ export {
 export { Switch, type SwitchProps } from "./components/Switch/Switch.tsx";
 export {
 	Select,
-	type SelectItem,
+	type SelectOptionProps,
+	type SelectOptionsGroupProps,
+	type SelectOptionTextProps,
 	type SelectRootProps,
+	type SelectSelectedOptionsProps,
 } from "./components/Select/Select.tsx";
 export { Table, type TableRootProps } from "./components/Table/Table.tsx";
 export { TableSkeleton } from "./components/Table/SkeletonRows.tsx";
-export { Tour, useTour, type TourStep } from "./components/Tour/Tour.tsx";
+export {
+	Tour,
+	useTour,
+	type TourProps,
+	type TourStep,
+	type UseTourReturn,
+} from "./components/Tour/Tour.tsx";
 export {
 	SignaturePad,
 	type SignaturePadProps,
@@ -175,15 +248,19 @@ export type {
 } from "./components/Table/types.ts";
 export type {
 	BatchActionsProps,
-	BatchActionsRenderProps,
+	TableSelection,
 } from "./components/Table/BatchActions.tsx";
+export type { TableEmptyProps } from "./components/Table/Empty.tsx";
 export {
 	separateDisablingProps,
 	type PropsWithDisabling,
 } from "./utils/disablingProps.ts";
 export { splitArkProps } from "./utils/splitArkProps.ts";
 export { getPartStyles, type WithPartClasses } from "./utils/partStyling.ts";
-export { TextArea } from "./components/TextArea/TextArea.tsx";
+export {
+	TextArea,
+	type TextAreaProps,
+} from "./components/TextArea/TextArea.tsx";
 export {
 	EditableText,
 	type EditableTextProps,
@@ -196,10 +273,13 @@ export {
 export { Chip, type ChipProps } from "./components/Chip/Chip.tsx";
 export {
 	Combobox,
-	type ComboboxItem,
+	type ComboboxOptionProps,
+	type ComboboxOptionTextProps,
 	type ComboboxRootProps,
+	type ComboboxSelectedOptionsProps,
 } from "./components/Combobox/Combobox.tsx";
-export { Morph } from "./components/Morph/Morph.tsx";
+export { Morph, type MorphProps } from "./components/Morph/Morph.tsx";
+export type { OptionRecord } from "./utils/optionCollection.ts";
 export { morphTitle } from "./utils/morphPairing.ts";
 /**
  * The attributes a morph pairs on, for tests that assert an app marks a

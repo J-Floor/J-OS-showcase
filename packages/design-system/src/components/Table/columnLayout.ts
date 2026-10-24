@@ -50,9 +50,12 @@ const FONT_PROBE =
  */
 export const ANIMATED_COLUMNS = 32;
 
+/** A CSS custom property name: only these may reach an inline style. */
+type CustomProperty = `--${string}`;
+
 /** The registered `<length>` property holding the content width of the
  *  visible column at `index`. */
-function columnWidthProperty(index: number): string {
+function columnWidthProperty(index: number): CustomProperty {
 	return `--jf-col-${String(index)}`;
 }
 
@@ -62,16 +65,17 @@ function columnWidthProperty(index: number): string {
  * the table transitions, so every row reads one interpolated value per frame.
  */
 export type ColumnLayout = TrackLayout & {
-	widths: Readonly<Record<string, string>>;
+	widths: Readonly<Record<CustomProperty, string>>;
 };
 
 function sameLayout(left: ColumnLayout, right: ColumnLayout): boolean {
-	const names = Object.keys(left.widths);
+	const leftWidths = Object.entries(left.widths);
+	const rightWidths = new Map(Object.entries(right.widths));
 	return (
 		left.tracks === right.tracks &&
 		left.floor === right.floor &&
-		names.length === Object.keys(right.widths).length &&
-		names.every((name) => left.widths[name] === right.widths[name])
+		leftWidths.length === rightWidths.size &&
+		leftWidths.every(([name, width]) => rightWidths.get(name) === width)
 	);
 }
 
@@ -149,7 +153,7 @@ function buildLayout<Data extends Record<string, unknown>>(
 	header: ColumnNeeds,
 	body: ColumnNeeds
 ): ColumnLayout {
-	const widths: Record<string, string> = {};
+	const widths: Record<CustomProperty, string> = {};
 	const resolved = resolveTrackLayout(
 		table.getVisibleLeafColumns().map((column, index) => {
 			const size = columnMeta(column).size;

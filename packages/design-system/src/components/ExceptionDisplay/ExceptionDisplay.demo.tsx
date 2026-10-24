@@ -1,4 +1,4 @@
-import { Button, ExceptionDisplay } from "@j-os/design-system";
+import { Button, ExceptionDisplay, type TStatus } from "@j-os/design-system";
 
 import type { Demo } from "../../../demo/types.ts";
 
@@ -6,9 +6,7 @@ export default {
 	title: "ExceptionDisplay",
 	render: (p) => (
 		<ExceptionDisplay
-			status={
-				p.status as "success" | "error" | "warning" | "info" | "neutral"
-			}
+			status={p.status as TStatus}
 			icon={p.icon}
 			title={p.title}
 			description={p.description}

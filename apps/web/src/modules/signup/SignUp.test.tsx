@@ -78,9 +78,11 @@ test("after submit, the pending screen says the email explains what to do for so
 	type("Why do you want to join J floor?", "To build.");
 
 	fireEvent.click(screen.getByRole("combobox", { name: "Product stage" }));
-	fireEvent.click(await screen.findByText("Prototype"));
+	fireEvent.click(await screen.findByRole("option", { name: "Prototype" }));
 	fireEvent.click(screen.getByRole("combobox", { name: "Funding stage" }));
-	fireEvent.click(await screen.findByText("Bootstrapped (not raised)"));
+	fireEvent.click(
+		await screen.findByRole("option", { name: "Bootstrapped (not raised)" })
+	);
 	fireEvent.click(
 		screen.getByRole("combobox", { name: "Industry / vertical" })
 	);

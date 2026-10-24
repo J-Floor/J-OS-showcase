@@ -3,17 +3,14 @@ import clsx from "clsx";
 import { type JSX } from "solid-js";
 
 import { ICONS } from "../../icons.ts";
+import { FOCUSABLE } from "../../utils/focusable.ts";
 import { Icon } from "../Icon/Icon.tsx";
-import iconButtonStyles from "../IconButton/IconButton.module.scss";
 import { Popover } from "../Popover/Popover.tsx";
 import { Tooltip } from "../Tooltip/Tooltip.tsx";
 
 import { createColumnFilter } from "./columnFilterState.ts";
 import { FilterBody } from "./FilterBodies.tsx";
 import styles from "./Table.module.scss";
-
-const FOCUSABLE =
-	'input, button, select, textarea, [contenteditable="true"], [tabindex]:not([tabindex="-1"])';
 
 /**
  * The first focusable element in a filter popover that is not part of a mode
@@ -38,38 +35,26 @@ function FilterTrigger(props: {
 	isTextFilter: boolean;
 }): JSX.Element {
 	return (
-		<Tooltip
-			tooltipContent="Filter"
-			asChild={(tooltipProps) => (
-				<span
-					{...(tooltipProps() as object)}
-					class={styles.filterTrigger}
-				>
-					<Popover.ClickTrigger
-						asChild={(triggerProps) => (
-							<button
-								type="button"
-								{...(triggerProps() as object)}
-								aria-label={`Filter ${props.label}`}
-								data-active={
-									props.isActive ? "true" : undefined
-								}
-								class={clsx(
-									iconButtonStyles.iconButton,
-									props.isActive && styles.active
-								)}
-							>
-								<Icon>
-									{props.isTextFilter
-										? ICONS.search
-										: "filter_list"}
-								</Icon>
-							</button>
+		<Tooltip.Anchor label="Filter" class={styles.filterTrigger}>
+			<Popover.ClickTrigger
+				asChild={(triggerProps) => (
+					<button
+						type="button"
+						{...triggerProps()}
+						aria-label={`Filter ${props.label}`}
+						data-active={props.isActive ? "true" : undefined}
+						class={clsx(
+							styles.headerButton,
+							props.isActive && styles.active
 						)}
-					/>
-				</span>
-			)}
-		/>
+					>
+						<Icon>
+							{props.isTextFilter ? ICONS.search : ICONS.filter}
+						</Icon>
+					</button>
+				)}
+			/>
+		</Tooltip.Anchor>
 	);
 }
 

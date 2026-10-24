@@ -24,15 +24,15 @@ const LAST_NAMES = [
 	"Berners-Lee",
 ];
 
-// A roster big enough to hit the per-group cap — the case the palette is built
+// A list big enough to hit the per-group cap — the case the palette is built
 // for, and the one a three-name fixture never shows.
-const PEOPLE = FIRST_NAMES.flatMap((first, f) =>
+const RECORDS = FIRST_NAMES.flatMap((first, f) =>
 	LAST_NAMES.map((last, l) => ({
-		value: `p:${String(f)}-${String(l)}`,
+		value: `r:${String(f)}-${String(l)}`,
 		label: `${first} ${last}`,
-		group: "People",
-		icon: "person",
-		detail: l % 2 === 0 ? "Member" : "Guest",
+		group: "Records",
+		icon: "description",
+		detail: l % 2 === 0 ? "Draft" : "Final",
 		keywords: [`${first.toLowerCase()}@example.com`],
 		searchOnly: true,
 		onSelect: () => {},
@@ -41,11 +41,11 @@ const PEOPLE = FIRST_NAMES.flatMap((first, f) =>
 
 const PAGES = [
 	{
-		value: "page:community",
-		label: "Community",
+		value: "page:overview",
+		label: "Overview",
 		group: "Pages",
-		icon: "groups",
-		detail: "/community",
+		icon: "home",
+		detail: "/overview",
 		onSelect: () => {},
 	},
 	{
@@ -57,11 +57,11 @@ const PAGES = [
 		onSelect: () => {},
 	},
 	{
-		value: "page:space",
-		label: "Space",
+		value: "page:settings",
+		label: "Settings",
 		group: "Pages",
-		icon: "meeting_room",
-		detail: "/space",
+		icon: "settings",
+		detail: "/settings",
 		onSelect: () => {},
 	},
 ];
@@ -69,19 +69,19 @@ const PAGES = [
 const TASKS = [
 	{
 		value: "t:1",
-		label: "Fix the door reconciler",
+		label: "Fix the sync job",
 		group: "Tasks",
 		icon: "task",
-		detail: "Nuki",
+		detail: "Backend",
 		searchOnly: true,
 		onSelect: () => {},
 	},
 	{
 		value: "t:2",
-		label: "Chase the unsigned agreements",
+		label: "Chase the unsigned forms",
 		group: "Tasks",
 		icon: "task",
-		detail: "Community",
+		detail: "Overview",
 		searchOnly: true,
 		onSelect: () => {},
 	},
@@ -103,8 +103,8 @@ export default {
 				<CommandPalette
 					open={open()}
 					onOpenChange={setOpen}
-					items={[...PAGES, ...PEOPLE, ...TASKS]}
-					placeholder="Search pages, people, tasks…"
+					items={[...PAGES, ...RECORDS, ...TASKS]}
+					placeholder="Search pages, records, tasks…"
 					maxPerGroup={p.maxPerGroup}
 					recentsKey={p.recents ? "demo:palette:recents" : undefined}
 				/>
@@ -119,7 +119,7 @@ export default {
 		// Recents are read from localStorage on open; turn them off to see the
 		// plain grouped list.
 		"Without recents": { recents: false },
-		// The 64 people are `searchOnly`, so they only appear once you type — then
+		// The 64 records are `searchOnly`, so they only appear once you type — then
 		// the heading owns up to how many were left out.
 		"Tight cap": { maxPerGroup: 3 },
 	},

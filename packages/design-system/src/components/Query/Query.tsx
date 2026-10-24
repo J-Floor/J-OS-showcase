@@ -2,20 +2,20 @@ import {
 	createContext,
 	children,
 	createSignal,
-	onCleanup,
 	Show,
 	untrack,
-	useContext,
 	type Accessor,
 	type JSX,
 } from "solid-js";
 
+import { useRequiredContext } from "../../utils/context.ts";
+import { createPresence } from "../../utils/presence.tsx";
 import { Skeleton } from "../Skeleton/Skeleton.tsx";
 import { SkeletonList } from "../Skeleton/SkeletonList.tsx";
 
 /**
  * Loading, empty and loaded states for data that is `undefined` while it
- * loads (Convex `useQuery`). `Query.Root` provides the state and renders no
+ * loads (a live query, say). `Query.Root` provides the state and renders no
  * element; the parts read it at any depth. Never Suspense: loading is
  * controlled by `data === undefined`.
  *
@@ -38,26 +38,11 @@ type QueryState = {
 const QueryContext = createContext<QueryState>();
 
 function useQueryState(part: string): QueryState {
-	const state = useContext(QueryContext);
-	if (!state) throw new Error(`Query.${part} must sit inside Query.Root.`);
-	return state;
+	return useRequiredContext(QueryContext, `Query.${part}`, "Query.Root");
 }
 
 function isEmpty(value: unknown): boolean {
 	return value === null || (Array.isArray(value) && value.length === 0);
-}
-
-/** A presence counter: parts register on creation, unregister on cleanup. */
-function createPresence(): [Accessor<boolean>, () => void] {
-	const [count, setCount] = createSignal(0);
-	return [
-		// eslint-disable-next-line solid/reactivity -- an accessor handed to context
-		() => count() > 0,
-		() => {
-			setCount((current) => current + 1);
-			onCleanup(() => setCount((current) => current - 1));
-		},
-	];
 }
 
 /** Resolves its children (so every part registers), then reports settled. */
@@ -72,7 +57,17 @@ function Settle(props: {
 	return <>{resolved()}</>;
 }
 
-function Root(props: { data: unknown; children: JSX.Element }): JSX.Element {
+export type QueryRootProps = { data: unknown; children: JSX.Element };
+
+export type QueryContentProps<T> = {
+	of: T | null | undefined;
+	children: (data: Accessor<NonNullable<T>>) => JSX.Element;
+};
+
+/** `Query.Empty` and `Query.Skeleton`: their content, shown verbatim. */
+export type QueryPartProps = { children: JSX.Element };
+
+function Root(props: QueryRootProps): JSX.Element {
 	const [hasEmpty, registerEmpty] = createPresence();
 	const [hasSkeleton, registerSkeleton] = createPresence();
 	const [settled, setSettled] = createSignal(false);
@@ -95,10 +90,7 @@ function Root(props: { data: unknown; children: JSX.Element }): JSX.Element {
 
 /** The loaded content. Takes its own `of` (the same value as Root's `data`)
  *  so `rows` is typed: context cannot carry Root's type. */
-function Content<T>(props: {
-	of: T | null | undefined;
-	children: (data: Accessor<NonNullable<T>>) => JSX.Element;
-}): JSX.Element {
+function Content<T>(props: QueryContentProps<T>): JSX.Element {
 	const state = useQueryState("Content");
 	return (
 		<Show when={state.settled()}>
@@ -121,7 +113,7 @@ function Content<T>(props: {
 }
 
 /** Shown when the data is loaded and empty (`null` or `[]`). */
-function Empty(props: { children: JSX.Element }): JSX.Element {
+function Empty(props: QueryPartProps): JSX.Element {
 	const state = useQueryState("Empty");
 	state.registerEmpty();
 	return (
@@ -132,7 +124,7 @@ function Empty(props: { children: JSX.Element }): JSX.Element {
 }
 
 /** Replaces Content's default skeleton while loading. Rendered verbatim. */
-function QuerySkeleton(props: { children: JSX.Element }): JSX.Element {
+function QuerySkeleton(props: QueryPartProps): JSX.Element {
 	const state = useQueryState("Skeleton");
 	state.registerSkeleton();
 	return <Show when={state.data() === undefined}>{props.children}</Show>;

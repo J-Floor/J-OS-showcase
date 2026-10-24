@@ -1,5 +1,6 @@
 @use "sass:list";
 @use "sass:string";
+@use "../../styles/icon-button";
 @use "../../styles/typography" as typo;
 @use "../../styles/utils" as utils;
 
@@ -7,6 +8,17 @@
    not shift the page. Mirrored by ESTIMATED_ROW_HEIGHT in virtualRows.ts (the
    virtualiser's estimate) — change both together. */
 $row-height: 53px;
+
+/* The multi-sort badge's type: body-small, with a glyph as small as the text
+   and no line box, so the badge sits flush in the button's corner. */
+@mixin sort-badge-typography {
+	@include typo.body-typography(
+		0.75rem,
+		400,
+		$line-height: 0,
+		$icon-size: 0.75rem
+	);
+}
 
 /* The non-scrolling positioning context. Carries NO overflow of its own: only
    one of this and `.scrollBox` may be a scroll container, and a scroll box
@@ -206,6 +218,7 @@ $track-properties: ();
 			   outline, so the ring would vanish. A system-colour outline survives;
 			   the negative offset keeps it inside the row so nothing shifts. */
 			@media (forced-colors: active) {
+				/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- a forced-colors system colour; no token stands for it */
 				outline: var(--jf-border-width-accessibility) solid CanvasText;
 				outline-offset: calc(-1 * var(--jf-border-width-accessibility));
 			}
@@ -292,11 +305,10 @@ $track-properties: ();
 	margin-inline: auto;
 }
 
+/* The one cell of the empty row: the empty state brings its own spacing. */
 .empty {
 	grid-column: 1 / -1;
-	padding: var(--jf-spacing-far);
-	color: var(--jf-fg-muted);
-	text-align: center;
+	padding: 0;
 }
 
 /* Trailing per-row action column — always the last track (after the filler
@@ -355,9 +367,9 @@ $track-properties: ();
 }
 
 .groupCount {
-	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this font-weight value */
-	font-weight: 400;
 	color: var(--jf-fg-muted);
+
+	@include typo.jf-typo-body-regular;
 }
 
 /* Group-header row: spans every track, reads like a sub-header. A 16px
@@ -431,7 +443,8 @@ $track-properties: ();
 	border-radius: var(--jf-radius-container);
 	box-shadow: var(--jf-shadow-surface-elevation);
 	transform: translateX(-50%) scale(0);
-	transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+	transition: transform var(--jf-animation-duration-default)
+		var(--jf-animation-ease-standard);
 
 	@include typo.jf-typo-body-bold;
 
@@ -444,24 +457,9 @@ $track-properties: ();
 	white-space: nowrap;
 }
 
-/* Sorting/filtering buttons */
-.filterButton {
-	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	padding: var(--jf-spacing-close);
-	color: var(--jf-fg-muted);
-	cursor: pointer;
-	background: transparent;
-	border: none;
-	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this radius value */
-	border-radius: 6px;
-
-	/* stylelint-disable-next-line defensive-css/no-accidental-hover -- pointer-capable control; mobile accidental-hover not a concern */
-	&:hover {
-		background-color: var(--jf-surface-bg-raised);
-	}
+/* The sort and filter buttons in a header cell. */
+.headerButton {
+	@include icon-button.icon-button;
 }
 
 /* Tooltip-trigger wrapper around the filter button — tight box so the tooltip
@@ -492,15 +490,14 @@ $track-properties: ();
 }
 
 /* Override the header cell's typography `[data-icon]` size (which otherwise
-   makes the badge full-size). Extra class raises specificity above it. */
-.sortWrap .sortOrder [data-icon] {
-	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this font-size value */
-	font-size: 12px;
+   makes the badge full-size): small type with an icon to match. Extra class
+   raises specificity above it. */
+.sortWrap .sortOrder {
+	@include sort-badge-typography;
 }
 
 /* Active filter/sort — white pill stands out against the grey header fill */
-.active,
-.sortActive {
+.active {
 	color: var(--jf-fg-strong);
 	background-color: var(--jf-surface-bg-base);
 	border-radius: var(--jf-radius-container);
@@ -516,10 +513,10 @@ $track-properties: ();
 
 .filterTitle {
 	margin: 0;
-	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this font-weight value */
-	font-weight: 700;
 	color: var(--jf-fg-strong);
 	text-align: start;
+
+	@include typo.jf-typo-body-bold;
 }
 
 .enumOptions {
@@ -534,7 +531,6 @@ $track-properties: ();
    fold are pinned to the skeleton, so the browser would keep the view at the
    end as each page lands and every page would ask for the next. */
 .skeletonRow {
-	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value */
 	block-size: $row-height;
 	overflow-anchor: none;
 
@@ -556,7 +552,6 @@ $track-properties: ();
 	grid-auto-columns: 1fr;
 	align-items: center;
 	gap: var(--jf-spacing-far);
-	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value */
 	block-size: $row-height;
 	padding-inline: var(--jf-spacing-near);
 	border-block-end: 1px solid var(--jf-border-subtle);

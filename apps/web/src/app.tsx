@@ -5,6 +5,7 @@ import {
 	ShortcutPeekProvider,
 	ThemeSwitch,
 } from "@j-os/design-system";
+import { useLocation } from "@solidjs/router";
 import { HotkeysProvider } from "@tanstack/solid-hotkeys";
 import type { ParentProps } from "solid-js";
 
@@ -44,13 +45,16 @@ import { ShortcutPeekButton } from "./shared/ShortcutPeekButton.tsx";
 function ShellBody(props: ParentProps) {
 	let page: HTMLDivElement | undefined;
 	usePageTransitions(() => page);
+	const location = useLocation();
 	return (
 		<ConfirmProvider>
 			{/* The page's toolbar joins the floating stack on a phone. */}
 			<FloatingStackProvider>
 				<main class={styles.main}>
 					<header class={styles.topbar}>
-						<AppErrorBoundary>
+						{/* The bar outlives navigation (its breadcrumbs follow the
+						    route), so a new path clears a caught error. */}
+						<AppErrorBoundary resetKey={location.pathname}>
 							<Breadcrumbs />
 							<GlobalSearch />
 							{/* Adding a topbar control changes the fold thresholds in

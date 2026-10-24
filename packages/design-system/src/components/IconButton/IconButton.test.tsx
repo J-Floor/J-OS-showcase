@@ -2,7 +2,6 @@ import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
 import type { Hotkey } from "@tanstack/solid-hotkeys";
 import { createSignal } from "solid-js";
 
-import type { TriggerProps } from "../../utils/triggerProps.ts";
 import { Menu } from "../Menu/Menu.tsx";
 
 import { IconButton } from "./IconButton.tsx";
@@ -29,6 +28,92 @@ test("renders a spinner instead of the icon while loading", () => {
 	));
 	expect(screen.getByRole("status")).toBeInTheDocument();
 	expect(screen.queryByText("add")).not.toBeInTheDocument();
+});
+
+test("a caller's aria-label is kept", () => {
+	render(() => (
+		<IconButton tooltipLabel="Remove" aria-label="Remove the filter">
+			close
+		</IconButton>
+	));
+	expect(
+		screen.getByRole("button", { name: "Remove the filter" })
+	).toBeInTheDocument();
+});
+
+test("a caller's aria-labelledby names the button instead of the label", () => {
+	render(() => (
+		<>
+			<span id="remove-name">Remove the filter</span>
+			<IconButton tooltipLabel="Remove" aria-labelledby="remove-name">
+				close
+			</IconButton>
+		</>
+	));
+	const button = screen.getByRole("button", { name: "Remove the filter" });
+	expect(button).not.toHaveAttribute("aria-label");
+});
+
+test("a caller's aria-describedby is kept while the tooltip is closed", () => {
+	render(() => (
+		<>
+			<span id="remove-hint">Removes it for everyone</span>
+			<IconButton tooltipLabel="Remove" aria-describedby="remove-hint">
+				close
+			</IconButton>
+		</>
+	));
+	expect(screen.getByRole("button", { name: "Remove" })).toHaveAttribute(
+		"aria-describedby",
+		"remove-hint"
+	);
+});
+
+test("an open tooltip joins a caller's aria-describedby instead of replacing it", async () => {
+	render(() => (
+		<>
+			<span id="remove-hint">Removes it for everyone</span>
+			<IconButton tooltipLabel="Remove" aria-describedby="remove-hint">
+				close
+			</IconButton>
+		</>
+	));
+	const button = screen.getByRole("button", { name: "Remove" });
+	fireEvent.keyDown(document, { key: "Tab" });
+	button.focus();
+	const tooltip = await screen.findByRole("tooltip", { hidden: true });
+	await waitFor(() => {
+		expect(button).toHaveAttribute(
+			"aria-describedby",
+			`remove-hint ${tooltip.id}`
+		);
+	});
+});
+
+test("an async onClick shows the spinner until it settles", async () => {
+	let settle!: () => void;
+	render(() => (
+		<IconButton
+			tooltipLabel="Save"
+			onClick={() =>
+				new Promise<void>((resolve) => {
+					settle = resolve;
+				})
+			}
+		>
+			save
+		</IconButton>
+	));
+	const button = screen.getByRole("button", { name: "Save" });
+	fireEvent.click(button);
+	expect(button.querySelector("[role='status']")).not.toBeNull();
+	expect(screen.queryByText("save")).not.toBeInTheDocument();
+
+	settle();
+	await waitFor(() => {
+		expect(screen.getByText("save")).toBeInTheDocument();
+	});
+	expect(button.querySelector("[role='status']")).toBeNull();
 });
 
 test("fires onClick", () => {
@@ -125,7 +210,7 @@ test("as a menu trigger it keeps the menu's id and state while its tooltip still
 				asChild={(triggerProps) => (
 					<IconButton
 						tooltipLabel="More"
-						triggerProps={triggerProps() as TriggerProps}
+						triggerProps={triggerProps()}
 					>
 						more_vert
 					</IconButton>
@@ -163,6 +248,27 @@ test("as a menu trigger it keeps the menu's id and state while its tooltip still
 	expect(tooltipTrigger?.contains(button)).toBe(true);
 });
 
+test("triggerProps keep the outer machine's onClick beside the IconButton's own", () => {
+	const calls: string[] = [];
+	render(() => (
+		<IconButton
+			tooltipLabel="Open"
+			triggerProps={{
+				onClick: () => {
+					calls.push("trigger");
+				},
+			}}
+			onClick={() => {
+				calls.push("own");
+			}}
+		>
+			add
+		</IconButton>
+	));
+	fireEvent.click(screen.getByRole("button", { name: "Open" }));
+	expect(calls).toEqual(["trigger", "own"]);
+});
+
 test("as a menu trigger, keyboard focus on the button opens its tooltip and blur closes it", async () => {
 	render(() => (
 		<Menu.Root>
@@ -170,7 +276,7 @@ test("as a menu trigger, keyboard focus on the button opens its tooltip and blur
 				asChild={(triggerProps) => (
 					<IconButton
 						tooltipLabel="More"
-						triggerProps={triggerProps() as TriggerProps}
+						triggerProps={triggerProps()}
 					>
 						more_vert
 					</IconButton>

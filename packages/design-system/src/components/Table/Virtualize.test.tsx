@@ -3,6 +3,7 @@ import { createSignal } from "solid-js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Table } from "./Table.tsx";
+import { rowIndex } from "./testRowIds.ts";
 import type { JfColumnDefinition } from "./types.ts";
 
 type Row = Record<string, unknown> & { id: string; group: string };
@@ -151,6 +152,7 @@ describe("Table virtualisation", () => {
 		// rows until visible" below).
 		render(() => (
 			<Table.Root
+				getRowId={rowIndex}
 				columns={columns}
 				data={rows(40)}
 				groupBy="group"
@@ -164,8 +166,9 @@ describe("Table virtualisation", () => {
 	it("renders only a window of rows when it can measure one", () => {
 		const parent = measurableScrollParent(300);
 		render(() => (
-			<div ref={parent.ref} style={{ height: "300px" }}>
+			<div ref={parent.ref}>
 				<Table.Root
+					getRowId={rowIndex}
 					columns={columns}
 					data={rows(200)}
 					groupBy="group"
@@ -189,8 +192,9 @@ describe("Table virtualisation", () => {
 		const parent = measurableScrollParent(300);
 		const seen: Row[][] = [];
 		render(() => (
-			<div ref={parent.ref} style={{ height: "300px" }}>
+			<div ref={parent.ref}>
 				<Table.Root
+					getRowId={rowIndex}
 					columns={columns}
 					data={rows(200)}
 					groupBy="group"
@@ -217,8 +221,9 @@ describe("Table virtualisation", () => {
 			{ id: "before", group: "a" },
 		]);
 		render(() => (
-			<div ref={parent.ref} style={{ height: "300px" }}>
+			<div ref={parent.ref}>
 				<Table.Root
+					getRowId={rowIndex}
 					columns={columns}
 					data={data()}
 					groupBy="group"
@@ -236,8 +241,13 @@ describe("Table virtualisation", () => {
 	it("leaves an ungrouped table alone", () => {
 		const parent = measurableScrollParent(300);
 		render(() => (
-			<div ref={parent.ref} style={{ height: "300px" }}>
-				<Table.Root columns={columns} data={rows(40)} virtualize />
+			<div ref={parent.ref}>
+				<Table.Root
+					getRowId={rowIndex}
+					columns={columns}
+					data={rows(40)}
+					virtualize
+				/>
 			</div>
 		));
 		expect(screen.getByText("r39")).toBeInTheDocument();
@@ -256,8 +266,9 @@ describe("Table virtualisation", () => {
 		// real measurements.
 		const parent = measurableScrollParent(0);
 		render(() => (
-			<div ref={parent.ref} style={{ height: "0px" }}>
+			<div ref={parent.ref}>
 				<Table.Root
+					getRowId={rowIndex}
 					columns={columns}
 					data={rows(200)}
 					groupBy="group"
@@ -296,8 +307,9 @@ describe("Table virtualisation", () => {
 		// instead of recomputing against a zero-size viewport.
 		const parent = measurableScrollParent(400);
 		render(() => (
-			<div ref={parent.ref} style={{ height: "400px" }}>
+			<div ref={parent.ref}>
 				<Table.Root
+					getRowId={rowIndex}
 					columns={columns}
 					data={rows(500)}
 					groupBy="group"
@@ -347,8 +359,9 @@ describe("Table virtualisation", () => {
 		// go straight from its frozen window to a freshly measured one.
 		const parent = measurableScrollParent(400);
 		render(() => (
-			<div ref={parent.ref} style={{ height: "400px" }}>
+			<div ref={parent.ref}>
 				<Table.Root
+					getRowId={rowIndex}
 					columns={columns}
 					data={rows(500)}
 					groupBy="group"
@@ -399,8 +412,9 @@ describe("Table onEndReached", () => {
 		const onEndReached = vi.fn();
 		const [data, setData] = createSignal(rows(4));
 		render(() => (
-			<div ref={parent.ref} style={{ height: "300px" }}>
+			<div ref={parent.ref}>
 				<Table.Root
+					getRowId={rowIndex}
 					columns={columns}
 					data={data()}
 					groupBy="group"
@@ -431,8 +445,9 @@ describe("Table onEndReached", () => {
 		const [data, setData] = createSignal(rows(4));
 		const [loadingMore, setLoadingMore] = createSignal(false);
 		render(() => (
-			<div ref={parent.ref} style={{ height: "300px" }}>
+			<div ref={parent.ref}>
 				<Table.Root
+					getRowId={rowIndex}
 					columns={columns}
 					data={data()}
 					groupBy="group"
@@ -464,8 +479,9 @@ describe("Table onEndReached", () => {
 		const onEndReached = vi.fn();
 		const [loadingMore, setLoadingMore] = createSignal(false);
 		render(() => (
-			<div ref={parent.ref} style={{ height: "300px" }}>
+			<div ref={parent.ref}>
 				<Table.Root
+					getRowId={rowIndex}
 					columns={columns}
 					data={rows(4)}
 					groupBy="group"
@@ -493,8 +509,9 @@ describe("Table onEndReached", () => {
 		const parent = measurableScrollParent(300);
 		const onEndReached = vi.fn();
 		render(() => (
-			<div ref={parent.ref} style={{ height: "300px" }}>
+			<div ref={parent.ref}>
 				<Table.Root
+					getRowId={rowIndex}
 					columns={columns}
 					data={rows(200)}
 					groupBy="group"
@@ -516,8 +533,9 @@ describe("Table onEndReached", () => {
 		const parent = measurableScrollParent(300);
 		const onEndReached = vi.fn();
 		render(() => (
-			<div ref={parent.ref} style={{ height: "300px" }}>
+			<div ref={parent.ref}>
 				<Table.Root
+					getRowId={rowIndex}
 					columns={columns}
 					data={rows(200)}
 					groupBy="group"
@@ -548,8 +566,9 @@ describe("Table onEndReached", () => {
 		const parent = measurableScrollParent(300);
 		const onEndReached = vi.fn();
 		render(() => (
-			<div ref={parent.ref} style={{ height: "300px" }}>
+			<div ref={parent.ref}>
 				<Table.Root
+					getRowId={rowIndex}
 					columns={columns}
 					data={undefined}
 					groupBy="group"
@@ -566,6 +585,7 @@ describe("Table onEndReached", () => {
 		const onEndReached = vi.fn();
 		render(() => (
 			<Table.Root
+				getRowId={rowIndex}
 				columns={columns}
 				data={rows(4)}
 				groupBy="group"

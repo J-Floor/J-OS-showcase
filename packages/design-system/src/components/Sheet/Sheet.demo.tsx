@@ -1,12 +1,11 @@
-import { createSignal } from "solid-js";
+import { createSignal, Show } from "solid-js";
 
 import { Button, Sheet, PropertyRow } from "@j-os/design-system";
 
 import type { Demo } from "../../../demo/types.ts";
 
 /** Placeholder markup shaped like the demo's loaded body, for the "custom
- *  skeleton" preset — mirrors how a real sheet shapes its own
- *  `Sheet.Body` `skeleton`. */
+ *  skeleton" preset: what a real sheet puts in its `Sheet.Skeleton`. */
 function CustomSkeletonPlaceholder() {
 	return (
 		<>
@@ -46,14 +45,12 @@ function SheetDemo(props: {
 						<Sheet.Close />
 					</Sheet.HeaderActions>
 				</Sheet.Header>
-				<Sheet.Body
-					loading={props.loading}
-					skeleton={
-						props.customSkeleton ? (
-							<CustomSkeletonPlaceholder />
-						) : undefined
-					}
-				>
+				<Show when={props.customSkeleton}>
+					<Sheet.Skeleton>
+						<CustomSkeletonPlaceholder />
+					</Sheet.Skeleton>
+				</Show>
+				<Sheet.Body loading={props.loading}>
 					<p>{props.body}</p>
 				</Sheet.Body>
 				{props.withFooter ? (
@@ -84,7 +81,7 @@ export default {
 		/>
 	),
 	controls: {
-		title: { type: "text", default: "Edit member" },
+		title: { type: "text", default: "Edit item" },
 		body: {
 			type: "text",
 			default: "Sheet body content lives here.",

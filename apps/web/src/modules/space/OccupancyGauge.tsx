@@ -22,7 +22,7 @@ export function OccupancyGauge(props: { fill: number }) {
 				class={styles.fill}
 				data-fill-layer
 				aria-hidden="true"
-				style={{ width: `${props.fill * PERCENT}%` }}
+				style={{ "--fill": `${props.fill * PERCENT}%` }}
 			>
 				<div class={styles.row}>
 					<For each={SLOTS}>

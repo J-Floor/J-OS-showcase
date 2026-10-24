@@ -17,8 +17,8 @@ export function RulesStep(props: OnboardingStepProps) {
 	return (
 		<div class={styles.wrap}>
 			<SearchInput
-				label=""
-				aria-label={RULES_SEARCH_LABEL}
+				label={RULES_SEARCH_LABEL}
+				labelHidden
 				placeholder={RULES_SEARCH_LABEL}
 				value={query()}
 				onValueChange={setQuery}

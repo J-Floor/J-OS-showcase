@@ -29,12 +29,14 @@ import {
 	textContainsColumnFilter,
 	timeRangeColumnFilter,
 } from "./filter.ts";
+import type { TableRootProps } from "./Table.tsx";
 import type {
 	ColumnSize,
 	DataType,
 	EnumOption,
 	EnumValue,
 	JfColumnDefinition,
+	NoDataType,
 } from "./types.ts";
 
 /**
@@ -43,10 +45,7 @@ import type {
  * default size into every def, so the def alone cannot tell), and whether the
  * caller gave the column its own `cell` (TanStack merges a default one too).
  */
-type TableColumnMeta = (
-	| DataType
-	| { readonly dataType?: undefined; readonly enumOptions?: never }
-) & {
+type TableColumnMeta = (DataType | NoDataType) & {
 	size?: ColumnSize;
 	customCell?: boolean;
 };
@@ -205,29 +204,17 @@ function warnMisplacedActionsColumn(columns: readonly { id?: string }[]): void {
 	}
 }
 
-export type CreateTableOptions<Data extends Record<string, unknown>> = {
-	data: () => Data[];
-	columns: JfColumnDefinition<Data>[];
-	initialSorting?: SortingState;
-	initialFilters?: ColumnFiltersState;
-	enableRowSelection?: boolean;
-	groupBy?: string;
-	/** A row's stable id: see {@link defaultRowId}. Ids must be unique: two
-	 *  rows with one id share a selection and a measured width. */
-	getRowId?: (row: Data, index: number) => string;
-};
-
-/**
- * A row's `_id` when it is a string (every Convex document), else its index.
- * A stable id keeps a selection on its row, and lets the column measurement
- * skip unchanged rows, when a live push inserts or removes rows above it.
- */
-export function defaultRowId(
-	row: Record<string, unknown>,
-	index: number
-): string {
-	return typeof row._id === "string" ? row._id : String(index);
-}
+/** `Table.Root`'s table config, with `data` as a getter (loading is
+ *  `Table.Root`'s business). */
+export type CreateTableOptions<Data extends Record<string, unknown>> = Pick<
+	TableRootProps<Data>,
+	| "columns"
+	| "initialColumnSorting"
+	| "initialColumnFilters"
+	| "enableRowSelection"
+	| "groupBy"
+	| "getRowId"
+> & { data: () => Data[] };
 
 /**
  * Build a `@tanstack/solid-table` instance with signal-backed sorting,
@@ -246,10 +233,10 @@ export function createTable<Data extends Record<string, unknown>>(
 	options: CreateTableOptions<Data>
 ) {
 	const [sorting, setSorting] = createSignal<SortingState>(
-		options.initialSorting ?? []
+		options.initialColumnSorting ?? []
 	);
 	const [columnFilters, setColumnFilters] = createSignal<ColumnFiltersState>(
-		options.initialFilters ?? []
+		options.initialColumnFilters ?? []
 	);
 	const [rowSelection, setRowSelection] = createSignal<RowSelectionState>({});
 
@@ -268,7 +255,7 @@ export function createTable<Data extends Record<string, unknown>>(
 			return options.data();
 		},
 		columns,
-		getRowId: options.getRowId ?? defaultRowId,
+		getRowId: options.getRowId,
 		state: {
 			get sorting() {
 				return sorting();

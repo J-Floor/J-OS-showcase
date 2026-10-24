@@ -88,7 +88,7 @@ export function ConfirmProvider(props: ParentProps): JSX.Element {
 						<Dialog.CloseTrigger
 							asChild={(closeProps) => (
 								<Button
-									{...(closeProps() as object)}
+									triggerProps={closeProps()}
 									variant="tertiary"
 								>
 									Cancel

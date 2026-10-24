@@ -32,7 +32,7 @@ function todayMs(): number | undefined {
 }
 
 /**
- * Placeholder field layout passed to `Sheet.Body`'s `skeleton` while
+ * Placeholder field layout shown by `Sheet.Skeleton` while
  * `loading` is true — an open row whose data hasn't arrived yet. Shaped like
  * the loaded field list (mirrors `EventFieldsPlaceholder`); literal
  * "placeholder" text, never real or create-form copy.
@@ -204,6 +204,7 @@ function ProjectDetailRows(props: { fields: ProjectFields; people: Person[] }) {
 		<>
 			<PropertyRow field={projectFields.leaderId}>
 				<PersonSelect
+					label={projectFields.leaderId.label}
 					people={props.people}
 					value={props.fields.leaderId.value()}
 					placeholder="No leader"
@@ -215,6 +216,7 @@ function ProjectDetailRows(props: { fields: ProjectFields; people: Person[] }) {
 
 			<PropertyRow field={projectFields.startDate}>
 				<DateField
+					label={projectFields.startDate.label}
 					value={props.fields.startDate.value()}
 					onChange={(ms) => {
 						props.fields.startDate.set(ms);
@@ -228,6 +230,7 @@ function ProjectDetailRows(props: { fields: ProjectFields; people: Person[] }) {
 
 			<PropertyRow field={projectFields.endDate}>
 				<DateField
+					label={projectFields.endDate.label}
 					value={props.fields.endDate.value()}
 					onChange={(ms) => {
 						props.fields.endDate.set(ms);
@@ -328,10 +331,10 @@ export function ProjectSheet(props: ProjectSheetProps): JSX.Element {
 					void deleteProject();
 				}}
 			/>
-			<Sheet.Body
-				loading={props.loading}
-				skeleton={<ProjectFieldsPlaceholder />}
-			>
+			<Sheet.Skeleton>
+				<ProjectFieldsPlaceholder />
+			</Sheet.Skeleton>
+			<Sheet.Body loading={props.loading}>
 				<Input
 					label="Name"
 					maxLength={NAME_MAX}

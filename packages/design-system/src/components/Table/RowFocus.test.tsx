@@ -2,9 +2,11 @@ import { render, screen, fireEvent } from "@solidjs/testing-library";
 import { createSignal } from "solid-js";
 
 import { Table } from "./Table.tsx";
+import { rowId } from "./testRowIds.ts";
 import type { JfColumnDefinition } from "./types.ts";
 
-type Row = { _id: string; name: string };
+type Row = { id: string; name: string };
+
 // Annotated rather than inferred: `Table` takes its own `JfColumnDefinition`, whose
 // `dataType` is a literal union, so an unannotated object literal widens it to
 // `string` and stops matching. A `createColumnHelper` accessor does not satisfy
@@ -13,9 +15,9 @@ const columns: JfColumnDefinition<Row>[] = [
 	{ accessorKey: "name", header: "Name", dataType: "string" },
 ];
 const data: Row[] = [
-	{ _id: "a", name: "Ada" },
-	{ _id: "b", name: "Grace" },
-	{ _id: "c", name: "Hedy" },
+	{ id: "a", name: "Ada" },
+	{ id: "b", name: "Grace" },
+	{ id: "c", name: "Hedy" },
 ];
 
 function focused(): string | null {
@@ -38,17 +40,25 @@ function press(key: string): void {
 }
 
 test("the first arrow press focuses the first row", () => {
-	render(() => <Table.Root columns={columns} data={data} focusableRows />);
+	render(() => (
+		<Table.Root
+			getRowId={rowId}
+			columns={columns}
+			data={data}
+			focusableRows
+		/>
+	));
 	expect(focused()).toBeNull();
 	press("ArrowDown");
 	expect(focused()).toBe("Ada");
 });
 
 test("autofocusFirstRow rings the first row before any keypress", async () => {
-	// A triage queue lands you on a row ready to act, rather than making you
+	// A work queue lands you on a row ready to act, rather than making you
 	// prime the ring with an arrow first.
 	render(() => (
 		<Table.Root
+			getRowId={rowId}
 			columns={columns}
 			data={data}
 			focusableRows
@@ -63,11 +73,12 @@ test("autofocusFirstRow reports the first row via onFocusedRowChange on mount", 
 	const seen: (string | undefined)[] = [];
 	render(() => (
 		<Table.Root
+			getRowId={rowId}
 			columns={columns}
 			data={data}
 			focusableRows
 			autofocusFirstRow
-			onFocusedRowChange={(row) => seen.push(row?._id)}
+			onFocusedRowChange={(row) => seen.push(row?.id)}
 		/>
 	));
 	await Promise.resolve();
@@ -75,7 +86,14 @@ test("autofocusFirstRow reports the first row via onFocusedRowChange on mount", 
 });
 
 test("autofocusFirstRow is off by default — nothing is focused on mount", () => {
-	render(() => <Table.Root columns={columns} data={data} focusableRows />);
+	render(() => (
+		<Table.Root
+			getRowId={rowId}
+			columns={columns}
+			data={data}
+			focusableRows
+		/>
+	));
 	expect(focused()).toBeNull();
 });
 
@@ -86,12 +104,13 @@ test("a pinned, suppressed ring ignores Enter even while the grid has focus", ()
 	const activated: string[] = [];
 	render(() => (
 		<Table.Root
+			getRowId={rowId}
 			columns={columns}
 			data={data}
 			focusableRows
 			suppressFocus
 			activeRowId={() => "b"}
-			onRowActivate={(row) => activated.push(row._id)}
+			onRowActivate={(row) => activated.push(row.id)}
 		/>
 	));
 	grid().focus();
@@ -105,6 +124,7 @@ test("suppressFocus clears the ring and blocks it (e.g. while a sheet is open)",
 	const [suppressed, setSuppressed] = createSignal(false);
 	render(() => (
 		<Table.Root
+			getRowId={rowId}
 			columns={columns}
 			data={data}
 			focusableRows
@@ -133,7 +153,12 @@ test("moving the ring scrolls the newly-focused row into view", async () => {
 	Element.prototype.scrollIntoView = scrollIntoView;
 	try {
 		render(() => (
-			<Table.Root columns={columns} data={data} focusableRows />
+			<Table.Root
+				getRowId={rowId}
+				columns={columns}
+				data={data}
+				focusableRows
+			/>
 		));
 		press("ArrowDown");
 		await vi.waitFor(() => {
@@ -155,28 +180,29 @@ test("moving the ring scrolls the newly-focused row into view", async () => {
 
 test("activeRowId pins the ring while the sheet is open, follows it, and stays on close", () => {
 	// Models the sheet: ONE `open` signal drives both suppressFocus and the pin,
-	// exactly as RosterTab does — so on close they flip together and the ring is
+	// exactly as a list page does — so on close they flip together and the ring is
 	// left where it landed rather than cleared.
 	const [open, setOpen] = createSignal(false);
-	const [person, setPerson] = createSignal<string | undefined>();
+	const [shown, setShown] = createSignal<string | undefined>();
 	render(() => (
 		<Table.Root
+			getRowId={rowId}
 			columns={columns}
 			data={data}
 			focusableRows
 			suppressFocus={open()}
-			activeRowId={() => (open() ? person() : undefined)}
+			activeRowId={() => (open() ? shown() : undefined)}
 		/>
 	));
 	expect(focused()).toBeNull();
 
 	// Sheet opens on Grace (id "b"): interaction suppressed, ring pinned to her.
-	setPerson("b");
+	setShown("b");
 	setOpen(true);
 	expect(focused()).toBe("Grace");
 
 	// Page to Hedy ("c") via the sheet — the ring follows.
-	setPerson("c");
+	setShown("c");
 	expect(focused()).toBe("Hedy");
 
 	// Arrows are inert while the sheet owns them.
@@ -201,7 +227,7 @@ test("with grouping, arrows walk the displayed order, not the flat column sort",
 	// it LAST in the flat model — arrowing down from the top jumped straight past
 	// it into group "b". The first press must land on what is visually first.
 	type GroupedRow = {
-		_id: string;
+		id: string;
 		band: string;
 		score: number;
 		name: string;
@@ -222,11 +248,12 @@ test("with grouping, arrows walk the displayed order, not the flat column sort",
 	const groupedData: GroupedRow[] = [
 		// Group "a" renders first, but scores 0 → sorts last in a score-desc flat
 		// model. Group "b" renders second, but scores 9 → sorts first.
-		{ _id: "a1", band: "a", score: 0, name: "Anders" },
-		{ _id: "b1", band: "b", score: 9, name: "Bianca" },
+		{ id: "a1", band: "a", score: 0, name: "Anders" },
+		{ id: "b1", band: "b", score: 9, name: "Bianca" },
 	];
 	render(() => (
 		<Table.Root
+			getRowId={rowId}
 			columns={groupedColumns}
 			data={groupedData}
 			groupBy="band"
@@ -243,7 +270,14 @@ test("with grouping, arrows walk the displayed order, not the flat column sort",
 });
 
 test("arrows move focus and stop at the ends", () => {
-	render(() => <Table.Root columns={columns} data={data} focusableRows />);
+	render(() => (
+		<Table.Root
+			getRowId={rowId}
+			columns={columns}
+			data={data}
+			focusableRows
+		/>
+	));
 	press("ArrowDown");
 	press("ArrowDown");
 	expect(focused()).toBe("Grace");
@@ -257,10 +291,11 @@ test("Enter activates the focused row", () => {
 	const activated: string[] = [];
 	render(() => (
 		<Table.Root
+			getRowId={rowId}
 			columns={columns}
 			data={data}
 			focusableRows
-			onRowActivate={(row) => activated.push(row._id)}
+			onRowActivate={(row) => activated.push(row.id)}
 		/>
 	));
 	press("ArrowDown");
@@ -272,7 +307,12 @@ test("arrows do nothing while typing in a field", () => {
 	render(() => (
 		<>
 			<input data-testid="field" />
-			<Table.Root columns={columns} data={data} focusableRows />
+			<Table.Root
+				getRowId={rowId}
+				columns={columns}
+				data={data}
+				focusableRows
+			/>
 		</>
 	));
 	fireEvent.keyDown(screen.getByTestId("field"), { key: "ArrowDown" });
@@ -282,6 +322,7 @@ test("arrows do nothing while typing in a field", () => {
 test("checking a row clears focus and blocks it", async () => {
 	render(() => (
 		<Table.Root
+			getRowId={rowId}
 			columns={columns}
 			data={data}
 			focusableRows
@@ -305,10 +346,11 @@ test("onFocusedRowChange fires with the row the ring moved to", () => {
 	const changes: (string | undefined)[] = [];
 	render(() => (
 		<Table.Root
+			getRowId={rowId}
 			columns={columns}
 			data={data}
 			focusableRows
-			onFocusedRowChange={(row) => changes.push(row?._id)}
+			onFocusedRowChange={(row) => changes.push(row?.id)}
 		/>
 	));
 	press("ArrowDown");
@@ -321,11 +363,12 @@ test("onFocusedRowChange fires with undefined when a selection clears focus", as
 	const changes: (string | undefined)[] = [];
 	render(() => (
 		<Table.Root
+			getRowId={rowId}
 			columns={columns}
 			data={data}
 			focusableRows
 			enableRowSelection
-			onFocusedRowChange={(row) => changes.push(row?._id)}
+			onFocusedRowChange={(row) => changes.push(row?.id)}
 		/>
 	));
 	press("ArrowDown");
@@ -336,34 +379,12 @@ test("onFocusedRowChange fires with undefined when a selection clears focus", as
 	});
 });
 
-test("a row with no _id is never marked focused", () => {
-	type UnidentifiedRow = { name: string };
-	const unidentifiedColumns: JfColumnDefinition<UnidentifiedRow>[] = [
-		{ accessorKey: "name", header: "Name", dataType: "string" },
-	];
-	const unidentifiedData: UnidentifiedRow[] = [
-		{ name: "Ada" },
-		{ name: "Grace" },
-	];
-	render(() => (
-		<Table.Root
-			columns={unidentifiedColumns}
-			data={unidentifiedData}
-			focusableRows
-		/>
-	));
-	expect(document.querySelector('tr[data-focused="true"]')).toBeNull();
-	press("ArrowDown");
-	expect(document.querySelector('tr[data-focused="true"]')).toBeNull();
-	press("ArrowDown");
-	expect(document.querySelector('tr[data-focused="true"]')).toBeNull();
-});
-
 test("advance moves focus to whatever now holds the index", () => {
 	const [rows, setRows] = createSignal<Row[]>(data);
 	let api: { advance: () => void } | undefined;
 	render(() => (
 		<Table.Root
+			getRowId={rowId}
 			columns={columns}
 			data={rows()}
 			focusableRows
@@ -373,7 +394,7 @@ test("advance moves focus to whatever now holds the index", () => {
 	press("ArrowDown");
 	press("ArrowDown");
 	expect(focused()).toBe("Grace");
-	// Grace is triaged away; Hedy takes index 1.
+	// Grace is acted on and leaves; Hedy takes index 1.
 	setRows([data[0], data[2]]);
 	api?.advance();
 	expect(focused()).toBe("Hedy");
@@ -384,6 +405,7 @@ test("advance clamps to the last row when the tail is removed", () => {
 	let api: { advance: () => void } | undefined;
 	render(() => (
 		<Table.Root
+			getRowId={rowId}
 			columns={columns}
 			data={rows()}
 			focusableRows
@@ -408,7 +430,12 @@ test("arrow/Enter keydown at a focused field is not preventDefaulted, even thoug
 	render(() => (
 		<>
 			<input data-testid="field" />
-			<Table.Root columns={columns} data={data} focusableRows />
+			<Table.Root
+				getRowId={rowId}
+				columns={columns}
+				data={data}
+				focusableRows
+			/>
 		</>
 	));
 	const field = screen.getByTestId("field");
@@ -420,42 +447,32 @@ test("arrow/Enter keydown at a focused field is not preventDefaulted, even thoug
 	expect(focused()).toBeNull();
 });
 
-test("advance never focuses a row with no usable id", () => {
-	type UnidentifiedRow = { name: string };
-	const unidentifiedColumns: JfColumnDefinition<UnidentifiedRow>[] = [
-		{ accessorKey: "name", header: "Name", dataType: "string" },
-	];
-	const unidentifiedData: UnidentifiedRow[] = [
-		{ name: "Ada" },
-		{ name: "Grace" },
-	];
-	let api: { advance: () => void } | undefined;
-	render(() => (
-		<Table.Root
-			columns={unidentifiedColumns}
-			data={unidentifiedData}
-			focusableRows
-			focusApi={(given) => (api = given)}
-		/>
-	));
-	press("ArrowDown");
-	expect(document.querySelector('tr[data-focused="true"]')).toBeNull();
-	api?.advance();
-	expect(document.querySelector('tr[data-focused="true"]')).toBeNull();
-});
-
 test("ArrowDown suppresses the browser default on the acting path", () => {
 	// The handler owns cancelling the keystroke itself — this is what stops the
 	// page scrolling while the ring moves. `fireEvent.keyDown` returns
 	// `dispatchEvent`'s own result: `false` only when something called
 	// `preventDefault`.
-	render(() => <Table.Root columns={columns} data={data} focusableRows />);
+	render(() => (
+		<Table.Root
+			getRowId={rowId}
+			columns={columns}
+			data={data}
+			focusableRows
+		/>
+	));
 	grid().focus();
 	expect(fireEvent.keyDown(grid(), { key: "ArrowDown" })).toBe(false);
 });
 
 test("ArrowUp suppresses the browser default on the acting path", () => {
-	render(() => <Table.Root columns={columns} data={data} focusableRows />);
+	render(() => (
+		<Table.Root
+			getRowId={rowId}
+			columns={columns}
+			data={data}
+			focusableRows
+		/>
+	));
 	press("ArrowDown");
 	press("ArrowDown");
 	expect(focused()).toBe("Grace");
@@ -468,11 +485,12 @@ test("Enter on a button outside the table does not activate the ringed row", () 
 		<>
 			<button type="button">Outside</button>
 			<Table.Root
+				getRowId={rowId}
 				columns={columns}
 				data={data}
 				focusableRows
 				autofocusFirstRow
-				onRowActivate={(row) => activated.push(row._id)}
+				onRowActivate={(row) => activated.push(row.id)}
 			/>
 		</>
 	));
@@ -495,11 +513,12 @@ test("Enter on a button inside a row does not activate that row", () => {
 	];
 	render(() => (
 		<Table.Root
+			getRowId={rowId}
 			columns={withAction}
 			data={data}
 			focusableRows
 			autofocusFirstRow
-			onRowActivate={(row) => activated.push(row._id)}
+			onRowActivate={(row) => activated.push(row.id)}
 		/>
 	));
 	const act = screen.getAllByRole("button", { name: "Act" })[0];
@@ -511,6 +530,7 @@ test("Enter on a button inside a row does not activate that row", () => {
 test("aria-activedescendant points at the ringed row", () => {
 	render(() => (
 		<Table.Root
+			getRowId={rowId}
 			columns={columns}
 			data={data}
 			focusableRows
@@ -529,7 +549,7 @@ test("aria-activedescendant points at the ringed row", () => {
 });
 
 test("a table that is not focusable is a plain table with no tab stop", () => {
-	render(() => <Table.Root columns={columns} data={data} />);
+	render(() => <Table.Root getRowId={rowId} columns={columns} data={data} />);
 	expect(screen.queryByRole("grid")).toBeNull();
 	expect(screen.getByRole("table").hasAttribute("tabindex")).toBe(false);
 });
@@ -537,6 +557,7 @@ test("a table that is not focusable is a plain table with no tab stop", () => {
 test("going live claims focus", async () => {
 	render(() => (
 		<Table.Root
+			getRowId={rowId}
 			columns={columns}
 			data={data}
 			focusableRows
@@ -556,6 +577,7 @@ test("going live does not take focus from a text field", async () => {
 		<>
 			<input aria-label="Search" />
 			<Table.Root
+				getRowId={rowId}
 				columns={columns}
 				data={data}
 				focusableRows
@@ -576,6 +598,7 @@ test("closing the sheet (pin released) hands focus back to the table", async () 
 		<>
 			<button type="button">In sheet</button>
 			<Table.Root
+				getRowId={rowId}
 				columns={columns}
 				data={data}
 				focusableRows
@@ -600,6 +623,7 @@ test("ArrowDown on a focused tab steps into the live table", () => {
 				</button>
 			</div>
 			<Table.Root
+				getRowId={rowId}
 				columns={columns}
 				data={data}
 				focusableRows
@@ -622,7 +646,12 @@ test("ArrowDown on a focused tab of a vertical tablist does not step in", () => 
 					Tab
 				</button>
 			</div>
-			<Table.Root columns={columns} data={data} focusableRows />
+			<Table.Root
+				getRowId={rowId}
+				columns={columns}
+				data={data}
+				focusableRows
+			/>
 		</>
 	));
 	const tab = screen.getByRole("tab");
@@ -635,11 +664,12 @@ test("Enter with nothing focused focuses the grid without activating, the next E
 	const activated: string[] = [];
 	render(() => (
 		<Table.Root
+			getRowId={rowId}
 			columns={columns}
 			data={data}
 			focusableRows
 			autofocusFirstRow
-			onRowActivate={(row) => activated.push(row._id)}
+			onRowActivate={(row) => activated.push(row.id)}
 		/>
 	));
 	await Promise.resolve();
@@ -656,7 +686,14 @@ test("Enter with nothing focused focuses the grid without activating, the next E
 });
 
 test("ArrowDown with nothing focused focuses the grid without moving the ring", () => {
-	render(() => <Table.Root columns={columns} data={data} focusableRows />);
+	render(() => (
+		<Table.Root
+			getRowId={rowId}
+			columns={columns}
+			data={data}
+			focusableRows
+		/>
+	));
 	press("ArrowDown");
 	press("ArrowDown");
 	expect(focused()).toBe("Grace");
@@ -668,7 +705,14 @@ test("ArrowDown with nothing focused focuses the grid without moving the ring", 
 });
 
 test("keys with nothing focused are left alone when modified, unrelated, or the table is not on screen", () => {
-	render(() => <Table.Root columns={columns} data={data} focusableRows />);
+	render(() => (
+		<Table.Root
+			getRowId={rowId}
+			columns={columns}
+			data={data}
+			focusableRows
+		/>
+	));
 	expect(fireEvent.keyDown(document.body, { key: "x" })).toBe(true);
 	expect(
 		fireEvent.keyDown(document.body, { key: "Enter", ctrlKey: true })
@@ -693,6 +737,7 @@ test("the ring hides when a focused node is removed with no focusout", async () 
 	];
 	render(() => (
 		<Table.Root
+			getRowId={rowId}
 			columns={withAction}
 			data={data}
 			focusableRows
@@ -714,6 +759,7 @@ test("the ring shows only while focus is within the table", async () => {
 		<>
 			<button type="button">Outside</button>
 			<Table.Root
+				getRowId={rowId}
 				columns={columns}
 				data={data}
 				focusableRows
@@ -735,11 +781,12 @@ test("leaving the table reports no focused row, and returning reports it again",
 		<>
 			<button type="button">Outside</button>
 			<Table.Root
+				getRowId={rowId}
 				columns={columns}
 				data={data}
 				focusableRows
 				autofocusFirstRow
-				onFocusedRowChange={(row) => seen.push(row?._id)}
+				onFocusedRowChange={(row) => seen.push(row?.id)}
 			/>
 		</>
 	));
@@ -754,6 +801,7 @@ test("a pinned ring shows while focus is in the sheet", () => {
 		<>
 			<button type="button">In sheet</button>
 			<Table.Root
+				getRowId={rowId}
 				columns={columns}
 				data={data}
 				focusableRows
@@ -769,6 +817,7 @@ test("a pinned ring shows while focus is in the sheet", () => {
 test("going live does not pull focus off a control already inside the table", async () => {
 	render(() => (
 		<Table.Root
+			getRowId={rowId}
 			columns={columns}
 			data={data}
 			focusableRows
@@ -800,6 +849,7 @@ test("aria-activedescendant is dropped when the ringed row has left the table", 
 	const [pinned, setPinned] = createSignal<string | undefined>("b");
 	render(() => (
 		<Table.Root
+			getRowId={rowId}
 			columns={columns}
 			data={rows()}
 			focusableRows
@@ -818,7 +868,12 @@ test("aria-activedescendant is dropped when the ringed row has left the table", 
 test("a table inside an inert subtree does not take focus from a stray Enter", async () => {
 	render(() => (
 		<div inert>
-			<Table.Root columns={columns} data={data} focusableRows />
+			<Table.Root
+				getRowId={rowId}
+				columns={columns}
+				data={data}
+				focusableRows
+			/>
 		</div>
 	));
 	await Promise.resolve();
@@ -831,8 +886,18 @@ test("a table inside an inert subtree does not take focus from a stray Enter", a
 test("with two live visible tables, a stray Enter focuses only the first", async () => {
 	render(() => (
 		<>
-			<Table.Root columns={columns} data={data} focusableRows />
-			<Table.Root columns={columns} data={data} focusableRows />
+			<Table.Root
+				getRowId={rowId}
+				columns={columns}
+				data={data}
+				focusableRows
+			/>
+			<Table.Root
+				getRowId={rowId}
+				columns={columns}
+				data={data}
+				focusableRows
+			/>
 		</>
 	));
 	await Promise.resolve();
@@ -844,7 +909,7 @@ test("with two live visible tables, a stray Enter focuses only the first", async
 	expect(document.activeElement).not.toBe(second);
 });
 
-test("a getRowId keys focus for data with no _id", () => {
+test("a getRowId keys focus for data with no id", () => {
 	type Plain = { name: string };
 	render(() => (
 		<Table.Root
@@ -874,18 +939,4 @@ test("arrows focus rows a getRowId keys", () => {
 	));
 	press("ArrowDown");
 	expect(focused()).toBe("Ada");
-});
-
-test("rows with neither an _id nor a getRowId are never focused", () => {
-	render(() => (
-		<Table.Root
-			columns={[
-				{ accessorKey: "name", header: "Name", dataType: "string" },
-			]}
-			data={[{ name: "Ada" }, { name: "Grace" }]}
-			focusableRows
-		/>
-	));
-	press("ArrowDown");
-	expect(focused()).toBeNull();
 });

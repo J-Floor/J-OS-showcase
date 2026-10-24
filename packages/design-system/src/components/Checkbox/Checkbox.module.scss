@@ -50,7 +50,7 @@
 	font-size: 1.25rem;
 	color: var(--jf-fg-default);
 	/* stylelint-disable-next-line plugin/no-low-performance-animation-properties -- intentional transition on color */
-	transition: color 200ms ease;
+	transition: color var(--jf-animation-duration-default) ease;
 
 	/* Indicator glyph fills the control: 1em of the control's font-size.
 	   Descendant selector (0,2,0) beats Icon's own `.icon` rule (0,1,0). */
@@ -72,7 +72,7 @@
 		border-radius: 2px;
 		transform: translate(-50%, -50%);
 		/* stylelint-disable-next-line plugin/no-low-performance-animation-properties -- intentional transition on border-color */
-		transition: border-color 200ms ease;
+		transition: border-color var(--jf-animation-duration-default) ease;
 	}
 
 	/* Hover background circle */
@@ -95,7 +95,7 @@
 	}
 
 	&[data-focus-visible]::before {
-		outline: 2px solid var(--jf-fg-strong);
+		outline: var(--jf-border-width-accessibility) solid var(--jf-fg-strong);
 		outline-offset: 2px;
 	}
 }
@@ -118,12 +118,4 @@
 	&[data-state="unchecked"] {
 		display: none;
 	}
-}
-
-.disabledWrap {
-	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
-	display: inline-flex;
-	cursor: not-allowed;
-	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this opacity */
-	opacity: 0.5;
 }

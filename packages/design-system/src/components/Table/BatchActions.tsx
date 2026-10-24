@@ -3,102 +3,68 @@ import type {
 	Table as TanTable,
 } from "@tanstack/solid-table";
 import clsx from "clsx";
-import {
-	type Accessor,
-	type JSX,
-	Show,
-	createContext,
-	useContext,
-} from "solid-js";
+import { type Accessor, type JSX, Show, createContext } from "solid-js";
 
+import { useRequiredContext } from "../../utils/context.ts";
 import { Button } from "../Button/Button.tsx";
 
 import styles from "./Table.module.scss";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- table type is per-render
-type AnyTable = TanTable<any>;
-
-type BatchActionsContextValue = {
-	table: AnyTable;
-	/** Reactive row-selection signal, created in `Table.Root`'s scope. */
-	rowSelection: Accessor<RowSelectionState>;
+/** The checked rows of the enclosing `Table.Root`. */
+export type TableSelection<Data extends Record<string, unknown>> = {
+	/** The checked rows' original data objects, in row-model order. */
+	rows: Accessor<Data[]>;
+	count: Accessor<number>;
+	/** Uncheck every row. */
+	clear: () => void;
 };
 
-const BatchActionsContext = createContext<BatchActionsContextValue>();
+const SelectionContext =
+	createContext<TableSelection<Record<string, unknown>>>();
 
-export type BatchActionsRenderProps<Data extends Record<string, unknown>> = {
-	selectedRows: Data[];
-	selectedCount: number;
-	clearSelection: () => void;
-	table: TanTable<Data>;
-};
+/**
+ * The enclosing `Table.Root`'s checked rows, for anything rendered among its
+ * children (typically inside `Table.BatchActions`).
+ *
+ * `Data` is asserted, not inferred: a Solid context cannot carry
+ * `Table.Root`'s type parameter.
+ */
+export function useSelection<
+	Data extends Record<string, unknown>,
+>(): TableSelection<Data> {
+	return useRequiredContext(
+		SelectionContext,
+		"Table.useSelection",
+		"Table.Root"
+	) as TableSelection<Data>;
+}
 
-export type BatchActionsProps<Data extends Record<string, unknown>> = {
-	children?:
-		| JSX.Element
-		| ((props: BatchActionsRenderProps<Data>) => JSX.Element);
+export type BatchActionsProps = {
+	/** The bar's actions. They read the selection with `Table.useSelection`. */
+	children?: JSX.Element;
 	/** Clear the selection after a batch action's button is clicked. @default false */
 	unselectOnActionCompleted?: boolean;
 	class?: string;
 };
 
 /**
- * Selection action bar, a render-prop child of `Table.Root`. Receives
- * `{ selectedRows, selectedCount, clearSelection, table }`; visible only when
- * at least one row is selected.
+ * Selection action bar, a child of `Table.Root`, visible only while at least
+ * one row is checked. It shows the count and a clear button before its own
+ * children.
  *
  * Ported from EmboUI's `BatchActions`. React→Solid: the React context
- * (`useTableContext`) becomes a Solid context provided by `Table.Root`. The
- * context carries a reactive `rowSelection` accessor (created in `Table.Root`'s
- * own scope) so the bar's visibility tracks selection changes across component
- * boundaries — reading the memoized table row models alone is not reactive here.
- * The children render-prop is supported via a function child.
+ * (`useTableContext`) becomes a Solid context provided by `Table.Root`, which
+ * carries a reactive `rowSelection` accessor created in `Table.Root`'s own
+ * scope, so the bar tracks selection changes across component boundaries.
  */
-function BatchActionsComponent<Data extends Record<string, unknown>>(
-	props: BatchActionsProps<Data>
-): JSX.Element {
-	const context = useContext(BatchActionsContext);
-	// eslint-disable-next-line solid/components-return-once -- context is always provided by Table.Root at mount; the guard only handles misuse
-	if (!context) return null;
-	const table = context.table as TanTable<Data>;
-	const rowSelection = context.rowSelection;
-
-	function selectedCount(): number {
-		return Object.values(rowSelection()).filter(Boolean).length;
-	}
-	function selectedRows(): Data[] {
-		return table.getSelectedRowModel().rows.map((row) => row.original);
-	}
-
-	function clearSelection() {
-		table.resetRowSelection();
-	}
-
-	function content(): JSX.Element {
-		const children = props.children;
-		if (typeof children === "function") {
-			// Expose reactive getters (not snapshots) so a render-prop body that
-			// reads `p.selectedCount`/`p.selectedRows` updates as the selection
-			// changes (e.g. 1 → 2 rows).
-			return children({
-				get selectedRows() {
-					return selectedRows();
-				},
-				get selectedCount() {
-					return selectedCount();
-				},
-				clearSelection,
-				table,
-			});
-		}
-		return children;
-	}
+export function BatchActions(props: BatchActionsProps): JSX.Element {
+	const selection = useSelection();
 
 	function handleClick(event: MouseEvent) {
 		const target = event.target as HTMLElement;
 		const button = target.closest("button");
 		if (button && props.unselectOnActionCompleted) {
-			setTimeout(clearSelection, 0);
+			setTimeout(selection.clear, 0);
 		}
 	}
 
@@ -110,50 +76,52 @@ function BatchActionsComponent<Data extends Record<string, unknown>>(
 		<div
 			class={clsx(
 				styles.batchActions,
-				selectedCount() > 0 && styles.visible,
+				selection.count() > 0 && styles.visible,
 				props.class
 			)}
 			onClick={handleClick}
 		>
-			<Show when={selectedCount() > 0}>
+			<Show when={selection.count() > 0}>
 				<span class={styles.selectedCount}>
-					{selectedCount()} selected
+					{selection.count()} selected
 				</span>
-				<Button variant="tertiary" onClick={clearSelection}>
+				<Button variant="tertiary" onClick={selection.clear}>
 					Clear selection
 				</Button>
-				{content()}
+				{props.children}
 			</Show>
 		</div>
 	);
 }
 
 /**
- * Provides the table instance + reactive selection accessor to any
- * `Table.BatchActions` descendants. Rendered by `Table.Root` around the
- * consumer's children (placed below the table).
+ * Provides the selection to `Table.Root`'s children, so `Table.BatchActions`
+ * and `Table.useSelection` find it.
+ *
+ * `rowSelection` is the reactive selection signal, created in `Table.Root`'s
+ * scope: the table's memoised row models alone do not track across the
+ * component boundary, so `rows` reads it first.
  */
-function Provider(props: {
-	table: AnyTable;
+export function SelectionProvider<Data extends Record<string, unknown>>(props: {
+	table: TanTable<Data>;
 	rowSelection: Accessor<RowSelectionState>;
 	children: JSX.Element;
 }): JSX.Element {
+	const selection: TableSelection<Data> = {
+		rows: () => {
+			props.rowSelection();
+			return props.table
+				.getSelectedRowModel()
+				.rows.map((row) => row.original);
+		},
+		count: () => Object.values(props.rowSelection()).filter(Boolean).length,
+		clear: () => {
+			props.table.resetRowSelection();
+		},
+	};
 	return (
-		<BatchActionsContext.Provider
-			value={{
-				get table() {
-					return props.table;
-				},
-				// eslint-disable-next-line solid/reactivity -- forwarding the accessor function itself, not unwrapping it
-				rowSelection: props.rowSelection,
-			}}
-		>
+		<SelectionContext.Provider value={selection}>
 			{props.children}
-		</BatchActionsContext.Provider>
+		</SelectionContext.Provider>
 	);
 }
-
-export const BatchActions = {
-	Component: BatchActionsComponent,
-	Provider,
-};

@@ -1,33 +1,34 @@
-import { Select, type SelectItem } from "@j-os/design-system";
-import type { JSX } from "solid-js";
+import { Select } from "@j-os/design-system";
+import { For, type JSX } from "solid-js";
 
 import type { Id } from "../../../../../convex/_generated/dataModel";
-import { SelectOptionList } from "../../../../shared/components/SelectOptionList.tsx";
 import type { Project } from "../../data/tasksData.tsx";
 
 export function ProjectSelect(props: {
+	label: string;
 	projects: Project[];
 	value?: Id<"projects">;
 	onChange: (id: Id<"projects"> | undefined) => void;
 }): JSX.Element {
-	function options(): SelectItem[] {
-		return props.projects.map((project) => ({
-			value: project._id,
-			title: project.name,
-		}));
-	}
 	return (
 		<Select.Root
-			options={options()}
+			label={props.label}
+			labelHidden
 			value={props.value ? [props.value] : []}
 			placeholder="No project"
 			allowClearing
-			sameWidth
+			positioning={{ sameWidth: true }}
 			onValueChange={(details) => {
 				props.onChange(details.value[0] as Id<"projects"> | undefined);
 			}}
 		>
-			<SelectOptionList options={options()} />
+			<For each={props.projects}>
+				{(project) => (
+					<Select.Option value={project._id}>
+						{project.name}
+					</Select.Option>
+				)}
+			</For>
 		</Select.Root>
 	);
 }

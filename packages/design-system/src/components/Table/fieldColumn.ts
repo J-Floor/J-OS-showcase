@@ -1,8 +1,9 @@
 import type { FieldDefinition } from "../../utils/fields.ts";
+import type { DistributiveOmit } from "../../utils/types.ts";
 
 import type { JfColumnDefinition } from "./types.ts";
 
-type WithoutIdentity<T> = T extends unknown ? Omit<T, "id" | "header"> : never;
+type WithoutIdentity<T> = DistributiveOmit<T, "id" | "header">;
 
 /**
  * The column showing `field`: its id is the field's key and its header the

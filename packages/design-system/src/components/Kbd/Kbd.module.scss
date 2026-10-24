@@ -31,7 +31,7 @@
 	color: var(--jf-fg-default);
 	white-space: nowrap;
 	background-color: var(--jf-surface-bg-sunken);
-	border: 1px solid var(--jf-border-subtle);
+	border: var(--jf-border-width-decorative) solid var(--jf-border-subtle);
 	border-radius: var(--jf-radius-button);
 
 	@include typo.jf-typo-body-small;
@@ -42,8 +42,8 @@
    screen, and its buttons already shrink their own padding to fit their
    labels. Keyed to the input, not the width: a laptop
    window dragged narrow still has a keyboard, and its chips stay. CSS rather
-   than a JS media query, matching the header's control swap: a JS query
-   renders the wrong thing until the first effect. */
+   than a JS media query: a JS query renders the wrong thing until the first
+   effect. */
 @include input.touch-primary {
 	.kbd,
 	.hint {

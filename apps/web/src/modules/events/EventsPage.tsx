@@ -62,6 +62,7 @@ export function EventsPage() {
 					<Table.Root
 						columns={eventColumns()}
 						data={events.data()}
+						getRowId={(row) => row._id}
 						initialColumnSorting={EVENTS_DEFAULT_SORT}
 						groupBy="phase"
 						focusableRows

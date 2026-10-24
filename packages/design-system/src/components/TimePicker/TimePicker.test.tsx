@@ -1,6 +1,12 @@
 import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
+import { expectTypeOf } from "vitest";
 
 import { TimePicker } from "./TimePicker.tsx";
+import type { TimeGranularity } from "./timeValue.ts";
+
+test("TimeGranularity is the machine's time-of-day granularities", () => {
+	expectTypeOf<TimeGranularity>().toEqualTypeOf<"minute" | "second">();
+});
 
 function segment(container: HTMLElement, type: "hour" | "minute"): HTMLElement {
 	const element = container.querySelector<HTMLElement>(

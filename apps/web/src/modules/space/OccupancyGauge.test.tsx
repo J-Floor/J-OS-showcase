@@ -11,5 +11,5 @@ test("renders two rows of three person icons and a left fill width", () => {
 	// 3 base + 3 fill = 6 person ligatures.
 	expect(screen.getAllByText("person")).toHaveLength(6);
 	const fill = container.querySelector<HTMLElement>("[data-fill-layer]");
-	expect(fill?.style.width).toBe("50%");
+	expect(fill?.style.getPropertyValue("--fill")).toBe("50%");
 });

@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor } from "@solidjs/testing-library";
 
 import { firstValueField } from "./FilteringButton.tsx";
 import { Table } from "./Table.tsx";
+import { rowIndex } from "./testRowIds.ts";
 import type { JfColumnDefinition } from "./types.ts";
 
 // jsdom workarounds for ark/zag (Popover/Tooltip).
@@ -26,6 +27,7 @@ const columns = [
 test("text filter narrows rows", async () => {
 	render(() => (
 		<Table.Root
+			getRowId={rowIndex}
 			columns={columns as never}
 			data={[{ name: "Alpha" }, { name: "Beta" }]}
 		/>
@@ -42,6 +44,7 @@ test("text filter narrows rows", async () => {
 test("clearing the text filter removes it instead of leaving it active", async () => {
 	render(() => (
 		<Table.Root
+			getRowId={rowIndex}
 			columns={columns as never}
 			data={[{ name: "Alpha" }, { name: "Beta" }]}
 		/>
@@ -73,6 +76,7 @@ const scores: Scored[] = [
 test("an empty number range filters nothing and is not active", () => {
 	render(() => (
 		<Table.Root
+			getRowId={rowIndex}
 			columns={scored}
 			data={scores}
 			initialColumnFilters={[
@@ -93,6 +97,7 @@ test("an empty number range filters nothing and is not active", () => {
 test("a number range with one bound filters and is active", () => {
 	render(() => (
 		<Table.Root
+			getRowId={rowIndex}
 			columns={scored}
 			data={scores}
 			initialColumnFilters={[
@@ -132,7 +137,9 @@ const log: Logged[] = [
 ];
 
 test("an enum option covering several values filters on all of them", async () => {
-	render(() => <Table.Root columns={logged} data={log} />);
+	render(() => (
+		<Table.Root getRowId={rowIndex} columns={logged} data={log} />
+	));
 	fireEvent.click(screen.getByLabelText("Filter Operation"));
 	fireEvent.click(await screen.findByRole("checkbox", { name: "Unlock" }));
 	await waitFor(() => {
@@ -145,6 +152,7 @@ test("an enum option covering several values filters on all of them", async () =
 test("a boolean filter keeps the rows with that value", () => {
 	render(() => (
 		<Table.Root
+			getRowId={rowIndex}
 			columns={logged}
 			data={log}
 			initialColumnFilters={[{ id: "ok", value: false }]}
@@ -161,6 +169,7 @@ test("a boolean filter keeps the rows with that value", () => {
 test("switching a number filter to range carries the value to its upper bound", async () => {
 	render(() => (
 		<Table.Root
+			getRowId={rowIndex}
 			columns={scored}
 			data={scores}
 			initialColumnFilters={[
@@ -192,6 +201,7 @@ const dated: Dated[] = [
 test("a date range filters by local day and shows its bounds", async () => {
 	render(() => (
 		<Table.Root
+			getRowId={rowIndex}
 			columns={datedColumns}
 			data={dated}
 			initialColumnFilters={[
@@ -219,6 +229,7 @@ test("a date range filters by local day and shows its bounds", async () => {
 test("a time range filters inclusively and an open bound passes", () => {
 	render(() => (
 		<Table.Root
+			getRowId={rowIndex}
 			columns={datedColumns}
 			data={dated}
 			initialColumnFilters={[
@@ -238,12 +249,14 @@ test("a time range filters inclusively and an open bound passes", () => {
 });
 
 test("deselecting every enum option hides every row", async () => {
-	render(() => <Table.Root columns={logged} data={log} />);
+	render(() => (
+		<Table.Root getRowId={rowIndex} columns={logged} data={log} />
+	));
 	const trigger = screen.getByLabelText("Filter Operation");
 	fireEvent.click(trigger);
 	fireEvent.click(await screen.findByRole("checkbox", { name: "Unlock" }));
 	fireEvent.click(screen.getByRole("checkbox", { name: "Access" }));
-	expect(await screen.findByText("No results.")).toBeInTheDocument();
+	expect(await screen.findByText("No matches")).toBeInTheDocument();
 	expect(screen.queryByText("Uma")).not.toBeInTheDocument();
 	expect(trigger).toHaveAttribute("data-active", "true");
 });

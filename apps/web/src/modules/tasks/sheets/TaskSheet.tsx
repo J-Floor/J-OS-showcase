@@ -1,5 +1,5 @@
 import { Sheet, Input, PropertyRow, Select } from "@j-os/design-system";
-import { Show, type JSX } from "solid-js";
+import { For, Show, type JSX } from "solid-js";
 
 import { NAME_MAX, TEXT_MAX } from "../../../../convex/lib/validate.ts";
 import { celebrate } from "../../../lib/celebrate.ts";
@@ -8,7 +8,6 @@ import {
 	shallowArrayEquals,
 } from "../../../lib/createSyncedField.ts";
 import { DescriptionField } from "../../../shared/components/DescriptionField.tsx";
-import { SelectOptionList } from "../../../shared/components/SelectOptionList.tsx";
 import {
 	createActionError,
 	scopeOfFields,
@@ -31,13 +30,13 @@ import { ProjectSelect } from "./fields/ProjectSelect.tsx";
 import styles from "./TaskSheet.module.scss";
 
 const STATUS_OPTIONS = [
-	{ value: "backlog", title: "Backlog" },
-	{ value: "in_progress", title: "In progress" },
-	{ value: "done", title: "Done" },
+	{ value: "backlog", label: "Backlog" },
+	{ value: "in_progress", label: "In progress" },
+	{ value: "done", label: "Done" },
 ];
 
 /**
- * Placeholder field layout passed to `Sheet.Body`'s `skeleton` while
+ * Placeholder field layout shown by `Sheet.Skeleton` while
  * `loading` is true — an open row whose data hasn't arrived yet. Shaped like
  * the loaded field list (mirrors `EventFieldsPlaceholder`); literal
  * "placeholder" text, never real or create-form copy.
@@ -180,9 +179,10 @@ function StatusRow(props: { status: TaskFields["status"] }) {
 			}}
 		>
 			<Select.Root
-				options={STATUS_OPTIONS}
+				label={taskFields.status.label}
+				labelHidden
 				value={[props.status.value()]}
-				sameWidth
+				positioning={{ sameWidth: true }}
 				onValueChange={(details) => {
 					const next = details.value[0] as Task["status"];
 					const isCompleted =
@@ -196,7 +196,13 @@ function StatusRow(props: { status: TaskFields["status"] }) {
 					}
 				}}
 			>
-				<SelectOptionList options={STATUS_OPTIONS} />
+				<For each={STATUS_OPTIONS}>
+					{(option) => (
+						<Select.Option value={option.value}>
+							{option.label}
+						</Select.Option>
+					)}
+				</For>
 			</Select.Root>
 		</PropertyRow>
 	);
@@ -212,6 +218,7 @@ function TaskDetailRows(props: {
 		<>
 			<PropertyRow field={taskFields.assigneeIds}>
 				<AssigneeSelect
+					label={taskFields.assigneeIds.label}
 					people={props.people}
 					value={props.fields.assignees.value()}
 					onChange={(ids) => {
@@ -222,6 +229,7 @@ function TaskDetailRows(props: {
 
 			<PropertyRow field={taskFields.projectId}>
 				<ProjectSelect
+					label={taskFields.projectId.label}
 					projects={props.projects}
 					value={props.fields.projectId.value()}
 					onChange={(id) => {
@@ -232,6 +240,7 @@ function TaskDetailRows(props: {
 
 			<PropertyRow field={taskFields.dueDate}>
 				<DateField
+					label={taskFields.dueDate.label}
 					value={props.fields.dueDate.value()}
 					onChange={(ms) => {
 						props.fields.dueDate.set(ms);
@@ -314,10 +323,10 @@ export function TaskSheet(props: TaskSheetProps): JSX.Element {
 					void deleteTask();
 				}}
 			/>
-			<Sheet.Body
-				loading={props.loading}
-				skeleton={<TaskFieldsPlaceholder />}
-			>
+			<Sheet.Skeleton>
+				<TaskFieldsPlaceholder />
+			</Sheet.Skeleton>
+			<Sheet.Body loading={props.loading}>
 				<Input
 					label="Title"
 					maxLength={NAME_MAX}

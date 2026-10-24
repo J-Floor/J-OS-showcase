@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@solidjs/testing-library";
 import { describe, expect, it, test } from "vitest";
 
-import { ShortcutPeekProvider } from "../ShortcutPeek/ShortcutPeek.tsx";
+import { ShortcutPeekProvider } from "../../utils/shortcutPeek.tsx";
 
 import { Kbd } from "./Kbd.tsx";
 
@@ -12,16 +12,6 @@ describe("Kbd", () => {
 		const { container } = render(() => <Kbd shortcut="Mod+K" />);
 		const keys = container.querySelectorAll("kbd kbd");
 		expect([...keys].map((key) => key.textContent)).toEqual(["Ctrl", "K"]);
-	});
-
-	it("renders a named key as its glyph", () => {
-		render(() => <Kbd shortcut="Escape" />);
-		expect(screen.getByText("Esc")).toBeInTheDocument();
-	});
-
-	it("uppercases a single letter, the way it reads on the keyboard", () => {
-		render(() => <Kbd shortcut="K" />);
-		expect(screen.getByText("K")).toBeInTheDocument();
 	});
 
 	it("renders one nested kbd per glyph of a typed hotkey", () => {

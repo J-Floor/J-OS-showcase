@@ -58,8 +58,15 @@
 	inline-size: 320px;
 	padding: var(--jf-spacing-far);
 	background-color: var(--jf-surface-bg-base);
-	border: 1px solid var(--jf-border-subtle);
+	border: var(--jf-border-width-decorative) solid var(--jf-border-subtle);
 	border-radius: var(--jf-radius-button);
+}
+
+/* Ark sizes and paints the tip from these two, so the notch reads as part of
+   the step rather than a shape on top of it. */
+.arrow {
+	--arrow-size: var(--jf-spacing-near);
+	--arrow-background: var(--jf-surface-bg-base);
 }
 
 .close {

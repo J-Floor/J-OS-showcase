@@ -19,7 +19,7 @@ export default {
 			>
 				<Dialog.Trigger
 					asChild={(triggerProps) => (
-						<Button {...(triggerProps() as object)}>
+						<Button triggerProps={triggerProps()}>
 							Open dialog
 						</Button>
 					)}
@@ -31,7 +31,7 @@ export default {
 						<Dialog.CloseTrigger
 							asChild={(closeProps) => (
 								<Button
-									{...(closeProps() as object)}
+									triggerProps={closeProps()}
 									variant="tertiary"
 								>
 									Cancel
@@ -40,7 +40,7 @@ export default {
 						/>
 						<Dialog.CloseTrigger
 							asChild={(closeProps) => (
-								<Button {...(closeProps() as object)}>
+								<Button triggerProps={closeProps()}>
 									Confirm
 								</Button>
 							)}

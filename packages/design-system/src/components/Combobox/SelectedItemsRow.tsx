@@ -29,9 +29,6 @@ export type SelectedItemsRowProps<T> = {
 	/** Drops a single value from the selection. */
 	onRemove: (value: string) => void;
 
-	/** Replaces the default chip for each selected item. */
-	renderItem?: (item: T) => JSX.Element;
-
 	class?: string;
 };
 
@@ -123,8 +120,8 @@ function hiddenItemCount(itemCount: number, visibleCount: number): number {
  * Widths come from a hidden copy of the full row, so an item that is currently
  * collapsed still has a width to fit once the control grows.
  *
- * Internal to the selection components (Combobox); not exported from the
- * package's `index.ts`.
+ * Internal to the selection components (Select, Combobox); not exported from
+ * the package's `index.ts`.
  *
  * Solid port of EmboUI's `SelectedItemsRow`: `useRef` -> `let el: … | undefined`
  * with `ref={el}`, `useState` -> `createSignal`, the two `useLayoutEffect`s ->
@@ -198,8 +195,6 @@ export function SelectedItemsRow<T>(
 	// Not a component: the row's own markup for one selection, rendered
 	// twice (hidden and visible).
 	function renderItem(item: T): JSX.Element {
-		if (props.renderItem) return props.renderItem(item);
-
 		const value = props.getValue(item);
 		return (
 			<SelectedChip

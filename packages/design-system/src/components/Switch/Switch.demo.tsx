@@ -10,6 +10,7 @@ export default {
 			description={p.description || undefined}
 			defaultChecked={p.checked}
 			disabled={p.disabled}
+			disabledReason={p.disabledReason}
 		/>
 	),
 	controls: {
@@ -21,6 +22,10 @@ export default {
 		},
 		checked: { type: "boolean", default: false },
 		disabled: { type: "boolean", default: false },
+		disabledReason: {
+			type: "text",
+			default: "Allow notifications in the browser first.",
+		},
 	},
 	presets: {
 		On: { checked: true, description: "On." },

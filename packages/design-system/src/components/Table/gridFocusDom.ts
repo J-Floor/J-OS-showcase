@@ -206,7 +206,7 @@ export function scrollRingRowIntoView(
  *  never share an id. */
 export function createRowDomIds<Row>(
 	isEnabled: () => boolean | undefined,
-	rowId: (row: Row) => string | undefined
+	rowId: (row: Row) => string
 ): {
 	domIdFor: (id: string) => string;
 	rowDomId: (row: Row) => string | undefined;
@@ -216,8 +216,7 @@ export function createRowDomIds<Row>(
 		return `${rowDomPrefix}-row-${id}`;
 	}
 	function rowDomId(row: Row): string | undefined {
-		const id = rowId(row);
-		return isEnabled() && id !== undefined ? domIdFor(id) : undefined;
+		return isEnabled() ? domIdFor(rowId(row)) : undefined;
 	}
 	return { domIdFor, rowDomId };
 }

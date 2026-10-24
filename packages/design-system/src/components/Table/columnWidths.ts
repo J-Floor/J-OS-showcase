@@ -126,7 +126,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Structural equality for plain JSON-like values, as a Convex document is:
+ * Structural equality for plain JSON-like values, as a pushed document is:
  * arrays item by item, plain objects key by key, recursively, and every
  * other value (string, number, bigint, `ArrayBuffer`, ...) by `Object.is`.
  * A push re-parses every nested object and array fresh.
@@ -157,9 +157,9 @@ export function sameStructure(left: unknown, right: unknown): boolean {
  * since the last reset, padding and slack included. Rows are tracked by
  * `row.id`. A data push measures only rows with a new id or whose original
  * is not {@link sameStructure} equal to the one last measured under that id:
- * a Convex push hands back fresh objects for every row, most with the same
- * fields. A `measureVolatile` column is measured in every row on every pass. `row.id` is the row's `_id` by default (see
- * `defaultRowId`), so a row inserted above the others shifts nothing. A row
+ * a live data push hands back fresh objects for every row, most with the same
+ * fields. A `measureVolatile` column is measured in every row on every pass.
+ * Keyed by `getRowId`, a row inserted above the others shifts nothing. A row
  * that leaves keeps the width it gave. From the data, not the DOM: a
  * virtualised table renders only a window of its rows, and a collapsed group
  * renders none. A column that opts out, or shows no text in any row, gets no

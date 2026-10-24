@@ -112,8 +112,9 @@ function RunwayCard(props: {
 				xKey="week"
 				series={[{ key: "expiring", label: "Guests", kind: "bar" }]}
 				label="Guest windows closing over the next twelve weeks"
-				emptyMessage="No guest windows are set to close."
-			/>
+			>
+				<Chart.Empty>No guest windows are set to close.</Chart.Empty>
+			</Chart>
 		</ChartCard>
 	);
 }
@@ -192,8 +193,9 @@ function HostsCard(props: {
 				xKey="host"
 				series={[{ key: "guests", label: "Guests", kind: "bar" }]}
 				label="Guests per host"
-				emptyMessage="No guests are hosted yet."
-			/>
+			>
+				<Chart.Empty>No guests are hosted yet.</Chart.Empty>
+			</Chart>
 		</ChartCard>
 	);
 }
@@ -213,8 +215,9 @@ function VerticalsCard(props: {
 				xKey="vertical"
 				series={[{ key: "people", label: "People", kind: "bar" }]}
 				label="People per vertical"
-				emptyMessage="No one has picked a vertical yet."
-			/>
+			>
+				<Chart.Empty>No one has picked a vertical yet.</Chart.Empty>
+			</Chart>
 		</ChartCard>
 	);
 }

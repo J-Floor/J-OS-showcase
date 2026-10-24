@@ -6,9 +6,17 @@
 	--jf-animation-duration-fast: 120ms;
 	--jf-animation-duration-default: 200ms;
 	--jf-animation-duration-morph: 250ms;
+	--jf-animation-duration-reveal: 700ms;
 	--jf-animation-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
 	--jf-animation-ease-enter: cubic-bezier(0.05, 0.7, 0.1, 1);
 	--jf-animation-ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15);
+
+	/* Overshoots slightly, then settles: a toast arriving or a stack
+	   closing up around it. */
+	--jf-animation-ease-settle: cubic-bezier(0.21, 1.02, 0.73, 1);
+
+	/* Fast start, long soft landing: a toast leaving. */
+	--jf-animation-ease-settle-exit: cubic-bezier(0.06, 0.71, 0.55, 1);
 }
 
 body {
@@ -49,50 +57,6 @@ h5 {
 
 h6 {
 	@include typo.jf-typo-h6;
-}
-
-.jf-typo-h1 {
-	@include typo.jf-typo-h1;
-}
-
-.jf-typo-h2 {
-	@include typo.jf-typo-h2;
-}
-
-.jf-typo-h3 {
-	@include typo.jf-typo-h3;
-}
-
-.jf-typo-h4 {
-	@include typo.jf-typo-h4;
-}
-
-.jf-typo-h5 {
-	@include typo.jf-typo-h5;
-}
-
-.jf-typo-h6 {
-	@include typo.jf-typo-h6;
-}
-
-.jf-typo-body-bold {
-	@include typo.jf-typo-body-bold;
-}
-
-.jf-typo-body-medium {
-	@include typo.jf-typo-body-medium;
-}
-
-.jf-typo-body-regular {
-	@include typo.jf-typo-body-regular;
-}
-
-.jf-typo-body-small {
-	@include typo.jf-typo-body-small;
-}
-
-.jf-typo-body-tech {
-	@include typo.jf-typo-body-tech;
 }
 
 .jf-util-ellipsis {

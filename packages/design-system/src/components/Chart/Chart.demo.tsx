@@ -3,35 +3,35 @@ import { Chart, type ChartSeries } from "@j-os/design-system";
 import type { Demo } from "../../../demo/types.ts";
 
 const months = [
-	{ month: "Feb", members: 41, guests: 12, applications: 9 },
-	{ month: "Mar", members: 44, guests: 15, applications: 14 },
-	{ month: "Apr", members: 47, guests: 13, applications: 11 },
-	{ month: "May", members: 51, guests: 18, applications: 17 },
-	{ month: "Jun", members: 53, guests: 22, applications: 21 },
-	{ month: "Jul", members: 58, guests: 19, applications: 12 },
+	{ month: "Feb", visitors: 41, returning: 12, signups: 9 },
+	{ month: "Mar", visitors: 44, returning: 15, signups: 14 },
+	{ month: "Apr", visitors: 47, returning: 13, signups: 11 },
+	{ month: "May", visitors: 51, returning: 18, signups: 17 },
+	{ month: "Jun", visitors: 53, returning: 22, signups: 21 },
+	{ month: "Jul", visitors: 58, returning: 19, signups: 12 },
 ];
 
 const SHAPES: Record<string, ChartSeries[]> = {
 	line: [
-		{ key: "members", label: "Members" },
-		{ key: "guests", label: "Guests" },
-		{ key: "applications", label: "Applications" },
+		{ key: "visitors", label: "Visitors" },
+		{ key: "returning", label: "Returning" },
+		{ key: "signups", label: "Sign-ups" },
 	],
 	area: [
-		{ key: "members", label: "Members", kind: "area" },
-		{ key: "guests", label: "Guests", kind: "area" },
+		{ key: "visitors", label: "Visitors", kind: "area" },
+		{ key: "returning", label: "Returning", kind: "area" },
 	],
 	bar: [
-		{ key: "applications", label: "Applications", kind: "bar" },
-		{ key: "guests", label: "Guests", kind: "bar" },
+		{ key: "signups", label: "Sign-ups", kind: "bar" },
+		{ key: "returning", label: "Returning", kind: "bar" },
 	],
 	stacked: [
-		{ key: "members", label: "Members", kind: "bar", stack: "roster" },
-		{ key: "guests", label: "Guests", kind: "bar", stack: "roster" },
+		{ key: "visitors", label: "Visitors", kind: "bar", stack: "visits" },
+		{ key: "returning", label: "Returning", kind: "bar", stack: "visits" },
 	],
 	polarity: [
-		{ key: "members", label: "Joined", kind: "bar", colour: "positive" },
-		{ key: "guests", label: "Left", kind: "bar", colour: "negative" },
+		{ key: "visitors", label: "Joined", kind: "bar", colour: "positive" },
+		{ key: "returning", label: "Left", kind: "bar", colour: "negative" },
 	],
 };
 

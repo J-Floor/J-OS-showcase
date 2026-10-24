@@ -1,17 +1,12 @@
 @use "../../styles/typography" as typo;
 
 .chip {
-	--base-padding: var(--jf-spacing-near);
-
 	display: inline-flex;
 	flex-wrap: nowrap;
 	align-items: center;
-	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value */
-	gap: calc(var(--base-padding) / 2);
-	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value */
-	padding-block: calc(var(--base-padding) / 2);
-	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value */
-	padding-inline: calc(var(--base-padding) * 2);
+	gap: var(--jf-spacing-close);
+	padding-block: var(--jf-spacing-close);
+	padding-inline: var(--jf-spacing-far);
 	color: var(--jf-fg-default);
 	border: var(--jf-border-width-decorative) solid currentcolor;
 	border-radius: var(--jf-radius-full);
@@ -19,11 +14,11 @@
 	// Tighten the side that carries an icon so it sits closer to the edge than
 	// the label does.
 	&[data-prefix="true"] {
-		padding-inline-start: var(--base-padding);
+		padding-inline-start: var(--jf-spacing-near);
 	}
 
 	&[data-suffix="true"] {
-		padding-inline-end: var(--base-padding);
+		padding-inline-end: var(--jf-spacing-near);
 	}
 
 	[data-icon] {

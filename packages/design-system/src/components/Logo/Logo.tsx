@@ -1,3 +1,4 @@
+import clsx from "clsx";
 import type { JSX } from "solid-js";
 import { Show, createUniqueId } from "solid-js";
 
@@ -52,12 +53,14 @@ export function logoFrameMetrics(frame: Element): {
  */
 const FULL_MARK_VIEW_BOX = "35.8959 42.1884 60 60";
 
+type MarkProps = Pick<LogoProps, "animated"> & { clipId: string };
+
 /** The clip reference an animated mark masks itself with. */
 function clipReference(
-	isAnimated: boolean | undefined,
+	animated: MarkProps["animated"],
 	clipId: string
 ): string | undefined {
-	return isAnimated ? `url(#${clipId})` : undefined;
+	return animated ? `url(#${clipId})` : undefined;
 }
 
 /** Reveals the full lockup from the bottom (see .clip). Its static full size
@@ -84,10 +87,7 @@ function FullClip(props: { id: string }): JSX.Element {
  * single-SVG logo pixel for pixel and the reveal clips both alike. They are
  * separate elements so a View Transition can move each on its own.
  */
-function FullMark(props: {
-	isAnimated: boolean | undefined;
-	clipId: string;
-}): JSX.Element {
+function FullMark(props: MarkProps): JSX.Element {
 	function frameClip(): string {
 		return `${props.clipId}-frame`;
 	}
@@ -103,11 +103,11 @@ function FullMark(props: {
 					fill="currentColor"
 					xmlns="http://www.w3.org/2000/svg"
 				>
-					<Show when={props.isAnimated}>
+					<Show when={props.animated}>
 						<FullClip id={frameClip()} />
 					</Show>
 					<path
-						clip-path={clipReference(props.isAnimated, frameClip())}
+						clip-path={clipReference(props.animated, frameClip())}
 						fill-rule="evenodd"
 						clip-rule="evenodd"
 						d="M125.099 0.00837862C128.509 0.180634 131.221 2.99195 131.221 6.43478V289.565C131.221 293.008 128.509 295.819 125.099 295.992L124.767 296H6.45349C3.00065 296 0.181159 293.296 0.00840298 289.896L0 289.565V6.43478C0 2.88095 2.88933 6.9094e-08 6.45349 0H124.767L125.099 0.00837862ZM9.68023 286.348H121.541V9.65217H9.68023V286.348Z"
@@ -115,7 +115,7 @@ function FullMark(props: {
 					{/* The growing box's top edge: a full-width bar that rises
 					    with the reveal (see .topEdge); rests over the frame's
 					    own top border at the end. */}
-					<Show when={props.isAnimated}>
+					<Show when={props.animated}>
 						<rect
 							class={styles.topEdge}
 							x="0"
@@ -133,11 +133,11 @@ function FullMark(props: {
 					fill="currentColor"
 					xmlns="http://www.w3.org/2000/svg"
 				>
-					<Show when={props.isAnimated}>
+					<Show when={props.animated}>
 						<FullClip id={markClip()} />
 					</Show>
 					<path
-						clip-path={clipReference(props.isAnimated, markClip())}
+						clip-path={clipReference(props.animated, markClip())}
 						d="M83.8954 81.3962C83.8954 91.2205 78.1666 96.5217 66.7092 96.5217H47.3256V89.1004H66.7869C71.4954 89.1004 74.0071 86.3433 74.0071 81.8906V54.6098H53.9954V47.1884H83.8954V81.3962Z"
 					/>
 				</svg>
@@ -147,10 +147,7 @@ function FullMark(props: {
 }
 
 /** The standalone J mark. */
-function Monogram(props: {
-	isAnimated: boolean | undefined;
-	clipId: string;
-}): JSX.Element {
+function Monogram(props: MarkProps): JSX.Element {
 	return (
 		<span class={styles.part} {...{ [LOGO_PART]: "mark" }}>
 			<svg
@@ -159,7 +156,7 @@ function Monogram(props: {
 				fill="currentColor"
 				xmlns="http://www.w3.org/2000/svg"
 			>
-				<Show when={props.isAnimated}>
+				<Show when={props.animated}>
 					<defs>
 						<clipPath id={props.clipId}>
 							<rect
@@ -173,7 +170,7 @@ function Monogram(props: {
 					</defs>
 				</Show>
 				<path
-					clip-path={clipReference(props.isAnimated, props.clipId)}
+					clip-path={clipReference(props.animated, props.clipId)}
 					d="M47.9995 39.2078C47.9995 49.0321 42.2707 54.3333 30.8133 54.3333H11.4297V46.912H30.891C35.5995 46.912 38.1113 44.1549 38.1113 39.7022V12.4214H18.0996V5H47.9995V39.2078Z"
 				/>
 			</svg>
@@ -186,7 +183,7 @@ function Monogram(props: {
  * root sets `color` (a token by default) and the paths fill from it, so the
  * single component covers the old black/white asset pair across light/dark.
  *
- * Size it through `font-size` on the root (via `class`/`style`) — the SVG is
+ * Size it through `font-size` on the root (via `class`) — the SVG is
  * `block-size: 1em` with `inline-size: auto`, so it scales without distorting.
  *
  * `animated` reveals the mark via a growing-rectangle clip (the mark stays
@@ -205,7 +202,7 @@ export function Logo(props: LogoProps): JSX.Element {
 	}
 	return (
 		<span
-			class={props.class ? `${styles.root} ${props.class}` : styles.root}
+			class={clsx(styles.root, props.class)}
 			role={labelled() ? "img" : undefined}
 			aria-label={labelled() ? props.title : undefined}
 			aria-hidden={labelled() ? undefined : "true"}
@@ -213,10 +210,10 @@ export function Logo(props: LogoProps): JSX.Element {
 			<Show
 				when={(props.variant ?? "logo") === "monogram"}
 				fallback={
-					<FullMark isAnimated={props.animated} clipId={clipId} />
+					<FullMark animated={props.animated} clipId={clipId} />
 				}
 			>
-				<Monogram isAnimated={props.animated} clipId={clipId} />
+				<Monogram animated={props.animated} clipId={clipId} />
 			</Show>
 		</span>
 	);

@@ -123,7 +123,7 @@ export function WhatsNew() {
 					<div class={styles.footer}>
 						<Dialog.CloseTrigger
 							asChild={(closeProps) => (
-								<Button {...(closeProps() as object)}>
+								<Button triggerProps={closeProps()}>
 									Got it
 								</Button>
 							)}

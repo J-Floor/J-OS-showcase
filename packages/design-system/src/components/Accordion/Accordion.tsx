@@ -1,5 +1,4 @@
 import { Accordion as ArkAccordion } from "@ark-ui/solid/accordion";
-import { type Hotkey } from "@tanstack/solid-hotkeys";
 import clsx from "clsx";
 import { type JSX, Show, splitProps } from "solid-js";
 
@@ -12,6 +11,7 @@ import {
 	getPartStyles,
 	type WithPartClasses,
 } from "../../utils/partStyling.ts";
+import { type ShortcutHint } from "../../utils/types.ts";
 import { Icon } from "../Icon/Icon.tsx";
 import { Kbd } from "../Kbd/Kbd.tsx";
 import { MakeDisablable } from "../MakeDisablable/MakeDisablable.tsx";
@@ -30,94 +30,62 @@ import styles from "./Accordion.module.scss";
  *    the collapsible body. Authoring shape is unchanged from embo's fixture.
  *  - The open/closed indicator glyph + tooltip text read the per-item state via
  *    `ArkAccordion.ItemContext` (zag's `ItemState.expanded`).
- *  - The trigger needs both an accordion machine AND a tooltip. Per the
- *    ark-solid-composition rule, the tooltip anchors to a wrapping `<span>`
- *    (its own element/id) rather than sharing the trigger button's id, so the
- *    tooltip positions correctly.
+ *  - The trigger needs both an accordion machine AND a tooltip, so the
+ *    tooltip points at it through `Tooltip.Anchor`.
  */
-function Root(props: ArkAccordion.RootProps): JSX.Element {
+export type AccordionRootProps = ArkAccordion.RootProps;
+
+function Root(props: AccordionRootProps): JSX.Element {
+	const [local, rest] = splitProps(props, ["children", "class"]);
 	return (
 		<ArkAccordion.Root
 			collapsible
-			{...props}
-			class={clsx(styles.accordions, props.class)}
+			{...rest}
+			class={clsx(styles.accordions, local.class)}
 		>
-			{props.children}
+			{local.children}
 		</ArkAccordion.Root>
 	);
 }
 
-function Item(props: ArkAccordion.ItemProps & PropsWithDisabling): JSX.Element {
+export type AccordionItemProps = ArkAccordion.ItemProps & PropsWithDisabling;
+
+function Item(props: AccordionItemProps): JSX.Element {
 	const [otherProps, disabling] = separateDisablingProps(props);
+	const [local, rest] = splitProps(otherProps, ["children", "class"]);
 	return (
 		<MakeDisablable {...disabling}>
 			<ArkAccordion.Item
-				{...otherProps}
+				{...rest}
 				// Keep the item natively disabled too (embo only dims via the
 				// wrapper); this also blocks expansion, not just interaction visuals.
 				disabled={disabling.disabled}
-				class={clsx(styles.item, otherProps.class)}
+				class={clsx(styles.item, local.class)}
 			>
-				{otherProps.children}
+				{local.children}
 			</ArkAccordion.Item>
 		</MakeDisablable>
 	);
 }
 
-export type ItemTitleProps = Omit<ArkAccordion.ItemTriggerProps, "children"> & {
+export type AccordionItemTitleProps = Omit<
+	ArkAccordion.ItemTriggerProps,
+	"children"
+> & {
+	/** The title; an {@link ItemSubtitle} inside it adds a second line. */
 	children: JSX.Element;
-	/** Secondary line shown under the title. */
-	subtitle?: JSX.Element;
 	/**
 	 * A key that expands/collapses this section, shown as a chip at the trailing
 	 * edge of the header — but only while peeking (Alt held, or the topbar toggle
 	 * latched), like every other inline shortcut hint. The chip is display only;
 	 * the binding itself lives with whoever owns the section's open state.
 	 */
-	shortcut?: Hotkey;
-} & WithPartClasses<
-		"itemTrigger" | "itemIndicator" | "itemTitle" | "itemSubtitle"
-	>;
+	shortcut?: ShortcutHint;
+} & WithPartClasses<"itemTrigger" | "itemIndicator" | "itemTitle">;
 
-type TitleTextProps = Pick<
-	ItemTitleProps,
-	"children" | "subtitle" | "class" | "classOverride"
->;
-
-/** The title, or the title over its subtitle. */
-function TitleText(props: { local: TitleTextProps }): JSX.Element {
-	return (
-		<Show
-			when={props.local.subtitle}
-			fallback={
-				<span
-					class={clsx(
-						getPartStyles(styles, props.local, "itemTitle"),
-						props.local.class
-					)}
-				>
-					{props.local.children}
-				</span>
-			}
-		>
-			<span class={clsx(styles.itemHeader, props.local.class)}>
-				<span class={getPartStyles(styles, props.local, "itemTitle")}>
-					{props.local.children}
-				</span>
-				<span
-					class={getPartStyles(styles, props.local, "itemSubtitle")}
-				>
-					{props.local.subtitle}
-				</span>
-			</span>
-		</Show>
-	);
-}
-
-function ItemTitle(props: ItemTitleProps): JSX.Element {
+function ItemTitle(props: AccordionItemTitleProps): JSX.Element {
 	const [local, triggerRest] = splitProps(props, [
 		"children",
-		"subtitle",
 		"shortcut",
 		"class",
 		"classOverride",
@@ -125,56 +93,68 @@ function ItemTitle(props: ItemTitleProps): JSX.Element {
 	return (
 		<ArkAccordion.ItemContext>
 			{(itemState) => (
-				<Tooltip
-					tooltipContent={
-						itemState().expanded ? "Collapse" : "Expand"
-					}
-					asChild={(tip) => (
-						<span
-							{...(tip() as object)}
-							class={styles.triggerAnchor}
+				<Tooltip.Anchor
+					label={itemState().expanded ? "Collapse" : "Expand"}
+					class={styles.triggerAnchor}
+				>
+					<ArkAccordion.ItemTrigger
+						{...triggerRest}
+						class={getPartStyles(styles, local, "itemTrigger")}
+					>
+						<ArkAccordion.ItemIndicator
+							class={getPartStyles(
+								styles,
+								local,
+								"itemIndicator"
+							)}
 						>
-							<ArkAccordion.ItemTrigger
-								{...triggerRest}
-								class={getPartStyles(
-									styles,
-									local,
-									"itemTrigger"
-								)}
-							>
-								<ArkAccordion.ItemIndicator
-									class={getPartStyles(
-										styles,
-										local,
-										"itemIndicator"
-									)}
-								>
-									<Icon>
-										{itemState().expanded
-											? ICONS.collapseAll
-											: ICONS.expandAll}
-									</Icon>
-								</ArkAccordion.ItemIndicator>
-								<TitleText local={local} />
-								<Show when={local.shortcut} keyed>
-									{(shortcut) => (
-										<Kbd
-											shortcut={shortcut}
-											inline
-											class={styles.itemShortcut}
-										/>
-									)}
-								</Show>
-							</ArkAccordion.ItemTrigger>
+							<Icon>
+								{itemState().expanded
+									? ICONS.collapseAll
+									: ICONS.expandAll}
+							</Icon>
+						</ArkAccordion.ItemIndicator>
+						<span
+							class={clsx(
+								getPartStyles(styles, local, "itemTitle"),
+								local.class
+							)}
+						>
+							{local.children}
 						</span>
-					)}
-				/>
+						<Show when={local.shortcut} keyed>
+							{(shortcut) => (
+								<Kbd
+									shortcut={shortcut}
+									inline
+									class={styles.itemShortcut}
+								/>
+							)}
+						</Show>
+					</ArkAccordion.ItemTrigger>
+				</Tooltip.Anchor>
 			)}
 		</ArkAccordion.ItemContext>
 	);
 }
 
-function ItemContent(props: ArkAccordion.ItemContentProps): JSX.Element {
+export type AccordionItemSubtitleProps = {
+	children: JSX.Element;
+	class?: string;
+};
+
+/** A secondary line under the title. Goes inside {@link ItemTitle}. */
+function ItemSubtitle(props: AccordionItemSubtitleProps): JSX.Element {
+	return (
+		<span class={clsx(styles.itemSubtitle, props.class)}>
+			{props.children}
+		</span>
+	);
+}
+
+export type AccordionItemContentProps = ArkAccordion.ItemContentProps;
+
+function ItemContent(props: AccordionItemContentProps): JSX.Element {
 	const [local, rest] = splitProps(props, ["children", "class"]);
 	return (
 		<ArkAccordion.ItemContent
@@ -190,5 +170,6 @@ export const Accordion = {
 	Root,
 	Item,
 	ItemTitle,
+	ItemSubtitle,
 	ItemContent,
 };

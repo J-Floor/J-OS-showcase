@@ -1,5 +1,25 @@
 // @ts-check
 
+const STRICT_VALUE_KEYWORDS = [
+  "inherit",
+  "transparent",
+  "currentColor",
+  "currentcolor",
+  "none",
+  "0",
+  "100%",
+  "auto",
+  "nowrap",
+  "normal",
+  "1",
+  "fit-content",
+  "max-content",
+  "min-content",
+  "50%",
+  "1em",
+  "1rem",
+];
+
 /**
  * Shared Stylelint configuration for J-OS.
  * SCSS modules (design-system) + plain CSS modules (web app), all class-based.
@@ -11,6 +31,8 @@
  */
 export default {
   extends: ["stylelint-config-standard-scss", "stylelint-config-recess-order"],
+  // A disable says why: `/* stylelint-disable-next-line rule -- reason */`.
+  reportDescriptionlessDisables: true,
   ignoreFiles: [
     "**/*.d.ts",
     "apps/**/dist/**",
@@ -44,29 +66,17 @@ export default {
         "/line-height$/",
         "/letter-spacing$/",
         "/box-shadow$/",
+        "outline",
       ],
       {
         ignoreVariables: true,
         ignoreFunctions: false,
-        ignoreValues: [
-          "inherit",
-          "transparent",
-          "currentColor",
-          "currentcolor",
-          "none",
-          "0",
-          "100%",
-          "auto",
-          "nowrap",
-          "normal",
-          "1",
-          "fit-content",
-          "max-content",
-          "min-content",
-          "50%",
-          "1em",
-          "1rem",
-        ],
+        ignoreValues: {
+          "": STRICT_VALUE_KEYWORDS,
+          // The shorthand's width and colour take tokens; its line style is
+          // a keyword with no token to stand for it.
+          outline: [...STRICT_VALUE_KEYWORDS, "solid", "dashed", "dotted"],
+        },
         severity: "warning",
         disableFix: true,
       },
@@ -128,4 +138,21 @@ export default {
       { severity: "warning" },
     ],
   },
+  overrides: [
+    {
+      // Breakpoints live in the design system's `breakpoints.scss` mixins
+      // (`@include bp.phone`). That file is not a module, so its own queries
+      // pass.
+      files: ["**/*.module.scss"],
+      rules: {
+        "media-feature-name-disallowed-list": [
+          ["width", "min-width", "max-width"],
+          {
+            message:
+              "Use a breakpoint mixin from @j-os/design-system/breakpoints (`@include bp.phone`) instead of a raw width media query.",
+          },
+        ],
+      },
+    },
+  ],
 };

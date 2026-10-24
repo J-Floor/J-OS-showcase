@@ -4,11 +4,13 @@
  *   --embo-colour-surface-bg-*  -> --jf-surface-bg-{base,raised,overlay}
  *   --embo-colour-surface-fg-*  -> --jf-fg-{strong,default,muted}
  *   borders                     -> --jf-border-{subtle,strong}
- * No radius/z-index token exists in the scale yet, so small literals are used
- * (matching the Tooltip precedent).
+ * The control is the shared field shell. The chips row is the shared
+ * `field.selected-items`, styled by Combobox's SelectedItemsRow itself.
  */
 
 @use "../../styles/animation" as anim;
+@use "../../styles/typography" as typo;
+@use "../MakeField/field.mixins" as field;
 
 .positioner {
 	inline-size: min-content;
@@ -24,11 +26,10 @@
 	   z-index onto the Positioner as `--z-index` — so content is the single
 	   source of truth for the ordering of the whole floating pair.
 
-	   A flat base is not enough. The picker opened from the Guests table sits one
-	   layer above a layer-0 dialog and a tie is broken by DOM order, so it
-	   happened to paint on top; the same picker opened from inside the sheet is
-	   layer 2 under a layer-1 dialog, lost the tie, and rendered BEHIND the
-	   dialog — the board reported the host dropdown as simply not opening. */
+	   A flat base is not enough. A list opened from a table sits one layer
+	   above a layer-0 dialog and a tie is broken by DOM order, so it happened
+	   to paint on top; the same list opened from inside a sheet is layer 2
+	   under a layer-1 dialog, lost the tie, and rendered BEHIND the dialog. */
 	z-index: calc(var(--jf-z-index-overlay-base) + var(--layer-index, 0));
 	display: flex;
 	flex-direction: column;
@@ -47,11 +48,10 @@
 }
 
 .groupLabel {
+	@include typo.jf-typo-body-small;
+
 	max-inline-size: 100%;
 	padding-inline-start: var(--jf-spacing-near);
-	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal label size; no design token for this value */
-	font-size: 0.75rem;
-	line-height: 1rem;
 	color: var(--jf-fg-muted);
 	text-transform: uppercase;
 	user-select: none;
@@ -70,6 +70,11 @@
 		background-color: var(--jf-surface-bg-overlay);
 	}
 
+	&[data-disabled] {
+		cursor: not-allowed;
+		opacity: var(--jf-opacity-disabled);
+	}
+
 	& > * {
 		outline: none;
 	}
@@ -80,35 +85,37 @@
 	color: var(--jf-fg-strong);
 }
 
+/* The painted box. The chips, the trigger, the clear button and the chevron
+   sit side by side inside it. */
 .inputWrapper {
-	display: flex;
-	flex-wrap: nowrap;
-	gap: var(--jf-spacing-close);
-	align-items: center;
+	@include field.shell;
+
 	justify-content: space-between;
 	inline-size: 100%;
-	block-size: var(--jf-dimension-short-component-height);
-	padding-inline: var(--jf-spacing-near);
 	overflow: visible;
+	color: var(--jf-status-fg);
 	cursor: pointer;
-	background-color: var(--jf-status-bg);
+}
 
-	/* The trigger is a <button>; kill the UA default border. */
+/* The trigger paints nothing: it is the field's open/close button and holds
+   its value text. It takes the line unless chips replace that text. */
+.trigger {
+	display: flex;
+	flex: 1 1 auto;
+	flex-wrap: nowrap;
+	align-items: center;
+	align-self: stretch;
+	min-inline-size: 0;
+	padding: 0;
+	color: inherit;
+	text-align: start;
+	cursor: pointer;
+	background: none;
 	border: none;
-	border-radius: var(--jf-radius-button);
+	outline: none;
 
-	* {
-		color: var(--jf-status-fg);
-	}
-
-	&:focus-within {
-		outline-style: solid;
-		outline-color: var(--jf-status-fg);
-	}
-
-	&[data-invalid="true"] {
-		outline-style: solid;
-		outline-color: var(--jf-status-fg);
+	&:empty {
+		flex: 0 0 0;
 	}
 }
 
@@ -133,10 +140,16 @@
 }
 
 .icon {
-	pointer-events: none;
 	user-select: none;
 }
 
 .clearTrigger {
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	padding: 0;
+	color: inherit;
 	cursor: pointer;
+	background: none;
+	border: none;
 }

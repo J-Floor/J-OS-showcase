@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@solidjs/testing-library";
 
-import { ShortcutPeekProvider, useShortcutPeek } from "./ShortcutPeek.tsx";
+import { ShortcutPeekProvider, useShortcutPeek } from "./shortcutPeek.tsx";
 
 function Probe() {
 	const peek = useShortcutPeek();

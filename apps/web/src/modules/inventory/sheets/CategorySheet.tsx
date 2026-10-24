@@ -25,7 +25,7 @@ import { DescriptionValue, NameField } from "./InventoryForm.tsx";
 import { RelatedListSection } from "./RelatedListSection.tsx";
 
 /**
- * Placeholder field layout passed to `Sheet.Body`'s `skeleton` while
+ * Placeholder field layout shown by `Sheet.Skeleton` while
  * `loading` is true — an open row whose data hasn't arrived yet. Shaped like
  * the loaded field list (mirrors `EventFieldsPlaceholder`); literal
  * "placeholder" text, never real or create-form copy.
@@ -172,14 +172,13 @@ export function CategorySheet(props: CategorySheetProps): JSX.Element {
 					void form.deleteCategory();
 				}}
 			/>
-			<Sheet.Body
-				loading={props.loading}
-				skeleton={<CategoryFieldsPlaceholder />}
-			>
+			<Sheet.Skeleton>
+				<CategoryFieldsPlaceholder />
+			</Sheet.Skeleton>
+			<Sheet.Body loading={props.loading}>
 				<NameField
-					name={form.name}
-					hasError={form.formError() !== null}
-					onElement={(element) => {
+					form={form}
+					ref={(element) => {
 						nameElement = element;
 					}}
 				/>

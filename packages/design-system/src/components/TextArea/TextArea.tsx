@@ -1,29 +1,19 @@
 import { Field, type FieldTextareaProps } from "@ark-ui/solid/field";
-import { type JSX, splitProps } from "solid-js";
+import { type JSX } from "solid-js";
 
 import { type PropsWithDisabling } from "../../utils/disablingProps.ts";
-import { splitMakeFieldProps } from "../../utils/makeFieldProps.ts";
+import { splitFieldPartProps } from "../../utils/makeFieldProps.ts";
 import { splitArkProps } from "../../utils/splitArkProps.ts";
-import { MakeField, type MakeFieldProps } from "../MakeField/MakeField.tsx";
+import type { FieldInputEvent, MakeFieldOwnProps } from "../../utils/types.ts";
+import { MakeField } from "../MakeField/MakeField.tsx";
 
 import styles from "./TextArea.module.scss";
-
-// MakeField extends Field.Root's div-typed HTML props, which collide with the
-// textarea-typed props below (`ref`, `onInput`, `children`, event handlers, etc.).
-// Keep MakeField's own additions + Field semantic props; let the textarea side own
-// the DOM attributes.
-type MakeFieldOwnProps = Omit<
-	MakeFieldProps,
-	keyof JSX.HTMLAttributes<HTMLDivElement>
->;
 
 // FieldTextareaProps.onInput is event-based; TextArea exposes the string-value
 // convenience signature (value, NOT event) that consumers already depend on.
 export type TextAreaProps = PropsWithDisabling<
 	Omit<FieldTextareaProps, "onInput"> &
-		Omit<MakeFieldOwnProps, "label"> & {
-			/** Field label (required). */
-			label: string;
+		MakeFieldOwnProps & {
 			/** Called with the extracted string value on each input event. */
 			onInput: (value: string) => void;
 		}
@@ -42,25 +32,17 @@ export function TextArea(props: TextAreaProps): JSX.Element {
 	// Pull out our custom onInput before anything else so it doesn't reach ark.
 	const [own, rest] = splitArkProps(props, ["onInput"]);
 
-	// Split the MakeField-consumed keys (label, helperText, errorText, invalid,
-	// required, disabled, disabledReason, etc.) from the textarea forward props.
-	const [makeFieldProps, afterMakeField] = splitMakeFieldProps(rest);
+	// MakeField takes the label/helper/error, the field semantics, the
+	// disabling set and the Field.Root props (`readOnly`/`id`/`ids`); the rest
+	// goes to the textarea.
+	const [makeFieldProps, textareaForward] = splitFieldPartProps(rest);
 
-	// Pull id/ids/readOnly which are Field.Root concerns MakeField also forwards.
-	const [fieldExtra, textareaForward] = splitProps(afterMakeField, [
-		"readOnly",
-		"id",
-		"ids",
-	]);
-
-	function handleInput(
-		event: InputEvent & { currentTarget: HTMLTextAreaElement }
-	): void {
+	function handleInput(event: FieldInputEvent<HTMLTextAreaElement>): void {
 		own.onInput(event.currentTarget.value);
 	}
 
 	return (
-		<MakeField {...makeFieldProps} {...fieldExtra}>
+		<MakeField {...makeFieldProps}>
 			<Field.Textarea
 				class={styles.textarea}
 				{...textareaForward}

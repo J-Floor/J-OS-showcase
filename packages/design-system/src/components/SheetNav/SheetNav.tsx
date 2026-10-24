@@ -1,6 +1,7 @@
 import { createHotkey } from "@tanstack/solid-hotkeys";
 import { createSignal, onMount, type JSX } from "solid-js";
 
+import { ICONS } from "../../icons.ts";
 import { isTypingTarget } from "../../utils/typingTarget.ts";
 import {
 	isTransitionRunning,
@@ -38,11 +39,18 @@ function step(
 	});
 }
 
+export type SheetNavProps = {
+	onPrev: () => void;
+	onNext: () => void;
+	hasPrev: boolean;
+	hasNext: boolean;
+};
+
 /**
- * Prev/next arrows for a Sheet header (placed in the `headerAction` slot).
+ * Prev/next arrows for a Sheet header (placed in `Sheet.HeaderActions`).
  *
  * ArrowUp/ArrowDown here are scoped to the open sheet panel. `Table` keeps
- * its own ArrowUp/ArrowDown for its row-focus ring, but only while the
+ * its own ArrowUp/ArrowDown for a table's row-focus ring, but only while the
  * table itself has focus, so the two never see the same keystroke: with a
  * sheet open the ring is pinned and inert, and focus is in the sheet. The
  * scoping is the library's own target option: a hotkey registered with
@@ -51,7 +59,7 @@ function step(
  *
  * The target is the whole open sheet panel (Ark's `Dialog.Content`), not just
  * this component's own two buttons — focus can be anywhere inside the sheet
- * (a field being edited, the decision bar) when the arrow is pressed, and all
+ * (a field being edited, an action bar) when the arrow is pressed, and all
  * of that has to be in scope. `Sheet` already renders that panel with
  * `role="dialog"`, the same landmark `isTypingTarget` keys off of for "is this
  * inside an open overlay", so this walks up to it via `closest` from a ref on
@@ -60,12 +68,7 @@ function step(
  * hosting nav arrows at all), and nothing else in the tree needs to change to
  * give SheetNav what it needs.
  */
-export function SheetNav(props: {
-	onPrev: () => void;
-	onNext: () => void;
-	hasPrev: boolean;
-	hasNext: boolean;
-}): JSX.Element {
+export function SheetNav(props: SheetNavProps): JSX.Element {
 	// eslint-disable-next-line no-unassigned-vars -- assigned by Solid's `ref={anchorReference}` binding below, which the rule can't see
 	let anchorReference: HTMLDivElement | undefined;
 	const [sheetElement, setSheetElement] = createSignal<HTMLElement>();
@@ -128,7 +131,7 @@ export function SheetNav(props: {
 					step(sheetElement(), "sheet-prev", props.onPrev);
 				}}
 			>
-				expand_less
+				{ICONS.up}
 			</IconButton>
 			<IconButton
 				tooltipLabel="Next"
@@ -139,7 +142,7 @@ export function SheetNav(props: {
 					step(sheetElement(), "sheet-next", props.onNext);
 				}}
 			>
-				expand_more
+				{ICONS.down}
 			</IconButton>
 		</div>
 	);

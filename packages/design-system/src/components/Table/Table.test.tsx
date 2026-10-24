@@ -26,6 +26,7 @@ import {
 } from "./domContract.ts";
 import { fieldColumn } from "./fieldColumn.ts";
 import { Table } from "./Table.tsx";
+import { rowId, rowIndex } from "./testRowIds.ts";
 import type { JfColumnDefinition } from "./types.ts";
 
 // jsdom workarounds for ark/zag (Popover/Tooltip) used by header buttons.
@@ -66,6 +67,7 @@ test("onDisplayedRowsChange fires with on-screen row order", async () => {
 	let captured: IdRow[] = [];
 	render(() => (
 		<Table.Root
+			getRowId={rowIndex}
 			columns={idColumns as never}
 			data={[{ id: "a" }, { id: "b" }, { id: "c" }] as IdRow[]}
 			onDisplayedRowsChange={(rows: IdRow[]) => {
@@ -86,6 +88,7 @@ test("onSelectedRowsChange fires with the checked rows, not written from inside 
 	let captured: IdRow[] = [];
 	render(() => (
 		<Table.Root
+			getRowId={rowIndex}
 			columns={idColumns as never}
 			data={[{ id: "a" }, { id: "b" }, { id: "c" }] as IdRow[]}
 			enableRowSelection
@@ -109,7 +112,7 @@ test("onSelectedRowsChange fires with the checked rows, not written from inside 
 	});
 });
 
-test("a row with a string _id carries it for morph pairing", () => {
+test("a getRowId keys the morph id", () => {
 	render(() => (
 		<Table.Root
 			columns={
@@ -117,28 +120,8 @@ test("a row with a string _id carries it for morph pairing", () => {
 					{ accessorKey: "name", header: "Name", dataType: "string" },
 				] as never
 			}
-			data={[{ _id: "p1", name: "Ann" }, { name: "No id" }] as never}
-		/>
-	));
-	expect(screen.getByText("Ann").closest("tr")).toHaveAttribute(
-		"data-morph-of",
-		"p1"
-	);
-	expect(screen.getByText("No id").closest("tr")).not.toHaveAttribute(
-		"data-morph-of"
-	);
-});
-
-test("a getRowId decides the morph id too", () => {
-	render(() => (
-		<Table.Root
-			columns={
-				[
-					{ accessorKey: "name", header: "Name", dataType: "string" },
-				] as never
-			}
-			data={[{ _id: "p1", slug: "ann", name: "Ann" }] as never}
-			getRowId={(row) => (row as { slug: string }).slug}
+			data={[{ slug: "ann", name: "Ann" }]}
+			getRowId={(row) => row.slug}
 		/>
 	));
 	expect(screen.getByText("Ann").closest("tr")).toHaveAttribute(
@@ -147,8 +130,102 @@ test("a getRowId decides the morph id too", () => {
 	);
 });
 
+describe("empty state", () => {
+	type Named = { name: string };
+	const nameColumns: JfColumnDefinition<Named>[] = [
+		{ accessorKey: "name", header: "Name", dataType: "string" },
+	];
+
+	test("no rows at all show the generic empty state", () => {
+		render(() => (
+			<Table.Root getRowId={rowIndex} columns={nameColumns} data={[]} />
+		));
+		expect(screen.getByText("Nothing here yet")).toBeInTheDocument();
+		expect(screen.queryByText("No matches")).toBeNull();
+	});
+
+	test("a filter hiding every row shows No matches, and Clear filters brings the rows back", async () => {
+		render(() => (
+			<Table.Root
+				getRowId={rowIndex}
+				columns={nameColumns}
+				data={[{ name: "Ada" }, { name: "Grace" }]}
+				initialColumnFilters={[{ id: "name", value: "zzz" }]}
+			/>
+		));
+		expect(screen.getByText("No matches")).toBeInTheDocument();
+		expect(screen.queryByText("Ada")).toBeNull();
+		fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+		await waitFor(() => {
+			expect(screen.getByText("Ada")).toBeInTheDocument();
+		});
+		expect(screen.getByText("Grace")).toBeInTheDocument();
+		expect(screen.queryByText("No matches")).toBeNull();
+	});
+
+	test("a grouped table shows No matches too", () => {
+		type Grouped = { name: string; group: string };
+		render(() => (
+			<Table.Root
+				getRowId={rowIndex}
+				columns={
+					[
+						{
+							accessorKey: "name",
+							header: "Name",
+							dataType: "string",
+						},
+						{
+							accessorKey: "group",
+							header: "Group",
+							dataType: "string",
+						},
+					] satisfies JfColumnDefinition<Grouped>[]
+				}
+				data={[{ name: "Ada", group: "G" }]}
+				groupBy="group"
+				initialColumnFilters={[{ id: "name", value: "zzz" }]}
+			/>
+		));
+		expect(screen.getByText("No matches")).toBeInTheDocument();
+	});
+
+	test("a Table.Empty child replaces the default", () => {
+		render(() => (
+			<Table.Root getRowId={rowIndex} columns={nameColumns} data={[]}>
+				<Table.Empty>
+					<p>Invite someone</p>
+				</Table.Empty>
+			</Table.Root>
+		));
+		expect(screen.getByText("Invite someone")).toBeInTheDocument();
+		expect(screen.queryByText("Nothing here yet")).toBeNull();
+	});
+
+	test("Table.Empty renders nothing while there are rows", () => {
+		render(() => (
+			<Table.Root
+				getRowId={rowIndex}
+				columns={nameColumns}
+				data={[{ name: "Ada" }]}
+			>
+				<Table.Empty>
+					<p>Invite someone</p>
+				</Table.Empty>
+			</Table.Root>
+		));
+		expect(screen.queryByText("Invite someone")).toBeNull();
+	});
+});
+
 test("each row marks its first data cell's content as the morph title", () => {
-	render(() => <Table.Root columns={columns as never} data={loadedRows} />);
+	render(() => (
+		<Table.Root
+			getRowId={rowIndex}
+			columns={columns as never}
+			data={loadedRows}
+		/>
+	));
 	const titles = [
 		...document.querySelectorAll("tbody tr [data-morph-title]"),
 	].map((element) => element.textContent);
@@ -166,7 +243,11 @@ test("the title skips a leading editable column (disableRowClick)", () => {
 		{ accessorKey: "name", header: "Name", dataType: "string" },
 	];
 	render(() => (
-		<Table.Root columns={editableFirst as never} data={loadedRows} />
+		<Table.Root
+			getRowId={rowIndex}
+			columns={editableFirst as never}
+			data={loadedRows}
+		/>
 	));
 	const titles = [
 		...document.querySelectorAll("tbody tr [data-morph-title]"),
@@ -187,6 +268,7 @@ test("a hidden column (the grouped one) is not the title", () => {
 	];
 	render(() => (
 		<Table.Root
+			getRowId={rowIndex}
 			columns={grouped as never}
 			data={[{ name: "Ann", team: "red" }] as Grouped[]}
 			groupBy="team"
@@ -201,6 +283,7 @@ test("a hidden column (the grouped one) is not the title", () => {
 test("each data cell's content carries its column id as its morph key; the title cell's carries it as its title", () => {
 	render(() => (
 		<Table.Root
+			getRowId={rowIndex}
 			columns={
 				[
 					...columns,
@@ -240,6 +323,7 @@ test("each data cell's content carries its column id as its morph key; the title
 test("renders rows and sorts by column", () => {
 	render(() => (
 		<Table.Root
+			getRowId={rowIndex}
 			columns={columns as never}
 			data={data()}
 			initialColumnSorting={[{ id: "score", desc: true }]}
@@ -276,6 +360,7 @@ function cellCounts(): { head: number; body: number } {
 test("header and body rows have one cell per visible column, grouped or not", () => {
 	render(() => (
 		<Table.Root
+			getRowId={rowIndex}
 			columns={actionColumns}
 			data={[{ name: "A", group: "G" }]}
 			groupBy="group"
@@ -289,6 +374,7 @@ test("header and body rows have one cell per visible column, grouped or not", ()
 test("the plain table renders every column", () => {
 	render(() => (
 		<Table.Root
+			getRowId={rowIndex}
 			columns={actionColumns}
 			data={[{ name: "A", group: "G" }]}
 		/>
@@ -300,7 +386,13 @@ test("the plain table renders every column", () => {
 });
 
 test("ungrouped skeleton has one cell per header cell, even with an actions column", () => {
-	render(() => <Table.Root columns={actionColumns} data={undefined} />);
+	render(() => (
+		<Table.Root
+			getRowId={rowIndex}
+			columns={actionColumns}
+			data={undefined}
+		/>
+	));
 	const headCells = document.querySelectorAll("thead tr th").length;
 	const skeletonCells = document
 		.querySelector("[data-skeleton-row]")
@@ -314,20 +406,39 @@ test("ungrouped skeleton has one cell per header cell, even with an actions colu
 // measurements taken while the tab panel was hidden are re-taken against
 // real rows on return — no `needsRemeasure` heuristic needed.
 
-test("undefined data renders skeleton rows, not 'No results.'", () => {
-	render(() => <Table.Root columns={columns as never} data={undefined} />);
-	expect(screen.queryByText("No results.")).toBeNull();
+test("undefined data renders skeleton rows, not the empty state", () => {
+	render(() => (
+		<Table.Root
+			getRowId={rowIndex}
+			columns={columns as never}
+			data={undefined}
+		/>
+	));
+	expect(screen.queryByText("Nothing here yet")).toBeNull();
 	expect(document.querySelectorAll("[data-skeleton-row]")).toHaveLength(8);
 });
 
 test("loading renders one skeleton cell per visible column", () => {
-	render(() => <Table.Root columns={columns as never} data={[]} loading />);
+	render(() => (
+		<Table.Root
+			getRowId={rowIndex}
+			columns={columns as never}
+			data={[]}
+			loading
+		/>
+	));
 	const row = document.querySelector("[data-skeleton-row]");
 	expect(row?.querySelectorAll("td").length).toBe(columns.length);
 });
 
 test("the header renders while loading", () => {
-	render(() => <Table.Root columns={columns as never} data={undefined} />);
+	render(() => (
+		<Table.Root
+			getRowId={rowIndex}
+			columns={columns as never}
+			data={undefined}
+		/>
+	));
 	expect(screen.getAllByRole("columnheader").length).toBeGreaterThan(0);
 });
 
@@ -336,7 +447,11 @@ test("first mount shows skeleton rows until the paint, then real rows", async ()
 	vi.useFakeTimers();
 	try {
 		render(() => (
-			<Table.Root columns={columns as never} data={loadedRows} />
+			<Table.Root
+				getRowId={rowIndex}
+				columns={columns as never}
+				data={loadedRows}
+			/>
 		));
 		expect(document.querySelectorAll("[data-skeleton-row]")).toHaveLength(
 			8
@@ -398,7 +513,12 @@ async function settle(): Promise<void> {
 describe("loadingMore", () => {
 	test("appends three skeleton rows after the data rows", () => {
 		render(() => (
-			<Table.Root columns={columns as never} data={data()} loadingMore />
+			<Table.Root
+				getRowId={rowIndex}
+				columns={columns as never}
+				data={data()}
+				loadingMore
+			/>
 		));
 		const rows = [...document.querySelectorAll("tbody tr")];
 		expect(rows).toHaveLength(data().length + 3);
@@ -412,6 +532,7 @@ describe("loadingMore", () => {
 		const [loadingMore, setLoadingMore] = createSignal(true);
 		render(() => (
 			<Table.Root
+				getRowId={rowIndex}
 				columns={columns as never}
 				data={data()}
 				loadingMore={loadingMore()}
@@ -429,6 +550,7 @@ describe("loadingMore", () => {
 	test("a grouped table appends them after the last group", () => {
 		render(() => (
 			<Table.Root
+				getRowId={rowIndex}
 				columns={columns as never}
 				data={data()}
 				groupBy="name"
@@ -455,6 +577,7 @@ describe("loadingMore", () => {
 	test("the first-load skeleton wins while data is undefined", () => {
 		render(() => (
 			<Table.Root
+				getRowId={rowIndex}
 				columns={columns as never}
 				data={undefined}
 				loadingMore
@@ -499,12 +622,12 @@ describe("column tracks", () => {
 		vi.restoreAllMocks();
 	});
 
-	type Person = { name: string; team: string; note: string };
-	const people: Person[] = [
+	type Item = { name: string; team: string; note: string };
+	const items: Item[] = [
 		{ name: "Ada", team: "Core", note: "x" },
 		{ name: "Grace Hopper", team: "Core", note: "y" },
 	];
-	const personColumns: JfColumnDefinition<Person>[] = [
+	const itemColumns: JfColumnDefinition<Item>[] = [
 		{ accessorKey: "name", header: "Name", dataType: "string" },
 		{ accessorKey: "team", header: "Team", dataType: "string" },
 		{
@@ -524,7 +647,12 @@ describe("column tracks", () => {
 
 	test("list the visible leaf columns in order, grouped column excluded", () => {
 		render(() => (
-			<Table.Root columns={personColumns} data={people} groupBy="team" />
+			<Table.Root
+				getRowId={rowIndex}
+				columns={itemColumns}
+				data={items}
+				groupBy="team"
+			/>
 		));
 		// Name: "Grace Hopper" 120 + 1 beats the header 40 + 30 + 1.
 		expect(tracks()).toBe("minmax(121px, 1fr) minmax(200px, 2fr) 84px");
@@ -532,7 +660,13 @@ describe("column tracks", () => {
 	});
 
 	test("are the same shape in a flat table", () => {
-		render(() => <Table.Root columns={personColumns} data={people} />);
+		render(() => (
+			<Table.Root
+				getRowId={rowIndex}
+				columns={itemColumns}
+				data={items}
+			/>
+		));
 		// Team: the header "Team" 40 + 30 + 1 beats its widest cell, 41.
 		expect(tracks()).toBe(
 			"minmax(121px, 1fr) minmax(71px, 1fr) minmax(200px, 2fr) 84px"
@@ -542,6 +676,7 @@ describe("column tracks", () => {
 	test("put a filler track before the actions column when nothing flexes", () => {
 		render(() => (
 			<Table.Root
+				getRowId={rowIndex}
 				columns={[
 					{
 						accessorKey: "name",
@@ -549,9 +684,9 @@ describe("column tracks", () => {
 						dataType: "string",
 						size: "content",
 					},
-					personColumns[3],
+					itemColumns[3],
 				]}
-				data={people}
+				data={items}
 			/>
 		));
 		expect(tracks()).toBe("121px minmax(0, 1fr) 84px");
@@ -560,6 +695,7 @@ describe("column tracks", () => {
 	test("put the filler last when nothing flexes and there is no actions column", () => {
 		render(() => (
 			<Table.Root
+				getRowId={rowIndex}
 				columns={[
 					{
 						accessorKey: "name",
@@ -568,7 +704,7 @@ describe("column tracks", () => {
 						size: "content",
 					},
 				]}
-				data={people}
+				data={items}
 			/>
 		));
 		expect(tracks()).toBe("121px minmax(0, 1fr)");
@@ -577,8 +713,9 @@ describe("column tracks", () => {
 	test("lead with a 48px select column", () => {
 		render(() => (
 			<Table.Root
-				columns={personColumns}
-				data={people}
+				getRowId={rowIndex}
+				columns={itemColumns}
+				data={items}
 				enableRowSelection
 			/>
 		));
@@ -588,8 +725,9 @@ describe("column tracks", () => {
 	test("measure rows a filter hides", () => {
 		render(() => (
 			<Table.Root
-				columns={personColumns}
-				data={people}
+				getRowId={rowIndex}
+				columns={itemColumns}
+				data={items}
 				groupBy="team"
 				initialColumnFilters={[{ id: "name", value: "Ada" }]}
 			/>
@@ -600,7 +738,12 @@ describe("column tracks", () => {
 
 	test("do not change when a group collapses", () => {
 		render(() => (
-			<Table.Root columns={personColumns} data={people} groupBy="team" />
+			<Table.Root
+				getRowId={rowIndex}
+				columns={itemColumns}
+				data={items}
+				groupBy="team"
+			/>
 		));
 		const before = tracks();
 		fireEvent.click(screen.getByRole("button", { expanded: true }));
@@ -609,13 +752,18 @@ describe("column tracks", () => {
 	});
 
 	test("widen when rows arrive", () => {
-		const [rows, setRows] = createSignal<Person[]>([people[0]]);
+		const [rows, setRows] = createSignal<Item[]>([items[0]]);
 		render(() => (
-			<Table.Root columns={personColumns} data={rows()} groupBy="team" />
+			<Table.Root
+				getRowId={rowIndex}
+				columns={itemColumns}
+				data={rows()}
+				groupBy="team"
+			/>
 		));
 		// "Name" header 40 + 30 + 1 beats "Ada" 31.
 		expect(tracks()).toBe("minmax(71px, 1fr) minmax(200px, 2fr) 84px");
-		setRows(people);
+		setRows(items);
 		expect(tracks()).toBe("minmax(121px, 1fr) minmax(200px, 2fr) 84px");
 	});
 
@@ -623,6 +771,7 @@ describe("column tracks", () => {
 		type Op = { op: string };
 		render(() => (
 			<Table.Root
+				getRowId={rowIndex}
 				columns={[
 					{
 						accessorKey: "op",
@@ -642,10 +791,11 @@ describe("column tracks", () => {
 	});
 
 	test("measure only the rows a data push adds or replaces", () => {
-		const measureText = vi.fn((row: Person) => row.name);
-		const [rows, setRows] = createSignal<Person[]>(people);
+		const measureText = vi.fn((row: Item) => row.name);
+		const [rows, setRows] = createSignal<Item[]>(items);
 		render(() => (
 			<Table.Root
+				getRowId={rowIndex}
 				columns={[
 					{
 						accessorKey: "name",
@@ -660,9 +810,9 @@ describe("column tracks", () => {
 		));
 		expect(measureText).toHaveBeenCalledTimes(2);
 		measureText.mockClear();
-		const added: Person = { name: "Lin", team: "Core", note: "z" };
-		const replaced: Person = { ...people[0], name: "Ada L" };
-		setRows([replaced, people[1], added]);
+		const added: Item = { name: "Lin", team: "Core", note: "z" };
+		const replaced: Item = { ...items[0], name: "Ada L" };
+		setRows([replaced, items[1], added]);
 		expect(measureText.mock.calls.map(([row]) => row)).toEqual([
 			replaced,
 			added,
@@ -670,10 +820,11 @@ describe("column tracks", () => {
 	});
 
 	test("skip rows a push hands back as fresh but equal objects", () => {
-		const measureText = vi.fn((row: Person) => row.name);
-		const [rows, setRows] = createSignal<Person[]>(people);
+		const measureText = vi.fn((row: Item) => row.name);
+		const [rows, setRows] = createSignal<Item[]>(items);
 		render(() => (
 			<Table.Root
+				getRowId={rowIndex}
 				columns={[
 					{
 						accessorKey: "name",
@@ -687,19 +838,19 @@ describe("column tracks", () => {
 			/>
 		));
 		measureText.mockClear();
-		setRows(people.map((person) => ({ ...person })));
+		setRows(items.map((item) => ({ ...item })));
 		expect(measureText).not.toHaveBeenCalled();
-		const changed = { ...people[1], note: "edited" };
-		setRows([{ ...people[0] }, changed]);
+		const changed = { ...items[1], note: "edited" };
+		setRows([{ ...items[0] }, changed]);
 		expect(measureText.mock.calls.map(([row]) => row)).toEqual([changed]);
 	});
 
 	test("measure only a row a push inserts at the head", () => {
-		type Doc = { _id: string; name: string };
+		type Doc = { id: string; name: string };
 		const measureText = vi.fn((row: Doc) => row.name);
 		const documents: Doc[] = [
-			{ _id: "a", name: "Ada" },
-			{ _id: "b", name: "Grace" },
+			{ id: "a", name: "Ada" },
+			{ id: "b", name: "Grace" },
 		];
 		const [rows, setRows] = createSignal<Doc[]>(documents);
 		render(() => (
@@ -714,34 +865,46 @@ describe("column tracks", () => {
 					},
 				]}
 				data={rows()}
+				getRowId={rowId}
 			/>
 		));
 		measureText.mockClear();
-		const head: Doc = { _id: "z", name: "Lin" };
+		const head: Doc = { id: "z", name: "Lin" };
 		setRows([head, ...documents.map((doc) => ({ ...doc }))]);
 		expect(measureText.mock.calls.map(([row]) => row)).toEqual([head]);
 	});
 
 	test("grow when a wider row arrives and keep the width when it leaves", () => {
-		const [rows, setRows] = createSignal<Person[]>([people[0]]);
+		const [rows, setRows] = createSignal<Item[]>([items[0]]);
 		render(() => (
-			<Table.Root columns={personColumns} data={rows()} groupBy="team" />
+			<Table.Root
+				getRowId={rowIndex}
+				columns={itemColumns}
+				data={rows()}
+				groupBy="team"
+			/>
 		));
 		expect(tracks()).toBe("minmax(71px, 1fr) minmax(200px, 2fr) 84px");
-		setRows(people);
+		setRows(items);
 		expect(tracks()).toBe("minmax(121px, 1fr) minmax(200px, 2fr) 84px");
-		setRows([people[0]]);
+		setRows([items[0]]);
 		expect(tracks()).toBe("minmax(121px, 1fr) minmax(200px, 2fr) 84px");
 	});
 
 	test("content tracks read one width property each, set on the table", () => {
-		const [rows, setRows] = createSignal<Person[]>([people[0]]);
-		render(() => <Table.Root columns={personColumns} data={rows()} />);
+		const [rows, setRows] = createSignal<Item[]>([items[0]]);
+		render(() => (
+			<Table.Root
+				getRowId={rowIndex}
+				columns={itemColumns}
+				data={rows()}
+			/>
+		));
 		const before = rawTracks();
 		expect(before).toBe(
 			"minmax(var(--jf-col-0), 1fr) minmax(var(--jf-col-1), 1fr) minmax(200px, 2fr) 84px"
 		);
-		setRows(people);
+		setRows(items);
 		// A wider row moves only the width property, never the track list:
 		// every row reads the one value the table animates.
 		expect(rawTracks()).toBe(before);
@@ -754,14 +917,14 @@ describe("column tracks", () => {
 
 	test("skip rows a push hands back with fresh but equal nested values", () => {
 		type Nested = {
-			_id: string;
+			id: string;
 			name: string;
 			venture: { name: string; links: { url: string }[] };
 		};
 		const measureText = vi.fn((row: Nested) => row.name);
 		const documents: Nested[] = [
 			{
-				_id: "a",
+				id: "a",
 				name: "Ada",
 				venture: { name: "V", links: [{ url: "https://a" }] },
 			},
@@ -779,6 +942,7 @@ describe("column tracks", () => {
 					},
 				]}
 				data={rows()}
+				getRowId={rowId}
 			/>
 		));
 		measureText.mockClear();
@@ -791,10 +955,11 @@ describe("column tracks", () => {
 	});
 
 	test("re-measure a measureVolatile column on every pass", () => {
-		const volatile = vi.fn((row: Person) => row.name);
-		const [rows, setRows] = createSignal<Person[]>(people);
+		const volatile = vi.fn((row: Item) => row.name);
+		const [rows, setRows] = createSignal<Item[]>(items);
 		render(() => (
 			<Table.Root
+				getRowId={rowIndex}
 				columns={[
 					{
 						accessorKey: "name",
@@ -809,12 +974,18 @@ describe("column tracks", () => {
 			/>
 		));
 		volatile.mockClear();
-		setRows(people.map((person) => ({ ...person })));
+		setRows(items.map((item) => ({ ...item })));
 		expect(volatile).toHaveBeenCalledTimes(2);
 	});
 
 	test("animate track changes only once the first layout has settled", async () => {
-		render(() => <Table.Root columns={personColumns} data={people} />);
+		render(() => (
+			<Table.Root
+				getRowId={rowIndex}
+				columns={itemColumns}
+				data={items}
+			/>
+		));
 		const table = document.querySelector("table");
 		expect(table).not.toHaveAttribute("data-animate-tracks");
 		await waitFor(() => {
@@ -827,6 +998,7 @@ describe("column tracks", () => {
 		type Tagged = { tags: string[] };
 		render(() => (
 			<Table.Root
+				getRowId={rowIndex}
 				columns={[
 					{
 						accessorKey: "tags",
@@ -886,7 +1058,13 @@ describe("column re-measure", () => {
 	});
 
 	test("re-measure once when web fonts finish loading", async () => {
-		render(() => <Table.Root columns={nameColumns} data={named} />);
+		render(() => (
+			<Table.Root
+				getRowId={rowIndex}
+				columns={nameColumns}
+				data={named}
+			/>
+		));
 		await settle();
 		expect(measures).toHaveLength(1);
 		// "Grace Hopper" at 10px a character, + 1.
@@ -899,7 +1077,11 @@ describe("column re-measure", () => {
 
 	test("stop listening for fonts once unmounted", async () => {
 		const { unmount } = render(() => (
-			<Table.Root columns={nameColumns} data={named} />
+			<Table.Root
+				getRowId={rowIndex}
+				columns={nameColumns}
+				data={named}
+			/>
 		));
 		await settle();
 		unmount();
@@ -908,19 +1090,36 @@ describe("column re-measure", () => {
 	});
 
 	test("measure the body font, bold in a focusable table", () => {
-		render(() => <Table.Root columns={nameColumns} data={named} />);
+		render(() => (
+			<Table.Root
+				getRowId={rowIndex}
+				columns={nameColumns}
+				data={named}
+			/>
+		));
 		expect(measures[0]).toContain(" 400 ");
 		cleanup();
 		measures = [];
 		render(() => (
-			<Table.Root columns={nameColumns} data={named} focusableRows />
+			<Table.Root
+				getRowId={rowIndex}
+				columns={nameColumns}
+				data={named}
+				focusableRows
+			/>
 		));
 		expect(measures[0]).toContain(" 700 ");
 	});
 
 	test("read the body font with no body cell to read it from", () => {
 		const [rows, setRows] = createSignal<Named[]>([]);
-		render(() => <Table.Root columns={nameColumns} data={rows()} />);
+		render(() => (
+			<Table.Root
+				getRowId={rowIndex}
+				columns={nameColumns}
+				data={rows()}
+			/>
+		));
 		expect(measures).toEqual([expect.stringContaining(" 400 ")]);
 		setRows(named);
 		expect(tracks()).toBe("121px minmax(0, 1fr)");
@@ -933,7 +1132,13 @@ describe("column re-measure", () => {
 			return (text) => text.length * width;
 		});
 		const [rows, setRows] = createSignal<Named[]>(named);
-		render(() => <Table.Root columns={nameColumns} data={rows()} />);
+		render(() => (
+			<Table.Root
+				getRowId={rowIndex}
+				columns={nameColumns}
+				data={rows()}
+			/>
+		));
 		await settle();
 		// "Grace Hopper" at 20px a character, + 1.
 		expect(tracks()).toBe("241px minmax(0, 1fr)");
@@ -948,7 +1153,13 @@ describe("column re-measure", () => {
 	test("keep widths when a font that measures nothing differently loads", async () => {
 		setTableTextMeasurer(() => measureTenPixelsPerCharacter);
 		const [rows, setRows] = createSignal<Named[]>(named);
-		render(() => <Table.Root columns={nameColumns} data={rows()} />);
+		render(() => (
+			<Table.Root
+				getRowId={rowIndex}
+				columns={nameColumns}
+				data={rows()}
+			/>
+		));
 		await settle();
 		setRows([named[0]]);
 		expect(tracks()).toBe("121px minmax(0, 1fr)");
@@ -973,15 +1184,20 @@ describe("column re-measure", () => {
 		);
 		render(() => (
 			<div
-				style={{ "overflow-y": "auto" }}
 				ref={(element) => {
+					// jsdom loads no stylesheet: the scroll parent's overflow is inline.
+					element.style.setProperty("overflow-y", "auto");
 					Object.defineProperty(element, "clientHeight", {
 						configurable: true,
 						get: () => (isShown ? 400 : 0),
 					});
 				}}
 			>
-				<Table.Root columns={nameColumns} data={named} />
+				<Table.Root
+					getRowId={rowIndex}
+					columns={nameColumns}
+					data={named}
+				/>
 			</div>
 		));
 		const table = document.querySelector("table");
@@ -1019,15 +1235,20 @@ describe("column re-measure", () => {
 		render(() => (
 			<div
 				data-testid="scroller"
-				style={{ "overflow-y": "auto" }}
 				ref={(element) => {
+					// jsdom loads no stylesheet: the scroll parent's overflow is inline.
+					element.style.setProperty("overflow-y", "auto");
 					Object.defineProperty(element, "clientHeight", {
 						configurable: true,
 						get: () => (isShown ? 400 : 0),
 					});
 				}}
 			>
-				<Table.Root columns={nameColumns} data={named} />
+				<Table.Root
+					getRowId={rowIndex}
+					columns={nameColumns}
+					data={named}
+				/>
 			</div>
 		));
 		expect(tracks()).toBe("121px minmax(0, 1fr)");
@@ -1040,7 +1261,13 @@ describe("column re-measure", () => {
 
 describe("accessibility", () => {
 	test("rows, cells and headers carry explicit roles", () => {
-		render(() => <Table.Root columns={columns as never} data={data()} />);
+		render(() => (
+			<Table.Root
+				getRowId={rowIndex}
+				columns={columns as never}
+				data={data()}
+			/>
+		));
 		expect(screen.getByRole("table")).toBeInTheDocument();
 		expect(screen.getAllByRole("rowgroup")).toHaveLength(2);
 		const headers = screen.getAllByRole("columnheader");
@@ -1053,6 +1280,7 @@ describe("accessibility", () => {
 	test("a focusable table is a grid of gridcells", () => {
 		render(() => (
 			<Table.Root
+				getRowId={rowIndex}
 				columns={columns as never}
 				data={data()}
 				focusableRows
@@ -1065,6 +1293,7 @@ describe("accessibility", () => {
 	test("headerColumn makes the first column after the checkbox a row header", () => {
 		render(() => (
 			<Table.Root
+				getRowId={rowIndex}
 				columns={columns as never}
 				data={data()}
 				enableRowSelection
@@ -1079,6 +1308,7 @@ describe("accessibility", () => {
 	test("aria-sort tells the sort state, and only on sortable columns", () => {
 		render(() => (
 			<Table.Root
+				getRowId={rowIndex}
 				columns={[
 					...(columns as unknown as JfColumnDefinition<Row>[]),
 					{ id: "actions", header: "", size: 84, cell: () => null },
@@ -1096,6 +1326,7 @@ describe("accessibility", () => {
 	test("group header and empty rows span every column", () => {
 		render(() => (
 			<Table.Root
+				getRowId={rowIndex}
 				columns={actionColumns}
 				data={[{ name: "A", group: "G" }]}
 				groupBy="group"
@@ -1107,10 +1338,12 @@ describe("accessibility", () => {
 				?.getAttribute("colspan")
 		).toBe("2");
 		cleanup();
-		render(() => <Table.Root columns={actionColumns} data={[]} />);
-		expect(screen.getByText("No results.").getAttribute("colspan")).toBe(
-			"3"
-		);
+		render(() => (
+			<Table.Root getRowId={rowIndex} columns={actionColumns} data={[]} />
+		));
+		expect(
+			screen.getByText("Nothing here yet").closest("td")
+		).toHaveAttribute("colspan", "3");
 	});
 });
 
@@ -1122,6 +1355,7 @@ describe("default enum cell", () => {
 	test("shows the option label, the text it was measured by", () => {
 		render(() => (
 			<Table.Root
+				getRowId={rowIndex}
 				columns={[
 					{
 						accessorKey: "op",
@@ -1154,6 +1388,7 @@ describe("default enum cell", () => {
 	test("gives way to a custom cell", () => {
 		render(() => (
 			<Table.Root
+				getRowId={rowIndex}
 				columns={[
 					{
 						accessorKey: "op",
@@ -1172,7 +1407,13 @@ describe("default enum cell", () => {
 
 describe("DOM contract", () => {
 	test("the rendered header and body attributes match the selector constants", () => {
-		render(() => <Table.Root columns={columns as never} data={data()} />);
+		render(() => (
+			<Table.Root
+				getRowId={rowIndex}
+				columns={columns as never}
+				data={data()}
+			/>
+		));
 		const th = document.querySelector(HEADER_COLUMN_SELECTOR);
 		expect(th?.getAttribute(COLUMN_ID_ATTR)).toBe("name");
 		for (const attribute of [
@@ -1187,7 +1428,12 @@ describe("DOM contract", () => {
 
 	test("skeleton cells match the body text-cell selector", () => {
 		render(() => (
-			<Table.Root columns={columns as never} data={[]} loading />
+			<Table.Root
+				getRowId={rowIndex}
+				columns={columns as never}
+				data={[]}
+				loading
+			/>
 		));
 		expect(
 			document.querySelector(
@@ -1231,6 +1477,7 @@ describe("track animation stylesheet", () => {
 function renderTable(spy: (row: unknown) => void, rows = data()) {
 	render(() => (
 		<Table.Root
+			getRowId={rowIndex}
 			columns={columns as never}
 			data={rows}
 			onRowHoverIntent={spy}

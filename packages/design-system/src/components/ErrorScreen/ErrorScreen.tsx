@@ -24,7 +24,7 @@ export function ErrorScreen(props: ErrorScreenProps): JSX.Element {
 		<div class={styles.screen}>
 			<ExceptionDisplay
 				status="error"
-				icon="bolt"
+				icon={ICONS.failure}
 				title="Something went wrong."
 				description={props.message}
 			>

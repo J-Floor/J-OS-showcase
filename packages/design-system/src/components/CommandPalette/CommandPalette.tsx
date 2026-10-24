@@ -5,9 +5,10 @@ import { For, Show, createSignal, type JSX } from "solid-js";
 
 import { ICONS } from "../../icons.ts";
 import { type MorphOverlayProps } from "../../utils/morphPresence.ts";
+import { createSlotPart } from "../../utils/presence.tsx";
 import { Dialog } from "../Dialog/Dialog.tsx";
 import { Highlight } from "../Highlight/Highlight.tsx";
-import { Icon } from "../Icon/Icon.tsx";
+import { Icon, type IconProps } from "../Icon/Icon.tsx";
 import { Kbd } from "../Kbd/Kbd.tsx";
 import { ClearSearchButton } from "../SearchInput/ClearSearchButton.tsx";
 
@@ -35,14 +36,13 @@ export type CommandPaletteItem = {
 	/** Extra terms that should find this item but are not a better name for it —
 	 *  an email address, a synonym. Ranked below the label, always. */
 	keywords?: string[];
-	/** Material Symbols ligature. */
-	icon?: string;
+	icon?: IconProps["children"];
 	/** Secondary line: a role, a project, a path. */
 	detail?: string;
 	/**
 	 * Keep this out of the blank palette; offer it only once there is a query.
 	 *
-	 * For the open-ended lists — every person, every task — where an unfiltered
+	 * For the open-ended lists — every record of a kind — where an unfiltered
 	 * dump is both unreadable and expensive: each row is a live listbox option,
 	 * so a few hundred of them is a few hundred DOM nodes built before the user
 	 * has said what they want. The blank palette is for the handful of fixed
@@ -70,8 +70,8 @@ export type CommandPaletteProps = {
 	onOpenChange: (isOpen: boolean) => void;
 	items: CommandPaletteItem[];
 	placeholder?: string;
-	/** Shown when nothing matches. @default "No matches." */
-	emptyMessage?: string;
+	/** Parts: a `CommandPalette.Empty` replaces the default "No matches.". */
+	children?: JSX.Element;
 	/** `localStorage` key for the recent list. Omit to not keep recents. */
 	recentsKey?: string;
 	/** @default 5 */
@@ -113,7 +113,7 @@ function SearchField(props: {
 		    the DOM from first paint — and `autofocus` fires on mount,
 		    not on open, so it stole focus into the closed, invisible
 		    palette on every page load. Focus trapped there, every
-		    keystroke went to this hidden combobox: the roster's arrow
+		    keystroke went to this hidden combobox: a table's arrow
 		    keys never focused a row and Alt-to-peek did nothing. Focus
 		    on OPEN is handled by `initialFocusEl` on `Dialog.Root`
 		    above, which is why the attribute was only ever redundant. */}
@@ -137,19 +137,22 @@ function SearchField(props: {
 	);
 }
 
-/** The grouped rows, or the empty message when nothing matched. */
+/** `CommandPalette.Empty`: shown when nothing matches, instead of the
+ *  default message. */
+const emptyPart = createSlotPart("CommandPalette", "Empty", "CommandPalette");
+
+/** The grouped rows, or the empty content when nothing matched. */
 function PaletteGroups(props: {
 	groups: PaletteGroup[];
 	search: string;
-	emptyMessage: string | undefined;
 }): JSX.Element {
 	return (
 		<Show
 			when={props.groups.length > 0}
 			fallback={
-				<p class={styles.empty}>
-					{props.emptyMessage ?? "No matches."}
-				</p>
+				<div class={styles.empty}>
+					<emptyPart.Slot fallback="No matches." />
+				</div>
 			}
 		>
 			<For each={props.groups}>
@@ -259,104 +262,108 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
 	createHighlightIntent(highlighted, search, visible);
 
 	return (
-		<Dialog.Root
-			open={props.open}
-			morph={props.morph}
-			morphFrom={props.morphFrom}
-			onOpenChange={(details) => {
-				props.onOpenChange(details.open);
-			}}
-			// A palette opens to be TYPED IN, so it is one of the few dialogs
-			// with an obvious first field. `Dialog.Root` otherwise focuses the
-			// dialog itself (so a screen reader announces it instead of the
-			// close button) — correct in general, wrong here: ⌘K opened the
-			// palette with the caret nowhere, and the first keystroke went
-			// nowhere with it. This is the ONLY thing that should focus the
-			// input, and only on open — an `autofocus` attribute on the field
-			// fired on mount instead (the palette is mounted while closed) and
-			// stole focus into the hidden box, so it was removed.
-			initialFocusEl={() => inputReference ?? null}
-		>
-			<Dialog.Content
-				class={clsx(styles.dialog, props.class)}
-				// The dialog's own X is suppressed here, and the field carries a
-				// clear button instead. An X beside a search box means "empty
-				// this box" — putting the close action there invites you to lose
-				// the whole palette when you only wanted to retype. Escape closes
-				// it, and the footer says so.
-				classOverride={{ closeClass: styles.hiddenClose }}
+		<emptyPart.Scope>
+			{props.children}
+			<Dialog.Root
+				open={props.open}
+				morph={props.morph}
+				morphFrom={props.morphFrom}
+				onOpenChange={(details) => {
+					props.onOpenChange(details.open);
+				}}
+				// A palette opens to be TYPED IN, so it is one of the few dialogs
+				// with an obvious first field. `Dialog.Root` otherwise focuses the
+				// dialog itself (so a screen reader announces it instead of the
+				// close button) — correct in general, wrong here: ⌘K opened the
+				// palette with the caret nowhere, and the first keystroke went
+				// nowhere with it. This is the ONLY thing that should focus the
+				// input, and only on open — an `autofocus` attribute on the field
+				// fired on mount instead (the palette is mounted while closed) and
+				// stole focus into the hidden box, so it was removed.
+				initialFocusEl={() => inputReference ?? null}
 			>
-				<Combobox.Root
-					collection={collection()}
-					// Open WITH the dialog, not always. Inside an open dialog there
-					// is nothing to open onto and a palette that hides its list until
-					// you type shows an empty box — so while the dialog is up the
-					// combobox is open and the list browses freely. But the dialog
-					// stays MOUNTED while closed (an overlay cannot gate its own
-					// mount), and an always-open combobox pulls focus into its input on
-					// mount: on every page load focus was stolen into this closed,
-					// invisible palette, so the roster's arrow keys and Alt-to-peek
-					// went to a hidden search box and the table never saw a keystroke.
-					// Tying it to `props.open` keeps the list-always-shown behaviour
-					// while the palette is up and leaves focus alone while it is not.
-					open={props.open}
-					// Enter must RUN the highlighted row, not type it into the box.
-					// zag's default input behaviour completes the query with the
-					// highlighted item, which looked like Enter doing nothing: the
-					// field filled in, the list narrowed to one, and nothing opened.
-					inputBehavior="none"
-					// And nothing is left selected afterwards — the palette closes
-					// and reopens blank, so a stale selection would filter the next
-					// search down to the thing you picked last time.
-					selectionBehavior="clear"
-					highlightedValue={highlighted()}
-					onHighlightChange={(details) => {
-						setHighlighted(details.highlightedValue);
-					}}
-					inputValue={search()}
-					onInputValueChange={(details) => {
-						setSearch(details.inputValue);
-					}}
-					// `onSelect`, NOT `onValueChange`. `selectionBehavior="clear"`
-					// only empties the input; zag still holds the picked value, so
-					// picking the same row again is no change and `onValueChange`
-					// never fires — reopening the person you just closed did
-					// nothing. `onSelect` fires on every pick.
-					onSelect={(details) => {
-						pick(details.itemValue);
-					}}
-					class={styles.combobox}
+				<Dialog.Content
+					class={clsx(styles.dialog, props.class)}
+					// The dialog's own X is suppressed here, and the field carries a
+					// clear button instead. An X beside a search box means "empty
+					// this box" — putting the close action there invites you to lose
+					// the whole palette when you only wanted to retype. Escape closes
+					// it, and the footer says so.
+					classOverride={{ closeClass: styles.hiddenClose }}
 				>
-					<SearchField
-						placeholder={props.placeholder}
-						hasQuery={search() !== ""}
-						setInput={(element) => {
-							inputReference = element;
+					<Combobox.Root
+						collection={collection()}
+						// Open WITH the dialog, not always. Inside an open dialog there
+						// is nothing to open onto and a palette that hides its list until
+						// you type shows an empty box — so while the dialog is up the
+						// combobox is open and the list browses freely. But the dialog
+						// stays MOUNTED while closed (an overlay cannot gate its own
+						// mount), and an always-open combobox pulls focus into its input on
+						// mount: on every page load focus was stolen into this closed,
+						// invisible palette, so a table's arrow keys and Alt-to-peek
+						// went to a hidden search box and the table never saw a keystroke.
+						// Tying it to `props.open` keeps the list-always-shown behaviour
+						// while the palette is up and leaves focus alone while it is not.
+						open={props.open}
+						// Enter must RUN the highlighted row, not type it into the box.
+						// zag's default input behaviour completes the query with the
+						// highlighted item, which looked like Enter doing nothing: the
+						// field filled in, the list narrowed to one, and nothing opened.
+						inputBehavior="none"
+						// And nothing is left selected afterwards — the palette closes
+						// and reopens blank, so a stale selection would filter the next
+						// search down to the thing you picked last time.
+						selectionBehavior="clear"
+						highlightedValue={highlighted()}
+						onHighlightChange={(details) => {
+							setHighlighted(details.highlightedValue);
 						}}
-						onClear={() => {
-							setSearch("");
-							inputReference?.focus();
+						inputValue={search()}
+						onInputValueChange={(details) => {
+							setSearch(details.inputValue);
 						}}
-					/>
-					{/* `Combobox.List`, not `Combobox.Content`. Content is a
+						// `onSelect`, NOT `onValueChange`. `selectionBehavior="clear"`
+						// only empties the input; zag still holds the picked value, so
+						// picking the same row again is no change and `onValueChange`
+						// never fires — reopening the row you just closed did
+						// nothing. `onSelect` fires on every pick.
+						onSelect={(details) => {
+							pick(details.itemValue);
+						}}
+						class={styles.combobox}
+					>
+						<SearchField
+							placeholder={props.placeholder}
+							hasQuery={search() !== ""}
+							setInput={(element) => {
+								inputReference = element;
+							}}
+							onClear={() => {
+								setSearch("");
+								inputReference?.focus();
+							}}
+						/>
+						{/* `Combobox.List`, not `Combobox.Content`. Content is a
 					    dismissable LAYER, and nested inside the dialog's layer it is
 					    never the topmost one — Ark marks it `pointer-events: none`,
 					    so every row rendered fine and nothing could be clicked. The
 					    list is the plain listbox part, which is all a palette needs:
 					    the dialog already owns dismissal. */}
-					<Combobox.List
-						class={styles.content}
-						ref={setListReference}
-					>
-						<PaletteGroups
-							groups={groups()}
-							search={search()}
-							emptyMessage={props.emptyMessage}
-						/>
-					</Combobox.List>
-					<PaletteFooter shortcut={shortcutOr(props.shortcut)} />
-				</Combobox.Root>
-			</Dialog.Content>
-		</Dialog.Root>
+						<Combobox.List
+							class={styles.content}
+							ref={setListReference}
+						>
+							<PaletteGroups
+								groups={groups()}
+								search={search()}
+							/>
+						</Combobox.List>
+						<PaletteFooter shortcut={shortcutOr(props.shortcut)} />
+					</Combobox.Root>
+				</Dialog.Content>
+			</Dialog.Root>
+		</emptyPart.Scope>
 	);
 }
+
+CommandPalette.Empty = emptyPart.Part;

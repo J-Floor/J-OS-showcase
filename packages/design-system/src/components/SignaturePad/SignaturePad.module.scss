@@ -15,9 +15,8 @@
 	position: relative;
 	min-block-size: 10rem;
 	background-color: var(--jf-surface-bg-raised);
-	border: 1px solid var(--jf-border-strong);
-	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this radius value */
-	border-radius: 0.5rem;
+	border: var(--jf-border-width-decorative) solid var(--jf-border-strong);
+	border-radius: var(--jf-radius-container);
 }
 
 .segment {
@@ -51,5 +50,6 @@
 	inset-block-end: 1.5rem;
 	inset-inline: 1.5rem;
 	pointer-events: none;
-	border-block-end: 1px dashed var(--jf-border-strong);
+	border-block-end: var(--jf-border-width-decorative) dashed
+		var(--jf-border-strong);
 }

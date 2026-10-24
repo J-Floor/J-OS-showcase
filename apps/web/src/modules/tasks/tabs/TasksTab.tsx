@@ -1,16 +1,53 @@
+import { Tabs } from "@j-os/design-system";
 import { createEffect, createSignal, on, type JSX } from "solid-js";
 
 import type { Doc } from "../../../../convex/_generated/dataModel";
+import { displayName } from "../../../../convex/lib/names.ts";
 import { createSheetNav } from "../../../lib/createSheetNav.ts";
+import { createPersistedSignal } from "../../../lib/persistedSignal.ts";
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
 import { createEntitySelection } from "../../../shared/entity/createEntitySelection.ts";
-import { filterTasksByAssignee } from "../data/taskHelpers.ts";
+import {
+	ASSIGNEE_FILTER_ALL,
+	ASSIGNEE_FILTER_ME,
+	filterTasksByAssignee,
+} from "../data/taskHelpers.ts";
 import { useCurrentPerson, useProjects, useTasks } from "../data/tasksData.tsx";
 import { KanbanBoard } from "../kanban/KanbanBoard.tsx";
 import type { TaskStatus } from "../kanban/onDrop.ts";
 import { TaskSheet } from "../sheets/TaskSheet.tsx";
+import { TasksTabActions } from "../TasksTabActions.tsx";
 
 import styles from "./TabShared.module.scss";
+
+/** Assignee filter for the Tasks board. "Me" leads; "Everyone" (the default)
+ *  clears it. Self is dropped from the per-person list since "Me" covers it.
+ *  Persisted across reloads so the board keeps a chosen "Me"/person filter. */
+function createAssigneeFilter() {
+	const boardLevel = useBoardLevel();
+	const currentPerson = useCurrentPerson();
+	const [assignee, setAssignee] = createPersistedSignal(
+		"tasks.assigneeFilter",
+		ASSIGNEE_FILTER_ALL
+	);
+	return {
+		assignee,
+		setAssignee,
+		assigneeOptions: () => {
+			const meId = currentPerson.data()?._id;
+			return [
+				{ value: ASSIGNEE_FILTER_ME, label: "Me" },
+				{ value: ASSIGNEE_FILTER_ALL, label: "Everyone" },
+				...(boardLevel.data() ?? [])
+					.filter((person) => person._id !== meId)
+					.map((person) => ({
+						value: person._id,
+						label: displayName(person),
+					})),
+			];
+		},
+	};
+}
 
 /** The tasks, and those shown on the board, narrowed by the assignee filter.
  *  Drives the kanban and the sheet's prev/next nav so navigation stays within
@@ -38,9 +75,6 @@ function useVisibleTasks(options: { assigneeFilter: () => string }) {
 }
 
 export function TasksTab(props: {
-	requestNew: () => number;
-	/** Active assignee filter: "all", "me", or a person id. */
-	assigneeFilter: () => string;
 	/** Whether the Tasks tab is the one on screen — gates the `?task=`
 	 *  read/write side of the entity selection below. */
 	active: () => boolean;
@@ -50,8 +84,9 @@ export function TasksTab(props: {
 }): JSX.Element {
 	const boardLevel = useBoardLevel();
 	const projects = useProjects();
+	const { assignee, setAssignee, assigneeOptions } = createAssigneeFilter();
 	const { tasks, visibleTasks } = useVisibleTasks({
-		assigneeFilter: () => props.assigneeFilter(),
+		assigneeFilter: assignee,
 	});
 
 	// Bidirectional deep-linking: opening a task writes `?task=<id>`; an
@@ -100,20 +135,18 @@ export function TasksTab(props: {
 		openCreate();
 	}
 
-	// Open the create sheet when the tab-bar "+ Task" button fires (defer so it
-	// doesn't open on mount).
-	createEffect(
-		on(
-			() => props.requestNew(),
-			() => {
-				addToColumn("backlog");
-			},
-			{ defer: true }
-		)
-	);
-
 	return (
 		<div class={styles.tab}>
+			<Tabs.Actions value="tasks">
+				<TasksTabActions
+					options={assigneeOptions}
+					assignee={assignee}
+					onAssigneeChange={setAssignee}
+					onNewTask={() => {
+						addToColumn("backlog");
+					}}
+				/>
+			</Tabs.Actions>
 			<KanbanBoard
 				tasks={visibleTasks()}
 				people={boardLevel.data() ?? []}

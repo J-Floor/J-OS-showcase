@@ -33,7 +33,7 @@ import styles from "./EventSheet.module.scss";
 import { eventAttendeesQuery } from "./queries.ts";
 
 /**
- * Placeholder field layout passed to `Sheet.Body`'s `skeleton` while
+ * Placeholder field layout shown by `Sheet.Skeleton` while
  * `loading` is true — an open row whose data hasn't arrived yet. Shaped like
  * the loaded accordion (labelled rows under a "Details" section) so the
  * measured shimmer has leaves matching that shape; literal "placeholder"
@@ -287,10 +287,10 @@ export function EventSheet(props: {
 				onToggleEditing={() => setEditing((current) => !current)}
 			/>
 
-			<Sheet.Body
-				loading={props.loading}
-				skeleton={<EventFieldsPlaceholder />}
-			>
+			<Sheet.Skeleton>
+				<EventFieldsPlaceholder />
+			</Sheet.Skeleton>
+			<Sheet.Body loading={props.loading}>
 				<Show
 					when={props.event}
 					fallback={

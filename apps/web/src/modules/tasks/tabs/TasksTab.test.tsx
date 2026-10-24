@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
+import { Tabs } from "@j-os/design-system";
 import { MemoryRouter, Route } from "@solidjs/router";
-import { cleanup, render } from "@solidjs/testing-library";
+import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
 import { afterEach, expect, test, vi } from "vitest";
 
 const { taskRows, kanbanTasks } = vi.hoisted(() => ({
@@ -23,7 +24,11 @@ vi.mock("../kanban/KanbanBoard.tsx", () => ({
 		return null;
 	},
 }));
-vi.mock("../sheets/TaskSheet.tsx", () => ({ TaskSheet: () => null }));
+vi.mock("../sheets/TaskSheet.tsx", () => ({
+	TaskSheet: (props: { open: boolean }) => (
+		<div data-testid="task-sheet" data-open={String(props.open)} />
+	),
+}));
 
 import { TasksTab } from "./TasksTab.tsx";
 
@@ -39,12 +44,10 @@ function renderTab() {
 			<Route
 				path="*"
 				component={() => (
-					<TasksTab
-						requestNew={() => 0}
-						assigneeFilter={() => "all"}
-						active={() => true}
-						onNeedTab={() => {}}
-					/>
+					<Tabs.Root value="tasks">
+						<Tabs.Bar />
+						<TasksTab active={() => true} onNeedTab={() => {}} />
+					</Tabs.Root>
 				)}
 			/>
 		</MemoryRouter>
@@ -60,4 +63,20 @@ test("hands the board the loaded tasks", () => {
 	taskRows.current = [];
 	renderTab();
 	expect(kanbanTasks).toEqual([[]]);
+});
+
+test("its New task action sits in the tab bar and opens the create sheet", () => {
+	const { container } = renderTab();
+	const bar = container.querySelector('[data-part="tab-actions"]');
+	const button = screen.getByRole("button", { name: /New task/ });
+	expect(bar).toContainElement(button);
+	expect(screen.getByTestId("task-sheet")).toHaveAttribute(
+		"data-open",
+		"false"
+	);
+	fireEvent.click(button);
+	expect(screen.getByTestId("task-sheet")).toHaveAttribute(
+		"data-open",
+		"true"
+	);
 });

@@ -3,11 +3,14 @@ import {
 	useTour,
 	type TourStepDetails,
 } from "@ark-ui/solid/tour";
-import clsx from "clsx";
-import { For, Show, type JSX } from "solid-js";
+import { createEffect, For, onCleanup, Show, type JSX } from "solid-js";
 import { Portal } from "solid-js/web";
 
 import { ICONS } from "../../icons.ts";
+import {
+	getPartStyles,
+	type WithPartClasses,
+} from "../../utils/partStyling.ts";
 import { Button } from "../Button/Button.tsx";
 import { Icon } from "../Icon/Icon.tsx";
 
@@ -17,37 +20,102 @@ export { useTour };
 export type TourStep = TourStepDetails;
 export type UseTourReturn = ReturnType<typeof useTour>;
 
-export function Tour(props: {
+export type TourProps = {
 	tour: UseTourReturn;
-	class?: string;
+} & WithPartClasses<"backdrop" | "spotlight" | "positioner" | "content">;
+
+/**
+ * Hands focus back to wherever it was before the tour started.
+ *
+ * zag's tour traps focus between the step and its target, but deactivates the
+ * trap without returning focus, so when the tour ends focus is left on a node
+ * that has just been removed and the page falls back to `<body>`. Reading
+ * `document.activeElement` at the moment the tour opens races the trap, so
+ * the element is recorded from `focusin` while the tour is closed instead.
+ */
+function returnFocusOnEnd(isOpen: () => boolean): void {
+	let returnTo: HTMLElement | null = null;
+	let wasOpen = false;
+	function remember(event: FocusEvent): void {
+		if (event.target instanceof HTMLElement) returnTo = event.target;
+	}
+	createEffect(() => {
+		if (isOpen()) {
+			wasOpen = true;
+			return;
+		}
+		if (wasOpen) {
+			wasOpen = false;
+			returnTo?.focus({ preventScroll: true });
+		}
+		document.addEventListener("focusin", remember);
+		onCleanup(() => {
+			document.removeEventListener("focusin", remember);
+		});
+	});
+}
+
+/** One step action as a button, named by its visible label. */
+function ActionButton(props: {
+	action: ArkTour.ActionTriggerProps["action"];
 }): JSX.Element {
 	return (
-		<ArkTour.Root tour={props.tour} lazyMount unmountOnExit>
+		<ArkTour.ActionTrigger
+			action={props.action}
+			asChild={(triggerProps) => (
+				<Button
+					triggerProps={triggerProps()}
+					variant={
+						props.action.action === "prev" ? "secondary" : "primary"
+					}
+					// Ark names the button after the action it runs ("next
+					// step"); the visible label must be its name.
+					aria-label={props.action.label}
+				>
+					{props.action.label}
+				</Button>
+			)}
+		/>
+	);
+}
+
+export function Tour(props: TourProps): JSX.Element {
+	// eslint-disable-next-line solid/reactivity -- an accessor, read inside the helper's effect
+	returnFocusOnEnd(() => props.tour().open);
+	return (
+		<ArkTour.Root tour={props.tour}>
 			{/*
 			 * Ark keeps the positioner and content MOUNTED while the tour is
 			 * closed — content carries `data-state="closed"` and nothing else,
 			 * no `hidden`, no `display: none`. So an app that renders <Tour>
 			 * unconditionally (which it must: the component owns the start
-			 * call) had an empty 320px card, reading "0 of 4", parked at the
-			 * end of the document.
-			 *
-			 * On desktop the shell is `100dvb; overflow: hidden` and it sat
-			 * just past the fold, invisible and therefore unreported. On a
-			 * phone it was reachable, and it was announced to screen readers
-			 * the whole time as a modal `alertdialog` — a permanently-open
-			 * empty modal is the worse half of this bug.
+			 * call) had an empty card, reading "0 of 4", parked at the end of
+			 * the document, and announced to screen readers the whole time as a
+			 * modal `alertdialog`.
 			 *
 			 * `open` is the machine's own flag, so this closes the moment the
-			 * tour dismisses or completes.
+			 * tour dismisses or completes. Nothing here animates its close, so
+			 * the gate cuts no transition.
 			 */}
 			<Show when={props.tour().open}>
 				<Portal>
-					<ArkTour.Backdrop class={styles.backdrop} />
-					<ArkTour.Spotlight class={styles.spotlight} />
-					<ArkTour.Positioner class={styles.positioner}>
+					<ArkTour.Backdrop
+						class={getPartStyles(styles, props, "backdrop")}
+					/>
+					<ArkTour.Spotlight
+						class={getPartStyles(styles, props, "spotlight")}
+					/>
+					<ArkTour.Positioner
+						class={getPartStyles(styles, props, "positioner")}
+					>
 						<ArkTour.Content
-							class={clsx(styles.content, props.class)}
+							class={getPartStyles(styles, props, "content")}
 						>
+							{/* Points an anchored step at its target. Ark paints
+							    the tip from the custom properties `.arrow` sets. */}
+							<ArkTour.Arrow class={styles.arrow}>
+								<ArkTour.ArrowTip />
+							</ArkTour.Arrow>
 							<ArkTour.CloseTrigger class={styles.close}>
 								<Icon>{ICONS.close}</Icon>
 							</ArkTour.CloseTrigger>
@@ -59,22 +127,7 @@ export function Tour(props: {
 									{(actions) => (
 										<For each={actions()}>
 											{(action) => (
-												<ArkTour.ActionTrigger
-													action={action}
-													asChild={(triggerProps) => (
-														<Button
-															{...(triggerProps() as object)}
-															variant={
-																action.action ===
-																"prev"
-																	? "secondary"
-																	: "primary"
-															}
-														>
-															{action.label}
-														</Button>
-													)}
-												/>
+												<ActionButton action={action} />
 											)}
 										</For>
 									)}

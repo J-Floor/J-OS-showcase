@@ -90,8 +90,8 @@ function useBatchRunner(batch: () => ApplicationBatch) {
 	): void {
 		void (async () => {
 			if (prompt !== undefined && !(await confirm(prompt))) return;
-			const { runBatch, clearSelection } = batch();
-			await runBatch(rows, action, clearSelection);
+			const { runBatch, clear } = batch();
+			await runBatch(rows, action, clear);
 		})();
 	};
 }
@@ -151,16 +151,16 @@ function ApplicationBatchActions(props: {
 	batch: ApplicationBatch;
 }): JSX.Element {
 	function guestable() {
-		return rowsAllowing(props.batch.selectedRows, "APPROVE_GUEST");
+		return rowsAllowing(props.batch.rows(), "APPROVE_GUEST");
 	}
 	function memberable() {
-		return rowsAllowing(props.batch.selectedRows, "APPROVE_MEMBER");
+		return rowsAllowing(props.batch.rows(), "APPROVE_MEMBER");
 	}
 	function deniable() {
-		return rowsAllowing(props.batch.selectedRows, "DENY");
+		return rowsAllowing(props.batch.rows(), "DENY");
 	}
 	function undeniable() {
-		return rowsAllowing(props.batch.selectedRows, "UNDENY");
+		return rowsAllowing(props.batch.rows(), "UNDENY");
 	}
 
 	return (

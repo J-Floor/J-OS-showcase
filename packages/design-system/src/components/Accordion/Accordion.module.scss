@@ -8,15 +8,15 @@
 	inline-size: 100%;
 }
 
+/* Not `overflow: hidden`: that clipped the trigger's focus ring. The content
+   clips itself for its slide animation. */
 .item {
 	inline-size: 100%;
-	overflow: hidden;
 
 	@include typo.jf-typo-body-regular;
 }
 
-/* Tooltip anchor: a tight full-width box wrapping the trigger button so the
-   tooltip points at the trigger without sharing its id (ark-solid composition). */
+/* The tooltip anchor around the trigger spans the full row, like the trigger. */
 .triggerAnchor {
 	display: block;
 	inline-size: 100%;
@@ -37,6 +37,13 @@
 	background: var(--jf-surface-bg-raised);
 	border: none;
 	border-radius: var(--jf-radius-container);
+
+	/* Inset, so no clipping ancestor (a flush scroll container) can cut it. */
+	&:focus-visible {
+		outline: var(--jf-border-width-accessibility) solid
+			var(--jf-border-strong);
+		outline-offset: calc(-1 * var(--jf-border-width-accessibility));
+	}
 }
 
 .itemIndicator {
@@ -58,13 +65,9 @@
 	}
 }
 
-.itemHeader {
-	display: flex;
-	flex-flow: column nowrap;
-	align-items: start;
-}
-
+/* Its own line under the title; any other child stays inline with the text. */
 .itemSubtitle {
+	display: block;
 	color: var(--jf-fg-muted);
 
 	@include typo.jf-typo-body-regular;

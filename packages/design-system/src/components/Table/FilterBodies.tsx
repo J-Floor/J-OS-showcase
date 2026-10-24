@@ -18,6 +18,7 @@ import {
 	enumFilterValueFromIds,
 	enumOptionId,
 	exactFilter,
+	isFilterMode,
 	rangeFilter,
 	selectedEnumOptionIds,
 	switchRangeMode,
@@ -36,10 +37,10 @@ function ModeToggle(props: {
 }): JSX.Element {
 	return (
 		<Segment.Root
+			aria-label="Filter mode"
 			value={props.mode}
 			onValueChange={(details) => {
-				if (details.value === "exact" || details.value === "range")
-					props.onChange(details.value);
+				if (isFilterMode(details.value)) props.onChange(details.value);
 			}}
 		>
 			<Segment.Item value="exact">Exact</Segment.Item>
@@ -188,12 +189,16 @@ function ResetButton(props: {
 	);
 }
 
-/** A text column's filter: a substring typed into an input. */
-function TextFilter(props: {
+/** What every filter body gets: the column's title, its filter value and
+ *  the setter for it. */
+type FilterProps = {
 	title: string;
-	value: unknown;
-	onChange: (value: unknown) => void;
-}): JSX.Element {
+	value: ReturnType<ColumnFilterState["filterValue"]>;
+	onChange: ColumnFilterState["setFilter"];
+};
+
+/** A text column's filter: a substring typed into an input. */
+function TextFilter(props: FilterProps): JSX.Element {
 	return (
 		<Input
 			label={props.title}
@@ -208,15 +213,12 @@ function TextFilter(props: {
 }
 
 /** A boolean column's filter: Any / Yes / No. */
-function BooleanFilter(props: {
-	title: string;
-	value: unknown;
-	onChange: (value: unknown) => void;
-}): JSX.Element {
+function BooleanFilter(props: FilterProps): JSX.Element {
 	return (
 		<>
 			<h5 class={styles.filterTitle}>{props.title}</h5>
 			<Segment.Root
+				aria-label={props.title}
 				value={booleanSegment(props.value)}
 				onValueChange={(details) => {
 					props.onChange(booleanFilter(details.value));
@@ -231,13 +233,12 @@ function BooleanFilter(props: {
 }
 
 /** An enum column's filter: a checkbox per option. */
-function EnumFilter(props: {
-	title: string;
-	options: readonly EnumOption<EnumValue>[];
-	value: unknown;
-	isActive: boolean;
-	onChange: (value: unknown) => void;
-}): JSX.Element {
+function EnumFilter(
+	props: FilterProps & {
+		options: readonly EnumOption<EnumValue>[];
+		isActive: boolean;
+	}
+): JSX.Element {
 	function selected(): string[] {
 		return selectedEnumOptionIds(props.options, props.value);
 	}

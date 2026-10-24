@@ -1,8 +1,12 @@
 import { Tabs as ArkTabs } from "@ark-ui/solid";
-import { useTabsContext } from "@ark-ui/solid/tabs";
+import {
+	useTabsContext,
+	type TabsValueChangeDetails,
+} from "@ark-ui/solid/tabs";
 import clsx from "clsx";
 import {
-	Show,
+	For,
+	createContext,
 	createEffect,
 	createMemo,
 	createSignal,
@@ -10,19 +14,75 @@ import {
 	onCleanup,
 	onMount,
 	splitProps,
+	useContext,
+	type Accessor,
 	type ComponentProps,
 	type JSX,
 } from "solid-js";
 
+import { useRequiredContext } from "../../utils/context.ts";
+import { createPresence } from "../../utils/presence.tsx";
 import { listenForSwipe, type SwipeDirection } from "../../utils/swipe.ts";
 import { moveName } from "../../utils/viewTransition.ts";
 import { FloatingToolbar } from "../FloatingToolbar/FloatingToolbar.tsx";
 
 import styles from "./Tabs.module.scss";
 
-type ValueChangeDetails = Parameters<
-	NonNullable<ArkTabs.RootProps["onValueChange"]>
->[0];
+/** One `Actions` part: where it is declared, and its toolbar while its tab
+ *  is active (else nothing). */
+type ActionsEntry = {
+	anchor: Node;
+	toolbar: Accessor<JSX.Element>;
+};
+
+/** Where `Actions` parts register, so the `Bar` can show them. */
+type ActionsRegistry = {
+	/** In declaration (document) order. */
+	entries: Accessor<readonly ActionsEntry[]>;
+	/** Registers until the caller's owner is disposed. */
+	register: (entry: ActionsEntry) => void;
+	/** Marks a `Bar` mounted until the caller's owner is disposed. */
+	registerBar: () => void;
+	/** In development, warns once when actions have no `Bar` to show them. */
+	checkBar: () => void;
+};
+
+const ActionsContext = createContext<ActionsRegistry>();
+
+function byDocumentOrder(first: ActionsEntry, second: ActionsEntry): number {
+	return first.anchor.compareDocumentPosition(second.anchor) &
+		Node.DOCUMENT_POSITION_FOLLOWING
+		? -1
+		: 1;
+}
+
+function createActionsRegistry(): ActionsRegistry {
+	const [entries, setEntries] = createSignal<readonly ActionsEntry[]>([]);
+	const [hasBar, registerBar] = createPresence();
+	let hasWarned = false;
+	return {
+		entries,
+		register: (entry) => {
+			setEntries((current) => [...current, entry].sort(byDocumentOrder));
+			onCleanup(() => {
+				setEntries((current) =>
+					current.filter((item) => item !== entry)
+				);
+			});
+		},
+		registerBar,
+		checkBar: () => {
+			if (!import.meta.env.DEV || hasWarned || hasBar()) return;
+			hasWarned = true;
+			// eslint-disable-next-line no-console -- a warning for the developer, not the user
+			console.warn(
+				"Tabs.Actions render inside a Tabs.Bar, and this Tabs.Root has none."
+			);
+		},
+	};
+}
+
+const ROOT_SELECTOR = '[data-scope="tabs"][data-part="root"]';
 
 /**
  * Binds the active tab to a URL search param. The component owns the
@@ -30,7 +90,7 @@ type ValueChangeDetails = Parameters<
  * (`get`/`set`), so `Tabs` itself stays router-agnostic. `K` is the union of
  * valid tab values, so `fallback`/`keys`/`set` are all checked against it.
  */
-type TabsUrlParameter<K extends string = string> = {
+export type TabsUrlParameter<K extends string = string> = {
 	/** Reads the current raw param value (a router getter). A repeated param
 	 * (`string[]`) or absent param falls back. */
 	get: () => string | string[] | undefined;
@@ -51,10 +111,7 @@ function ownParts(
 		...root.querySelectorAll<HTMLElement>(
 			`[data-scope="tabs"][data-part="${part}"]`
 		),
-	].filter(
-		(element) =>
-			element.closest('[data-scope="tabs"][data-part="root"]') === root
-	);
+	].filter((element) => element.closest(ROOT_SELECTOR) === root);
 }
 
 /** zag marks a trigger with `data-value` but a panel with nothing, so
@@ -86,7 +143,7 @@ function neighbour(
 function swipeBetweenTabs(
 	root: HTMLElement,
 	value: () => string | undefined,
-	change: (details: ValueChangeDetails) => void
+	change: (details: TabsValueChangeDetails) => void
 ): () => void {
 	return listenForSwipe(root, {
 		startsHere: (target) => {
@@ -105,6 +162,11 @@ function swipeBetweenTabs(
 	});
 }
 
+export type TabsRootProps<K extends string = string> = ArkTabs.RootProps & {
+	value?: K;
+	urlParam?: TabsUrlParameter<K>;
+};
+
 /**
  * Tabs root. Controlled inside: Ark gets `current()`, and a change flips it
  * inside a View Transition, because with uncontrolled Ark the panel has
@@ -116,9 +178,7 @@ function swipeBetweenTabs(
  * the URL param as a click does. See `utils/swipe.ts` for what never starts
  * a swipe.
  */
-function Root<K extends string = string>(
-	props: ArkTabs.RootProps & { value?: K; urlParam?: TabsUrlParameter<K> }
-) {
+function Root<K extends string = string>(props: TabsRootProps<K>) {
 	const [local, rest] = splitProps(props, [
 		"urlParam",
 		"value",
@@ -141,7 +201,7 @@ function Root<K extends string = string>(
 			: urlParameter.fallback;
 	}
 
-	function change(details: ValueChangeDetails): void {
+	function change(details: TabsValueChangeDetails): void {
 		const next = details.value;
 		const urlParameter = local.urlParam;
 		const onChange = local.onValueChange;
@@ -175,95 +235,123 @@ function Root<K extends string = string>(
 	});
 
 	return (
-		<ArkTabs.Root
-			{...rest}
-			ref={(element: HTMLElement) => {
-				rootElement = element;
-				(local.ref as ((target: HTMLElement) => void) | undefined)?.(
-					element
-				);
-			}}
-			value={value()}
-			onValueChange={change}
-		/>
+		<ActionsContext.Provider value={createActionsRegistry()}>
+			<ArkTabs.Root
+				{...rest}
+				ref={(element: HTMLElement) => {
+					rootElement = element;
+					(
+						local.ref as ((target: HTMLElement) => void) | undefined
+					)?.(element);
+				}}
+				value={value()}
+				onValueChange={change}
+			/>
+		</ActionsContext.Provider>
 	);
 }
 
 function List(props: ArkTabs.ListProps) {
+	const [local, rest] = splitProps(props, ["children", "class"]);
 	return (
-		<ArkTabs.List {...props} class={clsx(styles.list, props.class)}>
+		<ArkTabs.List {...rest} class={clsx(styles.list, local.class)}>
 			<ArkTabs.Indicator class={styles.indicator} />
-			{props.children}
+			{local.children}
 		</ArkTabs.List>
 	);
 }
 
 function Trigger(props: ArkTabs.TriggerProps) {
+	const [local, rest] = splitProps(props, ["children", "class"]);
 	return (
-		<ArkTabs.Trigger {...props} class={clsx(styles.trigger, props.class)}>
-			{props.children}
+		<ArkTabs.Trigger {...rest} class={clsx(styles.trigger, local.class)}>
+			{local.children}
 		</ArkTabs.Trigger>
 	);
 }
 
+/** `children` and `class` are split off, so each reaches Ark from one
+ *  source: the children passed once, the class merged with the panel's. */
 function Content(props: ArkTabs.ContentProps) {
+	const [local, rest] = splitProps(props, ["children", "class"]);
 	return (
 		<ArkTabs.Content
-			{...props}
-			data-tab-value={props.value}
-			class={clsx(styles.content, props.class)}
+			{...rest}
+			data-tab-value={rest.value}
+			class={clsx(styles.content, local.class)}
 		>
-			{props.children}
+			{local.children}
 		</ArkTabs.Content>
 	);
 }
 
-/**
- * Declarative, tab-scoped slot for tab-bar controls — the sibling of
- * `Content`, but for the bar instead of the panel. Renders its children only
- * while `value` is the active tab (on every tab when `value` is omitted),
- * reading the active value from the tabs machine (so it follows the same
- * source of truth as the triggers). Place it inside a `Bar`, after the list;
- * a bar shows one at a time.
- */
-function Actions(props: { value?: string; children: JSX.Element }) {
-	return (
-		<ArkTabs.Context>
-			{(api) => (
-				<Show
-					when={
-						props.value === undefined || api().value === props.value
-					}
-				>
-					<FloatingToolbar data-part="tab-actions">
-						{props.children}
-					</FloatingToolbar>
-				</Show>
-			)}
-		</ArkTabs.Context>
-	);
-}
+export type TabsActionsProps = {
+	/** The tab these actions belong to. Omitted, they show on every tab. */
+	value?: ArkTabs.ContentProps["value"];
+	children: JSX.Element;
+};
 
 /**
- * The tab row: a `List` followed by its `Actions`. On a wide screen the
- * actions sit at the row's end. On a phone the list scrolls sideways within
- * the page and the active tab's actions are a `FloatingToolbar`: below a
- * `FloatingStack`, a pill in the stack (see its contract).
+ * A tab's bar controls, declared anywhere under `Tabs.Root`: typically
+ * inside that tab's `Content`, so the handlers close over the tab's own
+ * state. They render inside the root's `Bar`, never where they are declared
+ * (without a `Bar` they show nowhere, and development warns). The `Bar`
+ * shows them at its end while `value` is the active tab (reading the tabs
+ * machine, the same source of truth as the triggers), several in declaration
+ * order. The controls are built here, so they see the contexts of the place
+ * they are declared.
  */
-function Bar(props: Omit<ComponentProps<"div">, "ref">) {
+function Actions(props: TabsActionsProps): JSX.Element {
+	const registry = useRequiredContext(
+		ActionsContext,
+		"Tabs.Actions",
+		"Tabs.Root"
+	);
 	const tabs = useTabsContext();
+	const isActive = createMemo(
+		() => props.value === undefined || tabs().value === props.value
+	);
+	const toolbar = createMemo(() =>
+		isActive() ? (
+			<FloatingToolbar data-part="tab-actions">
+				{props.children}
+			</FloatingToolbar>
+		) : undefined
+	);
+	// An empty text node: invisible, and it marks the declaration's position.
+	const anchor = document.createTextNode("");
+	onMount(() => {
+		registry.register({ anchor, toolbar });
+		registry.checkBar();
+	});
+	return anchor;
+}
+
+export type TabsBarProps = Omit<ComponentProps<"div">, "ref">;
+
+/**
+ * The tab row: a `List`, then the active tab's `Actions` (declared here or
+ * anywhere else under the root). On a wide screen the actions sit at the
+ * row's end. On a phone the list scrolls sideways within the page and the
+ * active tab's actions are a `FloatingToolbar`: below a `FloatingStack`, a
+ * pill in the stack (see its contract).
+ */
+function Bar(props: TabsBarProps) {
+	const tabs = useTabsContext();
+	const registry = useContext(ActionsContext);
+	registry?.registerBar();
 	// The machine's api object changes on every state update; follow the value.
 	const active = createMemo(() => tabs().value);
 	let bar: HTMLDivElement | undefined;
 
 	createEffect(
 		on(active, (value) => {
-			if (!bar || value === null) return;
-			const trigger = [
-				...bar.querySelectorAll<HTMLElement>(
-					'[data-scope="tabs"][data-part="trigger"]'
-				),
-			].find((element) => element.dataset.value === value);
+			const root = bar?.closest<HTMLElement>(ROOT_SELECTOR);
+			if (!bar || !root || value === null) return;
+			const trigger = ownParts(root, "trigger").find(
+				(element) =>
+					element.dataset.value === value && bar?.contains(element)
+			);
 			// jsdom ships no `scrollIntoView`; a test must not be what throws.
 			if (typeof trigger?.scrollIntoView === "function")
 				trigger.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -278,7 +366,12 @@ function Bar(props: Omit<ComponentProps<"div">, "ref">) {
 			}}
 			data-part="tab-bar"
 			class={clsx(styles.bar, props.class)}
-		/>
+		>
+			{props.children}
+			<For each={registry?.entries()}>
+				{(entry) => <>{entry.toolbar()}</>}
+			</For>
+		</div>
 	);
 }
 

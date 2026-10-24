@@ -1,99 +1,158 @@
 import { DateInput, useDateInput } from "@ark-ui/solid/date-input";
 import {
 	DatePicker as ArkDatePicker,
+	type DateValue,
 	parseDate,
 	useDatePicker,
 	type UseDatePickerProps,
 } from "@ark-ui/solid/date-picker";
 import {
+	type Accessor,
 	type ComponentProps,
 	type JSX,
 	Index,
-	Show,
 	createMemo,
-	splitProps,
+	createUniqueId,
 } from "solid-js";
 import { Portal } from "solid-js/web";
 
 import { ICONS } from "../../icons.ts";
+import { type PropsWithDisabling } from "../../utils/disablingProps.ts";
+import { splitMakeFieldProps } from "../../utils/makeFieldProps.ts";
+import {
+	getPartStyles,
+	type WithPartClasses,
+} from "../../utils/partStyling.ts";
+import { splitArkProps } from "../../utils/splitArkProps.ts";
+import type { MakeFieldOwnProps } from "../../utils/types.ts";
 import { Icon } from "../Icon/Icon.tsx";
+import { MakeField, type MakeFieldProps } from "../MakeField/MakeField.tsx";
 
 import styles from "./DatePicker.module.scss";
 
+const DEFAULT_LOCALE = "en-GB";
+
 /**
- * All ark `UseDatePickerProps` are forwarded to the date-picker machine, with
- * three exceptions that this wrapper owns:
+ * The MakeField props (label, helper/error text, invalid, required, the
+ * disabling set) plus every ark `UseDatePickerProps` option, with these
+ * exceptions that the wrapper owns:
  *
- * - `value` and `onValueChange` — replaced by ISO `YYYY-MM-DD` string
+ * - `value` and `onValueChange`: replaced by ISO `YYYY-MM-DD` string
  *   convenience props (ark uses `DateValue[]`).
- * - `locale` — same semantics but defaults to `"en-GB"` (day/month/year).
- * - `open` / `onOpenChange` — the picker manages its own open state so that
+ * - `open` / `onOpenChange`: the picker manages its own open state so that
  *   outside-click dismissal works without extra wiring; exposing these would
  *   conflict with that internal management.
+ * - the field semantics (`disabled`, `invalid`, `required`, `readOnly`, `ids`)
+ *   come from the MakeField side and are handed to both machines.
+ *
+ * `locale` keeps ark's type and defaults to `en-GB` (day/month/year).
  */
-export type DatePickerProps = Omit<
-	UseDatePickerProps,
-	"value" | "onValueChange" | "locale" | "open" | "onOpenChange"
-> & {
-	/** Field label. */
-	label?: string;
-	/** BCP-47 locale controlling the segment order / format. Defaults to `en-GB`
-	 * (day/month/year). */
-	locale?: string;
-	/** Controlled selected date as an ISO `YYYY-MM-DD` string (or null/undefined
-	 * for empty). Kept in sync with the segmented input + calendar. */
-	value?: string | null;
-	/** Fired with the selected date as an ISO `YYYY-MM-DD` string (or null when
-	 * cleared). */
-	onValueChange?: (value: string | null) => void;
-	/** Earliest selectable date as an ISO `YYYY-MM-DD` string. Convenience over
-	 * ark's `min` (which takes a `DateValue`); earlier dates are disabled in the
-	 * calendar and rejected by the segmented input. */
-	minIso?: string;
-	/** Latest selectable date as an ISO `YYYY-MM-DD` string (see `minIso`). */
-	maxIso?: string;
-	class?: string;
-};
+export type DatePickerProps = PropsWithDisabling<
+	Omit<MakeFieldOwnProps, "ids"> &
+		Pick<MakeFieldProps, "class"> &
+		Omit<
+			UseDatePickerProps,
+			| "value"
+			| "onValueChange"
+			| "open"
+			| "onOpenChange"
+			| "disabled"
+			| "invalid"
+			| "required"
+			| "readOnly"
+		> & {
+			/** Controlled selected date as an ISO `YYYY-MM-DD` string (or
+			 *  null/undefined for empty). Kept in sync with the segmented
+			 *  input + calendar. */
+			value?: string | null;
+			/** Fired with the selected date as an ISO `YYYY-MM-DD` string (or
+			 *  null when cleared). */
+			onValueChange?: (value: string | null) => void;
+			/** Earliest selectable date as an ISO `YYYY-MM-DD` string.
+			 *  Convenience over ark's `min` (which takes a `DateValue`);
+			 *  earlier dates are disabled in the calendar and rejected by the
+			 *  segmented input. */
+			minIso?: string;
+			/** Latest selectable date as an ISO `YYYY-MM-DD` string (see
+			 *  `minIso`). */
+			maxIso?: string;
+		} & WithPartClasses<
+			| "label"
+			| "helperText"
+			| "errorText"
+			| "requiredIndicator"
+			| "content"
+			| "positioner"
+		>
+>;
 
 /** Props that belong to this wrapper, not forwarded to the ark machine. */
 const OWN_KEYS = [
-	"label",
 	"locale",
 	"value",
 	"onValueChange",
 	"minIso",
 	"maxIso",
-	"class",
 ] as const satisfies readonly (keyof DatePickerProps)[];
+
+const EDITABLE_SEGMENT = "[data-part=segment][data-editable]";
+
+/** The machine's value for the ISO `value` prop: `undefined` (no prop)
+ *  leaves the picker uncontrolled, `null` or `""` is a controlled empty. */
+function controlledValue(
+	value: string | null | undefined
+): DateValue[] | undefined {
+	if (value === undefined) return undefined;
+	return value ? [parseDate(value)] : [];
+}
+
+/**
+ * An optional ISO `YYYY-MM-DD` prop parsed to a date, memoized so its
+ * identity is stable across renders. Parsing inline in the reactive machine
+ * config would mint a fresh DateValue every render, which the date-picker
+ * machine reads as a changed `min`/`max` and resets its internal state on:
+ * that silently breaks calendar-cell selection (clicks never commit), while
+ * the segmented input still works.
+ */
+function createIsoDate(
+	iso: () => string | undefined
+): Accessor<DateValue | undefined> {
+	const date = createMemo(() => {
+		const value = iso();
+		return value ? parseDate(value) : undefined;
+	});
+	return date;
+}
 
 /**
  * Date field combining a segmented date input (type the date directly) with a
- * calendar popover (pick it visually). Wired exactly per ark's "date input with
- * date picker" pattern: the `DatePicker` machine is the single source of truth
- * and the `DateInput` machine mirrors its value and writes back through
- * `setValue` — so the two never fight over a controlled value (which is what
- * broke a naive two-Root version). Defaults to a European (day/month/year)
- * format. Built and styled from scratch (no embo equivalent).
+ * calendar popover (pick it visually), inside `MakeField` (label, helper and
+ * error text, invalid, required, disabled reason). Wired exactly per ark's
+ * "date input with date picker" pattern: the `DatePicker` machine is the
+ * single source of truth and the `DateInput` machine mirrors its value and
+ * writes back through `setValue`, so the two never fight over a controlled
+ * value (which is what broke a naive two-Root version). Defaults to a
+ * European (day/month/year) format. Built and styled from scratch (no embo
+ * equivalent).
  *
- * All `UseDatePickerProps` options (`min`, `max`, `isDateUnavailable`,
- * `selectionMode`, `disabled`, `readOnly`, `startOfWeek`, `timeZone`, etc.)
- * are forwarded to the underlying machine.
+ * Neither machine reads Field's context, so `disabled`/`invalid`/`required`/
+ * `readOnly` are handed to both: the MakeField dim alone only blocks the
+ * pointer. The calendar stays mounted once opened (`lazyMount` without
+ * `unmountOnExit`) so it animates out.
  */
 export function DatePicker(props: DatePickerProps): JSX.Element {
-	const [own, arkProps] = splitProps(props, OWN_KEYS);
+	let segmentGroupElement: HTMLDivElement | undefined;
+	// MakeField's label names the segment group, so both machines share it.
+	const labelId = createUniqueId();
 
-	// Memoize the parsed min/max so their object identity is stable across
-	// renders. Parsing inline in the reactive config below would mint a fresh
-	// DateValue every render, which the date-picker machine reads as a changed
-	// `min`/`max` and resets its internal state on — that silently breaks
-	// calendar-cell selection (clicks never commit), while the segmented input
-	// still works.
-	const minDate = createMemo(() =>
-		own.minIso ? parseDate(own.minIso) : undefined
-	);
-	const maxDate = createMemo(() =>
-		own.maxIso ? parseDate(own.maxIso) : undefined
-	);
+	const [own, rest] = splitArkProps(props, OWN_KEYS);
+	const [makeFieldProps, arkProps] = splitMakeFieldProps(rest);
+	function locale(): string {
+		return own.locale ?? DEFAULT_LOCALE;
+	}
+
+	const minDate = createIsoDate(() => own.minIso);
+	const maxDate = createIsoDate(() => own.maxIso);
 
 	// Wired per ark's "date input with date picker": the DatePicker machine owns
 	// the value (controlled here by `own.value`) and emits ISO to the consumer;
@@ -102,15 +161,16 @@ export function DatePicker(props: DatePickerProps): JSX.Element {
 	// outside-click dismissal works without extra wiring.
 	const datePicker = useDatePicker(() => ({
 		...arkProps,
-		locale: own.locale ?? "en-GB",
+		locale: locale(),
 		min: minDate() ?? arkProps.min,
 		max: maxDate() ?? arkProps.max,
-		// Only CONTROL the value when the consumer actually passes one. Forcing
-		// `[]` when uncontrolled made the picker controlled-empty: every click
-		// was reconciled back to empty (and once `min` was set, ark rejected the
-		// selection outright, so nothing happened). `undefined` lets the machine
-		// own its selection; uncontrolled consumers reset by remounting.
-		value: own.value ? [parseDate(own.value)] : undefined,
+		disabled: makeFieldProps.disabled,
+		invalid: makeFieldProps.invalid,
+		required: makeFieldProps.required,
+		// Only CONTROL the value when the consumer passes one: no `value` prop
+		// (`undefined`) lets the machine own its selection, while a controlled
+		// `null` is an empty value and must clear the shown date.
+		value: controlledValue(own.value),
 		onValueChange(details) {
 			// Emit ISO (YYYY-MM-DD) from the DateValue, not the localized display
 			// string, so a downstream ISO parser reads it correctly.
@@ -118,66 +178,107 @@ export function DatePicker(props: DatePickerProps): JSX.Element {
 		},
 	}));
 	const dateInput = useDateInput(() => ({
-		locale: own.locale ?? "en-GB",
+		ids: { label: () => labelId },
+		locale: locale(),
+		name: arkProps.name,
+		disabled: makeFieldProps.disabled,
+		invalid: makeFieldProps.invalid,
+		required: makeFieldProps.required,
+		readOnly: arkProps.readOnly,
 		value: datePicker().value,
 		onValueChange(details) {
 			datePicker().setValue(details.value);
 		},
 	}));
 
+	function focusFirstSegment(): void {
+		segmentGroupElement
+			?.querySelector<HTMLElement>(EDITABLE_SEGMENT)
+			?.focus();
+	}
+
 	return (
-		<DateInput.RootProvider
-			class={own.class ? `${styles.field} ${own.class}` : styles.field}
-			value={dateInput}
+		<MakeField
+			{...makeFieldProps}
+			ids={{ label: labelId }}
+			onLabelClicked={focusFirstSegment}
+			focusField={focusFirstSegment}
 		>
-			<Show when={own.label}>
-				<DateInput.Label class={styles.label}>
-					{own.label}
-				</DateInput.Label>
-			</Show>
-			<DateInput.Control class={styles.control}>
-				<ArkDatePicker.RootProvider
-					class={styles.pickerRoot}
-					value={datePicker}
-					lazyMount
-					unmountOnExit
+			<DateInput.RootProvider class={styles.root} value={dateInput}>
+				<DateInput.Control class={styles.control}>
+					<ArkDatePicker.RootProvider
+						class={styles.pickerRoot}
+						value={datePicker}
+						lazyMount
+					>
+						<ArkDatePicker.Control
+							class={styles.pickerControl}
+							data-invalid={
+								makeFieldProps.invalid ? "true" : undefined
+							}
+						>
+							<Segments
+								ref={(element) => {
+									segmentGroupElement = element;
+								}}
+							/>
+							<ArkDatePicker.Trigger class={styles.trigger}>
+								<Icon>{ICONS.datePicker}</Icon>
+							</ArkDatePicker.Trigger>
+						</ArkDatePicker.Control>
+						<CalendarPopover classOverride={props.classOverride} />
+					</ArkDatePicker.RootProvider>
+				</DateInput.Control>
+				<DateInput.HiddenInput />
+			</DateInput.RootProvider>
+		</MakeField>
+	);
+}
+
+/**
+ * The editable date segments, rendered through `Index` so they stay reactive.
+ * NOT `DateInput.SegmentContext`: it passes each segment snapshot as a
+ * function arg, which is non-reactive in Solid, so typed digits never
+ * re-render (the value updates but segments stay on the placeholder). Reading
+ * the Index accessor inside the `segment` JSX prop keeps it reactive.
+ */
+function Segments(props: {
+	ref: (element: HTMLDivElement) => void;
+}): JSX.Element {
+	return (
+		<DateInput.SegmentGroup ref={props.ref} class={styles.segmentGroup}>
+			<DateInput.Context>
+				{(api) => (
+					<Index each={api().getSegments()}>
+						{(segment) => (
+							<DateInput.Segment
+								class={styles.segment}
+								segment={segment()}
+							/>
+						)}
+					</Index>
+				)}
+			</DateInput.Context>
+		</DateInput.SegmentGroup>
+	);
+}
+
+/** The calendar, portalled; it stays mounted once opened so it animates out. */
+function CalendarPopover(
+	props: WithPartClasses<"content" | "positioner">
+): JSX.Element {
+	return (
+		<Portal>
+			<ArkDatePicker.Positioner
+				class={getPartStyles(styles, props, "positioner")}
+			>
+				<ArkDatePicker.Content
+					class={getPartStyles(styles, props, "content")}
 				>
-					<ArkDatePicker.Control class={styles.pickerControl}>
-						<DateInput.SegmentGroup class={styles.segmentGroup}>
-							{/* NOT DateInput.SegmentContext: it passes each segment
-							    snapshot as a function arg, which is non-reactive in
-							    Solid, so typed digits never re-render (the value
-							    updates but segments stay on the placeholder).
-							    Reading the Index accessor inside the `segment` JSX
-							    prop keeps it reactive. */}
-							<DateInput.Context>
-								{(api) => (
-									<Index each={api().getSegments()}>
-										{(segment) => (
-											<DateInput.Segment
-												class={styles.segment}
-												segment={segment()}
-											/>
-										)}
-									</Index>
-								)}
-							</DateInput.Context>
-						</DateInput.SegmentGroup>
-						<ArkDatePicker.Trigger class={styles.trigger}>
-							<Icon>{ICONS.datePicker}</Icon>
-						</ArkDatePicker.Trigger>
-					</ArkDatePicker.Control>
-					<Portal>
-						<ArkDatePicker.Positioner>
-							<ArkDatePicker.Content class={styles.content}>
-								<Calendar />
-							</ArkDatePicker.Content>
-						</ArkDatePicker.Positioner>
-					</Portal>
-				</ArkDatePicker.RootProvider>
-			</DateInput.Control>
-			<DateInput.HiddenInput />
-		</DateInput.RootProvider>
+					<Calendar />
+				</ArkDatePicker.Content>
+			</ArkDatePicker.Positioner>
+		</Portal>
 	);
 }
 

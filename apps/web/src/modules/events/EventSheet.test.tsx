@@ -231,7 +231,9 @@ function pasteIntoDateField(root: HTMLElement, iso: string): void {
  * field's update.
  */
 async function pasteDate(labelText: string, iso: string): Promise<void> {
-	const label = screen.getByText(labelText);
+	const label = screen.getByText(labelText, {
+		ignore: "script, style, [data-hidden]",
+	});
 	const root = label.parentElement;
 	if (!root) throw new Error(`no field root for "${labelText}"`);
 	pasteIntoDateField(root, iso);
@@ -246,7 +248,9 @@ async function pasteDate(labelText: string, iso: string): Promise<void> {
 /** The `PropertyRow` value cell for a given label, scoped so a query for a
  * segment type (e.g. `[data-type="minute"]`) only matches within that row. */
 function propertyRowValue(labelText: string): HTMLElement {
-	const label = screen.getByText(labelText);
+	const label = screen.getByText(labelText, {
+		ignore: "script, style, [data-hidden]",
+	});
 	const key = label.parentElement;
 	const row = key?.parentElement;
 	const value = row?.children[1] as HTMLElement | undefined;

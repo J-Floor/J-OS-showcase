@@ -117,14 +117,14 @@ jobs:
             git push origin HEAD:${{ github.ref_name }}
           fi
 
-      # One turbo run so Stylelint, tsc, the generated-file checks and the
-      # deploy builds (web, landing, design playground) execute concurrently.
-      # The builds run here because Deploy only runs after merge: a broken
-      # build would otherwise pass its PR and turn main red. ESLint runs in
-      # its own job.
-      - name: Stylelint, typecheck, generated-file checks, builds
+      # One turbo run so Stylelint, the design-system bundle check, tsc, the
+      # generated-file checks and the deploy builds (web, landing, design
+      # playground) execute concurrently. The builds run here because Deploy
+      # only runs after merge: a broken build would otherwise pass its PR and
+      # turn main red. ESLint runs in its own job.
+      - name: Stylelint, bundle check, typecheck, generated-file checks, builds
         if: steps.scope.outputs.docs-only != 'true'
-        run: bunx --bun turbo run lint:style:ci typecheck email:check agreements:check build build:demo${{ github.event_name == 'pull_request' && ' --affected' || '' }} --continue
+        run: bunx --bun turbo run lint:style:ci lint:bundles typecheck email:check agreements:check build build:demo${{ github.event_name == 'pull_request' && ' --affected' || '' }} --continue
 
       # Outside --affected on purpose: icons:check belongs to the design system
       # but scans the apps' sources for icon names, so a PR that only touches

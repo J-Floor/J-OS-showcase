@@ -21,7 +21,8 @@ export type ExceptionDisplayProps = {
 /**
  * Centered "something is off" screen shell — a big status-coloured icon, a title,
  * an optional description, and an optional actions row. The base for
- * `ErrorBoundary` / `EmptyState` / `PermissionDenied` (internal, like BaseButton).
+ * `ErrorScreen` / `EmptyState` / `PermissionDenied`, and public for any other
+ * screen of the same shape.
  *
  * Ported from EmboUI's ErrorBoundary layout. The big icon is sized in SCSS via
  * `.message [data-icon] { font-size }` — sizing the glyph by font-size only,

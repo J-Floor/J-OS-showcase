@@ -26,6 +26,7 @@
       "outputs": [],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/config-stylelint/**"]
     },
+    "lint:bundles": { "outputs": [] },
     "lint:style:ci": {
       "outputs": [],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/config-stylelint/**"]

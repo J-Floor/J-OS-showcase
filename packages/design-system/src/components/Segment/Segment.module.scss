@@ -13,6 +13,20 @@
    --embo-spacing-near               -> --jf-spacing-near
    --embo-spacing-away               -> --jf-spacing-away */
 
+/* A labelled group: the label above the track, as on every field. */
+.field {
+	display: inline-flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-near);
+}
+
+.label {
+	@include typo.jf-typo-body-small;
+
+	line-height: 1;
+	color: var(--jf-fg-default);
+}
+
 .segment {
 	display: inline-flex;
 	flex-wrap: nowrap;
@@ -69,11 +83,11 @@
 	align-items: center;
 	justify-content: center;
 
-	/* A two-word option ("Mark as left", "Kick out") otherwise breaks across two
-     lines as soon as the group is narrower than its content, which doubles the
-     control's height and leaves the sliding indicator misaligned. Options stay
-     on one line; a group too wide for its container scrolls instead (the
-     consumer decides that — see ChangeRoleDialog). */
+	/* A two-word option otherwise breaks across two lines as soon as the
+     group is narrower than its content, which doubles the control's height
+     and leaves the sliding indicator misaligned. Options stay on one line; a
+     group too wide for its container scrolls instead (the consumer decides
+     that). */
 	white-space: nowrap;
 	padding-block: var(--jf-spacing-near);
 	padding-inline: var(--jf-spacing-away);
@@ -87,9 +101,7 @@
 	&[data-state="checked"] {
 		@include typo.jf-typo-body-bold;
 
-		> * {
-			color: var(--jf-fg-strong);
-		}
+		color: var(--jf-fg-strong);
 	}
 
 	.segment[data-orientation="vertical"] & {

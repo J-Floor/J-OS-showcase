@@ -101,6 +101,8 @@ function EventBoundaryRow(props: {
 			>
 				<div class={styles.fieldRow}>
 					<DatePicker
+						label={boundary().field.label}
+						labelHidden
 						value={zonedDate(local())}
 						onValueChange={(iso) => {
 							if (!iso) return;
@@ -163,6 +165,7 @@ export function EventDetailsItem(props: {
 							fallback={<span>{props.event().name}</span>}
 						>
 							<EditableText
+								label="Name"
 								value={props.event().name}
 								maxLength={NAME_MAX}
 								onCommit={(value) => {
@@ -228,8 +231,11 @@ export function EventAdminItems(props: {
 
 			<Query.Root data={props.attendees()}>
 				<Accordion.Item value="attendees">
-					<Accordion.ItemTitle subtitle={<Query.Count />}>
+					<Accordion.ItemTitle>
 						Attendees
+						<Accordion.ItemSubtitle>
+							<Query.Count />
+						</Accordion.ItemSubtitle>
 					</Accordion.ItemTitle>
 					<Accordion.ItemContent>
 						<div class={styles.section}>

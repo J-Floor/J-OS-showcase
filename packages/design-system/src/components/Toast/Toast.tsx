@@ -8,6 +8,7 @@ import {
 import clsx from "clsx";
 import { Show, splitProps, type JSX } from "solid-js";
 
+import { ICONS } from "../../icons.ts";
 import { Icon } from "../Icon/Icon.tsx";
 import { IconButton } from "../IconButton/IconButton.tsx";
 import { Status, useStatusIcon, type TStatus } from "../Status/Status.tsx";
@@ -94,7 +95,7 @@ export function Toast(props: ToastProps): JSX.Element {
 									triggerProps={closeProps()}
 									tooltipLabel="Dismiss notification"
 								>
-									close
+									{ICONS.close}
 								</IconButton>
 							)}
 						/>

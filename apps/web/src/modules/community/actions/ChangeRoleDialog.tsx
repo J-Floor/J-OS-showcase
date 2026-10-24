@@ -55,7 +55,7 @@ export function ChangeRoleDialog(props: {
 								<Dialog.CloseTrigger
 									asChild={(closeProps) => (
 										<Button
-											{...(closeProps() as object)}
+											triggerProps={closeProps()}
 											variant="tertiary"
 										>
 											Cancel

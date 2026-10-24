@@ -40,7 +40,7 @@ export function EntityQrActions(props: {
 					mimeType="image/png"
 					asChild={(triggerProps) => (
 						<IconButton
-							{...(triggerProps() as object)}
+							triggerProps={triggerProps()}
 							tooltipLabel="Download QR"
 						>
 							{ICONS.qr}
@@ -78,7 +78,7 @@ export function EntityQrBlock(props: {
 					mimeType="image/png"
 					asChild={(triggerProps) => (
 						<Button
-							{...(triggerProps() as object)}
+							triggerProps={triggerProps()}
 							variant="secondary"
 						>
 							<Icon>{ICONS.qr}</Icon> Download QR

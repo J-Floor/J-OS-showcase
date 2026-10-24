@@ -79,6 +79,11 @@ export function tableRowKeys<Row extends Record<string, unknown>>(
 				(column) => column.id !== ACTIONS_COLUMN_ID
 			)}
 			data={[row]}
+			getRowId={(candidate, index) =>
+				typeof candidate._id === "string"
+					? candidate._id
+					: String(index)
+			}
 		/>
 	));
 	const first = document.querySelector("tbody tr");

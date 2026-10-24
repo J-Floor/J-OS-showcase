@@ -25,12 +25,10 @@ function SearchField(props: {
 	return (
 		<Input
 			rootRef={props.setRoot}
-			// `label=""` is falsy, so MakeField renders no <label> at all
-			// and the field would reach a screen reader unnamed. The visible
-			// design has no label — the magnifier and the placeholder carry
-			// it — so the name goes on the control itself.
-			label=""
-			aria-label="Search"
+			// The visible design has no label: the magnifier and the
+			// placeholder carry it.
+			label="Search"
+			labelHidden
 			class={props.class}
 			leadingIconName={ICONS.search}
 			placeholder="Search"
@@ -135,9 +133,12 @@ export function GlobalSearch(): JSX.Element {
 				shortcut={SEARCH_SHORTCUT}
 				items={items()}
 				placeholder="Search pages, people, tasks…"
-				emptyMessage="Nothing matches that."
 				recentsKey="jos:search:recents"
-			/>
+			>
+				<CommandPalette.Empty>
+					Nothing matches that.
+				</CommandPalette.Empty>
+			</CommandPalette>
 		</>
 	);
 }

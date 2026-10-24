@@ -213,9 +213,9 @@ $stack-step: 0.04;
 .bodySkeletonRow {
 	display: grid;
 
-	/* Mirrors PropertyRow's label column so the skeleton reads as the same
+	/* PropertyRow's label column, so the skeleton reads as the same
 	   shape as the rows it stands in for. */
-	grid-template-columns: 140px 1fr;
+	grid-template-columns: var(--jf-dimension-property-label) 1fr;
 	align-items: center;
 	gap: var(--jf-spacing-near);
 

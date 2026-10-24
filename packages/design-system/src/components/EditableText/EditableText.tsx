@@ -1,16 +1,16 @@
-import { Show, createSignal } from "solid-js";
+import { type JSX, Show, createSignal } from "solid-js";
 
-import { Input } from "../Input/Input.tsx";
+import { Input, type InputProps } from "../Input/Input.tsx";
 import { TextArea } from "../TextArea/TextArea.tsx";
 
-export type EditableTextProps = {
+export type EditableTextProps = Pick<
+	InputProps,
+	"label" | "class" | "placeholder" | "maxLength"
+> & {
 	/** Current (server) value the field mirrors when not being edited. */
 	value: string;
 	/** Render a multiline `TextArea` instead of a single-line `Input`. */
 	multiline?: boolean;
-	placeholder?: string;
-	/** Maximum number of characters the field accepts. */
-	maxLength?: number;
 	/** Called with the new value when the edit is committed (on blur), and only
 	 * when the value actually changed. */
 	onCommit: (value: string) => void;
@@ -21,8 +21,12 @@ export type EditableTextProps = {
  * edit-in-place convention used across tables and detail sheets. Local edits
  * live in a draft; committing per keystroke would refetch/re-render on every
  * character, so the value is written once on blur (and only if it changed).
+ *
+ * An inline editor sits where its context (a column header, a row title)
+ * already says what it is, so `label` is visually hidden: it is the field's
+ * accessible name.
  */
-export function EditableText(props: EditableTextProps) {
+export function EditableText(props: EditableTextProps): JSX.Element {
 	const [draft, setDraft] = createSignal<string | null>(null);
 	function display(): string {
 		const current = draft();
@@ -42,7 +46,9 @@ export function EditableText(props: EditableTextProps) {
 			when={props.multiline}
 			fallback={
 				<Input
-					label=""
+					label={props.label}
+					labelHidden
+					class={props.class}
 					placeholder={props.placeholder}
 					maxLength={props.maxLength}
 					value={display()}
@@ -54,7 +60,9 @@ export function EditableText(props: EditableTextProps) {
 			}
 		>
 			<TextArea
-				label=""
+				label={props.label}
+				labelHidden
+				class={props.class}
 				placeholder={props.placeholder}
 				maxLength={props.maxLength}
 				value={display()}

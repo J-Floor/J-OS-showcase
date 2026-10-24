@@ -1,8 +1,4 @@
-import {
-	type BatchActionsRenderProps,
-	Button,
-	Icon,
-} from "@j-os/design-system";
+import { type TableSelection, Button, Icon } from "@j-os/design-system";
 import { createEffect, on, type JSX } from "solid-js";
 
 import { call } from "../../../lib/call.ts";
@@ -65,11 +61,15 @@ export function ItemsTab(props: {
 	const batchDelete = createBatchDelete();
 	const { deleteRows } = batchDelete;
 
-	function batchActions(batch: BatchActionsRenderProps<Item>): JSX.Element {
+	function batchActions(batch: TableSelection<Item>): JSX.Element {
 		// A re-made selection starts without the old selection's failure.
 		createEffect(
 			on(
-				() => batch.selectedRows.map((row) => row._id).join(),
+				() =>
+					batch
+						.rows()
+						.map((row) => row._id)
+						.join(),
 				batchDelete.clearError
 			)
 		);
@@ -77,7 +77,7 @@ export function ItemsTab(props: {
 			<>
 				<Button
 					onClick={() => {
-						const selected = batch.selectedRows;
+						const selected = batch.rows();
 						void printInventoryList(selected);
 					}}
 				>
@@ -86,8 +86,8 @@ export function ItemsTab(props: {
 				<Button
 					variant="secondary"
 					onClick={() => {
-						const selected = batch.selectedRows;
-						void deleteRows(selected, batch.clearSelection);
+						const selected = batch.rows();
+						void deleteRows(selected, batch.clear);
 					}}
 				>
 					<Icon>{ICONS.delete}</Icon> Delete

@@ -1,4 +1,5 @@
 @use "../../styles/typography" as typo;
+@use "../../styles/utils";
 
 .field {
 	position: relative;
@@ -23,6 +24,12 @@
 .label {
 	color: var(--jf-fg-default);
 	cursor: text;
+
+	/* Out of the layout, still the control's accessible name. Absolutely
+	   positioned, so the field's gap closes up. */
+	&[data-hidden] {
+		@include utils.screenreader;
+	}
 }
 
 .requiredIndicator {

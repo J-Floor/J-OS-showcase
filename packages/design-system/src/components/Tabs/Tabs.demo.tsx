@@ -3,6 +3,8 @@ import { Show } from "solid-js";
 
 import type { Demo } from "../../../demo/types.ts";
 
+/** Each tab declares its own actions inside its panel; the bar shows the
+ *  active tab's. */
 export default {
 	title: "Tabs",
 	render: (p) => (
@@ -13,6 +15,8 @@ export default {
 					<Tabs.Trigger value="details">Details</Tabs.Trigger>
 					<Tabs.Trigger value="activity">Activity</Tabs.Trigger>
 				</Tabs.List>
+			</Tabs.Bar>
+			<Tabs.Content value="overview">
 				<Show when={p.actions}>
 					<Tabs.Actions value="overview">
 						<IconButton tooltipLabel="Print">print</IconButton>
@@ -20,15 +24,17 @@ export default {
 							<Icon>add</Icon> New item
 						</Button>
 					</Tabs.Actions>
+				</Show>
+				Overview panel content.
+			</Tabs.Content>
+			<Tabs.Content value="details">
+				<Show when={p.actions}>
 					<Tabs.Actions value="details">
 						<Button variant="secondary">Export</Button>
 					</Tabs.Actions>
 				</Show>
-			</Tabs.Bar>
-			<Tabs.Content value="overview">
-				Overview panel content.
+				Details panel content.
 			</Tabs.Content>
-			<Tabs.Content value="details">Details panel content.</Tabs.Content>
 			<Tabs.Content value="activity">
 				Activity panel content (no actions).
 			</Tabs.Content>

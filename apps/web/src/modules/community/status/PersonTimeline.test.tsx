@@ -203,7 +203,7 @@ describe("PersonTimeline", () => {
 	it("shows something sensible, not an empty box, for a person with no events", () => {
 		queryDataRef.current = [];
 		render(() => <PersonTimeline personId={"p1" as Id<"people">} />);
-		expect(screen.getByText("No history yet.")).toBeInTheDocument();
+		expect(screen.getByText("No history yet")).toBeInTheDocument();
 	});
 });
 

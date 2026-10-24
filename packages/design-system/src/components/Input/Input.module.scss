@@ -1,38 +1,31 @@
+@use "../MakeField/field.mixins" as field;
+
 /*
- * Ported from EmboUI Input.module.scss. embo colours every descendant via
- * `* { color: status-fg }` so the <Status> wrapper turns text + icons to the
- * error/warning colour on invalid; neutral fields use the strong fg. Radius is
- * --jf-radius-button (not embo's pill radius-input) by design choice.
+ * Ported from EmboUI Input.module.scss. The box is the shared field shell.
+ * The text colour sits on the wrapper and the input, not on every
+ * descendant, so a Kbd, Button or Chip passed as `trailing` keeps its own.
+ * MakeField only ever sets the neutral or the error status, so the field
+ * reads strong until it is invalid, then takes the status colour.
+ * Radius is --jf-radius-button (not embo's pill radius-input) by design
+ * choice.
  */
 
 .inputWrapper {
-	display: flex;
-	flex-wrap: nowrap;
-	align-items: center;
+	@include field.shell;
+
 	justify-content: space-between;
-	padding-inline: var(--jf-spacing-near);
 	overflow: hidden;
+	color: var(--jf-fg-strong);
 	cursor: text;
-	background-color: var(--jf-status-bg);
-	border-radius: var(--jf-radius-button);
-
-	* {
-		color: var(--jf-status-fg);
-	}
-
-	&:focus-within {
-		outline-style: solid;
-		outline-color: var(--jf-status-fg);
-	}
 
 	&[data-invalid="true"] {
-		outline-style: solid;
-		outline-color: var(--jf-status-fg);
+		color: var(--jf-status-fg);
 	}
 
 	& input {
 		inline-size: 100%;
 		min-block-size: var(--jf-dimension-short-component-height);
+		color: inherit;
 		background-color: transparent;
 		border: none;
 
@@ -46,12 +39,9 @@
 	}
 }
 
-[data-status="neutral"] .inputWrapper * {
-	color: var(--jf-fg-strong);
-}
-
+/* The shell's gap plus this keeps the icon a near-step from the text. */
 .icon {
-	margin-inline-end: var(--jf-spacing-near);
+	margin-inline-end: var(--jf-spacing-close);
 	pointer-events: none;
 	user-select: none;
 }
@@ -64,6 +54,6 @@
 	flex: 0 0 auto;
 	gap: var(--jf-spacing-close);
 	align-items: center;
-	margin-inline-start: var(--jf-spacing-near);
+	margin-inline-start: var(--jf-spacing-close);
 	user-select: none;
 }

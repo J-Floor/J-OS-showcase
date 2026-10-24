@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
-import { readFileSync } from "node:fs";
-
+import { compile } from "sass";
 import { afterEach, expect, onTestFinished, test, vi } from "vitest";
 
 import {
@@ -11,15 +10,23 @@ import {
 	restoreViewTransitions,
 } from "../test/viewTransitionFakes.ts";
 
+import { claimHandoff, hasContainer, joinHandoff, morph } from "./morph.ts";
 import {
+	GHOST_GEOMETRY_VARS,
 	MORPH_GHOST,
+	MORPH_KEY,
+	MORPH_OF,
+	MORPH_PINNED,
 	MORPH_SCRIM,
+	MORPH_SETTLING,
 	MORPH_STRIPPED,
-	claimHandoff,
-	hasContainer,
-	morph,
-} from "./morph.ts";
-import { MORPH_KEY, MORPH_TITLE, SHEET_SKELETON } from "./morphPairing.ts";
+	MORPH_TITLE,
+	PIN_VARS,
+	SOURCE_CLIP_VAR,
+	SURFACE_FROM_VARS,
+	SURFACE_TO_VARS,
+} from "./morphNames.ts";
+import { SHEET_SKELETON } from "./morphPairing.ts";
 import { PART_CLASS, viewTransition } from "./viewTransition.ts";
 
 /** The named elements at each new snapshot. */
@@ -71,12 +78,7 @@ test("an overlay opening inside a closing one takes over its name", async () => 
 		update: () => {
 			const wasClaimed = claimHandoff(() => sheet);
 			expect(wasClaimed).toBe(true);
-			void morph({
-				from: null,
-				to: () => sheet,
-				claimed: wasClaimed,
-				update: () => {},
-			});
+			void joinHandoff(() => {});
 		},
 	});
 	expect(seen).toEqual([["sheet"]]);
@@ -111,12 +113,7 @@ test("an overlay opened right after a close, in the same task, takes over its na
 	});
 	const wasClaimed = claimHandoff(() => sheet);
 	expect(wasClaimed).toBe(true);
-	void morph({
-		from: null,
-		to: () => sheet,
-		claimed: true,
-		update: () => {},
-	});
+	void joinHandoff(() => {});
 	await expect(closing).resolves.toEqual({ handedOff: true });
 	expect(seen).toEqual([["sheet"]]);
 	expect(warn).not.toHaveBeenCalled();
@@ -133,12 +130,7 @@ test("an opener that did not claim still names its target after another claimed"
 		update: () => {
 			const wasClaimed = claimHandoff(() => null);
 			expect(wasClaimed).toBe(true);
-			void morph({
-				from: null,
-				to: () => sheet,
-				claimed: wasClaimed,
-				update: () => {},
-			});
+			void joinHandoff(() => {});
 			void morph({ from: null, to: () => sheet, update: () => {} });
 		},
 	});
@@ -189,7 +181,7 @@ function withTitle(id: string, titleId: string): HTMLElement {
 	const node = element(id);
 	const title = document.createElement("span");
 	title.id = titleId;
-	title.setAttribute("data-morph-title", "");
+	title.setAttribute(MORPH_TITLE, "");
 	node.append(title);
 	return node;
 }
@@ -264,13 +256,8 @@ test("the handed-off target decides the look, not the closer", async () => {
 		to: () => field,
 		direction: "close",
 		update: () => {
-			const wasClaimed = claimHandoff(() => sheet);
-			void morph({
-				from: null,
-				to: () => sheet,
-				claimed: wasClaimed,
-				update: () => {},
-			});
+			expect(claimHandoff(() => sheet)).toBe(true);
+			void joinHandoff(() => {});
 		},
 	});
 	expect(seen.new).toEqual([["sheet"]]);
@@ -354,10 +341,10 @@ function recordSurface() {
 		return {
 			names: heldNames(),
 			kinds: document.documentElement.dataset.vt ?? "",
-			from: rootVariable("--jf-morph-from-background"),
-			to: rootVariable("--jf-morph-to-background"),
+			from: rootVariable(SURFACE_FROM_VARS.background),
+			to: rootVariable(SURFACE_TO_VARS.background),
 			ghosts: document.querySelectorAll(`[${MORPH_GHOST}]`).length,
-			pins: document.querySelectorAll("[data-morph-pinned]").length,
+			pins: document.querySelectorAll(`[${MORPH_PINNED}]`).length,
 			stripped: [
 				...document.querySelectorAll<HTMLElement>(
 					`[${MORPH_STRIPPED}]`
@@ -414,7 +401,7 @@ test("a container source: a ghost of its surface grows into the target", async (
 	expect(seen.new[0].from).toBe("rgb(10, 20, 30)");
 	expect(seen.new[0].to).toBe("rgb(250, 250, 250)");
 	expect(seen.new[0].kinds.split(" ")).toContain("morph-grow");
-	expect(rootVariable("--jf-morph-from-background")).toBe("");
+	expect(rootVariable(SURFACE_FROM_VARS.background)).toBe("");
 	expect(document.querySelector(`[${MORPH_GHOST}]`)).toBeNull();
 });
 
@@ -602,6 +589,50 @@ test("a close flies only the sheet values its row shows: the rest shrink with th
 	expect(seen.old[0].names).not.toHaveProperty("jf-morph-part-notes");
 });
 
+/** Lays `element` out at the given box (happy-dom lays nothing out). */
+function placeAt(
+	element: HTMLElement,
+	x: number,
+	y: number,
+	width: number,
+	height: number
+): void {
+	vi.spyOn(element, "getBoundingClientRect").mockReturnValue(
+		new DOMRect(x, y, width, height)
+	);
+}
+
+test("a row partly off screen opens from its visible part: clipped source, ghost over what shows, only whole cells fly", async () => {
+	vi.stubGlobal("innerWidth", 1000);
+	vi.stubGlobal("innerHeight", 800);
+	const row = rowWithCells(["status", "dueDate"]);
+	const [shown, cut] = row.children as unknown as HTMLElement[];
+	placeAt(row, -200, 300, 1100, 40);
+	placeAt(shown, 100, 310, 80, 20);
+	placeAt(cut, -150, 310, 80, 20);
+	const sheet = sheetWithFields(["status", "dueDate"]);
+	const old = { clip: "", left: "", width: "", names: {} };
+	fakeViewTransitions({
+		onStart: () => {
+			const ghost = document.querySelector<HTMLElement>(
+				`[${MORPH_GHOST}]`
+			);
+			Object.assign(old, {
+				clip: rootVariable(SOURCE_CLIP_VAR),
+				left: ghost?.style.getPropertyValue(GHOST_GEOMETRY_VARS.left),
+				width: ghost?.style.getPropertyValue(GHOST_GEOMETRY_VARS.width),
+				names: heldNames(),
+			});
+		},
+	});
+	await morph({ from: row, to: () => sheet, update: () => {} });
+	expect(old.clip).toBe("inset(0px 0px 0px 200px)");
+	expect([old.left, old.width]).toEqual(["0px", "900px"]);
+	expect(old.names).toHaveProperty("jf-morph-part-status", "cell-0");
+	expect(old.names).not.toHaveProperty("jf-morph-part-dueDate");
+	expect(rootVariable(SOURCE_CLIP_VAR)).toBe("");
+});
+
 test("keys pair exactly: another case or spelling does not fly", async () => {
 	const seen = recordSurface();
 	const row = rowWithCells(["status", "owner"]);
@@ -719,7 +750,7 @@ test("a value of another entity nested in the end does not take part", async () 
 	const row = rowWithCells(["dueDate"]);
 	const sheet = sheetWithFields([]);
 	const card = document.createElement("article");
-	card.setAttribute("data-morph-of", "task-1");
+	card.setAttribute(MORPH_OF, "task-1");
 	card.append(marked("nested", MORPH_KEY, "dueDate"));
 	sheet.append(card);
 	await morph({ from: row, to: () => sheet, update: () => {} });
@@ -776,16 +807,36 @@ test("a keyed title without that key in the target flies into its title", async 
 	expect(seen.new[0].names["jf-morph-title"]).toBe("sheet-title");
 });
 
-test("a close resolves its target once, and the title from that target", async () => {
-	const seen = recordBothSnapshots();
+test("a close resolves its target once, before it starts, and pairs every value against that target", async () => {
+	const seen = { old: [] as string[][], new: [] as string[][] };
 	const sheet = withTitle("sheet", "title");
+	sheet.append(
+		marked("sheet-status", MORPH_KEY, "status"),
+		marked("sheet-notes", MORPH_KEY, "notes")
+	);
 	const row = withTitle("row", "cell");
 	row.setAttribute("role", "row");
-	const to = vi.fn(() => row);
+	row.append(marked("row-status", MORPH_KEY, "status"));
+	// A second read would find a row that shows the notes too.
+	const rerendered = withTitle("rerendered", "rerendered-cell");
+	rerendered.append(marked("rerendered-notes", MORPH_KEY, "notes"));
+	const to = vi.fn().mockReturnValueOnce(row).mockReturnValue(rerendered);
+	let readsAtStart = 0;
+	fakeViewTransitions({
+		onStart: () => {
+			readsAtStart = to.mock.calls.length;
+			seen.old.push(namedIds());
+		},
+		onSnapshot: () => seen.new.push(namedIds()),
+	});
 	await morph({ from: sheet, to, direction: "close", update: () => {} });
+	expect(readsAtStart).toBe(1);
 	expect(to).toHaveBeenCalledTimes(1);
-	expect(seen.old).toEqual([["sheet", "title"]]);
-	expect(seen.new[0]).toEqual(expect.arrayContaining(["row", "cell"]));
+	expect(seen.old).toEqual([["sheet", "title", "sheet-status"]]);
+	expect(seen.new[0]).toEqual(
+		expect.arrayContaining(["row", "cell", "row-status"])
+	);
+	expect(seen.new[0]).not.toContain("rerendered-notes");
 });
 
 test("a morph joining a transition already past its old snapshot draws no surface", async () => {
@@ -911,19 +962,74 @@ test("a close takes its look from what it closes into", async () => {
 	expect(kindsOf(seen.new[1].kinds)).not.toContain("morph-scale");
 });
 
+// --- The compiled stylesheet ---------------------------------------------------
+
+/** viewTransition.scss as the browser gets it, comments dropped. */
+const COMPILED = compile(
+	`${import.meta.dirname}/../styles/viewTransition.scss`,
+	{
+		style: "expanded",
+	}
+).css.replaceAll(/\/\*[\s\S]*?\*\//g, "");
+
+type CompiledRule = { selectors: string[]; body: string; text: string };
+
+/** Every innermost rule of `css`, in order (an `@media` or `@keyframes`
+ *  wrapper drops away, its rules stay). */
+function innermostRules(css: string): CompiledRule[] {
+	return css.split("}").flatMap((chunk) => {
+		const open = chunk.lastIndexOf("{");
+		if (open === -1) return [];
+		const head = chunk.slice(0, open);
+		const selectors = head.slice(head.lastIndexOf("{") + 1).trim();
+		const body = chunk.slice(open + 1);
+		return [
+			{
+				selectors: selectors
+					.split(",")
+					.map((selector) => selector.trim()),
+				body,
+				text: `${selectors} {${body}}`,
+			},
+		];
+	});
+}
+
+const RULES = innermostRules(COMPILED);
+
+/** The index of the first compiled rule listing `selector`. */
+function ruleIndex(selector: string): number {
+	return RULES.findIndex((rule) => rule.selectors.includes(selector));
+}
+
+/** The compiled rule listing `selector`; fails the test when there is none. */
+function compiledRule(selector: string): CompiledRule {
+	const rule = RULES[ruleIndex(selector)];
+	expect(rule, `a compiled rule for ${selector}`).toBeDefined();
+	return rule;
+}
+
+function zIndexOf(selector: string): number {
+	return Number(/z-index: ([^;]+);/.exec(compiledRule(selector).body)?.[1]);
+}
+
+/** Loads the compiled rule for `selector` into the document for this test. */
+function installRule(selector: string): void {
+	const style = document.createElement("style");
+	style.textContent = compiledRule(selector).text;
+	document.head.append(style);
+	onTestFinished(() => {
+		style.remove();
+	});
+}
+
 // --- The hover pin ------------------------------------------------------------
 
-const PINNED = "data-morph-pinned";
 const HOVER = "rgb(43, 43, 43)";
 
 /** The pin rule of viewTransition.scss, for this test. */
 function installPinRule(): void {
-	const rule = document.createElement("style");
-	rule.textContent = `[${PINNED}] { background-color: var(--jf-morph-pin-bg) !important; border-color: var(--jf-morph-pin-border) !important; }`;
-	document.head.append(rule);
-	onTestFinished(() => {
-		rule.remove();
-	});
+	installRule(`[${MORPH_PINNED}]`);
 }
 
 test("an open pins its source's look for the transition, then lets go", async () => {
@@ -941,13 +1047,12 @@ test("an open pins its source's look for the transition, then lets go", async ()
 			// Chrome drops :hover as the transition starts.
 			row.style.removeProperty("background-color");
 			pinned.push({
-				row: row.hasAttribute(PINNED),
-				bg: row.style.getPropertyValue("--jf-morph-pin-bg"),
+				row: row.hasAttribute(MORPH_PINNED),
+				bg: row.style.getPropertyValue(PIN_VARS[0]),
 				painted: getComputedStyle(row).backgroundColor,
-				border: row.style.getPropertyValue("--jf-morph-pin-border"),
-				plainCell: plainCell.hasAttribute(PINNED),
-				stickyCell:
-					stickyCell.style.getPropertyValue("--jf-morph-pin-bg"),
+				border: row.style.getPropertyValue(PIN_VARS[1]),
+				plainCell: plainCell.hasAttribute(MORPH_PINNED),
+				stickyCell: stickyCell.style.getPropertyValue(PIN_VARS[0]),
 			});
 		},
 	});
@@ -967,9 +1072,9 @@ test("an open pins its source's look for the transition, then lets go", async ()
 		},
 	]);
 	for (const node of [row, stickyCell]) {
-		expect(node).not.toHaveAttribute(PINNED);
-		expect(node.style.getPropertyValue("--jf-morph-pin-bg")).toBe("");
-		expect(node.style.getPropertyValue("--jf-morph-pin-border")).toBe("");
+		expect(node).not.toHaveAttribute(MORPH_PINNED);
+		expect(node.style.getPropertyValue(PIN_VARS[0])).toBe("");
+		expect(node.style.getPropertyValue(PIN_VARS[1])).toBe("");
 	}
 });
 
@@ -989,8 +1094,8 @@ test("the surface starts from the pinned colour", async () => {
 test("a pinned hover background does not make an icon button a container", () => {
 	installPinRule();
 	const icon = styled("icon", "background-color: transparent", "button");
-	icon.setAttribute(PINNED, "");
-	icon.style.setProperty("--jf-morph-pin-bg", HOVER);
+	icon.setAttribute(MORPH_PINNED, "");
+	icon.style.setProperty(PIN_VARS[0], HOVER);
 	expect(hasContainer(icon)).toBe(false);
 });
 
@@ -1040,8 +1145,7 @@ test("a container source sheds its surface for the old snapshot, the ghost over 
 test("the surface comes back without a fade: settling holds the transitions off while the strip goes", async () => {
 	fakeViewTransitions();
 	const row = rowWithFilledCell();
-	const SETTLING = "data-morph-settling";
-	const watched = new Set([MORPH_STRIPPED, SETTLING]);
+	const watched = new Set([MORPH_STRIPPED, MORPH_SETTLING]);
 	const changes: string[] = [];
 	const set = row.setAttribute.bind(row);
 	const remove = row.removeAttribute.bind(row);
@@ -1056,7 +1160,8 @@ test("the surface comes back without a fade: settling holds the transitions off 
 	const read = window.getComputedStyle.bind(window);
 	vi.spyOn(window, "getComputedStyle").mockImplementation((target) => {
 		// The read that applies the surface back while nothing transitions.
-		if (target === row && row.hasAttribute(SETTLING)) changes.push("read");
+		if (target === row && row.hasAttribute(MORPH_SETTLING))
+			changes.push("read");
 		return read(target);
 	});
 	onTestFinished(() => {
@@ -1069,10 +1174,10 @@ test("the surface comes back without a fade: settling holds the transitions off 
 	});
 	expect(changes).toEqual([
 		`+${MORPH_STRIPPED}`,
-		`+${SETTLING}`,
+		`+${MORPH_SETTLING}`,
 		`-${MORPH_STRIPPED}`,
 		"read",
-		`-${SETTLING}`,
+		`-${MORPH_SETTLING}`,
 	]);
 });
 
@@ -1165,11 +1270,11 @@ function heldTransitions() {
 function morphStateOf(row: HTMLElement) {
 	return {
 		stripped: row.hasAttribute(MORPH_STRIPPED),
-		pinned: row.hasAttribute("data-morph-pinned"),
-		pinVar: row.style.getPropertyValue("--jf-morph-pin-bg") !== "",
-		from: rootVariable("--jf-morph-from-background") !== "",
-		to: rootVariable("--jf-morph-to-background") !== "",
-		clip: rootVariable("--jf-morph-source-clip") !== "",
+		pinned: row.hasAttribute(MORPH_PINNED),
+		pinVar: row.style.getPropertyValue(PIN_VARS[0]) !== "",
+		from: rootVariable(SURFACE_FROM_VARS.background) !== "",
+		to: rootVariable(SURFACE_TO_VARS.background) !== "",
+		clip: rootVariable(SOURCE_CLIP_VAR) !== "",
 	};
 }
 
@@ -1216,13 +1321,8 @@ test("a morph that starts while the last one finishes keeps its state through th
 });
 
 test("a morph that starts on a row the last one still strips reads the row's own surface", async () => {
-	// The strip rule as viewTransition.scss has it (the test loads no CSS).
-	const sheet = document.createElement("style");
-	sheet.textContent = `[${MORPH_STRIPPED}] { background-color: transparent !important; }`;
-	document.head.append(sheet);
-	onTestFinished(() => {
-		sheet.remove();
-	});
+	// The strip rule of viewTransition.scss (the test loads no CSS).
+	installRule(`[${MORPH_STRIPPED}]`);
 	const transitions = heldTransitions();
 	const row = rowWithFilledCell();
 	const closing = morph({
@@ -1232,7 +1332,8 @@ test("a morph that starts on a row the last one still strips reads the row's own
 		update: () => {},
 	});
 	await transitions.snapshot(0);
-	expect(getComputedStyle(row).backgroundColor).toBe("transparent");
+	// The strip hides the row's fill (the test DOM reads `background: none` as `none`).
+	expect(getComputedStyle(row).backgroundColor).not.toBe("rgb(5, 5, 5)");
 	const opening = morph({
 		from: row,
 		to: () => styled("next", CARD),
@@ -1240,7 +1341,7 @@ test("a morph that starts on a row the last one still strips reads the row's own
 	});
 	await transitions.snapshot(1);
 	// The row's fill, not the transparent look the close's strip left on it.
-	expect(rootVariable("--jf-morph-from-background")).toBe("rgb(5, 5, 5)");
+	expect(rootVariable(SURFACE_FROM_VARS.background)).toBe("rgb(5, 5, 5)");
 	// The filled sticky cell is one of the new morph's layers again.
 	expect(document.getElementById("sticky")).toHaveAttribute(MORPH_STRIPPED);
 	transitions.finish(0);
@@ -1257,7 +1358,7 @@ test("a cleanup that throws still resolves the morph, the error surfaced", async
 	const read = window.getComputedStyle.bind(window);
 	vi.spyOn(window, "getComputedStyle").mockImplementation((target) => {
 		// The read that gives a stripped element its surface back.
-		if (target.hasAttribute("data-morph-settling")) throw broken;
+		if (target.hasAttribute(MORPH_SETTLING)) throw broken;
 		return read(target);
 	});
 	await expect(
@@ -1268,74 +1369,59 @@ test("a cleanup that throws still resolves the morph, the error surfaced", async
 
 // --- The stylesheet -----------------------------------------------------------
 
-const STYLES = readFileSync(
-	`${import.meta.dirname}/../styles/viewTransition.scss`,
-	"utf8"
-);
-
-/** The value of the SCSS variable `$name`. */
-function scssNumber(name: string): number {
-	const match = new RegExp(String.raw`\$${name}:\s*(\d+);`).exec(STYLES);
-	return Number(match?.[1]);
-}
-
-/** The rule block that opens with `selector` (ending in `{`), up to its
- *  first `}`. */
-function blockAt(selector: string): string {
-	const start = STYLES.indexOf(selector);
-	const body = start + selector.length;
-	return start === -1 ? "" : STYLES.slice(body, STYLES.indexOf("}", body));
-}
-
-function zIndexAt(selector: string): string | undefined {
-	return /z-index: ([^;]+);/.exec(blockAt(selector))?.[1];
-}
-
 test("the scrim paints under the source, the source under the surface, the flying text over it", () => {
-	const source = scssNumber("layer-source");
-	const surface = scssNumber("layer-surface");
-	const text = scssNumber("layer-text");
-	expect(scssNumber("layer-scrim")).toBeLessThan(source);
+	const scrim = zIndexOf("::view-transition-group(jf-morph-scrim)");
+	const source = zIndexOf("::view-transition-group(jf-morph-source)");
+	const surface = zIndexOf("::view-transition-group(jf-morph)");
+	expect(scrim).toBeLessThan(source);
 	expect(source).toBeLessThan(surface);
-	expect(surface).toBeLessThan(text);
-	expect(zIndexAt("::view-transition-group(jf-morph-source) {")).toBe(
-		"$layer-source"
-	);
-	expect(zIndexAt("::view-transition-group(jf-morph-scrim) {")).toBe(
-		"$layer-scrim"
-	);
-	expect(zIndexAt("::view-transition-group(jf-morph) {")).toBe(
-		"$layer-surface"
-	);
 	// The title and each part, from the text-flight mixin.
-	expect(zIndexAt("::view-transition-group(#{$name}) {")).toBe("$layer-text");
+	for (const flight of ["jf-morph-title", `*.${PART_CLASS}`]) {
+		expect(zIndexOf(`::view-transition-group(${flight})`)).toBeGreaterThan(
+			surface
+		);
+	}
 });
 
 test("a stripped element loses its fill, border, shadow and outline, over the pin", () => {
-	const pin = STYLES.indexOf("[data-morph-pinned] {");
-	const strip = STYLES.indexOf(`[${MORPH_STRIPPED}]`);
-	expect(strip).toBeGreaterThan(pin);
-	const block = blockAt(`[${MORPH_STRIPPED}]`);
+	const strip = ruleIndex(`[${MORPH_STRIPPED}]`);
+	expect(strip).toBeGreaterThan(ruleIndex(`[${MORPH_PINNED}]`));
 	for (const declaration of [
 		"background: none !important",
 		"border-color: transparent !important",
 		"box-shadow: none !important",
 		"outline: none !important",
 	]) {
-		expect(block).toContain(declaration);
+		expect(RULES[strip].body).toContain(declaration);
 	}
 });
 
+test("the pin paints the pinned colours over every component rule", () => {
+	const { body } = compiledRule(`[${MORPH_PINNED}]`);
+	expect(body).toContain(`background-color: var(${PIN_VARS[0]}) !important`);
+	expect(body).toContain(`border-color: var(${PIN_VARS[1]}) !important`);
+});
+
 test("a stripped or settling element runs no transition: the strip lands, and leaves, at once", () => {
-	expect(blockAt("[data-morph-settling] {")).toContain(
-		"transition: none !important"
-	);
-	expect(STYLES).toMatch(
-		/\[data-morph-stripped\],\s*\[data-morph-settling\] \{/
-	);
+	const rule = compiledRule(`[${MORPH_SETTLING}]`);
+	expect(rule.selectors).toContain(`[${MORPH_STRIPPED}]`);
+	expect(rule.body).toContain("transition: none !important");
+});
+
+test("the ghost and the morph's groups have their rules", () => {
+	for (const selector of [
+		`[${MORPH_GHOST}]`,
+		"::view-transition-group(jf-morph)",
+		"::view-transition-group(jf-morph-source)",
+		"::view-transition-old(jf-morph-source)",
+		":root[data-vt~=morph-grow]::view-transition-image-pair(jf-morph)",
+		":root[data-vt~=morph-shrink]::view-transition-image-pair(jf-morph)",
+	]) {
+		compiledRule(selector);
+	}
 });
 
 test("the stylesheet styles every part flight by its class, never a fixed list of names", () => {
-	expect(STYLES).toContain(`@include text-flight("*.${PART_CLASS}");`);
-	expect(STYLES).not.toMatch(/jf-morph-part-\d|part-flights/);
+	compiledRule(`::view-transition-group(*.${PART_CLASS})`);
+	expect(COMPILED).not.toMatch(/jf-morph-part-\d|part-flights/);
 });

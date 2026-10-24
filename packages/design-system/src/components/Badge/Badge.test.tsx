@@ -36,3 +36,15 @@ test.each(["success", "error", "warning", "info", "neutral"] as const)(
 		).not.toBeNull();
 	}
 );
+
+test("forwards span attributes and merges the class", () => {
+	render(() => (
+		<Badge title="Two overdue" aria-label="Overdue" class="extra">
+			Late
+		</Badge>
+	));
+	const badge = screen.getByText("Late");
+	expect(badge).toHaveAttribute("title", "Two overdue");
+	expect(badge).toHaveAttribute("aria-label", "Overdue");
+	expect(badge).toHaveClass("extra");
+});

@@ -94,19 +94,3 @@ export function fullyVisibleOrNull(
 ): HTMLElement | null {
 	return element && isFullyVisible(element) ? element : null;
 }
-
-/** The `clip-path` cutting the `jf-morph-source` snapshot to what of its
- *  element was on screen (viewTransition.scss reads it). */
-const SOURCE_CLIP_VAR = "--jf-morph-source-clip";
-
-/** Clips the `jf-morph-source` snapshot to `element`'s on-screen part. */
-export function clipSource(element: HTMLElement): void {
-	document.documentElement.style.setProperty(
-		SOURCE_CLIP_VAR,
-		clipInset(element)
-	);
-}
-
-export function clearSourceClip(): void {
-	document.documentElement.style.removeProperty(SOURCE_CLIP_VAR);
-}
