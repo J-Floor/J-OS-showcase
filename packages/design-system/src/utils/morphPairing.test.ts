@@ -2,9 +2,9 @@ import { afterEach, expect, test, vi } from "vitest";
 
 import { mockLayoutBoxes } from "../test/viewTransitionFakes.ts";
 
-import { type EntityId, findMorphTarget } from "./morphPairing.ts";
+import { findMorphTarget } from "./morphPairing.ts";
 
-const id = "abc" as EntityId;
+const id = "abc";
 
 afterEach(() => {
 	vi.restoreAllMocks();

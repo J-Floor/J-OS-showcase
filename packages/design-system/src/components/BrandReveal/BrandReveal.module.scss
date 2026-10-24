@@ -1,0 +1,8 @@
+/* The splash: full viewport, its logo centred on the page background. */
+.splash {
+	position: fixed;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	background-color: var(--jf-surface-bg-base);
+}

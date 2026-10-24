@@ -33,8 +33,8 @@ export const LOGO_PART = "data-logo-part";
 
 /**
  * The stroke and outer corner radius, in px, of a rendered full logo's frame:
- * pass its `[data-logo-part="frame"]` element. For drawing that frame live
- * (the boot transition draws it as an inset box-shadow ring).
+ * pass its `[data-logo-part="frame"]` element, for drawing that frame live
+ * (`BrandReveal` does, while it grows).
  */
 export function logoFrameMetrics(frame: Element): {
 	stroke: number;
@@ -194,8 +194,8 @@ function Monogram(props: {
  * rises as the box grows.
  *
  * Each part carries `data-logo-part`: the full logo has `frame` and `mark`
- * (the J), the monogram has `mark`. The app's boot transition morphs them
- * into the sidebar's rail and monogram.
+ * (the J), the monogram has `mark`. `BrandReveal` morphs them into where the
+ * splash lands.
  */
 export function Logo(props: LogoProps): JSX.Element {
 	// Unique per instance so multiple Logos don't share one clip definition.

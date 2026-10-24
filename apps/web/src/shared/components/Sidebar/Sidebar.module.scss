@@ -57,10 +57,10 @@ $nav-block-size: calc(
 	inline-size: var(--sidebar-expanded);
 }
 
-/* Boot: while the splash logo unfolds into this rail (the design system's
-   unfoldLogo), the transition draws the border itself, so the rail's
-   snapshot carries only its contents. Colour only: the layout stays put. */
-:root[data-vt~="brand-unfold"] .sidebar {
+/* Boot: while the splash logo unfolds into this rail (brandUnfold.scss),
+   the transition draws the border itself, so the rail's snapshot carries
+   only its contents. Colour only: the layout stays put. */
+:root[data-vt~="app-brand-unfold"] .sidebar {
 	border-color: transparent;
 }
 
@@ -168,7 +168,7 @@ $nav-block-size: calc(
 @include bp.phone {
 	/* Published for what is fixed to the viewport's foot (the toaster). */
 	:root:has(.sidebar) {
-		--jf-bottom-nav-height: #{$nav-block-size};
+		--app-bottom-nav-height: #{$nav-block-size};
 	}
 
 	.sidebar,
@@ -181,7 +181,7 @@ $nav-block-size: calc(
 		flex-direction: row;
 		justify-content: space-around;
 		inline-size: auto;
-		block-size: var(--jf-bottom-nav-height);
+		block-size: var(--app-bottom-nav-height);
 
 		/* The bar's own padding stays minimal — the tap target is grown on the
 		   items instead, so the extra height is touchable rather than dead

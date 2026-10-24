@@ -129,6 +129,24 @@ test("a row with a string _id carries it for morph pairing", () => {
 	);
 });
 
+test("a getRowId decides the morph id too", () => {
+	render(() => (
+		<Table.Root
+			columns={
+				[
+					{ accessorKey: "name", header: "Name", dataType: "string" },
+				] as never
+			}
+			data={[{ _id: "p1", slug: "ann", name: "Ann" }] as never}
+			getRowId={(row) => (row as { slug: string }).slug}
+		/>
+	));
+	expect(screen.getByText("Ann").closest("tr")).toHaveAttribute(
+		"data-morph-of",
+		"ann"
+	);
+});
+
 test("each row marks its first data cell's content as the morph title", () => {
 	render(() => <Table.Root columns={columns as never} data={loadedRows} />);
 	const titles = [
@@ -1279,6 +1297,6 @@ test("the rows leave room at their end for a floating toolbar", () => {
 		"utf8"
 	);
 	expect(scss).toMatch(
-		/\n\.table \{[^}]*padding-block-end: var\(--jf-floating-toolbar-offset\);/
+		/\n\.table \{[^}]*padding-block-end: var\(--jf-floating-stack-block-size\);/
 	);
 });

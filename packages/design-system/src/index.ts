@@ -37,7 +37,7 @@ export {
 	type ChartProps,
 	type ChartSeries,
 } from "./components/Chart/Chart.tsx";
-export { Logo, type LogoProps } from "./components/Logo/Logo.tsx";
+export { LOGO_PART, Logo, type LogoProps } from "./components/Logo/Logo.tsx";
 export {
 	Status,
 	useStatusIcon,
@@ -105,6 +105,10 @@ export {
 	FloatingToolbar,
 	type FloatingToolbarProps,
 } from "./components/FloatingToolbar/FloatingToolbar.tsx";
+export {
+	FloatingStack,
+	FloatingStackProvider,
+} from "./components/FloatingStack/FloatingStack.tsx";
 export { Segment } from "./components/Segment/Segment.tsx";
 export {
 	Accordion,
@@ -125,7 +129,12 @@ export {
 	canAnimate,
 	viewTransition,
 } from "./utils/viewTransition.ts";
-export { unfoldLogo } from "./utils/brandUnfold.ts";
+export {
+	BRAND_SCREEN,
+	BrandReveal,
+	type BrandLanding,
+	type BrandRevealProps,
+} from "./components/BrandReveal/BrandReveal.tsx";
 export { hasLayoutBox } from "./utils/visibleArea.ts";
 export {
 	Confetti,
@@ -203,8 +212,7 @@ export {
 	MORPH_TITLE,
 	SHEET_SKELETON,
 } from "./utils/morphPairing.ts";
-/** The row-actions column's id: a test rendering a table without the
- *  actions' app context drops the column by it. */
+/** The row-actions column's id: a test can drop the column by it. */
 export { ACTIONS_COLUMN_ID } from "./components/Table/columnTracks.ts";
 export {
 	defineFields,

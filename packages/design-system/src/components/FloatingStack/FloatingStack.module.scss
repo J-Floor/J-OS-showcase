@@ -1,14 +1,11 @@
-@use "@j-os/design-system/breakpoints" as bp;
+@use "../../styles/breakpoints" as bp;
 
-/* Floats at the foot of the content column (`.main` is `position: relative`).
-   On a phone `.main` sits above the bottom bar, so the stack clears it without
-   needing the bar's height, and rises above a page's floating toolbar
-   (FloatingToolbar, also Tabs.Actions) while one shows. */
+/* A column centred at the foot of the nearest positioned ancestor. */
 .stack {
 	position: absolute;
 	inset-inline: 0;
 	inset-block-end: var(--jf-spacing-away);
-	z-index: 10;
+	z-index: var(--jf-z-index-floating);
 
 	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single column; nothing to wrap */
 	display: flex;
@@ -21,9 +18,8 @@
 	pointer-events: none;
 
 	@include bp.phone {
-		inset-block-end: calc(
-			var(--jf-spacing-far) + var(--jf-floating-toolbar-offset)
-		);
+		inset-block-end: var(--jf-spacing-far);
+		max-inline-size: calc(100% - 2 * var(--jf-spacing-far));
 	}
 }
 
@@ -31,4 +27,13 @@
    children are the pills, so they take it back. */
 .stack > * {
 	pointer-events: auto;
+}
+
+/* The toolbar's slot, last. Without a toolbar it takes no gap. */
+.slot {
+	max-inline-size: 100%;
+
+	&:empty {
+		display: none;
+	}
 }

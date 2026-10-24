@@ -410,7 +410,7 @@ describe("stylesheet", () => {
 
 	test("the bar never shrinks inside a bounded flex column", () => {
 		// A phone bar clips overflow, which drops its automatic minimum height
-		// to 0; in Space's bounded console that collapsed it to 0px.
+		// to 0; in a bounded flex column that collapsed it to 0px.
 		expect(scss).toMatch(/\.bar\s*\{[^}]*flex-shrink: 0;/);
 	});
 
@@ -418,7 +418,7 @@ describe("stylesheet", () => {
 		// The pill floats over the page; a panel the page scrolls through
 		// ends far enough below its last row for that row to clear it.
 		expect(scss).toMatch(
-			/\.content\s*\{[^}]*padding-block: var\(--jf-spacing-far\) var\(--jf-floating-toolbar-offset\);/
+			/\.content\s*\{[^}]*padding-block: var\(--jf-spacing-far\) var\(--jf-floating-stack-block-size\);/
 		);
 	});
 

@@ -1,3 +1,4 @@
+import { BrandReveal } from "@j-os/design-system";
 import {
 	Navigate,
 	Route,
@@ -23,14 +24,15 @@ import { authClient } from "../lib/auth.ts";
 import { ignoreFailure } from "../lib/call.ts";
 import { APP_NAME } from "../lib/constants.ts";
 import { ottPending } from "../lib/convex.ts";
+import { isUpdating } from "../lib/pwaUpdates.ts";
 import { modules } from "../modules/registry.ts";
 import { AppErrorBoundary } from "../shared/AppErrorBoundary.tsx";
+import { railLanding } from "../shared/components/Sidebar/brandLanding.ts";
 import { useQuery } from "../shared/data/useQuery.ts";
 import { LoadingScreen } from "../shared/LoadingScreen.tsx";
 import { NoAccess } from "../shared/NoAccess.tsx";
 import { Splash } from "../shared/Splash.tsx";
 
-import { createSplashHandoff } from "./splashHandoff.ts";
 import { useRole } from "./useRole.ts";
 
 type RoleData = ReturnType<ReturnType<typeof useRole>["data"]>;
@@ -185,13 +187,18 @@ export function RoleGate(props: ParentProps) {
 			isAccessTier(role.data())
 		);
 	}
-	const { isShellShown, splashRef } = createSplashHandoff(
-		showSplash,
-		landsOnRail
-	);
 
 	return (
-		<Show when={isShellShown()} fallback={<Splash ref={splashRef} />}>
+		// The splash's logo unfolds into the sidebar, or on a phone its
+		// frame grows into the screen. Without the sidebar's shell to land
+		// on, or while the app is updating (its overlay covers everything),
+		// the swap is instant.
+		<BrandReveal
+			ready={!showSplash()}
+			animate={landsOnRail() && !isUpdating()}
+			splash={<Splash />}
+			landing={railLanding}
+		>
 			<Show when={session().data} fallback={<Navigate href="/signin" />}>
 				<AuthedContent
 					role={role.data}
@@ -202,7 +209,7 @@ export function RoleGate(props: ParentProps) {
 					{props.children}
 				</AuthedContent>
 			</Show>
-		</Show>
+		</BrandReveal>
 	);
 }
 

@@ -29,8 +29,8 @@
  * An open overlay claims everything inside it. Ark marks its own parts with
  * `data-state="open"`, so a confirm dialog's buttons count as typing targets and
  * a second `D` cannot deny the person behind the dialog. A surface can opt OUT
- * with `data-shortcut-surface` — the person sheet does, because deciding the
- * person it shows IS its job, so its shortcuts must fire while focus is in it
+ * with `data-shortcut-surface` — a detail sheet whose job IS acting on the
+ * record it shows does, so its shortcuts must fire while focus is in it
  * (inputs inside it are still caught, so typing a note is still safe).
  */
 
@@ -81,10 +81,10 @@ export function isTypingTarget(target: EventTarget | null): boolean {
 		return true;
 	// An open overlay claims everything inside it, so a confirm/alert dialog's own
 	// controls count as typing targets and a second decision key cannot fire on
-	// the person behind it. EXCEPT a surface that opts out with
-	// `data-shortcut-surface`: the person sheet is a detail panel whose whole
-	// point is deciding the person it shows, so its bare-letter shortcuts and its
-	// nav arrows must fire while focus rests on the panel. `closest` stops at the
+	// the record behind it. EXCEPT a surface that opts out with
+	// `data-shortcut-surface`: a detail sheet whose whole point is acting on the
+	// record it shows, so its bare-letter shortcuts and its nav arrows must fire
+	// while focus rests on the panel. `closest` stops at the
 	// NEAREST open dialog, so a confirm opened on top of such a sheet (which
 	// traps focus into itself, unmarked) still blocks correctly; and any real
 	// input inside the sheet is still caught by the checks below, so typing a
@@ -100,7 +100,7 @@ export function isTypingTarget(target: EventTarget | null): boolean {
 	// the end of <body>), so the dialog check above never sees it. Its own keys
 	// must win: Enter picks the highlighted option, arrows move within the list. A
 	// guest-config Select left this gap — pressing Enter on a host option leaked
-	// past it to the roster's row-activate and opened the sheet behind the dialog.
+	// past it to the table's row-activate and opened the sheet behind the dialog.
 	// The `role="grid"` entry is for the DatePicker's calendar grid. The Table's
 	// own grid (`TABLE_GRID_ATTR`) is excluded: focus resting on the table is
 	// exactly where row-scoped letter shortcuts must fire. An input inside a row

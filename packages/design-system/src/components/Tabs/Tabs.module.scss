@@ -6,7 +6,7 @@
 	display: flex;
 
 	/* Clipping overflow drops the automatic minimum height to 0, so a bounded
-	   flex column (Space's console) would squash the bar out of sight. */
+	   flex column would squash the bar out of sight. */
 	flex-shrink: 0;
 	gap: var(--jf-spacing-near);
 	align-items: center;
@@ -71,11 +71,11 @@
 	}
 }
 
-/* The end padding is room for the page's floating toolbar (0 without one), so
-   the last row of a panel the page scrolls through clears the pill. A bounded
-   panel whose table scrolls inside it leaves that to the table. */
+/* The end padding is room for a `FloatingStack` (0 without one), so the last
+   row of a panel the page scrolls through clears the pills. A bounded panel
+   whose table scrolls inside it leaves that to the table. */
 .content {
-	padding-block: var(--jf-spacing-far) var(--jf-floating-toolbar-offset);
+	padding-block: var(--jf-spacing-far) var(--jf-floating-stack-block-size);
 
 	/* Sideways pans are the swipe between tabs (Tabs.Root); left to the
 	   browser they end in pointercancel. Vertical scroll and zoom stay

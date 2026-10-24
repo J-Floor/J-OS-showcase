@@ -34,6 +34,9 @@ export type RowContext<Data extends Record<string, unknown>> = {
 	groups: RowGroups<Data>;
 	focus: Pick<GridFocus<Data>, "isRowFocused" | "rowDomId">;
 	selection: RangeSelection<Data>;
+	/** The id a row is matched by (focus, and the sheet that closes into
+	 *  it); `undefined` for a row with none. */
+	rowId: (row: TanRow<Data>) => string | undefined;
 };
 
 /** A focusable table is an ARIA grid, whose cells are `gridcell`s. */
@@ -200,12 +203,7 @@ export function renderRow<Data extends Record<string, unknown>>(
 			class={clsx(props.onRowClick && styles.clickable)}
 			data-state={row.getIsSelected() ? "selected" : undefined}
 			data-focused={focus.isRowFocused(row) ? "true" : undefined}
-			{...{
-				[MORPH_OF]:
-					typeof row.original._id === "string"
-						? row.original._id
-						: undefined,
-			}}
+			{...{ [MORPH_OF]: context.rowId(row) }}
 			onPointerEnter={hoverIntent.onPointerEnter}
 			onPointerLeave={hoverIntent.onPointerLeave}
 			onClick={(event) => {

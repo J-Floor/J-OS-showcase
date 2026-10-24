@@ -247,8 +247,8 @@ function Actions(props: { value?: string; children: JSX.Element }) {
 /**
  * The tab row: a `List` followed by its `Actions`. On a wide screen the
  * actions sit at the row's end. On a phone the list scrolls sideways within
- * the page and the active tab's actions are a `FloatingToolbar`: a pill at
- * the foot of the nearest positioned ancestor (see its contract).
+ * the page and the active tab's actions are a `FloatingToolbar`: below a
+ * `FloatingStack`, a pill in the stack (see its contract).
  */
 function Bar(props: Omit<ComponentProps<"div">, "ref">) {
 	const tabs = useTabsContext();

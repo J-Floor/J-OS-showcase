@@ -1339,9 +1339,3 @@ test("the stylesheet styles every part flight by its class, never a fixed list o
 	expect(STYLES).toContain(`@include text-flight("*.${PART_CLASS}");`);
 	expect(STYLES).not.toMatch(/jf-morph-part-\d|part-flights/);
 });
-
-test("a page change fades through: out first, then in while growing", () => {
-	const page = blockAt('[data-vt~="page"]::view-transition-new(jf-page)');
-	expect(page).toContain("jf-vt-fade-through-in");
-	expect(STYLES).toMatch(/\$page-scale-from:\s*0\.92;/);
-});

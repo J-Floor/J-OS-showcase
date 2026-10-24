@@ -1,0 +1,5 @@
+/* The box the stack floats in: positioned, with room for the pills. */
+.box {
+	position: relative;
+	block-size: calc(var(--jf-dimension-short-component-height) * 6);
+}

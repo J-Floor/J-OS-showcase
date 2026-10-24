@@ -1,0 +1,34 @@
+/* Page change (`app-page`, usePageTransitions.ts): a fade through. The old
+   page fades out over the first part; the new one then fades in while
+   growing to its size from its top edge, the one against the topbar, so that
+   edge stays put and the page settles down from under the topbar rather than
+   towards it. Global: View Transition pseudo-elements match on the document
+   root, which a CSS module cannot scope. */
+$scale-from: 0.92;
+$faded-out-by: 35%;
+
+:root[data-vt~="app-page"]::view-transition-old(app-page) {
+	animation: app-page-out var(--jf-animation-duration-default)
+		var(--jf-animation-ease-standard) both;
+}
+
+:root[data-vt~="app-page"]::view-transition-new(app-page) {
+	transform-origin: center top;
+	animation: app-page-in var(--jf-animation-duration-default)
+		var(--jf-animation-ease-standard) both;
+}
+
+@keyframes app-page-out {
+	#{$faded-out-by},
+	100% {
+		opacity: 0;
+	}
+}
+
+@keyframes app-page-in {
+	0%,
+	#{$faded-out-by} {
+		opacity: 0;
+		transform: scale($scale-from);
+	}
+}

@@ -103,8 +103,8 @@ export function Tooltip(props: TooltipProps): JSX.Element {
 			 * it lands past the right edge of a phone-width viewport. That
 			 * widened the page to 752px on a 448px screen, and Chrome for
 			 * Android picks the page scale from the document width AT LOAD:
-			 * deep-linking straight into the person sheet — whose autofocused
-			 * header button opens its own tooltip — loaded the page zoomed out,
+			 * deep-linking straight into a sheet — whose autofocused header
+			 * button opens its own tooltip — loaded the page zoomed out,
 			 * with a layout viewport wide enough that no phone media query
 			 * matched any more, so the sheet sat beside the table in the
 			 * desktop layout. Opening that same sheet by navigating to it was

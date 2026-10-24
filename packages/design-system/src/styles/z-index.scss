@@ -1,6 +1,11 @@
 :root {
 	--jf-z-index-background: 0;
 	--jf-z-index-content: 1;
+
+	/* `FloatingStack`: over the page content it floats on (a table's sticky
+	   cells sit at 2), under every overlay. One layer for every floating
+	   pill: inside the stack they stack in flow, not by z-index. */
+	--jf-z-index-floating: 10;
 	--jf-z-index-overlay-base: 1000;
 	--jf-z-index-overlay-backdrop-base: 999;
 

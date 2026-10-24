@@ -1,0 +1,60 @@
+/* Boot: the splash logo unfolds into the sidebar rail (kind
+   `app-brand-unfold`, brandLanding.ts). The frame is drawn live on the image
+   pair, which fills the group, while the browser moves and sizes the group:
+   the stroke stays crisp and thins from the logo's stroke and corner (px,
+   set on <html> for the transition by the design system's BrandReveal) to
+   the rail's. An inset shadow, not a border, so the pair's content box is
+   its whole box and the rail's snapshot needs no offset. The splash frame's
+   snapshot hides; the rail's (its border made transparent by the Sidebar)
+   keeps its own size, pinned top-left and clipped by the growing box, and
+   fades in over the last third, so the nav lands with the frame. Global:
+   View Transition pseudo-elements match on the document root, which a CSS
+   module cannot scope. */
+$contents-hidden-until: 66%;
+
+:root[data-vt~="app-brand-unfold"] {
+	&::view-transition-old(jf-brand-frame) {
+		opacity: 0;
+		animation: none;
+	}
+
+	&::view-transition-image-pair(jf-brand-frame) {
+		/* The rail's ring (Sidebar.module.scss), and the logo's (its keyframe
+		   start). */
+		--app-brand-ring: inset 0 0 0 var(--jf-border-width-interactive)
+			var(--jf-fg-strong);
+		--app-brand-ring-from: inset 0 0 0 var(--jf-brand-stroke)
+			var(--jf-fg-strong);
+
+		overflow: clip;
+		border-radius: var(--jf-radius-container);
+		box-shadow: var(--app-brand-ring);
+		animation: app-brand-frame var(--jf-animation-duration-morph)
+			var(--jf-animation-ease-standard) both;
+	}
+
+	&::view-transition-new(jf-brand-frame) {
+		inline-size: auto;
+		block-size: auto;
+		object-fit: none;
+		object-position: left top;
+		animation: app-brand-contents-in var(--jf-animation-duration-morph)
+			var(--jf-animation-ease-standard) both;
+	}
+}
+
+/* stylelint-disable plugin/no-low-performance-animation-properties -- the frame animates its paint once, on one pseudo-element; drawing it live is what keeps the stroke crisp while the box scales */
+@keyframes app-brand-frame {
+	from {
+		border-radius: var(--jf-brand-corner);
+		box-shadow: var(--app-brand-ring-from);
+	}
+}
+/* stylelint-enable plugin/no-low-performance-animation-properties */
+
+@keyframes app-brand-contents-in {
+	0%,
+	#{$contents-hidden-until} {
+		opacity: 0;
+	}
+}

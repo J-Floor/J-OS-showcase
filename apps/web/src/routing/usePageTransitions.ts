@@ -6,9 +6,12 @@ import {
 } from "@solidjs/router";
 import { createEffect, on } from "solid-js";
 
+import "./pageTransition.scss";
+
 /**
- * Route changes as a View Transition of the content region (`jf-page`). The
- * sidebar and topbar stay still: the document root is not captured.
+ * Route changes as a View Transition of the content region (`app-page`,
+ * styled in pageTransition.scss). The sidebar and topbar stay still: the
+ * document root is not captured.
  *
  * Only a PATHNAME change animates; a search-param change (a sheet deep link,
  * a tab param) is not a page change.
@@ -100,7 +103,7 @@ export function usePageTransitions(page: () => HTMLElement | undefined): void {
 						isReplaying = false;
 					}
 				}),
-			{ kind: "page", names: [[element, "jf-page"]] }
+			{ kind: "app-page", names: [[element, "app-page"]] }
 		);
 	});
 }

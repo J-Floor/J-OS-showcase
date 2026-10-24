@@ -12,7 +12,7 @@ function source(path: string): string {
 
 test("the page content does not shrink for the floating toolbar", () => {
 	expect(source("app.module.scss")).not.toContain(
-		"--jf-floating-toolbar-offset"
+		"--jf-floating-stack-block-size"
 	);
 });
 
@@ -25,5 +25,5 @@ test("a bounded panel leaves the room to the table scrolling inside it", () => {
 test("the insights tab, its own scroller, leaves room at its end", () => {
 	expect(
 		source("modules/community/insights/InsightsTab.module.scss")
-	).toMatch(/\.tab \{[^}]*var\(--jf-floating-toolbar-offset\)/);
+	).toMatch(/\.tab \{[^}]*var\(--jf-floating-stack-block-size\)/);
 });

@@ -67,10 +67,10 @@ function Root(
 	 * the panel stays shut with `open` permanently true. No error, no callback
 	 * — it simply never appears.
 	 *
-	 * That is not hypothetical. Following a `?person=` link from another page
-	 * mounts the console, switches tab and opens the sheet in one flush; the
-	 * sheet never showed, while reloading the very same URL worked, because
-	 * waiting on the roster put a real gap between the mount and the open.
+	 * That is not hypothetical. A deep link that mounts the page, switches tab
+	 * and opens the sheet in one flush never showed the sheet, while
+	 * reloading the very same URL worked, because waiting on the page's data
+	 * put a real gap between the mount and the open.
 	 *
 	 * A sheet that is ALREADY open when it mounts is fine — zag computes its
 	 * initial state from `open` and starts open — so only the shut-at-mount
@@ -83,10 +83,10 @@ function Root(
 	 * The panel focuses ITSELF when it opens, not the first thing inside it.
 	 *
 	 * Ark's focus trap otherwise moves focus to the first tabbable descendant,
-	 * which here is the first `HeaderActions` control — the community sheets put
-	 * the edit-lock `IconButton` there, so opening a sheet parked focus on the
-	 * padlock, and, because that button carries a tooltip that opens on focus, it
-	 * flashed a stray, mis-positioned hint too. Focusing the content (it is
+	 * which here is the first `HeaderActions` control — often an `IconButton`,
+	 * so opening a sheet parked focus on it, and, because that button carries a
+	 * tooltip that opens on focus, it flashed a stray, mis-positioned hint
+	 * too. Focusing the content (it is
 	 * `tabindex="-1"` and labelled by the title) announces the sheet instead, and
 	 * leaves the sheet's own arrow/letter shortcuts to act from a neutral spot.
 	 *
@@ -266,9 +266,9 @@ function BodySkeleton(props: { rows?: number }): JSX.Element {
 
 /**
  * The scrolling body. Always skeleton-first: the sheet shell paints at once
- * with a skeleton, and the children build after that paint. A person
- * sheet's body is a few hundred milliseconds of work, and without this the
- * click froze with no feedback. `loading` holds the skeleton while the row
+ * with a skeleton, and the children build after that paint. A rich sheet's
+ * body can be a few hundred milliseconds of work, and without this the click
+ * froze with no feedback. `loading` holds the skeleton while the row
  * itself has not arrived.
  *
  * Two skeleton variants, picked by whether `skeleton` is passed:
@@ -284,7 +284,7 @@ function BodySkeleton(props: { rows?: number }): JSX.Element {
  *   those boxes. Measuring is safe here specifically BECAUSE a placeholder
  *   tree is cheap to build — measuring it costs nothing a manual bar
  *   wouldn't. Write it inline at the call site
- *   (`skeleton={<TaskFieldsPlaceholder />}`), never hoisted to a shared
+ *   (`skeleton={<FieldsPlaceholder />}`), never hoisted to a shared
  *   variable reused across sheets: a Solid JSX element is already-built
  *   DOM, produced fresh each time the expression evaluates, and the same
  *   node can't sit in two parents' trees at once.

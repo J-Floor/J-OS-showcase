@@ -1,11 +1,3 @@
-@use "../../styles/breakpoints" as bp;
-
-/* The floating pill's height: one control row plus its padding. Fixed, so the
-   offset the other bottom floaters read is known without measuring. */
-$pill-block-size: calc(
-	var(--jf-dimension-short-component-height) + 2 * var(--jf-spacing-close)
-);
-
 .toolbar {
 	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- one row of controls */
 	display: flex;
@@ -13,20 +5,13 @@ $pill-block-size: calc(
 	gap: var(--jf-spacing-near);
 	align-items: center;
 
-	/* A pill centred at the foot of the nearest positioned ancestor. Absolute,
-	   not fixed, so it lands in the same box as the app's prompt stack, above
-	   the bottom bar, and escapes a scroll clip between them. */
-	@include bp.phone {
-		position: absolute;
-		inset-inline: 0;
-		inset-block-end: var(--jf-spacing-far);
-		z-index: 9;
+	/* In a `FloatingStack`: a pill, as wide as its controls up to the stack's
+	   width, scrolling sideways past that. */
+	&[data-floating] {
 		box-sizing: border-box;
 		inline-size: fit-content;
-		max-inline-size: calc(100% - 2 * var(--jf-spacing-far));
-		block-size: $pill-block-size;
+		max-inline-size: 100%;
 		padding: var(--jf-spacing-close);
-		margin-inline: auto;
 		overflow: auto hidden;
 		overscroll-behavior: contain auto;
 		scrollbar-gutter: auto;
@@ -35,15 +20,5 @@ $pill-block-size: calc(
 		border: var(--jf-border-width-decorative) solid var(--jf-border-subtle);
 		border-radius: var(--jf-radius-full);
 		box-shadow: var(--jf-shadow-surface-elevation);
-	}
-}
-
-/* Prompts and toasts read this to sit above the pill; scrolling areas leave
-   this much room at their end. */
-@include bp.phone {
-	:root:has(.toolbar) {
-		--jf-floating-toolbar-offset: calc(
-			#{$pill-block-size} + var(--jf-spacing-near)
-		);
 	}
 }

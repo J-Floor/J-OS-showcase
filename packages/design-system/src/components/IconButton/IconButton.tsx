@@ -179,12 +179,12 @@ export function IconButton(props: IconButtonProps): JSX.Element {
 
 	// Which shortcut, if any, to reveal right now as an anchored corner badge.
 	//
-	// While peeking (Alt held, or the topbar toggle latched) each shortcut button
+	// While peeking (Alt held, or a peek toggle latched) each shortcut button
 	// shows its key as a small chip pinned to its own corner — NOT by force-opening
 	// its tooltip. Tooltips portal to `<body>` and position by floating-ui, so
 	// forcing dozens open at once stacked them above everything (the open sheet
 	// included) and they collided. A badge lives inside its own button's box, so a
-	// roster chip stays in the roster and a sheet chip stays in the sheet, with
+	// table chip stays in the table and a sheet chip stays in the sheet, with
 	// no portal, no z-index war and nothing to overlap. Bare (loading/disabled)
 	// buttons show none: a chip for a key that will not fire only misleads.
 	function peekShortcut(): ShortcutHint | undefined {

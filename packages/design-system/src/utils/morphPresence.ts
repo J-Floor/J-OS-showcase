@@ -10,7 +10,7 @@ import {
 
 import { recentActivation } from "./activation.ts";
 import { claimHandoff, hasContainer, morph } from "./morph.ts";
-import { ENTITY_ROW, type EntityId, findMorphTarget } from "./morphPairing.ts";
+import { ENTITY_ROW, findMorphTarget } from "./morphPairing.ts";
 import { canAnimate } from "./viewTransition.ts";
 import { hasLayoutBox } from "./visibleArea.ts";
 
@@ -19,7 +19,8 @@ type Candidate = HTMLElement | null | undefined;
 /**
  * Where an overlay opens from when nothing was just activated (a shortcut):
  * one element, or candidates in order, of which the first on screen is used
- * (the header's search field, else the compact button standing in for it).
+ * (a search field, else the compact button standing in for it on a narrow
+ * screen).
  */
 export type MorphFrom = () => Candidate | readonly Candidate[];
 
@@ -30,7 +31,7 @@ export type MorphOverlayProps = {
 	 * showing it (`Morph`, a table row) when the element it opened from is
 	 * gone. `false` turns the morph off and the CSS pop-in plays instead.
 	 */
-	morph?: EntityId | false;
+	morph?: string | false;
 	morphFrom?: MorphFrom;
 };
 

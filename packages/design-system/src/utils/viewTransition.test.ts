@@ -85,12 +85,12 @@ test("sets kinds and names for the transition and clears them after", async () =
 	const { finishAll } = fakeTransitions();
 	const element = document.createElement("div");
 	const done = viewTransition(() => {}, {
-		kind: "page",
-		names: [[element, "jf-page"]],
+		kind: "app-page",
+		names: [[element, "app-page"]],
 	});
-	expect(document.documentElement.dataset.vt).toBe("page");
+	expect(document.documentElement.dataset.vt).toBe("app-page");
 	expect(element.style.getPropertyValue("view-transition-name")).toBe(
-		"jf-page"
+		"app-page"
 	);
 	await vi.waitFor(() => {
 		finishAll();
@@ -107,7 +107,7 @@ test("a part name carries the part class for the transition, and both clear afte
 	const done = viewTransition(() => {}, {
 		names: [
 			[part, partName("dueDate")],
-			[page, "jf-page"],
+			[page, "app-page"],
 		],
 	});
 	expect(part.style.getPropertyValue("view-transition-name")).toBe(
@@ -164,13 +164,13 @@ test("a call during a running update joins it instead of starting another", asyn
 		() => {
 			void viewTransition(joined, { kind: "tab-forward" });
 		},
-		{ kind: "page" }
+		{ kind: "app-page" }
 	);
 	await vi.waitFor(() => {
 		expect(joined).toHaveBeenCalledTimes(1);
 	});
 	expect(start).toHaveBeenCalledTimes(1);
-	expect(document.documentElement.dataset.vt).toBe("page tab-forward");
+	expect(document.documentElement.dataset.vt).toBe("app-page tab-forward");
 	finishAll();
 	await done;
 });
@@ -345,9 +345,9 @@ test("a skipped session's cleanup leaves the newer session's names and data-vt",
 	const shared = document.createElement("div");
 	const onlyFirst = document.createElement("div");
 	const first = viewTransition(() => {}, {
-		kind: "page",
+		kind: "app-page",
 		names: [
-			[shared, "jf-page"],
+			[shared, "app-page"],
 			[onlyFirst, "jf-morph"],
 		],
 	});
@@ -384,11 +384,11 @@ test("unname leaves an element another session owns", async () => {
 		() => {
 			firstScope?.unname(shared);
 		},
-		{ names: [[shared, "jf-page"]] }
+		{ names: [[shared, "app-page"]] }
 	);
 	await transitionSettled();
 	expect(shared.style.getPropertyValue("view-transition-name")).toBe(
-		"jf-page"
+		"app-page"
 	);
 	endings[0]?.skip();
 	await first;
@@ -462,7 +462,7 @@ test("if startViewTransition throws, the update still runs and nothing stays stu
 			scope.beforeSnapshot(() => order.push("snapshot"));
 			order.push("update");
 		},
-		{ kind: "page", names: [[element, "jf-page"]] }
+		{ kind: "app-page", names: [[element, "app-page"]] }
 	);
 	expect(order).toEqual(["update", "snapshot"]);
 	expect(isTransitionRunning()).toBe(false);

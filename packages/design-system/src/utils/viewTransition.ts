@@ -33,8 +33,14 @@ export function partName(key: string): PartName {
 	return `${PART_PREFIX}${CSS.escape(key)}`;
 }
 
+/**
+ * An app's own transition name or kind: the app styles it in its own
+ * stylesheet (the pseudo-elements match on the document root, so the rules
+ * are global). The design system's own names start with `jf-`.
+ */
+export type AppTransitionName = `app-${string}`;
+
 export type TransitionName =
-	| "jf-page"
 	| "jf-tab"
 	| "jf-morph"
 	| "jf-morph-scrim"
@@ -44,7 +50,8 @@ export type TransitionName =
 	| "jf-sheet-body"
 	| "jf-brand-backdrop"
 	| "jf-brand-frame"
-	| "jf-brand-mark";
+	| "jf-brand-mark"
+	| AppTransitionName;
 
 export type TransitionKind =
 	| "morph"
@@ -52,14 +59,13 @@ export type TransitionKind =
 	| "morph-box"
 	| "morph-grow"
 	| "morph-shrink"
-	| "page"
 	| "tab-forward"
 	| "tab-back"
 	| "sheet-next"
 	| "sheet-prev"
 	| "brand"
-	| "brand-unfold"
-	| "brand-reveal";
+	| "brand-reveal"
+	| AppTransitionName;
 
 export type TransitionScope = {
 	/**

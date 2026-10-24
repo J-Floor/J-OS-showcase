@@ -2,7 +2,7 @@
  * What of an element is actually on screen. A View Transition snapshot
  * ignores the clipping of the element's ancestors: a table row scrolled
  * sideways is captured whole, its hidden cells painting over whatever sits
- * beside the table (the sidebar), and a morph out of it starts from its full
+ * beside the table, and a morph out of it starts from its full
  * width. These measure the visible part so a morph uses that instead.
  */
 

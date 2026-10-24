@@ -38,9 +38,9 @@
 }
 
 /* A touch screen has no keyboard, so a shortcut hint on one is decoration —
-   and it costs width where there is least of it: on a phone the person sheet
-   IS the screen, and its three decision buttons already shrink their own
-   padding to fit their labels. Keyed to the input, not the width: a laptop
+   and it costs width where there is least of it: on a phone a sheet IS the
+   screen, and its buttons already shrink their own padding to fit their
+   labels. Keyed to the input, not the width: a laptop
    window dragged narrow still has a keyboard, and its chips stay. CSS rather
    than a JS media query, matching the header's control swap: a JS query
    renders the wrong thing until the first effect. */

@@ -1,19 +1,17 @@
-/* Every View Transition rule in the app. The pseudo-elements below only match
-   on the document root, so CSS modules cannot scope them. Names are fixed
-   (`jf-page`, `jf-tab`, `jf-morph`, `jf-morph-scrim`, `jf-morph-source`,
-   `jf-morph-title`, `jf-sheet-body`, `jf-brand-backdrop`, `jf-brand-frame`,
-   `jf-brand-mark`),
-   but for the value flights: `jf-morph-part-<key>`, all of class
-   `jf-morph-part`; `data-vt` on <html> is a space-separated list of kinds
-   for the running transition. See
-   docs/superpowers/specs/2026-10-22-motion-view-transitions-design.md. */
+/* Every View Transition rule of the design system. The pseudo-elements
+   below only match on the document root, so CSS modules cannot scope them.
+   Names are fixed (`jf-tab`, `jf-morph`, `jf-morph-scrim`,
+   `jf-morph-source`, `jf-morph-title`, `jf-sheet-body`, `jf-brand-backdrop`,
+   `jf-brand-frame`, `jf-brand-mark`), but for the value flights:
+   `jf-morph-part-<key>`, all of class `jf-morph-part`. `data-vt` on <html>
+   is a space-separated list of kinds for the running transition. An app's
+   own names and kinds start with `app-` and live in its own stylesheet
+   (viewTransition.ts). */
 
 $slide-distance: 24px;
 $scale-from: 0.9;
 $contents-hidden-until: 66%;
 $fill-switch: 30%;
-$page-scale-from: 0.92;
-$page-faded-out-by: 35%;
 
 /* A morph's groups, bottom to top: the overlay's scrim, the trigger's
    content fading where it is,
@@ -43,14 +41,14 @@ $layer-text: 3;
 }
 
 /* Only named elements animate. Without this the whole page crossfades, and
-   the sidebar and topbar shimmer on every change. */
+   what did not change shimmers on every change. */
 :root[data-vt] {
 	view-transition-name: none;
 }
 
 /* The overlay holding the snapshots must not take the pointer: the page under
-   it keeps its hover state (the sidebar rail would collapse on a `mouseleave`
-   mid page change) and keeps taking clicks. */
+   it keeps its hover state (a hover-driven menu would collapse on a
+   `mouseleave` mid transition) and keeps taking clicks. */
 ::view-transition {
 	pointer-events: none;
 }
@@ -124,11 +122,11 @@ $layer-text: 3;
 	pointer-events: auto;
 }
 
-/* Morph, and the boot unfold (`jf-brand-frame` is the logo's frame, then
-   the sidebar rail; `jf-brand-mark` is the logo's J, then the sidebar
-   monogram). The groups animate the boxes; boxes and snapshots share one
-   duration and curve, or the content runs ahead of its box, and the J lands
-   as the rail settles. */
+/* Morph, and the boot reveal (`jf-brand-frame` is the splash logo's frame,
+   then where it lands; `jf-brand-mark` is the logo's J, then a landing's
+   monogram; BrandReveal.tsx). The groups animate the boxes; boxes and
+   snapshots share one duration and curve, or the content runs ahead of its
+   box, and the J lands as its landing settles. */
 ::view-transition-group(jf-morph),
 ::view-transition-group(jf-brand-frame),
 ::view-transition-old(jf-brand-frame),
@@ -308,50 +306,12 @@ $layer-text: 3;
 		var(--jf-animation-ease-exit) both;
 }
 
-/* Boot: the splash logo unfolds into the sidebar (brandUnfold.ts). With a
-   sidebar to land on (kind `brand-unfold`), the frame is drawn live
-   on the image pair, which fills the group, while the browser moves and
-   sizes the group: the stroke stays crisp and thins from the logo's stroke
-   and corner (px, set on <html> for the transition) to the rail's. An inset
-   shadow, not a border, so the pair's content box is its whole box and the
-   rail's snapshot needs no offset. The splash frame's snapshot hides; the
-   rail's (its border made transparent by the Sidebar) keeps its own size,
-   pinned top-left and clipped by the growing box like the box morph, and
-   fades in over the last third, so the nav lands with the frame. Without a
-   sidebar, the splash's snapshots just fade out (the browser default). */
-:root[data-vt~="brand-unfold"] {
-	@include pinned-snapshots(jf-brand-frame, new);
-
-	&::view-transition-old(jf-brand-frame) {
-		opacity: 0;
-		animation: none;
-	}
-
-	&::view-transition-image-pair(jf-brand-frame) {
-		/* The rail's ring, and the logo's (its keyframe start). */
-		--jf-brand-ring: inset 0 0 0 var(--jf-border-width-interactive)
-			var(--jf-fg-strong);
-		--jf-brand-ring-from: inset 0 0 0 var(--jf-brand-stroke)
-			var(--jf-fg-strong);
-
-		border-radius: var(--jf-radius-container);
-		box-shadow: var(--jf-brand-ring);
-		animation: jf-vt-brand-frame var(--jf-animation-duration-morph)
-			var(--jf-animation-ease-standard) both;
-	}
-
-	&::view-transition-new(jf-brand-frame) {
-		animation: jf-vt-contents-in var(--jf-animation-duration-morph)
-			var(--jf-animation-ease-standard) both;
-	}
-}
-
-/* Boot on a phone, where no sidebar shows the monogram (kind `brand-reveal`):
-   the logo's frame becomes the screen. The browser grows the group from the
-   logo's box to the viewport and scales the app's snapshot with it, so the
-   app appears inside the frame and grows until it is the screen. The frame's
-   stroke and corner shrink to nothing on the way; an outline, not an inset
-   shadow, because an inset shadow paints under the app's snapshot. */
+/* Boot with no landing (kind `brand-reveal`): the logo's frame becomes the
+   screen. The browser grows the group from the logo's box to the viewport
+   and scales the page's snapshot with it, so the page appears inside the
+   frame and grows until it is the screen. The frame's stroke and corner
+   shrink to nothing on the way; an outline, not an inset shadow, because an
+   inset shadow paints under the page's snapshot. */
 :root[data-vt~="brand-reveal"] {
 	&::view-transition-old(jf-brand-frame) {
 		opacity: 0;
@@ -369,9 +329,10 @@ $layer-text: 3;
 	}
 }
 
-/* The splash behind the logo (brandUnfold.ts). A reveal keeps it over the
-   app until the frame has grown to the screen, so the app is only ever seen
-   inside the frame; otherwise it goes at once, as the app is already there. */
+/* The splash behind the logo (BrandReveal.tsx). A reveal keeps it over the
+   page until the frame has grown to the screen, so the page is only ever
+   seen inside the frame; otherwise it goes at once, as the page is already
+   there. */
 :root[data-vt]:not([data-vt~="brand-reveal"])::view-transition-old(
 		jf-brand-backdrop
 	) {
@@ -381,21 +342,6 @@ $layer-text: 3;
 
 :root[data-vt~="brand-reveal"]::view-transition-old(jf-brand-backdrop) {
 	animation: none;
-}
-
-/* Page change: a fade through. The old page fades out over the first part;
-   the new one then fades in while growing to its size from its top edge, the
-   one against the topbar, so that edge stays put and the page settles down
-   from under the topbar rather than towards it. */
-:root[data-vt~="page"]::view-transition-old(jf-page) {
-	animation: jf-vt-fade-through-out var(--jf-animation-duration-default)
-		var(--jf-animation-ease-standard) both;
-}
-
-:root[data-vt~="page"]::view-transition-new(jf-page) {
-	transform-origin: center top;
-	animation: jf-vt-fade-through-in var(--jf-animation-duration-default)
-		var(--jf-animation-ease-standard) both;
 }
 
 /* Tab slide. The group keeps the panel's box; the pair is clipped to it. */
@@ -446,14 +392,7 @@ $layer-text: 3;
 	}
 }
 
-/* stylelint-disable plugin/no-low-performance-animation-properties -- the boot frame and the morph surface animate their paint once, on one pseudo-element each; drawing it live is what keeps the stroke crisp while the box scales */
-@keyframes jf-vt-brand-frame {
-	from {
-		border-radius: var(--jf-brand-corner);
-		box-shadow: var(--jf-brand-ring-from);
-	}
-}
-
+/* stylelint-disable plugin/no-low-performance-animation-properties -- the boot reveal's frame and the morph surface animate their paint once, on one pseudo-element each; drawing it live is what keeps the stroke crisp while the box scales */
 @keyframes jf-vt-brand-reveal {
 	from {
 		border-radius: var(--jf-brand-corner);
@@ -501,21 +440,6 @@ $layer-text: 3;
 	0%,
 	#{$contents-hidden-until} {
 		opacity: 0;
-	}
-}
-
-@keyframes jf-vt-fade-through-out {
-	#{$page-faded-out-by},
-	100% {
-		opacity: 0;
-	}
-}
-
-@keyframes jf-vt-fade-through-in {
-	0%,
-	#{$page-faded-out-by} {
-		opacity: 0;
-		transform: scale($page-scale-from);
 	}
 }
 

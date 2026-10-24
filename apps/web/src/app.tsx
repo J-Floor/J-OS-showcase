@@ -1,4 +1,10 @@
-import { ShortcutPeekProvider, ThemeSwitch } from "@j-os/design-system";
+import {
+	BRAND_SCREEN,
+	FloatingStack,
+	FloatingStackProvider,
+	ShortcutPeekProvider,
+	ThemeSwitch,
+} from "@j-os/design-system";
 import { HotkeysProvider } from "@tanstack/solid-hotkeys";
 import type { ParentProps } from "solid-js";
 
@@ -13,7 +19,6 @@ import { LastPathTracker, ModuleRoutes, RoleGate } from "./routing/index.tsx";
 import { usePageTransitions } from "./routing/usePageTransitions.ts";
 import { AppErrorBoundary } from "./shared/AppErrorBoundary.tsx";
 import { Breadcrumbs } from "./shared/components/Breadcrumbs/Breadcrumbs.tsx";
-import { BRAND_SCREEN } from "./shared/components/Sidebar/brandFrame.ts";
 import { Sidebar } from "./shared/components/Sidebar/Sidebar.tsx";
 import { ConfirmProvider } from "./shared/confirm.tsx";
 import { BoardLevelProvider } from "./shared/data/boardLevel.tsx";
@@ -25,7 +30,6 @@ import {
 	NotificationsBell,
 	TopbarMenu,
 } from "./shared/notifications/TopbarMenu.tsx";
-import { PromptStack } from "./shared/PromptStack.tsx";
 import { GlobalSearch } from "./shared/search/GlobalSearch.tsx";
 import { ShortcutPeekButton } from "./shared/ShortcutPeekButton.tsx";
 
@@ -42,57 +46,61 @@ function ShellBody(props: ParentProps) {
 	usePageTransitions(() => page);
 	return (
 		<ConfirmProvider>
-			<main class={styles.main}>
-				<header class={styles.topbar}>
-					<AppErrorBoundary>
-						<Breadcrumbs />
-						<GlobalSearch />
-						{/* Adding a topbar control changes the fold thresholds in
+			{/* The page's toolbar joins the floating stack on a phone. */}
+			<FloatingStackProvider>
+				<main class={styles.main}>
+					<header class={styles.topbar}>
+						<AppErrorBoundary>
+							<Breadcrumbs />
+							<GlobalSearch />
+							{/* Adding a topbar control changes the fold thresholds in
 						    breakpoints.scss. */}
-						<div class={styles.topbarActions}>
-							{/* Each action its own control while the bar has
+							<div class={styles.topbarActions}>
+								{/* Each action its own control while the bar has
 							    room; one kebab menu (TopbarMenu) once it does
 							    not. Swapped in CSS by the bar's own width, see
 							    app.module.scss. */}
-							<div class={styles.desktopActions}>
-								<ShortcutPeekButton />
-								<Can I="view" the="Notifications">
-									<NotificationsBell />
-								</Can>
-								<ThemeSwitch />
-								<SignOutButton />
+								<div class={styles.desktopActions}>
+									<ShortcutPeekButton />
+									<Can I="view" the="Notifications">
+										<NotificationsBell />
+									</Can>
+									<ThemeSwitch />
+									<SignOutButton />
+								</div>
+								<div class={styles.foldedMenu}>
+									<TopbarMenu />
+								</div>
 							</div>
-							<div class={styles.foldedMenu}>
-								<TopbarMenu />
-							</div>
-						</div>
-					</AppErrorBoundary>
-				</header>
-				{/* The single scroll region: the shell, sidebar and header stay
+						</AppErrorBoundary>
+					</header>
+					{/* The single scroll region: the shell, sidebar and header stay
 				    fixed; only this scrolls. */}
-				<div
-					class={styles.content}
-					ref={(element) => {
-						page = element;
-					}}
-				>
-					{props.children}
-				</div>
-				{/* Floated at this column's foot (above the phone bottom bar),
-				    stacked top to bottom. */}
-				<PromptStack>
+					<div
+						class={styles.content}
+						ref={(element) => {
+							page = element;
+						}}
+					>
+						{props.children}
+					</div>
+					{/* Floated at this column's foot (above the phone bottom bar),
+				    stacked top to bottom; on a phone a page's toolbar joins
+				    under them. */}
+					<FloatingStack>
+						<Can I="view" the="Notifications">
+							<NotificationsPrompt />
+						</Can>
+						<InstallPwaPrompt />
+					</FloatingStack>
+					{/* Staff get no notifications: no sheet, and no push re-sync. */}
 					<Can I="view" the="Notifications">
-						<NotificationsPrompt />
+						<AppErrorBoundary>
+							<NotificationsHost />
+						</AppErrorBoundary>
 					</Can>
-					<InstallPwaPrompt />
-				</PromptStack>
-				{/* Staff get no notifications: no sheet, and no push re-sync. */}
-				<Can I="view" the="Notifications">
-					<AppErrorBoundary>
-						<NotificationsHost />
-					</AppErrorBoundary>
-				</Can>
-			</main>
+				</main>
+			</FloatingStackProvider>
 		</ConfirmProvider>
 	);
 }

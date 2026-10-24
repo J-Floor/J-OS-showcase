@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { FloatingStack } from "@j-os/design-system";
 import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
 import { ok, type Result } from "neverthrow";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -23,7 +24,6 @@ vi.mock("../lib/push.ts", () => ({
 
 import { InstallPwaPrompt } from "./InstallPwaPrompt.tsx";
 import { NotificationsPrompt } from "./notifications/NotificationsPrompt.tsx";
-import { PromptStack } from "./PromptStack.tsx";
 import { resetInstallPromptForTest } from "./pwaInstall.ts";
 
 beforeEach(() => {
@@ -55,10 +55,10 @@ function fireBeforeInstallPrompt(): void {
 
 function renderStack() {
 	return render(() => (
-		<PromptStack>
+		<FloatingStack>
 			<NotificationsPrompt />
 			<InstallPwaPrompt />
-		</PromptStack>
+		</FloatingStack>
 	));
 }
 
@@ -105,6 +105,6 @@ test("an empty stack holds nothing that could take a click", () => {
 	const { container } = renderStack();
 	const stack = container.firstElementChild;
 	expect(stack).not.toBeNull();
-	expect(stack?.childElementCount).toBe(0);
+	expect(stack?.textContent).toBe("");
 	expect(screen.queryAllByRole("button")).toHaveLength(0);
 });

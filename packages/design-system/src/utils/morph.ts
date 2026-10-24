@@ -613,7 +613,7 @@ class MorphEnds {
 	}
 
 	/** Where the source's title lands: the target's value with the title's
-	 *  key (a person sheet's first-name half), else the target's title. */
+	 *  key (a sheet's first-name half), else the target's title. */
 	titleTarget(title: HTMLElement): HTMLElement | null {
 		const key = title.getAttribute(MORPH_TITLE) ?? "";
 		return (

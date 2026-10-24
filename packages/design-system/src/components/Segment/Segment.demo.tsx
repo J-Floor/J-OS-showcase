@@ -32,8 +32,8 @@ export default {
 		narrow: { type: "boolean", default: false },
 	},
 	presets: {
-		// A stacked group in a narrow column — the shape the community sheet uses,
-		// where a row of options would not fit.
+		// A stacked group in a narrow column — the shape a sheet uses, where a
+		// row of options would not fit.
 		"Stacked in a narrow column": { vertical: true, narrow: true },
 	},
 } satisfies Demo;

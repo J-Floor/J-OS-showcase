@@ -11,7 +11,7 @@ import { Can } from "../../../lib/ability.tsx";
 import { prefetchModule } from "../../../modules/prefetchModule.ts";
 import { modules } from "../../../modules/registry.ts";
 
-import { BRAND_FRAME } from "./brandFrame.ts";
+import { BRAND_FRAME } from "./brandLanding.ts";
 import styles from "./Sidebar.module.scss";
 
 export function Sidebar() {

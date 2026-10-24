@@ -1,9 +1,9 @@
 import { render, screen } from "@solidjs/testing-library";
 import { expect, test } from "vitest";
 
-import { Morph, type EntityId } from "./Morph.tsx";
+import { Morph } from "./Morph.tsx";
 
-const id = "abc" as EntityId;
+const id = "abc";
 
 test("renders a div carrying the entity id", () => {
 	render(() => <Morph of={id}>content</Morph>);

@@ -5,8 +5,8 @@ import { Button, Sheet, PropertyRow } from "@j-os/design-system";
 import type { Demo } from "../../../demo/types.ts";
 
 /** Placeholder markup shaped like the demo's loaded body, for the "custom
- *  skeleton" preset — mirrors how a real sheet (e.g. `TaskSheet`) shapes
- *  its own `Sheet.Body` `skeleton`. */
+ *  skeleton" preset — mirrors how a real sheet shapes its own
+ *  `Sheet.Body` `skeleton`. */
 function CustomSkeletonPlaceholder() {
 	return (
 		<>

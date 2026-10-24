@@ -1,6 +1,6 @@
 /* Pill surface shared by the install and notifications prompts. Placement
-   (floating, bottom-center, stacked) belongs to `PromptStack`, whose
-   `.stack > *` rule makes the pill clickable. */
+   (floating, bottom-center, stacked) belongs to the design system's
+   `FloatingStack`, which also makes the pill clickable. */
 .pill {
 	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- two controls; nothing to wrap */
 	display: flex;

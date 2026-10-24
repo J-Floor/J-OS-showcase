@@ -25,7 +25,6 @@ import { MORPH_SCRIM } from "../../utils/morph.ts";
 import { MORPH_TITLE, SHEET_SKELETON } from "../../utils/morphPairing.ts";
 import { MORPH_HIDDEN } from "../../utils/morphPresence.ts";
 import { setDeferredImmediate } from "../Deferred/Deferred.tsx";
-import type { EntityId } from "../Morph/Morph.tsx";
 import { PropertyRow } from "../PropertyRow/PropertyRow.tsx";
 
 import { SHEET_SKELETON_ROW, Sheet } from "./Sheet.tsx";
@@ -292,7 +291,7 @@ describe("Sheet", () => {
 					<Sheet.Root
 						open={open()}
 						onOpenChange={setOpen}
-						morph={"t1" as EntityId}
+						morph={"t1"}
 					>
 						<Sheet.Header>
 							<Sheet.Title>Task</Sheet.Title>
@@ -312,7 +311,7 @@ describe("Sheet", () => {
 			const uninstall = trackActivation();
 			onTestFinished(uninstall);
 			const [open, setOpen] = createSignal(false);
-			const [entity, setEntity] = createSignal("a" as EntityId);
+			const [entity, setEntity] = createSignal("a");
 			render(() => (
 				<>
 					<div id="row-a" role="row" data-morph-of="a" />
@@ -337,7 +336,7 @@ describe("Sheet", () => {
 			setOpen(true);
 			await transitionSettled();
 			expect(rowA).toHaveAttribute(MORPH_HIDDEN);
-			setEntity("b" as EntityId);
+			setEntity("b");
 			expect(rowA).not.toHaveAttribute(MORPH_HIDDEN);
 			names.length = 0;
 			setOpen(false);
@@ -351,7 +350,7 @@ describe("Sheet", () => {
 			stubViewTransition();
 			const uninstall = trackActivation();
 			onTestFinished(uninstall);
-			const [selected, setSelected] = createSignal<EntityId>();
+			const [selected, setSelected] = createSignal<string>();
 			render(() => (
 				<>
 					<div id="row-b" role="row" data-morph-of="b" />
@@ -374,7 +373,7 @@ describe("Sheet", () => {
 			row?.dispatchEvent(
 				new PointerEvent("pointerdown", { bubbles: true })
 			);
-			setSelected("b" as EntityId);
+			setSelected("b");
 			await transitionSettled();
 			expect(row).toHaveAttribute(MORPH_HIDDEN);
 		});
@@ -396,7 +395,7 @@ describe("Sheet", () => {
 					<Sheet.Root
 						open={open()}
 						onOpenChange={setOpen}
-						morph={"t1" as EntityId}
+						morph={"t1"}
 					>
 						<Sheet.Header>
 							<Sheet.Title>Task</Sheet.Title>
@@ -459,7 +458,7 @@ describe("Sheet", () => {
 					<Sheet.Root
 						open={open()}
 						onOpenChange={setOpen}
-						morph={"t1" as EntityId}
+						morph={"t1"}
 					>
 						<Sheet.Header>
 							<Sheet.Title>Task</Sheet.Title>
@@ -579,7 +578,7 @@ describe("Sheet", () => {
 					<Sheet.Root
 						open={open()}
 						onOpenChange={setOpen}
-						morph={"t1" as EntityId}
+						morph={"t1"}
 					>
 						<Sheet.Header>
 							<Sheet.Title>Task</Sheet.Title>

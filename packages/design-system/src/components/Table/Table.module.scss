@@ -80,10 +80,10 @@ $track-properties: ();
 	inline-size: 100%;
 	min-inline-size: max(100%, var(--jf-table-floor));
 
-	/* Room for a page's floating toolbar (0 without one). Inside the scroll
-	   box, so a bounded table keeps its height and its last row scrolls clear
-	   of the pill. */
-	padding-block-end: var(--jf-floating-toolbar-offset);
+	/* Room for a `FloatingStack` (0 without one). Inside the scroll box, so a
+	   bounded table keeps its height and its last row scrolls clear of the
+	   pills. */
+	padding-block-end: var(--jf-floating-stack-block-size);
 
 	/* A focusable table (`role="grid"`) shows focus through its row ring, so
 	   the table box itself draws no outline. */

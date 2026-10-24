@@ -125,16 +125,16 @@ export type TableRootProps<Data extends Record<string, unknown>> = {
 	autofocusFirstRow?: boolean;
 	/**
 	 * Clear and disable the row-focus ring while true. For when something else owns
-	 * the keyboard and the person it acts on — an open detail sheet, say: a ring
+	 * the keyboard and the record it acts on — an open detail sheet, say: a ring
 	 * left glowing under it would claim a row is the target when the sheet is, and
 	 * Enter would reopen it stacked on top. Mutually exclusive with the ring the
 	 * same way a checkbox selection is.
 	 */
 	suppressFocus?: boolean;
 	/**
-	 * Pin the ring to a specific row by `_id` — the person an open detail sheet
+	 * Pin the ring to a specific row by `_id` — the record an open detail sheet
 	 * is showing — so the table stays visually in sync as the sheet pages
-	 * person to person, and that row is scrolled into view. Shown but NOT
+	 * record to record, and that row is scrolled into view. Shown but NOT
 	 * interactive: a pinned ring is inert, so arrows and Enter do nothing while
 	 * it is pinned (the sheet owns them), whether or not `suppressFocus` is
 	 * set. When the pin releases (`undefined`), the ring stays where it landed,
@@ -359,6 +359,7 @@ export function Root<Data extends Record<string, unknown>>(
 		groups: model.groups,
 		focus,
 		selection: model.selection,
+		rowId: (row) => focusRowId(props, row),
 		loading,
 		scroll: viewport.scroll,
 		renderItems: model.renderItems,

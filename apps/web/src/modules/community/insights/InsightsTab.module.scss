@@ -12,10 +12,10 @@
 	min-block-size: 0;
 	padding-block: var(--jf-spacing-far);
 
-	/* Its own scroller, so its own end room for the page's floating toolbar
-	   (0 without one). */
+	/* Its own scroller, so its own end room for the floating pills (0
+	   without any). */
 	padding-block-end: calc(
-		var(--jf-spacing-far) + var(--jf-floating-toolbar-offset)
+		var(--jf-spacing-far) + var(--jf-floating-stack-block-size)
 	);
 
 	/* stylelint-disable-next-line defensive-css/require-scrollbar-gutter -- the shell's own gutter applies; a second one double-insets the grid */

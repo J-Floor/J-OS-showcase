@@ -12,14 +12,10 @@
 	   can shrink every chart at once by re-declaring it on the grid. */
 	--jf-dimension-chart-height: 180px;
 
-	/* Room a phone's FloatingToolbar (also Tabs.Actions) takes at the foot of
-	   the content column. The toolbar raises it on the root while it shows;
-	   the other bottom floaters (prompts, toasts) add it to their offset, and
-	   scrolling areas (table rows, tab panels) leave it free at their end. */
-	--jf-floating-toolbar-offset: 0px;
-
-	/* Height of the app's phone bottom navigation bar, for anything fixed to
-	   the viewport's foot (toasts) to clear it. The bar sets it while it is
-	   on screen; 0 everywhere else. */
-	--jf-bottom-nav-height: 0px;
+	/* Room a `FloatingStack` takes at the foot of the box it floats in: its
+	   height plus its inset while it holds anything, else 0. The stack keeps
+	   it on the root; scrolling areas (table rows, tab panels) leave it free
+	   at their end, and other bottom-anchored floaters add it to their
+	   offset. */
+	--jf-floating-stack-block-size: 0px;
 }

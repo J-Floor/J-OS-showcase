@@ -27,8 +27,8 @@
 	min-block-size: 0;
 	overflow: hidden;
 
-	/* Anchor for the floating prompt stack, which pins to this column's foot
-	   (above the phone bottom bar, which sits outside `.main`). */
+	/* Anchor for the FloatingStack, which pins to this column's foot (above
+	   the phone bottom bar, which sits outside `.main`). */
 	position: relative;
 }
 

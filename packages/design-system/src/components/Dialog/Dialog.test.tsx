@@ -8,7 +8,6 @@ import {
 	namedIds,
 	restoreViewTransitions,
 } from "../../test/viewTransitionFakes.ts";
-import type { EntityId } from "../Morph/Morph.tsx";
 
 import { Dialog } from "./Dialog.tsx";
 
@@ -91,7 +90,7 @@ test("given an entity, closes into the on-screen element showing it", async () =
 	render(() => (
 		<>
 			<div id="row" data-morph-of="t1" />
-			<Dialog.Root open={open()} morph={"t1" as EntityId}>
+			<Dialog.Root open={open()} morph={"t1"}>
 				<Dialog.Content>
 					<Dialog.Title>Task</Dialog.Title>
 				</Dialog.Content>

@@ -6,9 +6,6 @@
  */
 import { hasLayoutBox } from "./visibleArea.ts";
 
-/** Structurally equal to Convex's GenericId, without a dependency on convex. */
-export type EntityId = string & { __tableName: string };
-
 /** The attribute naming the entity an element shows. */
 export const MORPH_OF = "data-morph-of";
 
@@ -21,7 +18,7 @@ export const ENTITY_SURFACE = `[role="row"], [${MORPH_OF}]`;
 export const ENTITY_ROW = `${ENTITY_SURFACE}, [role="option"]`;
 
 /** The on-screen element showing this entity, if any. */
-export function findMorphTarget(of: EntityId): HTMLElement | null {
+export function findMorphTarget(of: string): HTMLElement | null {
 	const matches = [
 		...document.querySelectorAll<HTMLElement>(
 			`[${MORPH_OF}="${CSS.escape(of)}"]`
@@ -41,7 +38,7 @@ export function findMorphTarget(of: EntityId): HTMLElement | null {
  * Marks the title inside a morph source or target; it flies on its own. Its
  * value may be a field key (a table's title cell carries its column id): the
  * title then flies into the target's value with that key when it has one
- * (a person sheet's first-name half), else into the target's title.
+ * (a sheet's first-name half), else into the target's title.
  */
 export const MORPH_TITLE = "data-morph-title";
 
@@ -68,7 +65,7 @@ export const SHEET_SKELETON = "data-sheet-skeleton";
 /**
  * Whether `element`, inside the morph end `root`, flies: not placeholder
  * content (it is replaced mid-animation), and not a value of another entity
- * shown inside the end (a task card in a project sheet).
+ * shown inside the end (a card listed inside a sheet).
  */
 function takesPart(root: HTMLElement | null, element: HTMLElement): boolean {
 	if (element.closest(`[${SHEET_SKELETON}]`)) return false;

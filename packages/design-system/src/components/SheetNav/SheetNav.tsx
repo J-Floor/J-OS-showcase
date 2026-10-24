@@ -42,7 +42,7 @@ function step(
  * Prev/next arrows for a Sheet header (placed in the `headerAction` slot).
  *
  * ArrowUp/ArrowDown here are scoped to the open sheet panel. `Table` keeps
- * its own ArrowUp/ArrowDown for the roster's row-focus ring, but only while the
+ * its own ArrowUp/ArrowDown for its row-focus ring, but only while the
  * table itself has focus, so the two never see the same keystroke: with a
  * sheet open the ring is pinned and inert, and focus is in the sheet. The
  * scoping is the library's own target option: a hotkey registered with

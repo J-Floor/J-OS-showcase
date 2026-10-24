@@ -4,7 +4,7 @@ import { createSignal, type JSX, Show } from "solid-js";
 import { createDismissed } from "../../lib/dismissed.ts";
 import { enablePush, pushConfigured, pushSupport } from "../../lib/push.ts";
 import { createActionError } from "../createActionError.ts";
-// Same pill surface as the install prompt; PromptStack places them both.
+// Same pill surface as the install prompt; FloatingStack places them both.
 import { ICONS } from "../icons.ts";
 import { InlineError } from "../InlineError.tsx";
 import styles from "../InstallPwaPrompt.module.scss";
