@@ -1,5 +1,12 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+	within,
+} from "@solidjs/testing-library";
 import { afterEach, expect, test, vi } from "vitest";
 
 const { mockCreate, mockUpdate, mockRemove } = vi.hoisted(() => ({
@@ -84,6 +91,51 @@ test("new item with initialAssetTag shows that tag in the field", () => {
 	expect(screen.getByLabelText("Asset tag letter")).toHaveValue("A");
 	expect(screen.getByLabelText("Asset tag number")).toHaveValue("00001");
 	expect(screen.getByText("New item")).toBeInTheDocument();
+});
+
+test("a scanned tag is where the new item starts: Escape closes without asking", async () => {
+	const onOpenChange = vi.fn();
+	render(() => (
+		<ItemSheet
+			open
+			onOpenChange={onOpenChange}
+			itemTypes={[]}
+			initialAssetTag="A00001"
+		/>
+	));
+	const sheet = screen.getByRole("dialog", { name: "New item" });
+	await waitFor(() => {
+		fireEvent.keyDown(sheet, { key: "Escape" });
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+	});
+	expect(
+		screen.queryByRole("dialog", { name: "Discard new item?" })
+	).toBeNull();
+});
+
+test("a new item with a typed description asks before Escape throws it away", async () => {
+	const onOpenChange = vi.fn();
+	render(() => (
+		<ItemSheet
+			open
+			onOpenChange={onOpenChange}
+			itemTypes={[]}
+			initialAssetTag="A00001"
+		/>
+	));
+	fireEvent.input(screen.getByLabelText("Description"), {
+		target: { value: "Meeting room" },
+	});
+	const sheet = screen.getByRole("dialog", { name: "New item" });
+	// Ark hears Escape a moment after the open: press until it asks.
+	await waitFor(() => {
+		if (!screen.queryByRole("dialog", { name: "Discard new item?" }))
+			fireEvent.keyDown(sheet, { key: "Escape" });
+		expect(
+			screen.getByRole("dialog", { name: "Discard new item?" })
+		).toBeInTheDocument();
+	});
+	expect(onOpenChange).not.toHaveBeenCalled();
 });
 
 test("copy from item is offered on a new item, not when editing", () => {
@@ -171,7 +223,9 @@ test("asset tag is read-only in edit mode and editing another field autosaves wi
 	// under `selected()` and slam the sheet shut mid-edit.
 	expect(screen.queryByRole("group", { name: "Asset tag" })).toBeNull();
 	// Shown twice: the sheet title, and the read-only tag row.
-	expect(screen.getAllByText("A00001")).toHaveLength(2);
+	expect(
+		within(screen.getByRole("dialog")).getAllByText("A00001")
+	).toHaveLength(2);
 
 	// Editing another field still autosaves that field only...
 	const description = screen.getByLabelText("Description");
@@ -318,7 +372,7 @@ test("an empty asset tag shows the hint, not an error, after leaving the group",
 });
 
 test("morph: the item's columns pair with the sheet values showing the same field", () => {
-	const row = tableRowKeys(itemColumns([chair]), chair);
+	const row = tableRowKeys(itemColumns({ types: [], categories: [] }), chair);
 	expect(row.title).toBe("assetTag");
 	expect(row.cells).toEqual(["typeName", "categoryName", "description"]);
 

@@ -1,6 +1,14 @@
-import { expect, it } from "vitest";
+import { expect, expectTypeOf, it } from "vitest";
+
+import type { Wifi } from "../../../convex/lib/wifi.ts";
 
 import { wifiQrPayload } from "./wifi.ts";
+import type { WifiContentProps } from "./WifiContent.tsx";
+
+it("takes the server's Wi-Fi shape everywhere", () => {
+	expectTypeOf<Parameters<typeof wifiQrPayload>[0]>().toEqualTypeOf<Wifi>();
+	expectTypeOf<WifiContentProps>().toEqualTypeOf<Wifi>();
+});
 
 it("builds a WPA join payload from the given network", () => {
 	expect(

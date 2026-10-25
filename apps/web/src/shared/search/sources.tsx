@@ -2,6 +2,7 @@ import type { CommandPaletteItem } from "@j-os/design-system";
 import { createEffect, createSignal, For, type JSX } from "solid-js";
 
 import { useAbility } from "../../lib/ability.tsx";
+import { ROSTER_TABS } from "../../modules/community/communityTabs.ts";
 import { personEntity } from "../../modules/community/entity.ts";
 import { communityModule } from "../../modules/community/index.ts";
 import { eventsEntity } from "../../modules/events/entity.ts";
@@ -11,12 +12,13 @@ import {
 	itemTypeEntity,
 } from "../../modules/inventory/entity.ts";
 import { inventoryModule } from "../../modules/inventory/index.ts";
+import { INVENTORY_TABS } from "../../modules/inventory/inventoryTabs.ts";
 import { prefetchModule } from "../../modules/prefetchModule.ts";
 import { modules } from "../../modules/registry.ts";
 import { projectEntity, taskEntity } from "../../modules/tasks/entity.ts";
 import type { EntityDescriptor } from "../entity/entityDescriptor.ts";
 import { EntitySource, type Emit } from "../entity/EntitySource.tsx";
-import { ICONS } from "../icons.ts";
+import type { EntityRow } from "../types.ts";
 
 /**
  * Where the palette's results come from.
@@ -50,29 +52,12 @@ export function pageItems(
 		}));
 }
 
-/** The community console's three tabs, which are destinations in their own
- *  right — "the guests list" is a thing people look for by name. */
-export const COMMUNITY_TABS = [
-	{
-		tab: "applications",
-		label: "Applications",
-		icon: ICONS.memberApplication,
-	},
-	{ tab: "members", label: "Members", icon: ICONS.members },
-	{ tab: "guests", label: "Guests", icon: ICONS.guestApplication },
-] as const;
-
-export const INVENTORY_TABS = [
-	{ tab: "items", label: "Items", icon: ICONS.inventory },
-	{ tab: "types", label: "Item types", icon: ICONS.itemType },
-	{ tab: "categories", label: "Categories", icon: ICONS.category },
-] as const;
-
+/** The community rosters and the inventory tabs, as palette destinations. */
 export function tabItems(
 	navigate: (path: string) => void
 ): CommandPaletteItem[] {
 	const ability = useAbility();
-	const community = COMMUNITY_TABS.map((entry) => ({
+	const community = ROSTER_TABS.map((entry) => ({
 		value: `tab:${entry.tab}`,
 		label: entry.label,
 		group: "Community",
@@ -107,12 +92,10 @@ export function tabItems(
 /** A descriptor stripped of its specific `Row` type so a heterogeneous set can
  *  live in one array. `EntitySource` only ever calls the functions the
  *  descriptor it was built with supplies, so the erasure is sound. */
-type AnyRow = { _id: string };
-
-function erase<Row extends { _id: string }>(
+function erase<Row extends EntityRow>(
 	descriptor: EntityDescriptor<Row>
-): EntityDescriptor<AnyRow> {
-	return descriptor as unknown as EntityDescriptor<AnyRow>;
+): EntityDescriptor<EntityRow> {
+	return descriptor as unknown as EntityDescriptor<EntityRow>;
 }
 
 /**
@@ -127,7 +110,7 @@ function erase<Row extends { _id: string }>(
  * is who `tasks.list`/`projects.list` answer for. Events are searchable for
  * anyone who can view the Events page.
  */
-const entityDescriptors: EntityDescriptor<AnyRow>[] = [
+const entityDescriptors: EntityDescriptor<EntityRow>[] = [
 	erase(personEntity),
 	erase(taskEntity),
 	erase(projectEntity),

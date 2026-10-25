@@ -9,6 +9,8 @@
  * (no radius/border-width token in the scale yet, matching Tooltip/Spinner).
  */
 
+@use "../../styles/hover";
+
 .checkbox {
 	display: flex;
 	flex-wrap: nowrap;
@@ -16,6 +18,14 @@
 	align-items: center;
 	inline-size: fit-content;
 	cursor: pointer;
+
+	/* ark sets [data-hover] on the Root, not the Control, so trigger the hover
+	   circle from the label's hover too. */
+	@include hover.hover {
+		& .control::after {
+			transform: translate(-50%, -50%) scale(1);
+		}
+	}
 }
 
 .label {
@@ -98,13 +108,6 @@
 		outline: var(--jf-border-width-accessibility) solid var(--jf-fg-strong);
 		outline-offset: 2px;
 	}
-}
-
-/* ark sets [data-hover] on the Root, not the Control, so trigger the hover
-   circle from the label's :hover too. */
-/* stylelint-disable-next-line defensive-css/no-accidental-hover -- pointer-capable control; mobile accidental-hover not a concern */
-.checkbox:hover .control::after {
-	transform: translate(-50%, -50%) scale(1);
 }
 
 .indicator {

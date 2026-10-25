@@ -1,34 +1,56 @@
-import {
-	Table,
-	type JfColumnDefinition,
-	type TableSelection,
-} from "@j-os/design-system";
-import { Show, createSignal, type JSX } from "solid-js";
+import { Table, type JfColumnDefinition } from "@j-os/design-system";
+import { createContext, createSignal, type Accessor, type JSX } from "solid-js";
 
-import { createSheetNav } from "../../../lib/createSheetNav.ts";
+import {
+	createSheetNav,
+	type SheetNavState,
+} from "../../../lib/createSheetNav.ts";
+import { useRequiredContext } from "../../../shared/compound.ts";
 import type { EntitySelection } from "../../../shared/entity/createEntitySelection.ts";
 import type { EntityDescriptor } from "../../../shared/entity/entityDescriptor.ts";
-import type { SheetNavState } from "../../../shared/entity/EntitySheetHeader.tsx";
 import { useRowPrefetch } from "../../../shared/entity/useRowPrefetch.ts";
+import type { EntityRow } from "../../../shared/types.ts";
 
-/** The selection bar's contents: hands the table's selection to the tab's
- *  `batchActions`. */
-function InventoryBatchBar<Row extends Record<string, unknown>>(props: {
-	batchActions?: (selection: TableSelection<Row>) => JSX.Element;
+/** What `InventoryTab.Sheet` hands its child: accessors, never values, so the
+ *  sheet updates in place instead of being re-created. */
+export type InventorySheetArgs<Row> = {
+	open: Accessor<boolean>;
+	onOpenChange: (isOpen: boolean) => void;
+	row: Accessor<Row | undefined>;
+	initialAssetTag: Accessor<string | undefined>;
+	nav: SheetNavState;
+	prebuild: Accessor<boolean>;
+};
+
+const SheetArgsContext = createContext<InventorySheetArgs<never>>();
+
+/**
+ * The tab's sheet. Its child is called once, outside any tracked scope, with
+ * accessors: reading `open()` / `row()` / the prefill is deferred into the
+ * sheet's own render. Reading the values here instead would put those reads
+ * at this call site, which Solid re-runs on every signal change, disposing
+ * and recreating the sheet instead of updating it in place.
+ *
+ * `Row` is asserted, not inferred: a Solid context cannot carry
+ * `InventoryTab`'s type parameter.
+ */
+function Sheet<Row>(props: {
+	children: (sheet: InventorySheetArgs<Row>) => JSX.Element;
 }): JSX.Element {
-	const selection = Table.useSelection<Row>();
-	// eslint-disable-next-line solid/reactivity -- called once; the selection hands out accessors, read inside the bar's own JSX
-	return props.batchActions?.(selection) ?? null;
+	const args = useRequiredContext(
+		SheetArgsContext,
+		"InventoryTab.Sheet",
+		"InventoryTab.Root"
+	);
+	// eslint-disable-next-line solid/reactivity -- intentional single call outside a tracked scope; the callback takes accessors, so no reactive read happens here
+	return props.children(args);
 }
 
-export function InventoryTab<
-	Row extends Record<string, unknown> & { _id: string },
->(props: {
+function Root<Row extends Record<string, unknown> & EntityRow>(props: {
 	data: () => Row[] | undefined;
 	columns: () => JfColumnDefinition<Row>[];
 	/** Sheet open/close/current-row/URL state — the single source of truth,
-	 *  created once per tab in `InventoryPage`. Replaces the old internal
-	 *  open/editingId signals and the `requestNew`/`requestOpenItem` nonces. */
+	 *  created once per tab in `InventoryPage`. */
 	selection: EntitySelection<Row>;
 	/** This tab's entity descriptor; its `prefetch` warms the sheet's queries on
 	 *  row hover and keyboard focus. */
@@ -38,15 +60,8 @@ export function InventoryTab<
 	newItemAssetTag?: () => string | undefined;
 	/** Items tab only: checkboxes + header select-all. Types/categories omit this. */
 	enableRowSelection?: boolean;
-	/** Selection-bar contents. Only rendered when row selection is on. */
-	batchActions?: (selection: TableSelection<Row>) => JSX.Element;
-	renderSheet: (args: {
-		open: () => boolean;
-		onOpenChange: (isOpen: boolean) => void;
-		row: () => Row | undefined;
-		initialAssetTag: () => string | undefined;
-		nav: SheetNavState;
-	}) => JSX.Element;
+	/** `InventoryTab.Sheet`, and `Table.BatchActions` when row selection is on. */
+	children?: JSX.Element;
 }): JSX.Element {
 	const [displayed, setDisplayed] = createSignal<Row[]>([]);
 	// eslint-disable-next-line solid/reactivity -- the descriptor is fixed for this tab
@@ -63,14 +78,7 @@ export function InventoryTab<
 		},
 	});
 
-	// Called once, outside any tracked scope: the callback receives accessors
-	// (not values), so reading `open()` / `selected()` / the prefill is deferred
-	// into the child's own render. Reading the values here instead would put
-	// those reads in this render-prop call site, which Solid re-runs on every
-	// signal change — disposing and recreating the sheet instead of updating it
-	// in place.
-	// eslint-disable-next-line solid/reactivity -- intentional single call outside a tracked scope; the callback takes accessors, so no reactive read happens here
-	const sheet = props.renderSheet({
+	const sheetArgs: InventorySheetArgs<Row> = {
 		open: () => props.selection.open(),
 		onOpenChange: (isOpen) => {
 			// The sheet only ever asks to close (it has no self-open trigger);
@@ -81,16 +89,14 @@ export function InventoryTab<
 		row: () => props.selection.selected(),
 		initialAssetTag: () =>
 			props.selection.creating() ? props.newItemAssetTag?.() : undefined,
-		nav: {
-			hasPrev: nav.hasPrev,
-			hasNext: nav.hasNext,
-			onPrev: nav.prev,
-			onNext: nav.next,
-		},
-	});
+		nav,
+		prebuild: () => props.selection.prebuild(),
+	};
 
 	return (
-		<>
+		<SheetArgsContext.Provider
+			value={sheetArgs as unknown as InventorySheetArgs<never>}
+		>
 			<Table.Root
 				columns={props.columns()}
 				data={props.data()}
@@ -104,17 +110,17 @@ export function InventoryTab<
 				onRowActivate={(row) => {
 					props.selection.openRow(row);
 				}}
-				onRowHoverIntent={prefetchRow}
+				onRowHoverIntent={(row) => {
+					prefetchRow(row);
+					props.selection.intend();
+				}}
 				onFocusedRowChange={prefetchRow}
 				enableRowSelection={props.enableRowSelection}
 			>
-				<Show when={props.enableRowSelection}>
-					<Table.BatchActions>
-						<InventoryBatchBar batchActions={props.batchActions} />
-					</Table.BatchActions>
-				</Show>
+				{props.children}
 			</Table.Root>
-			{sheet}
-		</>
+		</SheetArgsContext.Provider>
 	);
 }
+
+export const InventoryTab = { Root, Sheet };

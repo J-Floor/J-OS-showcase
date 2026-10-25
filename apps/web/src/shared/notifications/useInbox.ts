@@ -6,7 +6,7 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { NOTIFICATIONS_PAGE_SIZE } from "../../../convex/lib/constants.ts";
 import { call } from "../../lib/call.ts";
-import { useFlooredLog } from "../data/useFlooredLog.ts";
+import { useFlooredLog, type FlooredLog } from "../data/useFlooredLog.ts";
 import { toaster } from "../toaster.ts";
 
 /** One history row as the inbox queries return it. */
@@ -14,15 +14,7 @@ export type InboxRow = FunctionReturnType<
 	typeof api.notify.inbox.listSince
 >[number];
 
-export type Inbox = {
-	/** The live head, then the older pages, newest first; undefined until the
-	 *  head has loaded. */
-	rows: Accessor<InboxRow[] | undefined>;
-	failed: Accessor<boolean>;
-	canLoadMore: Accessor<boolean>;
-	loadingMore: Accessor<boolean>;
-	loadMoreFailed: Accessor<boolean>;
-	loadMore: () => Promise<void>;
+export type Inbox = FlooredLog<InboxRow> & {
 	markRead: (id: Id<"notifications">) => void;
 	markAllRead: () => void;
 };

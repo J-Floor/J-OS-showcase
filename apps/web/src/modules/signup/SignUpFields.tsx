@@ -8,6 +8,7 @@ import {
 import { For, Show } from "solid-js";
 
 import { ICONS } from "../../shared/icons.ts";
+import { NameFields } from "../../shared/NameFields.tsx";
 
 import {
 	fundingStageOptions,
@@ -17,7 +18,6 @@ import {
 	type ProductStage,
 	type Vertical,
 } from "./options.ts";
-import styles from "./SignUp.module.scss";
 import { EXTRA_LINK_INDEXES, type SignUpForm } from "./signUpForm.ts";
 
 type FieldsProps = { form: SignUpForm };
@@ -26,32 +26,20 @@ type FieldsProps = { form: SignUpForm };
 export function IdentityFields(props: FieldsProps) {
 	return (
 		<>
-			<div class={styles.row}>
-				<Input
-					label="First name"
-					required
-					disabled={props.form.submitting()}
-					disabledReason="Submitting…"
-					value={props.form.fields.firstName()}
-					onValueChange={(event) =>
-						props.form.fields.setFirstName(
-							event.currentTarget.value
-						)
-					}
-					{...props.form.errProps(props.form.errors().firstName)}
-				/>
-				<Input
-					label="Last name"
-					required
-					disabled={props.form.submitting()}
-					disabledReason="Submitting…"
-					value={props.form.fields.lastName()}
-					onValueChange={(event) =>
-						props.form.fields.setLastName(event.currentTarget.value)
-					}
-					{...props.form.errProps(props.form.errors().lastName)}
-				/>
-			</div>
+			<NameFields
+				disabled={props.form.submitting()}
+				disabledReason="Submitting…"
+				firstName={{
+					value: props.form.fields.firstName(),
+					onChange: props.form.fields.setFirstName,
+					error: props.form.errProps(props.form.errors().firstName),
+				}}
+				lastName={{
+					value: props.form.fields.lastName(),
+					onChange: props.form.fields.setLastName,
+					error: props.form.errProps(props.form.errors().lastName),
+				}}
+			/>
 
 			<Input
 				type="email"

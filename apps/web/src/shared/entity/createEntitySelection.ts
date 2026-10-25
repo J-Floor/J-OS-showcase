@@ -1,4 +1,4 @@
-import { afterTransition } from "@j-os/design-system";
+import { createMorphHold } from "@j-os/design-system";
 import {
 	useIsRouting,
 	useLocation,
@@ -12,8 +12,10 @@ import {
 	createSignal,
 	on,
 	type Setter,
-	untrack,
 } from "solid-js";
+
+import type { SetParams } from "../types.ts";
+import type { EntityRow } from "../types.ts";
 
 /** Reserved param value for the create form. A row's slug is its `_id` (or a
  *  per-module override like `assetTag`), so `new` cannot collide with one. It
@@ -32,9 +34,8 @@ function parameterInWindowUrl(parameter: string): string | undefined {
 }
 
 type SearchParameters = ReturnType<typeof useSearchParams>[0];
-type SetSearchParameters = ReturnType<typeof useSearchParams>[1];
 
-type EntitySelectionOptions<Row extends { _id: string }> = {
+type EntitySelectionOptions<Row extends EntityRow> = {
 	rows: () => Row[] | undefined;
 	param: string;
 	/** Inbound links only open / outbound writes only happen when true. Tabbed
@@ -72,6 +73,12 @@ type EntitySelectionApi<Row> = {
 	openRow: (row: Row) => void;
 	openCreate: () => void;
 	close: (shouldPop?: boolean) => void;
+	/** Pass to the sheet's `prebuild`: true once an open was hinted. */
+	prebuild: () => boolean;
+	/** A sign the sheet is about to open (a row's hover intent, beside its
+	 *  prefetch): the sheet builds its parts ahead, so its first open's
+	 *  morph flies the row's values into them. */
+	intend: () => void;
 };
 
 type SelectionState = {
@@ -81,7 +88,7 @@ type SelectionState = {
 	setOpen: Setter<boolean>;
 	isActive: () => boolean;
 	/** Clears the selection after a close; the sheet keeps showing the row
-	 *  it closes until its close transition has finished. */
+	 *  it closes until its close transition has finished (`shownId`). */
 	closeLocal: () => void;
 	// Whether the current open sheet owns a history entry this hook pushed.
 	// When true, `close()` pops that entry (matching the Back button); when
@@ -100,7 +107,7 @@ type InboundAction =
 
 /** A LOADED list that lacks the slug: a genuine dead link, not a still-loading
  *  one. */
-function isDeadLink<Row extends { _id: string }>(
+function isDeadLink<Row extends EntityRow>(
 	slug: string,
 	rows: Row[] | undefined,
 	slugOf: (row: Row) => string
@@ -112,7 +119,7 @@ function isDeadLink<Row extends { _id: string }>(
 	);
 }
 
-function planInbound<Row extends { _id: string }>(input: {
+function planInbound<Row extends EntityRow>(input: {
 	wanted: unknown;
 	rows: Row[] | undefined;
 	isActive: boolean;
@@ -153,10 +160,10 @@ function planInbound<Row extends { _id: string }>(input: {
 // would re-fire this effect on a stale value. Reading `requestedId()`
 // untracked inside the callback still gates re-opens without being a
 // re-trigger source.
-function useInboundParameterSync<Row extends { _id: string }>(context: {
+function useInboundParameterSync<Row extends EntityRow>(context: {
 	options: EntitySelectionOptions<Row>;
 	params: SearchParameters;
-	setParams: SetSearchParameters;
+	setParams: SetParams;
 	slugOf: (row: Row) => string;
 	state: SelectionState;
 	resetLocal: () => void;
@@ -312,40 +319,9 @@ function useColdInboundHistoryBase(context: {
 	});
 }
 
-/**
- * The id the sheet shows. While open, the selection's. After a close, the
- * row it closed on, until the close transition (its morph back into the
- * row) has finished: closing clears the selection in the same tick, and the
- * sheet would otherwise re-render as the create form ("New task") before
- * the browser captured it, so the title flipped as the card shrank. Without
- * a transition (no API, reduced motion) it lets go on the next microtask.
- */
-function createClosingHold(
-	requestedId: Accessor<string | undefined>,
-	open: Accessor<boolean>
-): { shownId: () => string | undefined; hold: () => void } {
-	const [held, setHeld] = createSignal<string>();
-	let closes = 0;
-	return {
-		shownId: () => (open() ? requestedId() : held()),
-		hold: () => {
-			setHeld(untrack(requestedId));
-			closes += 1;
-			const close = closes;
-			// A microtask: the sheet's close transition starts in the effects
-			// this close sets off.
-			queueMicrotask(() => {
-				void afterTransition().then(() => {
-					if (close === closes) setHeld(undefined);
-				});
-			});
-		},
-	};
-}
-
-function createSelectionActions<Row extends { _id: string }>(context: {
+function createSelectionActions<Row extends EntityRow>(context: {
 	param: string;
-	setParams: SetSearchParameters;
+	setParams: SetParams;
 	navigate: ReturnType<typeof useNavigate>;
 	slugOf: (row: Row) => string;
 	state: SelectionState;
@@ -437,7 +413,7 @@ function createSelectionActions<Row extends { _id: string }>(context: {
  * behind it, so it synthesizes a paramless base (in the browser) — Back returns
  * to the list rather than leaving the app.
  */
-export function createEntitySelection<Row extends { _id: string }>(
+export function createEntitySelection<Row extends EntityRow>(
 	options: EntitySelectionOptions<Row>
 ): EntitySelectionApi<Row> {
 	const [params, setParams] = useSearchParams();
@@ -452,7 +428,13 @@ export function createEntitySelection<Row extends { _id: string }>(
 	// on the snapshot taken when it opened.
 	const [requestedId, setRequestedId] = createSignal<string>();
 	const [open, setOpen] = createSignal(false);
-	const closing = createClosingHold(requestedId, open);
+	/** The id the sheet shows: the selection's while open, and after a
+	 *  close the row it closed on until its morph back into the row has
+	 *  finished. Closing clears the selection in the same tick, and the
+	 *  sheet would otherwise re-render as the create form ("New task")
+	 *  before the browser captured it. */
+	const shownId = createMorphHold(requestedId, open);
+	const [prebuild, setPrebuild] = createSignal(false);
 	const state: SelectionState = {
 		requestedId,
 		setRequestedId,
@@ -461,7 +443,6 @@ export function createEntitySelection<Row extends { _id: string }>(
 		isActive,
 		closeLocal: () => {
 			batch(() => {
-				closing.hold();
 				setOpen(false);
 				setRequestedId(undefined);
 			});
@@ -471,7 +452,7 @@ export function createEntitySelection<Row extends { _id: string }>(
 
 	/** Looked up from the shown id: the sheet's, held through a close. */
 	function selected(): Row | undefined {
-		const id = closing.shownId();
+		const id = shownId();
 		return id === undefined || id === CREATE_SLUG
 			? undefined
 			: options.rows()?.find((row) => slugOf(row) === id);
@@ -527,18 +508,20 @@ export function createEntitySelection<Row extends { _id: string }>(
 	return {
 		selected,
 		requestedId,
-		shownId: closing.shownId,
+		shownId,
 		open,
 		loading,
 		creating,
 		openRow,
 		openCreate,
 		close,
+		prebuild,
+		intend: () => setPrebuild(true),
 	};
 }
 
 /** What a page hands the tab (or tabs) its selection drives. Derived from the
  *  hook itself so the shape can never drift from it. */
-export type EntitySelection<Row extends { _id: string }> = ReturnType<
+export type EntitySelection<Row extends EntityRow> = ReturnType<
 	typeof createEntitySelection<Row>
 >;

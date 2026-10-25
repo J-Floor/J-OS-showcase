@@ -1,5 +1,7 @@
 import { expect, test } from "vitest";
 
+import type { Id } from "../../../../convex/_generated/dataModel";
+
 import {
 	isoToMs,
 	msToIso,
@@ -12,21 +14,24 @@ import {
 	filterTasksByAssignee,
 } from "./taskHelpers.ts";
 
+const P1 = "p1" as Id<"people">;
+const P2 = "p2" as Id<"people">;
+
 const TASKS = [
-	{ _id: "t1", assigneeIds: ["p1", "p2"] },
-	{ _id: "t2", assigneeIds: ["p2"] },
-	{ _id: "t3" }, // unassigned
+	{ _id: "t1", assigneeIds: [P1, P2] },
+	{ _id: "t2", assigneeIds: [P2] },
+	{ _id: "t3", assigneeIds: [] }, // unassigned
 ];
 
 test("filterTasksByAssignee: 'all' keeps every task", () => {
 	expect(
-		filterTasksByAssignee(TASKS, "all", "p1").map((task) => task._id)
+		filterTasksByAssignee(TASKS, "all", P1).map((task) => task._id)
 	).toEqual(["t1", "t2", "t3"]);
 });
 
 test("filterTasksByAssignee: 'me' keeps tasks for the current person", () => {
 	expect(
-		filterTasksByAssignee(TASKS, "me", "p2").map((task) => task._id)
+		filterTasksByAssignee(TASKS, "me", P2).map((task) => task._id)
 	).toEqual(["t1", "t2"]);
 });
 
@@ -36,7 +41,7 @@ test("filterTasksByAssignee: 'me' with no current person matches nothing", () =>
 
 test("filterTasksByAssignee: a person id keeps that person's tasks", () => {
 	expect(
-		filterTasksByAssignee(TASKS, "p1", "p2").map((task) => task._id)
+		filterTasksByAssignee(TASKS, "p1", P2).map((task) => task._id)
 	).toEqual(["t1"]);
 });
 
@@ -76,11 +81,11 @@ test("sortColumn: due dates ascending, undated last, then creation", () => {
 });
 
 test("name + project lookups", () => {
-	const people = [{ _id: "p1", firstName: "Ada", lastName: "Lovelace" }];
-	const projects = [{ _id: "pr1", name: "Launch" }];
-	expect(personName("p1", people)).toBe("Ada Lovelace");
-	expect(personName("nope", people)).toBe("Unknown");
-	expect(assigneeNames(["p1"], people)).toEqual(["Ada Lovelace"]);
-	expect(projectName("pr1", projects)).toBe("Launch");
+	const people = [{ _id: P1, firstName: "Ada", lastName: "Lovelace" }];
+	const projects = [{ _id: "pr1" as Id<"projects">, name: "Launch" }];
+	expect(personName(P1, people)).toBe("Ada Lovelace");
+	expect(personName("nope" as Id<"people">, people)).toBe("Unknown");
+	expect(assigneeNames([P1], people)).toEqual(["Ada Lovelace"]);
+	expect(projectName("pr1" as Id<"projects">, projects)).toBe("Launch");
 	expect(projectName(undefined, projects)).toBeUndefined();
 });

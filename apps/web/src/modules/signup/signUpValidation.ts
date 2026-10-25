@@ -78,20 +78,7 @@ function urlError(url: string, index: number): string | null {
 		: "Enter a valid URL (https://…).";
 }
 
-type ScalarField =
-	| "firstName"
-	| "lastName"
-	| "email"
-	| "phone"
-	| "pastBuilt"
-	| "ventureName"
-	| "description"
-	| "productStage"
-	| "fundingStage"
-	| "verticals"
-	| "teamSize"
-	| "whyJoin"
-	| "referral";
+type ScalarField = Exclude<keyof SignUpValues, "links"> | "referral";
 
 /** Error text per field (null = valid); `urls` has one per link slot. */
 type SignUpErrors = Record<ScalarField, string | null> & {

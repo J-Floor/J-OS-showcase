@@ -1,4 +1,3 @@
-import { Button } from "@j-os/design-system";
 import { type JSX } from "solid-js";
 
 import type { Doc } from "../../../../convex/_generated/dataModel";
@@ -27,23 +26,14 @@ export function RoleSection(props: { person: Doc<"people"> }): JSX.Element {
 
 	return (
 		<div class={styles.section}>
-			<RoleChooser
+			<RoleChooser.Root
 				states={[`${props.person.tier}.${props.person.stage}`]}
 				onMove={(move) => applyMove(triage, [props.person._id], move)}
 			>
-				{(chooser) => (
-					<div class={styles.actions}>
-						<Button
-							isLoading={chooser.saving()}
-							disabled={chooser.move() === undefined}
-							shamefullyOmitDisabledReason
-							onClick={chooser.commit}
-						>
-							Change role
-						</Button>
-					</div>
-				)}
-			</RoleChooser>
+				<div class={styles.actions}>
+					<RoleChooser.Commit />
+				</div>
+			</RoleChooser.Root>
 		</div>
 	);
 }

@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 
 import { DAY_MS } from "../../../../convex/lib/constants.ts";
+import type { PersonRow } from "../../../../convex/people.ts";
 
 import {
 	applicationsPerMonth,
@@ -10,7 +11,6 @@ import {
 	hostLoad,
 	joinsPerMonth,
 	verticalMix,
-	type PersonRow,
 } from "./metrics.ts";
 
 /** A fixed instant so month bucketing is deterministic: 2026-08-04, 12:00 local. */

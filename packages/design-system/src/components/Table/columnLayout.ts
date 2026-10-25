@@ -1,3 +1,4 @@
+import { makeEventListener } from "@solid-primitives/event-listener";
 import type { Table as TanTable } from "@tanstack/solid-table";
 import {
 	type Accessor,
@@ -228,11 +229,11 @@ function listenForFontLoads(onLoad: () => void): void {
 	if (!("fonts" in document)) return;
 	// `loadingdone` alone, not `fonts.ready` too: a font that loads after
 	// mount fires it, and one loaded before mount is already measured.
-	const fonts = document.fonts;
-	fonts.addEventListener("loadingdone", onLoad);
-	onCleanup(() => {
-		fonts.removeEventListener("loadingdone", onLoad);
-	});
+	makeEventListener<{ loadingdone: FontFaceSetLoadEvent }>(
+		document.fonts,
+		"loadingdone",
+		onLoad
+	);
 }
 
 /** What the body measurement runs with, and when it starts over. */

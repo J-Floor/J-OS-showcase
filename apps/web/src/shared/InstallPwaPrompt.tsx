@@ -1,16 +1,9 @@
-import {
-	Button,
-	type ButtonProps,
-	FloatingToolbar,
-	Icon,
-	IconButton,
-	Popover,
-} from "@j-os/design-system";
+import { Button, type ButtonProps, Icon, Popover } from "@j-os/design-system";
 import { type JSX, Match, Show, Switch } from "solid-js";
 
 import { createDismissed } from "../lib/dismissed.ts";
 
-import { ICONS } from "./icons.ts";
+import { PromptPill } from "./PromptPill.tsx";
 import {
 	isAppInstalled,
 	type InstallMethod,
@@ -102,7 +95,7 @@ export function InstallPwaPrompt() {
 
 	return (
 		<Show when={show()}>
-			<FloatingToolbar>
+			<PromptPill.Root>
 				<Switch>
 					<Match when={method() === "prompt"}>
 						<PillButton onClick={() => void runInstallPrompt()} />
@@ -129,10 +122,8 @@ export function InstallPwaPrompt() {
 						)}
 					</Match>
 				</Switch>
-				<IconButton tooltipLabel="Dismiss" onClick={dismiss}>
-					{ICONS.close}
-				</IconButton>
-			</FloatingToolbar>
+				<PromptPill.Dismiss onClick={dismiss} />
+			</PromptPill.Root>
 		</Show>
 	);
 }

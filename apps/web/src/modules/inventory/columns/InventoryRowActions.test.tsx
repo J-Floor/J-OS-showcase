@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { cleanup, render, screen } from "@solidjs/testing-library";
-import type { JSX } from "solid-js";
+import type { ComponentProps } from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
 
 // The real `QrCode.DownloadTrigger` rasterises to a data URL via canvas,
@@ -12,15 +12,11 @@ vi.mock("@ark-ui/solid/qr-code", async (importOriginal) => {
 		...actual,
 		QrCode: {
 			...actual.QrCode,
-			DownloadTrigger: (props: {
-				fileName: string;
-				mimeType: string;
-				asChild: (
-					triggerProps: () => Record<string, unknown>
-				) => JSX.Element;
-			}) => (
+			DownloadTrigger: (
+				props: ComponentProps<typeof actual.QrCode.DownloadTrigger>
+			) => (
 				<div data-testid="download-trigger">
-					{props.asChild(() => ({}))}
+					{props.asChild?.(() => ({}))}
 				</div>
 			),
 		},

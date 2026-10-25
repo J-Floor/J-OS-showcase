@@ -17,6 +17,7 @@ import {
 	ACTION_COPY,
 	SENDING_TEXT,
 	WAKING_TEXT,
+	type RefusalStatus,
 	noResponseText,
 	offsiteText,
 	openText,
@@ -56,7 +57,7 @@ function holdRefusal(
 	holds: DoorStatusHolds,
 	slot: LockSlot,
 	action: DoorAction,
-	status: "offline" | "busy" | "debounced"
+	status: RefusalStatus
 ) {
 	holds.hold(
 		slot,

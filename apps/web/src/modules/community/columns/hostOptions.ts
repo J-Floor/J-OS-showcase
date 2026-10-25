@@ -1,4 +1,8 @@
+import type { EnumOption } from "@j-os/design-system";
+
+import type { Doc } from "../../../../convex/_generated/dataModel";
 import { shortNames } from "../../../../convex/lib/names.ts";
+import type { BoardLevelPerson } from "../../../../convex/lib/personViews.ts";
 
 /** A guest whose host is a legacy name string nobody has resolved to a board
  *  member yet. One bucket, not one option per stale name. */
@@ -6,9 +10,7 @@ export const UNRESOLVED_HOST = "__unresolved__";
 /** A guest nobody is vouching for. */
 export const NO_HOST = "__none__";
 
-export type HostOption = { value: string; label: string };
-
-type HostCandidate = { _id: string; firstName: string; lastName: string };
+type HostCandidate = Pick<BoardLevelPerson, "_id" | "firstName" | "lastName">;
 
 /**
  * The "Hosted by" filter options: the current board, plus the two buckets a
@@ -24,7 +26,7 @@ type HostCandidate = { _id: string; firstName: string; lastName: string };
  */
 export function hostOptions(
 	boardLevel: readonly HostCandidate[]
-): HostOption[] {
+): EnumOption[] {
 	const labels = shortNames(boardLevel);
 	return [
 		...boardLevel.map((member) => ({
@@ -37,10 +39,9 @@ export function hostOptions(
 }
 
 /** Which bucket a guest's host falls into, for the enum filter above. */
-export function hostValue(row: {
-	hostedById?: string;
-	hostedBy?: string;
-}): string {
+export function hostValue(
+	row: Pick<Doc<"people">, "hostedById" | "hostedBy">
+): string {
 	if (row.hostedById !== undefined) return row.hostedById;
 	return row.hostedBy === undefined ? NO_HOST : UNRESOLVED_HOST;
 }

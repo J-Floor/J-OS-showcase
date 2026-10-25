@@ -85,32 +85,36 @@ export function UnlockCard(): JSX.Element {
 
 	return (
 		<Show when={person.data() === undefined || canSeeDoors()}>
-			<SpaceCard
-				title="Doors"
-				loading={person.data() === undefined}
-				subtitle="An internet connection is required."
-				headerAction={
-					<IconButton
-						tooltipLabel="Check again"
-						isLoading={LOCKABLE_SLOTS.some((slot) =>
-							doors.isChecking(slot)
-						)}
-						disabled={LOCKABLE_SLOTS.every((slot) =>
-							holds.statuses().has(slot)
-						)}
-						disabledReason="A door action is in progress…"
-						onClick={refreshPositions}
-					>
-						{ICONS.refresh}
-					</IconButton>
-				}
-			>
-				<div class={styles.doors}>
-					{door("upstairs")}
-					<Route />
-					{door("downstairs")}
-				</div>
-			</SpaceCard>
+			<SpaceCard.Root loading={person.data() === undefined}>
+				<SpaceCard.Header
+					title="Doors"
+					subtitle="An internet connection is required."
+				>
+					<SpaceCard.Action>
+						<IconButton
+							tooltipLabel="Check again"
+							isLoading={LOCKABLE_SLOTS.some((slot) =>
+								doors.isChecking(slot)
+							)}
+							disabled={LOCKABLE_SLOTS.every((slot) =>
+								holds.statuses().has(slot)
+							)}
+							disabledReason="A door action is in progress…"
+							onClick={refreshPositions}
+						>
+							{ICONS.refresh}
+						</IconButton>
+					</SpaceCard.Action>
+				</SpaceCard.Header>
+				<SpaceCard.Body>
+					<div class={styles.doors}>
+						{door("upstairs")}
+						<Route />
+						{door("downstairs")}
+					</div>
+				</SpaceCard.Body>
+				<SpaceCard.Skeleton />
+			</SpaceCard.Root>
 		</Show>
 	);
 }

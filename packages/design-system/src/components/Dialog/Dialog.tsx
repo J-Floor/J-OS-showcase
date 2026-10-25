@@ -1,49 +1,52 @@
 import { Dialog as ArkDialog } from "@ark-ui/solid";
 import clsx from "clsx";
-import { createContext, splitProps, useContext } from "solid-js";
+import { splitProps, type JSX } from "solid-js";
 import { Portal } from "solid-js/web";
 
 import { ICONS } from "../../icons.ts";
+import { type MorphOverlayProps } from "../../utils/morphPresence.ts";
 import {
-	type MorphOverlayProps,
-	createMorphPresence,
-	overlayMorphOptions,
-} from "../../utils/morphPresence.ts";
+	OverlayBackdrop,
+	OverlayBody,
+	OverlayContent,
+	OverlayRoot,
+	OverlayTitle,
+	type OverlayOpenProps,
+} from "../../utils/overlayLayer.tsx";
 import {
 	getPartStyles,
 	type WithPartClasses,
 } from "../../utils/partStyling.ts";
+import type { DistributiveOmit } from "../../utils/types.ts";
+import { Button, type ButtonProps } from "../Button/Button.tsx";
 import { IconButton } from "../IconButton/IconButton.tsx";
 
 import styles from "./Dialog.module.scss";
 
-/**
- * Where `Content` hands its element to `Root`, so the dialog can focus ITSELF
- * on open. See {@link Root} for why that matters. Plain mutable capture rather
- * than a signal: it is read once, inside a zag callback, never rendered.
- */
-const ContentReference = createContext<{
-	set: (element: HTMLElement) => void;
-}>();
-
 export type DialogContentProps = ArkDialog.ContentProps &
-	WithPartClasses<"backdrop" | "positioner" | "content" | "close">;
+	WithPartClasses<"backdrop" | "positioner" | "content">;
 
 export type DialogRootProps = Omit<
 	ArkDialog.RootProps,
-	"open" | "defaultOpen"
+	"open" | "defaultOpen" | "restoreFocus" | "onOpenChange"
 > &
-	MorphOverlayProps & {
-		/** Controlled only: the morph needs to own when Ark sees it open. */
-		open: boolean;
-	};
+	MorphOverlayProps &
+	Pick<OverlayOpenProps, "open"> &
+	Partial<Pick<OverlayOpenProps, "onOpenChange">>;
 
 /**
  * Modal dialog. Ported from EmboUI's Dialog (React→Solid: `@ark-ui/react` →
- * `@ark-ui/solid`; no `forwardRef`). Same part composition as embo — the
- * backdrop + positioner + content card are portaled out of `Content`, and a
- * close button is baked into the top-trailing corner — so the authoring shape
- * (Root / Trigger / Content / Title / Description) is unchanged.
+ * `@ark-ui/solid`; no `forwardRef`). The backdrop, positioner and content
+ * card are portaled out of `Content`; inside it, `Header` (title,
+ * description and the close button), `Body` and `Footer` lay the card out,
+ * named and placed as `Sheet`'s parts are.
+ *
+ * What the card shows is built for each opening: built as it opens, kept
+ * while it morphs closed (the card shrinks with its content in it), and
+ * dropped after, so the next opening starts afresh and a closed dialog
+ * leaves no inputs in the page. An opening made while the close still runs
+ * starts afresh too. Gate nothing on the caller's `open`: it turns false
+ * before the browser captures the closing card.
  */
 function Content(props: DialogContentProps) {
 	const [local, rest] = splitProps(props, [
@@ -51,50 +54,70 @@ function Content(props: DialogContentProps) {
 		"class",
 		"children",
 	]);
-	const contentReference = useContext(ContentReference);
 	return (
 		<Portal>
-			<ArkDialog.Backdrop
-				class={getPartStyles(styles, local, "backdrop")}
-			/>
+			{/* Fades with the morph: see MORPH_SCRIM. */}
+			<OverlayBackdrop class={getPartStyles(styles, local, "backdrop")} />
 			<ArkDialog.Positioner
 				class={getPartStyles(styles, local, "positioner")}
 			>
-				<ArkDialog.Content
+				<OverlayContent
 					{...rest}
-					ref={(element: HTMLElement) => {
-						contentReference?.set(element);
-					}}
 					class={clsx(
 						getPartStyles(styles, local, "content"),
 						local.class
 					)}
 				>
-					<ArkDialog.CloseTrigger
-						asChild={(closeProps) => (
-							<IconButton
-								triggerProps={closeProps()}
-								tooltipLabel="Close"
-								class={getPartStyles(styles, local, "close")}
-							>
-								{ICONS.close}
-							</IconButton>
-						)}
-					/>
-					{local.children}
-				</ArkDialog.Content>
+					<OverlayBody>{local.children}</OverlayBody>
+				</OverlayContent>
 			</ArkDialog.Positioner>
 		</Portal>
 	);
 }
 
+/** The dialog's name, and the morph's title: a row or card that opens the
+ *  dialog flies its own title into it. */
 function Title(props: ArkDialog.TitleProps) {
 	const [local, rest] = splitProps(props, ["children", "class"]);
 	return (
-		<ArkDialog.Title {...rest} class={clsx(styles.title, local.class)}>
+		<OverlayTitle {...rest} class={clsx(styles.title, local.class)}>
 			{local.children}
-		</ArkDialog.Title>
+		</OverlayTitle>
 	);
+}
+
+/** The header: put a {@link Title} (and a {@link Description}) inside it.
+ *  It carries the close button, pinned to the card's top-trailing corner; a
+ *  dialog without a header has none (a palette closes on Escape). */
+function Header(props: { children: JSX.Element }): JSX.Element {
+	return (
+		<header class={styles.header}>
+			{props.children}
+			<ArkDialog.CloseTrigger
+				asChild={(closeProps) => (
+					<IconButton
+						triggerProps={closeProps()}
+						tooltipLabel="Close"
+						class={styles.close}
+					>
+						{ICONS.close}
+					</IconButton>
+				)}
+			/>
+		</header>
+	);
+}
+
+/** The content between the header and the footer: fields, a list, the
+ *  message. */
+function Body(props: { children: JSX.Element }): JSX.Element {
+	return <div class={styles.body}>{props.children}</div>;
+}
+
+/** The trailing row of decision buttons: {@link Cancel} first, then the
+ *  dialog's own action. */
+function Footer(props: { children: JSX.Element }): JSX.Element {
+	return <footer class={styles.footer}>{props.children}</footer>;
 }
 
 function Description(props: ArkDialog.DescriptionProps) {
@@ -106,6 +129,30 @@ function Description(props: ArkDialog.DescriptionProps) {
 		>
 			{local.children}
 		</ArkDialog.Description>
+	);
+}
+
+export type DialogCancelProps = DistributiveOmit<
+	ButtonProps,
+	"variant" | "triggerProps"
+>;
+
+/** A "Cancel" button that closes the dialog it sits in: a tertiary `Button`
+ *  on the close trigger. Its children replace the "Cancel" label. */
+function Cancel(props: DialogCancelProps) {
+	const [local, rest] = splitProps(props, ["children"]);
+	return (
+		<ArkDialog.CloseTrigger
+			asChild={(closeProps) => (
+				<Button
+					{...rest}
+					triggerProps={closeProps()}
+					variant="tertiary"
+				>
+					{local.children ?? "Cancel"}
+				</Button>
+			)}
+		/>
 	);
 }
 
@@ -128,9 +175,8 @@ const FOCUSABLE_SELECTOR = [
  * The first control an opening dialog should land on: the first focusable inside
  * its content that ISN'T the baked-in close button.
  *
- * The close button is skipped by its own `styles.close` class, which a
- * `classOverride.closeClass` adds to rather than replaces. Returns null when the
- * close button is the only
+ * The close button is skipped by its own `styles.close` class. Returns null
+ * when the close button is the only
  * focusable — a bare confirmation with no field — leaving the caller to fall back
  * to the content element.
  */
@@ -149,44 +195,24 @@ function firstDialogFocusable(content: HTMLElement | null): HTMLElement | null {
  * Dialog root. Two behaviours added:
  *
  * - An opening dialog focuses its first real control (see the notes on
- *   {@link firstDialogFocusable}). Consumer props are spread AFTER, so an
- *   explicit `initialFocusEl` still wins.
- * - It morphs out of the element that opened it and back into it on close
- *   (`createMorphPresence`); see {@link MorphOverlayProps}.
+ *   {@link firstDialogFocusable}). An `initialFocusEl` that names an element
+ *   still wins.
+ * - It morphs out of the element that opened it and back into it on close,
+ *   through the overlay layer (`OverlayRoot`); see {@link MorphOverlayProps}.
  */
 function Root(props: DialogRootProps) {
-	const [local, rest] = splitProps(props, ["open", "morph", "morphFrom"]);
-	let contentElement: HTMLElement | null = null;
-	const presence = createMorphPresence({
-		open: () => local.open,
-		content: () => contentElement,
-		...overlayMorphOptions(local),
-	});
-	return (
-		<ContentReference.Provider
-			value={{
-				set: (element) => {
-					contentElement = element;
-				},
-			}}
-		>
-			<ArkDialog.Root
-				initialFocusEl={() =>
-					firstDialogFocusable(contentElement) ?? contentElement
-				}
-				restoreFocus={false}
-				{...rest}
-				open={presence.shown()}
-			/>
-		</ContentReference.Provider>
-	);
+	return <OverlayRoot {...props} defaultFocus={firstDialogFocusable} />;
 }
 
 export const Dialog = {
 	Root,
 	Trigger: ArkDialog.Trigger,
 	Content,
+	Header,
 	Title,
 	Description,
+	Body,
+	Footer,
 	CloseTrigger: ArkDialog.CloseTrigger,
+	Cancel,
 };

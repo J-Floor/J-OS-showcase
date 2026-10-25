@@ -3,6 +3,7 @@ import { useMutation } from "convex-solidjs";
 import { createEffect } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
+import type { Doc } from "../../../convex/_generated/dataModel";
 import { ignoreFailure } from "../../lib/call.ts";
 import { useQuery } from "../../shared/data/useQuery.ts";
 
@@ -42,9 +43,15 @@ export const TOUR_STEPS: TourStep[] = [
 ];
 
 /** The fields the tour decision reads off a person row. */
-export type TourPerson = DoorsIntroPerson & {
-	onboarding?: { tourSeen?: boolean };
-};
+export type TourPerson = DoorsIntroPerson & Pick<Doc<"people">, "onboarding">;
+
+/**
+ * Whether the person has a tour that is still unseen (board and admin have no
+ * `onboarding` record and never get one). What's New waits on the same test.
+ */
+export function tourWillRun(person: TourPerson | null | undefined): boolean {
+	return Boolean(person?.onboarding) && !person?.onboarding?.tourSeen;
+}
 
 /**
  * The tour runs once, after onboarding, for a member/guest who has not seen it
@@ -56,9 +63,7 @@ export function shouldStartTour(
 	person: TourPerson | null | undefined,
 	now: number
 ): boolean {
-	return !person?.onboarding || person.onboarding.tourSeen
-		? false
-		: !doorsIntroPending(person, now);
+	return tourWillRun(person) && !doorsIntroPending(person, now);
 }
 
 export function WelcomeTour() {

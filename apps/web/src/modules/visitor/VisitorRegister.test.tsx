@@ -1,7 +1,10 @@
 // @vitest-environment happy-dom
 import { createMemoryHistory, MemoryRouter, Route } from "@solidjs/router";
 import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
-import { afterEach, expect, test, vi } from "vitest";
+import type { FunctionReturnType } from "convex/server";
+import { afterEach, expect, expectTypeOf, test, vi } from "vitest";
+
+import type { api } from "../../../convex/_generated/api";
 
 const mutateAsync = vi.fn<
 	(args: unknown) => Promise<{ status: "pending" | "no-event" | "ended" }>
@@ -42,7 +45,7 @@ vi.mock("../../lib/auth.ts", () => ({
 	authClient: { useSession: () => currentSession },
 }));
 
-import { VisitorRegister } from "./VisitorRegister.tsx";
+import { VisitorRegister, type RegisterOutcome } from "./VisitorRegister.tsx";
 
 afterEach(() => {
 	cleanup();
@@ -155,4 +158,10 @@ test("links the privacy notice under the register button", () => {
 	expect(link.closest("p")).toHaveTextContent(
 		"How we handle your data: Privacy notice"
 	);
+});
+
+test("RegisterOutcome is registerVisitor's status", () => {
+	expectTypeOf<RegisterOutcome>().toEqualTypeOf<
+		FunctionReturnType<typeof api.visitors.registerVisitor>["status"]
+	>();
 });

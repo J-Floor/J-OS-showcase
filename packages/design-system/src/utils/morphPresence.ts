@@ -2,18 +2,25 @@ import {
 	type Accessor,
 	type Setter,
 	createEffect,
+	createMemo,
 	createSignal,
 	onCleanup,
 	on,
 	untrack,
 } from "solid-js";
 
-import { recentActivation } from "./activation.ts";
-import { claimHandoff, hasContainer, joinHandoff, morph } from "./morph.ts";
+import { isActivationThroughPopup, recentActivation } from "./activation.ts";
+import {
+	type Claim,
+	claimHandoff,
+	hasContainer,
+	joinHandoff,
+	morph,
+} from "./morph.ts";
 import { MORPH_HIDDEN, MORPH_PICKED } from "./morphNames.ts";
 import { ENTITY_ROW, findMorphTarget } from "./morphPairing.ts";
-import { canAnimate } from "./viewTransition.ts";
-import { hasLayoutBox } from "./visibleArea.ts";
+import { afterTransition, canAnimate } from "./viewTransition.ts";
+import { hasLayoutBox, nearestVisibleAnchor } from "./visibleArea.ts";
 
 type Candidate = HTMLElement | null | undefined;
 
@@ -32,23 +39,21 @@ export type MorphOverlayProps = {
 	 * showing it (`Morph`, a table row) when the element it opened from is
 	 * gone. `false` turns the morph off and the CSS pop-in plays instead.
 	 */
-	morph?: string | false;
+	morphId?: string | false;
 	morphFrom?: MorphFrom;
 };
 
 /** The presence options an overlay's {@link MorphOverlayProps} stand for. */
 export function overlayMorphOptions(props: MorphOverlayProps) {
 	return {
-		enabled: () => props.morph !== false,
+		enabled: () => props.morphId !== false,
 		closeTarget: () =>
-			typeof props.morph === "string"
-				? findMorphTarget(props.morph)
+			typeof props.morphId === "string"
+				? findMorphTarget(props.morphId)
 				: null,
 		morphFrom: () => props.morphFrom?.(),
 	};
 }
-
-export { MORPH_HIDDEN, MORPH_PICKED };
 
 /** A row picked inside an overlay, the close's source: an entity row, or
  *  any list item (a palette result that shows no entity, a page). */
@@ -75,10 +80,18 @@ function restoreFocus(
 	if (isStranded) opener?.focus();
 }
 
-/** A row activated inside the overlay; a bare button (Cancel, close) is not one. */
+/** A row activated inside the overlay; a bare button (Cancel, close) is not
+ *  one, nor a pick in a popup opened from inside it. */
 function activatedInside(content: HTMLElement | null): HTMLElement | null {
 	const activated = recentActivation();
-	if (!activated || !content?.contains(activated)) return null;
+	// A pick in a popup opened from inside resolves to the popup's trigger:
+	// it was made in the popup, not on a row of the overlay.
+	if (
+		!activated ||
+		!content?.contains(activated) ||
+		isActivationThroughPopup()
+	)
+		return null;
 	const row = activated.closest<HTMLElement>(PICKED_ROW);
 	return row && content.contains(row) ? row : null;
 }
@@ -114,9 +127,7 @@ function closeTo(
 	closingSource: HTMLElement | null,
 	closeTarget: (() => HTMLElement | null) | undefined
 ): HTMLElement | null {
-	return hasLayoutBox(closingSource)
-		? closingSource
-		: (closeTarget?.() ?? null);
+	return nearestVisibleAnchor(closingSource) ?? closeTarget?.() ?? null;
 }
 
 function clearPicked(content: HTMLElement | null): void {
@@ -174,12 +185,22 @@ type PresenceOptions = {
 	 * the close goes to `closeTarget`.
 	 */
 	shows?: Accessor<unknown>;
+	/**
+	 * Read as the overlay closes: true hands its source and opener to the
+	 * overlay that claims its handoff, which then takes its place (a sheet
+	 * stepping aside for its discard prompt). A source handed to this
+	 * overlay is always handed on.
+	 */
+	handsOnSource?: Accessor<boolean>;
 };
 
 type PresenceState = {
 	setShown: Setter<boolean>;
 	/** What the overlay opened out of, hidden while it is open. */
 	source: HTMLElement | null;
+	/** The source was handed to this overlay with a handoff: it goes on
+	 *  with the next one. */
+	isSourceHanded: boolean;
 	/** Where focus goes back to on close. */
 	opener: HTMLElement | null;
 	/** The last value `open` asked for; `shown` lags it inside a transition. */
@@ -196,6 +217,37 @@ function releaseSource(state: PresenceState): void {
 	state.source = null;
 }
 
+/**
+ * The update that shows the overlay, hiding `source` when the overlay takes
+ * its place. Whether it does is measured now, before the update, like the
+ * morph's own container check.
+ */
+function showOver(
+	state: PresenceState,
+	source: HTMLElement | null
+): () => void {
+	const isReplaced = takesPlaceOf(source);
+	return () => {
+		state.setShown(true);
+		if (isReplaced && !state.isDisposed && state.source === source)
+			hideSource(source);
+	};
+}
+
+/**
+ * Opens as the target of a claimed handoff. With what the closer handed
+ * on, the overlay takes the closer's place: its source (hidden, as the
+ * closer hid it) and its opener.
+ */
+function takeHandoff(state: PresenceState, claim: Claim): void {
+	const { handedOn } = claim;
+	const source = handedOn?.source ?? null;
+	state.source = source;
+	state.isSourceHanded = handedOn !== undefined;
+	state.opener = handedOn?.opener ?? state.opener;
+	void joinHandoff(showOver(state, source));
+}
+
 function show(state: PresenceState, options: PresenceOptions): void {
 	state.openedFor = options.shows?.();
 	state.opener = outside(options.content(), activeElement()) ?? state.opener;
@@ -203,28 +255,21 @@ function show(state: PresenceState, options: PresenceOptions): void {
 		state.setShown(true);
 		return;
 	}
-	if (!state.isClosing && claimHandoff(options.content)) {
-		state.source = null;
-		void joinHandoff(() => {
-			state.setShown(true);
-		});
+	const claim = state.isClosing ? null : claimHandoff(options.content);
+	if (claim) {
+		takeHandoff(state, claim);
 		return;
 	}
 	const source = openFrom(options);
 	state.source = source;
-	// Measured before the update, like the morph's own container check.
-	const isReplaced = takesPlaceOf(source);
+	state.isSourceHanded = false;
 	if (state.opener === null || state.opener === document.body) {
 		state.opener = source;
 	}
 	void morph({
 		from: source,
 		to: options.content,
-		update: () => {
-			state.setShown(true);
-			if (isReplaced && !state.isDisposed && state.source === source)
-				hideSource(source);
-		},
+		update: showOver(state, source),
 	});
 }
 
@@ -240,9 +285,15 @@ function hide(state: PresenceState, options: PresenceOptions): void {
 		return;
 	}
 	state.isClosing = true;
+	const handsOn =
+		state.isSourceHanded || options.handsOnSource?.() === true
+			? { source: closingSource, opener: state.opener }
+			: undefined;
+	state.isSourceHanded = false;
 	void morph({
 		from: closeFrom(content),
 		direction: "close",
+		handsOn,
 		to: () => closeTo(closingSource, options.closeTarget),
 		update: () => {
 			unhideSource(closingSource);
@@ -274,6 +325,7 @@ export function createMorphPresence(options: PresenceOptions): MorphPresence {
 	const state: PresenceState = {
 		setShown,
 		source: null,
+		isSourceHanded: false,
 		opener: null,
 		isRequested: untrack(options.open),
 		isDisposed: false,
@@ -285,16 +337,12 @@ export function createMorphPresence(options: PresenceOptions): MorphPresence {
 		releaseSource(state);
 	});
 	createEffect(
-		on(
-			options.open,
-			(isOpen) => {
-				if (isOpen === state.isRequested) return;
-				state.isRequested = isOpen;
-				if (isOpen) show(state, options);
-				else hide(state, options);
-			},
-			{ defer: true }
-		)
+		on(options.open, (isOpen) => {
+			if (isOpen === state.isRequested) return;
+			state.isRequested = isOpen;
+			if (isOpen) show(state, options);
+			else hide(state, options);
+		})
 	);
 	releaseOnStep(
 		options.shows,
@@ -304,4 +352,57 @@ export function createMorphPresence(options: PresenceOptions): MorphPresence {
 		}
 	);
 	return { shown };
+}
+
+type Held<T> = {
+	value: T | undefined;
+	isLive: boolean;
+	/** Which let-go this is; 0 before the first. */
+	letGo: number;
+};
+
+/**
+ * `value` while `live`; once `live` turns false, the last live value until
+ * the morph that change started has finished (without one, until the next
+ * microtask), then `undefined`. For what an overlay showed or opened out of,
+ * which must still be on screen when the browser captures it: a sheet's row
+ * after its selection was cleared, a drag preview a sheet grows out of.
+ *
+ * The morph starts in the effects the change sets off, so the wait for it
+ * begins a microtask later. `settled`, when given, is waited for after the
+ * morph: what else must end first (an overlay's own CSS exit, which plays
+ * when there is no morph). A later let-go is not ended by an earlier one's
+ * morph finishing.
+ */
+export function createMorphHold<T>(
+	value: Accessor<T>,
+	live: Accessor<boolean>,
+	settled?: () => Promise<unknown>
+): Accessor<T | undefined> {
+	const [released, setReleased] = createSignal(0);
+	let letGos = 0;
+	function releaseAfterMorph(letGo: number): void {
+		queueMicrotask(() => {
+			void afterTransition()
+				.then(() => settled?.())
+				.then(() => {
+					setReleased((last) => Math.max(last, letGo));
+				});
+		});
+	}
+	const held = createMemo<Held<T>>(
+		(previous) => {
+			if (live()) return { ...previous, value: value(), isLive: true };
+			if (!previous.isLive) return previous;
+			letGos += 1;
+			releaseAfterMorph(letGos);
+			return { value: previous.value, isLive: false, letGo: letGos };
+		},
+		{ value: undefined, isLive: false, letGo: 0 }
+	);
+	const kept = createMemo(() => {
+		const { value: shown, isLive, letGo } = held();
+		return isLive || letGo > released() ? shown : undefined;
+	});
+	return kept;
 }

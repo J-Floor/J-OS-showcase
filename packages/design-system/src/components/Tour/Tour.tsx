@@ -3,7 +3,8 @@ import {
 	useTour,
 	type TourStepDetails,
 } from "@ark-ui/solid/tour";
-import { createEffect, For, onCleanup, Show, type JSX } from "solid-js";
+import { makeEventListener } from "@solid-primitives/event-listener";
+import { createEffect, For, Show, type JSX } from "solid-js";
 import { Portal } from "solid-js/web";
 
 import { ICONS } from "../../icons.ts";
@@ -48,10 +49,7 @@ function returnFocusOnEnd(isOpen: () => boolean): void {
 			wasOpen = false;
 			returnTo?.focus({ preventScroll: true });
 		}
-		document.addEventListener("focusin", remember);
-		onCleanup(() => {
-			document.removeEventListener("focusin", remember);
-		});
+		makeEventListener(document, "focusin", remember);
 	});
 }
 

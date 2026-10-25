@@ -1,10 +1,4 @@
-import {
-	Icon,
-	Morph,
-	Skeleton,
-	morphPart,
-	morphTitle,
-} from "@j-os/design-system";
+import { Card, Icon, Skeleton, morphPart } from "@j-os/design-system";
 import { Show, type JSX } from "solid-js";
 
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -21,17 +15,20 @@ export function ProjectCard(props: {
 	leaderName?: string;
 	taskCount: number | undefined;
 	onClick: () => void;
+	/** The pointer rested on the card: a sign its sheet is about to open. */
+	onHoverIntent?: () => void;
 	/** Draws the card's own box. A box around the card belongs here, not on
 	 *  a wrapper: the card is what morphs into the sheet, and a wrapper's box
 	 *  would stay behind. */
 	isBoxed?: boolean;
 }): JSX.Element {
 	return (
-		<Morph
-			of={props.id}
-			asChild={(morph) => (
+		<Card.Root
+			onHoverIntent={props.onHoverIntent}
+			morphId={props.id}
+			asChild={(card) => (
 				<button
-					{...morph()}
+					{...card()}
 					type="button"
 					class={styles.card}
 					data-boxed={props.isBoxed ? "" : undefined}
@@ -39,9 +36,13 @@ export function ProjectCard(props: {
 						props.onClick();
 					}}
 				>
-					<span class={styles.name} {...morphTitle}>
-						{props.name}
-					</span>
+					<Card.Title
+						asChild={(title) => (
+							<span {...title()} class={styles.name}>
+								{props.name}
+							</span>
+						)}
+					/>
 					<span class={styles.meta}>
 						<Show when={props.leaderName}>
 							{(name) => (

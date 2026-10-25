@@ -2,6 +2,7 @@
 import { expect, it, vi } from "vitest";
 
 import { api } from "../../../convex/_generated/api";
+import type { PersonRow } from "../../../convex/people.ts";
 
 const prefetch = vi.fn<(...args: unknown[]) => void>();
 vi.mock("../../shared/data/queryKeeper.ts", async (orig) => ({
@@ -15,7 +16,6 @@ vi.mock("../../shared/data/queryKeeper.ts", async (orig) => ({
 }));
 
 import { personEntity } from "./entity.ts";
-import type { PersonRow } from "./insights/metrics.ts";
 
 const row = { _id: "p1" } as unknown as PersonRow;
 

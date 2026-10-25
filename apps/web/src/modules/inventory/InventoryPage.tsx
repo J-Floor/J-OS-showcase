@@ -4,13 +4,12 @@ import { useSearchParams } from "@solidjs/router";
 import { Can } from "../../lib/ability.tsx";
 
 import {
-	TAB_KEYS,
 	activeInventoryTab,
 	createInventorySelections,
-	type InventoryTabKey,
 } from "./createInventorySelections.ts";
 import styles from "./InventoryPage.module.scss";
 import { InventoryTabBar } from "./InventoryTabBar.tsx";
+import { INVENTORY_TAB_KEYS, type InventoryTabKey } from "./inventoryTabs.ts";
 import { createInventoryScanner } from "./scan/createInventoryScanner.ts";
 import { QrScannerDialog } from "./scan/QrScannerDialog.tsx";
 import { CategoriesTab } from "./tabs/CategoriesTab.tsx";
@@ -63,7 +62,7 @@ export function InventoryPage() {
 						});
 					},
 					fallback: "items",
-					keys: TAB_KEYS,
+					keys: INVENTORY_TAB_KEYS,
 				}}
 			>
 				<InventoryTabBar
@@ -102,9 +101,6 @@ export function InventoryPage() {
 					void scanner.onDetect(raw);
 				}}
 				error={scanner.scanError()}
-				unknownTag={scanner.unknownTag()}
-				onCancelUnknown={scanner.closeScanner}
-				onAddUnknown={scanner.addUnknown}
 			/>
 		</Can>
 	);

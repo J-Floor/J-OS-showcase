@@ -1,5 +1,6 @@
 @use "sass:list";
 @use "sass:string";
+@use "../../styles/hover";
 @use "../../styles/icon-button";
 @use "../../styles/typography" as typo;
 @use "../../styles/utils" as utils;
@@ -183,7 +184,7 @@ $track-properties: ();
 			cursor: pointer;
 
 			@media (hover: hover) {
-				&:hover {
+				@include hover.hover {
 					background-color: var(--jf-surface-bg-raised);
 				}
 			}
@@ -199,9 +200,12 @@ $track-properties: ();
 
 		/* The focus ring. An inset box-shadow rather than a border: a border
 		   changes the row's height and every row below it shifts by a pixel as
-		   the ring moves, which reads as the table twitching. Not on a row a
-		   morph starts from (`data-morph-pinned`): the click focuses it before
-		   the morph captures it, and its text jumped to bold as it flew. */
+		   the ring moves, which reads as the table twitching. Not on a row the
+		   pointer holds as a morph starts (`data-morph-pinned`): the click that
+		   opens a row's sheet moves the ring onto it before the morph captures
+		   it, so the row would fly with a ring and bold text it never showed.
+		   A keyboard open keeps the ring: Enter opens the row the ring was
+		   already on, so the ring is the look the row had. */
 		& tr[data-focused="true"]:not([data-morph-pinned]) {
 			/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- literal box-shadow offsets (0 0 0), no design token for shadow geometry; only the width and colour are tokens */
 			box-shadow: inset 0 0 0 var(--jf-border-width-accessibility)
@@ -311,6 +315,15 @@ $track-properties: ();
 	padding: 0;
 }
 
+/* The empty cell spans every column, so on a table wider than its scroll box
+   its middle is off screen. The content is pinned to the visible part
+   instead: as wide as the scroll box and stuck to its start edge. */
+.emptyContent {
+	position: sticky;
+	inset-inline-start: 0;
+	inline-size: 100cqi;
+}
+
 /* Trailing per-row action column — always the last track (after the filler
    track when there is one), and pinned to the inline-end edge so the buttons
    stay visible while the rest of the columns scroll under it. Each row is as
@@ -339,9 +352,12 @@ $track-properties: ();
 
 /* Match the pinned cell's fill to the row's hover/selected tint so it doesn't
    read as a detached strip. */
-/* stylelint-disable-next-line defensive-css/no-accidental-hover -- pointer-capable control; mobile accidental-hover not a concern */
-.table tbody tr.clickable:hover .actionsCell {
-	background-color: var(--jf-surface-bg-raised);
+.table tbody tr.clickable {
+	@include hover.hover {
+		& .actionsCell {
+			background-color: var(--jf-surface-bg-raised);
+		}
+	}
 }
 
 .table tbody tr[data-state="selected"] .actionsCell {
@@ -360,6 +376,8 @@ $track-properties: ();
    auto-height; once a caller bounds them the table scrolls inside this box and
    the header stays put. */
 .scrollBox {
+	/* Lets the empty state size itself to the visible width (`cqi`). */
+	container-type: inline-size;
 	max-inline-size: 100%;
 	block-size: 100%;
 	/* stylelint-disable-next-line defensive-css/require-overscroll-behavior, defensive-css/require-scrollbar-gutter -- intentional for this scroll container */

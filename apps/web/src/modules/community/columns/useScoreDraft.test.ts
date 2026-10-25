@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { ConvexError } from "convex/values";
 import { createRoot, createSignal } from "solid-js";
 import { expect, test, vi } from "vitest";

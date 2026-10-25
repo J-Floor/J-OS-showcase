@@ -2,19 +2,20 @@
  * `Table.Root`'s body rows: a data row and its cells, a group's header row,
  * and the row shown when nothing matches.
  */
+import { Key } from "@solid-primitives/keyed";
 import type {
 	Cell as TanCell,
+	CellContext,
 	Row as TanRow,
 	Table as TanTable,
 } from "@tanstack/solid-table";
-import { flexRender } from "@tanstack/solid-table";
 import clsx from "clsx";
-import { type JSX, For, Show } from "solid-js";
+import { type Accessor, type JSX, Show, createMemo } from "solid-js";
 import { Dynamic } from "solid-js/web";
 
 import { ICONS } from "../../icons.ts";
 import { createHoverIntent } from "../../utils/hoverIntent.ts";
-import { MORPH_KEY, MORPH_OF, MORPH_TITLE } from "../../utils/morphPairing.ts";
+import { MORPH_KEY, MORPH_OF, MORPH_TITLE } from "../../utils/morphNames.ts";
 import { Checkbox } from "../Checkbox/Checkbox.tsx";
 import { Icon } from "../Icon/Icon.tsx";
 
@@ -108,17 +109,44 @@ function MorphContent(props: {
 	);
 }
 
+/** A cell's render context that reads the latest `Cell` and `Row` on every
+ *  access: the content is rendered once and follows refreshes through it. */
+function liveCellContext<Data extends Record<string, unknown>>(
+	context: RowContext<Data>,
+	cell: Accessor<TanCell<Data, unknown>>,
+	row: Accessor<TanRow<Data>>
+): CellContext<Data, unknown> {
+	return {
+		get cell() {
+			return cell();
+		},
+		get column() {
+			return cell().column;
+		},
+		get row() {
+			return row();
+		},
+		table: context.table,
+		getValue: <Value,>() => cell().getValue<Value>(),
+		renderValue: <Value,>() => cell().renderValue<Value>(),
+	};
+}
+
 function renderCell<Data extends Record<string, unknown>>(
 	context: RowContext<Data>,
-	cell: TanCell<Data, unknown>,
-	row: TanRow<Data>
+	cell: Accessor<TanCell<Data, unknown>>,
+	row: Accessor<TanRow<Data>>
 ): JSX.Element {
-	const column = cell.column;
-	const definition = column.columnDef as JfColumnDefinition<Data>;
-	const isSelect = column.id === SELECT_COLUMN_ID;
-	const isActions = column.id === ACTIONS_COLUMN_ID;
+	// Cells are keyed by column id, so the id is fixed for this cell; the
+	// column and its definition are read through `cell()`, never kept.
+	const columnId = cell().column.id;
+	function definition(): JfColumnDefinition<Data> {
+		return cell().column.columnDef as JfColumnDefinition<Data>;
+	}
+	const isSelect = columnId === SELECT_COLUMN_ID;
+	const isActions = columnId === ACTIONS_COLUMN_ID;
 	function isTitle(): boolean {
-		return column.id === titleColumnId(context);
+		return columnId === titleColumnId(context);
 	}
 	function isRowHeader(): boolean {
 		return isTitle() && context.props.headerColumn === true;
@@ -126,9 +154,26 @@ function renderCell<Data extends Record<string, unknown>>(
 	// In a grouped table the grouping column's value is shown in the group
 	// header row, so the leaf cell for that column is left blank to avoid a
 	// redundant repeat.
-	const isGroupedColumn = context.props.groupBy === column.id;
+	function isGroupedColumn(): boolean {
+		return context.props.groupBy === columnId;
+	}
+	function isRowClickOff(): boolean {
+		return isSelect || definition().disableRowClick === true;
+	}
+	const live = liveCellContext(context, cell, row);
+	const renderer = createMemo(() => definition().cell);
+	// A refresh hands a new `Cell`; re-rendering a component cell for it would
+	// replace a node a morph names, or the input that has focus. So the
+	// renderer is called here, tracked, rather than through `flexRender`'s
+	// component (which runs once, untracked): a renderer that reads `live` as
+	// it runs (text, `formatDate(info.row.original.at)`) re-runs with the
+	// refresh, and one that only hands `live` to JSX props renders once and
+	// follows the refresh through them.
 	function content(): JSX.Element {
-		return flexRender(column.columnDef.cell, cell.getContext());
+		const render = renderer();
+		return typeof render === "function"
+			? (render(live) as JSX.Element)
+			: render;
 	}
 	return (
 		<Dynamic
@@ -139,25 +184,22 @@ function renderCell<Data extends Record<string, unknown>>(
 				isActions && styles.actionsCell
 			)}
 			{...{
-				[COLUMN_ID_ATTR]: column.id,
+				[COLUMN_ID_ATTR]: columnId,
 				[TEXT_CELL_ATTR]: isSelect || isActions ? undefined : "",
 			}}
-			data-disable-row-click={
-				isSelect || definition.disableRowClick ? "true" : undefined
-			}
+			data-disable-row-click={isRowClickOff() ? "true" : undefined}
 			onClick={(event: MouseEvent) => {
-				if (definition.disableRowClick || isSelect)
-					event.stopPropagation();
+				if (isRowClickOff()) event.stopPropagation();
 			}}
 		>
 			<Show
 				when={isSelect}
 				fallback={
-					<Show when={!isGroupedColumn} fallback={null}>
+					<Show when={!isGroupedColumn()} fallback={null}>
 						{/* The actions cell shows no value to pair. */}
 						<Show when={!isActions} fallback={content()}>
 							<MorphContent
-								columnId={column.id}
+								columnId={columnId}
 								isTitle={isTitle()}
 							>
 								{content()}
@@ -168,14 +210,14 @@ function renderCell<Data extends Record<string, unknown>>(
 			>
 				<Checkbox
 					class={styles.selectCheckbox}
-					checked={row.getIsSelected()}
-					disabled={!row.getCanSelect()}
+					checked={row().getIsSelected()}
+					disabled={!row().getCanSelect()}
 					disabledReason="This row can't be selected"
 					onClick={(event) => {
-						context.selection.onCheckboxClick(row, event);
+						context.selection.onCheckboxClick(row(), event);
 					}}
 					onCheckedChange={() => {
-						context.selection.onCheckedChange(row);
+						context.selection.onCheckedChange(row());
 					}}
 				/>
 			</Show>
@@ -190,35 +232,36 @@ export type MeasuredRow = {
 	ref: (element: HTMLTableRowElement) => void;
 };
 
-/** `measured` is supplied only by the virtual body. */
+/** `row` is an accessor so the `<tr>` outlives the refreshes that rebuild
+ *  its `Row`; `measured` is supplied only by the virtual body. */
 export function renderRow<Data extends Record<string, unknown>>(
 	context: RowContext<Data>,
-	row: TanRow<Data>,
+	row: Accessor<TanRow<Data>>,
 	measured?: MeasuredRow
 ): JSX.Element {
 	const { props, focus } = context;
 	const hoverIntent = createHoverIntent(() => {
-		props.onRowHoverIntent?.(row.original);
+		props.onRowHoverIntent?.(row().original);
 	});
 	return (
 		<tr
 			ref={measured?.ref}
-			id={focus.rowDomId(row)}
+			id={focus.rowDomId(row())}
 			role="row"
 			data-index={measured?.index}
 			class={clsx(props.onRowClick && styles.clickable)}
-			data-state={row.getIsSelected() ? "selected" : undefined}
-			data-focused={focus.isRowFocused(row) ? "true" : undefined}
-			{...{ [MORPH_OF]: context.rowId(row) }}
+			data-state={row().getIsSelected() ? "selected" : undefined}
+			data-focused={focus.isRowFocused(row()) ? "true" : undefined}
+			{...{ [MORPH_OF]: context.rowId(row()) }}
 			onPointerEnter={hoverIntent.onPointerEnter}
 			onPointerLeave={hoverIntent.onPointerLeave}
 			onClick={(event) => {
-				if (props.onRowClick) props.onRowClick(row.original, event);
+				if (props.onRowClick) props.onRowClick(row().original, event);
 			}}
 		>
-			<For each={row.getVisibleCells()}>
+			<Key each={row().getVisibleCells()} by={(cell) => cell.column.id}>
 				{(cell) => renderCell(context, cell, row)}
-			</For>
+			</Key>
 		</tr>
 	);
 }
@@ -285,7 +328,9 @@ export function EmptyRow<Data extends Record<string, unknown>>(rowProps: {
 				role={cellRole(rowProps.context)}
 				colSpan={columnCount(rowProps.context.table)}
 			>
-				<EmptyContent table={rowProps.context.table} />
+				<div class={styles.emptyContent}>
+					<EmptyContent table={rowProps.context.table} />
+				</div>
 			</td>
 		</tr>
 	);

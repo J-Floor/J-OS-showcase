@@ -1,6 +1,7 @@
 import {
 	Combobox,
 	EditableText,
+	type EditableTextProps,
 	type FieldDefinition,
 	NumberInput,
 	PropertyRow,
@@ -33,10 +34,12 @@ import { personFields } from "./fields.ts";
  * owns (board `people.update` in the sheet, `updateOwnProfile` in MyProfile).
  * Extracted so the two editors cannot drift — they must offer the same fields. */
 
-export function PhoneField(props: {
-	value?: string;
-	onCommit: (v: string) => void;
-}) {
+/** A text row: the field's current value (absent until set) and the commit. */
+type TextFieldProps = Pick<EditableTextProps, "onCommit"> & {
+	value?: EditableTextProps["value"];
+};
+
+export function PhoneField(props: TextFieldProps) {
 	return (
 		<PropertyRow field={personFields.phone}>
 			<EditableText
@@ -52,11 +55,7 @@ export function PhoneField(props: {
 /** The venture-name row. The board sheet shows it as the roster's Venture
  * field (so it pairs with that column); the member profile passes its own
  * `label`, "Company" — same editor, different surface copy. */
-export function CompanyField(props: {
-	value?: string;
-	label?: string;
-	onCommit: (v: string) => void;
-}) {
+export function CompanyField(props: TextFieldProps & { label?: string }) {
 	return (
 		<PropertyRow
 			{...(props.label === undefined
@@ -73,10 +72,7 @@ export function CompanyField(props: {
 	);
 }
 
-export function DescriptionRow(props: {
-	value?: string;
-	onCommit: (v: string) => void;
-}) {
+export function DescriptionRow(props: TextFieldProps) {
 	return (
 		<PropertyRow field={personFields.description}>
 			<EditableText
@@ -197,10 +193,7 @@ export function FundingStageField(props: {
 	);
 }
 
-export function WhyJoinField(props: {
-	value?: string;
-	onCommit: (v: string) => void;
-}) {
+export function WhyJoinField(props: TextFieldProps) {
 	return (
 		<PropertyRow field={personFields.whyJoin}>
 			<EditableText
@@ -213,10 +206,7 @@ export function WhyJoinField(props: {
 	);
 }
 
-export function PastBuiltField(props: {
-	value?: string;
-	onCommit: (v: string) => void;
-}) {
+export function PastBuiltField(props: TextFieldProps) {
 	return (
 		<PropertyRow field={personFields.pastBuilt}>
 			<EditableText
@@ -229,10 +219,7 @@ export function PastBuiltField(props: {
 	);
 }
 
-export function ReferralField(props: {
-	value?: string;
-	onCommit: (v: string) => void;
-}) {
+export function ReferralField(props: TextFieldProps) {
 	return (
 		<PropertyRow field={personFields.referral}>
 			<EditableText

@@ -32,6 +32,9 @@ export type ActionDescriptor<Person> = {
 	icon: string;
 	hotkey: Hotkey;
 	scope: ShortcutScope;
+	/** Wrap the action's button in confetti: approving a member is the one
+	 *  decision worth celebrating. */
+	celebrate?: boolean;
 	/** Whether the action is on offer for this person. Drives both the button's
 	 *  disabled state and the binding's `enabled`. */
 	can: (person: Person) => boolean;

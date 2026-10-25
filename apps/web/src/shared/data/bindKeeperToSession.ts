@@ -1,9 +1,11 @@
-import { createEffect, createMemo, on, type Accessor } from "solid-js";
+import { createEffect, createMemo, on } from "solid-js";
+
+import type { authClient } from "../../lib/auth.ts";
 
 import { clearDataCaches, endDataSession } from "./caches.ts";
 import { setKeeperActive } from "./queryKeeper.ts";
 
-type SessionState = { data?: { user: { id: string } } | null };
+type SessionAccessor = ReturnType<typeof authClient.useSession>;
 
 /**
  * Ties the in-memory caches to the signed-in identity. It follows the user's
@@ -12,7 +14,7 @@ type SessionState = { data?: { user: { id: string } } | null };
  * Every change of id starts from empty caches, so a new person (even one
  * signing in without a signed-out moment between) never reads the last one's.
  */
-export function bindKeeperToSession(session: Accessor<SessionState>): void {
+export function bindKeeperToSession(session: SessionAccessor): void {
 	const userId = createMemo(() => session().data?.user.id);
 	createEffect(
 		on(userId, (id) => {

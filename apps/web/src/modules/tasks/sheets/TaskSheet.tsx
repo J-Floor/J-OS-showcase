@@ -1,39 +1,39 @@
-import { Sheet, Input, PropertyRow, Select } from "@j-os/design-system";
+import {
+	Sheet,
+	Input,
+	PropertyRow,
+	Select,
+	createSaveTracker,
+	type SaveTracker,
+} from "@j-os/design-system";
 import { For, Show, type JSX } from "solid-js";
 
 import { NAME_MAX, TEXT_MAX } from "../../../../convex/lib/validate.ts";
 import { celebrate } from "../../../lib/celebrate.ts";
+import type { SheetNavState } from "../../../lib/createSheetNav.ts";
 import {
 	createSyncedField,
 	shallowArrayEquals,
 } from "../../../lib/createSyncedField.ts";
 import { DescriptionField } from "../../../shared/components/DescriptionField.tsx";
 import {
-	createActionError,
-	scopeOfFields,
-	type ActionErrorState,
-} from "../../../shared/createActionError.ts";
+	createEntityCommands,
+	createEntityDraft,
+} from "../../../shared/entity/entityCommands.ts";
 import { EntityCreateFooter } from "../../../shared/entity/EntityCreateFooter.tsx";
-import {
-	EntitySheetHeader,
-	type SheetNavState,
-} from "../../../shared/entity/EntitySheetHeader.tsx";
+import { EntitySheetHeader } from "../../../shared/entity/EntitySheetHeader.tsx";
 import { ICONS } from "../../../shared/icons.ts";
 import { InlineError } from "../../../shared/InlineError.tsx";
+import type { SheetOpenProps } from "../../../shared/types.ts";
 import type { Person, Project, Task } from "../data/tasksData.tsx";
-import { useTaskActions, type TaskActions } from "../data/tasksData.tsx";
+import { useTaskActions } from "../data/tasksData.tsx";
 import { taskFields } from "../fields.ts";
+import { TASK_STATUSES } from "../kanban/onDrop.ts";
 
 import { AssigneeSelect } from "./fields/AssigneeSelect.tsx";
 import { DateField } from "./fields/DateField.tsx";
 import { ProjectSelect } from "./fields/ProjectSelect.tsx";
 import styles from "./TaskSheet.module.scss";
-
-const STATUS_OPTIONS = [
-	{ value: "backlog", label: "Backlog" },
-	{ value: "in_progress", label: "In progress" },
-	{ value: "done", label: "Done" },
-];
 
 /**
  * Placeholder field layout shown by `Sheet.Skeleton` while
@@ -66,9 +66,7 @@ function TaskFieldsPlaceholder() {
 	);
 }
 
-type TaskSheetProps = {
-	open: boolean;
-	onOpenChange: (isOpen: boolean) => void;
+type TaskSheetProps = SheetOpenProps & {
 	task?: Task;
 	/** Status the form starts with in create mode (e.g. a column's "+" prefills it). */
 	initialStatus?: Task["status"];
@@ -81,6 +79,18 @@ type TaskSheetProps = {
 	nav?: SheetNavState;
 };
 
+/** The sheet's writes to its task, and the failure they report through.
+ *  `onClose` closes the sheet after a create or a delete. */
+function createTaskSheetCommands(props: TaskSheetProps, onClose: () => void) {
+	return createEntityCommands({
+		id: () => props.task?._id,
+		actions: useTaskActions(),
+		onClose,
+	});
+}
+
+type TaskSheetCommands = ReturnType<typeof createTaskSheetCommands>;
+
 /**
  * Each field is a draft synced to its Convex value via createSyncedField: the
  * local draft drives the input (no echo race on fast typing), edits push to
@@ -92,73 +102,50 @@ type TaskSheetProps = {
  */
 function createTaskFields(
 	props: TaskSheetProps,
-	actions: TaskActions,
-	failure: ActionErrorState
+	patch: TaskSheetCommands["patch"],
+	tracker: SaveTracker
 ) {
 	function key() {
 		return `${String(props.open)}:${props.task?._id ?? "new"}`;
 	}
-
-	// Simplified patch: the server validator constrains the real payload.
-	async function patchTask(task: Task, fields: Record<string, unknown>) {
-		await failure.trackResult(
-			actions.update({ id: task._id, ...fields }),
-			scopeOfFields(fields)
-		);
-	}
-
-	function patch(fields: Record<string, unknown>) {
-		if (props.task) void patchTask(props.task, fields);
-	}
+	const sync = { key, open: () => props.open, tracker };
 
 	return {
 		title: createSyncedField({
 			remote: () => props.task?.title ?? "",
-			key,
-			write: (value) => {
-				patch({ title: value });
-			},
+			...sync,
+			write: (value) => patch({ title: value }),
 		}),
 		status: createSyncedField<Task["status"]>({
 			remote: () =>
 				props.task?.status ?? props.initialStatus ?? "backlog",
-			key,
-			write: (value) => {
-				patch({ status: value });
-			},
+			...sync,
+			write: (value) => patch({ status: value }),
 			debounceMs: 0,
 		}),
 		assignees: createSyncedField({
 			remote: () => props.task?.assigneeIds ?? [],
-			key,
-			write: (value) => {
-				patch({ assigneeIds: value });
-			},
+			...sync,
+			write: (value) => patch({ assigneeIds: value }),
 			debounceMs: 0,
 			equals: shallowArrayEquals,
 		}),
 		projectId: createSyncedField({
 			remote: () => props.task?.projectId,
-			key,
-			write: (value) => {
-				patch({ projectId: value ?? null });
-			},
+			...sync,
+			write: (value) => patch({ projectId: value ?? null }),
 			debounceMs: 0,
 		}),
 		dueDate: createSyncedField({
 			remote: () => props.task?.dueDate,
-			key,
-			write: (value) => {
-				patch({ dueDate: value ?? null });
-			},
+			...sync,
+			write: (value) => patch({ dueDate: value ?? null }),
 			debounceMs: 0,
 		}),
 		description: createSyncedField({
 			remote: () => props.task?.description ?? "",
-			key,
-			write: (value) => {
-				patch({ description: value });
-			},
+			...sync,
+			write: (value) => patch({ description: value }),
 		}),
 	};
 }
@@ -196,10 +183,10 @@ function StatusRow(props: { status: TaskFields["status"] }) {
 					}
 				}}
 			>
-				<For each={STATUS_OPTIONS}>
-					{(option) => (
-						<Select.Option value={option.value}>
-							{option.label}
+				<For each={TASK_STATUSES}>
+					{(status) => (
+						<Select.Option value={status.id}>
+							{status.label}
 						</Select.Option>
 					)}
 				</For>
@@ -255,53 +242,51 @@ function TaskDetailRows(props: {
 function createTaskCommands(
 	props: TaskSheetProps,
 	fields: TaskFields,
-	actions: TaskActions,
-	failure: ActionErrorState
+	commands: TaskSheetCommands
 ) {
 	async function createTask() {
 		if (!fields.title.value().trim()) return;
-		const result = await failure.trackResult(
-			actions.create({
-				title: fields.title.value().trim(),
-				status: fields.status.value(),
-				assigneeIds: fields.assignees.value(),
-				projectId: fields.projectId.value(),
-				dueDate: fields.dueDate.value(),
-				description: fields.description.value().trim() || undefined,
-			})
-		);
-		if (result.isErr()) return;
-		props.onOpenChange(false);
+		await commands.create({
+			title: fields.title.value().trim(),
+			status: fields.status.value(),
+			assigneeIds: fields.assignees.value(),
+			projectId: fields.projectId.value(),
+			dueDate: fields.dueDate.value(),
+			description: fields.description.value().trim() || undefined,
+		});
 	}
 
 	async function deleteTask() {
-		if (!props.task) {
-			props.onOpenChange(false);
-			return;
-		}
-		const result = await failure.trackResult(
-			actions.remove(props.task._id)
-		);
-		if (result.isErr()) return;
-		props.onOpenChange(false);
+		await commands.remove(props.task?._id);
 	}
 
 	return { createTask, deleteTask };
 }
 
-export function TaskSheet(props: TaskSheetProps): JSX.Element {
-	const actions = useTaskActions();
-	const failure = createActionError();
-	const fields = createTaskFields(props, actions, failure);
-	const { createTask, deleteTask } = createTaskCommands(
-		props,
+/** The sheet's fields, what they save, and the create form's draft
+ *  guard. */
+function createTaskSheet(props: TaskSheetProps, isEdit: () => boolean) {
+	const saves = createSaveTracker();
+	const commands = createTaskSheetCommands(props, () => {
+		draft.onOpenChange(false);
+	});
+	const fields = createTaskFields(props, commands.patch, saves);
+	const draft = createEntityDraft(props, isEdit, fields, "new task");
+	return {
+		...createTaskCommands(props, fields, commands),
+		failure: commands.failure,
 		fields,
-		actions,
-		failure
-	);
+		saves,
+		draft,
+	};
+}
+
+export function TaskSheet(props: TaskSheetProps): JSX.Element {
 	function isEdit() {
 		return props.task !== undefined;
 	}
+	const { createTask, deleteTask, failure, fields, saves, draft } =
+		createTaskSheet(props, isEdit);
 
 	// Focused when the sheet opens.
 	let titleElement: HTMLInputElement | undefined;
@@ -309,20 +294,25 @@ export function TaskSheet(props: TaskSheetProps): JSX.Element {
 	return (
 		<Sheet.Root
 			open={props.open}
-			morph={props.task?._id}
-			onOpenChange={props.onOpenChange}
+			prebuild={props.prebuild}
+			morphId={props.task?._id}
+			{...draft.sheet}
+			saveTracker={saves}
 			initialFocusEl={() => titleElement ?? null}
 		>
-			<EntitySheetHeader
+			<EntitySheetHeader.Root
 				title={props.task?.title ?? "New task"}
 				loading={props.loading}
 				nav={props.nav}
-				isEdit={isEdit()}
-				deleteLabel="Delete task"
-				onDelete={() => {
-					void deleteTask();
-				}}
-			/>
+				saveStatus={isEdit() && !props.loading}
+			>
+				<Show when={isEdit()}>
+					<EntitySheetHeader.Delete
+						label="Delete task"
+						onDelete={() => void deleteTask()}
+					/>
+				</Show>
+			</EntitySheetHeader.Root>
 			<Sheet.Skeleton>
 				<TaskFieldsPlaceholder />
 			</Sheet.Skeleton>

@@ -1,4 +1,13 @@
+import type { Infer } from "convex/values";
+
+import type { ventureValidator } from "../../../convex/schema.ts";
+
 /** URL helpers shared by the sign-up form and the member profile editor. */
+
+type LinkEntry = Pick<
+	NonNullable<Infer<typeof ventureValidator>["links"]>[number],
+	"label" | "url"
+>;
 
 export function normalizeUrl(value: string): string {
 	const trimmed = value.trim();
@@ -16,9 +25,9 @@ export function normalizeUrl(value: string): string {
  * empty labels exactly as before. */
 export function buildLinks(
 	slots: string[],
-	previous: { label: string; url: string }[] = []
-): { label: string; url: string }[] {
-	const built: { label: string; url: string }[] = [];
+	previous: LinkEntry[] = []
+): LinkEntry[] {
+	const built: LinkEntry[] = [];
 	for (let index = 0; index < slots.length; index++) {
 		const url = slots[index].trim();
 		if (url === "") break;

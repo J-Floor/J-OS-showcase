@@ -1,35 +1,44 @@
 import { Dialog, type DialogRootProps } from "@ark-ui/solid/dialog";
 import {
 	createContext,
-	createMemo,
+	createEffect,
 	createSignal,
 	Index,
-	onCleanup,
+	on,
 	onMount,
 	Show,
-	untrack,
 } from "solid-js";
 import type { JSX } from "solid-js";
 import { Portal } from "solid-js/web";
 
 import { ICONS } from "../../icons.ts";
 import { useRequiredContext } from "../../utils/context.ts";
-import { MORPH_SCRIM } from "../../utils/morph.ts";
-import { MORPH_TITLE, SHEET_SKELETON } from "../../utils/morphPairing.ts";
+import { SHEET_SKELETON } from "../../utils/morphPairing.ts";
+import { type MorphOverlayProps } from "../../utils/morphPresence.ts";
 import {
-	type MorphOverlayProps,
-	createMorphPresence,
-	overlayMorphOptions,
-} from "../../utils/morphPresence.ts";
+	OverlayBackdrop,
+	OverlayContent,
+	OverlayParts,
+	OverlayRoot,
+	OverlayTitle,
+	type OverlayOpenProps,
+} from "../../utils/overlayLayer.tsx";
 import {
 	getPartStyles,
 	type WithPartClasses,
 } from "../../utils/partStyling.ts";
 import { createSlotPart } from "../../utils/presence.tsx";
+import {
+	type SaveTracker,
+	SaveTrackerContext,
+	createSaveTracker,
+} from "../../utils/saveTracker.ts";
 import { Deferred } from "../Deferred/Deferred.tsx";
 import { IconButton } from "../IconButton/IconButton.tsx";
 import { Skeleton } from "../Skeleton/Skeleton.tsx";
 
+import { DiscardDialog } from "./DiscardDialog.tsx";
+import { SaveStatus } from "./SaveStatus.tsx";
 import styles from "./Sheet.module.scss";
 
 /** Marks the sheet's scrolling body; SheetNav slides it on prev/next. */
@@ -54,12 +63,38 @@ function useSheet(part: string): SheetState {
 	return useRequiredContext(SheetContext, `Sheet.${part}`, "Sheet.Root");
 }
 
-export type SheetRootProps = Required<Pick<DialogRootProps, "open">> &
+export type SheetRootProps = OverlayOpenProps &
 	/** Element to focus when the sheet opens (e.g. a title field). Defaults
 	 *  to the content panel itself. */
 	Pick<DialogRootProps, "initialFocusEl"> & {
-		onOpenChange: (isOpen: NonNullable<DialogRootProps["open"]>) => void;
 		children: JSX.Element;
+		/**
+		 * Build the parts while still closed, so the first open's morph finds
+		 * them and the values fly as they do on every later open. Set it on a
+		 * sign the sheet is about to open (a row's hover intent). Its content
+		 * stays hidden while closed.
+		 */
+		prebuild?: boolean;
+		/**
+		 * Asked before any close the sheet hears (its close button, Escape,
+		 * an outside click): true keeps the sheet's draft and asks first, in
+		 * the discard dialog the sheet morphs into. Discard then closes it;
+		 * Keep editing morphs back into the sheet.
+		 */
+		confirmClose?: () => boolean;
+		/** What the discard dialog would throw away: "new event" asks
+		 *  "Discard new event?". */
+		discardLabel?: string;
+		/**
+		 * Hands over `ask(onDiscard)`, which opens the discard dialog for a
+		 * way out the sheet cannot hear itself (the router leaving the
+		 * page): Discard runs `onDiscard` instead of closing, Keep editing
+		 * drops it. `onDiscard` is expected to close the sheet.
+		 */
+		discardRef?: (ask: (onDiscard: () => void) => void) => void;
+		/** The tracker its parts report saves to, for fields built outside
+		 *  the sheet; one of its own otherwise. */
+		saveTracker?: SaveTracker;
 	} & MorphOverlayProps &
 	WithPartClasses<"backdrop" | "positioner" | "content">;
 
@@ -67,7 +102,7 @@ export type SheetRootProps = Required<Pick<DialogRootProps, "open">> &
  * Centred modal card built directly on Ark Dialog (the design-system Dialog is
  * a small confirmation card; a sheet is a large detail card with its own
  * header, scrolling body and footer). It morphs out of the row, card or button
- * that opened it, and closes back into the on-screen element showing `morph`'s
+ * that opened it, and closes back into the on-screen element showing `morphId`'s
  * entity. Controlled via `open` / `onOpenChange`.
  *
  * A compound like the rest of the design system (`Table.Root`, `Accordion.*`):
@@ -78,27 +113,6 @@ export type SheetRootProps = Required<Pick<DialogRootProps, "open">> &
  * context they need.
  */
 function Root(props: SheetRootProps): JSX.Element {
-	/**
-	 * Ark syncs a controlled `open` through a zag `track`, which is a
-	 * `createEffect` whose FIRST run only records its dependencies. So a sheet
-	 * that mounts shut and is opened before that first run presents zag with no
-	 * transition to act on: the machine's initial state was computed as
-	 * "closed", the track run reads `true` and records it without firing, and
-	 * the panel stays shut with `open` permanently true. No error, no callback
-	 * — it simply never appears.
-	 *
-	 * That is not hypothetical. A deep link that mounts the page and opens the
-	 * sheet in one flush never showed the sheet, while reloading the very same
-	 * URL worked, because waiting on the page's data put a real gap between
-	 * the mount and the open.
-	 *
-	 * A sheet that is ALREADY open when it mounts is fine — zag computes its
-	 * initial state from `open` and starts open — so only the shut-at-mount
-	 * case waits, and only until the end of the current task, by which point
-	 * the track effect has run and recorded `false`.
-	 */
-	const isOpenAtMount = untrack(() => props.open);
-	const [settled, setSettled] = createSignal(false);
 	/**
 	 * The panel focuses ITSELF when it opens, not the first thing inside it.
 	 *
@@ -112,30 +126,6 @@ function Root(props: SheetRootProps): JSX.Element {
 	 * An explicit `initialFocusEl` (to drop the caret in a field, say) still wins.
 	 */
 	let contentElement: HTMLElement | null = null;
-	onMount(() => {
-		const timer = setTimeout(() => {
-			setSettled(true);
-		}, 0);
-		onCleanup(() => {
-			clearTimeout(timer);
-		});
-	});
-	function open(): boolean {
-		return props.open && (isOpenAtMount || settled());
-	}
-	const presence = createMorphPresence({
-		open,
-		content: () => contentElement,
-		...overlayMorphOptions(props),
-		shows: () => props.morph,
-	});
-	/** The parts (header, body, the consumer's queries) build when the sheet
-	 *  first shows, inside the morph's update so they are in its new
-	 *  snapshot, and stay built after. */
-	const hasOpened = createMemo(
-		(wasOpened: boolean) => wasOpened || presence.shown(),
-		false
-	);
 	/** A deferred `Body`'s children mounted after Ark's own initial focus ran
 	 *  against a skeleton. Re-apply `initialFocusEl` now that the real target
 	 *  exists — but only if focus is still where Ark parked it (the content
@@ -145,62 +135,145 @@ function Root(props: SheetRootProps): JSX.Element {
 		const target = props.initialFocusEl?.();
 		if (target && document.activeElement === contentElement) target.focus();
 	}
+	const guard = createCloseGuard(props);
+	// eslint-disable-next-line solid/reactivity -- handed over once, like a ref
+	props.discardRef?.(guard.ask);
 	return (
 		<SheetContext.Provider value={{ bodyReady: onBodyReady }}>
-			<skeletonPart.Scope>
-				<Dialog.Root
-					open={presence.shown()}
-					restoreFocus={false}
-					onOpenChange={(details) => {
-						props.onOpenChange(details.open);
-					}}
-					// A deferred `Body` means an `initialFocusEl` target (a field inside
-					// it) may not exist yet when Ark runs this on mount — `()=>null`
-					// makes Ark's focus-trap throw internally (it treats `null`, unlike
-					// `undefined`, as "specified but invalid") and land nowhere. Falling
-					// back to `contentElement` per call keeps Ark's own initial focus on the
-					// panel in that case, which `onBodyReady` below checks for before
-					// re-applying the real target once it mounts.
-					initialFocusEl={() =>
-						props.initialFocusEl?.() ?? contentElement
-					}
-					// The shell mounts at once, closed (unfocusable and invisible, see
-					// `.content`), so the morph's target box exists on the first open:
-					// mounted lazily, it did not exist yet when the morph looked for it.
-					// Its parts build on the first open (`hasOpened`). No
-					// `unmountOnExit`: the close is a CSS transition, which unmounting
-					// would cut off.
-				>
-					<Portal>
-						{/* Fades with the morph: see MORPH_SCRIM. */}
-						<Dialog.Backdrop
-							class={getPartStyles(styles, props, "backdrop")}
-							{...{ [MORPH_SCRIM]: "" }}
-						/>
-						<Dialog.Positioner
-							class={getPartStyles(styles, props, "positioner")}
-						>
-							<Dialog.Content
-								class={getPartStyles(styles, props, "content")}
-								// A sheet is a detail panel, not a confirmation: bare-letter
-								// shortcuts and nav arrows are meant to act on the thing it shows
-								// while focus rests in it. This opts the panel out of
-								// `isTypingTarget`'s "an open dialog claims its keystrokes" rule, so
-								// those shortcuts fire; real inputs inside it are still caught, so
-								// typing a field never triggers one.
-								data-shortcut-surface="true"
-								ref={(element: HTMLElement) => {
-									contentElement = element;
-								}}
+			<SaveTrackerContext.Provider
+				// The tracker is the sheet's for its lifetime, like its parts.
+				// eslint-disable-next-line solid/reactivity -- read once at setup
+				value={props.saveTracker ?? createSaveTracker()}
+			>
+				<skeletonPart.Scope>
+					<OverlayRoot
+						open={props.open && !guard.isAside()}
+						morphId={props.morphId}
+						morphFrom={props.morphFrom}
+						shows={() => props.morphId}
+						prebuild={props.prebuild}
+						onOpenChange={guard.onOpenChange}
+						handsOnSource={guard.isAside}
+						// A deferred `Body` means an `initialFocusEl` target (a field inside
+						// it) may not exist yet when Ark runs this on open; the layer then
+						// focuses the panel, and `onBodyReady` moves focus on once it mounts.
+						initialFocusEl={props.initialFocusEl}
+						// The shell mounts at once, closed (unfocusable and invisible, see
+						// `.content`), so the morph's target box exists on the first open:
+						// mounted lazily, it did not exist yet when the morph looked for it.
+						// Its parts build on the first open, or before it with `prebuild`.
+						// No `unmountOnExit`: the close is a CSS transition, which
+						// unmounting would cut off.
+					>
+						<Portal>
+							{/* Fades with the morph: see MORPH_SCRIM. */}
+							<OverlayBackdrop
+								class={getPartStyles(styles, props, "backdrop")}
+							/>
+							<Dialog.Positioner
+								class={getPartStyles(
+									styles,
+									props,
+									"positioner"
+								)}
 							>
-								<Show when={hasOpened()}>{props.children}</Show>
-							</Dialog.Content>
-						</Dialog.Positioner>
-					</Portal>
-				</Dialog.Root>
-			</skeletonPart.Scope>
+								<OverlayContent
+									class={getPartStyles(
+										styles,
+										props,
+										"content"
+									)}
+									// A sheet is a detail panel, not a confirmation: bare-letter
+									// shortcuts and nav arrows are meant to act on the thing it shows
+									// while focus rests in it. This opts the panel out of
+									// `isTypingTarget`'s "an open dialog claims its keystrokes" rule, so
+									// those shortcuts fire; real inputs inside it are still caught, so
+									// typing a field never triggers one.
+									data-shortcut-surface="true"
+									ref={(element: HTMLElement) => {
+										contentElement = element;
+									}}
+								>
+									<OverlayParts>
+										{props.children}
+									</OverlayParts>
+								</OverlayContent>
+							</Dialog.Positioner>
+						</Portal>
+					</OverlayRoot>
+					<Show when={props.confirmClose}>
+						<DiscardDialog
+							open={guard.isAsking()}
+							label={props.discardLabel}
+							onKeep={guard.keepEditing}
+							onDiscard={guard.discard}
+						/>
+					</Show>
+				</skeletonPart.Scope>
+			</SaveTrackerContext.Provider>
 		</SheetContext.Provider>
 	);
+}
+
+/**
+ * `confirmClose`: a close the sheet hears while the guard says yes sets the
+ * sheet aside for the discard dialog instead of reaching the caller. The
+ * caller's `open` stays true meanwhile; the sheet's parts, and the draft in
+ * them, stay built.
+ */
+function createCloseGuard(props: SheetRootProps) {
+	/** Closed for the dialog, or after Discard until the caller closes. */
+	const [isAside, setAside] = createSignal(false);
+	const [isAsking, setAsking] = createSignal(false);
+	/** The caller's way out for the dialog open now, from `ask`. */
+	let callerDiscard: (() => void) | undefined;
+	function setAsideToAsk(): void {
+		// In this order, each its own write: the sheet's close offers its
+		// handoff, which the dialog's open then claims.
+		setAside(true);
+		setAsking(true);
+	}
+	createEffect(
+		on(
+			() => props.open,
+			(isOpen) => {
+				if (isOpen) return;
+				callerDiscard = undefined;
+				setAsking(false);
+				setAside(false);
+			},
+			{ defer: true }
+		)
+	);
+	return {
+		isAside,
+		isAsking,
+		onOpenChange: (isOpen: boolean): void => {
+			if (isOpen || props.confirmClose?.() !== true) {
+				props.onOpenChange(isOpen);
+				return;
+			}
+			callerDiscard = undefined;
+			setAsideToAsk();
+		},
+		ask: (onDiscard: () => void): void => {
+			callerDiscard = onDiscard;
+			setAsideToAsk();
+		},
+		keepEditing: (): void => {
+			callerDiscard = undefined;
+			// The dialog's close offers the handoff back first.
+			setAsking(false);
+			setAside(false);
+		},
+		discard: (): void => {
+			const onDiscard = callerDiscard;
+			callerDiscard = undefined;
+			setAsking(false);
+			if (onDiscard) onDiscard();
+			else props.onOpenChange(false);
+		},
+	};
 }
 
 /** The header row: put a {@link Title} and a {@link HeaderActions} inside it. */
@@ -216,15 +289,8 @@ function Title(props: {
 	loading?: boolean;
 }): JSX.Element {
 	return (
-		<Dialog.Title
-			class={styles.title}
-			// No flight into a shimmer bar: the title flies once it has text.
-			{...{
-				get [MORPH_TITLE]() {
-					return props.loading ? undefined : "";
-				},
-			}}
-		>
+		// No flight into a shimmer bar: the title flies once it has text.
+		<OverlayTitle class={styles.title} loading={props.loading}>
 			<Show
 				when={!props.loading}
 				fallback={
@@ -239,7 +305,7 @@ function Title(props: {
 			>
 				{props.children}
 			</Show>
-		</Dialog.Title>
+		</OverlayTitle>
 	);
 }
 
@@ -373,4 +439,5 @@ export const Sheet = {
 	Body,
 	Footer,
 	Close,
+	SaveStatus,
 };

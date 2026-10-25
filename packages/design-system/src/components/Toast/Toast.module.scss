@@ -49,6 +49,8 @@
 .icon {
 	@include typo.jf-typo-h1;
 
+	display: flex;
+	flex-wrap: nowrap;
 	flex-shrink: 0;
 	color: var(--jf-status-fg);
 }

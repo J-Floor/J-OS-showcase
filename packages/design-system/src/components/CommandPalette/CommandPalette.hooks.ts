@@ -8,7 +8,7 @@ import {
 	type Accessor,
 } from "solid-js";
 
-import { MORPH_PICKED } from "../../utils/morphPresence.ts";
+import { MORPH_PICKED } from "../../utils/morphNames.ts";
 import { viewTransition } from "../../utils/viewTransition.ts";
 
 import {

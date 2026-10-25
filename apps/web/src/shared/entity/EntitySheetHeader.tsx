@@ -1,29 +1,27 @@
 import { Sheet, SheetNav, IconButton } from "@j-os/design-system";
-import { Show } from "solid-js";
+import { Show, type JSX } from "solid-js";
 
+import type { SheetNavState } from "../../lib/createSheetNav.ts";
 import { ICONS } from "../icons.ts";
 
-/** Prev/next over the rows the tab is displaying. */
-export type SheetNavState = {
-	hasPrev: () => boolean;
-	hasNext: () => boolean;
-	onPrev: () => void;
-	onNext: () => void;
-};
-
-/** The title, prev/next, a delete button for an existing row, and close. */
-export function EntitySheetHeader(props: {
+/** The title, the save status, prev/next, the caller's own actions (its
+ *  `Delete`, an edit toggle) and close. */
+function Root(props: {
 	title: string;
 	loading?: boolean;
 	nav?: SheetNavState;
-	isEdit: boolean;
-	deleteLabel: string;
-	onDelete: () => void;
-}) {
+	/** Shows what the fields have saved: an existing row's sheet, never a
+	 *  create form's. */
+	saveStatus?: boolean;
+	children?: JSX.Element;
+}): JSX.Element {
 	return (
 		<Sheet.Header>
 			<Sheet.Title loading={props.loading}>{props.title}</Sheet.Title>
 			<Sheet.HeaderActions>
+				<Show when={props.saveStatus}>
+					<Sheet.SaveStatus />
+				</Show>
 				<Show when={props.nav}>
 					{(nav) => (
 						<SheetNav
@@ -34,18 +32,25 @@ export function EntitySheetHeader(props: {
 						/>
 					)}
 				</Show>
-				<Show when={props.isEdit}>
-					<IconButton
-						tooltipLabel={props.deleteLabel}
-						onClick={() => {
-							props.onDelete();
-						}}
-					>
-						{ICONS.delete}
-					</IconButton>
-				</Show>
+				{props.children}
 				<Sheet.Close />
 			</Sheet.HeaderActions>
 		</Sheet.Header>
 	);
 }
+
+/** The delete button for an existing row. */
+function Delete(props: { label: string; onDelete: () => void }): JSX.Element {
+	return (
+		<IconButton
+			tooltipLabel={props.label}
+			onClick={() => {
+				props.onDelete();
+			}}
+		>
+			{ICONS.delete}
+		</IconButton>
+	);
+}
+
+export const EntitySheetHeader = { Root, Delete };

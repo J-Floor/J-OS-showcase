@@ -7,8 +7,6 @@
 import { MORPH_KEY, MORPH_OF, MORPH_TITLE } from "./morphNames.ts";
 import { hasLayoutBox } from "./visibleArea.ts";
 
-export { MORPH_KEY, MORPH_OF, MORPH_TITLE };
-
 /** An element that shows one entity and is a surface by what it is,
  *  whatever it paints: a table row, a `Morph`. */
 export const ENTITY_SURFACE = `[role="row"], [${MORPH_OF}]`;

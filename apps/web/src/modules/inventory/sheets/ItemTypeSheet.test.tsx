@@ -232,7 +232,7 @@ test("items loaded empty: shows (0) and the empty copy", () => {
 });
 
 test("morph: the item type's columns pair with the sheet values showing the same field", () => {
-	const row = tableRowKeys(itemTypeColumns([chairType]), chairType);
+	const row = tableRowKeys(itemTypeColumns({ categories: [] }), chairType);
 	expect(row.title).toBe("name");
 	expect(row.cells).toEqual(["categoryName", "description"]);
 

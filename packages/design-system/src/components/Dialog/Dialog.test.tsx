@@ -1,13 +1,24 @@
-import { cleanup, render, screen, waitFor } from "@solidjs/testing-library";
-import { createSignal } from "solid-js";
-import { afterEach, expect, onTestFinished, test } from "vitest";
+import { readFileSync } from "node:fs";
+
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@solidjs/testing-library";
+import { createEffect, createSignal } from "solid-js";
+import { afterEach, expect, onTestFinished, test, vi } from "vitest";
 
 import {
 	fakeViewTransitions,
+	installViewTransitions,
 	mockLayoutBoxes,
 	namedIds,
 	restoreViewTransitions,
+	transitionSettled,
 } from "../../test/viewTransitionFakes.ts";
+import { MORPH_SCRIM, MORPH_TITLE } from "../../utils/morphNames.ts";
 
 import { Dialog } from "./Dialog.tsx";
 
@@ -26,25 +37,41 @@ afterEach(cleanup);
  * reference box before and after.
  */
 
-test("bakes in a close button with an accessible name", () => {
+test("Header carries a close button with an accessible name", () => {
 	render(() => (
 		<Dialog.Root open>
 			<Dialog.Content>
-				<Dialog.Title>Change role</Dialog.Title>
+				<Dialog.Header>
+					<Dialog.Title>Change role</Dialog.Title>
+				</Dialog.Header>
 			</Dialog.Content>
 		</Dialog.Root>
 	));
 	// The name comes from the IconButton's tooltip label; an icon-only button
 	// that loses it reaches a screen reader as "button".
-	expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+	const close = screen.getByRole("button", { name: "Close" });
+	expect(close.closest("header")).not.toBeNull();
+});
+
+test("a dialog without a Header has no close button", () => {
+	render(() => (
+		<Dialog.Root open>
+			<Dialog.Content>
+				<Dialog.Title>Search</Dialog.Title>
+			</Dialog.Content>
+		</Dialog.Root>
+	));
+	expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
 });
 
 test("renders the title and content the caller passed", () => {
 	render(() => (
 		<Dialog.Root open>
 			<Dialog.Content>
-				<Dialog.Title>Change role</Dialog.Title>
-				<Dialog.Description>Pick a destination.</Dialog.Description>
+				<Dialog.Header>
+					<Dialog.Title>Change role</Dialog.Title>
+					<Dialog.Description>Pick a destination.</Dialog.Description>
+				</Dialog.Header>
 			</Dialog.Content>
 		</Dialog.Root>
 	));
@@ -64,24 +91,82 @@ test("each part builds its children once", () => {
 	render(() => (
 		<Dialog.Root open>
 			<Dialog.Content>
-				<Dialog.Title>
+				<Dialog.Header>
+					<Dialog.Title>
+						<Probe />
+					</Dialog.Title>
+					<Dialog.Description>
+						<Probe />
+					</Dialog.Description>
+				</Dialog.Header>
+				<Dialog.Body>
 					<Probe />
-				</Dialog.Title>
-				<Dialog.Description>
+				</Dialog.Body>
+				<Dialog.Footer>
 					<Probe />
-				</Dialog.Description>
-				<Probe />
+				</Dialog.Footer>
 			</Dialog.Content>
 		</Dialog.Root>
 	));
-	expect(built).toBe(3);
-	expect(screen.getAllByText("probe")).toHaveLength(3);
+	expect(built).toBe(4);
+	expect(screen.getAllByText("probe")).toHaveLength(4);
 });
 
-test("morph={false} still opens and closes", async () => {
+test("Header, Body and Footer lay the card out in that order", () => {
+	render(() => (
+		<Dialog.Root open>
+			<Dialog.Content>
+				<Dialog.Header>
+					<Dialog.Title>Confirm</Dialog.Title>
+				</Dialog.Header>
+				<Dialog.Body>
+					<p>Details</p>
+				</Dialog.Body>
+				<Dialog.Footer>
+					<Dialog.Cancel />
+				</Dialog.Footer>
+			</Dialog.Content>
+		</Dialog.Root>
+	));
+	const header = screen.getByText("Confirm").closest("header");
+	const footer = screen
+		.getByRole("button", { name: "Cancel" })
+		.closest("footer");
+	const body = screen.getByText("Details").parentElement;
+	expect(header).not.toBeNull();
+	expect(footer).not.toBeNull();
+	expect(body?.previousElementSibling).toBe(header);
+	expect(body?.nextElementSibling).toBe(footer);
+});
+
+test("onOpenChange hears the open state as a plain boolean", async () => {
+	const onOpenChange = vi.fn();
+	render(() => (
+		<Dialog.Root open onOpenChange={onOpenChange}>
+			<Dialog.Content>
+				<Dialog.Title>Confirm</Dialog.Title>
+				<Dialog.Footer>
+					<Dialog.Cancel />
+				</Dialog.Footer>
+			</Dialog.Content>
+		</Dialog.Root>
+	));
+	await waitFor(() => {
+		expect(screen.getByRole("dialog")).toHaveAttribute(
+			"data-state",
+			"open"
+		);
+	});
+	fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+	await waitFor(() => {
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+	});
+});
+
+test("morphId={false} still opens and closes", async () => {
 	const [open, setOpen] = createSignal(false);
 	render(() => (
-		<Dialog.Root open={open()} morph={false}>
+		<Dialog.Root open={open()} morphId={false}>
 			<Dialog.Content>
 				<Dialog.Title>Plain</Dialog.Title>
 			</Dialog.Content>
@@ -113,7 +198,7 @@ test("given an entity, closes into the on-screen element showing it", async () =
 	render(() => (
 		<>
 			<div id="row" data-morph-of="t1" />
-			<Dialog.Root open={open()} morph={"t1"}>
+			<Dialog.Root open={open()} morphId={"t1"}>
 				<Dialog.Content>
 					<Dialog.Title>Task</Dialog.Title>
 				</Dialog.Content>
@@ -124,4 +209,232 @@ test("given an entity, closes into the on-screen element showing it", async () =
 	await waitFor(() => {
 		expect(names).toEqual(["row"]);
 	});
+});
+
+test("Cancel is a tertiary close trigger labelled Cancel by default", () => {
+	render(() => (
+		<Dialog.Root open>
+			<Dialog.Content>
+				<Dialog.Title>Confirm</Dialog.Title>
+				<Dialog.Cancel />
+			</Dialog.Content>
+		</Dialog.Root>
+	));
+	const cancel = screen.getByRole("button", { name: "Cancel" });
+	expect(cancel).toHaveAttribute("data-variant", "tertiary");
+	expect(cancel).toHaveAttribute("data-part", "close-trigger");
+});
+
+test("Cancel takes its own label and hands its element to a ref", () => {
+	let element: HTMLElement | undefined;
+	render(() => (
+		<Dialog.Root open>
+			<Dialog.Content>
+				<Dialog.Title>Confirm</Dialog.Title>
+				<Dialog.Cancel
+					ref={(button) => {
+						element = button;
+					}}
+				>
+					Keep it
+				</Dialog.Cancel>
+			</Dialog.Content>
+		</Dialog.Root>
+	));
+	expect(element).toBe(screen.getByRole("button", { name: "Keep it" }));
+});
+
+/** A caller that asks for the dialog in its own mount effect: `open` is
+ *  false while Dialog.Root renders, true before the first flush ends. */
+function OpensOnMount() {
+	const [open, setOpen] = createSignal(false);
+	createEffect(() => {
+		setOpen(true);
+	});
+	return (
+		<Dialog.Root open={open()}>
+			<Dialog.Content>
+				<Dialog.Title>Welcome</Dialog.Title>
+			</Dialog.Content>
+		</Dialog.Root>
+	);
+}
+
+test("a dialog asked open in its caller's mount effect opens", async () => {
+	render(() => <OpensOnMount />);
+	await waitFor(() => {
+		expect(screen.getByRole("dialog")).toHaveAttribute(
+			"data-state",
+			"open"
+		);
+	});
+});
+
+test("a dialog asked open in its caller's mount effect opens through a morph", async () => {
+	fakeViewTransitions();
+	onTestFinished(restoreViewTransitions);
+	render(() => <OpensOnMount />);
+	await waitFor(() => {
+		expect(screen.getByRole("dialog")).toHaveAttribute(
+			"data-state",
+			"open"
+		);
+	});
+});
+
+test("its scrim is marked to fade with the morph", () => {
+	render(() => (
+		<Dialog.Root open>
+			<Dialog.Content>
+				<Dialog.Title>Confirm</Dialog.Title>
+			</Dialog.Content>
+		</Dialog.Root>
+	));
+	expect(
+		document.querySelector('[data-scope="dialog"][data-part="backdrop"]')
+	).toHaveAttribute(MORPH_SCRIM);
+});
+
+test("its scrim runs no fade of its own while a morph fades it", () => {
+	const styles = readFileSync(
+		`${import.meta.dirname}/Dialog.module.scss`,
+		"utf8"
+	);
+	const start = styles.indexOf(".backdrop {");
+	const backdrop = styles.slice(start, styles.indexOf("\n}\n", start));
+	expect(backdrop).toMatch(
+		/:root\[data-vt~="morph"\] & \{\s*transition: none;\s*\}/
+	);
+});
+
+test("its title is the morph title", () => {
+	render(() => (
+		<Dialog.Root open>
+			<Dialog.Content>
+				<Dialog.Title>Confirm</Dialog.Title>
+			</Dialog.Content>
+		</Dialog.Root>
+	));
+	expect(screen.getByText("Confirm")).toHaveAttribute(MORPH_TITLE, "");
+});
+
+/** View Transitions whose animation runs until `finish` is called. */
+function heldTransitions(): { finish: () => void } {
+	const pending: (() => void)[] = [];
+	installViewTransitions((update: () => unknown) => {
+		const finished = new Promise<void>((resolve) => {
+			pending.push(resolve);
+		});
+		const updated = Promise.resolve(update());
+		return { finished, updateCallbackDone: updated };
+	});
+	function finish(): void {
+		for (const resolve of pending.splice(0)) resolve();
+	}
+	// None outlives its test: a later test's close would wait on it.
+	onTestFinished(async () => {
+		finish();
+		await transitionSettled();
+		restoreViewTransitions();
+	});
+	return { finish };
+}
+
+function ContentHarness(props: { onBuild: () => void }) {
+	const [open, setOpen] = createSignal(false);
+	function Probe() {
+		props.onBuild();
+		return <span>body</span>;
+	}
+	return (
+		<>
+			<button
+				onClick={() => {
+					setOpen((isOpen) => !isOpen);
+				}}
+			>
+				toggle
+			</button>
+			<Dialog.Root open={open()}>
+				<Dialog.Content>
+					<Dialog.Title>With content</Dialog.Title>
+					<Probe />
+				</Dialog.Content>
+			</Dialog.Root>
+		</>
+	);
+}
+
+function toggleButton(): HTMLElement {
+	return screen.getByRole("button", { name: "toggle", hidden: true });
+}
+
+test("Content builds on open, outlives the close morph, and builds afresh on the next open", async () => {
+	const transitions = heldTransitions();
+	const build = vi.fn();
+	render(() => <ContentHarness onBuild={build} />);
+	expect(screen.queryByText("body")).toBeNull();
+	fireEvent.click(toggleButton());
+	// The open's update has run, so the close is a transition of its own.
+	await transitionSettled();
+	expect(screen.getByText("body")).toBeInTheDocument();
+	transitions.finish();
+	fireEvent.click(toggleButton());
+	await transitionSettled();
+	expect(screen.getByRole("dialog", { hidden: true })).toHaveAttribute(
+		"data-state",
+		"closed"
+	);
+	// The close morph is still running: the body is in it.
+	expect(screen.getByText("body")).toBeInTheDocument();
+	transitions.finish();
+	await waitFor(() => {
+		expect(screen.queryByText("body")).toBeNull();
+	});
+	fireEvent.click(toggleButton());
+	await waitFor(() => {
+		expect(screen.getByText("body")).toBeInTheDocument();
+	});
+	expect(build).toHaveBeenCalledTimes(2);
+});
+
+test("without View Transitions, Content stays until the card's own exit has finished", async () => {
+	let exit!: () => void;
+	const finished = new Promise<void>((resolve) => {
+		exit = resolve;
+	});
+	render(() => <ContentHarness onBuild={() => {}} />);
+	fireEvent.click(toggleButton());
+	await waitFor(() => {
+		expect(screen.getByText("body")).toBeInTheDocument();
+	});
+	// jsdom runs no CSS: the card's pop-out stands in as one animation.
+	Object.assign(screen.getByRole("dialog", { hidden: true }), {
+		getAnimations: () => [{ finished }],
+	});
+	fireEvent.click(toggleButton());
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	expect(screen.getByText("body")).toBeInTheDocument();
+	exit();
+	await waitFor(() => {
+		expect(screen.queryByText("body")).toBeNull();
+	});
+});
+
+test("Content reopened while its close morph still runs builds afresh", async () => {
+	const transitions = heldTransitions();
+	const build = vi.fn();
+	render(() => <ContentHarness onBuild={build} />);
+	fireEvent.click(toggleButton());
+	await transitionSettled();
+	transitions.finish();
+	fireEvent.click(toggleButton());
+	// The close's update has run; its animation has not finished.
+	await transitionSettled();
+	expect(screen.getByText("body")).toBeInTheDocument();
+	fireEvent.click(toggleButton());
+	await transitionSettled();
+	expect(screen.getByText("body")).toBeInTheDocument();
+	expect(build).toHaveBeenCalledTimes(2);
+	transitions.finish();
 });

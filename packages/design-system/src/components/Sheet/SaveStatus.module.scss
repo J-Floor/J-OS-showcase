@@ -1,0 +1,41 @@
+@use "../../styles/typography" as typo;
+
+/* One line beside the sheet's header actions. At idle it fades out with
+   the label it last showed (hidden from assistive tech, see SaveStatus). */
+.status {
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- one line: the label and its Retry */
+	display: inline-flex;
+	gap: var(--jf-spacing-close);
+	align-items: center;
+	color: var(--jf-fg-muted);
+	white-space: nowrap;
+	transition: opacity var(--jf-animation-duration-default)
+		var(--jf-animation-ease-standard);
+
+	@include typo.jf-typo-body-small;
+
+	/* Shown out of `display: none`, its first frame has no hidden style to
+	   fade in from without this. */
+	@starting-style {
+		opacity: 0;
+	}
+
+	&[data-state="idle"] {
+		pointer-events: none;
+		opacity: 0;
+	}
+
+	/* Faded out: no box, so no gap before the next action. */
+	&[data-collapsed] {
+		display: none;
+	}
+
+	&[data-state="failed"] {
+		color: var(--jf-error-fg);
+	}
+}
+
+/* Lays nothing out: the label and its Retry sit in the line's own row. */
+.label {
+	display: contents;
+}

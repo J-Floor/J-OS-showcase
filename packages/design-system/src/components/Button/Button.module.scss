@@ -1,6 +1,7 @@
 /* Button — ported from embo-ui Button.module.scss + BaseButton.module.scss.
  * SCSS nesting -> native CSS nesting; --embo-* -> --jf-* (grayscale, no brand hue). */
 
+@use "../../styles/hover";
 @use "../../styles/typography" as typo;
 @use "../../styles/utils";
 
@@ -123,7 +124,7 @@
 
 	&:not([data-loading="true"], [disabled]) {
 		@media (hover: hover) {
-			&:hover {
+			@include hover.hover {
 				/* fg-default (grey-900) is a hair off near-black, so the hover
 				   barely reads. Step to a clearly lighter shade in light mode
 				   (and correspondingly darker in dark mode) for a visible change. */
@@ -152,7 +153,7 @@
 
 	&:not([data-loading="true"], [disabled]) {
 		@media (hover: hover) {
-			&:hover {
+			@include hover.hover {
 				background-color: var(--jf-surface-bg-raised);
 				color: var(--jf-fg-strong);
 			}
@@ -243,7 +244,7 @@
 
 	&:not([data-loading="true"], [disabled]) {
 		@media (hover: hover) {
-			&:hover {
+			@include hover.hover {
 				/* Match secondary's resting fill so tertiary gains a visible
 				   hover surface (was transparent → no feedback). */
 				background-color: var(--jf-surface-bg-overlay);

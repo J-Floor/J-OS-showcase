@@ -471,3 +471,60 @@ test("the header says 'New event' in create mode", () => {
 		screen.getByRole("heading", { name: "New event" })
 	).toBeInTheDocument();
 });
+
+function discardPrompt(): HTMLElement | null {
+	return screen.queryByRole("dialog", { name: "Discard new event?" });
+}
+
+test("create: a typed name asks before Escape throws it away; Discard closes", async () => {
+	const onOpenChange = vi.fn();
+	renderSheet("board", { onOpenChange });
+	fireEvent.input(screen.getByLabelText("Name"), {
+		target: { value: "Open House" },
+	});
+	const sheet = screen.getByRole("dialog", { name: "New event" });
+	// Ark hears Escape a moment after the open: press until it asks.
+	await waitFor(() => {
+		if (!discardPrompt()) fireEvent.keyDown(sheet, { key: "Escape" });
+		expect(discardPrompt()).toBeInTheDocument();
+	});
+	expect(onOpenChange).not.toHaveBeenCalled();
+	fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+	await waitFor(() => {
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+	});
+});
+
+test("create: an untouched form closes on Escape without asking", async () => {
+	const onOpenChange = vi.fn();
+	renderSheet("board", { onOpenChange });
+	const sheet = screen.getByRole("dialog", { name: "New event" });
+	await waitFor(() => {
+		fireEvent.keyDown(sheet, { key: "Escape" });
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+	});
+	expect(discardPrompt()).toBeNull();
+});
+
+test("edit: a rename says Saving… then Changes saved", async () => {
+	let resolve!: (value: string) => void;
+	mutateAsync.mockImplementationOnce(
+		() =>
+			new Promise<string>((onResolve) => {
+				resolve = onResolve;
+			})
+	);
+	renderSheet("board", { event });
+	fireEvent.click(screen.getByRole("button", { name: /Unlock to edit/ }));
+	const field = await waitFor(() => screen.getByRole("textbox"));
+	fireEvent.input(field, { target: { value: "Renamed Night" } });
+	fireEvent.blur(field);
+	const status = screen.getByRole("status", { name: "Save status" });
+	await waitFor(() => {
+		expect(status).toHaveTextContent("Saving…");
+	});
+	resolve("event1");
+	await waitFor(() => {
+		expect(status).toHaveTextContent("Changes saved");
+	});
+});

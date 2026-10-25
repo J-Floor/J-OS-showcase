@@ -1,3 +1,5 @@
+import type { EnumOption } from "@j-os/design-system";
+
 import type {
 	PersonStatus,
 	StatusFact,
@@ -132,19 +134,18 @@ export function flagLabel(flag: StatusFlag): string {
  * step with {@link flagLabel} minus the actor, so filtering by one of these
  * and reading a row that says something else never happens.
  */
-export const FLAG_FILTER_OPTIONS: readonly { value: string; label: string }[] =
-	[
-		{ value: "agreement_missing", label: "Agreement not signed" },
-		// One option per board step, worded as its row flag — a generic
-		// "Board to-do outstanding" matched rows that said "Not added to
-		// WhatsApp group", which is exactly the mismatch this list rules out.
-		...BOARD_STEPS.map((step) => ({
-			value: flagFilterValue({ id: "board_task_pending", step: step.id }),
-			label: BOARD_TASK_PENDING[step.id],
-		})),
-		{ value: "door_suspended", label: "Door access blocked" },
-		{ value: "door_forced_open", label: "Door access always on" },
-	];
+export const FLAG_FILTER_OPTIONS: readonly EnumOption[] = [
+	{ value: "agreement_missing", label: "Agreement not signed" },
+	// One option per board step, worded as its row flag — a generic
+	// "Board to-do outstanding" matched rows that said "Not added to
+	// WhatsApp group", which is exactly the mismatch this list rules out.
+	...BOARD_STEPS.map((step) => ({
+		value: flagFilterValue({ id: "board_task_pending", step: step.id }),
+		label: BOARD_TASK_PENDING[step.id],
+	})),
+	{ value: "door_suspended", label: "Door access blocked" },
+	{ value: "door_forced_open", label: "Door access always on" },
+];
 
 /**
  * The value a flag files under in the Flags column filter: its id, plus the
@@ -174,7 +175,7 @@ type FactOf<Id extends StatusFact["id"]> = Extract<StatusFact, { id: Id }>;
 
 const AGREEMENT_FACT: Record<
 	FactOf<"agreement">["state"],
-	{ value: string; tone?: Tone }
+	Pick<FactLine, "value" | "tone">
 > = {
 	not_required: { value: "Not required" },
 	signed: { value: "Signed", tone: "success" },
@@ -183,7 +184,7 @@ const AGREEMENT_FACT: Record<
 
 const FORMER_FACT: Record<
 	FactOf<"former">["reason"],
-	{ value: string; tone?: Tone }
+	Pick<FactLine, "value" | "tone">
 > = {
 	kicked: { value: "Kicked out", tone: "error" },
 	left: { value: "Left voluntarily" },

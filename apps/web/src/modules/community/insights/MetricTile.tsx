@@ -1,5 +1,7 @@
-import { type JSX } from "solid-js";
+import { Skeleton } from "@j-os/design-system";
+import { Show, type JSX } from "solid-js";
 
+import type { Headline } from "./metrics.ts";
 import styles from "./MetricTile.module.scss";
 
 /**
@@ -16,14 +18,26 @@ import styles from "./MetricTile.module.scss";
 export function MetricTile(props: {
 	label: string;
 	value: JSX.Element;
+	/** Show a skeleton in place of the value while it is still loading. */
+	loading?: boolean;
 	detail?: string;
-	tone?: "neutral" | "warning" | "error";
+	tone?: Headline["tone"];
 }): JSX.Element {
 	return (
-		<div class={styles.tile} data-tone={props.tone ?? "neutral"}>
+		<div class={styles.tile}>
 			<span class={styles.label}>{props.label}</span>
-			<span class={styles.value} data-metric-value="">
-				{props.value}
+			{/* `neutral` sets no status, so the value keeps its own colour. */}
+			<span
+				data-status={props.tone === "neutral" ? undefined : props.tone}
+			>
+				<span class={styles.value} data-metric-value="">
+					<Show
+						when={!props.loading}
+						fallback={<Skeleton width="short" />}
+					>
+						{props.value}
+					</Show>
+				</span>
 			</span>
 			<span class={styles.detail}>{props.detail}</span>
 		</div>

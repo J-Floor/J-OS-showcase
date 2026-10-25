@@ -7,7 +7,6 @@ import {
 	createMemo,
 	createSignal,
 	Match,
-	Show,
 	Switch,
 	type Accessor,
 } from "solid-js";
@@ -17,9 +16,12 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import { authClient } from "../../lib/auth.ts";
 import { call } from "../../lib/call.ts";
 import { useQuery } from "../../shared/data/useQuery.ts";
+import { createFieldErrors } from "../../shared/fieldErrors.ts";
 import { ICONS } from "../../shared/icons.ts";
 import { emailError } from "../../shared/isValidEmail.ts";
+import { NameFields } from "../../shared/NameFields.tsx";
 import { useRecaptchaScript } from "../../shared/recaptcha.ts";
+import { SubmitErrorBanner } from "../../shared/SubmitErrorBanner.tsx";
 import { PrivacyNoticeLine } from "../privacy/PrivacyNoticeLine.tsx";
 import { getCaptchaToken } from "../signup/captchaToken.ts";
 
@@ -27,7 +29,9 @@ import styles from "./VisitorRegister.module.scss";
 
 const REGISTER_FAILED = "Something went wrong registering. Please try again.";
 
-type RegisterOutcome = "pending" | "no-event" | "ended";
+export type RegisterOutcome = FunctionReturnType<
+	typeof api.visitors.registerVisitor
+>["status"];
 
 type CheckInStatus = "idle" | "pending" | "done" | "denied";
 
@@ -41,7 +45,10 @@ type View =
 	| { kind: "form"; name: string };
 
 type PublicEvent = FunctionReturnType<typeof api.events.getEventPublic>;
-type EventQuery = { data: () => PublicEvent | undefined };
+type EventQuery = Pick<
+	ReturnType<typeof useQuery<typeof api.events.getEventPublic>>,
+	"data"
+>;
 type Session = ReturnType<typeof authClient.useSession>;
 
 function checkedInName(view: View): string | null {
@@ -142,6 +149,8 @@ function createRegistration(options: { eventId: Accessor<string | null> }) {
 		email: emailError(email()),
 	}));
 
+	const { errProps } = createFieldErrors(showErrors);
+
 	const isValid = createMemo(() => {
 		const fieldErrors = errors();
 		return (
@@ -150,16 +159,6 @@ function createRegistration(options: { eventId: Accessor<string | null> }) {
 			!fieldErrors.email
 		);
 	});
-
-	// Surface a field error only after a submit attempt.
-	function err(field: string | null): string | undefined {
-		return showErrors() && field ? field : undefined;
-	}
-
-	function errProps(field: string | null) {
-		const text = err(field);
-		return { invalid: Boolean(text), errorText: text };
-	}
 
 	async function onSubmit(submitEvent: Event) {
 		submitEvent.preventDefault();
@@ -226,42 +225,6 @@ function CheckedInNotice(props: { name: string | null }) {
 	);
 }
 
-/** The first- and last-name pair, side by side. */
-function NameRow(props: {
-	registration: ReturnType<typeof createRegistration>;
-}) {
-	return (
-		<div class={styles.row}>
-			<Input
-				label="First name"
-				required
-				disabled={props.registration.submitting()}
-				disabledReason="Registering…"
-				value={props.registration.firstName()}
-				onValueChange={(event) =>
-					props.registration.setFirstName(event.currentTarget.value)
-				}
-				{...props.registration.errProps(
-					props.registration.errors().firstName
-				)}
-			/>
-			<Input
-				label="Last name"
-				required
-				disabled={props.registration.submitting()}
-				disabledReason="Registering…"
-				value={props.registration.lastName()}
-				onValueChange={(event) =>
-					props.registration.setLastName(event.currentTarget.value)
-				}
-				{...props.registration.errProps(
-					props.registration.errors().lastName
-				)}
-			/>
-		</div>
-	);
-}
-
 /** The welcome heading and the name/email form. */
 function RegistrationForm(props: {
 	eventName: string | undefined;
@@ -281,7 +244,24 @@ function RegistrationForm(props: {
 				onSubmit={(event) => void props.registration.onSubmit(event)}
 				noValidate
 			>
-				<NameRow registration={props.registration} />
+				<NameFields
+					disabled={props.registration.submitting()}
+					disabledReason="Registering…"
+					firstName={{
+						value: props.registration.firstName(),
+						onChange: props.registration.setFirstName,
+						error: props.registration.errProps(
+							props.registration.errors().firstName
+						),
+					}}
+					lastName={{
+						value: props.registration.lastName(),
+						onChange: props.registration.setLastName,
+						error: props.registration.errProps(
+							props.registration.errors().lastName
+						),
+					}}
+				/>
 
 				<Input
 					type="email"
@@ -301,12 +281,7 @@ function RegistrationForm(props: {
 					)}
 				/>
 
-				<Show when={props.registration.submitError()}>
-					<div class={styles.banner} role="alert">
-						<Icon>{ICONS.error}</Icon>
-						<span>{props.registration.submitError()}</span>
-					</div>
-				</Show>
+				<SubmitErrorBanner message={props.registration.submitError()} />
 
 				<Button
 					type="submit"

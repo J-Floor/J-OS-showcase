@@ -1,4 +1,5 @@
 import { useAbility } from "../../lib/ability.tsx";
+import type { EntityRow } from "../types.ts";
 
 import type { EntityDescriptor } from "./entityDescriptor.ts";
 
@@ -7,7 +8,7 @@ import type { EntityDescriptor } from "./entityDescriptor.ts";
  * ability as its `canPerform`. Takes `undefined` (no row focused) and does nothing,
  * so it can be handed straight to a table's row hover and focus callbacks.
  */
-export function useRowPrefetch<Row extends { _id: string }>(
+export function useRowPrefetch<Row extends EntityRow>(
 	descriptor: Pick<EntityDescriptor<Row>, "prefetch"> | undefined
 ): (row: Row | undefined) => void {
 	const ability = useAbility();

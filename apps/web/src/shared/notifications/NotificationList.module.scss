@@ -102,3 +102,9 @@ $unread-dot-size: 0.5rem;
 .noScrollAnchor {
 	overflow-anchor: none;
 }
+
+.loading {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+}

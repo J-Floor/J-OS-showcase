@@ -28,13 +28,10 @@
 	font-variant-numeric: tabular-nums;
 
 	/* Tone paints the number, not the panel: a grid of amber boxes reads as an
-	   outage when most of these are only worth a glance. */
-	[data-tone="warning"] & {
-		color: var(--jf-warning-fg);
-	}
-
-	[data-tone="error"] & {
-		color: var(--jf-error-fg);
+	   outage when most of these are only worth a glance. A neutral tile sets no
+	   status, so it keeps the strong foreground. */
+	[data-status] & {
+		color: var(--jf-status-fg);
 	}
 }
 

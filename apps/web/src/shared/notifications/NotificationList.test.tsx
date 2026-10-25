@@ -352,6 +352,22 @@ test("a failed list says so in place of the rows", () => {
 	).toBeInTheDocument();
 });
 
+test("a history that has not loaded yet shows a loading skeleton, not the empty state", () => {
+	const inbox = {
+		rows: () => {},
+		failed: () => false,
+		canLoadMore: () => false,
+		loadingMore: () => false,
+		loadMoreFailed: () => false,
+		loadMore: () => Promise.resolve(),
+		markRead: vi.fn(),
+		markAllRead: vi.fn(),
+	} as unknown as Inbox;
+	render(() => <NotificationList inbox={inbox} onClose={() => {}} />);
+	expect(screen.getByRole("status", { name: "Loading" })).toBeInTheDocument();
+	expect(screen.queryByText("No notifications yet")).toBeNull();
+});
+
 test("the floor is read on the first open only, not at mount", async () => {
 	head.data = [];
 	serve({ since: null });

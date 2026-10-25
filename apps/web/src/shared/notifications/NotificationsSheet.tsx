@@ -1,10 +1,12 @@
-import { Button, Sheet, Skeleton, Tabs } from "@j-os/design-system";
+import { Button, Sheet, Tabs } from "@j-os/design-system";
 import { createEffect, createSignal, type JSX, Show, untrack } from "solid-js";
+
+import { isTabKey } from "../tabKey.ts";
+import type { OpenProps } from "../types.ts";
 
 import { NotificationCategories } from "./NotificationCategories.tsx";
 import { NotificationDeviceRow } from "./NotificationDeviceRow.tsx";
 import { NotificationList } from "./NotificationList.tsx";
-import styles from "./NotificationsSheet.module.scss";
 import {
 	NOTIFICATIONS_TABS,
 	type NotificationsTab,
@@ -13,31 +15,14 @@ import { useUnreadBadge } from "./unread.ts";
 import { useInbox } from "./useInbox.ts";
 import { usePushDevice } from "./usePushDevice.ts";
 
-function isNotificationsTab(value: string): value is NotificationsTab {
-	const tabs: readonly string[] = NOTIFICATIONS_TABS;
-	return tabs.includes(value);
-}
-
-function InboxLoading(): JSX.Element {
-	return (
-		<div class={styles.loading} role="status" aria-label="Loading">
-			<Skeleton width="long" />
-			<Skeleton width="medium" />
-			<Skeleton width="short" />
-		</div>
-	);
-}
-
 /**
  * The Notifications sheet: this device's push switch, always in view, then
  * the Inbox and Categories tabs. Each open lands on the tab it asks for. Only
  * the Inbox tab waits for the inbox to load.
  */
-export function NotificationsSheet(props: {
-	open: boolean;
-	tab: NotificationsTab;
-	onOpenChange: (isOpen: boolean) => void;
-}): JSX.Element {
+export function NotificationsSheet(
+	props: OpenProps & { tab: NotificationsTab }
+): JSX.Element {
 	const inbox = useInbox(() => props.open);
 	const unread = useUnreadBadge();
 	const [tab, setTab] = createSignal<NotificationsTab>(
@@ -80,7 +65,7 @@ export function NotificationsSheet(props: {
 				<Tabs.Root
 					value={tab()}
 					onValueChange={(details) => {
-						if (isNotificationsTab(details.value))
+						if (isTabKey(NOTIFICATIONS_TABS, details.value))
 							setTab(details.value);
 					}}
 				>
@@ -93,17 +78,12 @@ export function NotificationsSheet(props: {
 						</Tabs.Trigger>
 					</Tabs.List>
 					<Tabs.Content value="inbox">
-						<Show
-							when={inbox.rows() !== undefined || inbox.failed()}
-							fallback={<InboxLoading />}
-						>
-							<NotificationList
-								inbox={inbox}
-								onClose={() => {
-									props.onOpenChange(false);
-								}}
-							/>
-						</Show>
+						<NotificationList
+							inbox={inbox}
+							onClose={() => {
+								props.onOpenChange(false);
+							}}
+						/>
 					</Tabs.Content>
 					<Tabs.Content value="categories">
 						<NotificationCategories pushOn={device.pushOn()} />

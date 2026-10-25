@@ -32,17 +32,23 @@ export function OccupancyCard() {
 
 	return (
 		<Show when={loading() || enabled()}>
-			<SpaceCard
-				title="Occupancy"
-				helpText="How full the space is right now."
-				loading={loading()}
-				skeleton={<Skeleton class={styles.gaugeSkeleton} />}
-			>
-				<div class={styles.readout}>
-					<OccupancyGauge fill={fill() ?? 0} />
-					<span class={styles.level}>{occupancyLevel(fill())}</span>
-				</div>
-			</SpaceCard>
+			<SpaceCard.Root loading={loading()}>
+				<SpaceCard.Header title="Occupancy" />
+				<SpaceCard.Help>
+					How full the space is right now.
+				</SpaceCard.Help>
+				<SpaceCard.Body>
+					<div class={styles.readout}>
+						<OccupancyGauge fill={fill() ?? 0} />
+						<span class={styles.level}>
+							{occupancyLevel(fill())}
+						</span>
+					</div>
+				</SpaceCard.Body>
+				<SpaceCard.Skeleton>
+					<Skeleton class={styles.gaugeSkeleton} />
+				</SpaceCard.Skeleton>
+			</SpaceCard.Root>
 		</Show>
 	);
 }

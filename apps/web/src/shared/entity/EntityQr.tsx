@@ -5,6 +5,7 @@ import type { JSX } from "solid-js";
 import { createCopyFeedback } from "../createCopyFeedback.ts";
 import { ICONS } from "../icons.ts";
 
+import type { EntityQrLink } from "./entityDescriptor.ts";
 import styles from "./EntityQr.module.scss";
 
 /**
@@ -17,10 +18,7 @@ import styles from "./EntityQr.module.scss";
  * than `display: none`, because zag sizes the PNG canvas from the frame's
  * bounding box and a hidden one measures 0×0.
  */
-export function EntityQrActions(props: {
-	url: string;
-	fileName: string;
-}): JSX.Element {
+export function EntityQrActions(props: EntityQrLink): JSX.Element {
 	const { copied, copy } = createCopyFeedback(() => props.url);
 
 	return (
@@ -57,10 +55,7 @@ export function EntityQrActions(props: {
  * gate inside — callers wrap in `<Can>`. Ported from the events "QR & link"
  * accordion body.
  */
-export function EntityQrBlock(props: {
-	url: string;
-	fileName: string;
-}): JSX.Element {
+export function EntityQrBlock(props: EntityQrLink): JSX.Element {
 	const { copied, copy } = createCopyFeedback(() => props.url);
 
 	return (

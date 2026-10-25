@@ -3,13 +3,9 @@
  * claiming real focus for it, keys routed in from the document, and scrolling
  * the ringed row into view. The ring's state lives in `gridRing.ts`.
  */
-import {
-	createEffect,
-	createUniqueId,
-	onCleanup,
-	onMount,
-	type Accessor,
-} from "solid-js";
+import { makeEventListener } from "@solid-primitives/event-listener";
+import { Result } from "neverthrow";
+import { createEffect, createUniqueId, onMount, type Accessor } from "solid-js";
 
 import { isTypingTarget } from "../../utils/typingTarget.ts";
 
@@ -21,12 +17,12 @@ const TAB_SELECTOR = '[role="tab"]';
 
 /** `:focus-visible`, defensively: a test DOM without the selector must not
  *  throw, and treats every focus as keyboard focus (the safe direction). */
+const matchesFocusVisible = Result.fromThrowable((element: HTMLElement) =>
+	element.matches(":focus-visible")
+);
+
 function keyboardFocused(element: HTMLElement): boolean {
-	try {
-		return element.matches(":focus-visible");
-	} catch {
-		return true;
-	}
+	return matchesFocusVisible(element).unwrapOr(true);
 }
 
 /** ArrowDown on a horizontal tab: steps into the live table. A vertical
@@ -164,14 +160,9 @@ export function routeStrayKeys(options: {
 	onMount(() => {
 		// `focusableRows` is static table config, read once like the rest.
 		if (!isEnabled()) return;
-		document.addEventListener("keydown", routeStrayKey);
-		document.addEventListener("keydown", syncFocusWithin, true);
-		document.addEventListener("focusin", syncFocusWithin, true);
-		onCleanup(() => {
-			document.removeEventListener("keydown", routeStrayKey);
-			document.removeEventListener("keydown", syncFocusWithin, true);
-			document.removeEventListener("focusin", syncFocusWithin, true);
-		});
+		makeEventListener(document, "keydown", routeStrayKey);
+		makeEventListener(document, "keydown", syncFocusWithin, true);
+		makeEventListener(document, "focusin", syncFocusWithin, true);
 	});
 }
 

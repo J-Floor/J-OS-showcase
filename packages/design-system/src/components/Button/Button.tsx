@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import { children, splitProps, type JSX } from "solid-js";
 
+import { keyShortcutsOf } from "../../utils/activation.ts";
 import { adornmentsOf } from "../../utils/adornments.ts";
 import { separateDisablingProps } from "../../utils/disablingProps.ts";
 import {
@@ -8,6 +9,7 @@ import {
 	type WithPartClasses,
 } from "../../utils/partStyling.ts";
 import { callHandler, type TriggerProps } from "../../utils/triggerProps.ts";
+import { type ShortcutHint } from "../../utils/types.ts";
 import { Spinner } from "../Spinner/Spinner.tsx";
 
 import {
@@ -35,6 +37,13 @@ export type ButtonProps = {
 	 * behind the same loading guard.
 	 */
 	triggerProps?: TriggerProps;
+	/**
+	 * The key that fires this button, named in `aria-keyshortcuts` (a bare
+	 * modifier names none). That is how a shortcut press finds the button
+	 * it fires, so an overlay it opens grows out of it. Attribute only: to
+	 * show the key, pass a `<Kbd>` child.
+	 */
+	shortcut?: ShortcutHint;
 } & BaseButtonProps &
 	WithPartClasses<"content" | "loadingSpinner">;
 
@@ -47,6 +56,7 @@ export function Button(props: ButtonProps): JSX.Element {
 		"classOverride",
 		"triggerProps",
 		"onClick",
+		"shortcut",
 	]);
 
 	const resolvedChildren = children(() => local.children);
@@ -69,6 +79,7 @@ export function Button(props: ButtonProps): JSX.Element {
 					Boolean(local.triggerProps?.disabled)
 			)}
 			onClick={handleClick}
+			aria-keyshortcuts={keyShortcutsOf(local.shortcut)}
 			class={clsx(
 				styles.button,
 				styles[local.variant ?? "primary"],

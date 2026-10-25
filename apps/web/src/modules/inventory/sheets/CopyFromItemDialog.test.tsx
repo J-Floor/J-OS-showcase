@@ -1,5 +1,12 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@solidjs/testing-library";
+import { createSignal } from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -91,6 +98,59 @@ test("a type name is not enough to match a row", () => {
 	expect(
 		screen.queryByRole("button", { name: "A00001 Chair" })
 	).not.toBeInTheDocument();
+});
+
+test("lists no rows while idle", () => {
+	renderDialog({ open: false });
+	expect(screen.queryByRole("button", { name: "A00001 Chair" })).toBeNull();
+});
+
+test("keeps its content mounted through its close", () => {
+	const [open, setOpen] = createSignal(true);
+	render(() => (
+		<CopyFromItemDialog
+			open={open()}
+			onOpenChange={() => {}}
+			items={[chair]}
+			onSelect={() => {}}
+		/>
+	));
+	const row = screen.getByRole("button", { name: "A00001 Chair" });
+	setOpen(false);
+	expect(row).toBeInTheDocument();
+	expect(
+		screen.getByText("Search by asset tag", { exact: false })
+	).toBeInTheDocument();
+});
+
+test("keeps its filter through its close, and opens again unfiltered", async () => {
+	const [open, setOpen] = createSignal(true);
+	render(() => (
+		<CopyFromItemDialog
+			open={open()}
+			onOpenChange={() => {}}
+			items={[chair, kettle]}
+			onSelect={() => {}}
+		/>
+	));
+	fireEvent.input(screen.getByLabelText("Asset tag"), {
+		target: { value: "A000" },
+	});
+
+	setOpen(false);
+
+	expect(screen.getByLabelText("Asset tag")).toHaveValue("A000");
+	expect(screen.queryByRole("button", { name: "B00002 Kettle" })).toBeNull();
+
+	// The exit ends (no animation runs here): the search goes with it.
+	await waitFor(() => {
+		expect(screen.queryByLabelText("Asset tag")).toBeNull();
+	});
+	setOpen(true);
+	expect(
+		await screen.findByRole("button", { name: "B00002 Kettle" })
+	).toBeInTheDocument();
+	expect(screen.getByLabelText("Asset tag")).toHaveValue("");
 });
 
 test("choosing a row calls onSelect with that item", () => {

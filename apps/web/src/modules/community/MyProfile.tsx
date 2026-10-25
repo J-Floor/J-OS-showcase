@@ -1,9 +1,10 @@
 import { Input, PropertyRow, Query, SkeletonList } from "@j-os/design-system";
-import type { FunctionReturnType } from "convex/server";
+import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { useMutation } from "convex-solidjs";
 import { createSignal, For, Show, type Accessor } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
+import { displayName } from "../../../convex/lib/names.ts";
 import { MAX_LINKS } from "../../../convex/lib/safeUrl.ts";
 import { call } from "../../lib/call.ts";
 import { createActionError } from "../../shared/createActionError.ts";
@@ -22,14 +23,18 @@ import {
 	TeamSizeField,
 	VerticalField,
 } from "./ProfileFields.tsx";
+import type { VentureLinkValue } from "./VentureLink.tsx";
 
 const LINK_SLOTS = [...Array.from({ length: MAX_LINKS }).keys()];
 const OPTIONAL_LINK_SLOTS = LINK_SLOTS.slice(1);
 const PROFILE_SKELETON_ROWS = 6;
 
-type CurrentPerson = NonNullable<
+type OwnPerson = NonNullable<
 	FunctionReturnType<typeof api.people.getCurrentPerson>
 >;
+
+/** The fields one save changes: `updateOwnProfile`'s arguments. */
+export type ProfilePatch = FunctionArgs<typeof api.people.updateOwnProfile>;
 
 // A `type="tel"`/text input isn't sanitised by the browser (tel only hints
 // the mobile keypad), so drop anything that isn't a phone character before
@@ -51,7 +56,7 @@ export function MyProfile() {
 	const me = useQuery(api.people.getCurrentPerson, {});
 	const update = useMutation(api.people.updateOwnProfile);
 	const { error, trackResult } = createActionError();
-	async function patch(fields: Record<string, unknown>): Promise<void> {
+	async function patch(fields: ProfilePatch): Promise<void> {
 		await trackResult(
 			call(update.mutateAsync(fields), "Could not save your profile.")
 		);
@@ -82,8 +87,8 @@ export function MyProfile() {
 /** The member's profile fields, each saved on commit through `onPatch`. Takes
  *  the person as an accessor so a query push updates the fields in place. */
 function ProfileForm(props: {
-	person: Accessor<CurrentPerson>;
-	onPatch: (fields: Record<string, unknown>) => void;
+	person: Accessor<OwnPerson>;
+	onPatch: (fields: ProfilePatch) => void;
 }) {
 	function person() {
 		return props.person();
@@ -94,9 +99,7 @@ function ProfileForm(props: {
 				<span>{person().email}</span>
 			</PropertyRow>
 			<PropertyRow icon={ICONS.name} label="Name">
-				<span>
-					{`${person().firstName} ${person().lastName}`.trim()}
-				</span>
+				<span>{displayName(person())}</span>
 			</PropertyRow>
 			<PhoneField
 				value={person().phone}
@@ -164,8 +167,8 @@ function ProfileForm(props: {
  * this editor and drops whatever the user is mid-typing into another slot.
  */
 function LinksEditor(props: {
-	initial: { label: string; url: string }[];
-	onSave: (links: { label: string; url: string }[]) => void;
+	initial: VentureLinkValue[];
+	onSave: (links: NonNullable<ProfilePatch["links"]>) => void;
 }) {
 	const seed = LINK_SLOTS.map((index) => props.initial[index]?.url ?? "");
 	const [slots, setSlots] = createSignal<string[]>(seed);

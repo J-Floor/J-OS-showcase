@@ -3,7 +3,12 @@ import "solid-devtools";
 // so the install pill (which mounts late, inside the authed shell) doesn't miss
 // the early-firing event. Must stay at the top, ahead of the first render.
 import "./shared/pwaInstall.ts";
-import { JFloorProvider, Toast } from "@j-os/design-system";
+import {
+	JFloorProvider,
+	Toast,
+	readStored,
+	writeStored,
+} from "@j-os/design-system";
 import { Route, Router } from "@solidjs/router";
 import { ConvexProvider } from "convex-solidjs";
 import type { ParentProps } from "solid-js";
@@ -16,7 +21,6 @@ import { render } from "solid-js/web";
 import { registerSW } from "virtual:pwa-register";
 
 import { App, ModuleRoutes } from "./app.tsx";
-import { readSession, writeSession } from "./lib/browserStorage.ts";
 import { APP_ROOT_ID } from "./lib/constants.ts";
 import { bindConvexAuth, convex } from "./lib/convex.ts";
 import { startPwaUpdateChecks, startReloadOnUpdate } from "./lib/pwaUpdates.ts";
@@ -61,14 +65,16 @@ const PRELOAD_RELOAD_COOLDOWN_MS = 10_000;
 // timestamp caps it to at most one forced reload per 10s.
 window.addEventListener("vite:preloadError", () => {
 	const key = "jf:lastPreloadErrorReload";
-	const last = readSession(key).map((stored) => Number(stored ?? "0"));
+	const last = readStored("session", key).map((stored) =>
+		Number(stored ?? "0")
+	);
 	// sessionStorage unavailable (private mode / blocked) means there is no
 	// loop guard, so do NOT reload: a genuinely broken chunk would reload
 	// forever. Let the import rejection surface to the route's
 	// <AppErrorBoundary> instead.
 	if (last.isErr() || Date.now() - last.value < PRELOAD_RELOAD_COOLDOWN_MS)
 		return;
-	const marked = writeSession(key, String(Date.now()));
+	const marked = writeStored("session", key, String(Date.now()));
 	if (marked.isErr()) return;
 	window.location.reload();
 });

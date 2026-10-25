@@ -1,31 +1,30 @@
-import { fieldColumn, type JfColumnDefinition } from "@j-os/design-system";
-import { ok, type Result } from "neverthrow";
+import {
+	actionsColumnSize,
+	fieldColumn,
+	type JfColumnDefinition,
+} from "@j-os/design-system";
+import { ok } from "neverthrow";
 import { For, createSignal } from "solid-js";
 
-import type { Doc, Id } from "../../../../convex/_generated/dataModel";
-import type { PersonStatus } from "../../../../convex/lib/derive.ts";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { invariant } from "../../../../convex/lib/result.ts";
-import type { ClientError } from "../../../lib/call.ts";
+import type { PersonRow } from "../../../../convex/people.ts";
 import { SHORT_TEXT_SIZE } from "../../../shared/columnSizes.ts";
 import { ChangeRoleDialog } from "../actions/ChangeRoleDialog.tsx";
 import type { RoleMove } from "../actions/ChangeRoleDialog.tsx";
 import { useMemberActions } from "../actions/memberActions.ts";
-import { type TriageResult, useTriage } from "../actions/triage.ts";
+import {
+	useTriage,
+	type MoveResult,
+	type Triage,
+	type TriageResult,
+} from "../actions/triage.ts";
 import { personFields } from "../fields.ts";
 
 import { flagsColumn } from "./flagsColumn.tsx";
 import { joinedColumn } from "./joinedColumn.ts";
-import {
-	actionsColumnSize,
-	RowActionButton,
-	RowActions,
-} from "./RowActions.tsx";
+import { RowActionButton, RowActions } from "./RowActions.tsx";
 import { ventureColumns } from "./ventureColumns.tsx";
-
-export type MemberRow = Doc<"people"> & {
-	status: PersonStatus;
-	hasAgreement: boolean;
-};
 
 /** The group a person falls into in the Members tab, derived from the machine.
  *  Placement follows the LAST tier: a former member stays in this tab.
@@ -36,16 +35,8 @@ export type MemberRow = Doc<"people"> & {
  *  is read first and believed. `MARK_LEFT` and `KICK_OUT` are separate events
  *  precisely because the distinction matters; the tab now says so. */
 export function memberGroup(
-	row: MemberRow
-):
-	| "board"
-	| "admin"
-	| "staff"
-	| "core"
-	| "member"
-	| "not_onboarded"
-	| "alumni"
-	| "kicked_out" {
+	row: PersonRow
+): (typeof groupOptions)[number]["value"] {
 	if (row.tier === "former")
 		return row.formerReason === "left" ? "alumni" : "kicked_out";
 	if (row.tier === "board") return "board";
@@ -66,8 +57,6 @@ export function memberGroup(
 function assertNever(value: never): never {
 	invariant(false, `applyMove: unhandled RoleMove event ${String(value)}`);
 }
-
-type Triage = ReturnType<typeof useTriage>;
 
 // A `switch`, not an `if`/`else if` chain ending in a bare `else`: once
 // every other case is listed, TS narrows `event` in the `default` arm to
@@ -121,7 +110,7 @@ export async function applyMove(
 	triage: Triage,
 	ids: Id<"people">[],
 	move: RoleMove
-): Promise<Result<unknown, ClientError>> {
+): Promise<MoveResult> {
 	for (const id of ids) {
 		const result = await applyOneMove(triage, id, move);
 		if (result.isErr()) return result;
@@ -148,7 +137,7 @@ const groupOptions = [
  * out. Labels, icons and availability all come from `useMemberActions`, shared
  * with the batch bar and the (future) key bindings — this component just
  * renders whatever it offers. */
-function MemberActions(props: { row: MemberRow }) {
+function MemberActions(props: { row: PersonRow }) {
 	const triage = useTriage();
 	const [roleOpen, setRoleOpen] = createSignal(false);
 	const memberActions = useMemberActions({
@@ -182,7 +171,7 @@ function MemberActions(props: { row: MemberRow }) {
  * {@link guestColumns}, which has to be one — and so the venture columns below
  * are built once per call rather than shared by reference across two tables.
  */
-export function memberColumns(): JfColumnDefinition<MemberRow>[] {
+export function memberColumns(): JfColumnDefinition<PersonRow>[] {
 	return [
 		{
 			// Hidden grouping column — board / members / kicked-out. Derived (not a
@@ -202,15 +191,15 @@ export function memberColumns(): JfColumnDefinition<MemberRow>[] {
 			accessorKey: "lastName",
 			dataType: "string",
 		}),
-		flagsColumn<MemberRow>(),
+		flagsColumn<PersonRow>(),
 		fieldColumn(personFields.ventureName, {
 			dataType: "string",
 			size: SHORT_TEXT_SIZE,
 			measureText: false,
 			accessorFn: (row) => row.venture?.name ?? "",
 		}),
-		...ventureColumns<MemberRow>(),
-		joinedColumn<MemberRow>(),
+		...ventureColumns<PersonRow>(),
+		joinedColumn<PersonRow>(),
 		{
 			id: "actions",
 			header: "",

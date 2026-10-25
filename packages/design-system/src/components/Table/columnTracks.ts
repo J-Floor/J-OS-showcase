@@ -7,6 +7,38 @@ export const SELECT_COLUMN_ID = "select";
 export const ACTIONS_COLUMN_ID = "actions";
 export const SELECT_COLUMN_WIDTH = 48;
 
+/**
+ * What the actions column holds, in px (jsdom and a first render measure
+ * nothing):
+ * - `button`: one `IconButton` in a body cell, the body typography's icon
+ *   size plus `--jf-spacing-close` padding on each side.
+ * - `gap`: `--jf-spacing-close`, between two of them.
+ * - `cellPadding`: the cell's own inline room, `--jf-spacing-near` on each
+ *   side plus its leading divider.
+ */
+export const ACTIONS_COLUMN_DIMENSIONS = {
+	button: 29,
+	gap: 4,
+	cellPadding: 17,
+} as const;
+
+/**
+ * How wide the trailing actions column must be to hold `count` icon buttons
+ * set `--jf-spacing-close` apart.
+ *
+ * Derived rather than guessed, because guessing wrong is invisible until
+ * somebody points at the screen: buttons packed to the cell's end are not
+ * clipped by a column too narrow for them, they escape out of its leading
+ * edge and sit on top of the column before it.
+ *
+ * Pass the MOST buttons any row can show, not the usual number: some are
+ * conditional, and one width has to serve the whole table.
+ */
+export function actionsColumnSize(count: number): number {
+	const { button, gap, cellPadding } = ACTIONS_COLUMN_DIMENSIONS;
+	return count * button + Math.max(0, count - 1) * gap + cellPadding;
+}
+
 /** One column's grid track, the least it can be, and whether it takes a share
  *  of leftover width (`fr`). */
 type ResolvedTrack = { css: string; floor: number; flexible: boolean };

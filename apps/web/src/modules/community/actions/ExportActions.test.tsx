@@ -42,13 +42,9 @@ const guestRows = [
 	row({ _id: "g1", email: "g@example.com", tier: "guest", stage: "active" }),
 ];
 
-vi.mock("../data/useApplications.ts", () => ({
+vi.mock("../data/communityData.tsx", () => ({
 	useApplications: () => ({ data: () => appRows }),
-}));
-vi.mock("../data/useMembers.ts", () => ({
 	useMembers: () => ({ data: () => memberRows }),
-}));
-vi.mock("../data/useGuests.ts", () => ({
 	useGuests: () => ({ data: () => guestRows }),
 }));
 

@@ -1,3 +1,4 @@
+import type { FunctionReturnType } from "convex/server";
 import { type JSX, createContext, useContext } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
@@ -34,11 +35,10 @@ export function useBoardLevel() {
 	return context ?? boardLevelQuery();
 }
 
-export type StaffMember = {
-	_id: Id<"people">;
-	firstName: string;
-	lastName: string;
-};
+export type StaffMember = Pick<
+	FunctionReturnType<typeof api.people.listBoardLevel>[number],
+	"_id" | "firstName" | "lastName"
+>;
 
 /** A board-level person's display name from `useBoardLevel().data()`:
  *  `undefined` while the list loads, `null` when no one has that id (left the

@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { blockStorage } from "../../test/blockedStorage.ts";
+
 import {
 	addRecent,
 	readRecents,
@@ -80,6 +82,23 @@ describe("recents storage", () => {
 
 	it("reads an unset key as empty", () => {
 		expect(readRecents("missing")).toEqual([]);
+	});
+
+	it("stores the list as a JSON array", () => {
+		writeRecents("k", ["Button"]);
+		expect(localStorage.getItem("k")).toBe('["Button"]');
+	});
+
+	it("reads blocked storage as empty and writes to it without throwing", () => {
+		const restore = blockStorage();
+		try {
+			expect(readRecents("k")).toEqual([]);
+			expect(() => {
+				writeRecents("k", ["Button"]);
+			}).not.toThrow();
+		} finally {
+			restore();
+		}
 	});
 
 	it("reads corrupt JSON as empty instead of throwing", () => {

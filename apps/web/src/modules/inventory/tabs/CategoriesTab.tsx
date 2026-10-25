@@ -7,27 +7,31 @@ import { useCategories } from "../data/inventoryData.ts";
 import { categoryEntity } from "../entity.ts";
 import { CategorySheet } from "../sheets/CategorySheet.tsx";
 
-import { InventoryTab } from "./InventoryTab.tsx";
+import { InventoryTab, type InventorySheetArgs } from "./InventoryTab.tsx";
 
 export function CategoriesTab(props: {
 	selection: EntitySelection<Category>;
 }): JSX.Element {
 	const categories = useCategories();
 	return (
-		<InventoryTab
+		<InventoryTab.Root
 			data={() => categories.data()}
 			columns={() => categoryColumns()}
 			selection={props.selection}
 			descriptor={categoryEntity}
-			renderSheet={(sheet) => (
-				<CategorySheet
-					open={sheet.open()}
-					onOpenChange={sheet.onOpenChange}
-					category={sheet.row()}
-					loading={props.selection.loading()}
-					nav={sheet.nav}
-				/>
-			)}
-		/>
+		>
+			<InventoryTab.Sheet<Category>>
+				{(sheet: InventorySheetArgs<Category>) => (
+					<CategorySheet
+						open={sheet.open()}
+						prebuild={sheet.prebuild()}
+						onOpenChange={sheet.onOpenChange}
+						category={sheet.row()}
+						loading={props.selection.loading()}
+						nav={sheet.nav}
+					/>
+				)}
+			</InventoryTab.Sheet>
+		</InventoryTab.Root>
 	);
 }

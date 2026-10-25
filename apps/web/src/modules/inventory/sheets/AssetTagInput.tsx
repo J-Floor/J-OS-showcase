@@ -10,6 +10,7 @@ import {
 } from "solid-js";
 
 import { parseAssetTag } from "../../../../convex/lib/assetTag.ts";
+import type { SyncedField } from "../../../lib/createSyncedField.ts";
 
 import styles from "./AssetTagInput.module.scss";
 
@@ -64,16 +65,14 @@ function nextLetter(raw: string, previous: string): string {
 }
 
 type AssetTagInputProps = {
-	value: string;
-	onChange: (tag: string) => void;
-	onFlush: () => void;
+	field: SyncedField<string>;
 	hasError: boolean;
 	onElement?: (element: HTMLInputElement) => void;
 };
 
-/** The two fields' state and handlers; the combined tag goes to `onChange`. */
+/** The two fields' state and handlers; the combined tag goes to the field's `set`. */
 function createAssetTagFields(props: AssetTagInputProps) {
-	const initial = splitTag(untrack(() => props.value));
+	const initial = splitTag(untrack(() => props.field.value()));
 	const [letter, setLetter] = createSignal(initial.letter);
 	const [digits, setDigits] = createSignal(initial.digits);
 	const [isLeft, setLeft] = createSignal(false);
@@ -88,7 +87,7 @@ function createAssetTagFields(props: AssetTagInputProps) {
 	// prefilled; adopt that, but never overwrite what is being typed.
 	createEffect(
 		on(
-			() => props.value,
+			() => props.field.value(),
 			(value) => {
 				if (value === untrack(combined)) return;
 				const parts = splitTag(value);
@@ -102,7 +101,7 @@ function createAssetTagFields(props: AssetTagInputProps) {
 	function change(parts: Partial<TagParts>) {
 		setLetter(parts.letter ?? letter());
 		setDigits(parts.digits ?? digits());
-		props.onChange(combined());
+		props.field.set(combined());
 	}
 
 	return {
@@ -153,7 +152,7 @@ function createAssetTagFields(props: AssetTagInputProps) {
 		onGroupFocusOut: (event: GroupFocusEvent) => {
 			if (!isLeavingGroup(event)) return;
 			setLeft(true);
-			props.onFlush();
+			props.field.flush();
 		},
 	};
 }

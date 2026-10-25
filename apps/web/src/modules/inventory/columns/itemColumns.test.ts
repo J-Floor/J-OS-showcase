@@ -1,13 +1,15 @@
 // @vitest-environment happy-dom
-import { type JfColumnDefinition } from "@j-os/design-system";
+import {
+	actionsColumnSize,
+	type JfColumnDefinition,
+} from "@j-os/design-system";
+import { createRoot, createSignal } from "solid-js";
 import { expect, test } from "vitest";
-
-import { actionsColumnSize } from "../../community/columns/RowActions.tsx";
 
 import { categoryColumns } from "./categoryColumns.tsx";
 import { DESCRIPTION_SIZE } from "./columnSizes.ts";
-import { itemColumns } from "./itemColumns.tsx";
-import { itemTypeColumns } from "./itemTypeColumns.tsx";
+import { createItemColumns, itemColumns } from "./itemColumns.tsx";
+import { createItemTypeColumns, itemTypeColumns } from "./itemTypeColumns.tsx";
 
 const rows = [
 	{
@@ -31,10 +33,23 @@ const rows = [
 	},
 ] as const;
 
+const NO_OPTIONS = { types: [], categories: [] };
+
+type ItemRows = Parameters<typeof createItemColumns>[0] extends () => infer R
+	? R
+	: never;
+type TypeRows = Parameters<
+	typeof createItemTypeColumns
+>[0] extends () => infer R
+	? R
+	: never;
+
 test("item columns expose type and category as enum filters", () => {
-	const columns = itemColumns([...rows] as unknown as Parameters<
-		typeof itemColumns
-	>[0]);
+	const columns = createRoot((dispose) => {
+		const built = createItemColumns(() => rows as unknown as ItemRows)();
+		dispose();
+		return built;
+	});
 	const type = columns.find(
 		(column) => column.header === "Type"
 	) as JfColumnDefinition<Record<string, unknown>>;
@@ -54,10 +69,8 @@ test("item columns expose type and category as enum filters", () => {
 });
 
 test("free-text descriptions share the leftover width instead of growing to fit", () => {
-	const items = itemColumns([...rows] as unknown as Parameters<
-		typeof itemColumns
-	>[0]);
-	const types = itemTypeColumns([]);
+	const items = itemColumns(NO_OPTIONS);
+	const types = itemTypeColumns(NO_OPTIONS);
 	const categories = categoryColumns();
 	for (const columns of [items, types, categories]) {
 		expect(
@@ -69,8 +82,67 @@ test("free-text descriptions share the leftover width instead of growing to fit"
 	}
 });
 
+function enumOptionsOf<Row extends Record<string, unknown>>(
+	columns: readonly JfColumnDefinition<Row>[],
+	header: string
+): unknown {
+	return (
+		columns.find((column) => column.header === header) as
+			| JfColumnDefinition<Record<string, unknown>>
+			| undefined
+	)?.enumOptions;
+}
+
+test("item columns change only when their options do: a push with the same types and categories keeps them", () => {
+	createRoot((dispose) => {
+		const [items, setItems] = createSignal(rows as unknown as ItemRows);
+		const columns = createItemColumns(items);
+		const first = columns();
+		setItems(
+			rows.map((row) => ({
+				...row,
+				description: "Edited",
+			})) as unknown as ItemRows
+		);
+		expect(columns()).toBe(first);
+		setItems([
+			...rows,
+			{ ...rows[0], _id: "i3", typeName: "Desk" },
+		] as unknown as ItemRows);
+		expect(columns()).not.toBe(first);
+		expect(enumOptionsOf(columns(), "Type")).toEqual([
+			{ label: "Chair", value: "Chair" },
+			{ label: "Desk", value: "Desk" },
+			{ label: "Kettle", value: "Kettle" },
+		]);
+		dispose();
+	});
+});
+
+test("item type columns change only when their category options do", () => {
+	const types = [
+		{ _id: "t1", name: "Chair", categoryName: "Furniture" },
+		{ _id: "t2", name: "Kettle", categoryName: "Kitchen" },
+	];
+	createRoot((dispose) => {
+		const [rowsNow, setRows] = createSignal(types as unknown as TypeRows);
+		const columns = createItemTypeColumns(rowsNow);
+		const first = columns();
+		setRows(types.map((type) => ({ ...type })) as unknown as TypeRows);
+		expect(columns()).toBe(first);
+		setRows([
+			...types,
+			{ _id: "t3", name: "Lamp", categoryName: "Lighting" },
+		] as unknown as TypeRows);
+		expect(columns()).not.toBe(first);
+		dispose();
+	});
+});
+
 test("the item actions column is a display column with a fixed width", () => {
-	const actions = itemColumns([]).find((column) => column.id === "actions");
+	const actions = itemColumns(NO_OPTIONS).find(
+		(column) => column.id === "actions"
+	);
 	expect(actions?.size).toBe(actionsColumnSize(2));
 	expect(actions).not.toHaveProperty("dataType");
 	expect(actions).not.toHaveProperty("enableSorting");

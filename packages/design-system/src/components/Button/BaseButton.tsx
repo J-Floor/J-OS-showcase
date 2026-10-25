@@ -1,3 +1,4 @@
+import { mergeRefs } from "@solid-primitives/refs";
 import clsx from "clsx";
 import {
 	type Accessor,
@@ -98,10 +99,6 @@ export function BaseButton(props: BaseButtonProps): JSX.Element {
 	]);
 
 	let element: HTMLElement | undefined;
-	function setElement(node: HTMLElement) {
-		element = node;
-		if (typeof local.ref === "function") local.ref(node);
-	}
 
 	const [isClickHandlerExecuting, setClickHandlerExecuting] =
 		createSignal(false);
@@ -158,7 +155,9 @@ export function BaseButton(props: BaseButtonProps): JSX.Element {
 				component={local.as ?? "button"}
 				type={isNativeButton() ? "button" : undefined}
 				{...rest}
-				ref={setElement}
+				ref={mergeRefs((node: HTMLElement) => {
+					element = node;
+				}, local.ref)}
 				href={isDisabled() ? undefined : local.href}
 				onClick={handleClick}
 				aria-busy={combinedIsLoading() ? true : undefined}

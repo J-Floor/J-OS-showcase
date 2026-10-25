@@ -1,8 +1,11 @@
 import { Logo } from "@j-os/design-system";
+import type { FunctionReturnType } from "convex/server";
 import { Match, Show, Switch, type JSX } from "solid-js";
 
+import type { api } from "../../../convex/_generated/api";
 import type { Wifi } from "../../../convex/lib/wifi.ts";
 import { APP_NAME } from "../../lib/constants.ts";
+import type { LinkConfirmationStatus } from "../../shared/linkConfirmation.ts";
 import { WifiContent } from "../space/WifiContent.tsx";
 
 import styles from "./ConfirmScreen.module.scss";
@@ -42,13 +45,19 @@ export function ConfirmDetail(props: { children: JSX.Element }): JSX.Element {
 	return <p class={styles.intro}>{props.children}</p>;
 }
 
+/** The statuses of the two Wi-Fi confirm links, plus the page's own two. */
+type WifiConfirmStatus = LinkConfirmationStatus<
+	| FunctionReturnType<typeof api.visitors.confirmVisitor>
+	| FunctionReturnType<typeof api.eventCheckIn.confirmEventInvite>
+>;
+
 /**
  * The Wi-Fi hand-off a visitor or event-invite link lands on. Once verified it
  * shows the Wi-Fi, then `children` (where to go next); `expiredDetail` says how
  * to get a fresh link.
  */
 export function WifiConfirmScreen(props: {
-	status: string;
+	status: WifiConfirmStatus;
 	isVerified: boolean;
 	wifi: Wifi | undefined;
 	expiredDetail: string;

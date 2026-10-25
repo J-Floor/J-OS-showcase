@@ -75,10 +75,14 @@ vi.mock("../data/inventoryData.ts", () => ({
 	}),
 }));
 
-vi.mock("../columns/itemColumns.tsx", () => ({
-	itemColumns: () => [
+const { mockColumns } = vi.hoisted(() => ({
+	mockColumns: vi.fn(() => [
 		{ accessorKey: "assetTag", header: "Asset tag", dataType: "string" },
-	],
+	]),
+}));
+
+vi.mock("../columns/itemColumns.tsx", () => ({
+	createItemColumns: () => mockColumns,
 }));
 
 vi.mock("../sheets/ItemSheet.tsx", () => ({

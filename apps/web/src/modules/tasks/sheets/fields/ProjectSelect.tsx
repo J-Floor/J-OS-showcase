@@ -1,15 +1,16 @@
-import { Select } from "@j-os/design-system";
+import { Select, type SelectRootProps } from "@j-os/design-system";
 import { For, type JSX } from "solid-js";
 
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import type { Project } from "../../data/tasksData.tsx";
 
-export function ProjectSelect(props: {
-	label: string;
-	projects: Project[];
-	value?: Id<"projects">;
-	onChange: (id: Id<"projects"> | undefined) => void;
-}): JSX.Element {
+export function ProjectSelect(
+	props: Pick<SelectRootProps, "label"> & {
+		projects: Project[];
+		value?: Id<"projects">;
+		onChange: (id: Id<"projects"> | undefined) => void;
+	}
+): JSX.Element {
 	return (
 		<Select.Root
 			label={props.label}

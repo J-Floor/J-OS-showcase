@@ -5,6 +5,7 @@ import { Show } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
 import { createLinkConfirmation } from "../../shared/linkConfirmation.ts";
+import type { SignUpPrefill } from "../signup/signUpForm.ts";
 
 import { WifiConfirmScreen } from "./ConfirmScreen.tsx";
 
@@ -38,7 +39,7 @@ export function VisitorConfirm() {
 									firstName: wifi.firstName,
 									lastName: wifi.lastName,
 									email: wifi.email,
-								},
+								} satisfies SignUpPrefill,
 							});
 						}}
 					>

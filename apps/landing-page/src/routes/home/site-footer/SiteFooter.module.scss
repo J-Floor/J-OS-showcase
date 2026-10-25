@@ -1,3 +1,4 @@
+@use "@j-os/design-system/hover";
 @use "@j-os/design-system/breakpoints" as bp;
 @use "../../../styles/marketing-type" as mkt;
 
@@ -86,7 +87,7 @@
 	transition: background-color var(--jf-animation-duration-default) ease;
 
 	@media (hover: hover) {
-		&:hover {
+		@include hover.hover {
 			background-color: var(--core-grey-700);
 		}
 	}

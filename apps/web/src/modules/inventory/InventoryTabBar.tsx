@@ -1,9 +1,10 @@
 import { Button, Icon, IconButton, Tabs } from "@j-os/design-system";
-import type { Accessor } from "solid-js";
+import { For, type Accessor } from "solid-js";
 
 import { ICONS } from "../../shared/icons.ts";
 
 import type { Item } from "./data/inventoryData.ts";
+import { INVENTORY_TABS } from "./inventoryTabs.ts";
 import { printInventoryList } from "./print/printInventoryList.ts";
 
 /** The tab triggers, and each tab's header actions: print and scan and new
@@ -25,9 +26,13 @@ export function InventoryTabBar(props: {
 	return (
 		<Tabs.Bar>
 			<Tabs.List>
-				<Tabs.Trigger value="items">Items</Tabs.Trigger>
-				<Tabs.Trigger value="types">Item types</Tabs.Trigger>
-				<Tabs.Trigger value="categories">Categories</Tabs.Trigger>
+				<For each={INVENTORY_TABS}>
+					{(entry) => (
+						<Tabs.Trigger value={entry.tab}>
+							{entry.label}
+						</Tabs.Trigger>
+					)}
+				</For>
 			</Tabs.List>
 			<Tabs.Actions value="items">
 				<IconButton

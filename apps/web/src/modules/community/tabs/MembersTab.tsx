@@ -1,9 +1,10 @@
-import { Button, Icon } from "@j-os/design-system";
+import { Button, Icon, Table } from "@j-os/design-system";
 import { type JSX, Show, createSignal } from "solid-js";
 
+import type { Id } from "../../../../convex/_generated/dataModel";
 import type { StateId } from "../../../../convex/lib/lifecycleTypes.ts";
 import { invariant } from "../../../../convex/lib/result.ts";
-import { useConfirm } from "../../../shared/confirm.tsx";
+import type { PersonRow } from "../../../../convex/people.ts";
 import { ICONS } from "../../../shared/icons.ts";
 import { ChangeRoleDialog } from "../actions/ChangeRoleDialog.tsx";
 import { useMemberActions } from "../actions/memberActions.ts";
@@ -11,85 +12,57 @@ import { eligible, type ActionDescriptor } from "../actions/shortcuts.ts";
 import { useTriage } from "../actions/triage.ts";
 import {
 	applyMove,
-	type MemberRow,
 	memberColumns,
 	memberGroup,
 } from "../columns/memberColumns.tsx";
-import { useMembers } from "../data/useMembers.ts";
+import { useMembers } from "../data/communityData.tsx";
 
-import { RosterTab, type RosterBatchProps } from "./RosterTab.tsx";
+import { BatchKickOut } from "./BatchKickOut.tsx";
+import { RosterTab } from "./RosterTab.tsx";
 import type { TabProps } from "./TabProps.ts";
+
+/** Who a Change role dialog applies to, and what to do once they have moved. */
+type RoleTarget = {
+	ids: Id<"people">[];
+	states: StateId[];
+	onMoved?: () => void;
+};
 
 /** The selection bar: change role for, and kick out, the checked rows. */
 function MemberBatchActions(props: {
-	batch: RosterBatchProps<MemberRow>;
-	isRoleOpen: boolean;
-	onRoleOpenChange: (isOpen: boolean) => void;
-	kickOutAction: () => ActionDescriptor<MemberRow>;
+	onChangeRole: (target: RoleTarget) => void;
+	kickOutAction: () => ActionDescriptor<PersonRow>;
 }): JSX.Element {
-	const triage = useTriage();
-	const confirm = useConfirm();
+	const selection = Table.useSelection<PersonRow>();
 
 	// The rows Kick out applies to — the SAME rule the per-row button
 	// and the `K` key ask, via `kickOutAction().can`.
 	function targets() {
-		return eligible(props.kickOutAction(), props.batch.rows());
+		return eligible(props.kickOutAction(), selection.rows());
 	}
 
 	return (
 		<>
-			<Show when={props.batch.rows().length > 0}>
+			<Show when={selection.rows().length > 0}>
 				<Button
 					onClick={() => {
-						props.onRoleOpenChange(true);
+						const rows = selection.rows();
+						props.onChangeRole({
+							ids: rows.map((row) => row._id),
+							states: rows.map<StateId>(
+								(row) => `${row.tier}.${row.stage}`
+							),
+							// Clearing the selection takes this bar away. The dialog is
+							// not in it, so it stays up to animate out.
+							onMoved: selection.clear,
+						});
 					}}
 				>
 					<Icon>{ICONS.role}</Icon>Change role
 				</Button>
 			</Show>
-			<ChangeRoleDialog
-				open={props.isRoleOpen}
-				onOpenChange={props.onRoleOpenChange}
-				count={props.batch.rows().length}
-				states={props.batch
-					.rows()
-					.map<StateId>((row) => `${row.tier}.${row.stage}`)}
-				onMove={(move) => {
-					// Read the tracked selection synchronously (before the
-					// promise) so `solid/reactivity` stays happy, then let
-					// the dialog await the whole batch before it closes.
-					const ids = props.batch.rows().map((row) => row._id);
-					const clearSelection = props.batch.clear;
-					return applyMove(triage, ids, move).then((result) => {
-						if (result.isOk()) clearSelection();
-						return result;
-					});
-				}}
-			/>
 			<Show when={targets().length > 0}>
-				<Button
-					variant="secondary"
-					onClick={() => {
-						void (async () => {
-							const rows = targets();
-							if (
-								await confirm({
-									title: "Kick out?",
-									message: `Revoke access for ${rows.length} person(s)? They'll be moved to Kicked out, keeping their whole history.`,
-									confirmLabel: "Kick out",
-									tone: "danger",
-								})
-							)
-								await props.batch.runBatch(
-									rows,
-									triage.kickOut,
-									props.batch.clear
-								);
-						})();
-					}}
-				>
-					<Icon>{ICONS.kickOut}</Icon>Kick out
-				</Button>
+				<BatchKickOut kind="member" rows={targets()} />
 			</Show>
 		</>
 	);
@@ -98,30 +71,36 @@ function MemberBatchActions(props: {
 /**
  * Members tab: members / board / kicked-out grouped, with batch triage and a
  * change-role dialog. The roster + sheet scaffold is {@link RosterTab}; this
- * file owns what is member-specific — the change-role flows and the selection
+ * file owns what is member-specific — the change-role flow and the selection
  * bar.
  *
- * Change role has two flows, two dialogs. The BATCH one (`roleOpen`) lives in the
- * selection bar over the checked rows. The SINGLE one (`singleRoleOpen` +
- * `roleTarget`) is for the `R` key and the sheet footer — those act on one
- * person, who has no checkbox selection, so the batch dialog (mounted only while
- * rows are selected) never opened for them; this one is passed as `extra` so it
- * exists to be opened for the sheet/focused person.
+ * Change role has one dialog for both ways in: the selection bar's button
+ * (over the checked rows) and the `R` key / sheet footer (one person, who has
+ * no checkbox selection). It sits BESIDE the roster, not in the selection
+ * bar: the bar only exists while rows are checked, and a successful move
+ * clears the selection, which would unmount the dialog mid-close.
  */
 export function MembersTab(props: TabProps): JSX.Element {
 	const members = useMembers();
 	const triage = useTriage();
-	const [roleOpen, setRoleOpen] = createSignal(false);
-	const [singleRoleOpen, setSingleRoleOpen] = createSignal(false);
-	const [roleTarget, setRoleTarget] = createSignal<MemberRow>();
+	const [isRoleOpen, setRoleOpen] = createSignal(false);
+	// Kept after the dialog closes: dropping it would unmount the dialog
+	// before its exit animation ran.
+	const [roleTarget, setRoleTarget] = createSignal<RoleTarget>();
+	function openRoleDialog(target: RoleTarget): void {
+		setRoleTarget(target);
+		setRoleOpen(true);
+	}
 	const memberActions = useMemberActions({
 		onChangeRole: (person) => {
-			setRoleTarget(person);
-			setSingleRoleOpen(true);
+			openRoleDialog({
+				ids: [person._id],
+				states: [`${person.tier}.${person.stage}`],
+			});
 		},
 		group: memberGroup,
 	});
-	function kickOutAction(): ActionDescriptor<MemberRow> {
+	function kickOutAction(): ActionDescriptor<PersonRow> {
 		const action = memberActions
 			.actions()
 			.find((candidate) => candidate.id === "kick");
@@ -130,36 +109,40 @@ export function MembersTab(props: TabProps): JSX.Element {
 	}
 
 	return (
-		<RosterTab<MemberRow>
-			tab={props}
-			scope="members"
-			data={() => members.data()}
-			columns={() => memberColumns()}
-			groupBy="group"
-			actions={memberActions.actions}
-			extra={
-				<Show when={roleTarget()}>
-					{(person) => (
-						<ChangeRoleDialog
-							open={singleRoleOpen()}
-							onOpenChange={setSingleRoleOpen}
-							count={1}
-							states={[`${person().tier}.${person().stage}`]}
-							onMove={(move) =>
-								applyMove(triage, [person()._id], move)
-							}
-						/>
-					)}
-				</Show>
-			}
-			batchActions={(batch) => (
-				<MemberBatchActions
-					batch={batch}
-					isRoleOpen={roleOpen()}
-					onRoleOpenChange={setRoleOpen}
-					kickOutAction={() => kickOutAction()}
-				/>
-			)}
-		/>
+		<>
+			<RosterTab.Root<PersonRow>
+				tab={props}
+				scope="members"
+				data={() => members.data()}
+				columns={() => memberColumns()}
+				groupBy="group"
+				actions={memberActions.actions}
+			>
+				<Table.BatchActions>
+					<MemberBatchActions
+						onChangeRole={openRoleDialog}
+						kickOutAction={kickOutAction}
+					/>
+				</Table.BatchActions>
+			</RosterTab.Root>
+			<Show when={roleTarget()}>
+				{(target) => (
+					<ChangeRoleDialog
+						open={isRoleOpen()}
+						onOpenChange={setRoleOpen}
+						count={target().ids.length}
+						states={target().states}
+						onMove={(move) =>
+							applyMove(triage, target().ids, move).then(
+								(result) => {
+									if (result.isOk()) target().onMoved?.();
+									return result;
+								}
+							)
+						}
+					/>
+				)}
+			</Show>
+		</>
 	);
 }

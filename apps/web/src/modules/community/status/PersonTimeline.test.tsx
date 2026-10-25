@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, render, screen } from "@solidjs/testing-library";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import type { FunctionReturnType } from "convex/server";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 
 // Property 4 (timeline renders events / gives a sensible empty state) needs
 // `PersonTimeline` itself mounted, which calls `useQuery` — stub it out (as
@@ -19,13 +20,19 @@ vi.mock("convex-solidjs", () => ({
 	}),
 }));
 
+import type { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { ICONS } from "../../../shared/icons.ts";
 
-import { PersonTimeline, toEntry } from "./PersonTimeline.tsx";
+import { type AuditRow, PersonTimeline, toEntry } from "./PersonTimeline.tsx";
 
-function row(over: Record<string, unknown>) {
-	return { _id: "e1", at: 1_800_000_000_000, kind: "transition", ...over };
+function row(over: Record<string, unknown>): AuditRow {
+	return {
+		_id: "e1",
+		at: 1_800_000_000_000,
+		kind: "transition",
+		...over,
+	} as unknown as AuditRow;
 }
 
 describe("toEntry", () => {
@@ -211,23 +218,25 @@ it("names the events that predate the statechart", () => {
 	// The audit log keeps whatever was written at the time, so production
 	// still holds hundreds of `SUBMIT` and `SIGN_AGREEMENT` rows from before
 	// the machine existed. They were rendering as raw tokens.
-	expect(
-		toEntry({ _id: "e", at: 0, kind: "transition", event: "SUBMIT" }).title
-	).toBe("Applied to join");
-	expect(
-		toEntry({
-			_id: "e",
-			at: 0,
-			kind: "transition",
-			event: "SIGN_AGREEMENT",
-		}).title
-	).toBe("Signed the agreement");
+	expect(toEntry(row({ at: 0, event: "SUBMIT" })).title).toBe(
+		"Applied to join"
+	);
+	expect(toEntry(row({ at: 0, event: "SIGN_AGREEMENT" })).title).toBe(
+		"Signed the agreement"
+	);
 });
 
 it("shows an unrecognised event rather than hiding it", () => {
 	// A name we have not written wording for is still information; swallowing
 	// it would leave a gap in someone's history with no way to notice.
-	expect(
-		toEntry({ _id: "e", at: 0, kind: "transition", event: "WAT" }).title
-	).toBe("WAT");
+	expect(toEntry(row({ at: 0, event: "WAT" })).title).toBe("WAT");
+});
+
+it("types its rows from the query that sends them, door actions included", () => {
+	expectTypeOf<AuditRow>().toEqualTypeOf<
+		FunctionReturnType<typeof api.personEvents.listForPerson>[number]
+	>();
+	expectTypeOf<"door_action">().toExtend<AuditRow["kind"]>();
+	// A kind the schema does not have is not a row kind.
+	expectTypeOf<"made_up">().not.toExtend<AuditRow["kind"]>();
 });

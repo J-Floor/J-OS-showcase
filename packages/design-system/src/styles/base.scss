@@ -17,6 +17,13 @@
 
 	/* Fast start, long soft landing: a toast leaving. */
 	--jf-animation-ease-settle-exit: cubic-bezier(0.06, 0.71, 0.55, 1);
+
+	@media (prefers-reduced-motion: reduce) {
+		--jf-animation-duration-fast: 0ms;
+		--jf-animation-duration-default: 0ms;
+		--jf-animation-duration-morph: 0ms;
+		--jf-animation-duration-reveal: 0ms;
+	}
 }
 
 body {

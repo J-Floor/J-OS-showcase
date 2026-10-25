@@ -5,6 +5,7 @@ import { onMount, Show } from "solid-js";
 import { celebrate } from "../../lib/celebrate.ts";
 import { ICONS } from "../../shared/icons.ts";
 import { useRecaptchaScript } from "../../shared/recaptcha.ts";
+import { SubmitErrorBanner } from "../../shared/SubmitErrorBanner.tsx";
 import { PrivacyNoticeLine } from "../privacy/PrivacyNoticeLine.tsx";
 
 import styles from "./SignUp.module.scss";
@@ -17,7 +18,7 @@ import {
 	TeamFields,
 	VentureFields,
 } from "./SignUpFields.tsx";
-import { createSignUpForm } from "./signUpForm.ts";
+import { createSignUpForm, type SignUpPrefill } from "./signUpForm.ts";
 
 /** What the applicant sees once the form is sent: the application is not
  *  sent until they click the link in the email. */
@@ -55,11 +56,7 @@ export function SignUp() {
 	// Visitors converting to full applicants arrive with their name + email
 	// already known (passed as router navigation state); prefill but keep
 	// every field editable.
-	const nav = useLocation<{
-		firstName?: string;
-		lastName?: string;
-		email?: string;
-	}>();
+	const nav = useLocation<SignUpPrefill>();
 	const form = createSignUpForm(nav.state ?? {});
 	useRecaptchaScript("signup");
 
@@ -88,12 +85,7 @@ export function SignUp() {
 						<LinkFields form={form} />
 						<MotivationFields form={form} />
 
-						<Show when={form.submitError()}>
-							<div class={styles.banner} role="alert">
-								<Icon>{ICONS.error}</Icon>
-								<span>{form.submitError()}</span>
-							</div>
-						</Show>
+						<SubmitErrorBanner message={form.submitError()} />
 
 						<Button
 							type="submit"

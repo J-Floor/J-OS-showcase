@@ -1,7 +1,7 @@
 import { expect, expectTypeOf, test } from "vitest";
 
 import { type FieldDefinition, defineFields, morphPart } from "./fields.ts";
-import { MORPH_KEY } from "./morphPairing.ts";
+import { MORPH_KEY } from "./morphNames.ts";
 
 const fields = defineFields({
 	status: { label: "Status", icon: "flag" },

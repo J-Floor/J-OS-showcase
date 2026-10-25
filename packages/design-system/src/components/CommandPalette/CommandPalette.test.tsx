@@ -18,10 +18,8 @@ import {
 	transitionSettled,
 } from "../../test/viewTransitionFakes.ts";
 import { trackActivation } from "../../utils/activation.ts";
-import {
-	MORPH_HIDDEN,
-	createMorphPresence,
-} from "../../utils/morphPresence.ts";
+import { MORPH_HIDDEN } from "../../utils/morphNames.ts";
+import { createMorphPresence } from "../../utils/morphPresence.ts";
 
 import { CommandPalette, type CommandPaletteItem } from "./CommandPalette.tsx";
 
@@ -500,19 +498,20 @@ describe("the open shortcut", () => {
 });
 
 describe("while closed", () => {
-	// The palette stays mounted while closed (an overlay cannot gate its own
-	// mount). It used to run an ALWAYS-open combobox inside that closed dialog,
-	// and Ark focuses an open combobox's input on mount — so on every page load
-	// focus was pulled into the hidden search box, and a table's arrow keys
-	// drove the palette instead of the table's row focus (Alt-to-peek too). The
-	// combobox now tracks the dialog's open state.
+	// The palette's dialog stays mounted while closed (an overlay cannot gate
+	// its own mount). It used to run an ALWAYS-open combobox inside that closed
+	// dialog, and Ark focuses an open combobox's input on mount — so on every
+	// page load focus was pulled into the hidden search box, and a table's
+	// arrow keys drove the palette instead of the table's row focus
+	// (Alt-to-peek too). A dialog's content is now built per opening, so a
+	// closed palette has no combobox at all; while open, the combobox tracks
+	// the dialog's open state.
 	//
-	// The symptom is a focus steal, but that is asserted through `aria-expanded`,
+	// The symptom is a focus steal, but that is asserted through the input,
 	// not `document.activeElement`: jsdom lays nothing out and does not replay
 	// Ark's focus-on-open, so a focus assertion passes against the broken build
-	// too — a test that cannot fail. The combobox's open state is the cause the
-	// focus steal follows from, and it IS reflected deterministically.
-	it("keeps its combobox closed, so it captures no keystrokes", () => {
+	// too — a test that cannot fail.
+	it("builds no combobox, so it captures no keystrokes", () => {
 		render(() => (
 			<CommandPalette
 				open={false}
@@ -520,13 +519,9 @@ describe("while closed", () => {
 				items={items()}
 			/>
 		));
-		const input = document.querySelector(
-			'[data-scope="combobox"][data-part="input"]'
-		);
-		// The combobox was hardcoded `open`, so a closed palette still ran an open
-		// combobox that arrow keys drove; the input's `aria-expanded` reads "true"
-		// against that build. Tying `open` to the dialog closes it: "false".
-		expect(input?.getAttribute("aria-expanded")).toBe("false");
+		expect(
+			document.querySelector('[data-scope="combobox"][data-part="input"]')
+		).toBeNull();
 	});
 });
 
@@ -754,12 +749,15 @@ describe("CommandPalette morph look", () => {
 		setOpen(false);
 		await transitionSettled();
 		expect(field).not.toHaveAttribute(MORPH_HIDDEN);
+		// The close fades the dialog's scrim with it (its backdrop is marked).
 		expect(seen.old.map((snapshot) => snapshot.names)).toEqual([
 			["field:jf-morph"],
-			["palette:jf-morph"],
+			["palette:jf-morph-scrim", "palette:jf-morph"],
 		]);
+		// The scrim fades in with the open whatever the look: the dialog's
+		// own fade is off under a morph.
 		expect(seen.new.map((snapshot) => snapshot.names)).toEqual([
-			["palette:jf-morph"],
+			["palette:jf-morph-scrim", "palette:jf-morph"],
 			["field:jf-morph"],
 		]);
 		for (const snapshot of [...seen.old, ...seen.new]) {
@@ -778,6 +776,34 @@ describe("CommandPalette morph look", () => {
 });
 
 describe("CommandPalette morph handoff", () => {
+	it("closes with its list as it was: the old snapshot keeps the highlighted row", async () => {
+		const highlighted: (string | null)[] = [];
+		fakeViewTransitions({
+			onStart: () =>
+				highlighted.push(
+					document.querySelector("[data-highlighted]")?.textContent ??
+						null
+				),
+		});
+		onTestFinished(restoreViewTransitions);
+		const [open, setOpen] = createSignal(true);
+		render(() => (
+			<CommandPalette
+				open={open()}
+				onOpenChange={setOpen}
+				items={items()}
+			/>
+		));
+		await waitFor(() => {
+			expect(document.querySelector("[data-highlighted]")).not.toBeNull();
+		});
+		highlighted.length = 0;
+		setOpen(false);
+		await transitionSettled();
+		expect(highlighted).toHaveLength(1);
+		expect(highlighted[0]).not.toBeNull();
+	});
+
 	it("a pick closes first and then runs onSelect", async () => {
 		const calls: string[] = [];
 		const [open, setOpen] = createSignal(true);
@@ -906,8 +932,12 @@ describe("CommandPalette morph handoff", () => {
 			MORPH_HIDDEN
 		);
 		// The palette opened with its own look; the pick into a (box) sheet
-		// takes the sheet's: the target decides.
+		// takes the sheet's: the target decides, and the row's surface grows
+		// into it.
 		await transitionSettled();
-		expect(kinds).toEqual(["morph morph-scale", "morph morph-box"]);
+		expect(kinds).toEqual([
+			"morph morph-scale",
+			"morph morph-box morph-handoff",
+		]);
 	});
 });

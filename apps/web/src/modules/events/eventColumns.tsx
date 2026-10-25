@@ -1,24 +1,16 @@
-import { fieldColumn, type JfColumnDefinition } from "@j-os/design-system";
+import {
+	actionsColumnSize,
+	fieldColumn,
+	type JfColumnDefinition,
+} from "@j-os/design-system";
 
 import type { Doc } from "../../../convex/_generated/dataModel";
-import { SITE_TIMEZONE } from "../../../convex/lib/time.ts";
-import { actionsColumnSize } from "../community/columns/RowActions.tsx";
 
+import { formatEventDate } from "./eventDate.ts";
 import { EventRowActions } from "./EventRowActions.tsx";
 import { eventFields } from "./fields.ts";
 
-// The space is physically in SITE_TIMEZONE, so a travelling admin must see the
-// event's Zurich date, not their browser's. Format the stored instant in that
-// zone (matches the sheet, which renders the *Local wall-clock in the same zone).
-const dateFormat = new Intl.DateTimeFormat(undefined, {
-	dateStyle: "medium",
-	timeZone: SITE_TIMEZONE,
-});
-
-/** An event date as the table shows it. */
-export function formatEventDate(ms: number): string {
-	return dateFormat.format(new Date(ms));
-}
+const EVENT_ACTION_COUNT = 2;
 
 /** The three accordion buckets, in display order. Compared against the cached
  *  UTC epochs (`startsAt`/`endsAt`), which are zone-independent instants — so
@@ -30,7 +22,9 @@ const phaseOptions = [
 	{ value: "past", label: "Past" },
 ] as const;
 
-function eventPhase(event: Doc<"events">, now: number): string {
+type EventPhase = (typeof phaseOptions)[number]["value"];
+
+function eventPhase(event: Doc<"events">, now: number): EventPhase {
 	if (now < event.startsAt) return "future";
 	return now > event.endsAt ? "past" : "current";
 }
@@ -87,7 +81,7 @@ export function eventColumns(): JfColumnDefinition<Doc<"events">>[] {
 			id: "actions",
 			header: "",
 			disableRowClick: true,
-			size: actionsColumnSize(2),
+			size: actionsColumnSize(EVENT_ACTION_COUNT),
 			cell: (info) => <EventRowActions row={info.row.original} />,
 		},
 	];

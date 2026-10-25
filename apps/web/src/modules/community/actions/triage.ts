@@ -13,6 +13,11 @@ export type RoleTier = Extract<LifecycleEvent, { type: "SET_ROLE" }>["tier"];
 /** What every triage action resolves to; the caller shows the failure. */
 export type TriageResult = ResultAsync<unknown, ClientError>;
 
+/** What a settled triage action holds. */
+export type MoveResult = Awaited<TriageResult>;
+
+export type Triage = ReturnType<typeof useTriage>;
+
 type TransitionEvent = FunctionArgs<typeof api.lifecycle.transition>["event"];
 
 const DECIDE_FALLBACK = "Could not save that decision.";

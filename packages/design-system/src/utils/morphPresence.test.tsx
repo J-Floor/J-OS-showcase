@@ -1,22 +1,24 @@
 import { render } from "@solidjs/testing-library";
-import { type Accessor, createEffect, createSignal, on } from "solid-js";
+import { type Accessor, batch, createEffect, createSignal, on } from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
 
 import {
 	fakeViewTransitions,
 	installViewTransitions,
 	mockLayoutBoxes,
+	namedIds,
 	restoreViewTransitions,
 	transitionSettled,
 } from "../test/viewTransitionFakes.ts";
 
 import { trackActivation } from "./activation.ts";
+import { MORPH_HIDDEN, MORPH_PICKED } from "./morphNames.ts";
 import {
-	MORPH_HIDDEN,
-	MORPH_PICKED,
 	type MorphFrom,
 	createMorphPresence,
+	createMorphHold,
 } from "./morphPresence.ts";
+import { viewTransition } from "./viewTransition.ts";
 
 /** jsdom loads no stylesheet: a morph source paints its background inline. */
 function fill(element: HTMLElement): void {
@@ -289,7 +291,7 @@ test("closeTarget is used when the source is gone", async () => {
 	uninstall();
 });
 
-function setupHandoff(isOpenedInsideClose = true) {
+function setupHandoff(isOpenedInsideClose = true, isHandingOn = false) {
 	const [openA, setOpenA] = createSignal(false);
 	const [openB, setOpenB] = createSignal(false);
 	let contentA: HTMLElement | undefined;
@@ -301,6 +303,7 @@ function setupHandoff(isOpenedInsideClose = true) {
 			open: openA,
 			enabled: () => true,
 			content: () => contentA ?? null,
+			handsOnSource: () => isHandingOn,
 		});
 		presenceB = createMorphPresence({
 			open: openB,
@@ -344,6 +347,81 @@ function setupHandoff(isOpenedInsideClose = true) {
 	});
 	return { setOpenA, setOpenB, presenceA, presenceB };
 }
+
+/** Records the ids holding a name at each new snapshot. */
+function recordNamed(): string[][] {
+	const seen: string[][] = [];
+	fakeViewTransitions({ onSnapshot: () => seen.push(namedIds()) });
+	return seen;
+}
+
+test("a closer that hands on its source: the claimant takes its place, closes into it and returns focus where the closer would have", async () => {
+	const seen = recordNamed();
+	mockLayoutBoxes();
+	const uninstall = trackActivation();
+	const { setOpenA, setOpenB, presenceB } = setupHandoff(false, true);
+	const opener = document.getElementById("a-opener");
+	opener?.focus();
+	activate(opener);
+	setOpenA(true);
+	await transitionSettled();
+	document.getElementById("a")?.focus();
+	setOpenA(false);
+	setOpenB(true);
+	await transitionSettled();
+	expect(presenceB.shown()).toBe(true);
+	expect(opener).toHaveAttribute(MORPH_HIDDEN);
+	document.getElementById("b")?.focus();
+	setOpenB(false);
+	await transitionSettled();
+	expect(opener).not.toHaveAttribute(MORPH_HIDDEN);
+	// The close's new snapshot: the ghost over the opener, which fades in.
+	expect(seen.at(-1)).toContain("a-opener");
+	expect(document.activeElement).toBe(opener);
+	uninstall();
+});
+
+test("a source handed on goes back with the next handoff: the first overlay reopens over it", async () => {
+	const seen = recordNamed();
+	mockLayoutBoxes();
+	const uninstall = trackActivation();
+	const { setOpenA, setOpenB, presenceA } = setupHandoff(false, true);
+	const opener = document.getElementById("a-opener");
+	activate(opener);
+	setOpenA(true);
+	await transitionSettled();
+	setOpenA(false);
+	setOpenB(true);
+	await transitionSettled();
+	setOpenB(false);
+	setOpenA(true);
+	await transitionSettled();
+	expect(presenceA.shown()).toBe(true);
+	expect(opener).toHaveAttribute(MORPH_HIDDEN);
+	setOpenA(false);
+	await transitionSettled();
+	expect(seen.at(-1)).toContain("a-opener");
+	uninstall();
+});
+
+test("a closer that keeps its source hands nothing on: the claimant opened from nothing", async () => {
+	const seen = recordNamed();
+	mockLayoutBoxes();
+	const uninstall = trackActivation();
+	const { setOpenA, setOpenB } = setupHandoff(false);
+	const opener = document.getElementById("a-opener");
+	activate(opener);
+	setOpenA(true);
+	await transitionSettled();
+	setOpenA(false);
+	setOpenB(true);
+	await transitionSettled();
+	expect(opener).not.toHaveAttribute(MORPH_HIDDEN);
+	setOpenB(false);
+	await transitionSettled();
+	expect(seen.at(-1)).not.toContain("a-opener");
+	uninstall();
+});
 
 test("a claimed opener hides no source", async () => {
 	fakeViewTransitions();
@@ -434,6 +512,89 @@ test("a row inside the overlay becomes the close source", async () => {
 		return button;
 	});
 	expect(named?.tagName).toBe("LI");
+});
+
+/** A trigger in a list item, and its menu portaled outside the overlay:
+ *  the item `build` returns is in that menu, now closed. */
+function triggerRowWithClosedMenu(content: HTMLElement): HTMLElement {
+	const row = document.createElement("li");
+	const trigger = document.createElement("button");
+	trigger.setAttribute("aria-controls", "menu");
+	trigger.setAttribute("aria-haspopup", "menu");
+	row.append(trigger);
+	content.append(row);
+	const menu = document.createElement("div");
+	menu.id = "menu";
+	const item = document.createElement("button");
+	item.setAttribute("role", "menuitem");
+	menu.append(item);
+	document.body.append(menu);
+	// The pick closes the menu.
+	item.addEventListener("pointerdown", () => {
+		menu.style.setProperty("visibility", "hidden");
+	});
+	return item;
+}
+
+test("a pick in a popup opened from a row inside the overlay closes from the overlay", async () => {
+	const { content, named } = await morphSourceAfterActivatingInside(
+		triggerRowWithClosedMenu
+	);
+	expect(named).toBe(content);
+});
+
+test("a direct press on a popup trigger in a row inside the overlay closes from that row", async () => {
+	const { named } = await morphSourceAfterActivatingInside((content) => {
+		const item = triggerRowWithClosedMenu(content);
+		return item.ownerDocument.querySelector<HTMLElement>(
+			'[aria-controls="menu"]'
+		)!;
+	});
+	expect(named?.tagName).toBe("LI");
+});
+
+test("a request made before the first effect run still opens", () => {
+	let presence!: ReturnType<typeof createMorphPresence>;
+	render(() => {
+		const [open, setOpen] = createSignal(false);
+		createEffect(() => {
+			setOpen(true);
+		});
+		presence = createMorphPresence({
+			open,
+			enabled: () => true,
+			content: () => null,
+		});
+		return null;
+	});
+	expect(presence.shown()).toBe(true);
+});
+
+test("a source inside a popup that has closed closes into the popup's trigger", async () => {
+	const names: string[] = [];
+	fakeViewTransitions({
+		onSnapshot: () => names.push(...namedIds()),
+	});
+	mockLayoutBoxes();
+	const trigger = document.createElement("button");
+	trigger.id = "trigger";
+	fill(trigger);
+	trigger.setAttribute("aria-controls", "popup");
+	const popup = document.createElement("div");
+	popup.id = "popup";
+	const item = document.createElement("button");
+	item.id = "item";
+	fill(item);
+	popup.append(item);
+	document.body.append(trigger, popup);
+	const { setOpen } = setup(true, undefined, () => item);
+	setOpen(true);
+	await transitionSettled();
+	popup.style.setProperty("visibility", "hidden");
+	names.length = 0;
+	setOpen(false);
+	await transitionSettled();
+	expect(names).toContain("trigger");
 });
 
 test("unmounting before the open update leaves the source visible", async () => {
@@ -555,4 +716,105 @@ test("a pointerdown on a non-activatable element still uses the fallback", async
 	await transitionSettled();
 	expect(document.getElementById("other")).toHaveAttribute(MORPH_HIDDEN);
 	uninstall();
+});
+
+/** A transition whose animation runs until the returned `finish`. */
+function runningTransition(): () => void {
+	let finish!: () => void;
+	installViewTransitions((update: () => unknown) => ({
+		updateCallbackDone: Promise.resolve(update()),
+		finished: new Promise<void>((resolve) => {
+			finish = resolve;
+		}),
+	}));
+	void viewTransition(() => {});
+	return () => {
+		finish();
+	};
+}
+
+function holdHarness(settled?: () => Promise<unknown>) {
+	const [value, setValue] = createSignal<string | undefined>("a");
+	const [live, setLive] = createSignal(true);
+	let held!: Accessor<string | undefined>;
+	render(() => {
+		held = createMorphHold(value, live, settled);
+		return null;
+	});
+	/** Lets go of the value as one change: what a close does. */
+	function letGo(): void {
+		batch(() => {
+			setLive(false);
+			setValue(undefined);
+		});
+	}
+	return { held, setValue, setLive, letGo };
+}
+
+test("createMorphHold waits for `settled` after the morph, then lets go", async () => {
+	let settle!: () => void;
+	const settled = vi.fn(
+		() =>
+			new Promise<void>((resolve) => {
+				settle = resolve;
+			})
+	);
+	const { held, letGo } = holdHarness(settled);
+	letGo();
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	expect(settled).toHaveBeenCalledOnce();
+	expect(held()).toBe("a");
+	settle();
+	await vi.waitFor(() => {
+		expect(held()).toBeUndefined();
+	});
+});
+
+test("createMorphHold follows the value while live", () => {
+	const { held, setValue } = holdHarness();
+	expect(held()).toBe("a");
+	setValue("b");
+	expect(held()).toBe("b");
+});
+
+test("createMorphHold keeps the last live value until the morph has finished", async () => {
+	const { held, letGo } = holdHarness();
+	letGo();
+	const finish = runningTransition();
+	expect(held()).toBe("a");
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	expect(held()).toBe("a");
+	finish();
+	await vi.waitFor(() => {
+		expect(held()).toBeUndefined();
+	});
+});
+
+test("createMorphHold without a transition lets go on the next microtask", async () => {
+	const { held, letGo } = holdHarness();
+	letGo();
+	expect(held()).toBe("a");
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	expect(held()).toBeUndefined();
+});
+
+test("createMorphHold: an earlier hold's end does not drop a later one", async () => {
+	const { held, letGo, setLive, setValue } = holdHarness();
+	letGo();
+	const finishFirst = runningTransition();
+	// Its update done, so the next transition is a new one.
+	await transitionSettled();
+	batch(() => {
+		setValue("b");
+		setLive(true);
+	});
+	letGo();
+	const finishSecond = runningTransition();
+	finishFirst();
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	expect(held()).toBe("b");
+	finishSecond();
+	await vi.waitFor(() => {
+		expect(held()).toBeUndefined();
+	});
 });

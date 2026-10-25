@@ -1,6 +1,5 @@
+import { readStored, writeStored } from "@j-os/design-system";
 import { createEffect, createSignal, type Signal } from "solid-js";
-
-import { readLocal, writeLocal } from "./browserStorage.ts";
 
 /**
  * A string signal whose value is mirrored to `localStorage` under `key`, so it
@@ -13,10 +12,10 @@ export function createPersistedSignal(
 	initial: string
 ): Signal<string> {
 	const [value, setValue] = createSignal(
-		readLocal(key).unwrapOr(null) ?? initial
+		readStored("local", key).unwrapOr(null) ?? initial
 	);
 	createEffect(() => {
-		writeLocal(key, value()).unwrapOr(undefined);
+		writeStored("local", key, value()).unwrapOr(undefined);
 	});
 	return [value, setValue];
 }

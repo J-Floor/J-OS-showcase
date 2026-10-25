@@ -1525,7 +1525,7 @@ describe("onRowHoverIntent", () => {
 	});
 });
 
-test("a row a morph starts from keeps the look it had: no focus ring or bold until the morph lets go", () => {
+test("a row the pointer holds as a morph starts keeps the look it had: the click's ring and bold wait until the morph lets go", () => {
 	const scss = readFileSync(
 		`${import.meta.dirname}/Table.module.scss`,
 		"utf8"
@@ -1546,4 +1546,71 @@ test("the rows leave room at their end for a floating toolbar", () => {
 	expect(scss).toMatch(
 		/\n\.table \{[^}]*padding-block-end: var\(--jf-floating-stack-block-size\);/
 	);
+});
+
+describe("columns that change after mount", () => {
+	type Member = { id: string; name: string; team: string };
+	const members: Member[] = [
+		{ id: "m1", name: "Ann", team: "red" },
+		{ id: "m2", name: "Bob", team: "blue" },
+	];
+	function teamColumns(
+		label: string,
+		teams: readonly string[]
+	): JfColumnDefinition<Member>[] {
+		return [
+			{ accessorKey: "name", header: label, dataType: "string" },
+			{
+				accessorKey: "team",
+				header: "Team",
+				dataType: "enum",
+				enumOptions: teams.map((team) => ({
+					label: team,
+					value: team,
+				})),
+			},
+		];
+	}
+
+	test("the header and an enum filter's options built from data follow new columns, and the rows and cells stay the same nodes", async () => {
+		const [current, setCurrent] = createSignal(
+			teamColumns("Name", ["red"])
+		);
+		render(() => (
+			<Table.Root getRowId={rowId} columns={current()} data={members} />
+		));
+		const rowsBefore = [...document.querySelectorAll("tbody tr")];
+		expect(rowsBefore).toHaveLength(members.length);
+		const cellsBefore = [...document.querySelectorAll("tbody td")];
+		const contentBefore = cellsBefore.map((cell) => cell.firstElementChild);
+		expect(contentBefore.every((content) => content !== null)).toBe(true);
+
+		setCurrent(
+			teamColumns(
+				"Member",
+				members.map((member) => member.team)
+			)
+		);
+
+		expect(
+			screen.getByRole("columnheader", { name: /Member/ })
+		).toBeInTheDocument();
+		fireEvent.click(screen.getByLabelText("Filter Team"));
+		expect(
+			await screen.findByRole("checkbox", { name: "blue" })
+		).toBeInTheDocument();
+		const rowsAfter = [...document.querySelectorAll("tbody tr")];
+		expect(rowsAfter).toHaveLength(rowsBefore.length);
+		for (const [index, row] of rowsAfter.entries()) {
+			expect(row).toBe(rowsBefore[index]);
+		}
+		// Cells are keyed by column id: a changed definition updates them in
+		// place, so a morph's named cell content is never replaced.
+		const cellsAfter = [...document.querySelectorAll("tbody td")];
+		expect(cellsAfter).toHaveLength(cellsBefore.length);
+		for (const [index, cell] of cellsAfter.entries()) {
+			expect(cell).toBe(cellsBefore[index]);
+			expect(cell.firstElementChild).toBe(contentBefore[index]);
+		}
+	});
 });

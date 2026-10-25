@@ -1,7 +1,7 @@
 import { Button, Dialog, Icon } from "@j-os/design-system";
 import { useNavigate } from "@solidjs/router";
 import { useMutation } from "convex-solidjs";
-import { For, Show, createSignal, type JSX } from "solid-js";
+import { For, createSignal, type JSX } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
 import { type LockSlot } from "../../../convex/lib/doorLocks.ts";
@@ -63,42 +63,42 @@ export function DoorsIntro(): JSX.Element {
 	return (
 		<Dialog.Root
 			open={open()}
-			onOpenChange={(details) => {
+			onOpenChange={(isOpen) => {
 				// Escape / outside tap: close for this session, record nothing.
-				if (!details.open) setDismissed(true);
+				if (!isOpen) setDismissed(true);
 			}}
 		>
 			<Dialog.Content>
-				<Show when={open()}>
+				<Dialog.Header>
 					<Dialog.Title>Getting in</Dialog.Title>
-					<div class={styles.body}>
-						<ul class={styles.doors}>
-							<For each={LOCK_SLOTS}>
-								{(door) => (
-									<li class={styles.door}>
-										<Icon>{door.icon}</Icon>
-										<span>
-											<strong class={styles.doorName}>
-												{door.buttonLabel}
-											</strong>{" "}
-											— {DOOR_DESCRIPTIONS[door.slot]}
-										</span>
-									</li>
-								)}
-							</For>
-						</ul>
-						<p class={styles.how}>
-							Open them from the <strong>Doors</strong> card on
-							the Space page. You need an internet connection.
-						</p>
-					</div>
-					<div class={styles.footer}>
-						<Button variant="tertiary" onClick={goToDoors}>
-							Go to Doors
-						</Button>
-						<Button onClick={markSeen}>Got it</Button>
-					</div>
-				</Show>
+				</Dialog.Header>
+				<Dialog.Body>
+					<ul class={styles.doors}>
+						<For each={LOCK_SLOTS}>
+							{(door) => (
+								<li class={styles.door}>
+									<Icon>{door.icon}</Icon>
+									<span>
+										<strong class={styles.doorName}>
+											{door.buttonLabel}
+										</strong>{" "}
+										— {DOOR_DESCRIPTIONS[door.slot]}
+									</span>
+								</li>
+							)}
+						</For>
+					</ul>
+					<p class={styles.how}>
+						Open them from the <strong>Doors</strong> card on the
+						Space page. You need an internet connection.
+					</p>
+				</Dialog.Body>
+				<Dialog.Footer>
+					<Button variant="tertiary" onClick={goToDoors}>
+						Go to Doors
+					</Button>
+					<Button onClick={markSeen}>Got it</Button>
+				</Dialog.Footer>
 			</Dialog.Content>
 		</Dialog.Root>
 	);

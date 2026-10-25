@@ -104,6 +104,21 @@ test("lists an event in the table", () => {
 	expect(screen.getByText("Open House")).toBeInTheDocument();
 });
 
+test("a live update adds, edits and removes rows", () => {
+	renderAs("member");
+	const [first] = oneEvent;
+	setRows([
+		{ ...first, name: "Open House (renamed)" },
+		{ ...first, _id: "event2", name: "Roof Party" },
+	]);
+	expect(screen.getByText("Open House (renamed)")).toBeInTheDocument();
+	expect(screen.getByText("Roof Party")).toBeInTheDocument();
+	expect(screen.queryByText("Open House")).toBeNull();
+	setRows([{ ...first, _id: "event2", name: "Roof Party" }]);
+	expect(screen.queryByText("Open House (renamed)")).toBeNull();
+	expect(screen.getByText("Roof Party")).toBeInTheDocument();
+});
+
 test("shows a loading skeleton while events are undefined, not the empty state", () => {
 	setRows(undefined);
 	renderAs("board");

@@ -1,10 +1,16 @@
 import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
 import type { Hotkey } from "@tanstack/solid-hotkeys";
 import { createSignal } from "solid-js";
+import { afterEach, onTestFinished, vi } from "vitest";
 
+import { nearestVisibleAnchor } from "../../utils/visibleArea.ts";
 import { Menu } from "../Menu/Menu.tsx";
 
 import { IconButton } from "./IconButton.tsx";
+
+afterEach(() => {
+	vi.restoreAllMocks();
+});
 
 test("renders icon ligature, exposes accessible name via tooltip label", () => {
 	render(() => <IconButton tooltipLabel="Add">add</IconButton>);
@@ -16,8 +22,8 @@ test("does not nest interactive elements (no <button><button>)", () => {
 	const { container } = render(() => (
 		<IconButton tooltipLabel="Add">add</IconButton>
 	));
-	expect(container.querySelectorAll("button button").length).toBe(0);
-	expect(container.querySelectorAll("button").length).toBe(1);
+	expect(container.querySelectorAll("button button")).toHaveLength(0);
+	expect(container.querySelectorAll("button")).toHaveLength(1);
 });
 
 test("renders a spinner instead of the icon while loading", () => {
@@ -203,6 +209,39 @@ test("the chip follows a shortcut that changes", async () => {
 	expect(screen.queryByRole("group", { name: "D" })).toBeNull();
 });
 
+test("a shortcut names its key on the button, following a change", () => {
+	const [shortcut, setShortcut] = createSignal<Hotkey>("D");
+	render(() => (
+		<IconButton tooltipLabel="Decide" shortcut={shortcut()}>
+			close
+		</IconButton>
+	));
+	const button = screen.getByRole("button", { name: "Decide" });
+	expect(button).toHaveAttribute("aria-keyshortcuts", "D");
+	setShortcut("Shift+G");
+	expect(button).toHaveAttribute("aria-keyshortcuts", "Shift+G");
+});
+
+test("a lone modifier hint fires nothing, so names no key", () => {
+	render(() => (
+		<IconButton tooltipLabel="Peek" shortcut="Alt">
+			keyboard
+		</IconButton>
+	));
+	expect(screen.getByRole("button")).not.toHaveAttribute("aria-keyshortcuts");
+});
+
+test("with triggerProps the shortcut sits on the button, not the tooltip's span", () => {
+	render(() => (
+		<IconButton tooltipLabel="Open" shortcut="O" triggerProps={{}}>
+			add
+		</IconButton>
+	));
+	const button = screen.getByRole("button", { name: "Open" });
+	expect(button).toHaveAttribute("aria-keyshortcuts", "O");
+	expect(document.querySelectorAll("[aria-keyshortcuts]")).toHaveLength(1);
+});
+
 test("as a menu trigger it keeps the menu's id and state while its tooltip still opens", async () => {
 	render(() => (
 		<Menu.Root>
@@ -246,6 +285,46 @@ test("as a menu trigger it keeps the menu's id and state while its tooltip still
 	expect(tooltipTrigger).not.toBeNull();
 	expect(tooltipTrigger).not.toBe(button);
 	expect(tooltipTrigger?.contains(button)).toBe(true);
+});
+
+test("a morph out of an item of its closed menu lands on this trigger", async () => {
+	// jsdom does no layout and loads no stylesheet: give every element a box,
+	// and hide a closed menu the way the popover animation mixin does.
+	vi.spyOn(HTMLElement.prototype, "getClientRects").mockReturnValue({
+		length: 1,
+	} as DOMRectList);
+	const closedMenu = document.createElement("style");
+	closedMenu.textContent = `[data-part="content"][data-state="closed"] { visibility: hidden; }`;
+	document.head.append(closedMenu);
+	onTestFinished(() => {
+		closedMenu.remove();
+	});
+	render(() => (
+		<Menu.Root>
+			<Menu.Trigger
+				asChild={(triggerProps) => (
+					<IconButton
+						tooltipLabel="More"
+						triggerProps={triggerProps()}
+					>
+						more_vert
+					</IconButton>
+				)}
+			/>
+			<Menu.Content>
+				<Menu.Item value="a">A</Menu.Item>
+			</Menu.Content>
+		</Menu.Root>
+	));
+	const button = screen.getByRole("button", { name: "More" });
+	fireEvent.click(button);
+	const item = await screen.findByRole("menuitem", { hidden: true });
+	expect(nearestVisibleAnchor(item)).toBe(item);
+	fireEvent.click(button);
+	await waitFor(() => {
+		expect(button).toHaveAttribute("aria-expanded", "false");
+	});
+	expect(nearestVisibleAnchor(item)).toBe(button);
 });
 
 test("triggerProps keep the outer machine's onClick beside the IconButton's own", () => {

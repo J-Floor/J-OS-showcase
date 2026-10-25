@@ -13,6 +13,12 @@ import {
 } from "solid-js";
 
 import { Icon, type IconProps } from "../Icon/Icon.tsx";
+import {
+	MorphScope,
+	morphAttributes,
+	useMorphTitle,
+	type Morphable,
+} from "../Morph/Morph.tsx";
 
 import styles from "./List.module.scss";
 
@@ -48,16 +54,17 @@ function ListRoot(props: ListRootProps): JSX.Element {
 	);
 }
 
-export type ListItemProps = Omit<ComponentProps<"div">, "onClick"> & {
-	/**
-	 * Makes the whole row one button: the content renders inside a
-	 * full-width `<button>`, so each row is one keyboard stop. Only a
-	 * clickable row takes the pointer cursor and the hover colour. Keep
-	 * interactive children out of a clickable item: a control nested in a
-	 * button is invalid markup.
-	 */
-	onClick?: () => void;
-};
+export type ListItemProps = Omit<ComponentProps<"div">, "onClick"> &
+	Morphable & {
+		/**
+		 * Makes the whole row one button: the content renders inside a
+		 * full-width `<button>`, so each row is one keyboard stop. Only a
+		 * clickable row takes the pointer cursor and the hover colour. Keep
+		 * interactive children out of a clickable item: a control nested in a
+		 * button is invalid markup.
+		 */
+		onClick?: () => void;
+	};
 
 type RowSlots = {
 	leading: JSX.Element[];
@@ -98,9 +105,12 @@ function ListItem(props: ListItemProps): JSX.Element {
 		"role",
 		"children",
 		"onClick",
+		"morphId",
 	]);
 	const isInsideList = useContext(InsideListContext);
-	const resolved = children(() => own.children);
+	const resolved = children(() => (
+		<MorphScope morphId={own.morphId}>{own.children}</MorphScope>
+	));
 	const slots = createMemo(() => partitionRow(resolved.toArray()));
 
 	function role(): JSX.HTMLAttributes<HTMLDivElement>["role"] {
@@ -136,6 +146,7 @@ function ListItem(props: ListItemProps): JSX.Element {
 			role={role()}
 			class={clsx(styles.listItem, own.class)}
 			data-clickable={own.onClick ? "" : undefined}
+			{...morphAttributes(own)}
 		>
 			<Show when={own.onClick} keyed fallback={content()}>
 				{(onClick) => (
@@ -160,11 +171,13 @@ export type ListItemTitleProps = ComponentProps<"span">;
  *  (Combobox wraps it in `Highlight`). */
 function ListItemTitle(props: ListItemTitleProps): JSX.Element {
 	const [own, rest] = splitProps(props, ["class"]);
+	const title = useMorphTitle();
 	return (
 		<span
 			{...rest}
 			class={clsx(styles.title, own.class)}
 			data-list-item-text
+			{...title()}
 		/>
 	);
 }

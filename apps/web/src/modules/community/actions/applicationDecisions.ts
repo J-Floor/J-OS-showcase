@@ -1,5 +1,6 @@
 import type { Doc } from "../../../../convex/_generated/dataModel";
 import { legalEvents } from "../../../../convex/lib/lifecycle.ts";
+import type { EventType } from "../../../../convex/lib/lifecycleTypes.ts";
 import { displayName } from "../../../../convex/lib/names.ts";
 import { useConfirm } from "../../../shared/confirm.tsx";
 import { ICONS } from "../../../shared/icons.ts";
@@ -23,7 +24,7 @@ type ApplicationDecisionHandlers = {
 	undeny: (person: Applicant) => Promise<RosterActionOutcome>;
 };
 
-function events(person: Applicant): readonly string[] {
+function events(person: Applicant): readonly EventType[] {
 	return legalEvents(`${person.tier}.${person.stage}`);
 }
 
@@ -48,6 +49,7 @@ function describeActions(
 			icon: ICONS.memberApplication,
 			hotkey: "M",
 			scope: "applications",
+			celebrate: true,
 			can: (person) => decisions.can(person, "member"),
 			run: (person) => decisions.makeMember(person),
 		},
@@ -153,7 +155,7 @@ export type Action = "guest" | "member" | "deny" | "undeny";
 
 /** The machine edge each decision travels, and so the one that decides whether
  *  it is on offer. */
-const EVENT_FOR: Record<Action, string> = {
+const EVENT_FOR: Record<Action, EventType> = {
 	guest: "APPROVE_GUEST",
 	member: "APPROVE_MEMBER",
 	deny: "DENY",

@@ -14,6 +14,7 @@ import { createActionError } from "../../shared/createActionError.ts";
 import { InlineError } from "../../shared/InlineError.tsx";
 
 import styles from "./EventSheet.module.scss";
+import { END_TIME_LABEL, START_TIME_LABEL } from "./fields.ts";
 
 const DEFAULT_START_TIME = "00:01";
 const DEFAULT_END_TIME = "23:59";
@@ -156,7 +157,7 @@ export function EventCreateForm(props: { form: EventCreateFormState }) {
 					onValueChange={props.form.setStartsAt}
 				/>
 				<TimePicker
-					label="Start time (Zurich)"
+					label={START_TIME_LABEL}
 					value={props.form.startTime()}
 					onValueChange={(value) => {
 						props.form.setStartTime(value ?? DEFAULT_START_TIME);
@@ -170,7 +171,7 @@ export function EventCreateForm(props: { form: EventCreateFormState }) {
 					onValueChange={props.form.setEndsAt}
 				/>
 				<TimePicker
-					label="End time (Zurich)"
+					label={END_TIME_LABEL}
 					value={props.form.endTime()}
 					onValueChange={(value) => {
 						props.form.setEndTime(value ?? DEFAULT_END_TIME);

@@ -9,6 +9,7 @@ import {
 import { errAsync, okAsync, type ResultAsync } from "neverthrow";
 import { afterEach, expect, test, vi } from "vitest";
 
+import type { PersonRow } from "../../../../convex/people.ts";
 import {
 	keyedAround,
 	keyedIn,
@@ -20,7 +21,7 @@ import {
 } from "../../../../test-stubs/morphKeys.tsx";
 import type { ClientError } from "../../../lib/call.ts";
 import { ConfirmProvider } from "../../../shared/confirm.tsx";
-import type { MemberRow } from "../columns/memberColumns.tsx";
+import { DIALOG_CONTENT } from "../../../shared/dialogSelectors.ts";
 
 // Ark's Dialog (the Sheet) mounts a Portal into document.body; unmount it
 // between tests so nodes don't accumulate and slow later queries under load.
@@ -51,6 +52,7 @@ const {
 	promoteToBoardMock,
 	reAdmitMock,
 	markLeftMock,
+	mutateAsyncMock,
 } = vi.hoisted(() => ({
 	kickOutMock: vi.fn(
 		(): ResultAsync<undefined, ClientError> => okAsync(undefined)
@@ -63,6 +65,9 @@ const {
 	promoteToBoardMock: vi.fn(() => okAsync(undefined)),
 	reAdmitMock: vi.fn(() => okAsync(undefined)),
 	markLeftMock: vi.fn(() => okAsync(undefined)),
+	// Every sheet mutation (`people.update` among them): sends nothing back
+	// unless a test says so.
+	mutateAsyncMock: vi.fn<(args: unknown) => Promise<unknown> | undefined>(),
 }));
 
 vi.mock("../actions/triage.ts", () => ({
@@ -146,15 +151,17 @@ const rows = [
 			since: "",
 		},
 	},
-] as unknown as MemberRow[];
+] as unknown as PersonRow[];
 
 /** Flip to simulate the roster query still loading (`data()` undefined). */
 let isMembersLoading = false;
 afterEach(() => {
 	isMembersLoading = false;
+	mutateAsyncMock.mockReset();
 });
 
-vi.mock("../data/useMembers.ts", () => ({
+vi.mock("../data/communityData.tsx", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../data/communityData.tsx")>()),
 	useMembers: () => ({
 		data: () => (isMembersLoading ? undefined : rows),
 	}),
@@ -169,7 +176,7 @@ vi.mock("convex-solidjs", () => ({
 	useConvexClient: () => ({ query: vi.fn(() => Promise.resolve(null)) }),
 	useMutation: vi.fn(() => ({
 		mutate: vi.fn(),
-		mutateAsync: vi.fn(),
+		mutateAsync: mutateAsyncMock,
 		data: () => {},
 		error: () => {},
 		isLoading: () => false,
@@ -253,7 +260,7 @@ test("MemberManagement: sheet body contains no inputs or textareas (read-only)",
 
 	// Scope the "no inputs" check to the Ark Dialog content panel so we don't
 	// accidentally pick up inputs in the table (e.g. filter inputs). Ark renders
-	// Dialog.Content with data-scope="dialog" data-part="content".
+	// Dialog.Content as DIALOG_CONTENT.
 	const dialogElement = openPanel();
 	expect(dialogElement).not.toBeNull();
 	// Read-only means the PROFILE is display-only. The one editable control that
@@ -492,9 +499,7 @@ test("a person from another roster opens no sheet here", async () => {
 	// Wait for the sheet's panel to exist, then judge it: a bare timer would
 	// race the Sheet's own mount timer.
 	await waitFor(() => {
-		expect(
-			document.querySelector('[data-scope="dialog"][data-part="content"]')
-		).not.toBeNull();
+		expect(document.querySelector(DIALOG_CONTENT)).not.toBeNull();
 	});
 	expect(openPanel()).toBeNull();
 	expect(sheetSkeleton()).toBeNull();
@@ -717,4 +722,115 @@ test("the Venture cell and the sheet's Venture value share a key, and every key 
 	});
 	for (const key of ["firstName", "lastName", "ventureName", "email"])
 		expect(keyedIn(panel, key)).toHaveLength(1);
+});
+
+test("the batch Change role dialog stays mounted through its close after a successful move", async () => {
+	setRoleMock.mockClear();
+	renderWithSelection((selection) => <MembersTab selection={selection} />);
+
+	const checkboxes = screen.getAllByRole("checkbox");
+	fireEvent.click(checkboxes[1]);
+	fireEvent.click(checkboxes[2]);
+	const clear = await screen.findByRole("button", {
+		name: /clear selection/i,
+	});
+	fireEvent.click(
+		within(clear.parentElement!).getByRole("button", {
+			name: /change role/i,
+		})
+	);
+	await waitFor(() => {
+		expect(openPanel()).not.toBeNull();
+	});
+	const dialog = openPanel()!;
+
+	// p1 and p3 are member.onboarding: Admin is reachable through SET_ROLE.
+	await waitFor(() => {
+		expect(screen.getAllByRole("radio").length).toBeGreaterThan(0);
+	});
+	const radio = screen
+		.getAllByRole<HTMLInputElement>("radio")
+		.find((candidate) => candidate.value === "admin");
+	fireEvent.click(radio!);
+	await waitFor(() => {
+		expect(
+			within(dialog).getByRole("button", { name: /change role/i })
+		).not.toBeDisabled();
+	});
+	fireEvent.click(
+		within(dialog).getByRole("button", { name: /change role/i })
+	);
+
+	await waitFor(() => {
+		expect(setRoleMock).toHaveBeenCalledTimes(2);
+	});
+	// A successful move clears the selection, which takes the selection bar
+	// away. The dialog does not live in the bar, so it is still there to
+	// animate out rather than being unmounted mid-close.
+	await waitFor(() => {
+		expect(
+			screen.queryByRole("button", { name: /clear selection/i })
+		).toBeNull();
+	});
+	expect(dialog.isConnected).toBe(true);
+	await waitFor(() => {
+		expect(dialog).toHaveAttribute("data-state", "closed");
+	});
+});
+
+/** Opens Ada's sheet in edit mode and renames her; the sheet's save status. */
+async function renameAda(): Promise<HTMLElement> {
+	const { container } = renderWithSelection((selection) => (
+		<MembersTab selection={selection} />
+	));
+	fireEvent.click(within(container).getAllByText("Ada")[0]);
+	await waitFor(() => {
+		expect(openPanel()).not.toBeNull();
+	});
+	const panel = openPanel() ?? document.body;
+	fireEvent.keyDown(document, { key: "e" });
+	const field = await within(panel).findByDisplayValue("Ada");
+	fireEvent.input(field, { target: { value: "Augusta" } });
+	fireEvent.blur(field);
+	return within(panel).getByRole("status", { name: "Save status" });
+}
+
+test("a member sheet edit says Saving… while people.update runs, then Changes saved", async () => {
+	let resolve!: () => void;
+	mutateAsyncMock.mockImplementationOnce(
+		() =>
+			new Promise<void>((onResolve) => {
+				resolve = onResolve;
+			})
+	);
+	const status = await renameAda();
+	expect(mutateAsyncMock).toHaveBeenCalledWith({
+		id: "p1",
+		firstName: "Augusta",
+	});
+	await waitFor(() => {
+		expect(status).toHaveTextContent("Saving…");
+	});
+	resolve();
+	await waitFor(() => {
+		expect(status).toHaveTextContent("Changes saved");
+	});
+});
+
+test("a refused people.update says Couldn't save; Retry sends it again", async () => {
+	mutateAsyncMock.mockRejectedValueOnce(new Error("offline"));
+	const status = await renameAda();
+	await waitFor(() => {
+		expect(status).toHaveTextContent("Couldn't save");
+	});
+	mutateAsyncMock.mockResolvedValueOnce(null);
+	fireEvent.click(within(status).getByRole("button", { name: /Retry/ }));
+	await waitFor(() => {
+		expect(status).toHaveTextContent("Changes saved");
+	});
+	expect(mutateAsyncMock).toHaveBeenCalledTimes(2);
+	expect(mutateAsyncMock).toHaveBeenLastCalledWith({
+		id: "p1",
+		firstName: "Augusta",
+	});
 });

@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { OWN_GESTURES_ATTR } from "@j-os/design-system";
 import { cleanup, render, screen } from "@solidjs/testing-library";
+import type { ComponentProps } from "solid-js";
 import { afterEach, beforeAll, expect, test, vi } from "vitest";
 
 afterEach(() => {
@@ -25,17 +26,25 @@ vi.mock("convex-solidjs", () => ({
 
 import { DAY_MS } from "../../../../convex/lib/constants.ts";
 
-import styles from "./ProjectTimeline.module.scss";
 import { ProjectTimeline } from "./ProjectTimeline.tsx";
 
-function timeline(projects: never[] | undefined) {
+type TimelineApi = Parameters<
+	NonNullable<ComponentProps<typeof ProjectTimeline>["ref"]>
+>[0];
+
+const SCROLL = '[data-part="timeline-scroll"]';
+
+function timeline(
+	projects: never[] | undefined,
+	onReady?: (api: TimelineApi) => void
+) {
 	return render(() => (
 		<ProjectTimeline
+			ref={onReady}
 			projects={projects}
 			people={[]}
 			tasks={undefined}
 			mode="week"
-			jumpToday={() => 0}
 			onSelect={() => {}}
 			onCreateRange={() => {}}
 		/>
@@ -56,12 +65,8 @@ test("projects empty: empty copy, no skeleton", () => {
 	expect(document.querySelector("[data-skeleton-list]")).toBeNull();
 });
 
-const FOUR_MONTHS = 120 * DAY_MS;
-const LAID_OUT_WIDTH = 300;
-
-test("opens scrolled to today when every project is months ago", () => {
-	// No layout here: report the scroll element's size once it is observed.
-	const resizes: (() => void)[] = [];
+/** No layout here: report the scroll element's size once it is observed. */
+function reportLayout(resizes: (() => void)[]) {
 	vi.stubGlobal(
 		"ResizeObserver",
 		class {
@@ -81,6 +86,14 @@ test("opens scrolled to today when every project is months ago", () => {
 			disconnect() {}
 		}
 	);
+}
+
+const FOUR_MONTHS = 120 * DAY_MS;
+const LAID_OUT_WIDTH = 300;
+
+test("opens scrolled to today when every project is months ago", () => {
+	const resizes: (() => void)[] = [];
+	reportLayout(resizes);
 	const now = Date.now();
 	const project = {
 		_id: "p1",
@@ -90,9 +103,34 @@ test("opens scrolled to today when every project is months ago", () => {
 	};
 	const { container } = timeline([project as never]);
 	for (const resize of resizes) resize();
-	const scroller = container.querySelector<HTMLElement>(`.${styles.scroll}`);
+	const scroller = container.querySelector<HTMLElement>(SCROLL);
 	expect(scroller?.scrollLeft).toBeGreaterThan(0);
-	expect(container.querySelector(`.${styles.today}`)).not.toBeNull();
+	expect(
+		container.querySelector('[data-part="timeline-today"]')
+	).not.toBeNull();
+});
+
+test("the ref hands out scrollToToday, which recentres on today", () => {
+	const resizes: (() => void)[] = [];
+	reportLayout(resizes);
+	const now = Date.now();
+	const project = {
+		_id: "p1",
+		name: "Roof",
+		startDate: now - DAY_MS,
+		endDate: now + DAY_MS,
+	};
+	let api: TimelineApi | undefined;
+	const { container } = timeline([project as never], (handle) => {
+		api = handle;
+	});
+	for (const resize of resizes) resize();
+	const scroller = container.querySelector<HTMLElement>(SCROLL)!;
+	const opened = scroller.scrollLeft;
+	scroller.scrollLeft = 0;
+	api?.scrollToToday();
+	expect(opened).toBeGreaterThan(0);
+	expect(scroller.scrollLeft).toBe(opened);
 });
 
 test("bars and the new-range row handle their own drags, so a tab swipe never starts on them", () => {
@@ -105,7 +143,7 @@ test("bars and the new-range row handle their own drags, so a tab swipe never st
 	};
 	const { container } = timeline([project as never]);
 	expect(screen.getByTitle("Roof")).toHaveAttribute(OWN_GESTURES_ATTR);
-	expect(container.querySelector(`.${styles.newRow}`)).toHaveAttribute(
-		OWN_GESTURES_ATTR
-	);
+	expect(
+		container.querySelector('[data-part="timeline-new-row"]')
+	).toHaveAttribute(OWN_GESTURES_ATTR);
 });

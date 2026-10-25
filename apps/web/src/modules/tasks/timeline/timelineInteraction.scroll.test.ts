@@ -67,13 +67,11 @@ function setup(initial: Timeline | null) {
 	return createRoot((dispose) => {
 		const [mode] = createSignal<ViewMode>("week");
 		const [timeline, setTimeline] = createSignal<Timeline | null>(initial);
-		const [jumpToday] = createSignal(0);
 		const padding = createTimelinePadding({ mode });
 		const scroll = createTimelineScroll({
 			mode,
 			padding,
 			timeline,
-			jumpToday,
 		});
 		return { dispose, padding, scroll, setTimeline };
 	});
@@ -118,6 +116,28 @@ test("does not jump again when the timeline changes or resizes later", () => {
 	element.scrollLeft = 900;
 	setTimeline(stubTimeline());
 	resize(element, VIEWPORT_WIDTH + 1);
+	expect(element.scrollLeft).toBe(900);
+	dispose();
+});
+
+test("scrollToToday recentres on today after the user scrolled away", () => {
+	const { dispose, scroll } = setup(stubTimeline());
+	const element = stubElement();
+	scroll.setScrollElement(element);
+	resize(element, VIEWPORT_WIDTH);
+	element.scrollLeft = 900;
+	scroll.scrollToToday();
+	expect(element.scrollLeft).toBe(TODAY_SCROLL_LEFT);
+	dispose();
+});
+
+test("scrollToToday does nothing while there is no timeline", () => {
+	const { dispose, scroll } = setup(null);
+	const element = stubElement();
+	scroll.setScrollElement(element);
+	resize(element, VIEWPORT_WIDTH);
+	element.scrollLeft = 900;
+	scroll.scrollToToday();
 	expect(element.scrollLeft).toBe(900);
 	dispose();
 });

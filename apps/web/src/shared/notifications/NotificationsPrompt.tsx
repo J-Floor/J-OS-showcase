@@ -1,4 +1,4 @@
-import { Button, FloatingToolbar, Icon, IconButton } from "@j-os/design-system";
+import { Button, Icon } from "@j-os/design-system";
 import { createSignal, type JSX, Show } from "solid-js";
 
 import { createDismissed } from "../../lib/dismissed.ts";
@@ -6,6 +6,7 @@ import { enablePush, pushConfigured, pushSupport } from "../../lib/push.ts";
 import { createActionError } from "../createActionError.ts";
 import { ICONS } from "../icons.ts";
 import { InlineError } from "../InlineError.tsx";
+import { PromptPill } from "../PromptPill.tsx";
 
 const DISMISSED_KEY = "jf-push-prompt-dismissed";
 
@@ -37,15 +38,13 @@ export function NotificationsPrompt(): JSX.Element {
 
 	return (
 		<Show when={show()}>
-			<FloatingToolbar>
+			<PromptPill.Root>
 				<InlineError message={failure()} />
 				<Button variant="tertiary" onClick={enable}>
 					<Icon>{ICONS.notifications}</Icon>Enable notifications
 				</Button>
-				<IconButton tooltipLabel="Dismiss" onClick={dismiss}>
-					{ICONS.close}
-				</IconButton>
-			</FloatingToolbar>
+				<PromptPill.Dismiss onClick={dismiss} />
+			</PromptPill.Root>
 		</Show>
 	);
 }

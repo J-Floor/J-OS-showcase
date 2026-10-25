@@ -32,6 +32,7 @@ export function TimelineLabels(
 		leaderName: (bar: TimelineBar) => string | undefined;
 		taskCount: (bar: TimelineBar) => number | undefined;
 		onSelect: (id: Id<"projects">) => void;
+		onHoverIntent?: () => void;
 		scrollToOffset: (offset: number, dayWidth: number) => void;
 	}
 ) {
@@ -49,6 +50,7 @@ export function TimelineLabels(
 							onClick={() => {
 								props.onSelect(bar.id);
 							}}
+							onHoverIntent={props.onHoverIntent}
 						/>
 						<IconButton
 							tooltipLabel="Jump to project"
@@ -165,6 +167,7 @@ function TimelineGridLines(props: TimelineProps) {
 			<Show when={timeline().todayOffset !== null}>
 				<div
 					class={styles.today}
+					data-part="timeline-today"
 					style={{
 						"--line-start": px(
 							(timeline().todayOffset ?? 0) * timeline().dayWidth
@@ -186,7 +189,7 @@ function TimelineBarView(
 ) {
 	return (
 		<Morph
-			of={props.bar.id}
+			morphId={props.bar.id}
 			asChild={(morph) => (
 				<div
 					{...morph()}
@@ -246,6 +249,7 @@ export function TimelineBody(
 			</For>
 			<div
 				class={styles.newRow}
+				data-part="timeline-new-row"
 				// Dragged across to create a project: never a tab swipe.
 				{...{ [OWN_GESTURES_ATTR]: "" }}
 				onPointerDown={(event) => {

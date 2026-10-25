@@ -1,4 +1,5 @@
 import type { Id } from "../../../../convex/_generated/dataModel";
+import type { useLookupItemByAssetTag } from "../data/inventoryData.ts";
 
 import { extractItemLink } from "./extractItemLink.ts";
 
@@ -14,7 +15,7 @@ export type ScanResolution =
  */
 export async function resolveScannedTag(
 	raw: string,
-	lookup: (assetTag: string) => Promise<{ _id: Id<"items"> } | null>
+	lookup: ReturnType<typeof useLookupItemByAssetTag>
 ): Promise<ScanResolution> {
 	const link = extractItemLink(raw);
 	if (link.kind === "invalid") return { kind: "invalid" };

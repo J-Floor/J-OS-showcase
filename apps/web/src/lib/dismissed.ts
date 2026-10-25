@@ -1,6 +1,5 @@
+import { readStored, writeStored } from "@j-os/design-system";
 import { createSignal } from "solid-js";
-
-import { readLocal, writeLocal } from "./browserStorage.ts";
 
 /**
  * A one-way "dismissed" flag mirrored to `localStorage` under `key`. Reads and
@@ -9,7 +8,7 @@ import { readLocal, writeLocal } from "./browserStorage.ts";
  */
 export function createDismissed(key: string): [() => boolean, () => void] {
 	const [dismissed, setDismissed] = createSignal(
-		readLocal(key)
+		readStored("local", key)
 			.map((stored) => stored === "1")
 			.unwrapOr(false)
 	);
@@ -17,7 +16,7 @@ export function createDismissed(key: string): [() => boolean, () => void] {
 		dismissed,
 		() => {
 			setDismissed(true);
-			writeLocal(key, "1").unwrapOr(undefined);
+			writeStored("local", key, "1").unwrapOr(undefined);
 		},
 	];
 }

@@ -1,11 +1,9 @@
-import type { Id } from "../../../../convex/_generated/dataModel";
 import type { EntitySelection } from "../../../shared/entity/createEntitySelection.ts";
+import type { Identified } from "../../../shared/types.ts";
 
-/** All the selection needs of a roster row: who it is. */
-export type PersonReference = { _id: Id<"people"> };
-
-/** The page-wide person selection every roster tab is handed. */
-export type PersonSelection = EntitySelection<PersonReference>;
+/** The page-wide person selection every roster tab is handed. It needs only
+ *  who a roster row is. */
+export type PersonSelection = EntitySelection<Identified<"people">>;
 
 /**
  * What the page hands each roster tab.

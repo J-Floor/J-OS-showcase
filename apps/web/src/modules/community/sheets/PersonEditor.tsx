@@ -1,10 +1,17 @@
-import { Button, EditableText, PropertyRow } from "@j-os/design-system";
+import {
+	Button,
+	EditableText,
+	PropertyRow,
+	useSaveTracker,
+} from "@j-os/design-system";
+import type { FunctionArgs } from "convex/server";
 import { useMutation } from "convex-solidjs";
-import { Show } from "solid-js";
+import { type Accessor, Show } from "solid-js";
 
 import { api } from "../../../../convex/_generated/api";
 import type { Doc } from "../../../../convex/_generated/dataModel";
 import { call } from "../../../lib/call.ts";
+import { reportSave } from "../../../lib/reportSave.ts";
 import {
 	createActionError,
 	scopeOfFields,
@@ -29,12 +36,19 @@ import {
 
 import styles from "./PersonDetail.module.scss";
 
+/** The fields one edit changes: `people.update`'s arguments bar the id. */
+export type PersonPatch = Omit<FunctionArgs<typeof api.people.update>, "id">;
+
 /** The email row, which has its own flow: the stored address stays until the
  * new one confirms, and a refused change shows its reason beside the field. */
-function EmailEditor(props: { person: Doc<"people"> }) {
+function EmailEditor(props: {
+	person: Doc<"people">;
+	isOpen: Accessor<boolean>;
+}) {
 	function person() {
 		return props.person;
 	}
+	const tracker = useSaveTracker();
 	const update = useMutation(api.people.update);
 	const cancelEmailChange = useMutation(api.people.cancelEmailChange);
 	// The stored email stays until the new address confirms
@@ -50,20 +64,32 @@ function EmailEditor(props: { person: Doc<"people"> }) {
 	const { error: emailError, trackResult } = createActionError(
 		() => person()._id
 	);
-	async function commitEmail(next: string): Promise<void> {
-		await trackResult(
-			call(
-				update.mutateAsync({ id: person()._id, email: next }),
-				"Could not change the email."
-			)
+	function commitEmail(next: string): void {
+		const id = person()._id;
+		reportSave(
+			tracker?.track(EMAIL_SCOPE),
+			() =>
+				trackResult(
+					call(
+						update.mutateAsync({ id, email: next }),
+						"Could not change the email."
+					)
+				),
+			props.isOpen
 		);
 	}
-	async function cancelPending(): Promise<void> {
-		await trackResult(
-			call(
-				cancelEmailChange.mutateAsync({ personId: person()._id }),
-				"Could not cancel the email change."
-			)
+	function cancelPending(): void {
+		const personId = person()._id;
+		reportSave(
+			tracker?.track(EMAIL_CANCEL_SCOPE),
+			() =>
+				trackResult(
+					call(
+						cancelEmailChange.mutateAsync({ personId }),
+						"Could not cancel the email change."
+					)
+				),
+			props.isOpen
 		);
 	}
 	return (
@@ -73,7 +99,7 @@ function EmailEditor(props: { person: Doc<"people"> }) {
 					label={personFields.email.label}
 					value={person().email}
 					onCommit={(value) => {
-						void commitEmail(value);
+						commitEmail(value);
 					}}
 				/>
 			</PropertyRow>
@@ -87,7 +113,7 @@ function EmailEditor(props: { person: Doc<"people"> }) {
 						<Button
 							variant="tertiary"
 							onClick={() => {
-								void cancelPending();
+								cancelPending();
 							}}
 						>
 							Cancel
@@ -103,30 +129,38 @@ function EmailEditor(props: { person: Doc<"people"> }) {
  *  `saveError`. */
 const HOST_SCOPE = "host";
 
+/** The email's own save, beside the field list's. */
+const EMAIL_SCOPE = "email";
+
+/** Cancelling the pending email change, its own save too. */
+const EMAIL_CANCEL_SCOPE = "email-cancel";
+
 function HostedByRow(props: {
 	person: Doc<"people">;
 	saveError: ActionErrorState;
+	isOpen: Accessor<boolean>;
 }) {
 	const setHost = useMutation(api.people.setHost);
+	const tracker = useSaveTracker();
 	return (
 		<PropertyRow field={personFields.hostedById}>
 			<HostSelect
 				value={props.person.hostedById ?? null}
-				placeholder={
-					props.person.hostedBy
-						? `${props.person.hostedBy} — re-pick`
-						: undefined
-				}
-				onCommit={(id) => {
-					void props.saveError.trackResult(
-						call(
-							setHost.mutateAsync({
-								id: props.person._id,
-								hostedById: id,
-							}),
-							"Could not change the host."
-						),
-						HOST_SCOPE
+				legacyHost={props.person.hostedBy}
+				onCommit={(hostedById) => {
+					const id = props.person._id;
+					const saveError = props.saveError;
+					reportSave(
+						tracker?.track(HOST_SCOPE),
+						() =>
+							saveError.trackResult(
+								call(
+									setHost.mutateAsync({ id, hostedById }),
+									"Could not change the host."
+								),
+								HOST_SCOPE
+							),
+						props.isOpen
 					);
 				}}
 			/>
@@ -134,26 +168,39 @@ function HostedByRow(props: {
 	);
 }
 
-/** Editable field list; saves each field via `people.update` on blur/change.
- * Mounted only in edit mode (so the read-only view needs no Convex mutation). */
-export function EditableDetail(props: { person: Doc<"people"> }) {
+/** Editable field list; saves each field via `people.update` on blur/change,
+ * reporting to the sheet's save status. Mounted only in edit mode (so the
+ * read-only view needs no Convex mutation). `isOpen`: the sheet is open, so
+ * a save failing once it closed toasts. */
+export function EditableDetail(props: {
+	person: Doc<"people">;
+	isOpen: Accessor<boolean>;
+}) {
 	const update = useMutation(api.people.update);
+	const tracker = useSaveTracker();
 	function person() {
 		return props.person;
 	}
 	const saveError = createActionError(() => person()._id);
-	function patch(fields: Record<string, unknown>): void {
-		void saveError.trackResult(
-			call(
-				update.mutateAsync({ id: person()._id, ...fields }),
-				"Could not save the change."
-			),
-			scopeOfFields(fields)
+	function patch(fields: PersonPatch): void {
+		const id = person()._id;
+		const scope = scopeOfFields(fields);
+		reportSave(
+			tracker?.track(scope),
+			() =>
+				saveError.trackResult(
+					call(
+						update.mutateAsync({ id, ...fields }),
+						"Could not save the change."
+					),
+					scope
+				),
+			props.isOpen
 		);
 	}
 	return (
 		<div>
-			<EmailEditor person={person()} />
+			<EmailEditor person={person()} isOpen={props.isOpen} />
 			<PropertyRow icon={ICONS.name} label="First name">
 				<EditableText
 					label={personFields.firstName.label}
@@ -186,7 +233,11 @@ export function EditableDetail(props: { person: Doc<"people"> }) {
 			/>
 			{/* Hosting stays here — guest-only, board-managed, not a shared field. */}
 			<Show when={person().tier === "guest"}>
-				<HostedByRow person={person()} saveError={saveError} />
+				<HostedByRow
+					person={person()}
+					saveError={saveError}
+					isOpen={props.isOpen}
+				/>
 			</Show>
 			<VerticalField
 				value={person().vertical}
@@ -208,7 +259,7 @@ export function EditableDetail(props: { person: Doc<"people"> }) {
  */
 function VentureEditor(props: {
 	person: Doc<"people">;
-	patch: (fields: Record<string, unknown>) => void;
+	patch: (fields: PersonPatch) => void;
 }) {
 	function venture() {
 		return props.person.venture;

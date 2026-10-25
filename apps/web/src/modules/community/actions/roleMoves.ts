@@ -4,14 +4,10 @@ import type { RoleTier } from "./triage.ts";
 export type RoleMove =
 	| {
 			kind: "event";
-			event:
-				| "PROMOTE_TO_MEMBER"
-				| "GRANT_CORE"
-				| "REVOKE_CORE"
-				| "PROMOTE_TO_BOARD"
-				| "RE_ADMIT"
-				| "MARK_LEFT"
-				| "KICK_OUT";
+			event: Exclude<
+				(typeof MOVES)[number]["via"][number],
+				"SET_ROLE" | "EXTEND_WINDOW"
+			>;
 	  }
 	| { kind: "role"; tier: RoleTier }
 	| { kind: "extendWindow"; until: number };

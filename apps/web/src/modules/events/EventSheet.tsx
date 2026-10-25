@@ -15,8 +15,12 @@ import { call } from "../../lib/call.ts";
 import { useConfirm } from "../../shared/confirm.tsx";
 import { createActionError } from "../../shared/createActionError.ts";
 import { useQuery } from "../../shared/data/useQuery.ts";
+import { createDraftGuard } from "../../shared/entity/createDraftGuard.ts";
+import { createEntityRemove } from "../../shared/entity/entityCommands.ts";
+import { EntitySheetHeader } from "../../shared/entity/EntitySheetHeader.tsx";
 import { ICONS } from "../../shared/icons.ts";
 import { InlineError } from "../../shared/InlineError.tsx";
+import type { SheetOpenProps } from "../../shared/types.ts";
 import { EditToggle } from "../community/sheets/EditToggle.tsx";
 
 import {
@@ -64,38 +68,46 @@ function EventFieldsPlaceholder() {
 
 const ALL_SECTIONS = ["details", "visitor", "attendees"];
 
-/** The title, the edit toggle (an existing event, board/admin) and the
- *  close button. */
-function EventSheetHeader(props: {
+/** What the sheet is open for: an existing event, a row still loading, or
+ *  (neither) a new event. */
+type EventSheetProps = SheetOpenProps & {
 	event?: Doc<"events">;
+	/** True when the sheet is open for a real row (`requestedId()` set) whose
+	 *  data hasn't loaded yet — distinct from create, where there is no id at
+	 *  all. Wins over `event` (which is undefined in both states). */
 	loading?: boolean;
-	isOpen: boolean;
-	canManage: boolean;
-	isEditing: boolean;
-	onToggleEditing: () => void;
-}) {
+};
+
+/** `EntitySheetHeader` plus the edit toggle, which it shows only for an
+ *  existing, loaded event and only to the board/admin (`canManage`). */
+function EventSheetHeader(
+	props: Pick<EventSheetProps, "event" | "loading"> & {
+		isOpen: boolean;
+		canManage: boolean;
+		isEditing: boolean;
+		onToggleEditing: () => void;
+	}
+) {
 	return (
-		<Sheet.Header>
-			<Sheet.Title loading={props.loading}>
-				{props.event ? props.event.name : "New event"}
-			</Sheet.Title>
-			<Sheet.HeaderActions>
-				<Show
-					when={
-						!props.loading &&
-						props.event !== undefined &&
-						props.canManage
-					}
-				>
-					<EditToggle
-						editing={props.isEditing}
-						enabled={props.isOpen}
-						onToggle={props.onToggleEditing}
-					/>
-				</Show>
-				<Sheet.Close />
-			</Sheet.HeaderActions>
-		</Sheet.Header>
+		<EntitySheetHeader.Root
+			title={props.event ? props.event.name : "New event"}
+			loading={props.loading}
+			saveStatus={!props.loading && props.event !== undefined}
+		>
+			<Show
+				when={
+					!props.loading &&
+					props.event !== undefined &&
+					props.canManage
+				}
+			>
+				<EditToggle
+					editing={props.isEditing}
+					enabled={props.isOpen}
+					onToggle={props.onToggleEditing}
+				/>
+			</Show>
+		</EntitySheetHeader.Root>
 	);
 }
 
@@ -104,6 +116,7 @@ function EventSheetHeader(props: {
 function EventDetailAccordion(props: {
 	event: Accessor<Doc<"events">>;
 	isEditing: Accessor<boolean>;
+	isOpen: Accessor<boolean>;
 	canManage: boolean;
 	attendees: Accessor<Attendee[] | undefined>;
 	openSections: string[];
@@ -117,7 +130,11 @@ function EventDetailAccordion(props: {
 				props.onOpenSectionsChange(details.value);
 			}}
 		>
-			<EventDetailsItem event={props.event} isEditing={props.isEditing} />
+			<EventDetailsItem
+				event={props.event}
+				isEditing={props.isEditing}
+				isOpen={props.isOpen}
+			/>
 			<Show when={props.canManage}>
 				<EventAdminItems
 					event={props.event}
@@ -130,17 +147,28 @@ function EventDetailAccordion(props: {
 
 /** The sheet's footer: Delete on an existing event (board/admin), Create
  *  on the create form. Nothing while the row is still loading. */
-function EventSheetFooter(props: {
-	event?: Doc<"events">;
-	loading?: boolean;
-	canManage: boolean;
-	form: EventCreateFormState;
-	onClose: () => void;
-}) {
+function EventSheetFooter(
+	props: Pick<EventSheetProps, "event" | "loading"> & {
+		canManage: boolean;
+		form: EventCreateFormState;
+		onClose: () => void;
+	}
+) {
 	const deleteEvent = useMutation(api.events.deleteEvent);
 	const confirm = useConfirm();
 
-	const { error, trackResult } = createActionError();
+	const failure = createActionError();
+	const removeEvent = createEntityRemove({
+		remove: (eventId: Id<"events">) =>
+			call(
+				deleteEvent.mutateAsync({ eventId }),
+				"Could not delete the event."
+			),
+		failure,
+		onClose: () => {
+			props.onClose();
+		},
+	});
 
 	async function remove(event: Doc<"events">): Promise<void> {
 		const isOk = await confirm({
@@ -150,14 +178,7 @@ function EventSheetFooter(props: {
 			tone: "danger",
 		});
 		if (!isOk) return;
-		const result = await trackResult(
-			call(
-				deleteEvent.mutateAsync({ eventId: event._id }),
-				"Could not delete the event."
-			)
-		);
-		if (result.isErr()) return;
-		props.onClose();
+		await removeEvent(event._id);
 	}
 
 	return (
@@ -168,7 +189,7 @@ function EventSheetFooter(props: {
 					<Show when={props.canManage && props.event} keyed>
 						{(event) => (
 							<Sheet.Footer>
-								<InlineError message={error()} />
+								<InlineError message={failure.error()} />
 								<Button
 									variant="tertiary"
 									onClick={() => remove(event)}
@@ -215,6 +236,24 @@ function useEventAttendees(
 	);
 }
 
+/** The create form's draft guard: asks before a typed draft is thrown
+ *  away. */
+function createEventDraft(props: EventSheetProps, form: EventCreateFormState) {
+	return createDraftGuard({
+		isOpen: () => props.open && !props.loading && props.event === undefined,
+		values: () => ({
+			name: form.name(),
+			startsAt: form.startsAt(),
+			endsAt: form.endsAt(),
+			startTime: form.startTime(),
+			endTime: form.endTime(),
+		}),
+		onOpenChange: (isOpen) => {
+			props.onOpenChange(isOpen);
+		},
+	});
+}
+
 /**
  * One sheet for creating and viewing/editing an event, styled like the
  * community person sheet: an accordion of `PropertyRow`s, a padlock
@@ -230,15 +269,7 @@ function useEventAttendees(
  * QR/copy/download, the attendee list, editing and delete are all
  * `manage`/`Events` (board/admin) only.
  */
-export function EventSheet(props: {
-	open: boolean;
-	onOpenChange: (isOpen: boolean) => void;
-	event?: Doc<"events">;
-	/** True when the sheet is open for a real row (`requestedId()` set) whose
-	 *  data hasn't loaded yet — distinct from create, where there is no id at
-	 *  all. Wins over `event` (which is undefined in both states). */
-	loading?: boolean;
-}) {
+export function EventSheet(props: EventSheetProps) {
 	const ability = useAbility();
 	function canManage(): boolean {
 		return ability().can("manage", "Events");
@@ -246,7 +277,7 @@ export function EventSheet(props: {
 
 	const form = createEventCreateForm({
 		onCreated: () => {
-			props.onOpenChange(false);
+			draft.onOpenChange(false);
 		},
 	});
 
@@ -271,12 +302,18 @@ export function EventSheet(props: {
 			}
 		)
 	);
+	// After the reset above, so the reset form is the draft's baseline.
+	const draft = createEventDraft(props, form);
 
 	return (
 		<Sheet.Root
 			open={props.open}
-			onOpenChange={props.onOpenChange}
-			morph={props.event?._id}
+			prebuild={props.prebuild}
+			onOpenChange={draft.onOpenChange}
+			confirmClose={draft.confirmClose}
+			discardRef={draft.discardRef}
+			discardLabel="new event"
+			morphId={props.event?._id}
 		>
 			<EventSheetHeader
 				event={props.event}
@@ -303,6 +340,7 @@ export function EventSheet(props: {
 						<EventDetailAccordion
 							event={event}
 							isEditing={editing}
+							isOpen={() => props.open}
 							canManage={canManage()}
 							attendees={() => attendees.data()}
 							openSections={openSections()}

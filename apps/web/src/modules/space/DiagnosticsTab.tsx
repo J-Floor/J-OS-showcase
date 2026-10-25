@@ -10,29 +10,51 @@ import styles from "./DiagnosticsTab.module.scss";
 import { toDoorText, type LogRow } from "./doorLog.ts";
 import { LockHealthCard } from "./LockHealthCard.tsx";
 
-type AuthLogRow = {
+type AuthLogRow = Pick<LogRow, "at" | "operation" | "trigger" | "outcome"> & {
 	id: string;
 	day: string;
-	at: number;
 	person: string;
-	operation: string;
-	trigger: string;
 	locks: string;
-	outcome: string;
 	toDoor: string;
 	noResponse: boolean;
 };
 
-const triggerOptions = [
-	{ value: "cron", label: "Cron" },
-	{ value: "lifecycle", label: "Lifecycle" },
-	{ value: "override", label: "Override" },
-	{ value: "onboarding", label: "Onboarding" },
-	{ value: "resend", label: "Resend" },
-	{ value: "gc", label: "GC" },
-	{ value: "app", label: "App" },
-	{ value: "switchover", label: "Switchover" },
-] as const;
+// Typed `Record<union, string>` so a new schema member is a compile error here
+// and not a filter option that quietly never shows.
+const operationLabels: Record<LogRow["operation"], string> = {
+	grant: "Grant",
+	revoke: "Revoke",
+	unlock: "Unlock",
+	lock: "Lock",
+};
+
+const triggerLabels: Record<LogRow["trigger"], string> = {
+	cron: "Cron",
+	lifecycle: "Lifecycle",
+	override: "Override",
+	onboarding: "Onboarding",
+	resend: "Resend",
+	gc: "GC",
+	app: "App",
+	switchover: "Switchover",
+};
+
+const outcomeLabels: Record<LogRow["outcome"], string> = {
+	ok: "Ok",
+	partial: "Partial",
+	failed: "Failed",
+	"dry-run": "Dry run",
+	busy: "Busy",
+};
+
+function enumOptions<Member extends string>(
+	labels: Record<Member, string>
+): { value: Member; label: string }[] {
+	return Object.entries<string>(labels).map(([value, label]) => ({
+		value: value as Member,
+		label,
+	}));
+}
 
 const columns: JfColumnDefinition<AuthLogRow>[] = [
 	{
@@ -58,19 +80,14 @@ const columns: JfColumnDefinition<AuthLogRow>[] = [
 		header: "Operation",
 		dataType: "enum",
 		size: "content",
-		enumOptions: [
-			{ value: "grant", label: "Grant" },
-			{ value: "revoke", label: "Revoke" },
-			{ value: "unlock", label: "Unlock" },
-			{ value: "lock", label: "Lock" },
-		],
+		enumOptions: enumOptions(operationLabels),
 	},
 	{
 		accessorKey: "trigger",
 		header: "Trigger",
 		dataType: "enum",
 		size: "content",
-		enumOptions: [...triggerOptions],
+		enumOptions: enumOptions(triggerLabels),
 	},
 	{
 		accessorKey: "locks",
@@ -83,13 +100,7 @@ const columns: JfColumnDefinition<AuthLogRow>[] = [
 		header: "Outcome",
 		dataType: "enum",
 		size: "content",
-		enumOptions: [
-			{ value: "ok", label: "Ok" },
-			{ value: "partial", label: "Partial" },
-			{ value: "failed", label: "Failed" },
-			{ value: "dry-run", label: "Dry run" },
-			{ value: "busy", label: "Busy" },
-		],
+		enumOptions: enumOptions(outcomeLabels),
 	},
 	{
 		accessorKey: "toDoor",
@@ -158,36 +169,30 @@ export function DiagnosticsTab(): JSX.Element {
 						<p class={styles.empty}>Couldn't load the log.</p>
 					}
 				>
-					{/* `rows()` is `undefined` while the query is loading — Table.Root
-					    renders its own skeleton rows for that case, and the empty
-					    state below only applies once the log has actually loaded
-					    with nothing in it. */}
-					<Show
-						when={rows()?.length !== 0}
-						fallback={
-							<p class={styles.empty}>
-								No door operations recorded yet.
-							</p>
-						}
-					>
-						<div class={styles.table}>
-							<Table.Root
-								columns={columns}
-								data={rows()}
-								getRowId={(row) => row.id}
-								groupBy="day"
-								virtualize
-								loadingMore={log.loadingMore()}
-								onEndReached={() => {
-									// A failed page waits for "Try again":
-									// the end is still in view, so retrying
-									// here would loop while offline.
-									if (!log.loadMoreFailed())
-										void log.loadMore();
-								}}
-							/>
-						</div>
-					</Show>
+					{/* One table throughout: it shows its own skeleton rows
+					    while `rows()` is undefined, then its rows in place. */}
+					<div class={styles.table}>
+						<Table.Root
+							columns={columns}
+							data={rows()}
+							getRowId={(row) => row.id}
+							groupBy="day"
+							virtualize
+							loadingMore={log.loadingMore()}
+							onEndReached={() => {
+								// A failed page waits for "Try again": the end
+								// is still in view, so retrying here would
+								// loop while offline.
+								if (!log.loadMoreFailed()) void log.loadMore();
+							}}
+						>
+							<Table.Empty>
+								<p class={styles.empty}>
+									No door operations recorded yet.
+								</p>
+							</Table.Empty>
+						</Table.Root>
+					</div>
 				</Show>
 				<Show when={log.loadMoreFailed()}>
 					<div class={styles.retry}>

@@ -1,12 +1,13 @@
 // @vitest-environment happy-dom
+import { Sheet } from "@j-os/design-system";
 import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
 import { getFunctionName } from "convex/server";
 import { ConvexError } from "convex/values";
 import { createSignal } from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
 
-import type { Doc } from "../../../../convex/_generated/dataModel";
 import type { PersonStatus } from "../../../../convex/lib/derive.ts";
+import type { PersonRow } from "../../../../convex/people.ts";
 import {
 	keyedIn,
 	keyedValue,
@@ -126,6 +127,11 @@ vi.mock("../../../shared/data/boardLevel.tsx", () => ({
 
 import { PersonDetail } from "./PersonDetail.tsx";
 
+/** The sheet around the detail is open. */
+function isShown(): boolean {
+	return true;
+}
+
 const ACTIVE_MEMBER: PersonStatus = {
 	tier: "member",
 	stage: "active",
@@ -144,7 +150,7 @@ const ACTIVE_MEMBER: PersonStatus = {
 
 function person(
 	over: Record<string, unknown> & { status: PersonStatus }
-): Doc<"people"> & { status: PersonStatus } {
+): PersonRow {
 	return {
 		_id: "p1",
 		_creationTime: 0,
@@ -154,7 +160,7 @@ function person(
 		tier: "member",
 		stage: "active",
 		...over,
-	} as unknown as Doc<"people"> & { status: PersonStatus };
+	} as unknown as PersonRow;
 }
 
 afterEach(() => {
@@ -167,7 +173,12 @@ afterEach(() => {
 });
 
 test("renders every status fact as its own labelled line", () => {
-	render(() => <PersonDetail person={person({ status: ACTIVE_MEMBER })} />);
+	render(() => (
+		<PersonDetail
+			isOpen={isShown}
+			person={person({ status: ACTIVE_MEMBER })}
+		/>
+	));
 	// The label AND the value, next to each other — the point of the rewrite is
 	// that no line needs decoding from its position. Worded by the UI's copy
 	// module, so this also pins that the sheet routes through it.
@@ -183,7 +194,12 @@ test("renders every status fact as its own labelled line", () => {
 });
 
 test("opens Status, Info and Notes by default, and leaves History closed", () => {
-	render(() => <PersonDetail person={person({ status: ACTIVE_MEMBER })} />);
+	render(() => (
+		<PersonDetail
+			isOpen={isShown}
+			person={person({ status: ACTIVE_MEMBER })}
+		/>
+	));
 	expect(screen.getByRole("button", { name: /Status/ })).toHaveAttribute(
 		"aria-expanded",
 		"true"
@@ -212,7 +228,12 @@ test("does not subscribe to the timeline while History is closed", () => {
 			actorName: "Sara",
 		},
 	];
-	render(() => <PersonDetail person={person({ status: ACTIVE_MEMBER })} />);
+	render(() => (
+		<PersonDetail
+			isOpen={isShown}
+			person={person({ status: ACTIVE_MEMBER })}
+		/>
+	));
 	// `lazyMount` on the accordion: no query is opened at all, and no timeline
 	// row is rendered, until the board asks for the history. The sheet is
 	// re-mounted for every row they step through, so this is one Convex
@@ -237,7 +258,12 @@ test('shows "Came from" listing the attended event(s) when the person came throu
 		{ eventId: "event1", name: "Hackathon Demo Night", confirmedAt: 0 },
 		{ eventId: "event2", name: "Open House", confirmedAt: 0 },
 	];
-	render(() => <PersonDetail person={person({ status: ACTIVE_MEMBER })} />);
+	render(() => (
+		<PersonDetail
+			isOpen={isShown}
+			person={person({ status: ACTIVE_MEMBER })}
+		/>
+	));
 	expect(screen.getByText("Came from")).toBeInTheDocument();
 	expect(
 		screen.getByText("Hackathon Demo Night, Open House")
@@ -245,12 +271,22 @@ test('shows "Came from" listing the attended event(s) when the person came throu
 });
 
 test('renders no "Came from" row for a person who never attended an event', () => {
-	render(() => <PersonDetail person={person({ status: ACTIVE_MEMBER })} />);
+	render(() => (
+		<PersonDetail
+			isOpen={isShown}
+			person={person({ status: ACTIVE_MEMBER })}
+		/>
+	));
 	expect(screen.queryByText("Came from")).toBeNull();
 });
 
 test("summarises the section with the headline, so a collapsed Status still says something", () => {
-	render(() => <PersonDetail person={person({ status: ACTIVE_MEMBER })} />);
+	render(() => (
+		<PersonDetail
+			isOpen={isShown}
+			person={person({ status: ACTIVE_MEMBER })}
+		/>
+	));
 	expect(screen.getByText(headline(ACTIVE_MEMBER))).toBeInTheDocument();
 });
 
@@ -259,6 +295,7 @@ test("shows what they told us when they applied, not just their contact details"
 	// someone hid the reason they were approved.
 	render(() => (
 		<PersonDetail
+			isOpen={isShown}
 			person={person({
 				status: ACTIVE_MEMBER,
 				venture: {
@@ -282,6 +319,7 @@ test("shows what they told us when they applied, not just their contact details"
 test('clicking "Done" on a board task dispatches the step id to completeBoardStep, not the label', () => {
 	render(() => (
 		<PersonDetail
+			isOpen={isShown}
 			person={person({
 				tier: "member",
 				stage: "onboarding",
@@ -323,7 +361,10 @@ test("edit mode offers every field the read-only view shows", () => {
 	const labels = ["Description", "Past built", "Why join", "Referral"];
 
 	render(() => (
-		<PersonDetail person={person({ status: ACTIVE_MEMBER, venture })} />
+		<PersonDetail
+			isOpen={isShown}
+			person={person({ status: ACTIVE_MEMBER, venture })}
+		/>
 	));
 	for (const label of labels)
 		expect(screen.getByText(label)).toBeInTheDocument();
@@ -331,6 +372,7 @@ test("edit mode offers every field the read-only view shows", () => {
 
 	render(() => (
 		<PersonDetail
+			isOpen={isShown}
 			person={person({ status: ACTIVE_MEMBER, venture })}
 			editing
 		/>
@@ -367,6 +409,7 @@ test("a refused email shows the server's reason and puts the stored email back",
 	rejectNextUpdateWithClash();
 	render(() => (
 		<PersonDetail
+			isOpen={isShown}
 			person={person({ status: ACTIVE_MEMBER, email: "old@example.com" })}
 			editing
 		/>
@@ -390,6 +433,7 @@ test("a redacted server error shows a generic message, not the raw text", async 
 	);
 	render(() => (
 		<PersonDetail
+			isOpen={isShown}
 			person={person({ status: ACTIVE_MEMBER, email: "old@example.com" })}
 			editing
 		/>
@@ -405,7 +449,7 @@ test("switching the sheet to another person clears the email error", async () =>
 	const [current, setCurrent] = createSignal(
 		person({ status: ACTIVE_MEMBER, _id: "p1", email: "old@example.com" })
 	);
-	render(() => <PersonDetail person={current()} editing />);
+	render(() => <PersonDetail isOpen={isShown} person={current()} editing />);
 	commitEmail("old@example.com", "taken@example.com");
 	await screen.findByRole("alert");
 	setCurrent(
@@ -425,7 +469,7 @@ test("a refusal that lands after switching person is not shown on the new one", 
 	const [current, setCurrent] = createSignal(
 		person({ status: ACTIVE_MEMBER, _id: "p1", email: "old@example.com" })
 	);
-	render(() => <PersonDetail person={current()} editing />);
+	render(() => <PersonDetail isOpen={isShown} person={current()} editing />);
 	commitEmail("old@example.com", "taken@example.com");
 	setCurrent(
 		person({ status: ACTIVE_MEMBER, _id: "p2", email: "other@example.com" })
@@ -441,6 +485,7 @@ test("a refusal that lands after switching person is not shown on the new one", 
 test("a flagged venture link is shown as text, not a clickable anchor", () => {
 	render(() => (
 		<PersonDetail
+			isOpen={isShown}
 			person={person({
 				status: ACTIVE_MEMBER,
 				venture: {
@@ -467,6 +512,7 @@ test("a pending email change shows the address it waits on and keeps the stored 
 	pendingEmailChange.current = { newEmail: "new@example.org" };
 	render(() => (
 		<PersonDetail
+			isOpen={isShown}
 			person={person({ status: ACTIVE_MEMBER, email: "old@example.com" })}
 			editing
 		/>
@@ -480,6 +526,7 @@ test("a pending email change shows the address it waits on and keeps the stored 
 test("no pending email change, no notice", () => {
 	render(() => (
 		<PersonDetail
+			isOpen={isShown}
 			person={person({ status: ACTIVE_MEMBER, email: "old@example.com" })}
 			editing
 		/>
@@ -491,6 +538,7 @@ test("Cancel withdraws the pending email change for this person", () => {
 	pendingEmailChange.current = { newEmail: "new@example.org" };
 	render(() => (
 		<PersonDetail
+			isOpen={isShown}
 			person={person({ status: ACTIVE_MEMBER, _id: "p1" })}
 			editing
 		/>
@@ -499,10 +547,63 @@ test("Cancel withdraws the pending email change for this person", () => {
 	expect(cancelEmailChangeMock).toHaveBeenCalledWith({ personId: "p1" });
 });
 
+/** The detail in edit mode inside an open sheet that shows its save status. */
+function renderInSheet(): void {
+	render(() => (
+		<Sheet.Root open onOpenChange={() => {}}>
+			<Sheet.Header>
+				<Sheet.Title>Person</Sheet.Title>
+				<Sheet.HeaderActions>
+					<Sheet.SaveStatus />
+				</Sheet.HeaderActions>
+			</Sheet.Header>
+			<PersonDetail
+				isOpen={isShown}
+				person={person({ status: ACTIVE_MEMBER, _id: "p1" })}
+				editing
+			/>
+		</Sheet.Root>
+	));
+}
+
+function saveStatus(): HTMLElement {
+	return screen.getByRole("status", { name: "Save status" });
+}
+
+test("cancelling an email change reports to the sheet's save status", async () => {
+	pendingEmailChange.current = { newEmail: "new@example.org" };
+	renderInSheet();
+	fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+	expect(saveStatus()).toHaveAttribute("data-state", "pending");
+	await vi.waitFor(() => {
+		expect(saveStatus()).toHaveAttribute("data-state", "saved");
+	});
+});
+
+test("a refused email cancel reads Couldn't save, and Retry sends it again", async () => {
+	pendingEmailChange.current = { newEmail: "new@example.org" };
+	cancelEmailChangeMock.mockImplementationOnce(() =>
+		Promise.reject(
+			new ConvexError({ code: "Forbidden", message: "Not allowed." })
+		)
+	);
+	renderInSheet();
+	fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+	await vi.waitFor(() => {
+		expect(saveStatus()).toHaveAttribute("data-state", "failed");
+	});
+	fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+	await vi.waitFor(() => {
+		expect(saveStatus()).toHaveAttribute("data-state", "saved");
+	});
+	expect(cancelEmailChangeMock).toHaveBeenCalledTimes(2);
+});
+
 test("a later successful email commit clears the error", async () => {
 	rejectNextUpdateWithClash();
 	render(() => (
 		<PersonDetail
+			isOpen={isShown}
 			person={person({ status: ACTIVE_MEMBER, email: "old@example.com" })}
 			editing
 		/>
@@ -521,7 +622,10 @@ test("a later successful email commit clears the error", async () => {
 test('renders the "Came from" row with a skeleton value while attended events load', () => {
 	attendedEventsRows.current = undefined;
 	const { container } = render(() => (
-		<PersonDetail person={person({ status: ACTIVE_MEMBER })} />
+		<PersonDetail
+			isOpen={isShown}
+			person={person({ status: ACTIVE_MEMBER })}
+		/>
 	));
 	expect(screen.getByText("Came from")).toBeInTheDocument();
 	expect(container.querySelector("[data-width]")).not.toBeNull();
@@ -529,7 +633,7 @@ test('renders the "Came from" row with a skeleton value while attended events lo
 
 /** A person carrying every field a roster column shows, so each sheet value
  *  that pairs with a column renders. */
-function fullPerson(): Doc<"people"> & { status: PersonStatus } {
+function fullPerson(): PersonRow {
 	return person({
 		status: {
 			...ACTIVE_MEMBER,
@@ -587,7 +691,9 @@ const READ_ONLY_KEYS = [
 ];
 
 test("each sheet value showing a roster column carries that column's key, once", () => {
-	const { container } = render(() => <PersonDetail person={fullPerson()} />);
+	const { container } = render(() => (
+		<PersonDetail isOpen={isShown} person={fullPerson()} />
+	));
 	const counts = keyCounts(container);
 	expect(
 		[...counts.keys()].sort((left, right) => left.localeCompare(right))
@@ -601,7 +707,9 @@ test("each sheet value showing a roster column carries that column's key, once",
 });
 
 test("a value whose sheet label is worded differently carries the column's key under its own label", () => {
-	const { container } = render(() => <PersonDetail person={fullPerson()} />);
+	const { container } = render(() => (
+		<PersonDetail isOpen={isShown} person={fullPerson()} />
+	));
 	/** The label of the PropertyRow holding the keyed value. */
 	function labelOf(key: string): string | null | undefined {
 		let element: Element | null = keyedValue(container, key);
@@ -619,7 +727,7 @@ test("a value whose sheet label is worded differently carries the column's key u
 
 test("edit mode keys its editors like the read-only view and leaves the name to the title", () => {
 	const { container } = render(() => (
-		<PersonDetail person={fullPerson()} editing />
+		<PersonDetail isOpen={isShown} person={fullPerson()} editing />
 	));
 	const counts = keyCounts(container);
 	for (const key of [
@@ -649,7 +757,9 @@ test("edit mode keys its editors like the read-only view and leaves the name to 
 test("no keyed value is rendered inside a collapsed section", () => {
 	// History starts closed and is lazily mounted: nothing in it can pair, so
 	// every keyed value must sit in a section that is open.
-	const { container } = render(() => <PersonDetail person={fullPerson()} />);
+	const { container } = render(() => (
+		<PersonDetail isOpen={isShown} person={fullPerson()} />
+	));
 	const keyed = keyedIn(container);
 	expect(keyed.length).toBeGreaterThan(0);
 	for (const element of keyed)

@@ -5,6 +5,7 @@ import { For, Show, createSignal, type JSX } from "solid-js";
 
 import { ICONS } from "../../icons.ts";
 import { type MorphOverlayProps } from "../../utils/morphPresence.ts";
+import { type OverlayOpenProps } from "../../utils/overlayLayer.tsx";
 import { createSlotPart } from "../../utils/presence.tsx";
 import { Dialog } from "../Dialog/Dialog.tsx";
 import { Highlight } from "../Highlight/Highlight.tsx";
@@ -60,14 +61,13 @@ export type CommandPaletteItem = {
 	onHighlight?: () => void;
 };
 
-export type CommandPaletteProps = {
-	open: boolean;
+export type CommandPaletteProps = Pick<OverlayOpenProps, "open"> & {
 	/**
 	 * Must update `open` synchronously. A pick closes first and runs its
 	 * `onSelect` inside that close, so a sheet it opens can take over the
 	 * picked row; a deferred update starts them in the wrong order.
 	 */
-	onOpenChange: (isOpen: boolean) => void;
+	onOpenChange: OverlayOpenProps["onOpenChange"];
 	items: CommandPaletteItem[];
 	placeholder?: string;
 	/** Parts: a `CommandPalette.Empty` replaces the default "No matches.". */
@@ -266,11 +266,9 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
 			{props.children}
 			<Dialog.Root
 				open={props.open}
-				morph={props.morph}
+				morphId={props.morphId}
 				morphFrom={props.morphFrom}
-				onOpenChange={(details) => {
-					props.onOpenChange(details.open);
-				}}
+				onOpenChange={props.onOpenChange}
 				// A palette opens to be TYPED IN, so it is one of the few dialogs
 				// with an obvious first field. `Dialog.Root` otherwise focuses the
 				// dialog itself (so a screen reader announces it instead of the
@@ -284,26 +282,21 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
 			>
 				<Dialog.Content
 					class={clsx(styles.dialog, props.class)}
-					// The dialog's own X is suppressed here, and the field carries a
-					// clear button instead. An X beside a search box means "empty
-					// this box" — putting the close action there invites you to lose
-					// the whole palette when you only wanted to retype. Escape closes
-					// it, and the footer says so.
-					classOverride={{ closeClass: styles.hiddenClose }}
+					// No `Dialog.Header`, so no X: the field carries a clear button
+					// instead. An X beside a search box means "empty this box" —
+					// putting the close action there invites you to lose the whole
+					// palette when you only wanted to retype. Escape closes it, and
+					// the footer says so.
 				>
 					<Combobox.Root
 						collection={collection()}
-						// Open WITH the dialog, not always. Inside an open dialog there
-						// is nothing to open onto and a palette that hides its list until
-						// you type shows an empty box — so while the dialog is up the
-						// combobox is open and the list browses freely. But the dialog
-						// stays MOUNTED while closed (an overlay cannot gate its own
-						// mount), and an always-open combobox pulls focus into its input on
-						// mount: on every page load focus was stolen into this closed,
-						// invisible palette, so a table's arrow keys and Alt-to-peek
-						// went to a hidden search box and the table never saw a keystroke.
-						// Tying it to `props.open` keeps the list-always-shown behaviour
-						// while the palette is up and leaves focus alone while it is not.
+						// Open WITH the dialog. Inside an open dialog there is nothing to
+						// open onto and a palette that hides its list until you type
+						// shows an empty box — so while the dialog is up the combobox is
+						// open and the list browses freely. The combobox is built per
+						// opening (as all dialog content is) and kept through the close;
+						// following `props.open` closes it as the palette closes, so the
+						// closing card captures no keystrokes.
 						open={props.open}
 						// Enter must RUN the highlighted row, not type it into the box.
 						// zag's default input behaviour completes the query with the

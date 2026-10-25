@@ -1397,9 +1397,8 @@ test("the visibilitychange listener is removed on unmount", async () => {
 		renderCard();
 		await settle();
 		cleanup();
-		expect(remove).toHaveBeenCalledWith(
-			"visibilitychange",
-			expect.any(Function)
+		expect(remove.mock.calls.map(([type]) => type)).toContain(
+			"visibilitychange"
 		);
 		positionAsync.mockClear();
 		document.dispatchEvent(new Event("visibilitychange"));

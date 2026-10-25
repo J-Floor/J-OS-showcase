@@ -1,8 +1,8 @@
+import { makeEventListener } from "@solid-primitives/event-listener";
 import { createKeyHold } from "@tanstack/solid-hotkeys";
 import {
 	createContext,
 	createSignal,
-	onCleanup,
 	onMount,
 	useContext,
 	type JSX,
@@ -52,12 +52,8 @@ export function ShortcutPeekProvider(props: {
 		function swallowAlt(event: KeyboardEvent): void {
 			if (event.key === "Alt") event.preventDefault();
 		}
-		document.addEventListener("keydown", swallowAlt);
-		document.addEventListener("keyup", swallowAlt);
-		onCleanup(() => {
-			document.removeEventListener("keydown", swallowAlt);
-			document.removeEventListener("keyup", swallowAlt);
-		});
+		makeEventListener(document, "keydown", swallowAlt);
+		makeEventListener(document, "keyup", swallowAlt);
 	});
 
 	const value: PeekContext = {

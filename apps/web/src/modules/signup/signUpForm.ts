@@ -4,6 +4,7 @@ import { createMemo, createSignal } from "solid-js";
 import { api } from "../../../convex/_generated/api";
 import { MAX_LINKS } from "../../../convex/lib/safeUrl.ts";
 import { call } from "../../lib/call.ts";
+import { createFieldErrors } from "../../shared/fieldErrors.ts";
 
 import { getCaptchaToken } from "./captchaToken.ts";
 import { buildLinks } from "./links.ts";
@@ -19,11 +20,9 @@ const SUBMIT_FAILED =
 
 /** Visitors converting to full applicants arrive with their name + email
  *  already known (passed as router navigation state). */
-type SignUpPrefill = {
-	firstName?: string;
-	lastName?: string;
-	email?: string;
-};
+export type SignUpPrefill = Partial<
+	Pick<SignUpValues, "firstName" | "lastName" | "email">
+>;
 
 /** The ordered URL slots: the first is required, the rest reveal one at a
  *  time as the previous one gets a value. */
@@ -154,17 +153,7 @@ export function createSignUpForm(prefill: SignUpPrefill) {
 
 	const errors = createMemo(() => validateSignUp(readValues(fields)));
 	const isValid = createMemo(() => isSignUpValid(errors()));
-
-	// Surface a field error only after a submit attempt.
-	function err(field: string | null): string | undefined {
-		return showErrors() && field ? field : undefined;
-	}
-
-	// `invalid` / `errorText` pair every field needs, from one error string.
-	function errProps(field: string | null) {
-		const text = err(field);
-		return { invalid: Boolean(text), errorText: text };
-	}
+	const { errProps } = createFieldErrors(showErrors);
 
 	async function onSubmit(event: Event) {
 		event.preventDefault();

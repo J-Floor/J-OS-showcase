@@ -1,24 +1,29 @@
-import { Sheet, Input, PropertyRow, Query } from "@j-os/design-system";
+import {
+	Sheet,
+	Input,
+	PropertyRow,
+	Query,
+	createSaveTracker,
+	type SaveTracker,
+} from "@j-os/design-system";
 import { For, Show, type JSX } from "solid-js";
 
 import { NAME_MAX, TEXT_MAX } from "../../../../convex/lib/validate.ts";
+import type { SheetNavState } from "../../../lib/createSheetNav.ts";
 import { createSyncedField } from "../../../lib/createSyncedField.ts";
 import { DescriptionField } from "../../../shared/components/DescriptionField.tsx";
 import {
-	createActionError,
-	scopeOfFields,
-	type ActionErrorState,
-} from "../../../shared/createActionError.ts";
+	createEntityCommands,
+	createEntityDraft,
+} from "../../../shared/entity/entityCommands.ts";
 import { EntityCreateFooter } from "../../../shared/entity/EntityCreateFooter.tsx";
-import {
-	EntitySheetHeader,
-	type SheetNavState,
-} from "../../../shared/entity/EntitySheetHeader.tsx";
+import { EntitySheetHeader } from "../../../shared/entity/EntitySheetHeader.tsx";
 import { ICONS } from "../../../shared/icons.ts";
 import { InlineError } from "../../../shared/InlineError.tsx";
+import type { SheetOpenProps } from "../../../shared/types.ts";
 import { dateToIso, isoToMs } from "../data/taskHelpers.ts";
 import type { Person, Project, Task } from "../data/tasksData.tsx";
-import { useProjectActions, type ProjectActions } from "../data/tasksData.tsx";
+import { useProjectActions } from "../data/tasksData.tsx";
 import { projectFields } from "../fields.ts";
 import { TaskCard } from "../kanban/TaskCard.tsx";
 
@@ -59,9 +64,7 @@ function ProjectFieldsPlaceholder() {
 	);
 }
 
-type ProjectSheetProps = {
-	open: boolean;
-	onOpenChange: (isOpen: boolean) => void;
+type ProjectSheetProps = SheetOpenProps & {
 	project?: Project;
 	/** Create-mode date prefill (e.g. from dragging the timeline's "New" row). */
 	initialStart?: number;
@@ -80,6 +83,21 @@ type ProjectSheetProps = {
 	nav?: SheetNavState;
 };
 
+/** The sheet's writes to its project, and the failure they report through.
+ *  `onClose` closes the sheet after a create or a delete. */
+function createProjectSheetCommands(
+	props: ProjectSheetProps,
+	onClose: () => void
+) {
+	return createEntityCommands({
+		id: () => props.project?._id,
+		actions: useProjectActions(),
+		onClose,
+	});
+}
+
+type ProjectSheetCommands = ReturnType<typeof createProjectSheetCommands>;
+
 /**
  * Each field is a draft synced to its Convex value via createSyncedField (see
  * TaskSheet for the rationale). `key` includes `open` so the form re-seeds
@@ -89,41 +107,24 @@ type ProjectSheetProps = {
  */
 function createProjectFields(
 	props: ProjectSheetProps,
-	actions: ProjectActions,
-	failure: ActionErrorState
+	patch: ProjectSheetCommands["patch"],
+	tracker: SaveTracker
 ) {
 	function key() {
 		return `${String(props.open)}:${props.project?._id ?? "new"}`;
 	}
-
-	async function patchProject(
-		project: Project,
-		fields: Record<string, unknown>
-	) {
-		await failure.trackResult(
-			actions.update({ id: project._id, ...fields }),
-			scopeOfFields(fields)
-		);
-	}
-
-	function patch(fields: Record<string, unknown>) {
-		if (props.project) void patchProject(props.project, fields);
-	}
+	const sync = { key, open: () => props.open, tracker };
 
 	return {
 		name: createSyncedField({
 			remote: () => props.project?.name ?? "",
-			key,
-			write: (value) => {
-				patch({ name: value });
-			},
+			...sync,
+			write: (value) => patch({ name: value }),
 		}),
 		leaderId: createSyncedField({
 			remote: () => props.project?.leaderId,
-			key,
-			write: (value) => {
-				patch({ leaderId: value ?? null });
-			},
+			...sync,
+			write: (value) => patch({ leaderId: value ?? null }),
 			debounceMs: 0,
 		}),
 		startDate: createSyncedField({
@@ -133,27 +134,21 @@ function createProjectFields(
 				props.project
 					? props.project.startDate
 					: (props.initialStart ?? todayMs()),
-			key,
-			write: (value) => {
-				patch({ startDate: value ?? null });
-			},
+			...sync,
+			write: (value) => patch({ startDate: value ?? null }),
 			debounceMs: 0,
 		}),
 		endDate: createSyncedField({
 			remote: () =>
 				props.project ? props.project.endDate : props.initialEnd,
-			key,
-			write: (value) => {
-				patch({ endDate: value ?? null });
-			},
+			...sync,
+			write: (value) => patch({ endDate: value ?? null }),
 			debounceMs: 0,
 		}),
 		description: createSyncedField({
 			remote: () => props.project?.description ?? "",
-			key,
-			write: (value) => {
-				patch({ description: value });
-			},
+			...sync,
+			write: (value) => patch({ description: value }),
 		}),
 	};
 }
@@ -164,34 +159,21 @@ type ProjectFields = ReturnType<typeof createProjectFields>;
 function createProjectCommands(
 	props: ProjectSheetProps,
 	fields: ProjectFields,
-	actions: ProjectActions,
-	failure: ActionErrorState
+	commands: ProjectSheetCommands
 ) {
 	async function createProject() {
 		if (!fields.name.value().trim()) return;
-		const result = await failure.trackResult(
-			actions.create({
-				name: fields.name.value().trim(),
-				leaderId: fields.leaderId.value(),
-				startDate: fields.startDate.value(),
-				endDate: fields.endDate.value(),
-				description: fields.description.value().trim() || undefined,
-			})
-		);
-		if (result.isErr()) return;
-		props.onOpenChange(false);
+		await commands.create({
+			name: fields.name.value().trim(),
+			leaderId: fields.leaderId.value(),
+			startDate: fields.startDate.value(),
+			endDate: fields.endDate.value(),
+			description: fields.description.value().trim() || undefined,
+		});
 	}
 
 	async function deleteProject() {
-		if (!props.project) {
-			props.onOpenChange(false);
-			return;
-		}
-		const result = await failure.trackResult(
-			actions.remove(props.project._id)
-		);
-		if (result.isErr()) return;
-		props.onOpenChange(false);
+		await commands.remove(props.project?._id);
 	}
 
 	return { createProject, deleteProject };
@@ -300,37 +282,53 @@ function ProjectTasksSection(props: {
 	);
 }
 
-export function ProjectSheet(props: ProjectSheetProps): JSX.Element {
-	const actions = useProjectActions();
-	const failure = createActionError();
-	const fields = createProjectFields(props, actions, failure);
-	const { createProject, deleteProject } = createProjectCommands(
-		props,
+/** The sheet's fields, what they save, and the create form's draft
+ *  guard. */
+function createProjectSheet(props: ProjectSheetProps, isEdit: () => boolean) {
+	const saves = createSaveTracker();
+	const commands = createProjectSheetCommands(props, () => {
+		draft.onOpenChange(false);
+	});
+	const fields = createProjectFields(props, commands.patch, saves);
+	const draft = createEntityDraft(props, isEdit, fields, "new project");
+	return {
+		...createProjectCommands(props, fields, commands),
+		failure: commands.failure,
 		fields,
-		actions,
-		failure
-	);
+		saves,
+		draft,
+	};
+}
+
+export function ProjectSheet(props: ProjectSheetProps): JSX.Element {
 	function isEdit() {
 		return props.project !== undefined;
 	}
+	const { createProject, deleteProject, failure, fields, saves, draft } =
+		createProjectSheet(props, isEdit);
 
 	return (
 		<Sheet.Root
 			open={props.open}
-			onOpenChange={props.onOpenChange}
-			morph={props.project?._id}
+			prebuild={props.prebuild}
+			{...draft.sheet}
+			saveTracker={saves}
+			morphId={props.project?._id}
 			morphFrom={props.morphFrom}
 		>
-			<EntitySheetHeader
+			<EntitySheetHeader.Root
 				title={props.project?.name ?? "New project"}
 				loading={props.loading}
 				nav={props.nav}
-				isEdit={isEdit()}
-				deleteLabel="Delete project"
-				onDelete={() => {
-					void deleteProject();
-				}}
-			/>
+				saveStatus={isEdit() && !props.loading}
+			>
+				<Show when={isEdit()}>
+					<EntitySheetHeader.Delete
+						label="Delete project"
+						onDelete={() => void deleteProject()}
+					/>
+				</Show>
+			</EntitySheetHeader.Root>
 			<Sheet.Skeleton>
 				<ProjectFieldsPlaceholder />
 			</Sheet.Skeleton>

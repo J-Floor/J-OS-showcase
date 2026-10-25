@@ -1,4 +1,5 @@
 @use "@j-os/design-system/breakpoints" as bp;
+@use "@j-os/design-system/hover";
 @use "@j-os/design-system/typography" as typo;
 
 /* Phone bottom bar contents, top to bottom: its border, its padding, an
@@ -103,8 +104,7 @@ $nav-block-size: calc(
 	text-decoration: none;
 	border-radius: var(--jf-radius-button);
 
-	/* stylelint-disable-next-line defensive-css/no-accidental-hover -- pointer-capable control; mobile accidental-hover not a concern */
-	&:hover {
+	@include hover.hover {
 		background: var(--jf-surface-bg-overlay);
 	}
 }

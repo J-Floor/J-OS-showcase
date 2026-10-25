@@ -1,51 +1,27 @@
-import { Button, Sheet, PropertyRow } from "@j-os/design-system";
+import { Button, Sheet, createSaveTracker } from "@j-os/design-system";
 import { Show, createSignal, type JSX } from "solid-js";
 
-import { call } from "../../../lib/call.ts";
+import type { Id } from "../../../../convex/_generated/dataModel";
+import type { SheetNavState } from "../../../lib/createSheetNav.ts";
 import { createSyncedField } from "../../../lib/createSyncedField.ts";
 import { useConfirm } from "../../../shared/confirm.tsx";
-import {
-	createActionError,
-	scopeOfFields,
-} from "../../../shared/createActionError.ts";
-import {
-	EntitySheetHeader,
-	type SheetNavState,
-} from "../../../shared/entity/EntitySheetHeader.tsx";
-import { ICONS } from "../../../shared/icons.ts";
+import { createEntityDraft } from "../../../shared/entity/entityCommands.ts";
+import { EntitySheetHeader } from "../../../shared/entity/EntitySheetHeader.tsx";
 import { InlineError } from "../../../shared/InlineError.tsx";
-import type { Category } from "../data/inventoryData.ts";
+import type { SheetOpenProps } from "../../../shared/types.ts";
+import type { Category, CategoryPatch } from "../data/inventoryData.ts";
 import {
 	useCategoryActions,
 	useItemTypesByCategory,
 } from "../data/inventoryData.ts";
 import { categoryFields } from "../fields.ts";
 
+import { FieldsPlaceholder } from "./FieldsPlaceholder.tsx";
+import { createInventoryCommands } from "./inventoryCommands.ts";
 import { DescriptionValue, NameField } from "./InventoryForm.tsx";
 import { RelatedListSection } from "./RelatedListSection.tsx";
 
-/**
- * Placeholder field layout shown by `Sheet.Skeleton` while
- * `loading` is true — an open row whose data hasn't arrived yet. Shaped like
- * the loaded field list (mirrors `EventFieldsPlaceholder`); literal
- * "placeholder" text, never real or create-form copy.
- */
-function CategoryFieldsPlaceholder() {
-	return (
-		<>
-			<PropertyRow icon={ICONS.name} label="Name">
-				<span>placeholder</span>
-			</PropertyRow>
-			<PropertyRow icon={ICONS.description} label="Description">
-				<span>placeholder</span>
-			</PropertyRow>
-		</>
-	);
-}
-
-type CategorySheetProps = {
-	open: boolean;
-	onOpenChange: (isOpen: boolean) => void;
+type CategorySheetProps = SheetOpenProps & {
 	category?: Category;
 	/** True when the sheet is open for a real row (`requestedId()` set) whose
 	 *  data hasn't loaded yet — distinct from create, where there is no id at
@@ -59,60 +35,70 @@ type CategorySheetProps = {
 function createCategoryForm(props: CategorySheetProps) {
 	const actions = useCategoryActions();
 	const confirm = useConfirm();
-	const failure = createActionError();
 
 	function key() {
 		return `${String(props.open)}:${props.category?._id ?? "new"}`;
 	}
 
-	async function patch(change: Record<string, unknown>) {
-		const category = props.category;
-		if (!category) return;
-		await failure.trackResult(
-			call(
-				actions.update({ id: category._id, ...change }),
-				"Could not save."
-			),
-			scopeOfFields(change)
-		);
-	}
+	const commands = createInventoryCommands<
+		Parameters<typeof actions.create>[0],
+		Id<"itemCategories">,
+		CategoryPatch
+	>({
+		actions,
+		id: () => props.category?._id,
+		onClose: () => {
+			draft.onOpenChange(false);
+		},
+	});
+
+	const { patch } = commands;
+	const saves = createSaveTracker();
+	const sync = { key, open: () => props.open, tracker: saves };
 
 	const name = createSyncedField({
 		remote: () => props.category?.name ?? "",
-		key,
-		write: (value) => {
-			void patch({ name: value });
-		},
+		...sync,
+		write: (value) => patch({ name: value }),
 	});
 	const description = createSyncedField({
 		remote: () => props.category?.description ?? "",
-		key,
-		write: (value) => {
-			void patch({ description: value.trim() === "" ? null : value });
-		},
+		...sync,
+		write: (value) =>
+			patch({ description: value.trim() === "" ? null : value }),
 	});
+
+	const draft = createEntityDraft(
+		props,
+		() => props.category !== undefined,
+		{
+			name,
+			description,
+		},
+		"new category"
+	);
 
 	return {
 		name,
 		description,
-		formError: failure.error,
-		/** Forwards the sheet's open state, dropping a stale error on close. */
-		onOpenChange: (isOpen: boolean) => {
-			if (!isOpen) failure.clear();
-			props.onOpenChange(isOpen);
+		/** Spread onto the `Sheet.Root`. */
+		sheet: {
+			...draft.sheet,
+			saveTracker: saves,
+			/** Forwards the sheet's open state, dropping a stale error on
+			 *  close. */
+			onOpenChange: (isOpen: boolean) => {
+				if (!isOpen) commands.failure.clear();
+				draft.onOpenChange(isOpen);
+			},
 		},
+		formError: commands.failure.error,
 		async createCategory() {
 			if (!name.value().trim()) return;
-			const created = await failure.trackResult(
-				call(
-					actions.create({
-						name: name.value(),
-						description: description.value().trim() || undefined,
-					}),
-					"Could not create."
-				)
-			);
-			if (created.isOk()) props.onOpenChange(false);
+			await commands.create({
+				name: name.value(),
+				description: description.value().trim() || undefined,
+			});
 		},
 		async deleteCategory() {
 			if (!props.category) return;
@@ -124,11 +110,7 @@ function createCategoryForm(props: CategorySheetProps) {
 				tone: "danger",
 			});
 			if (!isOk) return;
-			const category = props.category;
-			const deleted = await failure.trackResult(
-				call(actions.remove(category._id), "Could not delete.")
-			);
-			if (deleted.isOk()) props.onOpenChange(false);
+			await commands.remove(props.category._id);
 		},
 	};
 }
@@ -158,22 +140,28 @@ export function CategorySheet(props: CategorySheetProps): JSX.Element {
 	return (
 		<Sheet.Root
 			open={props.open}
-			morph={props.category?._id}
-			onOpenChange={form.onOpenChange}
+			prebuild={props.prebuild}
+			morphId={props.category?._id}
+			{...form.sheet}
 			initialFocusEl={() => nameElement ?? null}
 		>
-			<EntitySheetHeader
+			<EntitySheetHeader.Root
 				title={props.category?.name ?? "New category"}
 				loading={props.loading}
 				nav={props.nav}
-				isEdit={isEdit()}
-				deleteLabel="Delete category"
-				onDelete={() => {
-					void form.deleteCategory();
-				}}
-			/>
+				saveStatus={isEdit() && !props.loading}
+			>
+				<Show when={isEdit()}>
+					<EntitySheetHeader.Delete
+						label="Delete category"
+						onDelete={() => void form.deleteCategory()}
+					/>
+				</Show>
+			</EntitySheetHeader.Root>
 			<Sheet.Skeleton>
-				<CategoryFieldsPlaceholder />
+				<FieldsPlaceholder
+					fields={[categoryFields.name, categoryFields.description]}
+				/>
 			</Sheet.Skeleton>
 			<Sheet.Body loading={props.loading}>
 				<NameField

@@ -1,3 +1,5 @@
+@use "../src/styles/hover";
+
 .app {
 	display: flex;
 	flex-direction: column;
@@ -48,7 +50,7 @@
 	border: none;
 	border-radius: var(--jf-radius-button);
 
-	&:hover {
+	@include hover.hover {
 		background: var(--jf-surface-bg-overlay);
 	}
 }

@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { HOVER_INTENT_MS } from "@j-os/design-system";
 import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
 import { afterEach, expect, test, vi } from "vitest";
 afterEach(cleanup);
@@ -33,4 +34,23 @@ test("shows title, assignee, project, due date; click fires", () => {
 	expect(screen.getByText("22 Jun 2026")).toBeInTheDocument();
 	fireEvent.click(screen.getByText("Write spec"));
 	expect(onClick).toHaveBeenCalled();
+});
+
+test("fires hover intent once the pointer rests on the card", () => {
+	vi.useFakeTimers();
+	const onHoverIntent = vi.fn();
+	render(() => (
+		<TaskCard
+			task={task}
+			people={[]}
+			projects={[]}
+			onClick={() => {}}
+			onHoverIntent={onHoverIntent}
+		/>
+	));
+	fireEvent.pointerEnter(screen.getByRole("article"));
+	expect(onHoverIntent).not.toHaveBeenCalled();
+	vi.advanceTimersByTime(HOVER_INTENT_MS);
+	vi.useRealTimers();
+	expect(onHoverIntent).toHaveBeenCalledTimes(1);
 });

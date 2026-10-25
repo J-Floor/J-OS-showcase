@@ -1,3 +1,4 @@
+@use "hover";
 @use "utils";
 
 /* The round, icon-only button look (IconButton, and buttons that cannot be an
@@ -45,7 +46,7 @@
 
 	&:not([data-loading="true"], [disabled]) {
 		@media (hover: hover) {
-			&:hover {
+			@include hover.hover {
 				&::before {
 					transform: translate(-50%, -50%) scale(1);
 				}

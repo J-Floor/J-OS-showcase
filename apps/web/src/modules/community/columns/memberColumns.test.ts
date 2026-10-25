@@ -3,9 +3,10 @@ import { errAsync, okAsync } from "neverthrow";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
+import type { PersonRow } from "../../../../convex/people.ts";
 import type { useTriage } from "../actions/triage.ts";
 
-import { applyMove, memberGroup, type MemberRow } from "./memberColumns.tsx";
+import { applyMove, memberGroup } from "./memberColumns.tsx";
 
 /**
  * A `ReturnType<typeof useTriage>` double, one mock per method. `applyMove`
@@ -130,7 +131,7 @@ describe("applyMove failures", () => {
 describe("memberGroup", () => {
 	it("staff rows group under Staff", () => {
 		expect(
-			memberGroup({ tier: "staff", stage: "active" } as MemberRow)
+			memberGroup({ tier: "staff", stage: "active" } as PersonRow)
 		).toBe("staff");
 	});
 });

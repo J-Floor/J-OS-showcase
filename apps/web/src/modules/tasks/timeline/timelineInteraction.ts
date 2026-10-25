@@ -1,4 +1,4 @@
-import { afterTransition } from "@j-os/design-system";
+import { createMorphHold } from "@j-os/design-system";
 import {
 	batch,
 	createEffect,
@@ -135,13 +135,11 @@ function createObservedElement() {
 
 /** Scroll behaviour: opens on today, grows the range when scrolled toward an
  *  edge, keeps the viewport anchored when it grows on the left, and jumps to
- *  today from the toolbar. */
+ *  today on request. */
 export function createTimelineScroll(options: {
 	mode: Accessor<ViewMode>;
 	padding: ReturnType<typeof createTimelinePadding>;
 	timeline: Accessor<Timeline | null>;
-	/** Bumped by the toolbar "Today" button to recentre on today. */
-	jumpToday: Accessor<number>;
 }) {
 	const { padding } = options;
 	const { element, isShown, mount } = createObservedElement();
@@ -178,9 +176,15 @@ export function createTimelineScroll(options: {
 			);
 	}
 
-	function scrollToToday(timeline: Timeline): void {
+	function scrollToTodayIn(timeline: Timeline): void {
 		if (timeline.todayOffset !== null)
 			scrollToOffset(timeline.todayOffset, timeline.dayWidth);
+	}
+
+	/** Recentre on today (a no-op until the timeline exists). */
+	function scrollToToday(): void {
+		const timeline = options.timeline();
+		if (timeline) scrollToTodayIn(timeline);
 	}
 
 	// Open on today, once the timeline exists and its scroll element is shown.
@@ -191,23 +195,12 @@ export function createTimelineScroll(options: {
 		const timeline = options.timeline();
 		if (!(timeline && isShown())) return;
 		setHasJumped(true);
-		scrollToToday(timeline);
+		scrollToTodayIn(timeline);
 	});
-
-	// "Jump to today" from the toolbar (bumped nonce).
-	createEffect(
-		on(
-			() => options.jumpToday(),
-			() => {
-				const timeline = options.timeline();
-				if (timeline) scrollToToday(timeline);
-			},
-			{ defer: true }
-		)
-	);
 
 	return {
 		scrollToOffset,
+		scrollToToday,
 		setScrollElement: (scrollElement: HTMLDivElement): void => {
 			// A remounted element starts at the far left again.
 			batch(() => {
@@ -420,10 +413,16 @@ export function createNewRangeDrag(options: {
 		from: HTMLElement | null
 	) => void;
 }) {
-	const [newRange, setNewRange] = createSignal<{
+	const [dragged, setNewRange] = createSignal<{
 		a: number;
 		b: number;
 	} | null>(null);
+	// The sheet opens out of the preview, so a let-go range stays drawn
+	// until that morph has finished.
+	const held = createMorphHold(dragged, () => dragged() !== null);
+	function newRange(): { a: number; b: number } | null {
+		return held() ?? null;
+	}
 	let newAnchor: number | null = null;
 	let preview: HTMLElement | null = null;
 
@@ -463,16 +462,12 @@ export function createNewRangeDrag(options: {
 			}
 			const lo = Math.min(anchor, offset);
 			const hi = Math.max(anchor, offset);
-			// The sheet opens out of the preview, so it stays until that
-			// morph has finished (at once without one).
 			options.onCreateRange(
 				timeline.rangeStartMs + lo * DAY_MS,
 				timeline.rangeStartMs + hi * DAY_MS,
 				preview
 			);
-			void afterTransition().then(() => {
-				if (newAnchor === null) setNewRange(null);
-			});
+			setNewRange(null);
 		},
 	};
 }

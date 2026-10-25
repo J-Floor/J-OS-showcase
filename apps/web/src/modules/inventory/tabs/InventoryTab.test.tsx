@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import type { JfColumnDefinition } from "@j-os/design-system";
+import { Table, type JfColumnDefinition } from "@j-os/design-system";
 import {
 	MemoryRouter,
 	Route,
@@ -25,7 +25,7 @@ import {
 import type { EntityDescriptor } from "../../../shared/entity/entityDescriptor.ts";
 import { itemTypeEntity } from "../entity.ts";
 
-import { InventoryTab } from "./InventoryTab.tsx";
+import { InventoryTab, type InventorySheetArgs } from "./InventoryTab.tsx";
 
 const prefetch = vi.fn<(...args: unknown[]) => void>();
 vi.mock("../../../shared/data/queryKeeper.ts", async (orig) => ({
@@ -59,12 +59,13 @@ type Bag = {
 	search?: () => string;
 };
 
+function SelectionCount() {
+	const batch = Table.useSelection<Row>();
+	return <span>{`sel:${String(batch.count())}`}</span>;
+}
+
 function sheetText(
-	sheet: {
-		open: () => boolean;
-		row: () => Row | undefined;
-		initialAssetTag: () => string | undefined;
-	},
+	sheet: InventorySheetArgs<Row>,
 	requestedId: string | undefined
 ): string {
 	if (!sheet.open()) return "closed";
@@ -84,19 +85,8 @@ function renderHarness(options?: {
 	newItemAssetTag?: () => string | undefined;
 	enableRowSelection?: boolean;
 	descriptor?: EntityDescriptor<Row>;
-	batchActions?: (selection: { count: () => number }) => JSX.Element;
-	renderSheet?: (args: {
-		open: () => boolean;
-		onOpenChange: (isOpen: boolean) => void;
-		row: () => Row | undefined;
-		initialAssetTag: () => string | undefined;
-		nav: {
-			hasPrev: () => boolean;
-			hasNext: () => boolean;
-			onPrev: () => void;
-			onNext: () => void;
-		};
-	}) => JSX.Element;
+	batchActions?: () => JSX.Element;
+	renderSheet?: (args: InventorySheetArgs<Row>) => JSX.Element;
 }): Bag {
 	const bag: Bag = {};
 	const rows = options?.rows ?? (() => [] as Row[]);
@@ -106,21 +96,27 @@ function renderHarness(options?: {
 		const location = useLocation();
 		bag.search = () => location.search;
 		return (
-			<InventoryTab
+			<InventoryTab.Root
 				data={rows}
 				columns={() => COLUMNS}
 				selection={sel}
 				descriptor={options?.descriptor}
 				newItemAssetTag={options?.newItemAssetTag}
 				enableRowSelection={options?.enableRowSelection}
-				batchActions={options?.batchActions}
-				renderSheet={
-					options?.renderSheet ??
-					((sheet) => (
-						<div>{sheetText(sheet, sel.requestedId())}</div>
-					))
-				}
-			/>
+			>
+				<InventoryTab.Sheet<Row>>
+					{(sheet: InventorySheetArgs<Row>) =>
+						options?.renderSheet?.(sheet) ?? (
+							<div>{sheetText(sheet, sel.requestedId())}</div>
+						)
+					}
+				</InventoryTab.Sheet>
+				<Show when={options?.batchActions}>
+					<Table.BatchActions>
+						{options?.batchActions?.()}
+					</Table.BatchActions>
+				</Show>
+			</InventoryTab.Root>
 		);
 	}
 	render(() => (
@@ -214,6 +210,40 @@ test("keeps the same sheet dialog node across a data() refetch while open", asyn
 	expect(dialogAfter).toHaveTextContent("Chair v2");
 });
 
+test("paging with the sheet's nav shows the next row without re-creating the sheet", async () => {
+	const created = vi.fn();
+	function PagedSheet(props: { sheet: InventorySheetArgs<Row> }) {
+		created();
+		return (
+			<div>
+				<span role="dialog">{props.sheet.row()?.name ?? "none"}</span>
+				<button
+					onClick={() => {
+						props.sheet.nav.onNext();
+					}}
+				>
+					next-row
+				</button>
+			</div>
+		);
+	}
+	renderHarness({
+		rows: () => THREE_ROWS,
+		renderSheet: (sheet) => <PagedSheet sheet={sheet} />,
+	}).sel?.openRow(THREE_ROWS[0]);
+
+	expect(await screen.findByRole("dialog")).toHaveTextContent("Chair");
+	fireEvent.click(screen.getByRole("button", { name: "next-row" }));
+	await waitFor(() => {
+		expect(screen.getByRole("dialog")).toHaveTextContent("Lamp");
+	});
+	fireEvent.click(screen.getByRole("button", { name: "next-row" }));
+	await waitFor(() => {
+		expect(screen.getByRole("dialog")).toHaveTextContent("Desk");
+	});
+	expect(created).toHaveBeenCalledTimes(1);
+});
+
 // C1 regression: the old bridge (`itemOpenCommand()` derived from `selected()`,
 // fed to a `requestOpenItem` effect) re-fired on every rows() refetch because
 // closing never cleared the selection — so the sheet reopened by itself after
@@ -280,7 +310,7 @@ test("row selection adds a checkbox column and header select-all", async () => {
 	renderHarness({
 		rows: () => THREE_ROWS,
 		enableRowSelection: true,
-		batchActions: (batch) => <span>{`sel:${String(batch.count())}`}</span>,
+		batchActions: () => <SelectionCount />,
 	});
 	const checks = await screen.findAllByRole("checkbox");
 	// Header select-all plus one per row.
@@ -291,7 +321,7 @@ test("header select-all checks every visible row and shows the batch bar", async
 	renderHarness({
 		rows: () => THREE_ROWS,
 		enableRowSelection: true,
-		batchActions: (batch) => <span>{`sel:${String(batch.count())}`}</span>,
+		batchActions: () => <SelectionCount />,
 	});
 	const checks = await screen.findAllByRole("checkbox");
 	fireEvent.click(checks[0]);
@@ -310,7 +340,7 @@ test("clicking a row checkbox does not open the sheet", async () => {
 	renderHarness({
 		rows: () => THREE_ROWS,
 		enableRowSelection: true,
-		batchActions: (batch) => <span>{`sel:${String(batch.count())}`}</span>,
+		batchActions: () => <SelectionCount />,
 	});
 	expect(screen.getByText("closed")).toBeInTheDocument();
 	const checks = await screen.findAllByRole("checkbox");

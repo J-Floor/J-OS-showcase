@@ -1,8 +1,4 @@
-import type {
-	FunctionArgs,
-	FunctionReference,
-	FunctionReturnType,
-} from "convex/server";
+import type { FunctionArgs, FunctionReference } from "convex/server";
 import { useQuery as useConvexQuery } from "convex-solidjs";
 import {
 	createComputed,
@@ -16,15 +12,19 @@ import { LINGER_TTL, retain } from "./queryKeeper.ts";
 
 type MaybeAccessor<T> = T | Accessor<T>;
 
-type QueryOptions<T> = {
-	enabled?: boolean;
-	initialData?: T;
-	/** @default true */
-	keepPreviousData?: boolean;
-	/** Hand the query to the keeper when its reader goes away. Off for a
-	 *  one-shot read nobody comes back to. @default true */
-	linger?: boolean;
-};
+/** convex-solidjs's options (`enabled`, `initialData`, `keepPreviousData`),
+ *  read off its signature: the parameter is `T | Accessor<T>`, and this is `T`. */
+type ConvexQueryOptions<Q extends FunctionReference<"query">> = ReturnType<
+	Extract<NonNullable<Parameters<typeof useConvexQuery<Q>>[2]>, () => unknown>
+>;
+
+/** The app's options: convex-solidjs's, plus the keeper's `linger`. */
+type QueryOptions<Q extends FunctionReference<"query">> =
+	ConvexQueryOptions<Q> & {
+		/** Hand the query to the keeper when its reader goes away. Off for a
+		 *  one-shot read nobody comes back to. @default true */
+		linger?: boolean;
+	};
 
 function resolve<T>(value: MaybeAccessor<T>): T {
 	return typeof value === "function" ? (value as Accessor<T>)() : value;
@@ -39,7 +39,7 @@ function resolve<T>(value: MaybeAccessor<T>): T {
 export function useQuery<Q extends FunctionReference<"query">>(
 	query: Q,
 	args: MaybeAccessor<FunctionArgs<Q>>,
-	options?: MaybeAccessor<QueryOptions<FunctionReturnType<Q>>>
+	options?: MaybeAccessor<QueryOptions<Q>>
 ) {
 	const resolvedOptions = createMemo(() => ({
 		keepPreviousData: true,

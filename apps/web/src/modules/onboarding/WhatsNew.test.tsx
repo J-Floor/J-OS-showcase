@@ -1,5 +1,11 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen, waitFor } from "@solidjs/testing-library";
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@solidjs/testing-library";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 afterEach(cleanup);
@@ -43,6 +49,8 @@ vi.mock("convex-solidjs", async () => {
 		}),
 	};
 });
+
+import { OPEN_DIALOG_CONTENT } from "../../shared/dialogSelectors.ts";
 
 import { APP_VERSION, CHANGELOG, isNewer } from "./changelog.ts";
 import { WhatsNew } from "./WhatsNew.tsx";
@@ -129,4 +137,17 @@ test("is not held back for someone the door is closed to — they get no intro",
 	await waitFor(() => {
 		expect(screen.getByText(ALT_LINE)).toBeInTheDocument();
 	});
+});
+
+test("closing keeps the notes mounted, so the exit has something to animate", async () => {
+	render(() => <WhatsNew />);
+	await waitFor(() => {
+		expect(document.querySelector(OPEN_DIALOG_CONTENT)).not.toBeNull();
+	});
+
+	fireEvent.click(screen.getByText("Got it"));
+	await waitFor(() => {
+		expect(document.querySelector(OPEN_DIALOG_CONTENT)).toBeNull();
+	});
+	expect(screen.getByText(ALT_LINE)).toBeInTheDocument();
 });

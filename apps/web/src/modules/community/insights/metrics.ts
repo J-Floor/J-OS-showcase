@@ -1,12 +1,10 @@
 import type { ChartDatum } from "@j-os/design-system";
 
-import type { Doc, Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { DAY_MS, DAYS_PER_WEEK } from "../../../../convex/lib/constants.ts";
-import {
-	doorOpensFor,
-	type PersonStatus,
-} from "../../../../convex/lib/derive.ts";
+import { doorOpensFor } from "../../../../convex/lib/derive.ts";
 import { shortNames } from "../../../../convex/lib/names.ts";
+import type { PersonRow } from "../../../../convex/people.ts";
 
 /**
  * Everything the board dashboard counts, derived from the three rosters the
@@ -22,11 +20,6 @@ import { shortNames } from "../../../../convex/lib/names.ts";
  * pass over data that is on the client anyway. The one thing it cannot derive —
  * whether the locks are actually reachable — comes from an action instead.
  */
-
-export type PersonRow = Doc<"people"> & {
-	status: PersonStatus;
-	hasAgreement: boolean;
-};
 
 const WEEK_MS = DAYS_PER_WEEK * DAY_MS;
 /** How far ahead "expiring soon" looks. Two weeks is roughly the notice a board

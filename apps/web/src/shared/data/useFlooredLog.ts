@@ -14,6 +14,7 @@ import {
 } from "solid-js";
 
 import { call } from "../../lib/call.ts";
+import type { EntityRow } from "../types.ts";
 
 import { useQuery } from "./useQuery.ts";
 
@@ -51,7 +52,7 @@ export type FlooredLog<Row> = {
 };
 
 /** Rows in both lists show once; the first occurrence wins, order is kept. */
-export function mergeRows<Row extends { _id: string }>(
+export function mergeRows<Row extends EntityRow>(
 	head: Row[],
 	older: Row[]
 ): Row[] {
@@ -120,7 +121,7 @@ function useFloor<Row>(options: {
  * tried again the next time `start` turns true. A load asked for before the
  * floor arrives runs once it does.
  */
-export function useFlooredLog<Row extends { _id: string }>(options: {
+export function useFlooredLog<Row extends EntityRow>(options: {
 	queries: FlooredLogQueries<Row>;
 	pageSize: number;
 	start: Accessor<boolean>;

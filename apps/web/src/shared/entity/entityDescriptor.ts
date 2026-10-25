@@ -1,8 +1,12 @@
 import type { Accessor } from "solid-js";
 
 import type { Action, Subject } from "../../lib/ability.tsx";
+import type { EntityRow } from "../types.ts";
 
-export type EntityDescriptor<Row extends { _id: string }> = {
+/** What a row's QR code points at and what its download is called. */
+export type EntityQrLink = { url: string; fileName: string };
+
+export type EntityDescriptor<Row extends EntityRow> = {
 	key: string; // "event" | "person" | "task" | "item" | ...
 	route: string; // "/events"
 	param: string; // URL search param, e.g. "event"
@@ -26,7 +30,7 @@ export type EntityDescriptor<Row extends { _id: string }> = {
 	tab?: string;
 	tabParam?: string; // defaults to "tab" when `tab` is set
 	/** Entities with a shareable QR (items, events). */
-	qr?: (row: Row) => { url: string; fileName: string };
+	qr?: (row: Row) => EntityQrLink;
 	/** Warms the sheet's extra queries for one row on hover, focus or palette
 	 *  highlight. `canPerform` gates queries the sheet only runs for some viewers. Arg
 	 *  objects must equal the sheet's own, or the keeper key differs. */
@@ -37,7 +41,7 @@ export type EntityDescriptor<Row extends { _id: string }> = {
 };
 
 /** The slug for a row (`desc.slug?.(row) ?? row._id`). */
-export function slugOf<Row extends { _id: string }>(
+export function slugOf<Row extends EntityRow>(
 	desc: EntityDescriptor<Row>,
 	row: Row
 ): string {
@@ -48,7 +52,7 @@ export function slugOf<Row extends { _id: string }>(
  *  Emits ?tab= only for a static per-descriptor `tab`, never a per-row value.
  *  Use this for in-app navigation (`@solidjs/router`'s `navigate` rejects
  *  scheme-prefixed/absolute targets) — use `entityUrl` for QR/copy-link. */
-export function entityPath<Row extends { _id: string }>(
+export function entityPath<Row extends EntityRow>(
 	desc: EntityDescriptor<Row>,
 	row: Row
 ): string {
@@ -64,7 +68,7 @@ export function entityPath<Row extends { _id: string }>(
 
 /** Absolute deep-link URL for one entity row. Emits ?tab= only for a static
  *  per-descriptor `tab`, never a per-row value. */
-export function entityUrl<Row extends { _id: string }>(
+export function entityUrl<Row extends EntityRow>(
 	desc: EntityDescriptor<Row>,
 	row: Row
 ): string {

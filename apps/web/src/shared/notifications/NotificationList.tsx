@@ -1,4 +1,4 @@
-import { Button, EmptyState, List, Skeleton } from "@j-os/design-system";
+import { Button, EmptyState, List, Query, Skeleton } from "@j-os/design-system";
 import { useNavigate } from "@solidjs/router";
 import {
 	createEffect,
@@ -17,6 +17,16 @@ import { dayLabel, formatAgo } from "../time.ts";
 
 import styles from "./NotificationList.module.scss";
 import type { Inbox, InboxRow } from "./useInbox.ts";
+
+function InboxLoading(): JSX.Element {
+	return (
+		<div class={styles.loading} role="status" aria-label="Loading">
+			<Skeleton width="long" />
+			<Skeleton width="medium" />
+			<Skeleton width="short" />
+		</div>
+	);
+}
 
 /** Rows (newest first) under one label per local day, in day order. */
 function groupByDay(rows: InboxRow[], now: number): Map<string, InboxRow[]> {
@@ -195,39 +205,42 @@ export function NotificationList(props: {
 				<p class={styles.message}>Couldn't load notifications.</p>
 			}
 		>
-			<Show when={props.inbox.rows() !== undefined}>
-				<Show
-					when={groups().size > 0}
-					fallback={
-						<EmptyState
-							icon={ICONS.notifications}
-							title="No notifications yet"
-							description="Notifications sent to you show up here for 90 days."
-						/>
-					}
-				>
-					<div class={styles.list}>
-						<For each={[...groups().keys()]}>
-							{(day) => (
-								<section class={styles.day}>
-									<h3 class={styles.dayHeading}>{day}</h3>
-									<List.Root class={styles.group}>
-										<For each={groups().get(day)}>
-											{(row) => (
-												<NotificationRow
-													row={row}
-													onOpen={open}
-												/>
-											)}
-										</For>
-									</List.Root>
-								</section>
-							)}
-						</For>
-						<LoadMoreFooter inbox={props.inbox} />
-					</div>
-				</Show>
-			</Show>
+			<Query.Root data={props.inbox.rows()}>
+				<Query.Skeleton>
+					<InboxLoading />
+				</Query.Skeleton>
+				<Query.Empty>
+					<EmptyState
+						icon={ICONS.notifications}
+						title="No notifications yet"
+						description="Notifications sent to you show up here for 90 days."
+					/>
+				</Query.Empty>
+				<Query.Content of={props.inbox.rows()}>
+					{() => (
+						<div class={styles.list}>
+							<For each={[...groups().keys()]}>
+								{(day) => (
+									<section class={styles.day}>
+										<h3 class={styles.dayHeading}>{day}</h3>
+										<List.Root class={styles.group}>
+											<For each={groups().get(day)}>
+												{(row) => (
+													<NotificationRow
+														row={row}
+														onOpen={open}
+													/>
+												)}
+											</For>
+										</List.Root>
+									</section>
+								)}
+							</For>
+							<LoadMoreFooter inbox={props.inbox} />
+						</div>
+					)}
+				</Query.Content>
+			</Query.Root>
 		</Show>
 	);
 }

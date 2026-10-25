@@ -1,5 +1,5 @@
 import { Query } from "@j-os/design-system";
-import { createMemo, Show, type Accessor, type JSX } from "solid-js";
+import { createMemo, Show, type JSX } from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { personName } from "../data/taskHelpers.ts";
@@ -7,10 +7,6 @@ import type { Person, Project, Task } from "../data/tasksData.tsx";
 
 import styles from "./ProjectTimeline.module.scss";
 import {
-	HEADER_HEIGHT,
-	MONTH_BAND_HEIGHT,
-	ROW_HEIGHT,
-	TICK_ROW_HEIGHT,
 	buildTimeline,
 	type Timeline,
 	type TimelineBar,
@@ -31,16 +27,20 @@ import {
 	createTimelineScroll,
 } from "./timelineInteraction.ts";
 
-const LABEL_WIDTH = 248;
+/** What the timeline lets its parent do: the toolbar's "Today" button
+ *  recentres it. */
+export type ProjectTimelineApi = { scrollToToday: () => void };
 
 type ProjectTimelineProps = {
+	/** Receives the timeline's imperative API once, when it is created. */
+	ref?: (api: ProjectTimelineApi) => void;
 	projects: Project[] | undefined;
 	people: Person[];
 	tasks: Task[] | undefined;
 	mode: ViewMode;
-	/** Bumped by the toolbar "Today" button to recentre on today. */
-	jumpToday: Accessor<number>;
 	onSelect: (id: Id<"projects">) => void;
+	/** The pointer rested on a project: its sheet is about to open. */
+	onHoverIntent?: () => void;
 	/** Drag across the "New" row to create a project with that date range,
 	 *  out of `from` (the dragged range). */
 	onCreateRange: (
@@ -93,7 +93,6 @@ function createTimelineModel(props: ProjectTimelineProps) {
 			mode,
 			padding,
 			timeline,
-			jumpToday: () => props.jumpToday(),
 		}),
 		barDrag: createBarDrag({
 			timeline,
@@ -114,6 +113,8 @@ function createTimelineModel(props: ProjectTimelineProps) {
 export function ProjectTimeline(props: ProjectTimelineProps): JSX.Element {
 	const { mode, timeline, scroll, barDrag, newDrag, leaderName, taskCount } =
 		createTimelineModel(props);
+	// eslint-disable-next-line solid/reactivity -- a ref callback is called once, at setup
+	props.ref?.({ scrollToToday: scroll.scrollToToday });
 
 	return (
 		<div class={styles.wrap}>
@@ -129,31 +130,25 @@ export function ProjectTimeline(props: ProjectTimelineProps): JSX.Element {
 							}
 						>
 							{(current) => (
-								<div
-									class={styles.grid}
-									style={{
-										"--label-w": px(LABEL_WIDTH),
-										"--row-h": px(ROW_HEIGHT),
-										"--header-h": px(HEADER_HEIGHT),
-										"--band-h": px(MONTH_BAND_HEIGHT),
-										"--tick-h": px(TICK_ROW_HEIGHT),
-									}}
-								>
+								<div class={styles.grid}>
 									<TimelineLabels
 										timeline={current}
 										leaderName={leaderName}
 										taskCount={taskCount}
 										onSelect={props.onSelect}
+										onHoverIntent={props.onHoverIntent}
 										scrollToOffset={scroll.scrollToOffset}
 									/>
 
 									<div
 										class={styles.scroll}
+										data-part="timeline-scroll"
 										ref={scroll.setScrollElement}
 										onScroll={scroll.onScroll}
 									>
 										<div
 											class={styles.canvas}
+											data-mode={mode()}
 											style={{
 												"--canvas-w": px(
 													current().totalDays *
@@ -168,10 +163,6 @@ export function ProjectTimeline(props: ProjectTimelineProps): JSX.Element {
 														mode()
 													)
 												),
-												"--weekend-tint":
-													mode() === "day"
-														? "var(--jf-surface-bg-sunken)"
-														: "transparent",
 											}}
 										>
 											<TimelineHeader

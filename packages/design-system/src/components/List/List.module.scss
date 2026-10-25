@@ -1,3 +1,4 @@
+@use "../../styles/hover";
 @use "../../styles/typography" as typo;
 @use "../../styles/utils";
 
@@ -108,7 +109,7 @@
 	/* Only a row that does something looks like it does: an inert row takes
 	   neither the pointer nor the hover colour. */
 	@media (hover: hover) {
-		&:hover {
+		@include hover.hover {
 			background-color: var(--jf-surface-bg-overlay);
 		}
 	}

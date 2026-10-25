@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { Tabs } from "@j-os/design-system";
+import { HOVER_INTENT_MS, Tabs } from "@j-os/design-system";
 import { MemoryRouter, Route } from "@solidjs/router";
 import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
 import { afterEach, expect, test, vi } from "vitest";
@@ -16,11 +16,24 @@ vi.mock("../../../shared/data/boardLevel.tsx", () => ({
 	useBoardLevel: () => ({ data: () => [] }),
 }));
 vi.mock("../timeline/ProjectTimeline.tsx", () => ({
-	ProjectTimeline: () => null,
+	ProjectTimeline: (props: { onHoverIntent: () => void }) => (
+		<button
+			type="button"
+			onClick={() => {
+				props.onHoverIntent();
+			}}
+		>
+			rest on a bar
+		</button>
+	),
 }));
 vi.mock("../sheets/ProjectSheet.tsx", () => ({
-	ProjectSheet: (props: { open: boolean }) => (
-		<div data-testid="project-sheet" data-open={String(props.open)} />
+	ProjectSheet: (props: { open: boolean; prebuild?: boolean }) => (
+		<div
+			data-testid="project-sheet"
+			data-open={String(props.open)}
+			data-prebuild={String(props.prebuild)}
+		/>
 	),
 }));
 vi.mock("../sheets/TaskSheet.tsx", () => ({ TaskSheet: () => null }));
@@ -72,4 +85,25 @@ test("lists undated projects once loaded", () => {
 	renderTab();
 	expect(screen.getByText("No dates set")).toBeInTheDocument();
 	expect(screen.getByText("Roof")).toBeInTheDocument();
+});
+
+test("resting on a timeline project builds the sheet before it opens", () => {
+	renderTab();
+	const sheet = screen.getByTestId("project-sheet");
+	expect(sheet).toHaveAttribute("data-prebuild", "false");
+	fireEvent.click(screen.getByRole("button", { name: "rest on a bar" }));
+	expect(sheet).toHaveAttribute("data-prebuild", "true");
+	expect(sheet).toHaveAttribute("data-open", "false");
+});
+
+test("resting on an undated project builds the sheet before it opens", () => {
+	vi.useFakeTimers();
+	projectRows.current = [{ _id: "p1", name: "Roof" }];
+	renderTab();
+	const sheet = screen.getByTestId("project-sheet");
+	fireEvent.pointerEnter(screen.getByRole("button", { name: /Roof/ }));
+	vi.advanceTimersByTime(HOVER_INTENT_MS);
+	vi.useRealTimers();
+	expect(sheet).toHaveAttribute("data-prebuild", "true");
+	expect(sheet).toHaveAttribute("data-open", "false");
 });

@@ -3,6 +3,7 @@ import {
 	Input,
 	PropertyRow,
 	Select,
+	type SelectOptionProps,
 } from "@j-os/design-system";
 import { type Accessor } from "solid-js";
 
@@ -36,10 +37,9 @@ export function NameField(props: {
 }
 
 /** One option of an {@link OptionSelect}. */
-type SelectOption<Value extends string> = {
-	value: Value;
-	label: string;
-};
+type SelectOption<Value extends string> = Required<
+	Pick<SelectOptionProps, "label">
+> & { value: Value };
 
 /** The entity's description, marked as its `field` so the table's
  *  description cell flies into it. */
@@ -62,10 +62,7 @@ export function OptionSelect<Value extends string>(props: {
 	property: FieldDefinition;
 	placeholder: string;
 	options: SelectOption<Value>[];
-	field: {
-		value: Accessor<Value | undefined>;
-		set: (value: Value | undefined) => void;
-	};
+	field: Pick<SyncedField<Value | undefined>, "value" | "set">;
 }) {
 	function selected(): string[] {
 		const id = props.field.value();

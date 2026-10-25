@@ -4,6 +4,7 @@ import {
 	Timeline,
 	type TimelineEntry,
 } from "@j-os/design-system";
+import type { FunctionReturnType } from "convex/server";
 import type { JSX } from "solid-js";
 
 import { api } from "../../../../convex/_generated/api";
@@ -34,28 +35,22 @@ function mergedEmail(meta: unknown): string | undefined {
 		: undefined;
 }
 
-type AuditRow = {
-	_id: string;
-	at: number;
-	kind: string;
-	event?: string;
-	to?: string;
-	field?: string;
-	before?: unknown;
-	after?: unknown;
-	meta?: unknown;
-	actorName?: string;
-	// Set only on `door_action` rows (merged in from the door log).
-	action?: string;
-	slot?: string;
-	outcome?: string;
-	detail?: string;
-};
+/** One audit entry as the server sends it: a `personEvents` row, or a door
+ *  action merged in from the door log. */
+export type AuditRow = FunctionReturnType<
+	typeof api.personEvents.listForPerson
+>[number];
+
+/** The `personEvents` rows: every entry bar the merged-in door actions. */
+type EventRow = Exclude<AuditRow, { kind: "door_action" }>;
+
+/** A door unlocked or locked from the app, merged in from the door log. */
+type DoorActionRow = Extract<AuditRow, { kind: "door_action" }>;
 
 type EntryBody = Omit<TimelineEntry, "id" | "at">;
 
 /** Transitions, and any kind not worded yet: shown, never hidden. */
-function transitionEntry(row: AuditRow): EntryBody {
+function transitionEntry(row: EventRow): EntryBody {
 	return {
 		kind: "Transitions",
 		icon: "trending_flat",
@@ -66,7 +61,9 @@ function transitionEntry(row: AuditRow): EntryBody {
 }
 
 /** One builder per `personEventKind`; a kind with none is a transition. */
-const ENTRY_BODY_BY_KIND: Record<string, (row: AuditRow) => EntryBody> = {
+const ENTRY_BODY_BY_KIND: Partial<
+	Record<EventRow["kind"], (row: EventRow) => EntryBody>
+> = {
 	field_edit: (row) => ({
 		kind: "Field edits",
 		icon: ICONS.edit,
@@ -80,15 +77,6 @@ const ENTRY_BODY_BY_KIND: Record<string, (row: AuditRow) => EntryBody> = {
 		icon: ICONS.door,
 		title: doorEventLabel(row.after),
 		detail: typeof row.meta === "string" ? row.meta : undefined,
-		actor: row.actorName,
-	}),
-	// A door unlocked or locked from the app: same bucket as the board's
-	// door overrides, so "Door" is everything about this person and the door.
-	door_action: (row) => ({
-		kind: "Door",
-		icon: row.action === "lock" ? ICONS.lock : ICONS.unlock,
-		title: doorActionLabel(row.action, row.slot, row.outcome),
-		detail: row.detail,
 		actor: row.actorName,
 	}),
 	board_task: (row) => ({
@@ -123,16 +111,31 @@ const ENTRY_BODY_BY_KIND: Record<string, (row: AuditRow) => EntryBody> = {
 	}),
 };
 
+/** A door unlocked or locked from the app: same bucket as the board's door
+ *  overrides, so "Door" is everything about this person and the door. */
+function doorActionEntry(row: DoorActionRow): EntryBody {
+	return {
+		kind: "Door",
+		icon: row.action === "lock" ? ICONS.lock : ICONS.unlock,
+		title: doorActionLabel(row.action, row.slot, row.outcome),
+		detail: row.detail,
+		actor: row.actorName,
+	};
+}
+
+function bodyOf(row: AuditRow): EntryBody {
+	return row.kind === "door_action"
+		? doorActionEntry(row)
+		: (ENTRY_BODY_BY_KIND[row.kind] ?? transitionEntry)(row);
+}
+
 /**
  * Maps an audit row to a timeline entry, one `kind` label per `personEventKind`
  * so the Timeline's filter has something to group by. Field edits are the only
  * muted kind, so they are the only one collapsed by default.
  */
 export function toEntry(row: AuditRow): TimelineEntry {
-	const body = Object.hasOwn(ENTRY_BODY_BY_KIND, row.kind)
-		? ENTRY_BODY_BY_KIND[row.kind](row)
-		: transitionEntry(row);
-	return { id: row._id, at: row.at, ...body };
+	return { id: row._id, at: row.at, ...bodyOf(row) };
 }
 
 export function PersonTimeline(props: { personId: Id<"people"> }): JSX.Element {

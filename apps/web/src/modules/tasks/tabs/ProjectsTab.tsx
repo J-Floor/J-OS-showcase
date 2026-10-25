@@ -20,7 +20,10 @@ import { ProjectCard } from "../ProjectCard.tsx";
 import { ProjectSheet } from "../sheets/ProjectSheet.tsx";
 import { TaskSheet } from "../sheets/TaskSheet.tsx";
 import { ProjectTabActions } from "../TasksTabActions.tsx";
-import { ProjectTimeline } from "../timeline/ProjectTimeline.tsx";
+import {
+	ProjectTimeline,
+	type ProjectTimelineApi,
+} from "../timeline/ProjectTimeline.tsx";
 import { undatedProjects, type ViewMode } from "../timeline/timeline.ts";
 
 import local from "./ProjectsTab.module.scss";
@@ -120,12 +123,7 @@ function createProjectSelection(options: {
 
 	return {
 		projSel,
-		sheetNav: {
-			hasPrev: projNav.hasPrev,
-			hasNext: projNav.hasNext,
-			onPrev: projNav.prev,
-			onNext: projNav.next,
-		},
+		sheetNav: projNav,
 		createStart: draft.start,
 		createEnd: draft.end,
 		createFrom: draft.from,
@@ -155,6 +153,7 @@ function UndatedProjects(props: {
 	leaderName: (p: Project) => string | undefined;
 	taskCount: (p: Project) => number | undefined;
 	onOpen: (p: Project) => void;
+	onHoverIntent: () => void;
 }) {
 	return (
 		<section class={local.undated}>
@@ -172,6 +171,7 @@ function UndatedProjects(props: {
 								onClick={() => {
 									props.onOpen(project);
 								}}
+								onHoverIntent={props.onHoverIntent}
 							/>
 						</li>
 					)}
@@ -210,6 +210,7 @@ function TimelineView(props: {
 	people: Person[];
 	tasks: Task[] | undefined;
 	onSelect: (id: Id<"projects">) => void;
+	onHoverIntent: () => void;
 	onCreateRange: (
 		startMs: number,
 		endMs: number,
@@ -218,8 +219,7 @@ function TimelineView(props: {
 	onNewProject: () => void;
 }): JSX.Element {
 	const [mode, setMode] = createSignal<ViewMode>("day");
-	// The timeline recentres on today each time this count changes.
-	const [jumpToday, setJumpToday] = createSignal(0);
+	let timelineApi: ProjectTimelineApi | undefined;
 	return (
 		<>
 			<Tabs.Actions value="projects">
@@ -227,22 +227,41 @@ function TimelineView(props: {
 					mode={mode}
 					onModeChange={setMode}
 					onJumpToday={() => {
-						setJumpToday((count) => count + 1);
+						timelineApi?.scrollToToday();
 					}}
 					onNewProject={props.onNewProject}
 				/>
 			</Tabs.Actions>
 			<ProjectTimeline
+				ref={(api) => {
+					timelineApi = api;
+				}}
 				projects={props.projects}
 				people={props.people}
 				tasks={props.tasks}
 				mode={mode()}
-				jumpToday={jumpToday}
 				onSelect={props.onSelect}
+				onHoverIntent={props.onHoverIntent}
 				onCreateRange={props.onCreateRange}
 			/>
 		</>
 	);
+}
+
+/** What a project's card shows beside its name: its leader and task count. */
+function createProjectLookups(options: {
+	people: Accessor<Person[]>;
+	tasks: Accessor<Task[] | undefined>;
+}) {
+	return {
+		leaderName: (project: Project): string | undefined =>
+			project.leaderId
+				? personName(project.leaderId, options.people())
+				: undefined,
+		taskCount: (project: Project): number | undefined =>
+			options.tasks()?.filter((task) => task.projectId === project._id)
+				.length,
+	};
 }
 
 export function ProjectsTab(props: ProjectsTabProps): JSX.Element {
@@ -265,18 +284,13 @@ export function ProjectsTab(props: ProjectsTabProps): JSX.Element {
 		},
 	});
 	const { projSel } = selection;
+	const { leaderName, taskCount } = createProjectLookups({
+		people: () => boardLevel.data() ?? [],
+		tasks: tasks.data,
+	});
 
 	function undated() {
 		return undatedProjects(all());
-	}
-	function leaderName(project: Project) {
-		return project.leaderId
-			? personName(project.leaderId, boardLevel.data() ?? [])
-			: undefined;
-	}
-	function taskCount(project: Project) {
-		return tasks.data()?.filter((task) => task.projectId === project._id)
-			.length;
 	}
 
 	return (
@@ -286,6 +300,7 @@ export function ProjectsTab(props: ProjectsTabProps): JSX.Element {
 				people={boardLevel.data() ?? []}
 				tasks={tasks.data()}
 				onSelect={selection.openProject}
+				onHoverIntent={projSel.intend}
 				onCreateRange={selection.openNewRange}
 				onNewProject={selection.openNew}
 			/>
@@ -298,10 +313,12 @@ export function ProjectsTab(props: ProjectsTabProps): JSX.Element {
 					onOpen={(project) => {
 						projSel.openRow(project);
 					}}
+					onHoverIntent={projSel.intend}
 				/>
 			</Show>
 			<ProjectSheet
 				open={projSel.open()}
+				prebuild={projSel.prebuild()}
 				onOpenChange={(isOpen) => {
 					if (!isOpen) projSel.close();
 				}}

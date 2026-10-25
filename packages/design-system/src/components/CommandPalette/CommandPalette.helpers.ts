@@ -4,6 +4,9 @@
  * component (which was built on the React-only `cmdk`) it carries across
  * unchanged.
  */
+import { Result } from "neverthrow";
+
+import { readStored, writeStored } from "../../utils/storage.ts";
 
 const WORD_START_SCORE = 0.9;
 const MID_WORD_SCORE = 0.5;
@@ -59,29 +62,22 @@ export function addRecent(
 	return [value, ...list.filter((entry) => entry !== value)].slice(0, max);
 }
 
+const parseJson = Result.fromThrowable((raw: string): unknown =>
+	JSON.parse(raw)
+);
+
 /** Reads recents from localStorage. Any unusable payload reads as empty. */
 export function readRecents(key: string): string[] {
-	if (typeof localStorage === "undefined") return [];
-	try {
-		const raw = localStorage.getItem(key);
-		if (raw === null) return [];
-		const parsed: unknown = JSON.parse(raw);
-		return Array.isArray(parsed)
-			? parsed.filter(
-					(entry): entry is string => typeof entry === "string"
-				)
-			: [];
-	} catch {
-		return [];
-	}
+	const raw = readStored("local", key).unwrapOr(null);
+	if (raw === null) return [];
+	const parsed = parseJson(raw).unwrapOr(undefined);
+	return Array.isArray(parsed)
+		? parsed.filter((entry): entry is string => typeof entry === "string")
+		: [];
 }
 
-/** Persists recents. A full or blocked store is not worth throwing over. */
+/** Persists recents. A full or blocked store is not worth breaking a select
+ *  over. */
 export function writeRecents(key: string, list: string[]): void {
-	if (typeof localStorage === "undefined") return;
-	try {
-		localStorage.setItem(key, JSON.stringify(list));
-	} catch {
-		// Storage full or blocked. Recents are not worth breaking a select over.
-	}
+	writeStored("local", key, JSON.stringify(list));
 }

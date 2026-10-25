@@ -1,5 +1,6 @@
 import { Kbd, morphPart, NumberInput } from "@j-os/design-system";
-import { createEffect, on, onCleanup, onMount, useContext } from "solid-js";
+import { makeEventListener } from "@solid-primitives/event-listener";
+import { createEffect, on, onMount, useContext } from "solid-js";
 
 import type { Doc } from "../../../../convex/_generated/dataModel";
 import { InlineError } from "../../../shared/InlineError.tsx";
@@ -52,10 +53,7 @@ export function ScoreField(props: { person: Doc<"people"> }) {
 		);
 	}
 	onMount(() => {
-		document.addEventListener("pointerdown", onDown, true);
-		onCleanup(() => {
-			document.removeEventListener("pointerdown", onDown, true);
-		});
+		makeEventListener(document, "pointerdown", onDown, true);
 	});
 
 	return (

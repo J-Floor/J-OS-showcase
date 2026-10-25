@@ -23,6 +23,13 @@ export { isTypingTarget } from "./utils/typingTarget.ts";
 export { OWN_GESTURES_ATTR } from "./utils/swipe.ts";
 export { createHoverIntent, HOVER_INTENT_MS } from "./utils/hoverIntent.ts";
 export {
+	readStored,
+	writeStored,
+	STORAGE_UNAVAILABLE,
+	type StorageArea,
+	type StorageUnavailable,
+} from "./utils/storage.ts";
+export {
 	ShortcutPeekProvider,
 	useShortcutPeek,
 } from "./utils/shortcutPeek.tsx";
@@ -122,14 +129,24 @@ export {
 } from "./components/Popover/Popover.tsx";
 export {
 	Dialog,
+	type DialogCancelProps,
 	type DialogContentProps,
 	type DialogRootProps,
 } from "./components/Dialog/Dialog.tsx";
+export type { OverlayOpenProps } from "./utils/overlayLayer.tsx";
 export {
 	Sheet,
 	type SheetBodyProps,
 	type SheetRootProps,
 } from "./components/Sheet/Sheet.tsx";
+export {
+	SAVED_VISIBLE_MS,
+	type SaveState,
+	type SaveTracker,
+	type TrackedField,
+	createSaveTracker,
+	useSaveTracker,
+} from "./utils/saveTracker.ts";
 export {
 	SheetNav,
 	type SheetNavProps,
@@ -193,6 +210,7 @@ export {
 	canAnimate,
 	viewTransition,
 } from "./utils/viewTransition.ts";
+export { createMorphHold } from "./utils/morphPresence.ts";
 export {
 	BRAND_SCREEN,
 	BrandReveal,
@@ -286,14 +304,14 @@ export { morphTitle } from "./utils/morphPairing.ts";
  * column, a sheet row and a card with the same field. App code spreads
  * `morphPart` / `morphTitle` and never writes these itself.
  */
+export { MORPH_KEY, MORPH_OF, MORPH_TITLE } from "./utils/morphNames.ts";
+export { SHEET_SKELETON } from "./utils/morphPairing.ts";
+/** The row-actions column's id (a test can drop the column by it), and the
+ *  width that column needs for a number of icon buttons. */
 export {
-	MORPH_KEY,
-	MORPH_OF,
-	MORPH_TITLE,
-	SHEET_SKELETON,
-} from "./utils/morphPairing.ts";
-/** The row-actions column's id: a test can drop the column by it. */
-export { ACTIONS_COLUMN_ID } from "./components/Table/columnTracks.ts";
+	ACTIONS_COLUMN_ID,
+	actionsColumnSize,
+} from "./components/Table/columnTracks.ts";
 export {
 	defineFields,
 	morphPart,

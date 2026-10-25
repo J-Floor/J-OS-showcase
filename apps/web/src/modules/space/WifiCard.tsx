@@ -1,9 +1,10 @@
 import { Button, Input, Skeleton } from "@j-os/design-system";
 import { useMutation } from "convex-solidjs";
-import { Show, createSignal, onMount } from "solid-js";
+import { Show, createSignal, onMount, type Accessor } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
 import { SSID_MAX, WIFI_PASSWORD_MAX } from "../../../convex/lib/validate.ts";
+import type { Wifi } from "../../../convex/lib/wifi.ts";
 import { useAbility } from "../../lib/ability.tsx";
 import { call, ignoreFailure } from "../../lib/call.ts";
 import { createActionError } from "../../shared/createActionError.ts";
@@ -16,9 +17,7 @@ import { WifiContent } from "./WifiContent.tsx";
 
 /** The board's edit form for the network name and password: its drafts,
  *  and the actions that open, cancel and save it. */
-function createWifiEditing(credentials: {
-	data: () => { ssid: string; password: string } | undefined;
-}) {
+function createWifiEditing(credentials: { data: Accessor<Wifi | undefined> }) {
 	const [editing, setEditing] = createSignal(false);
 	const [ssidDraft, setSsidDraft] = createSignal("");
 	const [passwordDraft, setPasswordDraft] = createSignal("");
@@ -139,47 +138,45 @@ export function WifiCard() {
 	}
 
 	return (
-		<SpaceCard
-			title="Wi-Fi network"
-			helpText="Scan to join the space Wi-Fi network."
-			loading={credentials.data() === undefined}
-			skeleton={
-				<div class={styles.skeleton} data-wifi-skeleton="">
-					<Skeleton class={styles.qrSkeleton} />
-					<Skeleton class={styles.ssidSkeleton} />
-				</div>
-			}
-			headerAction={
-				<Show when={canEditWifi() && !edit.editing()}>
-					<Button variant="tertiary" onClick={edit.startEditing}>
-						Edit
-					</Button>
+		<SpaceCard.Root loading={credentials.data() === undefined}>
+			<SpaceCard.Header title="Wi-Fi network">
+				<SpaceCard.Action>
+					<Show when={canEditWifi() && !edit.editing()}>
+						<Button variant="tertiary" onClick={edit.startEditing}>
+							Edit
+						</Button>
+					</Show>
+				</SpaceCard.Action>
+			</SpaceCard.Header>
+			<SpaceCard.Help>
+				Scan to join the space Wi-Fi network.
+			</SpaceCard.Help>
+			<SpaceCard.Body>
+				<Show
+					when={edit.editing()}
+					fallback={
+						<Show when={credentials.data()} keyed>
+							{(current) => <WifiContent {...current} />}
+						</Show>
+					}
+				>
+					<WifiEditForm edit={edit} />
 				</Show>
-			}
-			note={
+			</SpaceCard.Body>
+			<SpaceCard.Note>
 				<Show when={!edit.editing()}>
 					<p class={styles.hint}>
 						Viewing on phone? Use Circle to Search (long-press your
 						home button/pill)
 					</p>
 				</Show>
-			}
-		>
-			<Show
-				when={edit.editing()}
-				fallback={
-					<Show when={credentials.data()} keyed>
-						{(current) => (
-							<WifiContent
-								ssid={current.ssid}
-								password={current.password}
-							/>
-						)}
-					</Show>
-				}
-			>
-				<WifiEditForm edit={edit} />
-			</Show>
-		</SpaceCard>
+			</SpaceCard.Note>
+			<SpaceCard.Skeleton>
+				<div class={styles.skeleton} data-wifi-skeleton="">
+					<Skeleton class={styles.qrSkeleton} />
+					<Skeleton class={styles.ssidSkeleton} />
+				</div>
+			</SpaceCard.Skeleton>
+		</SpaceCard.Root>
 	);
 }

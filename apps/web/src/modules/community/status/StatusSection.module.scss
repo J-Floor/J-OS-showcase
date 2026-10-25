@@ -1,3 +1,5 @@
+@use "@j-os/design-system/hover";
+
 /* Values are plain text on the same baseline as their label — a row of pills
    gave every line a different height and pushed the values off that baseline.
    Colour comes from the `Status` wrapper's var, so there is no status list
@@ -38,9 +40,10 @@
 		opacity: var(--jf-opacity-disabled);
 	}
 
-	/* stylelint-disable-next-line defensive-css/no-accidental-hover -- pointer-capable control; the underline is already the affordance on touch */
-	&:hover:not(:disabled) {
-		text-decoration-thickness: var(--jf-border-width-interactive);
+	&:not(:disabled) {
+		@include hover.hover {
+			text-decoration-thickness: var(--jf-border-width-interactive);
+		}
 	}
 
 	&:focus-visible {

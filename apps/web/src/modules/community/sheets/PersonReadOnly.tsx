@@ -1,4 +1,4 @@
-import { morphPart, PropertyRow, Skeleton } from "@j-os/design-system";
+import { morphPart, PropertyRow, Query, Skeleton } from "@j-os/design-system";
 import { For, Show } from "solid-js";
 
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
@@ -83,22 +83,27 @@ function AttendedEvents(props: { personId: Id<"people"> }) {
 		() => attendedEventsQuery.args(props.personId),
 		{ keepPreviousData: false }
 	);
-	function names(): string {
-		return (events.data() ?? [])
-			.map((attended) => attended.name)
-			.join(", ");
-	}
 	return (
-		<Show when={events.data() === undefined || names()}>
-			<PropertyRow icon={ICONS.events} label="Came from">
-				<Show
-					when={events.data() !== undefined}
-					fallback={<Skeleton width="medium" />}
-				>
-					<span>{names()}</span>
-				</Show>
-			</PropertyRow>
-		</Show>
+		<Query.Root data={events.data()}>
+			<Query.Skeleton>
+				<PropertyRow icon={ICONS.events} label="Came from">
+					<Skeleton width="medium" />
+				</PropertyRow>
+			</Query.Skeleton>
+			{/* Nobody came from an event: no row at all. */}
+			<Query.Empty>{null}</Query.Empty>
+			<Query.Content of={events.data()}>
+				{(attended) => (
+					<PropertyRow icon={ICONS.events} label="Came from">
+						<span>
+							{attended()
+								.map((event) => event.name)
+								.join(", ")}
+						</span>
+					</PropertyRow>
+				)}
+			</Query.Content>
+		</Query.Root>
 	);
 }
 

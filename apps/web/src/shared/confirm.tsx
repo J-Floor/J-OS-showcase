@@ -8,8 +8,6 @@ import {
 	useContext,
 } from "solid-js";
 
-import styles from "./confirm.module.scss";
-
 /** Options for a single confirmation prompt. */
 export type ConfirmOptions = {
 	title: string;
@@ -72,29 +70,22 @@ export function ConfirmProvider(props: ParentProps): JSX.Element {
 			<Dialog.Root
 				open={open()}
 				initialFocusEl={() => confirmReference ?? null}
-				onOpenChange={(details) => {
+				onOpenChange={(isOpen) => {
 					// Dismissing (Esc / backdrop / Cancel) counts as "no".
-					if (!details.open) settle(false);
+					if (!isOpen) settle(false);
 				}}
 			>
 				<Dialog.Content>
-					<Dialog.Title>{options().title}</Dialog.Title>
-					<Show when={options().message}>
-						<Dialog.Description>
-							{options().message}
-						</Dialog.Description>
-					</Show>
-					<div class={styles.footer}>
-						<Dialog.CloseTrigger
-							asChild={(closeProps) => (
-								<Button
-									triggerProps={closeProps()}
-									variant="tertiary"
-								>
-									Cancel
-								</Button>
-							)}
-						/>
+					<Dialog.Header>
+						<Dialog.Title>{options().title}</Dialog.Title>
+						<Show when={options().message}>
+							<Dialog.Description>
+								{options().message}
+							</Dialog.Description>
+						</Show>
+					</Dialog.Header>
+					<Dialog.Footer>
+						<Dialog.Cancel />
 						{/**
 						 * The CONFIRM button takes focus, not Cancel.
 						 *
@@ -120,7 +111,7 @@ export function ConfirmProvider(props: ParentProps): JSX.Element {
 						>
 							{options().confirmLabel ?? "Confirm"}
 						</Button>
-					</div>
+					</Dialog.Footer>
 				</Dialog.Content>
 			</Dialog.Root>
 		</ConfirmContext.Provider>

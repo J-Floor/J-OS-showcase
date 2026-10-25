@@ -1,25 +1,20 @@
-import type { useSearchParams } from "@solidjs/router";
 import { createEffect, createSignal, on } from "solid-js";
 
 import { createEntitySelection } from "../../shared/entity/createEntitySelection.ts";
 import { slugOf } from "../../shared/entity/entityDescriptor.ts";
 import { tabKeyOf } from "../../shared/tabKey.ts";
+import type { SetParams } from "../../shared/types.ts";
 
 import type { Category, Item, ItemType } from "./data/inventoryData.ts";
 import { categoryEntity, itemEntity, itemTypeEntity } from "./entity.ts";
-
-export const TAB_KEYS = ["items", "types", "categories"] as const;
-
-export type InventoryTabKey = (typeof TAB_KEYS)[number];
+import { INVENTORY_TAB_KEYS, type InventoryTabKey } from "./inventoryTabs.ts";
 
 /** The tab `?tab=` names. A bogus value (a hand-edited or stale link) falls
  *  back to "items" instead of leaving every tab's selection inactive —
  *  matches Tasks/Community. */
 export function activeInventoryTab(tab: unknown): InventoryTabKey {
-	return tabKeyOf(TAB_KEYS, tab, "items");
+	return tabKeyOf(INVENTORY_TAB_KEYS, tab, "items");
 }
-
-type SetParams = ReturnType<typeof useSearchParams>[1];
 
 /** Closes a tab's sheet the moment its tab stops being the active one. The
  *  user-click path (Tabs' `urlParam.set`) already closes all three, but a

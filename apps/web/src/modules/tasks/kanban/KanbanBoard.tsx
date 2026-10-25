@@ -32,7 +32,7 @@ import {
 	createStatusOverrides,
 	type Vec,
 } from "./kanbanInteraction.ts";
-import { COLUMNS, type TaskStatus } from "./onDrop.ts";
+import { TASK_STATUSES, type TaskStatus } from "./onDrop.ts";
 import { TaskCard } from "./TaskCard.tsx";
 
 function DraggableCard(props: {
@@ -43,12 +43,12 @@ function DraggableCard(props: {
 	grouped: boolean;
 	transformFor: (id: string, own: Vec) => Vec;
 	onClick: () => void;
+	onHoverIntent?: () => void;
 }): JSX.Element {
 	// eslint-disable-next-line solid/reactivity -- solid-dnd takes a stable id at creation time
 	const draggable = createDraggable(props.task._id);
-	function transform(): string {
-		const offset = props.transformFor(props.task._id, draggable.transform);
-		return `translate(${String(offset.x)}px, ${String(offset.y)}px)`;
+	function offset(): Vec {
+		return props.transformFor(props.task._id, draggable.transform);
 	}
 	return (
 		<div
@@ -58,7 +58,10 @@ function DraggableCard(props: {
 				[styles.grouping]: props.grouped,
 				[styles.dragActive]: draggable.isActiveDraggable,
 			}}
-			style={{ "--drag-transform": transform() }}
+			style={{
+				"--drag-x": `${String(offset().x)}px`,
+				"--drag-y": `${String(offset().y)}px`,
+			}}
 			data-task-id={props.task._id}
 			data-selected={props.selected ? "" : undefined}
 		>
@@ -67,6 +70,7 @@ function DraggableCard(props: {
 				people={props.people}
 				projects={props.projects}
 				onClick={props.onClick}
+				onHoverIntent={props.onHoverIntent}
 			/>
 		</div>
 	);
@@ -82,6 +86,7 @@ function Column(props: {
 	isGrouped: (id: string) => boolean;
 	transformFor: (id: string, own: Vec) => Vec;
 	onCardClick: (t: Task) => void;
+	onCardHoverIntent?: (t: Task) => void;
 	onAdd: () => void;
 }): JSX.Element {
 	// eslint-disable-next-line solid/reactivity -- solid-dnd takes a stable id at creation time
@@ -124,6 +129,9 @@ function Column(props: {
 										onClick={() => {
 											props.onCardClick(task);
 										}}
+										onHoverIntent={() => {
+											props.onCardHoverIntent?.(task);
+										}}
 									/>
 								)}
 							</For>
@@ -145,34 +153,31 @@ function BulkDeleteDialog(props: {
 	return (
 		<Dialog.Root
 			open={props.bulkDelete.confirmOpen()}
-			onOpenChange={(details) => {
-				props.bulkDelete.setConfirmOpen(details.open);
+			onOpenChange={(isOpen) => {
+				props.bulkDelete.setConfirmOpen(isOpen);
 			}}
 			initialFocusEl={() => cancelElement ?? null}
 		>
 			<Dialog.Content>
-				<Dialog.Title>
-					Delete {props.count} {props.count === 1 ? "task" : "tasks"}?
-				</Dialog.Title>
-				<Dialog.Description>
-					This can&rsquo;t be undone.
-				</Dialog.Description>
-				<div class={styles.confirmActions}>
-					<Button
-						variant="tertiary"
+				<Dialog.Header>
+					<Dialog.Title>
+						Delete {props.count}{" "}
+						{props.count === 1 ? "task" : "tasks"}?
+					</Dialog.Title>
+					<Dialog.Description>
+						This can&rsquo;t be undone.
+					</Dialog.Description>
+				</Dialog.Header>
+				<Dialog.Footer>
+					<Dialog.Cancel
 						ref={(element) => {
 							cancelElement = element;
 						}}
-						onClick={() => {
-							props.bulkDelete.setConfirmOpen(false);
-						}}
-					>
-						Cancel
-					</Button>
+					/>
 					<Button onClick={props.bulkDelete.deleteSelected}>
 						Delete
 					</Button>
-				</div>
+				</Dialog.Footer>
 			</Dialog.Content>
 		</Dialog.Root>
 	);
@@ -199,13 +204,17 @@ function MarqueeOutline(props: {
 	);
 }
 
-function Board(props: {
+type KanbanBoardProps = {
 	tasks: Task[] | undefined;
 	people: Person[];
 	projects: Project[];
 	onCardClick: (t: Task) => void;
+	/** The pointer rested on a card: its sheet is about to open. */
+	onCardHoverIntent?: (t: Task) => void;
 	onAddTask: (status: TaskStatus) => void;
-}): JSX.Element {
+};
+
+function Board(props: KanbanBoardProps): JSX.Element {
 	const context = useDragDropContext()!;
 	function tasks(): Task[] | undefined {
 		return props.tasks;
@@ -235,6 +244,7 @@ function Board(props: {
 			<div
 				ref={selection.setBoardElement}
 				class={styles.board}
+				data-part="kanban-board"
 				// Cards drag and the background draws a marquee: never a tab swipe.
 				{...{ [OWN_GESTURES_ATTR]: "" }}
 				onPointerDown={(event) => {
@@ -247,7 +257,7 @@ function Board(props: {
 					selection.onPointerUp(event);
 				}}
 			>
-				<For each={COLUMNS}>
+				<For each={TASK_STATUSES}>
 					{(col) => (
 						<Column
 							id={col.id}
@@ -259,6 +269,7 @@ function Board(props: {
 							isGrouped={groupDrag.isGrouped}
 							transformFor={groupDrag.transformFor}
 							onCardClick={props.onCardClick}
+							onCardHoverIntent={props.onCardHoverIntent}
 							onAdd={() => {
 								props.onAddTask(col.id);
 							}}
@@ -275,13 +286,7 @@ function Board(props: {
 	);
 }
 
-export function KanbanBoard(props: {
-	tasks: Task[] | undefined;
-	people: Person[];
-	projects: Project[];
-	onCardClick: (t: Task) => void;
-	onAddTask: (status: TaskStatus) => void;
-}): JSX.Element {
+export function KanbanBoard(props: KanbanBoardProps): JSX.Element {
 	return (
 		<DragDropProvider>
 			<DragDropSensors>

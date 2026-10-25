@@ -1,4 +1,4 @@
-import { Button, Icon, isTypingTarget } from "@j-os/design-system";
+import { Button, Icon, isTypingTarget, Table } from "@j-os/design-system";
 import {
 	createHotkey,
 	createHotkeys,
@@ -10,6 +10,7 @@ import { type JSX, Show } from "solid-js";
 import { api } from "../../../../convex/_generated/api";
 import { legalEvents } from "../../../../convex/lib/lifecycle.ts";
 import type { EventType } from "../../../../convex/lib/lifecycleTypes.ts";
+import type { PersonRow } from "../../../../convex/people.ts";
 import { call } from "../../../lib/call.ts";
 import { type ConfirmOptions, useConfirm } from "../../../shared/confirm.tsx";
 import { useQuery } from "../../../shared/data/useQuery.ts";
@@ -20,16 +21,19 @@ import {
 	useGuestExpiry,
 } from "../actions/guestExpiry.tsx";
 import { settleRosterAction } from "../actions/RosterActionError.tsx";
-import { type TriageResult, useTriage } from "../actions/triage.ts";
+import {
+	type Triage,
+	type TriageResult,
+	useTriage,
+} from "../actions/triage.ts";
 import {
 	applicationColumns,
 	CurrentPersonContext,
-	type ApplicationRow,
 } from "../columns/applicationColumns.tsx";
-import { useApplications } from "../data/useApplications.ts";
+import { useApplications } from "../data/communityData.tsx";
 import { ScoreField } from "../sheets/ScoreField.tsx";
 
-import { RosterTab, type RosterBatchProps } from "./RosterTab.tsx";
+import { RosterTab, useRosterBatch } from "./RosterTab.tsx";
 import type { TabProps } from "./TabProps.ts";
 
 /** The digit keys that set a score straight from the roster. 0–9 only — one
@@ -68,35 +72,31 @@ export function ApplicationsTab(props: TabProps): JSX.Element {
 
 /** The selected rows an event is legal for: each batch action runs only on
  *  those (denied applications are terminal). */
-function rowsAllowing(
-	rows: ApplicationRow[],
-	event: EventType
-): ApplicationRow[] {
+function rowsAllowing(rows: PersonRow[], event: EventType): PersonRow[] {
 	return rows.filter((row) =>
 		legalEvents(`${row.tier}.${row.stage}`).includes(event)
 	);
 }
 
-type ApplicationBatch = RosterBatchProps<ApplicationRow>;
-
 /** Runs a per-row action over `rows`, then clears the selection — after the
  *  user agrees to `prompt` when there is one. */
-function useBatchRunner(batch: () => ApplicationBatch) {
+function useBatchRunner() {
 	const confirm = useConfirm();
+	const runBatch = useRosterBatch();
+	const selection = Table.useSelection<PersonRow>();
 	return function runBatchAfter(
 		prompt: ConfirmOptions | undefined,
-		rows: ApplicationRow[],
-		action: (id: ApplicationRow["_id"]) => TriageResult
+		rows: PersonRow[],
+		action: (id: PersonRow["_id"]) => TriageResult
 	): void {
 		void (async () => {
 			if (prompt !== undefined && !(await confirm(prompt))) return;
-			const { runBatch, clear } = batch();
-			await runBatch(rows, action, clear);
+			await runBatch(rows, action, selection.clear);
 		})();
 	};
 }
 
-function MakeGuestButton(props: { rows: ApplicationRow[] }): JSX.Element {
+function MakeGuestButton(props: { rows: PersonRow[] }): JSX.Element {
 	const requestGuestExpiry = useGuestExpiry();
 	return (
 		<Button
@@ -112,19 +112,15 @@ function MakeGuestButton(props: { rows: ApplicationRow[] }): JSX.Element {
 
 /** A selection-bar button that runs one triage decision over `rows`, after
  *  the user agrees to `prompt` (built from the row count at click time) when
- *  there is one. */
+ *  there is one. Its children are the button's icon and label. */
 function BatchDecisionButton(props: {
-	batch: ApplicationBatch;
-	rows: ApplicationRow[];
-	icon: string;
-	label: string;
+	rows: PersonRow[];
 	prompt?: (count: number) => ConfirmOptions;
-	decide: (
-		triage: ReturnType<typeof useTriage>
-	) => (id: ApplicationRow["_id"]) => TriageResult;
+	decide: (triage: Triage) => (id: PersonRow["_id"]) => TriageResult;
+	children: JSX.Element;
 }): JSX.Element {
 	const triage = useTriage();
-	const runBatchAfter = useBatchRunner(() => props.batch);
+	const runBatchAfter = useBatchRunner();
 	return (
 		<Button
 			variant="secondary"
@@ -137,8 +133,7 @@ function BatchDecisionButton(props: {
 				);
 			}}
 		>
-			<Icon>{props.icon}</Icon>
-			{props.label}
+			{props.children}
 		</Button>
 	);
 }
@@ -147,20 +142,19 @@ function BatchDecisionButton(props: {
  * The selection bar's buttons. Each hides when none of the selection qualifies
  * for it.
  */
-function ApplicationBatchActions(props: {
-	batch: ApplicationBatch;
-}): JSX.Element {
+function ApplicationBatchActions(): JSX.Element {
+	const selection = Table.useSelection<PersonRow>();
 	function guestable() {
-		return rowsAllowing(props.batch.rows(), "APPROVE_GUEST");
+		return rowsAllowing(selection.rows(), "APPROVE_GUEST");
 	}
 	function memberable() {
-		return rowsAllowing(props.batch.rows(), "APPROVE_MEMBER");
+		return rowsAllowing(selection.rows(), "APPROVE_MEMBER");
 	}
 	function deniable() {
-		return rowsAllowing(props.batch.rows(), "DENY");
+		return rowsAllowing(selection.rows(), "DENY");
 	}
 	function undeniable() {
-		return rowsAllowing(props.batch.rows(), "UNDENY");
+		return rowsAllowing(selection.rows(), "UNDENY");
 	}
 
 	return (
@@ -170,41 +164,38 @@ function ApplicationBatchActions(props: {
 			</Show>
 			<Show when={memberable().length > 0}>
 				<BatchDecisionButton
-					batch={props.batch}
 					rows={memberable()}
-					icon={ICONS.memberApplication}
-					label="Make member"
 					prompt={(count) => ({
 						title: "Make members?",
-						message: `Approve ${count} applicant(s) as members? They'll each be emailed an invite.`,
+						message: `Approve ${String(count)} applicant(s) as members? They'll each be emailed an invite.`,
 						confirmLabel: "Make members",
 					})}
 					decide={(triage) => triage.makeMember}
-				/>
+				>
+					<Icon>{ICONS.memberApplication}</Icon>Make member
+				</BatchDecisionButton>
 			</Show>
 			<Show when={deniable().length > 0}>
 				<BatchDecisionButton
-					batch={props.batch}
 					rows={deniable()}
-					icon={ICONS.decline}
-					label="Turn down"
 					prompt={(count) => ({
 						title: "Turn down applications?",
-						message: `Deny ${count} application(s)? Each applicant will be emailed a rejection.`,
+						message: `Deny ${String(count)} application(s)? Each applicant will be emailed a rejection.`,
 						confirmLabel: "Turn down",
 						tone: "danger",
 					})}
 					decide={(triage) => triage.deny}
-				/>
+				>
+					<Icon>{ICONS.decline}</Icon>Turn down
+				</BatchDecisionButton>
 			</Show>
 			<Show when={undeniable().length > 0}>
 				<BatchDecisionButton
-					batch={props.batch}
 					rows={undeniable()}
-					icon={ICONS.undo}
-					label="Undo deny"
 					decide={(triage) => triage.undeny}
-				/>
+				>
+					<Icon>{ICONS.undo}</Icon>Undo deny
+				</BatchDecisionButton>
 			</Show>
 		</>
 	);
@@ -219,7 +210,7 @@ function ApplicationBatchActions(props: {
  * one.
  */
 function useApplicationRowKeys(
-	focused: () => ApplicationRow | undefined,
+	focused: () => PersonRow | undefined,
 	setScore: ReturnType<typeof useMutation<typeof api.applications.setScore>>
 ): void {
 	createHotkeys(
@@ -272,7 +263,7 @@ function ApplicationsRoster(props: TabProps): JSX.Element {
 
 	return (
 		<CurrentPersonContext.Provider value={currentPerson.data}>
-			<RosterTab<ApplicationRow>
+			<RosterTab.Root<PersonRow>
 				tab={props}
 				scope="applications"
 				data={() => applications.data()}
@@ -286,14 +277,17 @@ function ApplicationsRoster(props: TabProps): JSX.Element {
 					{ id: "createdAt", desc: true },
 				]}
 				actions={decisions.actions}
-				footerLead={(person) => <ScoreField person={person()} />}
 				focusedRowKeys={(focused) => {
 					useApplicationRowKeys(focused, setScore);
 				}}
-				batchActions={(batch) => (
-					<ApplicationBatchActions batch={batch} />
-				)}
-			/>
+			>
+				<RosterTab.FooterLead>
+					{(person) => <ScoreField person={person()} />}
+				</RosterTab.FooterLead>
+				<Table.BatchActions>
+					<ApplicationBatchActions />
+				</Table.BatchActions>
+			</RosterTab.Root>
 		</CurrentPersonContext.Provider>
 	);
 }

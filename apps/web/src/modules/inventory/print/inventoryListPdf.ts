@@ -8,13 +8,13 @@ import {
 	type PDFPage,
 } from "pdf-lib";
 
+import type { Item } from "../data/inventoryData.ts";
+
 /** The subset of an inventory item the printed list needs. */
-export type InventoryListRow = {
-	assetTag: string;
-	typeName: string;
-	categoryName: string;
-	description?: string;
-};
+export type InventoryListRow = Pick<
+	Item,
+	"assetTag" | "typeName" | "categoryName" | "description"
+>;
 
 /** The committed Typst letterhead (letterhead.pdf) and the static brand fonts
  * (agreements/static-fonts). Passed in so tests read them from disk and the

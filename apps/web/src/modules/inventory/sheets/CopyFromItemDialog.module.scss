@@ -1,3 +1,4 @@
+@use "@j-os/design-system/hover";
 @use "@j-os/design-system/typography" as typo;
 
 .results {
@@ -22,8 +23,7 @@
 	border: none;
 	border-radius: var(--jf-radius-container);
 
-	/* stylelint-disable-next-line defensive-css/no-accidental-hover -- pointer-capable picker row */
-	&:hover {
+	@include hover.hover {
 		background-color: var(--jf-surface-bg-overlay);
 	}
 

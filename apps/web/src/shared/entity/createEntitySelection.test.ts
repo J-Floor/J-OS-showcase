@@ -731,3 +731,14 @@ test("opening the create form while a close still holds the old row shows the cr
 	expect(bag.sel?.creating()).toBe(true);
 	transitions.finish();
 });
+
+test("an intent to open prebuilds the sheet, and it stays built", () => {
+	const [rows] = createSignal<Row[] | undefined>([rowA, rowB]);
+	const bag = renderHarness(rows);
+	expect(bag.sel?.prebuild()).toBe(false);
+	bag.sel?.intend();
+	expect(bag.sel?.prebuild()).toBe(true);
+	bag.sel?.openRow(rowA);
+	bag.sel?.close(false);
+	expect(bag.sel?.prebuild()).toBe(true);
+});

@@ -1,3 +1,5 @@
+@use "../../styles/hover";
+
 /* The browser's own cancel glyph would sit next to ours. `class` on Input lands
    on the field root (MakeField), so reach the <input> inside it. */
 .field input::-webkit-search-cancel-button {
@@ -20,8 +22,7 @@
 	border: none;
 	border-radius: var(--jf-radius-full);
 
-	/* stylelint-disable-next-line defensive-css/no-accidental-hover -- pointer-driven affordance inside a keyboard surface */
-	&:hover {
+	@include hover.hover {
 		color: var(--jf-fg-strong);
 		background-color: var(--jf-surface-bg-raised);
 	}

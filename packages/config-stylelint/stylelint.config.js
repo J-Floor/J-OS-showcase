@@ -137,6 +137,16 @@ export default {
       },
       { severity: "warning" },
     ],
+    // Hover looks go through `@include hover` (@j-os/design-system/hover),
+    // which also matches the element a morph pins, so the look holds through
+    // a View Transition (Chrome drops `:hover` as one starts).
+    "selector-pseudo-class-disallowed-list": [
+      ["hover"],
+      {
+        message:
+          "Write hover looks with `@include hover` from @j-os/design-system/hover: it also keeps the look while a morph holds the element.",
+      },
+    ],
   },
   overrides: [
     {

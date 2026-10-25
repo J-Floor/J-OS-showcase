@@ -46,11 +46,16 @@ vi.mock("./tabs/ItemsTab.tsx", () => ({
 	ItemsTab: (props: {
 		selection: {
 			open: () => boolean;
+			creating: () => boolean;
 			selected: () => { assetTag: string } | undefined;
 		};
+		newItemAssetTag?: () => string | undefined;
 	}) => (
 		<div>
 			items-tab
+			<Show when={props.selection.creating()}>
+				<div role="dialog">New item {props.newItemAssetTag?.()}</div>
+			</Show>
 			<Show when={props.selection.open() && props.selection.selected()}>
 				{(row) => <div role="dialog">Item {row().assetTag}</div>}
 			</Show>
@@ -133,6 +138,7 @@ if (!(Element.prototype as { hasPointerCapture?: unknown }).hasPointerCapture) {
 }
 
 import { AbilityProvider, type Role } from "../../lib/ability.tsx";
+import { ConfirmProvider } from "../../shared/confirm.tsx";
 
 import { InventoryPage } from "./InventoryPage.tsx";
 
@@ -199,7 +205,9 @@ function renderAs(role: Role) {
 				path="*"
 				component={() => (
 					<AbilityProvider role={role}>
-						<InventoryPage />
+						<ConfirmProvider>
+							<InventoryPage />
+						</ConfirmProvider>
 					</AbilityProvider>
 				)}
 			/>
@@ -247,7 +255,7 @@ test("an invalid QR payload keeps the scanner open with an error", async () => {
 	expect(mockQuery).not.toHaveBeenCalled();
 });
 
-test("an unknown asset tag asks whether to add it", async () => {
+test("an unknown asset tag closes the scanner and asks whether to add it", async () => {
 	detectThenHang("Z00099");
 	mockQuery.mockResolvedValue(null);
 	renderAs("board");
@@ -261,6 +269,34 @@ test("an unknown asset tag asks whether to add it", async () => {
 	expect(
 		await screen.findByRole("button", { name: /Add item/ })
 	).toBeInTheDocument();
+	await waitFor(() => {
+		expect(
+			screen.queryByRole("dialog", { name: "Scan asset tag" })
+		).not.toBeInTheDocument();
+	});
+});
+
+test("declining the unknown-tag question adds nothing", async () => {
+	detectThenHang("Z00099");
+	mockQuery.mockResolvedValue(null);
+	renderAs("board");
+	fireEvent.click(screen.getByRole("button", { name: /Scan QR/ }));
+	fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+	await waitFor(() => {
+		expect(
+			screen.queryByRole("dialog", { name: "No item for Z00099" })
+		).not.toBeInTheDocument();
+	});
+	expect(screen.queryByText(/New item Z/)).toBeNull();
+});
+
+test("confirming the unknown-tag question opens a new item with that tag", async () => {
+	detectThenHang("Z00099");
+	mockQuery.mockResolvedValue(null);
+	renderAs("board");
+	fireEvent.click(screen.getByRole("button", { name: /Scan QR/ }));
+	fireEvent.click(await screen.findByRole("button", { name: "Add item" }));
+	expect(await screen.findByText("New item Z00099")).toBeInTheDocument();
 });
 
 function renderAt(start: string) {

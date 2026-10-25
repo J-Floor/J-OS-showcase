@@ -5,30 +5,28 @@ import {
 	Dialog,
 	Segment,
 } from "@j-os/design-system";
-import { ok, type Result } from "neverthrow";
+import { ok } from "neverthrow";
 import {
 	type JSX,
 	type ParentProps,
-	Show,
 	createContext,
 	createSignal,
-	useContext,
 } from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
-import { invariant } from "../../../../convex/lib/result.ts";
 import {
 	composeExpiry,
 	minExpiryIso,
 	SITE_TIMEZONE,
 } from "../../../../convex/lib/time.ts";
-import type { ClientError } from "../../../lib/call.ts";
+import { useRequiredContext } from "../../../shared/compound.ts";
 import { createActionError } from "../../../shared/createActionError.ts";
+import { OPEN_DIALOG_CONTENT } from "../../../shared/dialogSelectors.ts";
 import { InlineError } from "../../../shared/InlineError.tsx";
 import { HostSelect } from "../columns/HostSelect.tsx";
 
 import styles from "./guestExpiry.module.scss";
-import { useTriage } from "./triage.ts";
+import { type MoveResult, type Triage, useTriage } from "./triage.ts";
 
 /** Opens the "Set expiry" dialog for the given applications; on confirm each is
  * approved as a guest with the chosen expiry. */
@@ -37,12 +35,11 @@ type RequestGuestExpiry = (applicationIds: Id<"people">[]) => void;
 const GuestExpiryContext = createContext<RequestGuestExpiry>();
 
 export function useGuestExpiry(): RequestGuestExpiry {
-	const context = useContext(GuestExpiryContext);
-	invariant(
-		context,
-		"useGuestExpiry must be used within <GuestExpiryProvider>"
+	return useRequiredContext(
+		GuestExpiryContext,
+		"useGuestExpiry",
+		"GuestExpiryProvider"
 	);
-	return context;
 }
 
 function DoorAccessChoice(props: {
@@ -79,20 +76,27 @@ function DoorAccessChoice(props: {
 	);
 }
 
+function GuestExpiryHeader(): JSX.Element {
+	return (
+		<Dialog.Header>
+			<Dialog.Title>Guest configuration</Dialog.Title>
+			<Dialog.Description>
+				Guest access runs through the end of the expiry date
+				(Europe/Zurich). Leave the date empty for open-ended access.
+				Only the host is required.
+			</Dialog.Description>
+		</Dialog.Header>
+	);
+}
+
 function GuestExpiryFooter(props: {
 	isSaving: boolean;
 	hasHost: boolean;
 	onConfirm: () => void;
 }): JSX.Element {
 	return (
-		<div class={styles.footer}>
-			<Dialog.CloseTrigger
-				asChild={(closeProps) => (
-					<Button triggerProps={closeProps()} variant="tertiary">
-						Cancel
-					</Button>
-				)}
-			/>
+		<Dialog.Footer>
+			<Dialog.Cancel />
 			<Confetti>
 				<Button
 					isLoading={props.isSaving}
@@ -103,7 +107,7 @@ function GuestExpiryFooter(props: {
 					Grant guest access
 				</Button>
 			</Confetti>
-		</div>
+		</Dialog.Footer>
 	);
 }
 
@@ -116,9 +120,7 @@ function GuestExpiryFooter(props: {
 function hostSelectTrigger(): HTMLElement | null {
 	return (
 		document
-			.querySelector(
-				'[data-scope="dialog"][data-part="content"][data-state="open"]'
-			)
+			.querySelector(OPEN_DIALOG_CONTENT)
 			?.querySelector<HTMLElement>(
 				'[data-scope="select"][data-part="trigger"]'
 			) ?? null
@@ -127,16 +129,16 @@ function hostSelectTrigger(): HTMLElement | null {
 
 /** Approve each application in turn; the first refusal ends the run. */
 async function approveAll(
-	approveAsGuest: ReturnType<typeof useTriage>["approveAsGuest"],
+	approveAsGuest: Triage["approveAsGuest"],
 	ids: Id<"people">[],
 	grant: {
-		until: number | undefined;
-		hostedById: Id<"people">;
-		shouldBlockDoor: boolean;
+		until: Parameters<Triage["approveAsGuest"]>[1];
+		hostedById: Parameters<Triage["approveAsGuest"]>[2];
+		shouldBlockDoor: Parameters<Triage["approveAsGuest"]>[3];
 		/** Called as each one is approved, so a retry skips it. */
 		onApproved: (id: Id<"people">) => void;
 	}
-): Promise<Result<unknown, ClientError>> {
+): Promise<MoveResult> {
 	for (const id of ids) {
 		const result = await approveAsGuest(
 			id,
@@ -207,20 +209,15 @@ export function GuestExpiryProvider(props: ParentProps): JSX.Element {
 			{props.children}
 			<Dialog.Root
 				open={open()}
-				onOpenChange={(details) => setOpen(details.open)}
+				onOpenChange={setOpen}
 				initialFocusEl={hostSelectTrigger}
 			>
 				<Dialog.Content>
-					<Dialog.Title>Guest configuration</Dialog.Title>
-					<Dialog.Description>
-						Guest access runs through the end of the expiry date
-						(Europe/Zurich). Leave the date empty for open-ended
-						access. Only the host is required.
-					</Dialog.Description>
-					{/* Mount only while open so closing the dialog also closes
-					    the calendar popover (its own portal) and resets the
-					    field for the next use. */}
-					<Show when={open()}>
+					<GuestExpiryHeader />
+					{/* Dropped once the dialog has closed, as all dialog content
+					    is: that closes the calendar popover (its own portal) and
+					    resets the field for the next use. */}
+					<Dialog.Body>
 						<HostSelect
 							label="Host"
 							value={host()}
@@ -235,8 +232,8 @@ export function GuestExpiryProvider(props: ParentProps): JSX.Element {
 							isAllowed={doorAllowed()}
 							onChange={setDoorAllowed}
 						/>
-					</Show>
-					<InlineError message={error()} />
+						<InlineError message={error()} />
+					</Dialog.Body>
 					<GuestExpiryFooter
 						isSaving={saving()}
 						hasHost={host() !== null}

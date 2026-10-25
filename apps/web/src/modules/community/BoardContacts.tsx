@@ -1,9 +1,10 @@
 import { Table, type JfColumnDefinition } from "@j-os/design-system";
+import type { FunctionReturnType } from "convex/server";
 
 import { api } from "../../../convex/_generated/api";
 import { useQuery } from "../../shared/data/useQuery.ts";
 
-type Contact = { firstName: string; lastName: string; phone?: string };
+type Contact = FunctionReturnType<typeof api.people.listBoardContacts>[number];
 
 const columns: JfColumnDefinition<Contact>[] = [
 	{ accessorKey: "firstName", header: "First name", dataType: "string" },

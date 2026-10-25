@@ -57,7 +57,7 @@ const rows = [
 		},
 		hasAgreement: false,
 	},
-] as unknown as MemberRow[];
+] as unknown as PersonRow[];
 
 const guestRows = [
 	{
@@ -79,7 +79,7 @@ const guestRows = [
 		},
 		hasAgreement: false,
 	},
-] as unknown as MemberRow[];
+] as unknown as PersonRow[];
 
 function applicant(id: string, firstName: string) {
 	return {
@@ -109,7 +109,7 @@ function applicant(id: string, firstName: string) {
 const applicantRows = [
 	applicant("a1", "Zed"),
 	applicant("a2", "Yan"),
-] as unknown as MemberRow[];
+] as unknown as PersonRow[];
 
 /**
  * The setter for "have the rosters answered yet", published by the mock below.
@@ -127,8 +127,7 @@ const shared = vi.hoisted(() => ({
 	applicants: false,
 }));
 
-// Only this module is mocked: `./data/useMembers` and its siblings are
-// re-exports of it, so they resolve to the mock too.
+// The rosters come from this module, so it is the one mocked.
 vi.mock("./data/communityData.tsx", async () => {
 	const { createSignal } = await import("solid-js");
 	const [loaded, setLoaded] = createSignal(true);
@@ -177,10 +176,10 @@ vi.mock("convex-solidjs", () => ({
 
 // Everything below the mocks: only `CommunityPage` strictly has to be, but the
 // import ordering rule wants one unbroken block, so they all sit together.
+import type { PersonRow } from "../../../convex/people.ts";
 import { AbilityProvider } from "../../lib/ability.tsx";
 import { lazyPage } from "../../shared/lazyPage.tsx";
 
-import type { MemberRow } from "./columns/memberColumns.tsx";
 import { CommunityPage } from "./CommunityPage.tsx";
 import { openPanel } from "./tabs/testSelection.tsx";
 
@@ -216,7 +215,9 @@ test("a ?person= link opens that person's sheet, on the tab they live in", async
 	// the deep-link effect still pins `?tab=members` into the URL a tick later
 	// — otherwise closing the sheet clears `?person=` and, with no `?tab=` of
 	// its own, the board would fall back to Applications under it.
-	expect(url()).toContain("tab=members");
+	await waitFor(() => {
+		expect(url()).toContain("tab=members");
+	});
 });
 
 test("a link naming the wrong tab still opens on the right one", async () => {

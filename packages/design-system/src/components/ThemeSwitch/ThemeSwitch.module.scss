@@ -1,3 +1,4 @@
+@use "../../styles/hover";
 @use "../../styles/utils";
 
 .switch {
@@ -14,8 +15,7 @@
 	/* stylelint-disable-next-line plugin/no-low-performance-animation-properties -- intentional transition on background-color */
 	transition: background-color var(--jf-animation-duration-default);
 
-	/* stylelint-disable-next-line defensive-css/no-accidental-hover -- pointer-capable control; mobile accidental-hover not a concern */
-	&:hover {
+	@include hover.hover {
 		color: var(--jf-fg-strong);
 		background-color: var(--jf-surface-bg-overlay);
 	}
@@ -31,7 +31,7 @@
 /* Set only after the first mount (see ThemeSwitch.tsx), so the glyph rotates +
    fades in on a real toggle but a fresh mount (e.g. on navigation) stays still. */
 .icon[data-animated] {
-	animation: theme-rotate-in 250ms ease-out;
+	animation: theme-rotate-in var(--jf-animation-duration-default) ease-out;
 }
 
 @keyframes theme-rotate-in {

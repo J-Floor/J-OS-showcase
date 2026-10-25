@@ -1,9 +1,30 @@
 import { fireEvent, render, screen } from "@solidjs/testing-library";
 import { vi } from "vitest";
 
+import { MORPH_OF, MORPH_TITLE } from "../../utils/morphNames.ts";
 import { Icon } from "../Icon/Icon.tsx";
 
 import { List } from "./List.tsx";
+
+test("morphId makes the row an entity surface and the title marks itself", () => {
+	render(() => (
+		<List.Item morphId="p1" data-testid="row">
+			<List.ItemTitle>Roof</List.ItemTitle>
+		</List.Item>
+	));
+	expect(screen.getByTestId("row")).toHaveAttribute(MORPH_OF, "p1");
+	expect(screen.getByText("Roof")).toHaveAttribute(MORPH_TITLE);
+});
+
+test("a row without morphId carries no entity attribute and its title no marker", () => {
+	render(() => (
+		<List.Item data-testid="row">
+			<List.ItemTitle>Roof</List.ItemTitle>
+		</List.Item>
+	));
+	expect(screen.getByTestId("row")).not.toHaveAttribute(MORPH_OF);
+	expect(screen.getByText("Roof")).not.toHaveAttribute(MORPH_TITLE);
+});
 
 test("renders item title + description", () => {
 	render(() => (

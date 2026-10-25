@@ -1,4 +1,4 @@
-import { Icon, Morph, morphPart, morphTitle } from "@j-os/design-system";
+import { Card, Icon, morphPart } from "@j-os/design-system";
 import { For, Show, type JSX } from "solid-js";
 
 import { ICONS } from "../../../shared/icons.ts";
@@ -30,6 +30,28 @@ function Assignees(props: { names: string[] }): JSX.Element {
 	);
 }
 
+/** Tells a click from a drag: solid-dnd fires a native click after a drag
+ *  ends, which would otherwise open the sheet. Clicks where the pointer moved
+ *  more than a few px between down and up are ignored. */
+function createClickGuard(onClick: () => void) {
+	let downX = 0;
+	let downY = 0;
+	return {
+		onPointerDown: (event: PointerEvent) => {
+			downX = event.clientX;
+			downY = event.clientY;
+		},
+		onClick: (event: MouseEvent) => {
+			if (
+				Math.hypot(event.clientX - downX, event.clientY - downY) >
+				CLICK_SLOP_PX
+			)
+				return;
+			onClick();
+		},
+	};
+}
+
 export function TaskCard(props: {
 	task: Task;
 	people: Person[];
@@ -39,6 +61,8 @@ export function TaskCard(props: {
 	/** Use a pointer cursor instead of the kanban grab (non-draggable contexts). */
 	pointer?: boolean;
 	onClick: () => void;
+	/** The pointer rested on the card: a sign its sheet is about to open. */
+	onHoverIntent?: () => void;
 }): JSX.Element {
 	function names() {
 		return assigneeNames(props.task.assigneeIds, props.people);
@@ -50,40 +74,29 @@ export function TaskCard(props: {
 		return formatDate(props.task.dueDate);
 	}
 
-	// Distinguish a click from a drag: solid-dnd fires a native click after a
-	// drag ends, which would otherwise open the sheet. Ignore clicks where the
-	// pointer moved more than a few px between down and up.
-	let downX = 0;
-	let downY = 0;
-	function onPointerDown(event: PointerEvent) {
-		downX = event.clientX;
-		downY = event.clientY;
-	}
-	function onClick(event: MouseEvent) {
-		if (
-			Math.hypot(event.clientX - downX, event.clientY - downY) >
-			CLICK_SLOP_PX
-		)
-			return;
+	const guard = createClickGuard(() => {
 		props.onClick();
-	}
+	});
 
 	return (
-		<Morph
-			of={props.task._id}
-			asChild={(morph) => (
+		<Card.Root
+			onHoverIntent={props.onHoverIntent}
+			morphId={props.task._id}
+			asChild={(card) => (
 				<article
-					{...morph()}
-					classList={{
-						[styles.card]: true,
-						[styles.pointer]: props.pointer,
-					}}
-					onPointerDown={onPointerDown}
-					onClick={onClick}
+					{...card()}
+					class={styles.card}
+					classList={{ [styles.pointer]: props.pointer }}
+					onPointerDown={guard.onPointerDown}
+					onClick={guard.onClick}
 				>
-					<h4 class={styles.title} {...morphTitle}>
-						{props.task.title}
-					</h4>
+					<Card.Title
+						asChild={(title) => (
+							<h4 {...title()} class={styles.title}>
+								{props.task.title}
+							</h4>
+						)}
+					/>
 					<div class={styles.meta}>
 						<Show when={names().length}>
 							<Assignees names={names()} />

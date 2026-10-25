@@ -47,14 +47,6 @@
 	border-radius: var(--jf-radius-container);
 }
 
-.confirmActions {
-	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
-	display: flex;
-	gap: var(--jf-spacing-near);
-	justify-content: flex-end;
-	margin-block-start: var(--jf-spacing-far);
-}
-
 /* The dragged card tracks the cursor 1:1 and sits above everything. */
 .dragActive {
 	z-index: 1000;
@@ -117,5 +109,5 @@
 
 .cardWrap {
 	touch-action: none;
-	transform: var(--drag-transform);
+	transform: translate(var(--drag-x), var(--drag-y));
 }

@@ -18,10 +18,6 @@ import styles from "./ventureColumns.module.scss";
 
 const LINKS_COLUMN_WIDTH = 200;
 
-/** Anything the three rosters render. All three read one table and one query
- *  shape, so the venture columns below are the same columns everywhere. */
-type PersonLike = Doc<"people">;
-
 /**
  * What a person told us they are building — shared by Applications, Members and
  * Guests.
@@ -39,7 +35,7 @@ type PersonLike = Doc<"people">;
  * cosmetic difference, it is a tab whose rows are four times as tall.
  */
 export function ventureColumns<
-	Row extends PersonLike,
+	Row extends Doc<"people">,
 >(): JfColumnDefinition<Row>[] {
 	return [
 		fieldColumn(personFields.vertical, {
@@ -88,7 +84,7 @@ export function ventureColumns<
 }
 
 /** A clamped free-text venture answer, sorted and filtered on its text. */
-function freeTextColumn<Row extends PersonLike>(
+function freeTextColumn<Row extends Doc<"people">>(
 	id: "description" | "pastBuilt" | "whyJoin"
 ): JfColumnDefinition<Row> {
 	return fieldColumn(personFields[id], {
@@ -100,7 +96,7 @@ function freeTextColumn<Row extends PersonLike>(
 	});
 }
 
-function teamSizeText(row: PersonLike): string {
+function teamSizeText(row: Doc<"people">): string {
 	return String(row.venture?.teamSize ?? "—");
 }
 
@@ -118,7 +114,7 @@ function clampCell(text: string | undefined) {
  * every other column on the row with them. The sheet lists all of them, so the
  * "+N" is what says there is more to go and look at.
  */
-function LinksCell(props: { venture: PersonLike["venture"] }) {
+function LinksCell(props: { venture: Doc<"people">["venture"] }) {
 	function links() {
 		return props.venture?.links ?? [];
 	}

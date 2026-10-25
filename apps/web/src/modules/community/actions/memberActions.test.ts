@@ -8,9 +8,8 @@ import { okAsync } from "neverthrow";
 import { createRoot } from "solid-js";
 import { expect, test, vi } from "vitest";
 
+import type { PersonRow } from "../../../../convex/people.ts";
 import { ICONS } from "../../../shared/icons.ts";
-import type { GuestRow } from "../columns/guestColumns.tsx";
-import type { MemberRow } from "../columns/memberColumns.tsx";
 
 import { useGuestActions } from "./guestActions.ts";
 import { useMemberActions } from "./memberActions.ts";
@@ -94,7 +93,7 @@ function member(fields: {
 	tier: string;
 	stage?: string;
 	hasAgreement?: boolean;
-}): MemberRow {
+}): PersonRow {
 	return {
 		_id: fields._id,
 		tier: fields.tier,
@@ -102,21 +101,21 @@ function member(fields: {
 		hasAgreement: fields.hasAgreement ?? false,
 		firstName: "Ada",
 		lastName: "Lovelace",
-	} as unknown as MemberRow;
+	} as unknown as PersonRow;
 }
 
 function guest(fields: {
 	_id: string;
 	tier: string;
 	stage?: string;
-}): GuestRow {
+}): PersonRow {
 	return {
 		_id: fields._id,
 		tier: fields.tier,
 		stage: fields.stage ?? "active",
 		firstName: "Grace",
 		lastName: "Hopper",
-	} as unknown as GuestRow;
+	} as unknown as PersonRow;
 }
 
 test("useMemberActions offers R/change role, K/kick out, A/view agreement, with no collisions", () => {

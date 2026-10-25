@@ -1,4 +1,4 @@
-import { Button, Icon, Skeleton } from "@j-os/design-system";
+import { Button, Icon, Query, Skeleton } from "@j-os/design-system";
 import type { FunctionReturnType } from "convex/server";
 import { Show } from "solid-js";
 
@@ -16,61 +16,70 @@ type OnboardingHost = FunctionReturnType<
 	typeof api.onboarding.getOnboardingHost
 >;
 
+type WhatsappInvite = FunctionReturnType<typeof api.onboarding.whatsappInvite>;
+
+/** The generic group-invite button, shown when there is no host to message. */
+function InviteButton(props: { inviteUrl: WhatsappInvite | undefined }) {
+	return (
+		<Show when={props.inviteUrl}>
+			{(url) => (
+				<Button
+					variant="secondary"
+					onClick={() => {
+						window.open(url(), "_blank", "noopener,noreferrer");
+					}}
+				>
+					Message us on WhatsApp
+				</Button>
+			)}
+		</Show>
+	);
+}
+
 /** The WhatsApp button: a message to the guest's host when they have one with
  *  a phone, else the group invite; a skeleton while the host loads. */
 function WhatsAppAction(props: {
 	host: OnboardingHost | undefined;
-	inviteUrl: string | null | undefined;
+	inviteUrl: WhatsappInvite | undefined;
 }) {
 	return (
-		<Show
-			when={props.host !== undefined}
-			fallback={
+		<Query.Root data={props.host}>
+			<Query.Skeleton>
 				<div role="status" aria-label="Loading" data-invite-skeleton="">
 					<Skeleton class={styles.buttonSkeleton} />
 				</div>
-			}
-		>
-			<Show
-				when={props.host?.phone}
-				fallback={
-					<Show when={props.inviteUrl}>
-						{(url) => (
+			</Query.Skeleton>
+			<Query.Empty>
+				<InviteButton inviteUrl={props.inviteUrl} />
+			</Query.Empty>
+			<Query.Content of={props.host}>
+				{(host) => (
+					<Show
+						when={host().phone}
+						fallback={<InviteButton inviteUrl={props.inviteUrl} />}
+					>
+						{(phone) => (
 							<Button
 								variant="secondary"
 								onClick={() => {
+									// wa.me wants the international number with
+									// no "+", spaces or punctuation. Opens a
+									// WhatsApp chat with the host — no spam
+									// phone calls.
 									window.open(
-										url(),
+										`https://wa.me/${phone().replaceAll(/\D/g, "")}`,
 										"_blank",
 										"noopener,noreferrer"
 									);
 								}}
 							>
-								Message us on WhatsApp
+								Message {host().name} on WhatsApp
 							</Button>
 						)}
 					</Show>
-				}
-			>
-				{(phone) => (
-					<Button
-						variant="secondary"
-						onClick={() => {
-							// wa.me wants the international number with no
-							// "+", spaces or punctuation. Opens a WhatsApp
-							// chat with the host — no spam phone calls.
-							window.open(
-								`https://wa.me/${phone().replaceAll(/\D/g, "")}`,
-								"_blank",
-								"noopener,noreferrer"
-							);
-						}}
-					>
-						Message {props.host?.name} on WhatsApp
-					</Button>
 				)}
-			</Show>
-		</Show>
+			</Query.Content>
+		</Query.Root>
 	);
 }
 
@@ -89,19 +98,28 @@ export function VisitStep(props: OnboardingStepProps) {
 			<p>{STREET_ADDRESS}</p>
 			<p>
 				Come by to build.{" "}
-				<Show
-					when={host.data() !== undefined}
-					fallback={<Skeleton width="long" />}
-				>
-					<Show
-						when={host.data()}
-						fallback="If you've never been to the space, for a smooth start reach out to one of our board members via WhatsApp. They will welcome you to the space and answer any questions you may have."
-					>
-						{(knownHost) =>
-							`If you've never been to the space, for a smooth start reach out to your host ${knownHost().name} via WhatsApp the first time you come. They will welcome you to the space and answer any questions you may have.`
-						}
-					</Show>
-				</Show>
+				<Query.Root data={host.data()}>
+					<Query.Skeleton>
+						<Skeleton width="long" />
+					</Query.Skeleton>
+					<Query.Empty>
+						If you've never been to the space, for a smooth start
+						reach out to one of our board members via WhatsApp. They
+						will welcome you to the space and answer any questions
+						you may have.
+					</Query.Empty>
+					<Query.Content of={host.data()}>
+						{(knownHost) => (
+							<>
+								If you've never been to the space, for a smooth
+								start reach out to your host {knownHost().name}{" "}
+								via WhatsApp the first time you come. They will
+								welcome you to the space and answer any
+								questions you may have.
+							</>
+						)}
+					</Query.Content>
+				</Query.Root>
 			</p>
 			<div class={styles.actions}>
 				<Button

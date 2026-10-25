@@ -16,6 +16,7 @@ import {
 } from "../../../convex/lib/doorLocks.ts";
 import { type DoorPosition } from "../../../convex/lib/doorProvider.ts";
 import { call } from "../../lib/call.ts";
+import { createVisiblePoll } from "../../lib/createVisiblePoll.ts";
 
 import { LOCK_SLOTS } from "./lockSlots.ts";
 
@@ -137,19 +138,8 @@ function createPositionPoll(
 				poll.onDisable();
 				return;
 			}
-			function onVisibilityChange() {
-				if (document.visibilityState === "visible") readAll();
-			}
 			readFirst();
-			const timer = setInterval(onVisibilityChange, POSITION_POLL_MS);
-			document.addEventListener("visibilitychange", onVisibilityChange);
-			onCleanup(() => {
-				clearInterval(timer);
-				document.removeEventListener(
-					"visibilitychange",
-					onVisibilityChange
-				);
-			});
+			createVisiblePoll(readAll, POSITION_POLL_MS);
 		})
 	);
 }

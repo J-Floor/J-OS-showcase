@@ -1,4 +1,4 @@
-import { MORPH_KEY } from "./morphPairing.ts";
+import { MORPH_KEY } from "./morphNames.ts";
 
 /**
  * One field of an entity, defined once and used by every place that shows

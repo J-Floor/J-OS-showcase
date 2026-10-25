@@ -1,14 +1,20 @@
 import { TableSkeleton, Tabs } from "@j-os/design-system";
 import { useSearchParams } from "@solidjs/router";
-import { createEffect, Show } from "solid-js";
+import { createEffect, For, Show } from "solid-js";
 
 import type { Id } from "../../../convex/_generated/dataModel";
 import { Can } from "../../lib/ability.tsx";
 import { createEntitySelection } from "../../shared/entity/createEntitySelection.ts";
 import { isTabKey } from "../../shared/tabKey.ts";
+import type { Identified } from "../../shared/types.ts";
 
 import { ExportActions } from "./actions/ExportActions.tsx";
 import styles from "./CommunityPage.module.scss";
+import {
+	COMMUNITY_TAB_KEYS,
+	COMMUNITY_TABS,
+	type CommunityTabKey,
+} from "./communityTabs.ts";
 import {
 	useApplications,
 	useGuests,
@@ -20,21 +26,7 @@ import { MyProfile } from "./MyProfile.tsx";
 import { ApplicationsTab } from "./tabs/ApplicationsTab.tsx";
 import { GuestsTab } from "./tabs/GuestsTab.tsx";
 import { MembersTab } from "./tabs/MembersTab.tsx";
-import type { PersonReference, PersonSelection } from "./tabs/TabProps.ts";
-
-// Insights last: the three rosters are what the board opens this page to do,
-// and a dashboard in front of them would put a read-only tab between them and
-// the work. It is also the only tab with no sheet, which is why it is not
-// handed the person `selection`. My profile sits after it: the board's own row,
-// not part of the triage work, and likewise sheetless.
-const TAB_KEYS = [
-	"applications",
-	"members",
-	"guests",
-	"insights",
-	"profile",
-] as const;
-type CommunityTabKey = (typeof TAB_KEYS)[number];
+import type { PersonSelection } from "./tabs/TabProps.ts";
 
 /**
  * Which tab is on screen and which rows the page-wide selection may name, both
@@ -94,7 +86,7 @@ function useRosterTabs() {
 	function awaitingLinkedTab(): boolean {
 		return (
 			typeof params.person === "string" &&
-			!isTabKey(TAB_KEYS, params.tab) &&
+			!isTabKey(COMMUNITY_TAB_KEYS, params.tab) &&
 			!rostersReady()
 		);
 	}
@@ -107,7 +99,7 @@ function useRosterTabs() {
 	 */
 	function activeTab(): CommunityTabKey {
 		const value = params.tab;
-		return isTabKey(TAB_KEYS, value)
+		return isTabKey(COMMUNITY_TAB_KEYS, value)
 			? value
 			: (linkedTab() ?? "applications");
 	}
@@ -115,7 +107,7 @@ function useRosterTabs() {
 	/** Everyone on the three rosters, once ALL of them have answered. A partial
 	 *  union would make the selection treat a person whose roster is still
 	 *  loading as a dead link and drop `?person=`. */
-	function people(): PersonReference[] | undefined {
+	function people(): Identified<"people">[] | undefined {
 		if (!rostersReady()) return undefined;
 		return [
 			...(applications.data() ?? []),
@@ -138,11 +130,13 @@ function CommunityTabBar() {
 	return (
 		<Tabs.Bar>
 			<Tabs.List>
-				<Tabs.Trigger value="applications">Applications</Tabs.Trigger>
-				<Tabs.Trigger value="members">Members</Tabs.Trigger>
-				<Tabs.Trigger value="guests">Guests</Tabs.Trigger>
-				<Tabs.Trigger value="insights">Insights</Tabs.Trigger>
-				<Tabs.Trigger value="profile">My profile</Tabs.Trigger>
+				<For each={COMMUNITY_TABS}>
+					{(entry) => (
+						<Tabs.Trigger value={entry.tab}>
+							{entry.label}
+						</Tabs.Trigger>
+					)}
+				</For>
 			</Tabs.List>
 			{/* Spans all three rosters, so it belongs to no one tab. */}
 			<Tabs.Actions>
@@ -232,7 +226,7 @@ function CommunityConsole() {
 	// One selection for all three rosters: `?person=` is page-wide, and a single
 	// owner is what lets Back close the sheet (it owns the history entry the
 	// open pushed) instead of leaving the page.
-	const selection = createEntitySelection<PersonReference>({
+	const selection = createEntitySelection<Identified<"people">>({
 		rows: people,
 		param: "person",
 	});
@@ -259,7 +253,7 @@ function CommunityConsole() {
 					setParams({ tab: value, person: undefined });
 				},
 				fallback: "applications",
-				keys: TAB_KEYS,
+				keys: COMMUNITY_TAB_KEYS,
 			}}
 		>
 			<CommunityTabBar />

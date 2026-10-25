@@ -4,13 +4,31 @@ import {
 	type JfColumnDefinition,
 	morphPart,
 	Table,
-	type TableSelection,
+	type TableRootProps,
 } from "@j-os/design-system";
-import { type JSX, Show, createEffect, createSignal, on } from "solid-js";
+import {
+	type Accessor,
+	type JSX,
+	Show,
+	createContext,
+	createEffect,
+	createSignal,
+	on,
+} from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
-import { createSheetNav } from "../../../lib/createSheetNav.ts";
+import type { PersonRow } from "../../../../convex/people.ts";
+import {
+	createSheetNav,
+	type SheetNavState,
+} from "../../../lib/createSheetNav.ts";
+import {
+	createPartSlot,
+	useRequiredContext,
+	type PartSlot,
+} from "../../../shared/compound.ts";
 import { useRowPrefetch } from "../../../shared/entity/useRowPrefetch.ts";
+import type { Identified } from "../../../shared/types.ts";
 import { createActionKeys } from "../actions/createActionKeys.ts";
 import {
 	RosterActionError,
@@ -21,7 +39,6 @@ import type { ActionDescriptor, ShortcutScope } from "../actions/shortcuts.ts";
 import type { TriageResult } from "../actions/triage.ts";
 import { personEntity } from "../entity.ts";
 import { personFields } from "../fields.ts";
-import type { PersonRow } from "../insights/metrics.ts";
 import { DecisionBar } from "../sheets/DecisionBar.tsx";
 import { EditToggle } from "../sheets/EditToggle.tsx";
 import { PersonDetail } from "../sheets/PersonDetail.tsx";
@@ -33,26 +50,50 @@ import type { TabProps } from "./TabProps.ts";
 /** Run each row through a per-row mutation (Convex mutations are individually
  *  transactional), then clear the selection. Stops at the first failure, shows
  *  it above the table and leaves the selection as it was. */
-export type RunBatch<Row> = (
-	rows: Row[],
+export type RunBatch = (
+	rows: Identified<"people">[],
 	action: (id: Id<"people">) => TriageResult,
 	clearSelection: () => void
 ) => Promise<void>;
 
-/** What a tab's selection bar is handed: the table's selection plus the
- *  shared {@link RunBatch}. */
-export type RosterBatchProps<Row extends Record<string, unknown>> =
-	TableSelection<Row> & { runBatch: RunBatch<Row> };
+/** What goes in the sheet's footer above the decision buttons, given the
+ *  person the sheet shows. */
+type FooterLead = (person: Accessor<PersonRow>) => JSX.Element;
 
-/** The selection bar's contents: reads the table's selection and hands it,
- *  with the tab's {@link RunBatch}, to the tab's `batchActions`. */
-function RosterBatchBar<Row extends PersonRow>(props: {
-	batchActions: (batch: RosterBatchProps<Row>) => JSX.Element;
-	runBatch: RunBatch<Row>;
-}): JSX.Element {
-	const selection = Table.useSelection<Row>();
-	// eslint-disable-next-line solid/reactivity -- called once; the batch hands out accessors, read inside the bar's own JSX
-	return props.batchActions({ ...selection, runBatch: props.runBatch });
+/** What {@link RosterTab.Root}'s parts and the tab's own selection-bar
+ *  children read from the roster they sit in. */
+type Roster = {
+	runBatch: RunBatch;
+	footerLead: PartSlot<FooterLead>;
+};
+
+const RosterContext = createContext<Roster>();
+
+function useRoster(part: string): Roster {
+	return useRequiredContext(RosterContext, part, "RosterTab.Root");
+}
+
+/** The shared {@link RunBatch} of the enclosing {@link RosterTab.Root}, for the
+ *  buttons a tab puts in its `Table.BatchActions`. */
+export function useRosterBatch(): RunBatch {
+	return useRoster("useRosterBatch").runBatch;
+}
+
+/**
+ * Rendered in the sheet footer ABOVE the decision buttons — Applications puts
+ * a score field here so the board can score without leaving the sheet. A child
+ * of {@link RosterTab.Root}; it renders nothing where it is placed.
+ *
+ * Handed an accessor for the open person, not the row: the sheet pages from
+ * person to person while it is open, and a roster refetch hands new row
+ * objects for the same people, so the lead updates in place instead of
+ * remounting (which would cancel a morph in flight).
+ */
+function RosterFooterLead(props: { children: FooterLead }): JSX.Element {
+	const roster = useRoster("RosterTab.FooterLead");
+	// eslint-disable-next-line solid/reactivity -- `fill` reads the accessor in a render effect
+	roster.footerLead.fill(() => props.children);
+	return null;
 }
 
 /**
@@ -116,20 +157,23 @@ function PersonTitle(props: {
 
 function RosterSheet<Row extends PersonRow>(props: {
 	isOpen: boolean;
+	/** Build the sheet ahead of its first open (a row's hover intent). */
+	prebuild: boolean;
 	isLoading: boolean;
 	selected: Row | undefined;
 	isEditing: boolean;
 	onToggleEditing: () => void;
-	nav: ReturnType<typeof createSheetNav>;
+	nav: SheetNavState;
 	onClose: () => void;
-	footerLead?: (person: () => Row) => JSX.Element;
 	actions: ActionDescriptor<Row>[];
 	scope: ShortcutScope;
 }): JSX.Element {
+	const roster = useRoster("RosterSheet");
 	return (
 		<Sheet.Root
 			open={props.isOpen}
-			morph={props.selected?._id}
+			prebuild={props.prebuild}
+			morphId={props.selected?._id}
 			onOpenChange={(isOpen) => {
 				if (!isOpen) props.onClose();
 			}}
@@ -140,14 +184,15 @@ function RosterSheet<Row extends PersonRow>(props: {
 					person={props.selected}
 				/>
 				<Sheet.HeaderActions>
+					<Sheet.SaveStatus />
 					<EditToggle
 						editing={props.isEditing}
 						enabled={props.isOpen}
 						onToggle={props.onToggleEditing}
 					/>
 					<SheetNav
-						onPrev={props.nav.prev}
-						onNext={props.nav.next}
+						onPrev={props.nav.onPrev}
+						onNext={props.nav.onNext}
 						hasPrev={props.nav.hasPrev()}
 						hasNext={props.nav.hasNext()}
 					/>
@@ -163,6 +208,7 @@ function RosterSheet<Row extends PersonRow>(props: {
 						<PersonDetail
 							person={person()}
 							editing={props.isEditing}
+							isOpen={() => props.isOpen}
 						/>
 					)}
 				</Show>
@@ -171,7 +217,7 @@ function RosterSheet<Row extends PersonRow>(props: {
 				{(person) => (
 					<Sheet.Footer>
 						<div class={styles.footer}>
-							{props.footerLead?.(person)}
+							{roster.footerLead.value()?.(person)}
 							<RosterActionError
 								scope={props.scope}
 								personId={person()._id}
@@ -190,12 +236,8 @@ function RosterSheet<Row extends PersonRow>(props: {
 	);
 }
 
-function batchRunner(scope: ShortcutScope) {
-	return async function runBatch(
-		rows: { _id: Id<"people"> }[],
-		action: (id: Id<"people">) => TriageResult,
-		clearSelection: () => void
-	): Promise<void> {
+function batchRunner(scope: ShortcutScope): RunBatch {
+	return async function runBatch(rows, action, clearSelection) {
 		for (const row of rows) {
 			const { refused } = await settleRosterAction(
 				scope,
@@ -230,6 +272,15 @@ function useSheetEditing(
 	return [editing, setEditing] as const;
 }
 
+/** What the roster knows about its sheet and its checked rows. */
+type RosterState<Row> = {
+	open: () => boolean;
+	selected: () => Row | undefined;
+	checked: () => Row[];
+	/** The selection's hint that its sheet is about to open. */
+	intend: () => void;
+};
+
 /** The document-level action keys: they act on the sheet's person, else the
  *  checked rows, else the ringed row. */
 function useRosterActionKeys<Row extends PersonRow>(
@@ -237,10 +288,7 @@ function useRosterActionKeys<Row extends PersonRow>(
 		tab: TabProps;
 		actions: () => ActionDescriptor<Row>[];
 	},
-	state: {
-		open: () => boolean;
-		selected: () => Row | undefined;
-		checked: () => Row[];
+	state: RosterState<Row> & {
 		focusedRow: () => Row | undefined;
 		onAdvance: () => void;
 		onClearSelection: () => void;
@@ -294,27 +342,25 @@ function useFocusedRowPrefetch<Row extends PersonRow>() {
 	};
 }
 
+/** What the table hands back to drive its keyboard ring. */
+type FocusApi<Row extends PersonRow> = Parameters<
+	NonNullable<TableRootProps<Row>["focusApi"]>
+>[0];
+
 type RosterTabProps<Row extends PersonRow> = {
 	tab: TabProps;
 	/** The loaded rows, or `undefined` while the query is still loading. */
 	data: () => Row[] | undefined;
 	columns: () => JfColumnDefinition<Row>[];
 	groupBy: string;
-	initialColumnSorting?: { id: string; desc: boolean }[];
+	initialColumnSorting?: TableRootProps<Row>["initialColumnSorting"];
 	/** Descriptors driving both the row keys and the sheet footer. */
 	actions: () => ActionDescriptor<Row>[];
 	/** The tab's own scope: where its failed actions are kept and shown. */
 	scope: ShortcutScope;
-	/** The selection bar's contents, given the selection plus {@link RunBatch}. */
-	batchActions: (props: RosterBatchProps<Row>) => JSX.Element;
-	/** Tab-specific chrome rendered beside the sheet — e.g. a dialog the tab's
-	 *  actions open. */
-	extra?: JSX.Element;
-	/** Rendered in the sheet footer ABOVE the decision buttons — Applications
-	 *  puts a score field here so the board can score without leaving the sheet.
-	 *  Handed an accessor, not the row, so a roster refetch updates the lead in
-	 *  place instead of remounting it (which would cancel a morph in flight). */
-	footerLead?: (person: () => Row) => JSX.Element;
+	/** Parts: the tab's `Table.BatchActions` (its buttons read
+	 *  {@link useRosterBatch}) and a {@link RosterTab.FooterLead}. */
+	children?: JSX.Element;
 	/**
 	 * Lets a tab bind extra document-level keys that act on the *focused* row
 	 * while the roster owns the keyboard. Given an accessor for the focused row —
@@ -333,16 +379,11 @@ type RosterTabProps<Row extends PersonRow> = {
  *  and tab-specific keys that act on it. */
 function useRosterFocus<Row extends PersonRow>(
 	props: RosterTabProps<Row>,
-	state: {
-		open: () => boolean;
-		selected: () => Row | undefined;
-		checked: () => Row[];
-		setChecked: (rows: Row[]) => void;
-	}
+	state: RosterState<Row> & { setChecked: (rows: Row[]) => void }
 ) {
 	const { focusedRow, onFocusedRowChange, prefetchRow } =
 		useFocusedRowPrefetch<Row>();
-	let focusApi: { advance: () => void } | undefined;
+	let focusApi: FocusApi<Row> | undefined;
 	useRosterActionKeys(props, {
 		...state,
 		focusedRow,
@@ -363,8 +404,12 @@ function useRosterFocus<Row extends PersonRow>(
 	props.focusedRowKeys?.(focusedRow);
 	return {
 		onFocusedRowChange,
-		prefetchRow,
-		setFocusApi: (api: { advance: () => void }) => {
+		/** Warms the row's data and builds the sheet ahead of the open. */
+		onHoverIntent: (row: Row) => {
+			prefetchRow(row);
+			state.intend();
+		},
+		setFocusApi: (api: FocusApi<Row>) => {
 			focusApi = api;
 		},
 	};
@@ -383,14 +428,15 @@ function useRosterFocus<Row extends PersonRow>(
  *
  * What stays with each tab is what is genuinely its own: which query feeds it,
  * its columns, its `useXActions` descriptors (with their tab-specific callbacks),
- * the selection-bar buttons, and any extra chrome (a provider, a dialog) passed
- * as `extra`.
+ * and the parts it passes as children: its `Table.BatchActions` and, if it has
+ * one, a {@link RosterTab.FooterLead}. Any other chrome a tab needs (a provider,
+ * a dialog) goes around or beside the `RosterTab.Root`.
  *
  * Every roster row is a {@link PersonRow}: a person carrying its derived
  * status, enough for the sheet's {@link PersonDetail}, the id lookups here
  * and the person descriptor's prefetch.
  */
-export function RosterTab<Row extends PersonRow>(
+function RosterTabRoot<Row extends PersonRow>(
 	props: RosterTabProps<Row>
 ): JSX.Element {
 	// eslint-disable-next-line solid/reactivity -- the page's stable props object, read lazily inside
@@ -404,16 +450,24 @@ export function RosterTab<Row extends PersonRow>(
 		props.scope
 	);
 	const [checked, setChecked] = createSignal<Row[]>([]);
-	const { onFocusedRowChange, prefetchRow, setFocusApi } = useRosterFocus(
+	const { onFocusedRowChange, onHoverIntent, setFocusApi } = useRosterFocus(
 		props,
-		{ open, selected, checked, setChecked }
+		{ open, selected, checked, setChecked, intend: selection.intend }
 	);
 	const { nav, setDisplayed } = useDisplayedRowsNav(selected, (row) => {
 		selection.openRow(row);
 	});
 
+	const footerLead = createPartSlot<FooterLead>();
+
 	return (
-		<>
+		<RosterContext.Provider
+			value={{
+				// eslint-disable-next-line solid/reactivity -- the scope is a constant of the tab, read once
+				runBatch: batchRunner(props.scope),
+				footerLead,
+			}}
+		>
 			<Show when={!open()}>
 				<RosterActionError scope={props.scope} />
 			</Show>
@@ -437,7 +491,7 @@ export function RosterTab<Row extends PersonRow>(
 				// closing then leaves you on that row.
 				activeRowId={() => (open() ? selected()?._id : undefined)}
 				onFocusedRowChange={onFocusedRowChange}
-				onRowHoverIntent={prefetchRow}
+				onRowHoverIntent={onHoverIntent}
 				onRowActivate={(row) => {
 					selection.openRow(row);
 				}}
@@ -448,15 +502,11 @@ export function RosterTab<Row extends PersonRow>(
 					selection.openRow(row);
 				}}
 			>
-				<Table.BatchActions>
-					<RosterBatchBar
-						batchActions={props.batchActions}
-						runBatch={batchRunner(props.scope)}
-					/>
-				</Table.BatchActions>
+				{props.children}
 			</Table.Root>
 			<RosterSheet
 				isOpen={open()}
+				prebuild={selection.prebuild()}
 				isLoading={props.data() === undefined}
 				selected={selected()}
 				isEditing={editing()}
@@ -464,14 +514,15 @@ export function RosterTab<Row extends PersonRow>(
 					setEditing((isEditing) => !isEditing);
 				}}
 				nav={nav}
-				onClose={() => {
-					selection.close();
-				}}
-				footerLead={props.footerLead}
+				onClose={selection.close}
 				actions={props.actions()}
 				scope={props.scope}
 			/>
-			{props.extra}
-		</>
+		</RosterContext.Provider>
 	);
 }
+
+export const RosterTab = {
+	Root: RosterTabRoot,
+	FooterLead: RosterFooterLead,
+};

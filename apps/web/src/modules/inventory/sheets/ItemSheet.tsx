@@ -4,27 +4,25 @@ import {
 	Sheet,
 	Icon,
 	PropertyRow,
+	createSaveTracker,
+	type SaveTracker,
 } from "@j-os/design-system";
 import { Show, createSignal, type Accessor, type JSX } from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { parseAssetTag } from "../../../../convex/lib/assetTag.ts";
-import { call } from "../../../lib/call.ts";
+import type { SheetNavState } from "../../../lib/createSheetNav.ts";
 import { createSyncedField } from "../../../lib/createSyncedField.ts";
+import type { SaveWrite } from "../../../lib/reportSave.ts";
 import { useConfirm } from "../../../shared/confirm.tsx";
-import {
-	createActionError,
-	scopeOfFields,
-} from "../../../shared/createActionError.ts";
+import { createEntityDraft } from "../../../shared/entity/entityCommands.ts";
 import { EntityCreateFooter } from "../../../shared/entity/EntityCreateFooter.tsx";
 import { EntityQrBlock } from "../../../shared/entity/EntityQr.tsx";
-import {
-	EntitySheetHeader,
-	type SheetNavState,
-} from "../../../shared/entity/EntitySheetHeader.tsx";
+import { EntitySheetHeader } from "../../../shared/entity/EntitySheetHeader.tsx";
 import { ICONS } from "../../../shared/icons.ts";
 import { InlineError } from "../../../shared/InlineError.tsx";
-import type { Item, ItemType } from "../data/inventoryData.ts";
+import type { SheetOpenProps } from "../../../shared/types.ts";
+import type { Item, ItemPatch, ItemType } from "../data/inventoryData.ts";
 import { useItemActions } from "../data/inventoryData.ts";
 import { itemEntity } from "../entity.ts";
 import { itemFields } from "../fields.ts";
@@ -32,33 +30,18 @@ import { itemFields } from "../fields.ts";
 import { AssetTagInput } from "./AssetTagInput.tsx";
 import { detailsFromItem } from "./copyFromItem.ts";
 import { CopyFromItemDialog } from "./CopyFromItemDialog.tsx";
+import { FieldsPlaceholder } from "./FieldsPlaceholder.tsx";
+import { createInventoryCommands } from "./inventoryCommands.ts";
 import { DescriptionValue, OptionSelect } from "./InventoryForm.tsx";
 
-/**
- * Placeholder field layout shown by `Sheet.Skeleton` while
- * `loading` is true — an open row whose data hasn't arrived yet. Shaped like
- * the loaded field list (mirrors `EventFieldsPlaceholder`); literal
- * "placeholder" text, never real or create-form copy.
- */
-function ItemFieldsPlaceholder() {
-	return (
-		<>
-			<PropertyRow icon={ICONS.assetTag} label="Asset tag">
-				<span>placeholder</span>
-			</PropertyRow>
-			<PropertyRow icon={ICONS.itemType} label="Type">
-				<span>placeholder</span>
-			</PropertyRow>
-			<PropertyRow icon={ICONS.description} label="Description">
-				<span>placeholder</span>
-			</PropertyRow>
-		</>
-	);
-}
+/** The rows the skeleton stands in for: the sheet's own fields. */
+const PLACEHOLDER_FIELDS = [
+	itemFields.assetTag,
+	itemFields.typeName,
+	itemFields.description,
+];
 
-type ItemSheetProps = {
-	open: boolean;
-	onOpenChange: (isOpen: boolean) => void;
+type ItemSheetProps = SheetOpenProps & {
 	item?: Item;
 	itemTypes: ItemType[];
 	items?: Item[];
@@ -74,15 +57,17 @@ type ItemSheetProps = {
  *  create-only). */
 function createItemFields(
 	props: ItemSheetProps,
-	patch: (change: Record<string, unknown>) => Promise<void>
+	patch: (change: ItemPatch) => ReturnType<SaveWrite>,
+	tracker: SaveTracker
 ) {
 	function key() {
 		return `${String(props.open)}:${props.item?._id ?? "new"}:${props.initialAssetTag ?? ""}`;
 	}
+	const sync = { key, open: () => props.open, tracker };
 
 	const assetTag = createSyncedField({
 		remote: () => props.item?.assetTag ?? props.initialAssetTag ?? "",
-		key,
+		...sync,
 		// Create-only field: the tag is read-only text in edit mode (below), so
 		// this never fires there — `createItem` sends it once. Autosaving it
 		// would rename the slug (`selected()` matches on assetTag) and slam the
@@ -91,18 +76,15 @@ function createItemFields(
 	});
 	const typeId = createSyncedField<Id<"itemTypes"> | undefined>({
 		remote: () => props.item?.typeId,
-		key,
-		write: (value) => {
-			if (value) void patch({ typeId: value });
-		},
+		...sync,
+		write: (value) => (value ? patch({ typeId: value }) : undefined),
 		debounceMs: 0,
 	});
 	const description = createSyncedField({
 		remote: () => props.item?.description ?? "",
-		key,
-		write: (value) => {
-			void patch({ description: value.trim() === "" ? null : value });
-		},
+		...sync,
+		write: (value) =>
+			patch({ description: value.trim() === "" ? null : value }),
 	});
 	return { assetTag, typeId, description };
 }
@@ -115,21 +97,28 @@ function isAssetTagValid(tag: string): boolean {
 function createItemForm(props: ItemSheetProps) {
 	const actions = useItemActions();
 	const confirm = useConfirm();
-	const failure = createActionError();
 
-	async function patch(change: Record<string, unknown>) {
-		const item = props.item;
-		if (!item) return;
-		await failure.trackResult(
-			call(
-				actions.update({ id: item._id, ...change }),
-				"Could not save."
-			),
-			scopeOfFields(change)
-		);
-	}
+	const commands = createInventoryCommands<
+		Parameters<typeof actions.create>[0],
+		Id<"items">,
+		ItemPatch
+	>({
+		actions,
+		id: () => props.item?._id,
+		onClose: () => {
+			draft.onOpenChange(false);
+		},
+	});
 
-	const fields = createItemFields(props, patch);
+	const saves = createSaveTracker();
+	const fields = createItemFields(props, commands.patch, saves);
+	// A scanned tag is where the form starts, not a change.
+	const draft = createEntityDraft(
+		props,
+		() => props.item !== undefined,
+		fields,
+		"new item"
+	);
 
 	function tagLooksValid() {
 		return isAssetTagValid(fields.assetTag.value());
@@ -137,8 +126,11 @@ function createItemForm(props: ItemSheetProps) {
 
 	return {
 		...fields,
-		formError: failure.error,
-		clearFormError: failure.clear,
+		draft,
+		/** Spread onto the `Sheet.Root`, before its own `onOpenChange`. */
+		sheet: { ...draft.sheet, saveTracker: saves },
+		formError: commands.failure.error,
+		clearFormError: commands.failure.clear,
 		tagLooksValid,
 		/** Fills the type and description from another item. */
 		copyFrom: (source: Item): void => {
@@ -149,18 +141,11 @@ function createItemForm(props: ItemSheetProps) {
 		async createItem() {
 			const selected = fields.typeId.value();
 			if (!tagLooksValid() || selected === undefined) return;
-			const created = await failure.trackResult(
-				call(
-					actions.create({
-						typeId: selected,
-						assetTag: fields.assetTag.value(),
-						description:
-							fields.description.value().trim() || undefined,
-					}),
-					"Could not create."
-				)
-			);
-			if (created.isOk()) props.onOpenChange(false);
+			await commands.create({
+				typeId: selected,
+				assetTag: fields.assetTag.value(),
+				description: fields.description.value().trim() || undefined,
+			});
 		},
 		async deleteItem() {
 			if (!props.item) return;
@@ -171,11 +156,7 @@ function createItemForm(props: ItemSheetProps) {
 				tone: "danger",
 			});
 			if (!isOk) return;
-			const item = props.item;
-			const deleted = await failure.trackResult(
-				call(actions.remove(item._id), "Could not delete.")
-			);
-			if (deleted.isOk()) props.onOpenChange(false);
+			await commands.remove(props.item._id);
 		},
 	};
 }
@@ -224,9 +205,7 @@ function AssetTagField(props: {
 			}
 		>
 			<AssetTagInput
-				value={props.assetTag.value()}
-				onChange={props.assetTag.set}
-				onFlush={props.assetTag.flush}
+				field={props.assetTag}
 				hasError={props.hasError}
 				onElement={props.onElement}
 			/>
@@ -339,28 +318,33 @@ export function ItemSheet(props: ItemSheetProps): JSX.Element {
 		<>
 			<Sheet.Root
 				open={props.open}
-				morph={props.item?._id}
+				prebuild={props.prebuild}
+				morphId={props.item?._id}
+				{...form.sheet}
 				onOpenChange={(isOpen) => {
 					if (!isOpen) {
 						setCopyOpen(false);
 						form.clearFormError();
 					}
-					props.onOpenChange(isOpen);
+					form.draft.onOpenChange(isOpen);
 				}}
 				initialFocusEl={() => tagElement ?? null}
 			>
-				<EntitySheetHeader
+				<EntitySheetHeader.Root
 					title={props.item?.assetTag ?? "New item"}
 					loading={props.loading}
 					nav={props.nav}
-					isEdit={isEdit()}
-					deleteLabel="Delete item"
-					onDelete={() => {
-						void form.deleteItem();
-					}}
-				/>
+					saveStatus={isEdit() && !props.loading}
+				>
+					<Show when={isEdit()}>
+						<EntitySheetHeader.Delete
+							label="Delete item"
+							onDelete={() => void form.deleteItem()}
+						/>
+					</Show>
+				</EntitySheetHeader.Root>
 				<Sheet.Skeleton>
-					<ItemFieldsPlaceholder />
+					<FieldsPlaceholder fields={PLACEHOLDER_FIELDS} />
 				</Sheet.Skeleton>
 				<Sheet.Body loading={props.loading}>
 					<Show when={!isEdit()}>

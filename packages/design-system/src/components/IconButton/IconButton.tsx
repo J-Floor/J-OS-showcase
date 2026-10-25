@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import { type JSX, Show, splitProps } from "solid-js";
 
+import { keyShortcutsOf } from "../../utils/activation.ts";
 import { separateDisablingProps } from "../../utils/disablingProps.ts";
 import { useShortcutPeek } from "../../utils/shortcutPeek.tsx";
 import { callHandler, type TriggerProps } from "../../utils/triggerProps.ts";
@@ -39,6 +40,10 @@ export type IconButtonProps = {
 	 * A lone `Modifier` (e.g. `Alt`) is allowed for a button whose hint IS the
 	 * modifier — the peek toggle, which the Alt key doubles for. Display only; a
 	 * bare modifier does not register a binding.
+	 *
+	 * The button also names the key in `aria-keyshortcuts` (none for a bare
+	 * modifier), which is how a shortcut press finds the button it fires: an
+	 * overlay it opens grows out of it.
 	 */
 	shortcut?: ShortcutHint;
 	/** Material Symbols ligature name (e.g. "add", "delete"). */
@@ -251,6 +256,7 @@ export function IconButton(props: IconButtonProps): JSX.Element {
 				)}
 				isLoading={local.isLoading}
 				class={clsx(styles.iconButton, local.class)}
+				aria-keyshortcuts={keyShortcutsOf(local.shortcut)}
 				aria-label={accessibleName({
 					...local,
 					"aria-labelledby": props["aria-labelledby"],

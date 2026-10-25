@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
+import { actionsColumnSize } from "@j-os/design-system";
 import { expect, test } from "vitest";
 
 import type { Doc } from "../../../convex/_generated/dataModel";
-import { actionsColumnSize } from "../community/columns/RowActions.tsx";
 
-import { eventColumns, formatEventDate } from "./eventColumns.tsx";
+import { eventColumns } from "./eventColumns.tsx";
+import { formatEventDate } from "./eventDate.ts";
 
 const STARTS = Date.UTC(2026, 9, 8, 18);
 const ENDS = Date.UTC(2026, 9, 9, 2);

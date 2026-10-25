@@ -1,53 +1,34 @@
-import { Sheet, PropertyRow } from "@j-os/design-system";
+import {
+	Sheet,
+	createSaveTracker,
+	type SaveTracker,
+} from "@j-os/design-system";
 import { Show, createSignal, type JSX } from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
-import { call } from "../../../lib/call.ts";
+import type { SheetNavState } from "../../../lib/createSheetNav.ts";
 import { createSyncedField } from "../../../lib/createSyncedField.ts";
+import type { SaveWrite } from "../../../lib/reportSave.ts";
 import { useConfirm } from "../../../shared/confirm.tsx";
-import {
-	createActionError,
-	scopeOfFields,
-} from "../../../shared/createActionError.ts";
+import { createEntityDraft } from "../../../shared/entity/entityCommands.ts";
 import { EntityCreateFooter } from "../../../shared/entity/EntityCreateFooter.tsx";
-import {
-	EntitySheetHeader,
-	type SheetNavState,
-} from "../../../shared/entity/EntitySheetHeader.tsx";
-import { ICONS } from "../../../shared/icons.ts";
+import { EntitySheetHeader } from "../../../shared/entity/EntitySheetHeader.tsx";
 import { InlineError } from "../../../shared/InlineError.tsx";
-import type { Category, ItemType } from "../data/inventoryData.ts";
+import type { SheetOpenProps } from "../../../shared/types.ts";
+import type {
+	Category,
+	ItemType,
+	ItemTypePatch,
+} from "../data/inventoryData.ts";
 import { useItemsByType, useItemTypeActions } from "../data/inventoryData.ts";
 import { itemTypeFields } from "../fields.ts";
 
+import { FieldsPlaceholder } from "./FieldsPlaceholder.tsx";
+import { createInventoryCommands } from "./inventoryCommands.ts";
 import { DescriptionValue, NameField, OptionSelect } from "./InventoryForm.tsx";
 import { RelatedListSection } from "./RelatedListSection.tsx";
 
-/**
- * Placeholder field layout shown by `Sheet.Skeleton` while
- * `loading` is true — an open row whose data hasn't arrived yet. Shaped like
- * the loaded field list (mirrors `EventFieldsPlaceholder`); literal
- * "placeholder" text, never real or create-form copy.
- */
-function ItemTypeFieldsPlaceholder() {
-	return (
-		<>
-			<PropertyRow icon={ICONS.name} label="Name">
-				<span>placeholder</span>
-			</PropertyRow>
-			<PropertyRow icon={ICONS.category} label="Category">
-				<span>placeholder</span>
-			</PropertyRow>
-			<PropertyRow icon={ICONS.description} label="Description">
-				<span>placeholder</span>
-			</PropertyRow>
-		</>
-	);
-}
-
-type ItemTypeSheetProps = {
-	open: boolean;
-	onOpenChange: (isOpen: boolean) => void;
+type ItemTypeSheetProps = SheetOpenProps & {
 	itemType?: ItemType;
 	categories: Category[];
 	/** True when the sheet is open for a real row (`requestedId()` set) whose
@@ -60,33 +41,30 @@ type ItemTypeSheetProps = {
 /** The item type's three fields, each saved as it is typed. */
 function createItemTypeFields(
 	props: ItemTypeSheetProps,
-	patch: (change: Record<string, unknown>) => Promise<void>
+	patch: (change: ItemTypePatch) => ReturnType<SaveWrite>,
+	tracker: SaveTracker
 ) {
 	function key() {
 		return `${String(props.open)}:${props.itemType?._id ?? "new"}`;
 	}
+	const sync = { key, open: () => props.open, tracker };
 
 	const name = createSyncedField({
 		remote: () => props.itemType?.name ?? "",
-		key,
-		write: (value) => {
-			void patch({ name: value });
-		},
+		...sync,
+		write: (value) => patch({ name: value }),
 	});
 	const categoryId = createSyncedField<Id<"itemCategories"> | undefined>({
 		remote: () => props.itemType?.categoryId,
-		key,
-		write: (value) => {
-			if (value) void patch({ categoryId: value });
-		},
+		...sync,
+		write: (value) => (value ? patch({ categoryId: value }) : undefined),
 		debounceMs: 0,
 	});
 	const description = createSyncedField({
 		remote: () => props.itemType?.description ?? "",
-		key,
-		write: (value) => {
-			void patch({ description: value.trim() === "" ? null : value });
-		},
+		...sync,
+		write: (value) =>
+			patch({ description: value.trim() === "" ? null : value }),
 	});
 	return { name, categoryId, description };
 }
@@ -95,45 +73,50 @@ function createItemTypeFields(
 function createItemTypeForm(props: ItemTypeSheetProps) {
 	const actions = useItemTypeActions();
 	const confirm = useConfirm();
-	const failure = createActionError();
 
-	async function patch(change: Record<string, unknown>) {
-		const itemType = props.itemType;
-		if (!itemType) return;
-		await failure.trackResult(
-			call(
-				actions.update({ id: itemType._id, ...change }),
-				"Could not save."
-			),
-			scopeOfFields(change)
-		);
-	}
+	const commands = createInventoryCommands<
+		Parameters<typeof actions.create>[0],
+		Id<"itemTypes">,
+		ItemTypePatch
+	>({
+		actions,
+		id: () => props.itemType?._id,
+		onClose: () => {
+			draft.onOpenChange(false);
+		},
+	});
 
-	const fields = createItemTypeFields(props, patch);
+	const saves = createSaveTracker();
+	const fields = createItemTypeFields(props, commands.patch, saves);
+	const draft = createEntityDraft(
+		props,
+		() => props.itemType !== undefined,
+		fields,
+		"new item type"
+	);
 
 	return {
 		...fields,
-		formError: failure.error,
-		/** Forwards the sheet's open state, dropping a stale error on close. */
-		onOpenChange: (isOpen: boolean) => {
-			if (!isOpen) failure.clear();
-			props.onOpenChange(isOpen);
+		/** Spread onto the `Sheet.Root`. */
+		sheet: {
+			...draft.sheet,
+			saveTracker: saves,
+			/** Forwards the sheet's open state, dropping a stale error on
+			 *  close. */
+			onOpenChange: (isOpen: boolean) => {
+				if (!isOpen) commands.failure.clear();
+				draft.onOpenChange(isOpen);
+			},
 		},
+		formError: commands.failure.error,
 		async createItemType() {
 			const selected = fields.categoryId.value();
 			if (!fields.name.value().trim() || selected === undefined) return;
-			const created = await failure.trackResult(
-				call(
-					actions.create({
-						name: fields.name.value(),
-						categoryId: selected,
-						description:
-							fields.description.value().trim() || undefined,
-					}),
-					"Could not create."
-				)
-			);
-			if (created.isOk()) props.onOpenChange(false);
+			await commands.create({
+				name: fields.name.value(),
+				categoryId: selected,
+				description: fields.description.value().trim() || undefined,
+			});
 		},
 		async deleteItemType() {
 			if (!props.itemType) return;
@@ -145,11 +128,7 @@ function createItemTypeForm(props: ItemTypeSheetProps) {
 				tone: "danger",
 			});
 			if (!isOk) return;
-			const itemType = props.itemType;
-			const deleted = await failure.trackResult(
-				call(actions.remove(itemType._id), "Could not delete.")
-			);
-			if (deleted.isOk()) props.onOpenChange(false);
+			await commands.remove(props.itemType._id);
 		},
 	};
 }
@@ -171,6 +150,15 @@ function CreateFooter(props: { form: ReturnType<typeof createItemTypeForm> }) {
 	);
 }
 
+/** The open type's items. Subscribes only while the sheet is open AND an
+ *  existing (saved) type is selected: closed or create-mode passes
+ *  `undefined`, which `useItemsByType` treats as "don't subscribe". */
+function useOpenTypeItems(props: ItemTypeSheetProps) {
+	return useItemsByType(() =>
+		props.open && props.itemType ? props.itemType._id : undefined
+	);
+}
+
 export function ItemTypeSheet(props: ItemTypeSheetProps): JSX.Element {
 	const form = createItemTypeForm(props);
 	// Controlled + onValueChange so the section actually collapses (matches
@@ -184,34 +172,39 @@ export function ItemTypeSheet(props: ItemTypeSheetProps): JSX.Element {
 		return props.itemType !== undefined;
 	}
 
-	// Subscribes only while the sheet is open AND an existing (saved) type is
-	// selected — closed or create-mode passes `undefined`, which
-	// `useItemsByType` treats as "don't subscribe".
-	const itemsQuery = useItemsByType(() =>
-		props.open && props.itemType ? props.itemType._id : undefined
-	);
+	const itemsQuery = useOpenTypeItems(props);
 
 	let nameElement: HTMLInputElement | undefined;
 
 	return (
 		<Sheet.Root
 			open={props.open}
-			morph={props.itemType?._id}
-			onOpenChange={form.onOpenChange}
+			prebuild={props.prebuild}
+			morphId={props.itemType?._id}
+			{...form.sheet}
 			initialFocusEl={() => nameElement ?? null}
 		>
-			<EntitySheetHeader
+			<EntitySheetHeader.Root
 				title={props.itemType?.name ?? "New item type"}
 				loading={props.loading}
 				nav={props.nav}
-				isEdit={isEdit()}
-				deleteLabel="Delete item type"
-				onDelete={() => {
-					void form.deleteItemType();
-				}}
-			/>
+				saveStatus={isEdit() && !props.loading}
+			>
+				<Show when={isEdit()}>
+					<EntitySheetHeader.Delete
+						label="Delete item type"
+						onDelete={() => void form.deleteItemType()}
+					/>
+				</Show>
+			</EntitySheetHeader.Root>
 			<Sheet.Skeleton>
-				<ItemTypeFieldsPlaceholder />
+				<FieldsPlaceholder
+					fields={[
+						itemTypeFields.name,
+						itemTypeFields.categoryName,
+						itemTypeFields.description,
+					]}
+				/>
 			</Sheet.Skeleton>
 			<Sheet.Body loading={props.loading}>
 				<NameField

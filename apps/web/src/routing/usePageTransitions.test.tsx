@@ -10,6 +10,7 @@ import {
 import { cleanup, render, screen } from "@solidjs/testing-library";
 import { afterEach, expect, test, vi } from "vitest";
 
+import { createLeaveGuards } from "./leaveGuards.ts";
 import { usePageTransitions } from "./usePageTransitions.ts";
 
 afterEach(async () => {
@@ -321,4 +322,54 @@ test("guards run twice per animated navigation: first prevented, then the replay
 	go("/b");
 	await screen.findByText("Page B");
 	expect(seen).toEqual([true, false]);
+});
+
+let hold: ((proceed: () => void) => boolean) | undefined;
+
+/** The app shell's order: leave guards first, then page transitions. */
+function GuardedShell(props: { children?: unknown }) {
+	let page: HTMLDivElement | undefined;
+	const guards = createLeaveGuards();
+	usePageTransitions(() => page);
+	guards.add((proceed) => hold?.(proceed) ?? false);
+	const navigate = useNavigate();
+	go = navigate;
+	const location = useLocation();
+	pathname = () => location.pathname;
+	return (
+		<div
+			ref={(element) => {
+				page = element;
+			}}
+		>
+			{props.children as never}
+		</div>
+	);
+}
+
+test("a leave a guard holds starts no transition; going ahead animates it once", async () => {
+	const start = fakeTransition();
+	render(() => (
+		<MemoryRouter root={GuardedShell}>
+			<Route path="/a" component={() => <p>Page A</p>} />
+			<Route path="/b" component={() => <p>Page B</p>} />
+		</MemoryRouter>
+	));
+	go("/a");
+	await screen.findByText("Page A");
+	await settled();
+	start.mockClear();
+	let proceed: (() => void) | undefined;
+	hold = (goOn) => {
+		proceed = goOn;
+		return true;
+	};
+	go("/b");
+	await settled();
+	expect(pathname()).toBe("/a");
+	expect(start).not.toHaveBeenCalled();
+	hold = undefined;
+	proceed?.();
+	expect(await screen.findByText("Page B")).toBeInTheDocument();
+	expect(start).toHaveBeenCalledTimes(1);
 });

@@ -19,14 +19,14 @@ describe("createSheetNav", () => {
 		});
 		expect(nav.hasPrev()).toBe(false);
 		expect(nav.hasNext()).toBe(true);
-		nav.next();
+		nav.onNext();
 		expect(current).toBe("b");
 		expect(nav.hasPrev()).toBe(true);
 		expect(nav.hasNext()).toBe(true);
-		nav.next();
+		nav.onNext();
 		expect(current).toBe("c");
 		expect(nav.hasNext()).toBe(false);
-		nav.prev();
+		nav.onPrev();
 		expect(current).toBe("b");
 	});
 
@@ -40,7 +40,7 @@ describe("createSheetNav", () => {
 		});
 		expect(nav.hasPrev()).toBe(false);
 		expect(nav.hasNext()).toBe(false);
-		nav.prev();
-		nav.next();
+		nav.onPrev();
+		nav.onNext();
 	});
 });

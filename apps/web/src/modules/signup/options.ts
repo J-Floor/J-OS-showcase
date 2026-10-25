@@ -1,69 +1,21 @@
-// Option lists for the public sign-up form. Values mirror the Convex enums
-// (`productStage` / `fundingStage` / `vertical` in convex/schema.ts); labels are
-// written for clarity on the form.
+import type { Infer } from "convex/values";
 
-// Mirrors the `productStage` / `fundingStage` / `vertical` unions in
-// convex/schema.ts. Kept in sync by hand (the frontend can't import the server
-// value validators); src/lib/schema-sync.test.ts fails the typecheck on drift.
-export type ProductStage =
-	| "building"
-	| "prototype"
-	| "mvp"
-	| "traction"
-	| "other";
+import type {
+	fundingStage,
+	productStage,
+	vertical,
+} from "../../../convex/schema.ts";
 
-export type FundingStage =
-	| "bootstrapped"
-	| "angel"
-	| "pre_seed"
-	| "seed"
-	| "series_a"
-	| "other";
+// Option lists for the public sign-up form. Labels are written for clarity on
+// the form; the values are the Convex enums, inferred from their validators.
 
-export type Vertical =
-	| "ai"
-	| "fintech"
-	| "insurtech"
-	| "healthtech"
-	| "biotech"
-	| "climate"
-	| "energy"
-	| "aerospace"
-	| "robotics"
-	| "hardware"
-	| "semiconductors"
-	| "devtools"
-	| "infra"
-	| "security"
-	| "data"
-	| "edtech"
-	| "foodtech"
-	| "agtech"
-	| "proptech"
-	| "legaltech"
-	| "hrtech"
-	| "logistics"
-	| "mobility"
-	| "traveltech"
-	| "martech"
-	| "ecommerce"
-	| "consumer"
-	| "creative"
-	| "web3"
-	| "manufacturing"
-	| "defense"
-	| "materials"
-	| "construction"
-	| "wellness"
-	| "gaming"
-	| "productivity"
-	| "other";
+export type ProductStage = Infer<typeof productStage>;
+export type FundingStage = Infer<typeof fundingStage>;
+export type Vertical = Infer<typeof vertical>;
 
-export type ProductStageOption = { value: ProductStage; label: string };
-export type FundingStageOption = { value: FundingStage; label: string };
-export type VerticalOption = { value: Vertical; label: string };
+type Option<Value extends string> = { value: Value; label: string };
 
-export const productStageOptions: ProductStageOption[] = [
+export const productStageOptions: Option<ProductStage>[] = [
 	{ value: "building", label: "Building — not commercial yet" },
 	{ value: "prototype", label: "Prototype" },
 	{ value: "mvp", label: "MVP / early product" },
@@ -71,7 +23,7 @@ export const productStageOptions: ProductStageOption[] = [
 	{ value: "other", label: "Other" },
 ];
 
-export const fundingStageOptions: FundingStageOption[] = [
+export const fundingStageOptions: Option<FundingStage>[] = [
 	{ value: "bootstrapped", label: "Bootstrapped (not raised)" },
 	{ value: "angel", label: "Raised angel" },
 	{ value: "pre_seed", label: "Raised pre-seed" },
@@ -82,7 +34,7 @@ export const fundingStageOptions: FundingStageOption[] = [
 
 // Authored in any order — `verticalOptions` below is sorted by label at module
 // load, so a new entry can be added anywhere and still shows in the right place.
-const verticalOptionsUnordered: VerticalOption[] = [
+const verticalOptionsUnordered: Option<Vertical>[] = [
 	{ value: "aerospace", label: "Aerospace" },
 	{ value: "agtech", label: "Agtech" },
 	{ value: "ai", label: "AI / ML" },
@@ -124,13 +76,13 @@ const verticalOptionsUnordered: VerticalOption[] = [
 
 /* eslint-disable id-length -- conventional comparator parameter names */
 /** Alphabetical by label, but "Other" always sorts last as a catch-all. */
-function byVerticalLabel(a: VerticalOption, b: VerticalOption): number {
+function byVerticalLabel(a: Option<Vertical>, b: Option<Vertical>): number {
 	if (a.value === "other") return 1;
 	return b.value === "other" ? -1 : a.label.localeCompare(b.label);
 }
 /* eslint-enable id-length -- conventional comparator parameter names */
 
 /** The verticals as shown to users: sorted by label, "Other" pinned last. */
-export const verticalOptions: VerticalOption[] = [
+export const verticalOptions: Option<Vertical>[] = [
 	...verticalOptionsUnordered,
 ].sort(byVerticalLabel);

@@ -1,4 +1,5 @@
 import { Navigate } from "@solidjs/router";
+import type { FunctionReturnType } from "convex/server";
 import { useMutation } from "convex-solidjs";
 import { ok, type Result } from "neverthrow";
 import { Show } from "solid-js";
@@ -25,7 +26,9 @@ import { ONBOARDING_VIEWS } from "./registry.ts";
 export function OnboardingWizardView(props: {
 	person: Doc<"people">;
 	onComplete: () => PromiseLike<Result<unknown, ClientError>>;
-	onResume: () => PromiseLike<Result<{ activated: boolean }, ClientError>>;
+	onResume: () => PromiseLike<
+		Result<FunctionReturnType<typeof api.onboarding.resume>, ClientError>
+	>;
 }) {
 	const { error: completeError, trackResult } = createActionError();
 	/** What each step's button calls; a refusal shows under the step. */

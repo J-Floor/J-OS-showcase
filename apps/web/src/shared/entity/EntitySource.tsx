@@ -7,6 +7,7 @@ import {
 	descriptorModule,
 	prefetchModule,
 } from "../../modules/prefetchModule.ts";
+import type { EntityRow } from "../types.ts";
 
 import {
 	entityPath,
@@ -25,7 +26,7 @@ export type Emit = (items: CommandPaletteItem[]) => void;
  * during that one component-body pass, since Solid components run their body
  * once and never re-invoke it when a signal it plainly read changes.
  */
-function EntitySourceRows<Row extends { _id: string }>(props: {
+function EntitySourceRows<Row extends EntityRow>(props: {
 	descriptor: EntityDescriptor<Row>;
 	emit: Emit;
 }): JSX.Element {
@@ -71,7 +72,7 @@ function EntitySourceRows<Row extends { _id: string }>(props: {
  * `desc.ability.action` `desc.ability.subject` never mounts `useRows()`, so
  * its query is never subscribed and it never emits.
  */
-export function EntitySource<Row extends { _id: string }>(props: {
+export function EntitySource<Row extends EntityRow>(props: {
 	descriptor: EntityDescriptor<Row>;
 	emit: Emit;
 }): JSX.Element {

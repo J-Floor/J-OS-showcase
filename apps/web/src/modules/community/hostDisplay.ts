@@ -1,4 +1,4 @@
-import type { Id } from "../../../convex/_generated/dataModel";
+import type { Doc } from "../../../convex/_generated/dataModel";
 import { staffName, type StaffMember } from "../../shared/data/boardLevel.tsx";
 
 /**
@@ -8,7 +8,7 @@ import { staffName, type StaffMember } from "../../shared/data/boardLevel.tsx";
  */
 export function hostDisplay(
 	staff: StaffMember[] | undefined,
-	person: { hostedById?: Id<"people">; hostedBy?: string }
+	person: Pick<Doc<"people">, "hostedById" | "hostedBy">
 ): { name: string | undefined; loading: boolean } {
 	const id = person.hostedById;
 	const name = id ? staffName(staff, id) : null;

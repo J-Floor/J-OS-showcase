@@ -17,6 +17,7 @@ import { DoorsIntro } from "./modules/onboarding/DoorsIntro.tsx";
 import { WelcomeTour } from "./modules/onboarding/WelcomeTour.tsx";
 import { WhatsNew } from "./modules/onboarding/WhatsNew.tsx";
 import { LastPathTracker, ModuleRoutes, RoleGate } from "./routing/index.tsx";
+import { LeaveGuards, createLeaveGuards } from "./routing/leaveGuards.ts";
 import { usePageTransitions } from "./routing/usePageTransitions.ts";
 import { AppErrorBoundary } from "./shared/AppErrorBoundary.tsx";
 import { Breadcrumbs } from "./shared/components/Breadcrumbs/Breadcrumbs.tsx";
@@ -44,68 +45,72 @@ import { ShortcutPeekButton } from "./shared/ShortcutPeekButton.tsx";
  *  dialog portals to <body>, so wrapping `<main>` changes no layout. */
 function ShellBody(props: ParentProps) {
 	let page: HTMLDivElement | undefined;
+	// First, so a held leave never starts a page transition.
+	const leaveGuards = createLeaveGuards();
 	usePageTransitions(() => page);
 	const location = useLocation();
 	return (
-		<ConfirmProvider>
-			{/* The page's toolbar joins the floating stack on a phone. */}
-			<FloatingStackProvider>
-				<main class={styles.main}>
-					<header class={styles.topbar}>
-						{/* The bar outlives navigation (its breadcrumbs follow the
+		<LeaveGuards.Provider value={leaveGuards}>
+			<ConfirmProvider>
+				{/* The page's toolbar joins the floating stack on a phone. */}
+				<FloatingStackProvider>
+					<main class={styles.main}>
+						<header class={styles.topbar}>
+							{/* The bar outlives navigation (its breadcrumbs follow the
 						    route), so a new path clears a caught error. */}
-						<AppErrorBoundary resetKey={location.pathname}>
-							<Breadcrumbs />
-							<GlobalSearch />
-							{/* Adding a topbar control changes the fold thresholds in
+							<AppErrorBoundary resetKey={location.pathname}>
+								<Breadcrumbs />
+								<GlobalSearch />
+								{/* Adding a topbar control changes the fold thresholds in
 						    breakpoints.scss. */}
-							<div class={styles.topbarActions}>
-								{/* Each action its own control while the bar has
+								<div class={styles.topbarActions}>
+									{/* Each action its own control while the bar has
 							    room; one kebab menu (TopbarMenu) once it does
 							    not. Swapped in CSS by the bar's own width, see
 							    app.module.scss. */}
-								<div class={styles.desktopActions}>
-									<ShortcutPeekButton />
-									<Can I="view" the="Notifications">
-										<NotificationsBell />
-									</Can>
-									<ThemeSwitch />
-									<SignOutButton />
+									<div class={styles.desktopActions}>
+										<ShortcutPeekButton />
+										<Can I="view" the="Notifications">
+											<NotificationsBell />
+										</Can>
+										<ThemeSwitch />
+										<SignOutButton />
+									</div>
+									<div class={styles.foldedMenu}>
+										<TopbarMenu />
+									</div>
 								</div>
-								<div class={styles.foldedMenu}>
-									<TopbarMenu />
-								</div>
-							</div>
-						</AppErrorBoundary>
-					</header>
-					{/* The single scroll region: the shell, sidebar and header stay
+							</AppErrorBoundary>
+						</header>
+						{/* The single scroll region: the shell, sidebar and header stay
 				    fixed; only this scrolls. */}
-					<div
-						class={styles.content}
-						ref={(element) => {
-							page = element;
-						}}
-					>
-						{props.children}
-					</div>
-					{/* Floated at this column's foot (above the phone bottom bar),
+						<div
+							class={styles.content}
+							ref={(element) => {
+								page = element;
+							}}
+						>
+							{props.children}
+						</div>
+						{/* Floated at this column's foot (above the phone bottom bar),
 				    stacked top to bottom; on a phone a page's toolbar joins
 				    under them. */}
-					<FloatingStack>
+						<FloatingStack>
+							<Can I="view" the="Notifications">
+								<NotificationsPrompt />
+							</Can>
+							<InstallPwaPrompt />
+						</FloatingStack>
+						{/* Staff get no notifications: no sheet, and no push re-sync. */}
 						<Can I="view" the="Notifications">
-							<NotificationsPrompt />
+							<AppErrorBoundary>
+								<NotificationsHost />
+							</AppErrorBoundary>
 						</Can>
-						<InstallPwaPrompt />
-					</FloatingStack>
-					{/* Staff get no notifications: no sheet, and no push re-sync. */}
-					<Can I="view" the="Notifications">
-						<AppErrorBoundary>
-							<NotificationsHost />
-						</AppErrorBoundary>
-					</Can>
-				</main>
-			</FloatingStackProvider>
-		</ConfirmProvider>
+					</main>
+				</FloatingStackProvider>
+			</ConfirmProvider>
+		</LeaveGuards.Provider>
 	);
 }
 

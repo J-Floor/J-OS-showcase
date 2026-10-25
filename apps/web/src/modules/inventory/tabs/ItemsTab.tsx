@@ -1,4 +1,4 @@
-import { type TableSelection, Button, Icon } from "@j-os/design-system";
+import { Button, Icon, Table } from "@j-os/design-system";
 import { createEffect, on, type JSX } from "solid-js";
 
 import { call } from "../../../lib/call.ts";
@@ -7,7 +7,7 @@ import { createActionError } from "../../../shared/createActionError.ts";
 import type { EntitySelection } from "../../../shared/entity/createEntitySelection.ts";
 import { ICONS } from "../../../shared/icons.ts";
 import { InlineError } from "../../../shared/InlineError.tsx";
-import { itemColumns } from "../columns/itemColumns.tsx";
+import { createItemColumns } from "../columns/itemColumns.tsx";
 import type { Item } from "../data/inventoryData.ts";
 import {
 	useItemActions,
@@ -17,7 +17,7 @@ import {
 import { printInventoryList } from "../print/printInventoryList.ts";
 import { ItemSheet } from "../sheets/ItemSheet.tsx";
 
-import { InventoryTab } from "./InventoryTab.tsx";
+import { InventoryTab, type InventorySheetArgs } from "./InventoryTab.tsx";
 
 /** The batch Delete: confirms, removes each row, and keeps a failure for the
  *  batch bar, where the delete was asked for. */
@@ -52,71 +52,81 @@ function createBatchDelete() {
 	return { error, clearError: clear, deleteRows };
 }
 
+/** The selection bar's Print and Delete, for the checked items. */
+function ItemBatchActions(): JSX.Element {
+	const batch = Table.useSelection<Item>();
+	const batchDelete = createBatchDelete();
+	const { deleteRows } = batchDelete;
+	// A re-made selection starts without the old selection's failure.
+	createEffect(
+		on(
+			() =>
+				batch
+					.rows()
+					.map((row) => row._id)
+					.join(),
+			batchDelete.clearError
+		)
+	);
+
+	return (
+		<>
+			<Button
+				onClick={() => {
+					const selected = batch.rows();
+					void printInventoryList(selected);
+				}}
+			>
+				<Icon>{ICONS.print}</Icon> Print
+			</Button>
+			<Button
+				variant="secondary"
+				onClick={() => {
+					const selected = batch.rows();
+					void deleteRows(selected, batch.clear);
+				}}
+			>
+				<Icon>{ICONS.delete}</Icon> Delete
+			</Button>
+			<InlineError message={batchDelete.error()} />
+		</>
+	);
+}
+
 export function ItemsTab(props: {
 	selection: EntitySelection<Item>;
 	newItemAssetTag?: () => string | undefined;
 }): JSX.Element {
 	const items = useItems();
 	const types = useItemTypes();
-	const batchDelete = createBatchDelete();
-	const { deleteRows } = batchDelete;
-
-	function batchActions(batch: TableSelection<Item>): JSX.Element {
-		// A re-made selection starts without the old selection's failure.
-		createEffect(
-			on(
-				() =>
-					batch
-						.rows()
-						.map((row) => row._id)
-						.join(),
-				batchDelete.clearError
-			)
-		);
-		return (
-			<>
-				<Button
-					onClick={() => {
-						const selected = batch.rows();
-						void printInventoryList(selected);
-					}}
-				>
-					<Icon>{ICONS.print}</Icon> Print
-				</Button>
-				<Button
-					variant="secondary"
-					onClick={() => {
-						const selected = batch.rows();
-						void deleteRows(selected, batch.clear);
-					}}
-				>
-					<Icon>{ICONS.delete}</Icon> Delete
-				</Button>
-				<InlineError message={batchDelete.error()} />
-			</>
-		);
-	}
+	const columns = createItemColumns(() => items.data() ?? []);
 
 	return (
-		<InventoryTab
+		<InventoryTab.Root
 			data={() => items.data()}
-			columns={() => itemColumns(items.data() ?? [])}
+			columns={columns}
 			selection={props.selection}
 			newItemAssetTag={props.newItemAssetTag}
 			enableRowSelection
-			batchActions={batchActions}
-			renderSheet={(sheet) => (
-				<ItemSheet
-					open={sheet.open()}
-					onOpenChange={sheet.onOpenChange}
-					item={sheet.row()}
-					itemTypes={types.data() ?? []}
-					items={items.data() ?? []}
-					initialAssetTag={sheet.initialAssetTag()}
-					loading={props.selection.loading()}
-					nav={sheet.nav}
-				/>
-			)}
-		/>
+		>
+			<InventoryTab.Sheet<Item>>
+				{(sheet: InventorySheetArgs<Item>) => (
+					<ItemSheet
+						open={sheet.open()}
+						prebuild={sheet.prebuild()}
+						onOpenChange={sheet.onOpenChange}
+						item={sheet.row()}
+						itemTypes={types.data() ?? []}
+						items={items.data() ?? []}
+						initialAssetTag={sheet.initialAssetTag()}
+						loading={props.selection.loading()}
+						nav={sheet.nav}
+					/>
+				)}
+			</InventoryTab.Sheet>
+			<Table.BatchActions>
+				<ItemBatchActions />
+			</Table.BatchActions>
+		</InventoryTab.Root>
 	);
 }

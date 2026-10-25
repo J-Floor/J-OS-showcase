@@ -1,60 +1,43 @@
 import {
 	Avatar,
-	Confetti,
 	Input,
 	Kbd,
 	NumberInput,
 	Skeleton,
+	actionsColumnSize,
 	fieldColumn,
 	type JfColumnDefinition,
 } from "@j-os/design-system";
-import { useMutation } from "convex-solidjs";
+import { makeEventListener } from "@solid-primitives/event-listener";
+import type { FunctionReturnType } from "convex/server";
 import {
 	type Accessor,
 	For,
 	Show,
 	createContext,
-	createSignal,
-	onCleanup,
 	onMount,
 	useContext,
 } from "solid-js";
 
 import { api } from "../../../../convex/_generated/api";
 import type { Doc } from "../../../../convex/_generated/dataModel";
-import type { PersonStatus } from "../../../../convex/lib/derive.ts";
-import { call } from "../../../lib/call.ts";
+import type { PersonRow } from "../../../../convex/people.ts";
 import {
 	FREE_TEXT_SIZE,
 	SHORT_TEXT_SIZE,
 } from "../../../shared/columnSizes.ts";
-import { createActionError } from "../../../shared/createActionError.ts";
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
 import { InlineError } from "../../../shared/InlineError.tsx";
 import { formatDate } from "../../../shared/time.ts";
 import { useApplicationDecisions } from "../actions/applicationDecisions.ts";
 import { personFields } from "../fields.ts";
-import { noteAuthor } from "../noteAuthor.ts";
+import { latestNote, noteAuthor } from "../noteAuthor.ts";
+import { useAddNote } from "../useAddNote.ts";
 
 import styles from "./applicationColumns.module.scss";
-import {
-	actionsColumnSize,
-	RowActionButton,
-	RowActions,
-} from "./RowActions.tsx";
+import { RowActionButton, RowActions } from "./RowActions.tsx";
 import { useScoreDraft } from "./useScoreDraft.ts";
 import { ventureColumns } from "./ventureColumns.tsx";
-
-/**
- * All three tabs read one table and one query shape now, so an application row
- * IS a person row — which is what let the three separate detail sheets become
- * one. Kept as an alias rather than deleted: the name still says which tab's
- * columns these are.
- */
-export type ApplicationRow = Doc<"people"> & {
-	status: PersonStatus;
-	hasAgreement: boolean;
-};
 
 /**
  * Current board member, provided ONCE by the tab. ScoreCells read it from here
@@ -62,7 +45,9 @@ export type ApplicationRow = Doc<"people"> & {
  * every table re-render (e.g. after saving a score) remounts all cells, each
  * spawning a fresh query that suspends, flickering the whole table.
  */
-export type CurrentPerson = Doc<"people"> | null | undefined;
+export type CurrentPerson =
+	| FunctionReturnType<typeof api.people.getCurrentPerson>
+	| undefined;
 function noCurrentPerson(): CurrentPerson {
 	return;
 }
@@ -85,25 +70,18 @@ const DISABLED_REASON: Record<string, string> = {
  * turn down / undo. The decisions themselves — including which are on offer and
  * what each confirms — live in `useApplicationDecisions`, shared with the
  * sheet's decision bar. */
-function ApplicationActions(props: { row: ApplicationRow }) {
+function ApplicationActions(props: { row: PersonRow }) {
 	const decide = useApplicationDecisions();
 	return (
 		<RowActions>
 			<For each={decide.actions()}>
-				{(action) => {
-					const button = (
-						<RowActionButton
-							action={action}
-							row={props.row}
-							disabledReason={DISABLED_REASON[action.id]}
-						/>
-					);
-					return action.id === "member" ? (
-						<Confetti>{button}</Confetti>
-					) : (
-						button
-					);
-				}}
+				{(action) => (
+					<RowActionButton
+						action={action}
+						row={props.row}
+						disabledReason={DISABLED_REASON[action.id]}
+					/>
+				)}
 			</For>
 		</RowActions>
 	);
@@ -132,12 +110,8 @@ function usePointerEditSource(onScrubberRelease: () => void) {
 		source = null;
 	}
 	onMount(() => {
-		document.addEventListener("pointerdown", onDown, true);
-		document.addEventListener("pointerup", onUp, true);
-		onCleanup(() => {
-			document.removeEventListener("pointerdown", onDown, true);
-			document.removeEventListener("pointerup", onUp, true);
-		});
+		makeEventListener(document, "pointerdown", onDown, true);
+		makeEventListener(document, "pointerup", onUp, true);
 	});
 	return () => source;
 }
@@ -152,7 +126,7 @@ function usePointerEditSource(onScrubberRelease: () => void) {
  * dedupes that subscription, and these columns are static module-scope exports
  * so the hooks must live inside the cell component.
  */
-export function ScoreCell(props: { row: ApplicationRow }) {
+export function ScoreCell(props: { row: PersonRow }) {
 	const currentPerson = useContext(CurrentPersonContext);
 	// The score is global — shared by all board members — so it's a single
 	// entry, not one per board member.
@@ -222,41 +196,11 @@ export function NotesCell(props: {
 	showShortcutHint?: boolean;
 }) {
 	const boardLevel = useBoardLevel();
-	const addNote = useMutation(api.people.addNote);
-	const [draft, setDraft] = createSignal("");
-	const { error: noteError, trackResult } = createActionError();
-	let isSaving = false;
-	let refusedText: string | undefined;
-
-	function latest() {
-		const log = props.row.board?.noteLog ?? [];
-		return log.length > 0 ? log[log.length - 1] : undefined;
-	}
-	async function submit(isRetry: boolean): Promise<void> {
-		const text = draft().trim();
-		// Enter and blur both submit; the draft outlives the save, so
-		// without this one note would be sent twice. After a refusal only
-		// Enter sends the same text again, not every blur.
-		if (!text || isSaving || (!isRetry && text === refusedText)) return;
-		isSaving = true;
-		const result = await trackResult(
-			call(
-				addNote.mutateAsync({ id: props.row._id, text }),
-				"Could not save the note."
-			)
-		);
-		isSaving = false;
-		if (result.isErr()) {
-			refusedText = text;
-			return;
-		}
-		refusedText = undefined;
-		setDraft("");
-	}
+	const note = useAddNote(() => props.row._id);
 
 	return (
 		<div class={styles.noteCell} data-note-cell>
-			<Show when={latest()}>
+			<Show when={latestNote(props.row)}>
 				{(entry) => (
 					<div class={styles.latest} title={entry().text}>
 						<Show
@@ -281,7 +225,7 @@ export function NotesCell(props: {
 				label="Add a note"
 				labelHidden
 				placeholder="Add a note…"
-				value={draft()}
+				value={note.draft()}
 				// Peek hint: `N` focuses this composer on the ringed row. `inline`
 				// shows it only while peeking; the CSS limits it to the focused row.
 				// Omitted where the tab doesn't bind `n` (e.g. the Guests tab).
@@ -290,15 +234,19 @@ export function NotesCell(props: {
 						<Kbd shortcut="N" inline class={styles.noteKbd} />
 					) : undefined
 				}
-				onValueChange={(event) => setDraft(event.currentTarget.value)}
+				onValueChange={(event) => {
+					note.setDraft(event.currentTarget.value);
+				}}
 				onKeyDown={(event) => {
 					if (event.key !== "Enter") return;
 					event.preventDefault();
-					void submit(true);
+					note.submit(true);
 				}}
-				onBlur={() => void submit(false)}
+				onBlur={() => {
+					note.submit(false);
+				}}
 			/>
-			<InlineError message={noteError()} />
+			<InlineError message={note.error()} />
 		</div>
 	);
 }
@@ -316,7 +264,9 @@ const triageGroupOptions = [
  * there regardless of score; everything else splits on whether the board has
  * entered a score yet — presence of a value, not its size (a deliberate 0
  * counts as scored). */
-export function triageGroupOf(row: ApplicationRow): string {
+export function triageGroupOf(
+	row: PersonRow
+): (typeof triageGroupOptions)[number]["value"] {
 	if (row.stage === "denied") return "denied";
 	return typeof row.board?.score === "number" ? "queue" : "toScore";
 }
@@ -324,11 +274,11 @@ export function triageGroupOf(row: ApplicationRow): string {
 /** The submission date as the Date column shows it: the explicit
  *  `submittedAt` when present (the seed varies it), else Convex's automatic
  *  `_creationTime`. */
-export function submissionDateText(row: ApplicationRow): string {
+export function submissionDateText(row: PersonRow): string {
 	return formatDate(row.submittedAt ?? row._creationTime);
 }
 
-export function applicationColumns(): JfColumnDefinition<ApplicationRow>[] {
+export function applicationColumns(): JfColumnDefinition<PersonRow>[] {
 	return [
 		{
 			// Hidden grouping column (`Table` hides whatever it groups by): it must
@@ -382,13 +332,10 @@ export function applicationColumns(): JfColumnDefinition<ApplicationRow>[] {
 			size: FREE_TEXT_SIZE,
 			measureText: false,
 			// Sort/filter on the latest note's text — what the cell shows.
-			accessorFn: (row) => {
-				const log = row.board?.noteLog ?? [];
-				return log.length > 0 ? log[log.length - 1].text : "";
-			},
+			accessorFn: (row) => latestNote(row)?.text ?? "",
 			cell: (info) => <NotesCell row={info.row.original} />,
 		}),
-		...ventureColumns<ApplicationRow>(),
+		...ventureColumns<PersonRow>(),
 		{
 			id: "actions",
 			header: "",

@@ -11,7 +11,8 @@ import { okAsync } from "neverthrow";
 import { afterEach, expect, test, vi } from "vitest";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
-import type { GuestRow } from "../columns/guestColumns.tsx";
+import type { PersonRow } from "../../../../convex/people.ts";
+import { DIALOG_CONTENT } from "../../../shared/dialogSelectors.ts";
 
 // Ark's Dialog (the Sheet) mounts a Portal into document.body; unmount it
 // between tests so nodes don't accumulate and slow later queries under load.
@@ -57,7 +58,7 @@ const guestRow = {
 		boardTasks: [],
 		since: "",
 	},
-} as unknown as GuestRow;
+} as unknown as PersonRow;
 
 const guestRow2 = {
 	_id: "p2" as Id<"people">,
@@ -76,7 +77,7 @@ const guestRow2 = {
 		boardTasks: [],
 		since: "",
 	},
-} as unknown as GuestRow;
+} as unknown as PersonRow;
 
 // An expired guest: their status changes (stage flips to "expired") but they
 // must not change TAB — spatial memory matters, so `useGuests` keeps
@@ -98,9 +99,13 @@ const expiredGuestRow = {
 		boardTasks: [],
 		since: "",
 	},
-} as unknown as GuestRow;
+} as unknown as PersonRow;
 
-let guestsData: GuestRow[] | undefined = [guestRow, guestRow2, expiredGuestRow];
+let guestsData: PersonRow[] | undefined = [
+	guestRow,
+	guestRow2,
+	expiredGuestRow,
+];
 
 vi.mock("../data/communityData.tsx", () => ({
 	useGuests: () => ({
@@ -195,10 +200,8 @@ test("sheet body contains no inputs or textareas (read-only)", async () => {
 
 	// Scope the "no inputs" check to the Ark Dialog content panel so we don't
 	// pick up Ark UI internals (like filter inputs) elsewhere in the document.
-	// Ark renders Dialog.Content with data-scope="dialog" data-part="content".
-	const dialogElement = document.querySelector<HTMLElement>(
-		'[data-scope="dialog"][data-part="content"]'
-	);
+	// Ark renders Dialog.Content as DIALOG_CONTENT.
+	const dialogElement = document.querySelector<HTMLElement>(DIALOG_CONTENT);
 	expect(dialogElement).not.toBeNull();
 	// Read-only means the PROFILE is display-only. The one editable control that
 	// remains is the always-available board-notes composer — you can leave a note
@@ -228,9 +231,7 @@ test("sheet has Prev (disabled) and Next arrows; Next advances to second row", a
 	// SheetNav buttons (Previous / Next) within it.
 	// Note: disabled SheetNav buttons are wrapped in MakeDisablable's Tooltip span,
 	// which makes them inaccessible to the standard AT query; use `hidden: true`.
-	const dialogContent = document.querySelector<HTMLElement>(
-		'[data-scope="dialog"][data-part="content"]'
-	);
+	const dialogContent = document.querySelector<HTMLElement>(DIALOG_CONTENT);
 	expect(dialogContent).not.toBeNull();
 
 	// Both arrows render in the sheet header

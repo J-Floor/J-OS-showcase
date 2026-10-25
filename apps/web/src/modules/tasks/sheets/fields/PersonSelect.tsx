@@ -1,18 +1,17 @@
-import { Select } from "@j-os/design-system";
+import { Select, type SelectRootProps } from "@j-os/design-system";
 import type { JSX } from "solid-js";
 
 import type { Id } from "../../../../../convex/_generated/dataModel";
+import { PersonOptions } from "../../../../shared/components/PersonOptions.tsx";
 import type { Person } from "../../data/tasksData.tsx";
 
-import { PersonOptions } from "./PersonOptions.tsx";
-
-export function PersonSelect(props: {
-	label: string;
-	people: Person[];
-	value?: Id<"people">;
-	onChange: (id: Id<"people"> | undefined) => void;
-	placeholder?: string;
-}): JSX.Element {
+export function PersonSelect(
+	props: Pick<SelectRootProps, "label" | "placeholder"> & {
+		people: Person[];
+		value?: Id<"people">;
+		onChange: (id: Id<"people"> | undefined) => void;
+	}
+): JSX.Element {
 	return (
 		<Select.Root
 			label={props.label}

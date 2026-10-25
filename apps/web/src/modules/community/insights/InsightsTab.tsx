@@ -1,6 +1,7 @@
-import { Chart, Skeleton, type ChartDatum } from "@j-os/design-system";
-import { For, createMemo, type JSX } from "solid-js";
+import { Chart, type ChartDatum, type ChartProps } from "@j-os/design-system";
+import { For, Show, createMemo, type JSX } from "solid-js";
 
+import type { PersonRow } from "../../../../convex/people.ts";
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
 import {
 	useApplications,
@@ -18,7 +19,6 @@ import {
 	hostLoad,
 	joinsPerMonth,
 	verticalMix,
-	type PersonRow,
 } from "./metrics.ts";
 import { MetricTile } from "./MetricTile.tsx";
 
@@ -97,156 +97,107 @@ function useInsightMetrics() {
 	};
 }
 
-function RunwayCard(props: {
-	data: ChartDatum[];
-	loading: boolean;
-}): JSX.Element {
-	return (
-		<ChartCard
-			loading={props.loading}
-			title="Guest windows closing"
-			hint="Next twelve weeks. A spike is a week where several people lose the door at once."
-		>
-			<Chart
-				data={props.data}
-				xKey="week"
-				series={[{ key: "expiring", label: "Guests", kind: "bar" }]}
-				label="Guest windows closing over the next twelve weeks"
-			>
-				<Chart.Empty>No guest windows are set to close.</Chart.Empty>
-			</Chart>
-		</ChartCard>
-	);
-}
+type InsightMetrics = ReturnType<typeof useInsightMetrics>;
 
-function InboundCard(props: {
-	data: ChartDatum[];
-	loading: boolean;
-}): JSX.Element {
-	return (
-		<ChartCard
-			loading={props.loading}
-			title="Applications received"
-			hint="By month submitted, counting everyone who applied — including the ones since approved."
-		>
-			<Chart
-				data={props.data}
-				xKey="month"
-				series={[
-					{
-						key: "applications",
-						label: "Applications",
-						kind: "bar",
-					},
-				]}
-				label="Applications received per month"
-			/>
-		</ChartCard>
-	);
-}
+/** What each chart card shows. The cards differ only in copy and series, so
+ *  they are rows here rather than five components. */
+const CHART_CARDS: {
+	title: string;
+	hint: string;
+	/** Replaces the chart's default message when there is nothing to plot. */
+	emptyCopy?: string;
+	chart: Pick<ChartProps, "xKey" | "series" | "label">;
+	data: (metrics: InsightMetrics) => ChartDatum[];
+	loading: (metrics: InsightMetrics) => boolean;
+}[] = [
+	{
+		title: "Guest windows closing",
+		hint: "Next twelve weeks. A spike is a week where several people lose the door at once.",
+		emptyCopy: "No guest windows are set to close.",
+		chart: {
+			xKey: "week",
+			series: [{ key: "expiring", label: "Guests", kind: "bar" }],
+			label: "Guest windows closing over the next twelve weeks",
+		},
+		data: (metrics) => metrics.runway(),
+		loading: (metrics) => metrics.rostersLoading(),
+	},
+	{
+		title: "Applications received",
+		hint: "By month submitted, counting everyone who applied — including the ones since approved.",
+		chart: {
+			xKey: "month",
+			series: [
+				{ key: "applications", label: "Applications", kind: "bar" },
+			],
+			label: "Applications received per month",
+		},
+		data: (metrics) => metrics.inbound(),
+		loading: (metrics) => metrics.rostersLoading(),
+	},
+	{
+		title: "Access granted",
+		hint: "When the people here now first got in. Departures are not in this — it is arrivals, not net growth.",
+		chart: {
+			xKey: "month",
+			series: [
+				{
+					key: "members",
+					label: "Members",
+					kind: "bar",
+					stack: "joins",
+				},
+				{ key: "guests", label: "Guests", kind: "bar", stack: "joins" },
+			],
+			label: "People granted access per month, members and guests",
+		},
+		data: (metrics) => metrics.joins(),
+		loading: (metrics) => metrics.rostersLoading(),
+	},
+	{
+		title: "Who is hosting",
+		hint: "Guests vouched for, per board member. Hosting is the one obligation the board takes on personally.",
+		emptyCopy: "No guests are hosted yet.",
+		chart: {
+			xKey: "host",
+			series: [{ key: "guests", label: "Guests", kind: "bar" }],
+			label: "Guests per host",
+		},
+		data: (metrics) => metrics.hosts(),
+		loading: (metrics) => metrics.hostsLoading(),
+	},
+	{
+		title: "What the floor is building",
+		hint: "People count once per vertical they picked, so the total is larger than the head count.",
+		emptyCopy: "No one has picked a vertical yet.",
+		chart: {
+			xKey: "vertical",
+			series: [{ key: "people", label: "People", kind: "bar" }],
+			label: "People per vertical",
+		},
+		data: (metrics) => metrics.verticals(),
+		loading: (metrics) => metrics.rostersLoading(),
+	},
+];
 
-function JoinsCard(props: {
-	data: ChartDatum[];
-	loading: boolean;
-}): JSX.Element {
-	return (
-		<ChartCard
-			loading={props.loading}
-			title="Access granted"
-			hint="When the people here now first got in. Departures are not in this — it is arrivals, not net growth."
-		>
-			<Chart
-				data={props.data}
-				xKey="month"
-				series={[
-					{
-						key: "members",
-						label: "Members",
-						kind: "bar",
-						stack: "joins",
-					},
-					{
-						key: "guests",
-						label: "Guests",
-						kind: "bar",
-						stack: "joins",
-					},
-				]}
-				label="People granted access per month, members and guests"
-			/>
-		</ChartCard>
-	);
-}
-
-function HostsCard(props: {
-	data: ChartDatum[];
-	loading: boolean;
-}): JSX.Element {
-	return (
-		<ChartCard
-			loading={props.loading}
-			title="Who is hosting"
-			hint="Guests vouched for, per board member. Hosting is the one obligation the board takes on personally."
-		>
-			<Chart
-				data={props.data}
-				xKey="host"
-				series={[{ key: "guests", label: "Guests", kind: "bar" }]}
-				label="Guests per host"
-			>
-				<Chart.Empty>No guests are hosted yet.</Chart.Empty>
-			</Chart>
-		</ChartCard>
-	);
-}
-
-function VerticalsCard(props: {
-	data: ChartDatum[];
-	loading: boolean;
-}): JSX.Element {
-	return (
-		<ChartCard
-			loading={props.loading}
-			title="What the floor is building"
-			hint="People count once per vertical they picked, so the total is larger than the head count."
-		>
-			<Chart
-				data={props.data}
-				xKey="vertical"
-				series={[{ key: "people", label: "People", kind: "bar" }]}
-				label="People per vertical"
-			>
-				<Chart.Empty>No one has picked a vertical yet.</Chart.Empty>
-			</Chart>
-		</ChartCard>
-	);
-}
-
-function InsightCharts(props: {
-	metrics: ReturnType<typeof useInsightMetrics>;
-}): JSX.Element {
+function InsightCharts(props: { metrics: InsightMetrics }): JSX.Element {
 	return (
 		<section class={styles.charts}>
-			<RunwayCard
-				data={props.metrics.runway()}
-				loading={props.metrics.rostersLoading()}
-			/>
-			<InboundCard
-				data={props.metrics.inbound()}
-				loading={props.metrics.rostersLoading()}
-			/>
-			<JoinsCard
-				data={props.metrics.joins()}
-				loading={props.metrics.rostersLoading()}
-			/>
-			<HostsCard
-				data={props.metrics.hosts()}
-				loading={props.metrics.hostsLoading()}
-			/>
-			<VerticalsCard
-				data={props.metrics.verticals()}
-				loading={props.metrics.rostersLoading()}
-			/>
+			<For each={CHART_CARDS}>
+				{(card) => (
+					<ChartCard
+						title={card.title}
+						hint={card.hint}
+						loading={card.loading(props.metrics)}
+					>
+						<Chart {...card.chart} data={card.data(props.metrics)}>
+							<Show when={card.emptyCopy}>
+								{(copy) => <Chart.Empty>{copy()}</Chart.Empty>}
+							</Show>
+						</Chart>
+					</ChartCard>
+				)}
+			</For>
 		</section>
 	);
 }
@@ -273,13 +224,8 @@ export function InsightsTab(): JSX.Element {
 					{(tile) => (
 						<MetricTile
 							label={tile.label}
-							value={
-								metrics.rostersLoading() ? (
-									<Skeleton width="short" />
-								) : (
-									tile.value
-								)
-							}
+							value={tile.value}
+							loading={metrics.rostersLoading()}
 							detail={tile.detail}
 							tone={tile.tone}
 						/>

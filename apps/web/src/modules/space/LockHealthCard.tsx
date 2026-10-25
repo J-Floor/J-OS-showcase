@@ -1,17 +1,15 @@
 import { useAction } from "convex-solidjs";
-import {
-	For,
-	Show,
-	createSignal,
-	onCleanup,
-	onMount,
-	type JSX,
-} from "solid-js";
+import { For, Show, createSignal, onMount, type JSX } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
 import { call } from "../../lib/call.ts";
+import { createVisiblePoll } from "../../lib/createVisiblePoll.ts";
 
-import { lockHealthSummary, type DoorHealth } from "./lockHealth.ts";
+import {
+	lockHealthSummary,
+	type DoorHealth,
+	type LockHealthSummary,
+} from "./lockHealth.ts";
 import styles from "./LockHealthCard.module.scss";
 import { SpaceCard } from "./SpaceCard.tsx";
 
@@ -37,23 +35,9 @@ function createLockHealthPolling() {
 		setFailure(result.isErr() ? result.error.message : null);
 	}
 
-	function onVisibilityChange() {
-		if (document.visibilityState === "visible") void check();
-	}
-
 	onMount(() => {
 		void check();
-		const timer = setInterval(() => {
-			if (document.visibilityState === "visible") void check();
-		}, POLL_MS);
-		document.addEventListener("visibilitychange", onVisibilityChange);
-		onCleanup(() => {
-			clearInterval(timer);
-			document.removeEventListener(
-				"visibilitychange",
-				onVisibilityChange
-			);
-		});
+		createVisiblePoll(() => void check(), POLL_MS);
 	});
 	return { reading, failure };
 }
@@ -78,69 +62,71 @@ export function LockHealthCard(): JSX.Element {
 	}
 	// While loading, and if the check fails, there is no summary — fall back to a
 	// tone the card can still colour by.
-	function tone(): "neutral" | "error" {
+	function tone(): LockHealthSummary["tone"] {
 		return summary()?.tone ?? (failure() ? "error" : "neutral");
 	}
 
 	return (
-		<SpaceCard
-			title="Doors"
-			helpText="Whether the space's smart locks are reachable right now."
-			note={
-				// The per-lock list below already names each door's state, so
-				// the summary line only shows when there is no list.
-				<Show when={!(summary() && reading()?.locks)}>
-					<p class={styles.note} data-tone={tone()}>
+		<SpaceCard.Root>
+			<SpaceCard.Header title="Doors" />
+			<SpaceCard.Help>
+				Whether the space's smart locks are reachable right now.
+			</SpaceCard.Help>
+			<SpaceCard.Body>
+				<div class={styles.stack}>
+					<div class={styles.value} data-tone={tone()}>
 						<Show
 							when={summary()}
-							fallback={failure() ?? "Checking door status…"}
-						>
-							{(loadedSummary) => loadedSummary().detail}
-						</Show>
-					</p>
-				</Show>
-			}
-		>
-			<div class={styles.stack}>
-				<div class={styles.value} data-tone={tone()}>
-					<Show
-						when={summary()}
-						fallback={
-							<span class={styles.num}>
-								{failure() ? "?" : "…"}
-							</span>
-						}
-					>
-						{(loadedSummary) => (
-							<>
+							fallback={
 								<span class={styles.num}>
-									{loadedSummary().value}
+									{failure() ? "?" : "…"}
 								</span>
-								<span class={styles.label}>doors online</span>
-							</>
+							}
+						>
+							{(loadedSummary) => (
+								<>
+									<span class={styles.num}>
+										{loadedSummary().value}
+									</span>
+									<span class={styles.label}>
+										doors online
+									</span>
+								</>
+							)}
+						</Show>
+					</div>
+					<Show when={summary() && reading()}>
+						{(loaded) => (
+							<ul class={styles.locks}>
+								<For each={loaded().locks}>
+									{(lock) => (
+										<li
+											class={styles.lock}
+											data-online={
+												lock.online ? "true" : "false"
+											}
+										>
+											{lock.name}
+											{lock.online
+												? " online"
+												: " offline"}
+										</li>
+									)}
+								</For>
+							</ul>
 						)}
 					</Show>
 				</div>
-				<Show when={summary() && reading()?.locks}>
-					{(locks) => (
-						<ul class={styles.locks}>
-							<For each={locks()}>
-								{(lock) => (
-									<li
-										class={styles.lock}
-										data-online={
-											lock.online ? "true" : "false"
-										}
-									>
-										{lock.name}
-										{lock.online ? " online" : " offline"}
-									</li>
-								)}
-							</For>
-						</ul>
-					)}
+			</SpaceCard.Body>
+			<SpaceCard.Note>
+				{/* The per-lock list below already names each door's state, so
+				    the status line only shows until there is one. */}
+				<Show when={!summary()}>
+					<p class={styles.note} data-tone={tone()}>
+						{failure() ?? "Checking door status…"}
+					</p>
 				</Show>
-			</div>
-		</SpaceCard>
+			</SpaceCard.Note>
+		</SpaceCard.Root>
 	);
 }

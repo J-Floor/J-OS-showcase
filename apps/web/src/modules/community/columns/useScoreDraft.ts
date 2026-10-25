@@ -1,10 +1,15 @@
+import { useSaveTracker } from "@j-os/design-system";
+import type { FunctionArgs } from "convex/server";
 import { useMutation } from "convex-solidjs";
 import { createSignal } from "solid-js";
 
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { call } from "../../../lib/call.ts";
+import { reportSave } from "../../../lib/reportSave.ts";
 import { createActionError } from "../../../shared/createActionError.ts";
+
+const SCORE_FIELD = "score";
 
 /**
  * The half-typed score a board member is editing, and how it reaches the
@@ -13,7 +18,8 @@ import { createActionError } from "../../../shared/createActionError.ts";
  *
  * While editing, the field shows the draft; otherwise it mirrors the server.
  * The draft is cleared only once the server has the value, so the field never
- * flashes back to the old score between commit and refetch.
+ * flashes back to the old score between commit and refetch. Inside a sheet the
+ * save reports to its save status.
  */
 export function useScoreDraft(options: {
 	personId: () => Id<"people">;
@@ -21,6 +27,7 @@ export function useScoreDraft(options: {
 	canScore: () => boolean;
 }) {
 	const setScore = useMutation(api.applications.setScore);
+	const tracked = useSaveTracker()?.track(SCORE_FIELD);
 	const [draft, setDraft] = createSignal<string | null>(null);
 	const { error, trackResult } = createActionError(options.personId);
 
@@ -31,16 +38,25 @@ export function useScoreDraft(options: {
 		return score === undefined ? "" : String(score);
 	}
 
-	async function save(args: {
-		personId: Id<"people">;
-		value?: number;
-	}): Promise<void> {
-		await trackResult(
-			call(setScore.mutateAsync(args), "Could not save the score.")
+	function save(args: FunctionArgs<typeof api.applications.setScore>): void {
+		reportSave(
+			tracked,
+			() =>
+				trackResult(
+					call(
+						setScore.mutateAsync(args),
+						"Could not save the score."
+					)
+				).then((result) => {
+					// Err or Ok, the field goes back to mirroring the server: on
+					// a refusal that is the score the board still has, not the
+					// one that was typed.
+					setDraft(null);
+					return result;
+				}),
+			// The field shows its own refusal; a closed sheet needs no toast.
+			() => true
 		);
-		// Err or Ok, the field goes back to mirroring the server: on a refusal
-		// that is the score the board still has, not the one that was typed.
-		setDraft(null);
 	}
 
 	function commit(): void {
@@ -55,7 +71,7 @@ export function useScoreDraft(options: {
 				setDraft(null);
 				return;
 			}
-			void save({ personId: options.personId() });
+			save({ personId: options.personId() });
 			return;
 		}
 		const parsed = Number(value);
@@ -63,7 +79,7 @@ export function useScoreDraft(options: {
 			setDraft(null);
 			return;
 		}
-		void save({ personId: options.personId(), value: parsed });
+		save({ personId: options.personId(), value: parsed });
 	}
 
 	return { draft, setDraft, display, commit, error };

@@ -1,6 +1,15 @@
+import type { FunctionReturnType } from "convex/server";
+
+import type { api } from "../../../convex/_generated/api";
 import { type DoorAction } from "../../../convex/lib/doorProvider.ts";
 import { ICONS } from "../../shared/icons.ts";
 import { MS_PER_SECOND } from "../../shared/time.ts";
+
+/** Why the server did not accept a door action: every status but "ok". */
+export type RefusalStatus = Exclude<
+	FunctionReturnType<typeof api.doorActions.unlockDoor>,
+	{ status: "ok" }
+>["status"];
 
 export const SENDING_TEXT = "Sending…";
 export const WAKING_TEXT = "Waking the door…";
@@ -56,7 +65,7 @@ export function offlineText(label: string): string {
 
 /** Copy for the statuses the unlock and lock actions return besides "ok". */
 export function resultText(
-	status: "offline" | "busy" | "debounced",
+	status: RefusalStatus,
 	label: string,
 	action: DoorAction
 ): string {

@@ -92,15 +92,16 @@ export function TasksTab(props: {
 	// Bidirectional deep-linking: opening a task writes `?task=<id>`; an
 	// inbound `?task=<id>` opens it (switching to this tab first via
 	// `onNeedTab` if needed); closing clears the param.
+	const selection = createEntitySelection<Doc<"tasks">>({
+		rows: tasks.data,
+		param: "task",
+		active: () => props.active(),
+		onNeedTab: (slug) => {
+			props.onNeedTab(slug);
+		},
+	});
 	const { selected, requestedId, open, loading, openRow, openCreate, close } =
-		createEntitySelection<Doc<"tasks">>({
-			rows: tasks.data,
-			param: "task",
-			active: () => props.active(),
-			onNeedTab: (slug) => {
-				props.onNeedTab(slug);
-			},
-		});
+		selection;
 
 	// Leaving this tab abandons whatever it had open — `writeParam` inside the
 	// selection itself is a no-op once `active` is already false, so it can't
@@ -152,10 +153,12 @@ export function TasksTab(props: {
 				people={boardLevel.data() ?? []}
 				projects={projects.data() ?? []}
 				onCardClick={openRow}
+				onCardHoverIntent={selection.intend}
 				onAddTask={addToColumn}
 			/>
 			<TaskSheet
 				open={open()}
+				prebuild={selection.prebuild()}
 				onOpenChange={(isOpen) => {
 					if (!isOpen) close();
 				}}
@@ -164,12 +167,7 @@ export function TasksTab(props: {
 				initialStatus={createStatus()}
 				people={boardLevel.data() ?? []}
 				projects={projects.data() ?? []}
-				nav={{
-					hasPrev: nav.hasPrev,
-					hasNext: nav.hasNext,
-					onPrev: nav.prev,
-					onNext: nav.next,
-				}}
+				nav={nav}
 			/>
 		</div>
 	);

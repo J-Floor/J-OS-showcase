@@ -5,7 +5,6 @@ import {
 	Icon,
 	Table,
 } from "@j-os/design-system";
-import { Show } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
 import type { Doc } from "../../../convex/_generated/dataModel";
@@ -31,11 +30,19 @@ export function EventsPage() {
 	const events = useQuery(api.events.listEvents, {});
 	const prefetchRow = useRowPrefetch(eventsEntity);
 
-	const { selected, loading, open, openRow, openCreate, close } =
-		createEntitySelection<Doc<"events">>({
-			rows: events.data,
-			param: "event",
-		});
+	const {
+		selected,
+		loading,
+		open,
+		openRow,
+		openCreate,
+		close,
+		prebuild,
+		intend,
+	} = createEntitySelection<Doc<"events">>({
+		rows: events.data,
+		param: "event",
+	});
 
 	return (
 		<div class={styles.console}>
@@ -49,33 +56,34 @@ export function EventsPage() {
 				</Can>
 			</div>
 			<div class={styles.panel}>
-				<Show
-					when={events.data()?.length !== 0}
-					fallback={
+				<Table.Root
+					columns={eventColumns()}
+					data={events.data()}
+					getRowId={(row) => row._id}
+					initialColumnSorting={EVENTS_DEFAULT_SORT}
+					groupBy="phase"
+					focusableRows
+					suppressFocus={open()}
+					onRowClick={openRow}
+					onRowActivate={openRow}
+					onRowHoverIntent={(row) => {
+						prefetchRow(row);
+						intend();
+					}}
+					onFocusedRowChange={prefetchRow}
+				>
+					<Table.Empty>
 						<EmptyState
 							icon={ICONS.events}
 							title="No events yet"
 							description="Create one to get a visitor QR code."
 						/>
-					}
-				>
-					<Table.Root
-						columns={eventColumns()}
-						data={events.data()}
-						getRowId={(row) => row._id}
-						initialColumnSorting={EVENTS_DEFAULT_SORT}
-						groupBy="phase"
-						focusableRows
-						suppressFocus={open()}
-						onRowClick={openRow}
-						onRowActivate={openRow}
-						onRowHoverIntent={prefetchRow}
-						onFocusedRowChange={prefetchRow}
-					/>
-				</Show>
+					</Table.Empty>
+				</Table.Root>
 			</div>
 			<EventSheet
 				open={open()}
+				prebuild={prebuild()}
 				onOpenChange={(isOpen) => {
 					if (!isOpen) close();
 				}}

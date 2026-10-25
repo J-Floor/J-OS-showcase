@@ -18,7 +18,7 @@ const BOARD_ONLY_TABS = [
 	{ value: "diagnostics", label: "Diagnostics" },
 ] as const;
 
-type TabEntry = { value: string; label: string };
+type TabEntry = (typeof INFO_TABS | typeof BOARD_ONLY_TABS)[number];
 
 /** Which tabs this person sees: Access always, Rules for anyone who can view
  *  the space info, Diagnostics for the board. */

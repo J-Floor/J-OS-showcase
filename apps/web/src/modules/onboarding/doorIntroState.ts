@@ -1,10 +1,12 @@
+import type { Doc } from "../../../convex/_generated/dataModel";
 import {
 	doorOpensFor,
 	type LifecyclePerson,
 } from "../../../convex/lib/derive.ts";
 
 /** What the doors-intro decision reads off a person row. */
-export type DoorsIntroPerson = LifecyclePerson & { doorsIntroSeenAt?: number };
+export type DoorsIntroPerson = LifecyclePerson &
+	Pick<Doc<"people">, "doorsIntroSeenAt">;
 
 /**
  * Whether the one-time "Getting in" intro is still owed to this person: their

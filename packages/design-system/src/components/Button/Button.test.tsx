@@ -340,3 +340,24 @@ test("triggerProps keep the outer machine's handler and attributes beside the Bu
 	fireEvent.click(button);
 	expect(calls).toEqual(["trigger", "own"]);
 });
+
+test("a shortcut names its key on the button", () => {
+	render(() => <Button shortcut="Shift+D">Turn down</Button>);
+	expect(screen.getByRole("button")).toHaveAttribute(
+		"aria-keyshortcuts",
+		"Shift+D"
+	);
+});
+
+test("no shortcut, no aria-keyshortcuts", () => {
+	render(() => <Button>Save</Button>);
+	expect(screen.getByRole("button")).not.toHaveAttribute("aria-keyshortcuts");
+});
+
+test("without a shortcut, a caller's own aria-keyshortcuts is kept", () => {
+	render(() => <Button aria-keyshortcuts="Control+S">Save</Button>);
+	expect(screen.getByRole("button")).toHaveAttribute(
+		"aria-keyshortcuts",
+		"Control+S"
+	);
+});

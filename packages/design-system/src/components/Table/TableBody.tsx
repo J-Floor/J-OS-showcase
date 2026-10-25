@@ -3,8 +3,17 @@
  * flat rows, or the grouped rows — all of them, or the virtual window with a
  * pad row above and below.
  */
+import { Key } from "@solid-primitives/keyed";
+import type { Row as TanRow } from "@tanstack/solid-table";
 import type { VirtualItem } from "@tanstack/solid-virtual";
-import { type Accessor, type JSX, For, Show, createMemo } from "solid-js";
+import {
+	type Accessor,
+	type JSX,
+	Show,
+	createEffect,
+	createMemo,
+	on,
+} from "solid-js";
 
 import { Deferred } from "../Deferred/Deferred.tsx";
 
@@ -69,26 +78,55 @@ function LoadingMoreRows<Data extends Record<string, unknown>>(body: {
 	);
 }
 
+/** What a virtual item is kept by across refreshes: its group's key or its
+ *  row's id, apart so the two never collide. An index stands in while the
+ *  item is missing (a window frozen over fewer items). */
+function virtualItemKey<Data extends Record<string, unknown>>(
+	context: BodyContext<Data>,
+	index: number
+): string {
+	const item = context.renderItems().at(index);
+	if (!item) return `index:${String(index)}`;
+	return item.kind === "group"
+		? `group:${item.group.key}`
+		: `row:${context.rowId(item.row)}`;
+}
+
 /** One rendered virtual item: a group header or a data row, reporting its
- *  height through `measure`. */
+ *  height through `measure`. The item's kind is fixed by its key; its
+ *  index and its data are read live, and the last one is kept while the
+ *  item is missing. */
 function renderVirtualItem<Data extends Record<string, unknown>>(
 	context: BodyContext<Data>,
-	resolved: RenderItem<Data>,
-	index: number,
+	index: Accessor<number>,
 	measure: (element: HTMLTableRowElement) => void
 ): JSX.Element {
+	const resolved = createMemo<RenderItem<Data> | undefined>(
+		(last) => context.renderItems().at(index()) ?? last
+	);
 	// Narrowed before the branch: `Show`'s `when` takes a value, not a
 	// predicate, so testing `kind` inline would leave both arms holding the
 	// union.
-	const group = resolved.kind === "group" ? resolved.group : undefined;
-	const row = resolved.kind === "row" ? resolved.row : undefined;
+	function group() {
+		const item = resolved();
+		return item?.kind === "group" ? item.group : undefined;
+	}
+	function row() {
+		const item = resolved();
+		return item?.kind === "row" ? item.row : undefined;
+	}
 	return (
 		<Show
-			when={group}
+			when={group()}
 			fallback={
-				<Show when={row}>
+				<Show when={row()}>
 					{(leaf) =>
-						renderRow(context, leaf(), { index, ref: measure })
+						renderRow(context, leaf, {
+							get index() {
+								return index();
+							},
+							ref: measure,
+						})
 					}
 				</Show>
 			}
@@ -97,7 +135,7 @@ function renderVirtualItem<Data extends Record<string, unknown>>(
 				<GroupHeaderRow
 					context={context}
 					group={header()}
-					index={index}
+					index={index()}
 					ref={measure}
 				/>
 			)}
@@ -192,13 +230,18 @@ function VirtualBody<Data extends Record<string, unknown>>(body: {
 			<Show when={padTop() > 0}>
 				<PadRow height={padTop()} />
 			</Show>
-			<For each={items()}>
+			{/* Kept by group key or row id, like the plain body: a refresh,
+			    a sort or a collapse moves a row's `<tr>` rather than
+			    rebuilding it, so a box a morph names inside it survives. */}
+			<Key
+				each={items()}
+				by={(virtualRow) =>
+					virtualItemKey(body.context, virtualRow.index)
+				}
+			>
 				{(virtualRow) => {
-					// Re-read by index rather than closing over the item:
-					// sorting, filtering and collapsing all reshuffle the
-					// list under a stable set of virtual indexes.
-					function item(): RenderItem<Data> | undefined {
-						return body.context.renderItems()[virtualRow.index];
+					function index(): number {
+						return virtualRow().index;
 					}
 					// Every rendered row reports its real height back, so a
 					// wrapped cell does not throw off the spacers.
@@ -209,11 +252,11 @@ function VirtualBody<Data extends Record<string, unknown>>(body: {
 					// `data-index` back as null and warned on every row —
 					// hence stamping it here. And measuring writes to the
 					// virtualiser, which re-runs this very list: doing that
-					// synchronously inside the render re-entered `For`
+					// synchronously inside the render re-entered the list
 					// mid-update and blew up on a row that no longer
 					// existed. The microtask lets the render finish first.
-					function measure(element: HTMLTableRowElement): void {
-						element.dataset.index = String(virtualRow.index);
+					let measured: HTMLTableRowElement | undefined;
+					function report(element: HTMLTableRowElement): void {
 						queueMicrotask(() => {
 							if (element.isConnected)
 								body.context.rows.virtualizer.measureElement(
@@ -221,34 +264,45 @@ function VirtualBody<Data extends Record<string, unknown>>(body: {
 								);
 						});
 					}
-					// `keyed` is load-bearing. A plain `Show` runs its
-					// callback ONCE, when the condition first turns truthy,
-					// and never again while it merely changes from one
-					// truthy value to another — so a row rendered here kept
-					// its original cells forever. A row's flag changed on
-					// the server, the data pushed a fresh row model, and
-					// the table went on showing the old flag. `keyed`
-					// re-renders whenever the item's identity changes, which
-					// (given the memo above) is exactly when it should.
-					return (
-						<Show when={item()} keyed>
-							{(resolved) =>
-								renderVirtualItem(
-									body.context,
-									resolved,
-									virtualRow.index,
-									measure
-								)
-							}
-						</Show>
+					function measure(element: HTMLTableRowElement): void {
+						measured = element;
+						element.dataset.index = String(index());
+						report(element);
+					}
+					// A kept row that moves (a sort, a collapse above it)
+					// reports its height again at its new index: the
+					// virtualiser caches heights by index, and its resize
+					// observer only fires on a size change.
+					createEffect(
+						on(
+							index,
+							() => {
+								if (measured) report(measured);
+							},
+							{ defer: true }
+						)
 					);
+					return renderVirtualItem(body.context, index, measure);
 				}}
-			</For>
+			</Key>
 			<Show when={padBottom() > 0}>
 				<PadRow height={padBottom()} />
 			</Show>
 			<LoadingMoreRows context={body.context} />
 		</>
+	);
+}
+
+/** Rows rendered by id: each `<tr>` is kept across data refreshes and reads
+ *  its fresh `Row` through the accessor. */
+function KeyedRows<Data extends Record<string, unknown>>(body: {
+	context: BodyContext<Data>;
+	rows: Accessor<readonly TanRow<Data>[]>;
+}): JSX.Element {
+	return (
+		<Key each={body.rows()} by={(row) => body.context.rowId(row)}>
+			{(row) => renderRow(body.context, row)}
+		</Key>
 	);
 }
 
@@ -261,9 +315,10 @@ function FlatBody<Data extends Record<string, unknown>>(body: {
 			fallback={<EmptyRow context={body.context} />}
 		>
 			<>
-				<For each={body.context.table.getRowModel().rows}>
-					{(row) => renderRow(body.context, row)}
-				</For>
+				<KeyedRows
+					context={body.context}
+					rows={() => body.context.table.getRowModel().rows}
+				/>
 				<LoadingMoreRows context={body.context} />
 			</>
 		</Show>
@@ -310,30 +365,33 @@ function GroupedBody<Data extends Record<string, unknown>>(body: {
 						when={body.context.rows.virtualizing()}
 						fallback={
 							<>
-								<For each={body.context.groups.rowGroups()}>
-									{(group) => (
-										<>
-											<GroupHeaderRow
-												context={body.context}
-												group={group}
-											/>
-											<Show
-												when={body.context.groups.isGroupExpanded(
-													group.key
-												)}
-											>
-												<For each={group.rows}>
-													{(row) =>
-														renderRow(
-															body.context,
-															row
-														)
-													}
-												</For>
-											</Show>
-										</>
-									)}
-								</For>
+								<Key
+									each={body.context.groups.rowGroups()}
+									by={(group) => group.key}
+								>
+									{(group) => {
+										return (
+											<>
+												<GroupHeaderRow
+													context={body.context}
+													group={group()}
+												/>
+												<Show
+													when={body.context.groups.isGroupExpanded(
+														group().key
+													)}
+												>
+													<KeyedRows
+														context={body.context}
+														rows={() =>
+															group().rows
+														}
+													/>
+												</Show>
+											</>
+										);
+									}}
+								</Key>
 								<LoadingMoreRows context={body.context} />
 							</>
 						}

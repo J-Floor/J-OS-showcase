@@ -95,17 +95,13 @@ export function HostSelectCell(props: { row: Doc<"people"> }): JSX.Element {
 				}
 			>
 				<HostSelect
-					autoFocus
+					autofocus
 					// Opened either way: both routes here are deliberate (a click,
 					// or Enter/Space), so there is no case where the picker should
 					// appear already mounted but closed.
 					defaultOpen
 					value={props.row.hostedById ?? null}
-					placeholder={
-						props.row.hostedBy
-							? `${props.row.hostedBy} — re-pick`
-							: undefined
-					}
+					legacyHost={props.row.hostedBy}
 					onCommit={(value: Id<"people"> | null) => {
 						void commitHost(value);
 					}}

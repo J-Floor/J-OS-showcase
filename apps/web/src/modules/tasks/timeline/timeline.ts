@@ -1,7 +1,14 @@
 import { DAY_MS, DAYS_PER_WEEK } from "../../../../convex/lib/constants.ts";
 import type { Project } from "../data/tasksData.tsx";
 
-export type ViewMode = "day" | "week" | "month";
+/** The zoom levels, in the order the view picker lists them. */
+export const VIEW_OPTIONS = [
+	{ value: "day", label: "Day" },
+	{ value: "week", label: "Week" },
+	{ value: "month", label: "Month" },
+] as const;
+
+export type ViewMode = (typeof VIEW_OPTIONS)[number]["value"];
 
 const DAYS_PER_LEAP_YEAR = 366;
 const MAX_RANGE_YEARS = 6;
@@ -27,15 +34,10 @@ export const DEFAULT_PAD: Record<ViewMode, number> = {
 	month: 3,
 };
 
-/** Row + header heights (px), shared with the SCSS via inline custom properties. */
-export const ROW_HEIGHT = 64;
-export const MONTH_BAND_HEIGHT = 30;
-export const TICK_ROW_HEIGHT = 26;
-export const HEADER_HEIGHT = MONTH_BAND_HEIGHT + TICK_ROW_HEIGHT;
-
-export type TimelineBar = {
+/** One project's bar: its name and leader (for the label card) plus where it
+ *  sits on the timeline. */
+export type TimelineBar = Pick<Project, "name" | "leaderId"> & {
 	id: Project["_id"];
-	name: string;
 	/** Days from the timeline's left edge to the bar's start. */
 	offset: number;
 	/** Bar length in days, inclusive of both endpoints. */
@@ -43,8 +45,6 @@ export type TimelineBar = {
 	/** Raw stored endpoints (UTC-midnight ms), used for drag/resize math. */
 	startMs: number;
 	endMs: number;
-	/** Project leader, for the label card. */
-	leaderId?: string;
 };
 
 export type TimelineSegment = {

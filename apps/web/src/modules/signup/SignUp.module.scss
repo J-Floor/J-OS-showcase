@@ -1,5 +1,3 @@
-@use "@j-os/design-system/breakpoints" as bp;
-
 .screen {
 	display: grid;
 	place-items: start center;
@@ -42,30 +40,6 @@
 	   gaps. */
 	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
 	gap: calc((var(--jf-spacing-close) + var(--jf-spacing-detached)) / 2);
-}
-
-/* Two-up rows that collapse to one column on narrow screens. Same gap as the
-   form so stacked fields (on phones) match the spacing of every other field. */
-.row {
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
-	gap: calc((var(--jf-spacing-close) + var(--jf-spacing-detached)) / 2);
-
-	@include bp.phone {
-		grid-template-columns: 1fr;
-	}
-}
-
-.banner {
-	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
-	display: flex;
-	gap: var(--jf-spacing-near);
-	align-items: center;
-	padding: var(--jf-spacing-near);
-	color: var(--jf-error-fg);
-	background-color: var(--jf-error-bg);
-	border-radius: var(--jf-radius-button);
 }
 
 .submit {

@@ -1,9 +1,7 @@
-import { Button, Dialog } from "@j-os/design-system";
+import { Button, Dialog, Input } from "@j-os/design-system";
 import { createSignal } from "solid-js";
 
 import type { Demo } from "../../../demo/types.ts";
-
-import styles from "./Dialog.demo.module.scss";
 
 export default {
 	title: "Dialog",
@@ -12,10 +10,8 @@ export default {
 		return (
 			<Dialog.Root
 				open={open()}
-				onOpenChange={(details) => {
-					setOpen(details.open);
-				}}
-				morph={p.morph ? undefined : false}
+				onOpenChange={setOpen}
+				morphId={p.morph ? undefined : false}
 			>
 				<Dialog.Trigger
 					asChild={(triggerProps) => (
@@ -24,20 +20,19 @@ export default {
 						</Button>
 					)}
 				/>
+				{/* Its content is built for each opening and kept while it
+				    morphs closed: type in the field, close, reopen, and it is
+				    empty again. */}
 				<Dialog.Content>
-					<Dialog.Title>{p.title}</Dialog.Title>
-					<Dialog.Description>{p.description}</Dialog.Description>
-					<div class={styles.footer}>
-						<Dialog.CloseTrigger
-							asChild={(closeProps) => (
-								<Button
-									triggerProps={closeProps()}
-									variant="tertiary"
-								>
-									Cancel
-								</Button>
-							)}
-						/>
+					<Dialog.Header>
+						<Dialog.Title>{p.title}</Dialog.Title>
+						<Dialog.Description>{p.description}</Dialog.Description>
+					</Dialog.Header>
+					<Dialog.Body>
+						<Input label="Type the project name to confirm" />
+					</Dialog.Body>
+					<Dialog.Footer>
+						<Dialog.Cancel />
 						<Dialog.CloseTrigger
 							asChild={(closeProps) => (
 								<Button triggerProps={closeProps()}>
@@ -45,7 +40,7 @@ export default {
 								</Button>
 							)}
 						/>
-					</div>
+					</Dialog.Footer>
 				</Dialog.Content>
 			</Dialog.Root>
 		);

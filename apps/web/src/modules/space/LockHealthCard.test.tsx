@@ -60,13 +60,14 @@ test("renders the fetched online count and names an offline door", async () => {
 	expect(screen.queryByText(/Upstairs offline —/)).not.toBeInTheDocument();
 });
 
-test("without a per-lock list, the summary line names the offline door", async () => {
-	const withList = health.value;
-	health.value = { configured: 2, unavailable: [{ name: "Upstairs" }] };
+test("the status line sits below the reading", async () => {
+	health.fail = true;
 	render(() => <LockHealthCard />);
-	expect(await screen.findByText("1/2")).toBeInTheDocument();
-	expect(screen.getByText(/Upstairs offline —/)).toBeInTheDocument();
-	health.value = withList;
+	const line = await screen.findByText("Couldn't reach the locks.");
+	const value = screen.getByText("?");
+	expect(
+		value.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING
+	).toBeTruthy();
 });
 
 test("re-checks the doors every minute while on screen", async () => {

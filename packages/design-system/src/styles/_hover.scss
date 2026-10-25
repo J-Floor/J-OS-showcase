@@ -1,0 +1,17 @@
+/* stylelint-disable selector-pseudo-class-disallowed-list, defensive-css/no-accidental-hover -- the one place `:hover` is written: every hover rule comes through this mixin, and each caller keeps its own `(hover: hover)` guard */
+
+/* An element of a morph's source the pointer holds (morphNames.ts,
+   MORPH_PINNED_SELECTOR): Chrome drops `:hover` as a View Transition starts,
+   so the morph pins what the pointer holds and a hover look matches the pin
+   too. */
+$morph-pinned: '[data-morph-pinned="held"]';
+
+/* A hover look: `:hover`, and the same look while a morph holds it. Write
+   every hover rule with this instead of `:hover`, and keep the
+   `@media (hover: hover)` guard around it where the rule had one. */
+@mixin hover {
+	&:hover,
+	&#{$morph-pinned} {
+		@content;
+	}
+}

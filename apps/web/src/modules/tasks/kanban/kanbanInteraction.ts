@@ -1,18 +1,14 @@
+import { isTypingTarget } from "@j-os/design-system";
+import { createHotkey } from "@tanstack/solid-hotkeys";
 import { useDragDropContext } from "@thisbeyond/solid-dnd";
-import {
-	createEffect,
-	createSignal,
-	onCleanup,
-	onMount,
-	type Accessor,
-} from "solid-js";
+import { createEffect, createSignal, type Accessor } from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { celebrate } from "../../../lib/celebrate.ts";
 import { toaster } from "../../../shared/toaster.ts";
 import type { Task, TaskActions } from "../data/tasksData.tsx";
 
-import { COLUMNS, type TaskStatus } from "./onDrop.ts";
+import { TASK_STATUSES, type TaskStatus } from "./onDrop.ts";
 
 type Rect = { x: number; y: number; w: number; h: number };
 export type Vec = { x: number; y: number };
@@ -213,7 +209,7 @@ export function createDropHandler(options: {
 	options.context[1].onDragEnd(({ draggable, droppable }) => {
 		options.groupDrag.clearOffsets();
 		if (!droppable) return;
-		const status = COLUMNS.find(
+		const status = TASK_STATUSES.find(
 			(column) => column.id === String(droppable.id)
 		)?.id;
 		if (!status) return;
@@ -270,6 +266,12 @@ export function createDropHandler(options: {
 	});
 }
 
+/** Only a key that opens the confirm is cancelled, and it still bubbles. */
+const BULK_DELETE_KEY_OPTIONS = {
+	preventDefault: false,
+	stopPropagation: false,
+};
+
 /** Backspace/Delete → confirm → bulk delete of the selected cards. */
 export function createBulkDelete(options: {
 	selection: MarqueeSelection;
@@ -278,29 +280,18 @@ export function createBulkDelete(options: {
 	const { selection, actions } = options;
 	const [confirmOpen, setConfirmOpen] = createSignal(false);
 
-	function onKeyDown(event: KeyboardEvent) {
-		if (event.key !== "Backspace" && event.key !== "Delete") return;
-		if (selection.selected().size === 0) return;
-		const focused = document.activeElement as HTMLElement | null;
+	function onKey(event: KeyboardEvent) {
 		if (
-			focused &&
-			(focused.tagName === "INPUT" ||
-				focused.tagName === "TEXTAREA" ||
-				focused.isContentEditable)
-		) {
-			return;
-		}
-		if (document.querySelector('[role="dialog"][data-state="open"]'))
+			selection.selected().size === 0 ||
+			isTypingTarget(event.target) ||
+			document.querySelector('[role="dialog"][data-state="open"]')
+		)
 			return;
 		event.preventDefault();
 		setConfirmOpen(true);
 	}
-	onMount(() => {
-		document.addEventListener("keydown", onKeyDown);
-	});
-	onCleanup(() => {
-		document.removeEventListener("keydown", onKeyDown);
-	});
+	createHotkey("Backspace", onKey, BULK_DELETE_KEY_OPTIONS);
+	createHotkey("Delete", onKey, BULK_DELETE_KEY_OPTIONS);
 
 	return {
 		confirmOpen,

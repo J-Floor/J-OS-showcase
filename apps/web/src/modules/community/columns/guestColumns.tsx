@@ -1,40 +1,32 @@
 import {
-	Confetti,
+	actionsColumnSize,
+	type EnumOption,
 	fieldColumn,
 	type JfColumnDefinition,
 } from "@j-os/design-system";
 import { For } from "solid-js";
 
-import type { Doc } from "../../../../convex/_generated/dataModel";
-import type { PersonStatus } from "../../../../convex/lib/derive.ts";
+import type { PersonRow } from "../../../../convex/people.ts";
 import { SHORT_TEXT_SIZE } from "../../../shared/columnSizes.ts";
 import { formatDistance } from "../../../shared/time.ts";
 import { useGuestActions } from "../actions/guestActions.ts";
 import { personFields } from "../fields.ts";
+import { latestNote } from "../noteAuthor.ts";
 
 import { NotesCell } from "./applicationColumns.tsx";
 import { flagsColumn } from "./flagsColumn.tsx";
-import { hostValue, type HostOption } from "./hostOptions.ts";
+import { hostValue } from "./hostOptions.ts";
 import { HostSelectCell } from "./HostSelectCell.tsx";
 import { joinedColumn } from "./joinedColumn.ts";
-import {
-	actionsColumnSize,
-	RowActionButton,
-	RowActions,
-} from "./RowActions.tsx";
+import { RowActionButton, RowActions } from "./RowActions.tsx";
 import { ventureColumns } from "./ventureColumns.tsx";
-
-export type GuestRow = Doc<"people"> & {
-	status: PersonStatus;
-	hasAgreement: boolean;
-};
 
 /** Guests tab grouping, straight off the machine's stage. A guest who left of
  *  their own accord is filed as alumni, not as someone who was thrown out —
  *  see `memberGroup`. */
 export function guestStatus(
-	row: GuestRow
-): "active" | "expired" | "not_onboarded" | "alumni" | "kicked_out" {
+	row: PersonRow
+): (typeof statusOptions)[number]["value"] {
 	if (row.tier === "former")
 		return row.formerReason === "left" ? "alumni" : "kicked_out";
 	if (row.stage === "onboarding") return "not_onboarded";
@@ -58,21 +50,14 @@ const statusOptions = [
  * component just renders whatever it offers, in one consistent order with the
  * Members tab.
  */
-function GuestActions(props: { row: GuestRow }) {
+function GuestActions(props: { row: PersonRow }) {
 	const guestActions = useGuestActions();
 	return (
 		<RowActions>
 			<For each={guestActions.actions()}>
-				{(action) => {
-					const button = (
-						<RowActionButton action={action} row={props.row} />
-					);
-					return action.id === "member" ? (
-						<Confetti>{button}</Confetti>
-					) : (
-						button
-					);
-				}}
+				{(action) => (
+					<RowActionButton action={action} row={props.row} />
+				)}
 			</For>
 		</RowActions>
 	);
@@ -80,7 +65,7 @@ function GuestActions(props: { row: GuestRow }) {
 
 /** What the "Time remaining" cell shows: the time left on the guest's
  *  access, or a dash when it has no end. */
-function timeRemainingText(row: GuestRow): string {
+function timeRemainingText(row: PersonRow): string {
 	return row.accessUntil ? formatDistance(row.accessUntil) : "—";
 }
 
@@ -96,8 +81,8 @@ function timeRemainingText(row: GuestRow): string {
  * `hosts` costs the caller a `useBoardLevel()` it already holds.
  */
 export function guestColumns(
-	hosts: readonly HostOption[]
-): JfColumnDefinition<GuestRow>[] {
+	hosts: readonly EnumOption[]
+): JfColumnDefinition<PersonRow>[] {
 	return [
 		{
 			// Hidden grouping column — active above expired (group order from
@@ -116,7 +101,7 @@ export function guestColumns(
 			accessorKey: "lastName",
 			dataType: "string",
 		}),
-		flagsColumn<GuestRow>(),
+		flagsColumn<PersonRow>(),
 		fieldColumn(personFields.timeRemaining, {
 			dataType: "number",
 			size: "content",
@@ -150,7 +135,7 @@ export function guestColumns(
 			accessorFn: (row) => hostValue(row),
 			cell: (info) => <HostSelectCell row={info.row.original} />,
 		}),
-		...ventureColumns<GuestRow>(),
+		...ventureColumns<PersonRow>(),
 		fieldColumn(personFields.notes, {
 			// The board's attributed notes thread (shared with the other tabs). The
 			// Guests tab doesn't bind the `n` shortcut, so no peek chip is shown.
@@ -159,12 +144,12 @@ export function guestColumns(
 			size: { min: 240, weight: 2 },
 			measureText: false,
 			// Sort/filter on the latest note's text — what the cell shows.
-			accessorFn: (row) => row.board?.noteLog?.at(-1)?.text ?? "",
+			accessorFn: (row) => latestNote(row)?.text ?? "",
 			cell: (info) => (
 				<NotesCell row={info.row.original} showShortcutHint={false} />
 			),
 		}),
-		joinedColumn<GuestRow>(),
+		joinedColumn<PersonRow>(),
 		{
 			id: "actions",
 			header: "",

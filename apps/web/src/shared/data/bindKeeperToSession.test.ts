@@ -3,6 +3,7 @@ import { createRoot, createSignal } from "solid-js";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { api } from "../../../convex/_generated/api";
+import type { authClient } from "../../lib/auth.ts";
 
 import { bindKeeperToSession } from "./bindKeeperToSession.ts";
 import {
@@ -32,7 +33,10 @@ function setup(initial: State) {
 	} as unknown as ConvexClient);
 	const [state, setState] = createSignal<State>(initial, { equals: false });
 	const dispose = createRoot((disposeRoot) => {
-		bindKeeperToSession(state);
+		// The fixture carries only the user id the binding reads.
+		bindKeeperToSession(
+			state as unknown as ReturnType<typeof authClient.useSession>
+		);
 		return disposeRoot;
 	});
 	return { setState, dispose };

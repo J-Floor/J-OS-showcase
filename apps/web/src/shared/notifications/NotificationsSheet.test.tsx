@@ -228,18 +228,8 @@ test("the device row shows while the inbox is still loading", () => {
 	renderSheet("inbox");
 	expect(screen.getByTestId("device-row")).toBeVisible();
 	expect(tabNamed("Inbox")).toBeInTheDocument();
-	expect(screen.queryByTestId("list")).not.toBeInTheDocument();
-	expect(screen.getByRole("status", { name: "Loading" })).toBeInTheDocument();
-});
-
-test("a failed inbox load shows the list, not the skeleton", () => {
-	inbox.rows = () => {};
-	inbox.failed = () => true;
-	renderSheet("inbox");
+	// The list owns its loading and failed states (see NotificationList).
 	expect(screen.getByTestId("list")).toBeInTheDocument();
-	expect(
-		screen.queryByRole("status", { name: "Loading" })
-	).not.toBeInTheDocument();
 });
 
 test("opening a row closes the sheet", () => {

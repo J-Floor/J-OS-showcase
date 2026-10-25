@@ -1,4 +1,4 @@
-export type WifiNetwork = { ssid: string; password: string };
+import type { Wifi } from "../../../convex/lib/wifi.ts";
 
 /**
  * Escape the characters that are special in a `WIFI:` join string. The format
@@ -19,6 +19,6 @@ function escapeWifiValue(value: string): string {
  * gated query (`api.wifi.get`) or a confirmed visitor's `confirmVisitor`
  * result. This helper just formats whatever network it is handed.
  */
-export function wifiQrPayload(net: WifiNetwork): string {
+export function wifiQrPayload(net: Wifi): string {
 	return `WIFI:T:WPA;S:${escapeWifiValue(net.ssid)};P:${escapeWifiValue(net.password)};;`;
 }

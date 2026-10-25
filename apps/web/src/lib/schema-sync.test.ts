@@ -1,25 +1,12 @@
-// Drift guards for hand-maintained TypeScript unions that duplicate Convex
-// schema validators across the convex/src runtime boundary. The frontend can't
-// `Infer` these validators at runtime (it can't import server value
-// validators), so the unions are kept in sync BY HAND. These compile-time
-// assertions fail the typecheck (and therefore CI) the moment a union diverges
-// from its schema validator. The runtime `expect` only exists so Vitest counts
-// the file.
+// Drift guard for the hand-maintained `Role` union, which sits across the
+// convex/src boundary from the schema's `tier` validator. The compile-time
+// assertion fails the typecheck (and therefore CI) the moment they diverge.
+// The runtime `expect` only exists so Vitest counts the file.
 
 import type { Infer } from "convex/values";
 import { expect, test } from "vitest";
 
-import {
-	fundingStage,
-	productStage,
-	tier,
-	vertical,
-} from "../../convex/schema.ts";
-import type {
-	FundingStage,
-	ProductStage,
-	Vertical,
-} from "../modules/signup/options.ts";
+import { tier } from "../../convex/schema.ts";
 
 import type { Role } from "./ability.tsx";
 
@@ -48,16 +35,6 @@ export type _RoleSync = Expect<
 		Exclude<Infer<typeof tier>, "prospect" | "former" | "visitor">
 	>
 >;
-
-export type _ProductStageSync = Expect<
-	Equal<ProductStage, Infer<typeof productStage>>
->;
-
-export type _FundingStageSync = Expect<
-	Equal<FundingStage, Infer<typeof fundingStage>>
->;
-
-export type _VerticalSync = Expect<Equal<Vertical, Infer<typeof vertical>>>;
 
 test("schema-sync unions are guarded at compile time", () => {
 	// The real assertions are the `Expect<Equal<…>>` types above; they fail the

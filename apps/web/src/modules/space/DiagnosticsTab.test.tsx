@@ -11,6 +11,11 @@ import { createSignal } from "solid-js";
 import { afterEach, beforeEach, expect, test, vi, type Mock } from "vitest";
 
 import { DOOR_LOG_PAGE_SIZE } from "../../../convex/lib/constants.ts";
+import {
+	doorLogOperation,
+	doorLogOutcome,
+	doorLogTrigger,
+} from "../../../convex/schema.ts";
 
 const health: { value: unknown } = {
 	value: {
@@ -277,6 +282,19 @@ test("shows a skeleton, not a crash, while the log query is still loading", asyn
 	).not.toBeInTheDocument();
 });
 
+test("keeps one table from its skeleton to its loaded rows", async () => {
+	state.head = undefined;
+	render(() => <DiagnosticsTab />);
+	await screen.findByText("Door log");
+	const loading = document.querySelector("table");
+	expect(loading).not.toBeNull();
+
+	state.head = [row("a", at(0), "Ada")];
+
+	expect(await screen.findByText("Ada")).toBeInTheDocument();
+	expect(document.querySelector("table")).toBe(loading);
+});
+
 test("shows an error state when the log query fails", async () => {
 	state.head = undefined;
 	state.headError = new Error("boom");
@@ -491,8 +509,31 @@ type LogColumn = {
 	id?: string;
 	accessorKey?: string;
 	size?: unknown;
+	enumOptions?: { value: string }[];
 	measureText?: (row: Record<string, unknown>) => string;
 };
+
+function optionValues(id: string): string[] | undefined {
+	return (table.columns as LogColumn[])
+		.find((column) => (column.id ?? column.accessorKey) === id)
+		?.enumOptions?.map((option) => option.value)
+		.sort(compareText);
+}
+
+function compareText(left: string, right: string): number {
+	return left.localeCompare(right);
+}
+
+function members(validator: { members: { value: string }[] }): string[] {
+	return validator.members.map((member) => member.value).sort(compareText);
+}
+
+test("the filter options list every member of the schema's door-log enums", async () => {
+	await mounted();
+	expect(optionValues("operation")).toEqual(members(doorLogOperation));
+	expect(optionValues("trigger")).toEqual(members(doorLogTrigger));
+	expect(optionValues("outcome")).toEqual(members(doorLogOutcome));
+});
 
 test("the log's columns fit their content and leave the rest to Person and Locks", async () => {
 	await mounted();

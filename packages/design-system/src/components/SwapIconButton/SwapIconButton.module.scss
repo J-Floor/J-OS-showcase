@@ -2,7 +2,7 @@
    descendant selector beats IconButton's inherited foreground colour. */
 .swapIconButton[data-success] [data-icon] {
 	color: var(--jf-success-fg);
-	animation: swap-icon-pop 0.2s ease-out;
+	animation: swap-icon-pop var(--jf-animation-duration-default) ease-out;
 }
 
 @keyframes swap-icon-pop {

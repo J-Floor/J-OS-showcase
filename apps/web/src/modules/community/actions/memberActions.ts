@@ -1,13 +1,10 @@
-import { displayName } from "../../../../convex/lib/names.ts";
-import { useConfirm } from "../../../shared/confirm.tsx";
+import type { PersonRow } from "../../../../convex/people.ts";
 import { ICONS } from "../../../shared/icons.ts";
-import type { MemberRow } from "../columns/memberColumns.tsx";
 import { useOpenAgreement } from "../openAgreement.ts";
 
 import { agreementAction } from "./agreementAction.ts";
-import { settleRosterAction } from "./RosterActionError.tsx";
-import type { ActionDescriptor, RosterActionOutcome } from "./shortcuts.ts";
-import { useTriage } from "./triage.ts";
+import { useKickOutAction } from "./kickOutAction.ts";
+import type { ActionDescriptor } from "./shortcuts.ts";
 
 /**
  * What the board can do to a member from the roster or the sheet.
@@ -23,30 +20,16 @@ import { useTriage } from "./triage.ts";
  * the button too, or a second click opens a second blank tab.
  */
 export function useMemberActions(options: {
-	onChangeRole: (person: MemberRow) => void;
-	group: (person: MemberRow) => string;
-}): { actions: () => ActionDescriptor<MemberRow>[] } {
-	const triage = useTriage();
-	const confirm = useConfirm();
+	onChangeRole: (person: PersonRow) => void;
+	group: (person: PersonRow) => string;
+}): { actions: () => ActionDescriptor<PersonRow>[] } {
 	const agreement = useOpenAgreement();
+	const kickOut = useKickOutAction("member", {
+		can: (person) => options.group(person) !== "kicked_out",
+		disabledReason: "Already kicked out",
+	});
 
-	async function kickOut(person: MemberRow): Promise<RosterActionOutcome> {
-		if (
-			await confirm({
-				title: "Kick out?",
-				message: `Revoke ${displayName(person)}'s access? They'll be moved to Kicked out, keeping their whole history.`,
-				confirmLabel: "Kick out",
-				tone: "danger",
-			})
-		)
-			return settleRosterAction(
-				"members",
-				person._id,
-				triage.kickOut(person._id)
-			);
-	}
-
-	function actions(): ActionDescriptor<MemberRow>[] {
+	function actions(): ActionDescriptor<PersonRow>[] {
 		return [
 			{
 				id: "role",
@@ -59,16 +42,7 @@ export function useMemberActions(options: {
 					options.onChangeRole(person);
 				},
 			},
-			{
-				id: "kick",
-				label: "Kick out",
-				icon: ICONS.kickOut,
-				hotkey: "K",
-				scope: "members",
-				can: (person) => options.group(person) !== "kicked_out",
-				disabledReason: () => "Already kicked out",
-				run: (person) => kickOut(person),
-			},
+			kickOut,
 			agreementAction(agreement, "members"),
 		];
 	}

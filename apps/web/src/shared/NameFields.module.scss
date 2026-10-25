@@ -1,0 +1,14 @@
+@use "@j-os/design-system/breakpoints" as bp;
+
+/* Two-up row that collapses to one column on narrow screens. Same gap as the
+   forms it sits in so stacked fields match the spacing of every other field. */
+.row {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
+	gap: calc((var(--jf-spacing-close) + var(--jf-spacing-detached)) / 2);
+
+	@include bp.phone {
+		grid-template-columns: 1fr;
+	}
+}

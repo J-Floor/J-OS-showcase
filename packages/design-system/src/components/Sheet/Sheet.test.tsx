@@ -1,7 +1,13 @@
 import { readFileSync } from "node:fs";
 
-import { render, screen, fireEvent, waitFor } from "@solidjs/testing-library";
-import { type JSX, createSignal } from "solid-js";
+import {
+	render,
+	screen,
+	fireEvent,
+	waitFor,
+	within,
+} from "@solidjs/testing-library";
+import { type JSX, createEffect, createRoot, createSignal } from "solid-js";
 import {
 	afterEach,
 	describe,
@@ -21,10 +27,24 @@ import {
 } from "../../test/viewTransitionFakes.ts";
 import { trackActivation } from "../../utils/activation.ts";
 import { defineFields } from "../../utils/fields.ts";
-import { MORPH_SCRIM } from "../../utils/morph.ts";
-import { MORPH_TITLE, SHEET_SKELETON } from "../../utils/morphPairing.ts";
-import { MORPH_HIDDEN } from "../../utils/morphPresence.ts";
+import {
+	MORPH_HIDDEN,
+	MORPH_SCRIM,
+	MORPH_TITLE,
+} from "../../utils/morphNames.ts";
+import { SHEET_SKELETON } from "../../utils/morphPairing.ts";
+import {
+	OVERLAYS_ABOVE_VAR,
+	OVERLAY_COVERED,
+} from "../../utils/overlayLayer.tsx";
+import {
+	type SaveTracker,
+	createSaveTracker,
+	useSaveTracker,
+} from "../../utils/saveTracker.ts";
+import { stackedName } from "../../utils/viewTransition.ts";
 import { setDeferredImmediate } from "../Deferred/Deferred.tsx";
+import { Dialog } from "../Dialog/Dialog.tsx";
 import { PropertyRow } from "../PropertyRow/PropertyRow.tsx";
 
 import { SHEET_SKELETON_ROW, Sheet } from "./Sheet.tsx";
@@ -68,7 +88,7 @@ async function openFromButton(morph: false | undefined): Promise<{
 			<button id="opener" ref={fill}>
 				Open
 			</button>
-			<Sheet.Root open={open()} onOpenChange={setOpen} morph={morph}>
+			<Sheet.Root open={open()} onOpenChange={setOpen} morphId={morph}>
 				<Sheet.Header>
 					<Sheet.Title>Task</Sheet.Title>
 				</Sheet.Header>
@@ -87,6 +107,22 @@ async function openFromButton(morph: false | undefined): Promise<{
 // Only what this compound adds is worth asserting — Ark's dialog machine (open
 // state, focus trap, Escape) is Ark's own coverage. Here: the parts render where
 // they should, and the Close part is wired to Ark's close trigger.
+/** A caller that asks for the sheet in its own mount effect: `open` is
+ *  false while Sheet.Root renders, true before the first flush ends. */
+function OpensOnMount(): JSX.Element {
+	const [open, setOpen] = createSignal(false);
+	createEffect(() => {
+		setOpen(true);
+	});
+	return (
+		<Sheet.Root open={open()} onOpenChange={setOpen}>
+			<Sheet.Header>
+				<Sheet.Title>Task</Sheet.Title>
+			</Sheet.Header>
+		</Sheet.Root>
+	);
+}
+
 describe("Sheet", () => {
 	it("renders title, body and footer parts when open", () => {
 		render(() => (
@@ -400,7 +436,7 @@ describe("Sheet", () => {
 					<Sheet.Root
 						open={open()}
 						onOpenChange={setOpen}
-						morph={"t1"}
+						morphId={"t1"}
 					>
 						<Sheet.Header>
 							<Sheet.Title>Task</Sheet.Title>
@@ -428,7 +464,7 @@ describe("Sheet", () => {
 					<Sheet.Root
 						open={open()}
 						onOpenChange={setOpen}
-						morph={entity()}
+						morphId={entity()}
 					>
 						<Sheet.Header>
 							<Sheet.Title>Task</Sheet.Title>
@@ -468,7 +504,7 @@ describe("Sheet", () => {
 						onOpenChange={() => {
 							setSelected(undefined);
 						}}
-						morph={selected()}
+						morphId={selected()}
 					>
 						<Sheet.Header>
 							<Sheet.Title>Task</Sheet.Title>
@@ -504,7 +540,7 @@ describe("Sheet", () => {
 					<Sheet.Root
 						open={open()}
 						onOpenChange={setOpen}
-						morph={"t1"}
+						morphId={"t1"}
 					>
 						<Sheet.Header>
 							<Sheet.Title>Task</Sheet.Title>
@@ -567,7 +603,7 @@ describe("Sheet", () => {
 					<Sheet.Root
 						open={open()}
 						onOpenChange={setOpen}
-						morph={"t1"}
+						morphId={"t1"}
 					>
 						<Sheet.Header>
 							<Sheet.Title>Task</Sheet.Title>
@@ -651,7 +687,7 @@ describe("Sheet", () => {
 			});
 		});
 
-		test("morph={false} opens without hiding its source", async () => {
+		test("morphId={false} opens without hiding its source", async () => {
 			const { opener } = await openFromButton(false);
 			await screen.findByRole("dialog");
 			await new Promise((resolve) => setTimeout(resolve, 20));
@@ -690,7 +726,7 @@ describe("Sheet", () => {
 					<Sheet.Root
 						open={open()}
 						onOpenChange={setOpen}
-						morph={"t1"}
+						morphId={"t1"}
 					>
 						<Sheet.Header>
 							<Sheet.Title>Task</Sheet.Title>
@@ -741,6 +777,53 @@ describe("Sheet", () => {
 			});
 			// Kept once built: a reopen does not rebuild it.
 			expect(built).toHaveBeenCalledTimes(1);
+		});
+
+		test("prebuild builds the parts while closed, hidden, and the open reuses them", async () => {
+			const built = vi.fn();
+			function Probe(): JSX.Element {
+				built();
+				return <button aria-keyshortcuts="E">probe</button>;
+			}
+			const [open, setOpen] = createSignal(false);
+			const [prebuild, setPrebuild] = createSignal(false);
+			render(() => (
+				<Sheet.Root
+					open={open()}
+					onOpenChange={setOpen}
+					prebuild={prebuild()}
+				>
+					<Sheet.Header>
+						<Sheet.Title>Task</Sheet.Title>
+					</Sheet.Header>
+					<Sheet.Body>
+						<Probe />
+					</Sheet.Body>
+				</Sheet.Root>
+			));
+			expect(built).not.toHaveBeenCalled();
+			setPrebuild(true);
+			await waitFor(() => {
+				expect(built).toHaveBeenCalledTimes(1);
+			});
+			const shell = document.querySelector("[data-shortcut-surface]");
+			// Mounted but not shown: really hidden, so its shortcut buttons
+			// match no key press.
+			expect(shell).toHaveAttribute("data-state", "closed");
+			expect(shell).toHaveAttribute("hidden");
+			setOpen(true);
+			await screen.findByRole("dialog");
+			expect(built).toHaveBeenCalledTimes(1);
+		});
+
+		test("a sheet asked open in its caller's mount effect opens", async () => {
+			render(() => <OpensOnMount />);
+			await waitFor(() => {
+				expect(screen.getByRole("dialog")).toHaveAttribute(
+					"data-state",
+					"open"
+				);
+			});
 		});
 	});
 });
@@ -795,4 +878,309 @@ test("on a phone it fills the screen: no margin around it, no card edges", () =>
 	]) {
 		expect(content).toContain(declaration);
 	}
+});
+
+/** The sheet's content panel (a dialog's has no shortcut surface). */
+function sheetContent(): HTMLElement {
+	const content = document.querySelector<HTMLElement>(
+		'[data-part="content"][data-shortcut-surface]'
+	);
+	if (!content) throw new Error("no sheet content");
+	return content;
+}
+
+test("an overlay opened over a sheet steps it back inside the update, and its close brings it forward there too", async () => {
+	type Seen = { above: string; isCovered: boolean; name: string };
+	const seen: Seen[] = [];
+	stubViewTransition(() => {
+		const content = sheetContent();
+		seen.push({
+			above: content.style.getPropertyValue(OVERLAYS_ABOVE_VAR),
+			isCovered: content.hasAttribute(OVERLAY_COVERED),
+			name: content.style.getPropertyValue("view-transition-name"),
+		});
+	});
+	const [isDialogOpen, setDialogOpen] = createSignal(false);
+	render(() => (
+		<>
+			<Sheet.Root open onOpenChange={() => {}}>
+				<Sheet.Header>
+					<Sheet.Title>Task</Sheet.Title>
+				</Sheet.Header>
+			</Sheet.Root>
+			<Dialog.Root open={isDialogOpen()} onOpenChange={setDialogOpen}>
+				<Dialog.Content>
+					<Dialog.Header>
+						<Dialog.Title>Confirm</Dialog.Title>
+					</Dialog.Header>
+				</Dialog.Content>
+			</Dialog.Root>
+		</>
+	));
+	await new Promise((resolve) => setTimeout(resolve, 5));
+	expect(sheetContent().style.getPropertyValue(OVERLAYS_ABOVE_VAR)).toBe("0");
+	setDialogOpen(true);
+	await transitionSettled();
+	setDialogOpen(false);
+	await transitionSettled();
+	expect(seen).toEqual([
+		{ above: "1", isCovered: true, name: stackedName(0) },
+		{ above: "0", isCovered: false, name: stackedName(0) },
+	]);
+});
+
+/** An open sheet guarded by `confirmClose`; its `onOpenChange` spy. */
+function renderGuarded(isDirty: boolean) {
+	const onOpenChange = vi.fn();
+	render(() => (
+		<Sheet.Root
+			open
+			onOpenChange={onOpenChange}
+			confirmClose={() => isDirty}
+			discardLabel="new item"
+		>
+			<Sheet.Header>
+				<Sheet.Title>New item</Sheet.Title>
+				<Sheet.HeaderActions>
+					<Sheet.Close />
+				</Sheet.HeaderActions>
+			</Sheet.Header>
+			<input aria-label="Name" />
+		</Sheet.Root>
+	));
+	return onOpenChange;
+}
+
+function discardDialog(): HTMLElement | null {
+	return screen.queryByRole("dialog", { name: "Discard new item?" });
+}
+
+/** Whose backdrop holds `jf-morph-scrim`: the sheet's portal holds the
+ *  sheet's content. */
+function namedScrimOwner(): string {
+	const scrim = [...document.querySelectorAll<HTMLElement>("*")].find(
+		(element) =>
+			element.style.getPropertyValue("view-transition-name") ===
+			"jf-morph-scrim"
+	);
+	if (!scrim) return "none";
+	return scrim.parentElement?.querySelector("[data-shortcut-surface]")
+		? "sheet"
+		: "dialog";
+}
+
+/** A guarded sheet whose prompt the caller asks for (`discardRef`). */
+function renderAskedFromOutside() {
+	const onOpenChange = vi.fn();
+	let ask!: (onDiscard: () => void) => void;
+	render(() => (
+		<Sheet.Root
+			open
+			onOpenChange={onOpenChange}
+			confirmClose={() => true}
+			discardLabel="new item"
+			discardRef={(asker) => {
+				ask = asker;
+			}}
+		>
+			<Sheet.Header>
+				<Sheet.Title>New item</Sheet.Title>
+				<Sheet.HeaderActions>
+					<Sheet.Close />
+				</Sheet.HeaderActions>
+			</Sheet.Header>
+		</Sheet.Root>
+	));
+	return { onOpenChange, ask };
+}
+
+describe("confirmClose", () => {
+	const WAYS_OUT = {
+		"the close button": () => {
+			fireEvent.click(screen.getByRole("button", { name: /close/i }));
+		},
+		Escape: () => {
+			fireEvent.keyDown(sheetContent(), { key: "Escape" });
+		},
+		"an outside click": () => {
+			fireEvent.pointerDown(document.body);
+		},
+	};
+
+	for (const [way, leave] of Object.entries(WAYS_OUT)) {
+		test(`while dirty, ${way} asks instead of closing`, async () => {
+			const onOpenChange = renderGuarded(true);
+			// Ark starts listening for a press outside some time after the
+			// open, later on a loaded machine: press until the prompt shows.
+			await waitFor(() => {
+				if (!discardDialog()) leave();
+				expect(discardDialog()).toBeInTheDocument();
+			});
+			expect(onOpenChange).not.toHaveBeenCalled();
+		});
+	}
+
+	test("while clean, a way out closes at once", async () => {
+		const onOpenChange = renderGuarded(false);
+		fireEvent.click(screen.getByRole("button", { name: /close/i }));
+		await waitFor(() => {
+			expect(onOpenChange).toHaveBeenCalledWith(false);
+		});
+		expect(discardDialog()).toBeNull();
+	});
+
+	test("Keep editing closes the prompt; the sheet is open again, its draft intact", async () => {
+		const onOpenChange = renderGuarded(true);
+		const name = screen.getByRole<HTMLInputElement>("textbox", {
+			name: "Name",
+		});
+		name.value = "Drill";
+		fireEvent.click(screen.getByRole("button", { name: /close/i }));
+		await waitFor(() => {
+			expect(discardDialog()).toBeInTheDocument();
+		});
+		expect(sheetContent()).toHaveAttribute("data-state", "closed");
+		fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
+		await waitFor(() => {
+			expect(sheetContent()).toHaveAttribute("data-state", "open");
+		});
+		expect(onOpenChange).not.toHaveBeenCalled();
+		expect(name.value).toBe("Drill");
+		expect(name.isConnected).toBe(true);
+	});
+
+	test("Discard closes the sheet", async () => {
+		const onOpenChange = renderGuarded(true);
+		fireEvent.click(screen.getByRole("button", { name: /close/i }));
+		await waitFor(() => {
+			expect(discardDialog()).toBeInTheDocument();
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+		await waitFor(() => {
+			expect(onOpenChange).toHaveBeenCalledWith(false);
+		});
+	});
+
+	test("the sheet morphs into the prompt, and the prompt back into the sheet", async () => {
+		const named: string[][] = [];
+		const scrims: string[] = [];
+		const kinds: string[] = [];
+		stubViewTransition(() => {
+			kinds.push(document.documentElement.dataset.vt ?? "");
+			scrims.push(namedScrimOwner());
+			named.push(
+				[
+					...document.querySelectorAll<HTMLElement>(
+						'[data-part="content"]'
+					),
+				]
+					.filter(
+						(content) =>
+							content.style.getPropertyValue(
+								"view-transition-name"
+							) === "jf-morph"
+					)
+					.map((content) =>
+						content.hasAttribute("data-shortcut-surface")
+							? "sheet"
+							: "dialog"
+					)
+			);
+		});
+		renderGuarded(true);
+		await new Promise((resolve) => setTimeout(resolve, 5));
+		// Ark hears a close a moment after the press, so each step waits
+		// for its end state before the transition can be waited out.
+		fireEvent.click(screen.getByRole("button", { name: /close/i }));
+		await waitFor(() => {
+			expect(discardDialog()).toBeInTheDocument();
+		});
+		await transitionSettled();
+		fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
+		await waitFor(() => {
+			expect(sheetContent()).toHaveAttribute("data-state", "open");
+		});
+		await transitionSettled();
+		// One transition each way: the closer names the claimant.
+		expect(named).toEqual([["dialog"], ["sheet"]]);
+		// Each way, the surface is drawn and the claimant's scrim takes over.
+		expect(scrims).toEqual(["dialog", "sheet"]);
+		for (const snapshotKinds of kinds) {
+			expect(snapshotKinds.split(" ")).toContain("morph-handoff");
+		}
+	});
+
+	test("discardRef asks from outside: Discard runs the caller's way out instead of closing", async () => {
+		const { onOpenChange, ask } = renderAskedFromOutside();
+		const onDiscard = vi.fn();
+		ask(onDiscard);
+		await waitFor(() => {
+			expect(discardDialog()).toBeInTheDocument();
+		});
+		expect(sheetContent()).toHaveAttribute("data-state", "closed");
+		fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+		await waitFor(() => {
+			expect(onDiscard).toHaveBeenCalledOnce();
+		});
+		expect(onOpenChange).not.toHaveBeenCalled();
+	});
+
+	test("discardRef: Keep editing drops the caller's way out", async () => {
+		const { onOpenChange, ask } = renderAskedFromOutside();
+		const onDiscard = vi.fn();
+		ask(onDiscard);
+		await waitFor(() => {
+			expect(discardDialog()).toBeInTheDocument();
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
+		await waitFor(() => {
+			expect(sheetContent()).toHaveAttribute("data-state", "open");
+		});
+		// A later close the sheet hears closes as usual, once it is back.
+		fireEvent.click(
+			await within(sheetContent()).findByRole("button", {
+				name: "Close",
+			})
+		);
+		await waitFor(() => {
+			expect(discardDialog()).toBeInTheDocument();
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+		await waitFor(() => {
+			expect(onOpenChange).toHaveBeenCalledWith(false);
+		});
+		expect(onDiscard).not.toHaveBeenCalled();
+	});
+});
+
+test("a sheet given a saveTracker provides that one to its parts", () => {
+	let seen: SaveTracker | undefined;
+	function Reader(): JSX.Element {
+		seen = useSaveTracker();
+		return null;
+	}
+	const tracker = createRoot(() => createSaveTracker());
+	render(() => (
+		<Sheet.Root open onOpenChange={() => {}} saveTracker={tracker}>
+			<Reader />
+		</Sheet.Root>
+	));
+	expect(seen).toBe(tracker);
+});
+
+test("a sheet steps back and forward with a morph, not inside it: its own transitions are off while one runs", () => {
+	const styles = readFileSync(
+		`${import.meta.dirname}/Sheet.module.scss`,
+		"utf8"
+	);
+	const start = styles.indexOf("\n.content {");
+	const content = styles.slice(start, styles.indexOf("\n}\n", start));
+	expect(content).toMatch(
+		/:root\[data-vt~="morph"\] & \{\s*transition: none;\s*\}/
+	);
+	// The overlay layer's count, written as the overlay above is shown;
+	// Ark's own count arrives a frame later, after the new snapshot.
+	expect(content).toContain(`var(${OVERLAYS_ABOVE_VAR})`);
+	expect(content).toContain(`&[${OVERLAY_COVERED}]`);
+	expect(content).not.toMatch(/nested-layer-count|data-has-nested/);
 });

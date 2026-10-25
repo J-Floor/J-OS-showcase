@@ -238,6 +238,40 @@ describe("Table virtualisation", () => {
 		expect(screen.queryByText("before")).toBeNull();
 	});
 
+	it("keeps a windowed row's node and its cell content across a refresh", () => {
+		// A refresh hands every row as a new object. The `<tr>` and what its
+		// cells render must stay (a morph names a box inside a cell; replacing
+		// it mid-transition skips the transition), and a changed value must
+		// still show.
+		const parent = measurableScrollParent(300);
+		const [data, setData] = createSignal<Row[]>([
+			{ id: "before", group: "a" },
+			{ id: "other", group: "b" },
+		]);
+		render(() => (
+			<div ref={parent.ref}>
+				<Table.Root
+					getRowId={rowIndex}
+					columns={columns}
+					data={data()}
+					groupBy="group"
+					virtualize
+				/>
+			</div>
+		));
+		const row = screen.getByText("before").closest("tr");
+		const value = screen.getByText("before");
+
+		setData([
+			{ id: "after", group: "a" },
+			{ id: "other", group: "b" },
+		]);
+
+		expect(screen.getByText("after").closest("tr")).toBe(row);
+		expect(screen.getByText("other").closest("tr")?.isConnected).toBe(true);
+		expect(value.isConnected).toBe(true);
+	});
+
 	it("leaves an ungrouped table alone", () => {
 		const parent = measurableScrollParent(300);
 		render(() => (

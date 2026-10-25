@@ -11,6 +11,10 @@ import { createSignal } from "solid-js";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 
 import { keyedIn, keyedValue } from "../../../../test-stubs/morphKeys.tsx";
+import {
+	DIALOG_CONTENT,
+	OPEN_DIALOG_CONTENT,
+} from "../../../shared/dialogSelectors.ts";
 
 // apps/web does not run vitest in `globals` mode, so `@solidjs/testing-library`'s
 // own auto-cleanup — which only registers itself when it finds a GLOBAL
@@ -178,7 +182,8 @@ afterEach(() => {
 	setLiveRows(rows);
 });
 
-vi.mock("../data/useApplications.ts", () => ({
+vi.mock("../data/communityData.tsx", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../data/communityData.tsx")>()),
 	useApplications: () => ({
 		data: () => liveRows(),
 		error: () => {},
@@ -375,10 +380,9 @@ describe("ApplicationsTab", () => {
 
 		// Scope the "no inputs" check to the Ark Dialog content panel so we don't
 		// accidentally pick up table inputs or Ark UI internals. Ark renders
-		// Dialog.Content with data-scope="dialog" data-part="content".
-		const dialogElement = document.querySelector<HTMLElement>(
-			'[data-scope="dialog"][data-part="content"]'
-		);
+		// Dialog.Content as DIALOG_CONTENT.
+		const dialogElement =
+			document.querySelector<HTMLElement>(DIALOG_CONTENT);
 		expect(dialogElement).not.toBeNull();
 		// Read-only means the PROFILE is display-only. Two always-available
 		// controls remain regardless of edit mode: the footer score field and the
@@ -415,9 +419,8 @@ describe("ApplicationsTab", () => {
 		// contains the expected applicant email (i.e. the open sheet).
 		// Note: disabled SheetNav buttons are wrapped in MakeDisablable's Tooltip span,
 		// which makes them inaccessible to the standard AT query; use `hidden: true`.
-		const allDialogContents = document.querySelectorAll<HTMLElement>(
-			'[data-scope="dialog"][data-part="content"]'
-		);
+		const allDialogContents =
+			document.querySelectorAll<HTMLElement>(DIALOG_CONTENT);
 		const sheetContent = Array.from(allDialogContents).find((element) =>
 			element.textContent.includes("grace@example.com")
 		);
@@ -542,9 +545,8 @@ describe("ApplicationsTab", () => {
 			).toBeInTheDocument();
 		});
 		const panel =
-			document.querySelector<HTMLElement>(
-				'[data-scope="dialog"][data-part="content"][data-state="open"]'
-			) ?? document.body;
+			document.querySelector<HTMLElement>(OPEN_DIALOG_CONTENT) ??
+			document.body;
 		function scoreBoxes(): HTMLElement[] {
 			return keyedIn(panel, "score");
 		}

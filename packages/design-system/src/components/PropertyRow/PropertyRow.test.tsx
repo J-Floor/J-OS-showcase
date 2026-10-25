@@ -4,7 +4,7 @@ import { afterEach, expect, test } from "vitest";
 afterEach(cleanup);
 
 import { defineFields } from "../../utils/fields.ts";
-import { MORPH_KEY } from "../../utils/morphPairing.ts";
+import { MORPH_KEY } from "../../utils/morphNames.ts";
 
 import { PropertyRow } from "./PropertyRow.tsx";
 

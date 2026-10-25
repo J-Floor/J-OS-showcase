@@ -1,27 +1,34 @@
 /* eslint-disable max-lines -- one cohesive module: a morph's ends, its surface, its source and its flights decide together what each snapshot holds */
+import { Result } from "neverthrow";
+
 import {
+	BOX_CLASS,
+	BOX_SLOT_VARS,
 	GHOST_GEOMETRY_VARS,
-	GHOST_VARS,
+	MORPH_BOX_SLOTS,
 	MORPH_GHOST,
+	MORPH_LAYER,
 	MORPH_PINNED,
+	MORPH_PINNED_HELD,
 	MORPH_SCRIM,
-	MORPH_SETTLING,
-	MORPH_STRIPPED,
 	MORPH_TITLE,
-	PIN_VARS,
 	SOURCE_CLIP_VAR,
 	SURFACE_FROM_VARS,
 	SURFACE_TO_VARS,
 	type SurfaceProperties,
+	boxSlotClass,
 } from "./morphNames.ts";
 import { ENTITY_SURFACE, keyedValues, titleIn } from "./morphPairing.ts";
 import {
+	PART_CLASS,
 	type TransitionScope,
 	canAnimate,
 	isTransitionRunning,
 	moveName,
+	type PartName,
 	partName,
 	runningScope,
+	stackedName,
 	surfaceError,
 	viewTransition,
 } from "./viewTransition.ts";
@@ -31,8 +38,6 @@ import {
 	fullyVisibleOrNull,
 	visibleRect,
 } from "./visibleArea.ts";
-
-export { MORPH_GHOST, MORPH_SCRIM, MORPH_STRIPPED };
 
 /** A control that takes typing: a morph out of (or into) one scales. */
 const TEXT_CONTROL = `input:not([type="checkbox"], [type="radio"]), textarea, [role="combobox"], [role="textbox"]`;
@@ -51,7 +56,25 @@ type MorphLook = "box" | "scale";
 /** What a surface morph draws: the box's fill, border and corner. */
 type Surface = Record<keyof SurfaceProperties, string>;
 
-type Handoff = { claimedTarget?: () => HTMLElement | null; open: boolean };
+/**
+ * What a closing overlay hands to the one that takes its place, when it
+ * hands them on: the element it opened out of and where focus goes back to.
+ * The claimant then stands where the closer stood and closes as it would
+ * have (a sheet's discard prompt closes into the sheet's row).
+ */
+export type HandedOn = {
+	source: HTMLElement | null;
+	opener: HTMLElement | null;
+};
+
+type Handoff = {
+	claimedTarget?: () => HTMLElement | null;
+	open: boolean;
+	handedOn?: HandedOn;
+};
+
+/** A claimed handoff: what the closer handed on, if anything. */
+export type Claim = { handedOn: HandedOn | undefined };
 
 /** One handoff per transition session, keyed by its scope. */
 const handoffs = new WeakMap<TransitionScope, Handoff>();
@@ -69,12 +92,12 @@ function isClear(color: string): boolean {
 	return color === "" || color === "transparent" || ZERO_ALPHA.test(color);
 }
 
+const matchesHeld = Result.fromThrowable((element: HTMLElement) =>
+	element.matches(":hover, :active")
+);
+
 function isHeld(element: HTMLElement): boolean {
-	try {
-		return element.matches(":hover, :active");
-	} catch {
-		return false;
-	}
+	return matchesHeld(element).unwrapOr(false);
 }
 
 /**
@@ -94,7 +117,6 @@ function atRest<T>(
 	const copy = element.cloneNode(false) as HTMLElement;
 	copy.removeAttribute("id");
 	copy.removeAttribute(MORPH_PINNED);
-	copy.removeAttribute(MORPH_STRIPPED);
 	element.after(copy);
 	try {
 		return read(getComputedStyle(copy));
@@ -134,31 +156,44 @@ function isTextField(element: HTMLElement): boolean {
 	return textControlOf(element) !== null;
 }
 
+/**
+ * The box `root`'s field paints on: the first element that paints, from its
+ * text control up to `root` (the DS Field's input wrapper). `root` itself
+ * counts only `isRootIncluded`: an end's own paint is {@link hasContainer}'s.
+ */
+function fieldBoxIn(
+	root: HTMLElement,
+	isRootIncluded = false
+): HTMLElement | null {
+	const stop = isRootIncluded ? root.parentElement : root;
+	for (
+		let node = textControlOf(root);
+		node && node !== stop;
+		node = node.parentElement
+	) {
+		if (paints(node)) return node;
+	}
+	return null;
+}
+
 /** A field root paints on the box around its control (the DS Field's input
  *  wrapper), not on itself: the field is that box. */
 function fieldBoxPaints(root: HTMLElement): boolean {
-	for (
-		let node = textControlOf(root);
-		node && node !== root;
-		node = node.parentElement
-	) {
-		if (paints(node)) return true;
-	}
-	return false;
+	return fieldBoxIn(root) !== null;
 }
 
 /**
  * True when the element is a surface of its own: a table row or an entity
- * element, anything that paints a background, a border or a shadow at rest,
- * or a field root whose control's box does. A morph out of one grows that
- * surface into the target; one out of an icon button or a bare glyph leaves
- * it in place and grows the target out of its box. Internal: exported for
- * its tests.
+ * element, anything whose {@link paintedBox} paints a background, a border
+ * or a shadow at rest, or a field root whose control's box does. A morph
+ * out of one grows that surface into the target; one out of an icon button
+ * or a bare glyph leaves it in place and grows the target out of its box.
+ * Internal: exported for its tests.
  */
 export function hasContainer(element: HTMLElement): boolean {
 	return (
 		element.matches(ENTITY_SURFACE) ||
-		paints(element) ||
+		paints(paintedBox(element)) ||
 		fieldBoxPaints(element)
 	);
 }
@@ -179,16 +214,9 @@ function lookKind(look: MorphLook): "morph-scale" | "morph-box" {
 	return look === "scale" ? "morph-scale" : "morph-box";
 }
 
-/** The four border colours, top, right, bottom, left. */
-function borderColors(style: CSSStyleDeclaration): string {
-	return BORDER_SIDES.map((side) =>
-		style.getPropertyValue(`border-${side}-color`)
-	).join(" ");
-}
-
 /**
- * Which morph holds each piece of shared state it sets: an element's strip or
- * pin, the root's surface vars, the source clip. A morph that starts while
+ * Which morph holds each piece of shared state it sets: an element's pin,
+ * the root's surface vars, the source clip. A morph that starts while
  * the last one is still finishing (a row clicked again as its sheet closes
  * into it) takes the same row and root vars; the earlier morph's cleanup
  * then lets go of only what it still holds, like the transition names
@@ -201,11 +229,6 @@ class Holds {
 		this.holders.set(key, holder);
 	}
 
-	/** Forgets `key`, whoever holds it. */
-	forget(key: object): void {
-		this.holders.delete(key);
-	}
-
 	/** True, and forgotten, if `holder` still holds `key`. */
 	release(key: object, holder: object): boolean {
 		if (this.holders.get(key) !== holder) return false;
@@ -215,44 +238,60 @@ class Holds {
 }
 
 const pins = new Holds();
-const strips = new Holds();
 const roots = new Holds();
 /** The root's surface vars, and its source clip: one key each in `roots`. */
 const ROOT_SURFACE = {};
 const ROOT_CLIP = {};
+/** Each box-flight slot's vars: one key per slot in `roots`. */
+const ROOT_BOX_SLOTS = BOX_SLOT_VARS.map(() => ({}));
 
-function pinOne(element: HTMLElement, style: CSSStyleDeclaration): void {
-	// Read before the attribute is set: the style is live, and the pin rule
-	// would apply before its vars exist.
-	const background = style.backgroundColor || CLEAR;
-	const border = borderColors(style);
-	element.style.setProperty(PIN_VARS[0], background);
-	element.style.setProperty(PIN_VARS[1], border);
-	element.setAttribute(MORPH_PINNED, "");
-}
-
-/** `element` and its children that paint their own fill (a sticky cell
- *  mirrors the row's hover fill). */
-function surfaceLayers(element: HTMLElement): HTMLElement[] {
-	const layers = [element];
-	for (const child of element.children) {
-		if (
-			!(child instanceof HTMLElement) ||
-			isClear(getComputedStyle(child).backgroundColor)
-		) {
-			continue;
-		}
-		layers.push(child);
+/** The element child `element`'s whole content is, if it is one: no other
+ *  element and no text beside it. */
+function soleChild(element: HTMLElement): HTMLElement | null {
+	if (element.childElementCount !== 1) return null;
+	for (const node of element.childNodes) {
+		const isText = node.nodeType === Node.TEXT_NODE;
+		if (isText && node.textContent?.trim()) return null;
 	}
-	return layers;
+	const child = element.firstElementChild;
+	return child instanceof HTMLElement ? child : null;
 }
 
-/** Pins the look of `source`'s {@link surfaceLayers} for `holder`. Returns
- *  them. */
+/**
+ * The box `element` shows on screen: `element` if it paints, else the first
+ * element that does down the chain of sole children (a `Morph` wrapper's
+ * card, a value that is one status pill); `element` when none paints. A
+ * painted element beside text or another element is only part of the
+ * content, never its box. Internal: exported for its tests.
+ */
+export function paintedBox(element: HTMLElement): HTMLElement {
+	for (let node: HTMLElement | null = element; node; node = soleChild(node)) {
+		if (paints(node)) return node;
+	}
+	return element;
+}
+
+/** `source` if the pointer holds it, then each held element down from it:
+ *  one path, as `:hover` holds an element and its ancestors. */
+function heldChain(source: HTMLElement): HTMLElement[] {
+	const chain: HTMLElement[] = [];
+	let node: HTMLElement | undefined = source;
+	while (node && isHeld(node)) {
+		chain.push(node);
+		node = [...node.children].find(
+			(child): child is HTMLElement =>
+				child instanceof HTMLElement && isHeld(child)
+		);
+	}
+	return chain;
+}
+
+/** Pins the elements of `source` the pointer holds ({@link MORPH_PINNED}),
+ *  for `holder`. Returns them. */
 function pinLook(source: HTMLElement, holder: object): HTMLElement[] {
-	const pinned = surfaceLayers(source);
+	const pinned = heldChain(source);
 	for (const element of pinned) {
-		pinOne(element, getComputedStyle(element));
+		element.setAttribute(MORPH_PINNED, MORPH_PINNED_HELD);
 		pins.take(element, holder);
 	}
 	return pinned;
@@ -261,60 +300,16 @@ function pinLook(source: HTMLElement, holder: object): HTMLElement[] {
 /** Lets go of the pins `holder` still holds. */
 function unpin(elements: HTMLElement[], holder: object): void {
 	for (const element of elements) {
-		if (!pins.release(element, holder)) continue;
-		element.removeAttribute(MORPH_PINNED);
-		for (const name of PIN_VARS) element.style.removeProperty(name);
+		if (pins.release(element, holder))
+			element.removeAttribute(MORPH_PINNED);
 	}
-}
-
-/** Gives the elements `holder` still holds stripped their surface back. */
-function unstrip(stripped: HTMLElement[], holder: object): void {
-	restoreSurface(
-		stripped.filter((element) => strips.release(element, holder))
-	);
-}
-
-/**
- * Takes back a strip an earlier morph still holds on `element` or its
- * children (a row clicked again as its sheet closes into it), so the new
- * morph reads the element's own surface, then strips it for itself.
- */
-function reclaim(element: HTMLElement | null): void {
-	if (!element) return;
-	const held = [element, ...element.children].filter(
-		(layer): layer is HTMLElement =>
-			layer instanceof HTMLElement && layer.hasAttribute(MORPH_STRIPPED)
-	);
-	for (const layer of held) strips.forget(layer);
-	restoreSurface(held);
-}
-
-/** Gives `elements` their surface back at once, without their own
- *  transition ({@link MORPH_SETTLING}). */
-function restoreSurface(elements: HTMLElement[]): void {
-	for (const element of elements) {
-		element.setAttribute(MORPH_SETTLING, "");
-		element.removeAttribute(MORPH_STRIPPED);
-	}
-	// Reading the style applies the surface now, while no transition runs.
-	for (const element of elements)
-		getComputedStyle(element).getPropertyValue("background-color");
-	for (const element of elements) element.removeAttribute(MORPH_SETTLING);
-}
-
-/** Strips the surface off `element`'s {@link surfaceLayers} for `holder`.
- *  Returns them. */
-function strip(element: HTMLElement, holder: object): HTMLElement[] {
-	const stripped = surfaceLayers(element);
-	for (const layer of stripped) {
-		layer.setAttribute(MORPH_STRIPPED, "");
-		strips.take(layer, holder);
-	}
-	return stripped;
 }
 
 function surfaceOf(element: HTMLElement): Surface {
-	const style = getComputedStyle(element);
+	return surfaceIn(getComputedStyle(element));
+}
+
+function surfaceIn(style: CSSStyleDeclaration): Surface {
 	return {
 		background: style.backgroundColor || CLEAR,
 		borderColor: style.borderTopColor || CLEAR,
@@ -362,22 +357,47 @@ function clipSource(element: HTMLElement, holder: object): void {
 	roots.take(ROOT_CLIP, holder);
 }
 
-/** Clears the surface vars and the source clip `holder` still holds. */
+/** Box-flight slot `slot`'s surface, from one end's box to the other's,
+ *  for `holder`. */
+function setBoxSurfaces(
+	slot: number,
+	from: Surface,
+	to: Surface,
+	holder: object
+): void {
+	const root = document.documentElement.style;
+	writeSurface(root, BOX_SLOT_VARS[slot].from, from);
+	writeSurface(root, BOX_SLOT_VARS[slot].to, to);
+	roots.take(ROOT_BOX_SLOTS[slot], holder);
+}
+
+/** Clears the surface vars, the box-flight vars and the source clip
+ *  `holder` still holds. */
 function clearRoot(holder: object): void {
+	const root = document.documentElement.style;
 	if (roots.release(ROOT_SURFACE, holder)) {
-		const root = document.documentElement.style;
 		clearSurface(root, SURFACE_FROM_VARS);
 		clearSurface(root, SURFACE_TO_VARS);
 	}
+	ROOT_BOX_SLOTS.forEach((key, slot) => {
+		if (!roots.release(key, holder)) return;
+		clearSurface(root, BOX_SLOT_VARS[slot].from);
+		clearSurface(root, BOX_SLOT_VARS[slot].to);
+	});
 	if (roots.release(ROOT_CLIP, holder)) {
 		document.documentElement.style.removeProperty(SOURCE_CLIP_VAR);
 	}
 }
 
-/** A content-free box exactly over the on-screen part of `at`'s border box
- *  (a row scrolled sideways starts from what is visible, not its full
- *  width), painting `surface`. */
-function placeGhost(at: HTMLElement, surface: Surface): HTMLElement {
+/**
+ * A content-free box exactly over the on-screen part of `at`'s border box (a
+ * row scrolled sideways starts from what is visible, not its full width). It
+ * carries geometry only and paints nothing: an open's ghost is in the frame
+ * the browser keeps on screen while the update renders, so a painted surface
+ * would cover its source's text there; the morph's surface is drawn on the
+ * image pair instead, and the ghost's own snapshot is hidden.
+ */
+function placeGhost(at: HTMLElement): HTMLElement {
 	const box = visibleRect(at);
 	const ghost = document.createElement("div");
 	ghost.setAttribute(MORPH_GHOST, "");
@@ -388,7 +408,6 @@ function placeGhost(at: HTMLElement, surface: Surface): HTMLElement {
 			`${box[key as keyof typeof GHOST_GEOMETRY_VARS]}px`
 		);
 	}
-	writeSurface(ghost.style, GHOST_VARS, surface);
 	document.body.append(ghost);
 	return ghost;
 }
@@ -400,18 +419,18 @@ function faded(surface: Surface): Surface {
 
 /**
  * The handoff a closing overlay offers: an overlay that opens inside the
- * same transition calls this and, when it returns true, opens through
+ * same transition calls this and, when it returns a claim, opens through
  * {@link joinHandoff}; the closer then names the NEW overlay instead of
  * morphing back to its own source, so the picked palette row grows into
- * the sheet it opened.
+ * the sheet it opened. The claim carries what the closer handed on.
  */
-export function claimHandoff(target: () => HTMLElement | null): boolean {
+export function claimHandoff(target: () => HTMLElement | null): Claim | null {
 	const scope = runningScope();
-	if (!scope) return false;
+	if (!scope) return null;
 	const handoff = handoffOf(scope);
-	if (!handoff.open || handoff.claimedTarget) return false;
+	if (!handoff.open || handoff.claimedTarget) return null;
 	handoff.claimedTarget = target;
-	return true;
+	return { handedOn: handoff.handedOn };
 }
 
 /**
@@ -436,13 +455,9 @@ type MorphOptions = {
 	/** An overlay opening (the default) or closing. A close offers its
 	 *  handoff (see {@link claimHandoff}). */
 	direction?: "open" | "close";
-};
-
-const CLEAR_SURFACE: Surface = {
-	background: CLEAR,
-	borderColor: CLEAR,
-	borderWidth: "0px",
-	radius: "0px",
+	/** A close's source and opener, handed to the overlay that claims its
+	 *  handoff. */
+	handsOn?: HandedOn;
 };
 
 /** Animating, and not joining a running transition: its old snapshot is
@@ -468,24 +483,33 @@ class MorphEnds {
 	target: HTMLElement | null = null;
 	/** Stands in for the trigger: in the old snapshot on open, the new on close. */
 	ghost: HTMLElement | null = null;
-	/** A close target with a container, named `jf-morph-source`: its content
-	 *  fades in where it is. */
+	/** A close target with a container, named `jf-morph-source` on its
+	 *  {@link paintedBox}: its content fades in where it is. */
 	fadingIn: HTMLElement | null = null;
-	/** An open source with a container, named `jf-morph-source`: hidden while
-	 *  open, its content fades out where it is. */
+	/** An open source with a container, named `jf-morph-source` on its
+	 *  {@link paintedBox}: hidden while open, its content fades out where it
+	 *  is. */
 	readonly fadingOut: HTMLElement | null = null;
 	/** A surface may be drawn ({@link canDrawSurface}, with a source). An
 	 *  open also needs the box look; a close learns its look from its
 	 *  target, at {@link resolve}. */
 	readonly isSurface: boolean;
+	/** The overlay's marked scrim fades with this morph, whatever its look
+	 *  and with or without a source: the overlay's own fade is off under a
+	 *  morph. */
+	private readonly fadesScrim: boolean;
 	readonly isClosing: boolean;
+	/** The surface is drawn (`morph-grow` or `morph-shrink`): known once
+	 *  {@link resolve} ran. Box flights draw theirs only then. */
+	private drawsSurface = false;
+	/** A close whose handoff was claimed: its target is the claimant. Known
+	 *  once {@link resolve} ran. */
+	private isHandedOff = false;
 	/** An open's look, from its source. */
 	readonly openLook: MorphLook;
 	private readonly fromSurface: Surface | undefined;
 	/** What {@link pinLook} pinned; let go in {@link cleanUp}. */
 	private readonly pinned: HTMLElement[] = [];
-	/** What {@link strip} stripped; let go in {@link cleanUp}. */
-	private stripped: HTMLElement[] = [];
 	private targetValues: Map<string, HTMLElement> | undefined;
 	private closeValues: Map<string, HTMLElement> | undefined;
 	private readonly options: MorphOptions;
@@ -495,40 +519,34 @@ class MorphEnds {
 		const { from } = options;
 		this.isClosing = options.direction === "close";
 		this.target = closeTargetOf(options);
-		// Before anything reads its look.
-		reclaim(from);
 		this.openLook = this.isClosing ? "box" : lookOf(from);
+		this.fadesScrim = canDrawSurface();
 		this.isSurface =
-			this.openLook === "box" && canDrawSurface() && from !== null;
+			this.openLook === "box" && this.fadesScrim && from !== null;
 		if (!this.isSurface || !from) return;
+		const box = paintedBox(from);
 		if (this.isClosing) {
-			this.fromSurface = surfaceOf(from);
+			this.fromSurface = surfaceOf(box);
 			return;
 		}
 		const isContainer = hasContainer(from);
-		// Pinned first: the surface then starts from the pinned colours.
+		// Pinned first: the surface then starts from the held look.
 		this.pinned = pinLook(from, this);
 		if (isContainer) {
-			this.fadingOut = from;
-			this.fromSurface = surfaceOf(from);
-			clipSource(from, this);
+			this.fadingOut = box;
+			this.fromSurface = surfaceOf(box);
+			clipSource(box, this);
 		}
-		this.ghost = placeGhost(from, this.fromSurface ?? CLEAR_SURFACE);
-		// Last: the pin and the surface read the source's live style.
-		if (isContainer) this.stripped = strip(from, this);
+		this.ghost = placeGhost(box);
 	}
 
 	/** What carries `jf-morph` in the new snapshot. */
 	resolve(scope: TransitionScope): HTMLElement | null {
 		if (this.isClosing) {
-			const claimed = handoffOf(scope).claimedTarget;
-			// Handed off: the claimant's look wins, and the picked row grows
-			// into the new overlay as is.
-			if (claimed) {
-				this.target = claimed() ?? this.target;
-				return this.target;
-			}
-			return this.resolveClose(scope, this.target);
+			const claimant = handoffOf(scope).claimedTarget?.() ?? null;
+			return claimant
+				? this.handOff(scope, claimant)
+				: this.resolveClose(scope, this.target);
 		}
 		this.target = this.options.to();
 		return this.target && this.isSurface
@@ -541,8 +559,6 @@ class MorphEnds {
 		scope: TransitionScope,
 		target: HTMLElement | null
 	): HTMLElement | null {
-		// Before anything reads its look: an open still finishing may strip it.
-		reclaim(target);
 		const look = lookOf(target);
 		scope.kind(lookKind(look));
 		return target && this.fromSurface && look === "box"
@@ -553,13 +569,36 @@ class MorphEnds {
 	/** Open: the surface goes from the source's (or, without a container,
 	 *  the target's own) to the target's. */
 	private grow(scope: TransitionScope, target: HTMLElement): HTMLElement {
-		const toSurface = surfaceOf(target);
+		const toSurface = surfaceOf(paintedBox(target));
 		setSurfaces(this.fromSurface ?? toSurface, toSurface, this);
+		this.drawsSurface = true;
 		scope.kind("morph-grow");
 		return target;
 	}
 
-	/** Close: the card shrinks into a ghost of the target's surface, or, over
+	/**
+	 * Handed off: the claimant's look wins (the box look, `joinHandoff`), and
+	 * the closer's box (its card, or the picked row) grows into the
+	 * claimant's as on an open, the surface carrying the motion. The old
+	 * snapshot is a real overlay, not a ghost, so it fades out fast rather
+	 * than hiding (`morph-handoff`). A closer that joined a running
+	 * transition has no surface to start from: the claimant takes the name
+	 * as is.
+	 */
+	private handOff(
+		scope: TransitionScope,
+		claimant: HTMLElement
+	): HTMLElement {
+		this.target = claimant;
+		this.isHandedOff = true;
+		if (!this.fromSurface) return claimant;
+		setSurfaces(this.fromSurface, surfaceOf(paintedBox(claimant)), this);
+		this.drawsSurface = true;
+		scope.kind("morph-handoff");
+		return claimant;
+	}
+
+	/** Close: the card shrinks into the target's box and surface, or, over
 	 *  a target without a container, to its box while it fades. */
 	private shrink(
 		scope: TransitionScope,
@@ -567,15 +606,13 @@ class MorphEnds {
 		fromSurface: Surface
 	): HTMLElement {
 		const isContainer = hasContainer(target);
-		const toSurface = isContainer ? surfaceOf(target) : faded(fromSurface);
+		const box = paintedBox(target);
+		const toSurface = isContainer ? surfaceOf(box) : faded(fromSurface);
 		setSurfaces(fromSurface, toSurface, this);
-		this.ghost = placeGhost(target, toSurface);
-		this.fadingIn = isContainer ? target : null;
-		if (isContainer) {
-			clipSource(target, this);
-			// After the surface is read: the ghost brings it back in.
-			this.stripped = strip(target, this);
-		}
+		this.ghost = placeGhost(box);
+		this.fadingIn = isContainer ? box : null;
+		if (isContainer) clipSource(box, this);
+		this.drawsSurface = true;
 		scope.kind("morph-shrink");
 		return this.ghost;
 	}
@@ -607,16 +644,41 @@ class MorphEnds {
 		);
 	}
 
-	/** The scrim that fades out with a box-look close, in the old snapshot. */
+	/** The scrim that fades out with a close, in the old snapshot. */
 	closingScrim(): HTMLElement | null {
-		return this.isClosing && this.isSurface
+		return this.isClosing && this.fadesScrim
 			? scrimOf(this.options.from)
 			: null;
 	}
 
-	/** The scrim that fades in with a box-look open, in the new snapshot. */
+	/** The scrim that fades in with an open, in the new snapshot; on a
+	 *  handoff the claimant's, so one scrim runs through. */
 	openingScrim(): HTMLElement | null {
-		return !this.isClosing && this.isSurface ? scrimOf(this.target) : null;
+		const isOpening = !this.isClosing || this.isHandedOff;
+		return isOpening && this.fadesScrim ? scrimOf(this.target) : null;
+	}
+
+	/**
+	 * Turns the paired `flights` whose ends paint a field box into box
+	 * flights, one slot each while slots last: the slot's surfaces on
+	 * `<html>`, its classes on the new end. Runs after the new end is named,
+	 * just before the new snapshot: nothing changes on the page before the
+	 * old one. Only with the morph's own surface (the same kinds draw both).
+	 */
+	flyBoxes(flights: PartFlight[]): void {
+		if (!this.drawsSurface) return;
+		let slot = 0;
+		for (const flight of flights) {
+			if (slot === MORPH_BOX_SLOTS) return;
+			const box = flight.boxSurfaces();
+			if (!box) continue;
+			setBoxSurfaces(slot, box.from, box.to, this);
+			box.target.style.setProperty(
+				"view-transition-class",
+				`${PART_CLASS} ${BOX_CLASS} ${boxSlotClass(slot)}`
+			);
+			slot += 1;
+		}
 	}
 
 	/** An open's ghost leaves before the new snapshot: the target takes over. */
@@ -628,7 +690,6 @@ class MorphEnds {
 	cleanUp(): void {
 		this.ghost?.remove();
 		unpin(this.pinned, this);
-		unstrip(this.stripped, this);
 		clearRoot(this);
 	}
 }
@@ -649,21 +710,114 @@ function scrimOf(card: HTMLElement | null): HTMLElement | null {
 	return null;
 }
 
+/**
+ * One keyed value's flight (`jf-morph-part-<key>`). At each end it names the
+ * box the value paints ({@link valueBox}), else the value: the group then
+ * moves and sizes the box itself, not a cell around it (a row's score field beside its key hint). A pair
+ * with a box at either end takes the box flight ({@link MorphEnds.flyBoxes}):
+ * one box is enough, as for the card, whose surface fades out over an end
+ * without one. Text pairs keep the text flight.
+ */
+class PartFlight {
+	readonly name: PartName;
+	/** What the flight names in the old snapshot. */
+	readonly from: HTMLElement;
+	/** What it names in the new one, once {@link resolve} found it. */
+	target: HTMLElement | null = null;
+	/** The source's box surface, read before the transition and at rest
+	 *  (Chrome drops the hover as it starts; the old snapshot has none). */
+	private readonly fromSurface: Surface | undefined;
+	private toBox: HTMLElement | null = null;
+	private readonly key: string;
+
+	constructor(key: string, value: HTMLElement) {
+		this.key = key;
+		this.name = partName(key);
+		const box = valueBox(value);
+		this.from = box ?? value;
+		this.fromSurface = box ? atRest(box, surfaceIn) : undefined;
+	}
+
+	/** The new end: the target's value with this key, or its box. */
+	resolve(ends: MorphEnds): HTMLElement | null {
+		const value = ends.valueFor(this.key);
+		this.toBox = value ? valueBox(value) : null;
+		this.target = this.toBox ?? value;
+		return this.target;
+	}
+
+	/** The box flight's new end and its surfaces, from and to, if the pair
+	 *  has a box and its new end took the name (a duplicate is refused). */
+	boxSurfaces(): { target: HTMLElement; from: Surface; to: Surface } | null {
+		const { target } = this;
+		const isNamed =
+			target?.style.getPropertyValue("view-transition-name") ===
+			this.name;
+		if (!target || !isNamed) return null;
+		const to = this.toBox ? surfaceOf(this.toBox) : undefined;
+		if (this.fromSurface) {
+			return {
+				target,
+				from: this.fromSurface,
+				to: to ?? faded(this.fromSurface),
+			};
+		}
+		return to ? { target, from: faded(to), to } : null;
+	}
+}
+
+/**
+ * The box a keyed value paints, if any: its field's box ({@link fieldBoxIn},
+ * the value itself included), else the {@link paintedBox} the whole value
+ * is when that paints (a status pill). A pill beside other content is part
+ * of the value and has no box of its own: the value flies as text.
+ */
+function valueBox(value: HTMLElement): HTMLElement | null {
+	const field = fieldBoxIn(value, true);
+	if (field) return field;
+	const box = paintedBox(value);
+	return paints(box) ? box : null;
+}
+
 /** The source's values that fly: every keyed one fully on screen. */
-function flyingValues(
-	from: HTMLElement | null,
-	ends: MorphEnds
-): [string, HTMLElement][] {
+function flyingValues(from: HTMLElement | null, ends: MorphEnds): PartFlight[] {
 	// A source without a container stays live: nothing leaves it.
 	const hasFlights = ends.isClosing || ends.fadingOut !== null;
-	const flying: [string, HTMLElement][] = [];
+	const flying: PartFlight[] = [];
 	if (!from || !hasFlights) return flying;
-	for (const entry of keyedValues(from)) {
-		if (isFullyVisible(entry[1]) && ends.landsOnClose(entry[0]))
-			flying.push(entry);
+	for (const [key, value] of keyedValues(from)) {
+		if (isFullyVisible(value) && ends.landsOnClose(key))
+			flying.push(new PartFlight(key, value));
 	}
 	return flying;
 }
+
+/**
+ * The overlays shown under the one this morph opens or closes (the closing
+ * one holds the close's source). Each steps back or forward in the update,
+ * where its stylesheet runs no transition of its own under a morph, so each
+ * is named in both snapshots and the browser moves it: a close's target
+ * inside one is then measured where it will rest. None in a morph that
+ * joins a running transition: its old snapshot is already taken, and a
+ * group in the new one only would fade the overlay in from nothing.
+ */
+function stackedUnder(options: MorphOptions): HTMLElement[] {
+	if (!canDrawSurface()) return [];
+	const closing = options.direction === "close" ? options.from : null;
+	return [
+		...document.querySelectorAll<HTMLElement>(`[${MORPH_LAYER}]`),
+	].filter((layer) => !closing || !layer.contains(closing));
+}
+
+/** Opens a close's handoff, with what it hands on. */
+function offer(handoff: Handoff, options: MorphOptions): void {
+	handoff.open = true;
+	handoff.handedOn = options.handsOn;
+}
+
+const cleanUpEnds = Result.fromThrowable((ends: MorphEnds) => {
+	ends.cleanUp();
+});
 
 /**
  * Moves the one morph name (`jf-morph`) from `from` (old snapshot) to `to()`
@@ -675,16 +829,19 @@ function flyingValues(
  * The look comes from the trigger's end ({@link lookOf}): the source on
  * open, the close target on close. A text field scales (`morph-scale`);
  * anything else takes the box look (`morph-box`), which draws a surface
- * between the ends (`morph-grow` on open, `morph-shrink` on close). A source
- * with a container ({@link hasContainer}) is replaced by a ghost of its
- * surface that grows into the target, while its own content
- * (`jf-morph-source`, its surface stripped: {@link MORPH_STRIPPED}) fades in
- * place, under the growing surface; a source without one stays live and
- * the target grows out of its box. A close is the reverse. Each keyed
+ * between the ends (`morph-grow` on open, `morph-shrink` on close). A ghost
+ * of the trigger's box ({@link MORPH_GHOST}, geometry only) carries the
+ * morph's name on the trigger's side. A source with a container
+ * ({@link hasContainer}) gives the surface its start: it grows from the
+ * source's box and colours into the target, while the source itself, fill
+ * and all (`jf-morph-source`), fades in place under it; a source without
+ * one stays live and the target grows out of its box. A close is the reverse. Each keyed
  * value of the source (a table cell) flies into the target's value with the
  * same key (a sheet field), each named by its key (`jf-morph-part-<key>`,
- * class `jf-morph-part`). An open's source
- * keeps its look for the transition ({@link MORPH_PINNED}).
+ * class `jf-morph-part`). The elements of an open's source the pointer
+ * holds keep their hover look for the transition ({@link MORPH_PINNED}).
+ * Each end's surface, ghost and `jf-morph-source` sit on its
+ * {@link paintedBox} (a bare `Morph` wrapper's card).
  *
  * A closing overlay (`direction: "close"`) offers a handoff (see
  * {@link claimHandoff}). A
@@ -692,10 +849,11 @@ function flyingValues(
  */
 export function morph(options: MorphOptions): Promise<{ handedOff: boolean }> {
 	let captured: Handoff | undefined;
+	const stacked = stackedUnder(options);
 	const ends = new MorphEnds(options);
 	const from = ends.ghost && !ends.isClosing ? ends.ghost : options.from;
 	const title = fullyVisibleOrNull(titleIn(options.from));
-	const values = flyingValues(options.from, ends);
+	const flights = flyingValues(options.from, ends);
 	const done = moveName({
 		from,
 		to: (scope) => ends.resolve(scope),
@@ -716,17 +874,26 @@ export function morph(options: MorphOptions): Promise<{ handedOff: boolean }> {
 				to: () => (title ? ends.titleTarget(title) : null),
 				name: "jf-morph-title",
 			},
-			...values.map(([key, value]) => ({
-				from: value,
-				to: () => ends.valueFor(key),
-				name: partName(key),
+			...flights.map((flight) => ({
+				from: flight.from,
+				to: () => flight.resolve(ends),
+				name: flight.name,
+			})),
+			...stacked.map((layer, index) => ({
+				from: layer,
+				to: () => layer,
+				name: stackedName(index),
 			})),
 		],
 		kind: "morph",
 		update: (scope) => {
 			ends.removeOpenGhost();
+			// After the names above: moveName registered its own first.
+			scope.beforeSnapshot(() => {
+				ends.flyBoxes(flights);
+			});
 			captured = handoffOf(scope);
-			if (ends.isClosing) captured.open = true;
+			if (ends.isClosing) offer(captured, options);
 			// A close's look waits for its target (resolve).
 			if (!ends.isClosing) scope.kind(lookKind(ends.openLook));
 			return options.update();
@@ -735,14 +902,11 @@ export function morph(options: MorphOptions): Promise<{ handedOff: boolean }> {
 	// Offered when the close is asked for, not when its update runs: an
 	// overlay opened right after it, in the same task, must find it open.
 	const session = runningScope();
-	if (ends.isClosing && session) handoffOf(session).open = true;
+	if (ends.isClosing && session) offer(handoffOf(session), options);
 	return done.then(() => {
-		try {
-			ends.cleanUp();
-		} catch (error) {
-			// The caller's own follow-up (a presence's close) must still run.
-			surfaceError(error);
-		}
+		const cleaned = cleanUpEnds(ends);
+		// The caller's own follow-up (a presence's close) must still run.
+		if (cleaned.isErr()) surfaceError(cleaned.error);
 		return {
 			// Read after the transition: a closer whose name was claimed must
 			// not restore focus over the overlay that took over.

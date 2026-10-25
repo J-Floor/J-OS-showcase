@@ -13,6 +13,8 @@
  * Without the API, or under reduced motion, the update runs synchronously and
  * nothing animates.
  */
+import { Result } from "neverthrow";
+
 export const SETTLE_CAP_MS = 50;
 
 const PART_PREFIX = "jf-morph-part-";
@@ -33,6 +35,29 @@ export function partName(key: string): PartName {
 	return `${PART_PREFIX}${CSS.escape(key)}`;
 }
 
+const STACKED_PREFIX = "jf-morph-stacked-";
+
+/**
+ * The class of every overlay open under a morphing one: it steps back or
+ * forward as the morph runs, as its own group.
+ */
+export const STACKED_CLASS = "jf-morph-stacked";
+
+/** An overlay under the morphing one: `jf-morph-stacked-` and its place. */
+export type StackedName = `${typeof STACKED_PREFIX}${number}`;
+
+/** The name of the `index`th overlay under the morphing one, from the
+ *  bottom. */
+export function stackedName(index: number): StackedName {
+	return `${STACKED_PREFIX}${index}`;
+}
+
+/** The class each family of numbered names carries. */
+const NAME_CLASSES: readonly (readonly [prefix: string, cls: string])[] = [
+	[PART_PREFIX, PART_CLASS],
+	[STACKED_PREFIX, STACKED_CLASS],
+];
+
 /**
  * An app's own transition name or kind: the app styles it in its own
  * stylesheet (the pseudo-elements match on the document root, so the rules
@@ -47,6 +72,7 @@ export type TransitionName =
 	| "jf-morph-source"
 	| "jf-morph-title"
 	| PartName
+	| StackedName
 	| "jf-sheet-body"
 	| "jf-brand-backdrop"
 	| "jf-brand-frame"
@@ -59,6 +85,7 @@ export type TransitionKind =
 	| "morph-box"
 	| "morph-grow"
 	| "morph-shrink"
+	| "morph-handoff"
 	| "tab-forward"
 	| "tab-back"
 	| "sheet-next"
@@ -227,11 +254,12 @@ function warnDuplicate(session: Session, name: TransitionName): void {
 	);
 }
 
-/** Sets `name` on `element`, with the part class when it is a part's. */
+/** Sets `name` on `element`, with its family's class when it has one. */
 function writeName(element: HTMLElement, name: TransitionName): void {
 	element.style.setProperty("view-transition-name", name);
-	if (name.startsWith(PART_PREFIX)) {
-		element.style.setProperty("view-transition-class", PART_CLASS);
+	const family = NAME_CLASSES.find(([prefix]) => name.startsWith(prefix));
+	if (family) {
+		element.style.setProperty("view-transition-class", family[1]);
 	} else {
 		element.style.removeProperty("view-transition-class");
 	}
@@ -293,6 +321,17 @@ function cleanUp(session: Session): void {
 	latest = undefined;
 }
 
+/** Starts `update`; its rejection is surfaced, a synchronous throw is the
+ *  Err. */
+const startUpdate = Result.fromThrowable(
+	(update: Update, scope: TransitionScope): Promise<unknown> =>
+		Promise.resolve(update(scope)).catch(surfaceError)
+);
+
+const runCallback = Result.fromThrowable((callback: () => void) => {
+	callback();
+});
+
 /**
  * Starts every queued update; each one's error is surfaced on its own, so
  * the returned promise never rejects.
@@ -304,24 +343,20 @@ function runQueued(session: Session): Promise<unknown> {
 		update;
 		update = session.queue.shift()
 	) {
-		try {
-			running.push(
-				Promise.resolve(update(session.scope)).catch(surfaceError)
-			);
-		} catch (error) {
-			surfaceError(error);
+		const started = startUpdate(update, session.scope);
+		if (started.isErr()) {
+			surfaceError(started.error);
+			continue;
 		}
+		running.push(started.value);
 	}
 	return Promise.all(running);
 }
 
 function runSnapshotCallbacks(session: Session): void {
 	for (const callback of session.snapshotCallbacks.splice(0)) {
-		try {
-			callback();
-		} catch (error) {
-			surfaceError(error);
-		}
+		const ran = runCallback(callback);
+		if (ran.isErr()) surfaceError(ran.error);
 	}
 }
 
@@ -354,12 +389,12 @@ function flushNow(session: Session): void {
 
 /** No API or reduced motion: the update runs now, its errors surfaced. */
 function runWithoutTransition(update: Update): Promise<void> {
-	try {
-		return Promise.resolve(update(noScope())).then(() => {}, surfaceError);
-	} catch (error) {
-		surfaceError(error);
+	const started = startUpdate(update, noScope());
+	if (started.isErr()) {
+		surfaceError(started.error);
 		return Promise.resolve();
 	}
+	return started.value.then(() => {});
 }
 
 function warnStartFailed(error: unknown): void {
@@ -370,6 +405,12 @@ function warnStartFailed(error: unknown): void {
 		error
 	);
 }
+
+const startTransition = Result.fromThrowable(
+	(update: () => Promise<void>): ViewTransition =>
+		// eslint-disable-next-line no-restricted-properties -- the one place allowed to call the View Transitions API
+		document.startViewTransition(update)
+);
 
 type TransitionOptions = {
 	kind?: TransitionKind;
@@ -408,23 +449,21 @@ export function viewTransition(
 		cleanUp(session);
 		session.settle();
 	}
-	let transition: ViewTransition;
-	try {
-		// eslint-disable-next-line no-restricted-properties -- the one place allowed to call the View Transitions API
-		transition = document.startViewTransition(async () => {
-			try {
-				await drain(session);
-			} finally {
-				if (updating === session) updating = undefined;
-			}
-		});
-	} catch (error) {
+	const started = startTransition(async () => {
+		try {
+			await drain(session);
+		} finally {
+			if (updating === session) updating = undefined;
+		}
+	});
+	if (started.isErr()) {
 		// E.g. a hidden document: no animation, but the update still runs.
-		warnStartFailed(error);
+		warnStartFailed(started.error);
 		flushNow(session);
 		finish();
 		return session.finished;
 	}
+	const transition = started.value;
 	// A skipped transition (a duplicate name, say) rejects `ready`; some
 	// Chromes log that as uncaught. `finished` below covers the cleanup.
 	// Promise.resolve: test fakes return no `ready`.

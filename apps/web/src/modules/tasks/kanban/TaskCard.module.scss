@@ -1,3 +1,5 @@
+@use "@j-os/design-system/hover";
+
 .card {
 	display: flex;
 	flex-direction: column;
@@ -8,8 +10,7 @@
 	border: 1px solid var(--jf-border-subtle);
 	border-radius: var(--jf-radius-container);
 
-	/* stylelint-disable-next-line defensive-css/no-accidental-hover -- pointer-capable control; mobile accidental-hover not a concern */
-	&:hover {
+	@include hover.hover {
 		border-color: var(--jf-border-strong);
 	}
 

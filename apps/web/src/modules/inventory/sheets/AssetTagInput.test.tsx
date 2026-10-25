@@ -16,12 +16,14 @@ function renderInput(initial = "", hasError = false) {
 		const [value, setValue] = createSignal(initial);
 		return (
 			<AssetTagInput
-				value={value()}
-				onChange={(tag) => {
-					changes.push(tag);
-					setValue(tag);
+				field={{
+					value,
+					set: (tag) => {
+						changes.push(tag);
+						setValue(tag);
+					},
+					flush: onFlush,
 				}}
-				onFlush={onFlush}
 				hasError={hasError}
 			/>
 		);

@@ -3,6 +3,7 @@ import {
 	useTabsContext,
 	type TabsValueChangeDetails,
 } from "@ark-ui/solid/tabs";
+import { mergeRefs } from "@solid-primitives/refs";
 import clsx from "clsx";
 import {
 	For,
@@ -238,12 +239,9 @@ function Root<K extends string = string>(props: TabsRootProps<K>) {
 		<ActionsContext.Provider value={createActionsRegistry()}>
 			<ArkTabs.Root
 				{...rest}
-				ref={(element: HTMLElement) => {
+				ref={mergeRefs((element: HTMLElement) => {
 					rootElement = element;
-					(
-						local.ref as ((target: HTMLElement) => void) | undefined
-					)?.(element);
-				}}
+				}, local.ref)}
 				value={value()}
 				onValueChange={change}
 			/>

@@ -29,8 +29,7 @@ import styles from "./DecisionBar.module.scss";
  * All buttons are `secondary`: one primary among them would read as the
  * recommended answer, and which decision a person deserves is the board's
  * judgement, not the console's. The `Kbd` chip is inline, so it shows only while
- * peeking. A `member` action is wrapped in `Confetti` — approving a member is
- * the one decision worth celebrating.
+ * peeking. An action marked `celebrate` is wrapped in `Confetti`.
  */
 export function DecisionBar<Person>(props: {
 	person: Person;
@@ -45,6 +44,7 @@ export function DecisionBar<Person>(props: {
 						<Button
 							classOverride={{ contentClass: styles.tight }}
 							variant="secondary"
+							shortcut={action.hotkey}
 							onClick={() => void action.run(props.person)}
 						>
 							{/* Icon and chip swap rather than share the width: the
@@ -63,10 +63,7 @@ export function DecisionBar<Person>(props: {
 					);
 					return (
 						<Show when={action.can(props.person)}>
-							<Show
-								when={action.id === "member"}
-								fallback={button}
-							>
+							<Show when={action.celebrate} fallback={button}>
 								<Confetti>{button}</Confetti>
 							</Show>
 						</Show>

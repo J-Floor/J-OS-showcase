@@ -5,19 +5,16 @@ import {
 	Skeleton,
 	TextArea,
 } from "@j-os/design-system";
-import { useMutation } from "convex-solidjs";
-import { For, Show, createSignal } from "solid-js";
+import { For, Show } from "solid-js";
 
-import { api } from "../../../../convex/_generated/api";
 import type { Doc } from "../../../../convex/_generated/dataModel";
 import { TEXT_MAX } from "../../../../convex/lib/validate.ts";
-import { call } from "../../../lib/call.ts";
-import { createActionError } from "../../../shared/createActionError.ts";
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
 import { InlineError } from "../../../shared/InlineError.tsx";
 import { formatAgo } from "../../../shared/time.ts";
 import { personFields } from "../fields.ts";
 import { noteAuthor } from "../noteAuthor.ts";
+import { useAddNote } from "../useAddNote.ts";
 
 import styles from "./BoardNotes.module.scss";
 
@@ -63,29 +60,10 @@ function NoteEntry(props: { entry: NoteLogEntry; author: string | undefined }) {
  */
 export function BoardNotes(props: { person: Doc<"people"> }) {
 	const boardLevel = useBoardLevel();
-	const addNote = useMutation(api.people.addNote);
-	const [draft, setDraft] = createSignal("");
-	const { error: noteError, trackResult } = createActionError();
-	let isSaving = false;
+	const note = useAddNote(() => props.person._id);
 
 	function notes() {
 		return props.person.board?.noteLog ?? [];
-	}
-	async function submit(): Promise<void> {
-		const text = draft().trim();
-		// Enter and blur both submit; the draft outlives the save, so
-		// without this one note would be sent twice.
-		if (!text || isSaving) return;
-		isSaving = true;
-		const result = await trackResult(
-			call(
-				addNote.mutateAsync({ id: props.person._id, text }),
-				"Could not save the note."
-			)
-		);
-		isSaving = false;
-		if (result.isErr()) return;
-		setDraft("");
 	}
 
 	return (
@@ -115,17 +93,19 @@ export function BoardNotes(props: { person: Doc<"people"> }) {
 					placeholder="Add a note…"
 					autoresize
 					maxLength={TEXT_MAX}
-					value={draft()}
+					value={note.draft()}
 					onInput={(value) => {
-						setDraft(value);
+						note.setDraft(value);
 					}}
 				/>
-				<InlineError message={noteError()} />
+				<InlineError message={note.error()} />
 				<div class={styles.composerActions}>
 					<Button
-						disabled={!draft().trim()}
+						disabled={!note.draft().trim()}
 						disabledReason="Write a note first"
-						onClick={() => void submit()}
+						onClick={() => {
+							note.submit();
+						}}
 					>
 						Add note
 					</Button>

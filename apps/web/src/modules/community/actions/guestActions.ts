@@ -1,17 +1,18 @@
 import { displayName } from "../../../../convex/lib/names.ts";
+import type { PersonRow } from "../../../../convex/people.ts";
 import { useConfirm } from "../../../shared/confirm.tsx";
 import { ICONS } from "../../../shared/icons.ts";
-import type { GuestRow } from "../columns/guestColumns.tsx";
 import { useOpenAgreement } from "../openAgreement.ts";
 
 import { agreementAction } from "./agreementAction.ts";
+import { useKickOutAction } from "./kickOutAction.ts";
 import { settleRosterAction } from "./RosterActionError.tsx";
 import type { ActionDescriptor, RosterActionOutcome } from "./shortcuts.ts";
 import { useTriage } from "./triage.ts";
 
 // A guest whose access already ended (expired, or already former) can't be
 // kicked out a second time.
-function expired(person: GuestRow): boolean {
+function expired(person: PersonRow): boolean {
 	return person.stage === "expired" || person.tier === "former";
 }
 
@@ -23,13 +24,13 @@ function expired(person: GuestRow): boolean {
  * tab and with no shortcut; folding it in fixes both.
  */
 export function useGuestActions(): {
-	actions: () => ActionDescriptor<GuestRow>[];
+	actions: () => ActionDescriptor<PersonRow>[];
 } {
 	const triage = useTriage();
 	const confirm = useConfirm();
 	const agreement = useOpenAgreement();
 
-	async function upgrade(person: GuestRow): Promise<RosterActionOutcome> {
+	async function upgrade(person: PersonRow): Promise<RosterActionOutcome> {
 		if (
 			await confirm({
 				title: "Upgrade to member?",
@@ -44,23 +45,12 @@ export function useGuestActions(): {
 			);
 	}
 
-	async function kickOut(person: GuestRow): Promise<RosterActionOutcome> {
-		if (
-			await confirm({
-				title: "Kick out?",
-				message: `Revoke ${displayName(person)}'s guest access? They'll be moved to Kicked out, keeping their whole history.`,
-				confirmLabel: "Kick out",
-				tone: "danger",
-			})
-		)
-			return settleRosterAction(
-				"guests",
-				person._id,
-				triage.kickOut(person._id)
-			);
-	}
+	const kickOut = useKickOutAction("guest", {
+		can: (person) => !expired(person),
+		disabledReason: "Guest access has already ended",
+	});
 
-	function actions(): ActionDescriptor<GuestRow>[] {
+	function actions(): ActionDescriptor<PersonRow>[] {
 		return [
 			{
 				id: "member",
@@ -68,19 +58,11 @@ export function useGuestActions(): {
 				icon: ICONS.upgradeToMember,
 				hotkey: "M",
 				scope: "guests",
+				celebrate: true,
 				can: () => true,
 				run: (person) => upgrade(person),
 			},
-			{
-				id: "kick",
-				label: "Kick out",
-				icon: ICONS.kickOut,
-				hotkey: "K",
-				scope: "guests",
-				can: (person) => !expired(person),
-				disabledReason: () => "Guest access has already ended",
-				run: (person) => kickOut(person),
-			},
+			kickOut,
 			agreementAction(agreement, "guests"),
 		];
 	}

@@ -9,22 +9,24 @@ import type {
 	Vertical,
 } from "../../signup/options.ts";
 
+/** The label of the option holding `value`, else the raw value. */
+function optionLabel<Value extends string>(
+	options: readonly { value: Value; label: string }[],
+	value: Value
+): string {
+	return options.find((option) => option.value === value)?.label ?? value;
+}
+
 /** Returns the human-readable label for a productStage enum value,
  *  falling back to the raw value when the entry is not found. */
 export function productStageLabel(stage: ProductStage | undefined): string {
-	return stage === undefined
-		? ""
-		: (productStageOptions.find((option) => option.value === stage)
-				?.label ?? stage);
+	return stage === undefined ? "" : optionLabel(productStageOptions, stage);
 }
 
 /** Returns the human-readable label for a fundingStage enum value,
  *  falling back to the raw value when the entry is not found. */
 export function fundingStageLabel(stage: FundingStage | undefined): string {
-	return stage === undefined
-		? ""
-		: (fundingStageOptions.find((option) => option.value === stage)
-				?.label ?? stage);
+	return stage === undefined ? "" : optionLabel(fundingStageOptions, stage);
 }
 
 /** Maps an array of vertical enum values to their labels (falling back to the
@@ -33,14 +35,7 @@ export function fundingStageLabel(stage: FundingStage | undefined): string {
 export function verticalsLabel(
 	values: readonly Vertical[] | undefined
 ): string {
-	return !values || values.length === 0
-		? ""
-		: values
-				.map(
-					(vertical) =>
-						verticalOptions.find(
-							(option) => option.value === vertical
-						)?.label ?? vertical
-				)
-				.join(", ");
+	return (values ?? [])
+		.map((vertical) => optionLabel(verticalOptions, vertical))
+		.join(", ");
 }

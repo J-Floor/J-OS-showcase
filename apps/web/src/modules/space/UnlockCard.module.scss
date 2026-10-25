@@ -44,9 +44,8 @@
 	min-block-size: calc(var(--jf-dimension-short-component-height) * 2);
 }
 
-/* "[stairs] or [elevator]": muted, centred. Nested in the doors column, so
-   SpaceCard's 48px `.body > [data-icon]` rule never reaches these icons; the
-   typography mixin sizes them via its `[data-icon]` rule. */
+/* "[stairs] or [elevator]": muted, centred. The typography mixin sizes the
+   icons via its `[data-icon]` rule. */
 .route {
 	display: flex;
 	flex-flow: row nowrap;

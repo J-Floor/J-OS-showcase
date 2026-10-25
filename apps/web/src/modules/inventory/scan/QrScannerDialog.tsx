@@ -1,11 +1,7 @@
-import { Button, Dialog } from "@j-os/design-system";
-import {
-	Show,
-	createEffect,
-	createSignal,
-	onCleanup,
-	type JSX,
-} from "solid-js";
+import { Dialog } from "@j-os/design-system";
+import { createEffect, createSignal, onCleanup, type JSX } from "solid-js";
+
+import type { OpenProps } from "../../../shared/types.ts";
 
 import { startQrScan, type QrScanCode } from "./qrScan.ts";
 import styles from "./QrScannerDialog.module.scss";
@@ -19,22 +15,21 @@ const STATUS_COPY: Record<QrScanCode, string> = {
 
 const HINT = "Point the camera at the QR code";
 
-type ScannerProps = {
-	open: boolean;
+type QrScannerDialogProps = OpenProps & {
 	onDetect: (raw: string) => void;
 	error?: string;
-	unknownTag?: string;
 };
 
-/** Runs the camera scan while the dialog is open (and not asking about an
- *  unknown tag), and says what it is doing: the hint, a provided error, or
- *  why the camera could not start. */
+type ScannerProps = Pick<QrScannerDialogProps, "open" | "onDetect" | "error">;
+
+/** Runs the camera scan while the dialog is open, and says what it is doing:
+ *  the hint, a provided error, or why the camera could not start. */
 function createQrScanStatus(props: ScannerProps) {
 	const [videoElement, setVideoElement] = createSignal<HTMLVideoElement>();
 	const [scanError, setScanError] = createSignal<QrScanCode>();
 
 	createEffect(() => {
-		if (!props.open || props.unknownTag !== undefined) return;
+		if (!props.open) return;
 		const video = videoElement();
 		if (video === undefined) return;
 		const onDetect = props.onDetect;
@@ -62,71 +57,43 @@ function createQrScanStatus(props: ScannerProps) {
 	return { setVideoElement, statusText, statusTone };
 }
 
-export function QrScannerDialog(props: {
-	open: boolean;
-	onOpenChange: (isOpen: boolean) => void;
-	onDetect: (raw: string) => void;
-	error?: string;
-	unknownTag?: string;
-	onAddUnknown?: () => void;
-	onCancelUnknown?: () => void;
-}): JSX.Element {
+/** The status and the camera preview. Built for each opening (as every
+ *  dialog's content is), so each one starts its own scan with a fresh
+ *  status; the scan stops as the dialog closes. */
+function Scanner(props: ScannerProps): JSX.Element {
 	const { setVideoElement, statusText, statusTone } =
 		createQrScanStatus(props);
-
 	return (
-		<Dialog.Root
-			open={props.open}
-			onOpenChange={(details) => {
-				props.onOpenChange(details.open);
-			}}
-		>
+		<>
+			<Dialog.Header>
+				<Dialog.Title>Scan asset tag</Dialog.Title>
+				<Dialog.Description>
+					<span class={styles.status} data-status={statusTone()}>
+						{statusText()}
+					</span>
+				</Dialog.Description>
+			</Dialog.Header>
+			<video
+				ref={setVideoElement}
+				class={styles.video}
+				playsinline
+				muted
+				autoplay
+				aria-label="Camera preview"
+			/>
+		</>
+	);
+}
+
+export function QrScannerDialog(props: QrScannerDialogProps): JSX.Element {
+	return (
+		<Dialog.Root open={props.open} onOpenChange={props.onOpenChange}>
 			<Dialog.Content>
-				<Show
-					when={props.unknownTag}
-					fallback={
-						<>
-							<Dialog.Title>Scan asset tag</Dialog.Title>
-							<Dialog.Description>
-								<span
-									class={styles.status}
-									data-status={statusTone()}
-								>
-									{statusText()}
-								</span>
-							</Dialog.Description>
-							<video
-								ref={setVideoElement}
-								class={styles.video}
-								playsinline
-								muted
-								autoplay
-								aria-label="Camera preview"
-							/>
-						</>
-					}
-				>
-					{(tag) => (
-						<>
-							<Dialog.Title>No item for {tag()}</Dialog.Title>
-							<Dialog.Description>
-								Nothing is registered under this asset tag. Add
-								a new item with this tag?
-							</Dialog.Description>
-							<div class={styles.actions}>
-								<Button
-									variant="tertiary"
-									onClick={() => props.onCancelUnknown?.()}
-								>
-									Cancel
-								</Button>
-								<Button onClick={() => props.onAddUnknown?.()}>
-									Add item
-								</Button>
-							</div>
-						</>
-					)}
-				</Show>
+				<Scanner
+					open={props.open}
+					onDetect={props.onDetect}
+					error={props.error}
+				/>
 			</Dialog.Content>
 		</Dialog.Root>
 	);

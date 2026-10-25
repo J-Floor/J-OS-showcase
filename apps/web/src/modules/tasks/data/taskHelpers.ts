@@ -1,12 +1,16 @@
+import type { Id } from "../../../../convex/_generated/dataModel";
+import { displayName } from "../../../../convex/lib/names.ts";
 import {
 	formatDateOnly,
 	isoToUtcMidnight,
 	utcMidnightToIso,
 } from "../../../../convex/lib/time.ts";
 
-type TaskLike = { dueDate?: number; _creationTime: number };
-type PersonLike = { _id: string; firstName: string; lastName: string };
-type ProjectLike = { _id: string; name: string };
+import type { Person, Project, Task } from "./tasksData.tsx";
+
+type TaskLike = Pick<Task, "dueDate" | "_creationTime">;
+type PersonLike = Pick<Person, "_id" | "firstName" | "lastName">;
+type ProjectLike = Pick<Project, "_id" | "name">;
 
 /** Sentinel filter values for the Tasks assignee filter; any other value is a
  * person id. */
@@ -19,16 +23,18 @@ export const ASSIGNEE_FILTER_ME = "me";
  * assigned to that person id. A `"me"` filter with no resolved current person
  * matches nothing (rather than leaking everyone's tasks while it loads).
  */
-export function filterTasksByAssignee<T extends { assigneeIds?: string[] }>(
+export function filterTasksByAssignee<T extends Pick<Task, "assigneeIds">>(
 	tasks: readonly T[],
 	filter: string,
-	currentPersonId: string | undefined
+	currentPersonId: Id<"people"> | undefined
 ): T[] {
 	if (filter === ASSIGNEE_FILTER_ALL) return [...tasks];
 	const id = filter === ASSIGNEE_FILTER_ME ? currentPersonId : filter;
 	return id === undefined
 		? []
-		: tasks.filter((task) => task.assigneeIds?.includes(id) ?? false);
+		: tasks.filter((task) =>
+				task.assigneeIds.some((assignee) => assignee === id)
+			);
 }
 
 export function isoToMs(iso: string | null): number | undefined {
@@ -65,20 +71,23 @@ export function sortColumn<T extends TaskLike>(tasks: readonly T[]): T[] {
 	});
 }
 
-export function personName(id: string, people: readonly PersonLike[]): string {
+export function personName(
+	id: Id<"people">,
+	people: readonly PersonLike[]
+): string {
 	const person = people.find((candidate) => candidate._id === id);
-	return person ? `${person.firstName} ${person.lastName}` : "Unknown";
+	return person ? displayName(person) : "Unknown";
 }
 
 export function assigneeNames(
-	ids: readonly string[],
+	ids: readonly Id<"people">[],
 	people: readonly PersonLike[]
 ): string[] {
 	return ids.map((id) => personName(id, people));
 }
 
 export function projectName(
-	id: string | undefined,
+	id: Id<"projects"> | undefined,
 	projects: readonly ProjectLike[]
 ): string | undefined {
 	return id

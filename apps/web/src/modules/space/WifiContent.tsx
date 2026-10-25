@@ -1,16 +1,14 @@
 import { QrCode } from "@ark-ui/solid/qr-code";
 import { IconButton } from "@j-os/design-system";
 
+import type { Wifi } from "../../../convex/lib/wifi.ts";
 import { createCopyFeedback } from "../../shared/createCopyFeedback.ts";
 import { ICONS } from "../../shared/icons.ts";
 
 import { wifiQrPayload } from "./wifi.ts";
 import styles from "./WifiContent.module.scss";
 
-export type WifiContentProps = {
-	ssid: string;
-	password: string;
-};
+export type WifiContentProps = Wifi;
 
 /**
  * Presentational: a scannable QR code for one Wi-Fi network, plus a masked

@@ -1,10 +1,81 @@
+import { readFileSync } from "node:fs";
+
 import {
+	ACTIONS_COLUMN_DIMENSIONS,
+	actionsColumnSize,
 	resolveTrack,
 	resolveTrackLayout,
 	usesContent,
 } from "./columnTracks.ts";
 
 const CONTENT = 90;
+const ROOT_FONT_SIZE = 16;
+
+function stylesheet(path: string): string {
+	return readFileSync(`${import.meta.dirname}/../../${path}`, "utf8");
+}
+
+/** The px a stylesheet gives `pattern`'s first capture group. */
+function px(path: string, pattern: RegExp): number {
+	const match = pattern.exec(stylesheet(path));
+	if (!match) throw new Error(`${pattern} not found in ${path}`);
+	return Number(match[1]);
+}
+
+describe("ACTIONS_COLUMN_DIMENSIONS", () => {
+	// An app sizes its actions column from these, and jsdom measures nothing,
+	// so a stylesheet change that is not mirrored here would go unnoticed.
+	const close = px("styles/spacing.scss", /--jf-spacing-close:\s*(\d+)px/);
+	const near = px("styles/spacing.scss", /--jf-spacing-near:\s*(\d+)px/);
+	// A body cell's glyph is sized by the body typography it includes, not
+	// by the Icon's own base size.
+	const glyph =
+		px(
+			"styles/typography.scss",
+			/@mixin body-typography\([\s\S]*?\$icon-size:\s*(\d+(?:\.\d+)?)rem/
+		) * ROOT_FONT_SIZE;
+	const divider = px(
+		"components/Table/Table.module.scss",
+		/\.actionsCell\s*\{[^}]*border-inline-start:\s*(\d+)px/
+	);
+
+	it("is one IconButton: its glyph and its padding on both sides", () => {
+		expect(stylesheet("components/Table/Table.module.scss")).toMatch(
+			/& td,\s*& th \{[^}]*@include typo\.jf-typo-body-regular;/
+		);
+		expect(stylesheet("styles/typography.scss")).toMatch(
+			/@mixin jf-typo-body-regular \{\s*@include body-typography\(/
+		);
+		expect(ACTIONS_COLUMN_DIMENSIONS.button).toBe(glyph + 2 * close);
+	});
+
+	it("spaces two buttons by --jf-spacing-close", () => {
+		expect(ACTIONS_COLUMN_DIMENSIONS.gap).toBe(close);
+	});
+
+	it("pads the cell by --jf-spacing-near each side, plus its divider", () => {
+		expect(stylesheet("components/Table/Table.module.scss")).toMatch(
+			/& td \{[^}]*padding:\s*var\(--jf-spacing-near\)/
+		);
+		expect(ACTIONS_COLUMN_DIMENSIONS.cellPadding).toBe(2 * near + divider);
+	});
+});
+
+describe("actionsColumnSize", () => {
+	const { button, gap, cellPadding } = ACTIONS_COLUMN_DIMENSIONS;
+
+	it("holds one button and the cell's own room", () => {
+		expect(actionsColumnSize(1)).toBe(button + cellPadding);
+	});
+
+	it("adds a gap between each pair of buttons", () => {
+		expect(actionsColumnSize(3)).toBe(3 * button + 2 * gap + cellPadding);
+	});
+
+	it("is just the cell's room with no buttons", () => {
+		expect(actionsColumnSize(0)).toBe(cellPadding);
+	});
+});
 
 describe("resolveTrack css", () => {
 	it("floors an unsized column at its content and shares what is left", () => {

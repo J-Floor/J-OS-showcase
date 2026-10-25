@@ -1,6 +1,12 @@
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-import { clipInset, isFullyVisible, visibleRect } from "./visibleArea.ts";
+import { MORPH_HIDDEN } from "./morphNames.ts";
+import {
+	clipInset,
+	isFullyVisible,
+	nearestVisibleAnchor,
+	visibleRect,
+} from "./visibleArea.ts";
 
 function box(
 	element: HTMLElement,
@@ -66,4 +72,102 @@ test("an element inside a non-clipping parent is its own box, fully visible", ()
 	box(cell, 10, 10, 200, 20);
 	expect(isFullyVisible(cell)).toBe(true);
 	expect(clipInset(cell)).toBe("none");
+});
+
+function byId(id: string): HTMLElement | null {
+	return document.getElementById(id);
+}
+
+describe("nearestVisibleAnchor", () => {
+	beforeEach(() => {
+		vi.spyOn(HTMLElement.prototype, "getClientRects").mockReturnValue({
+			length: 1,
+		} as DOMRectList);
+	});
+
+	test("a visible element is its own anchor", () => {
+		document.body.innerHTML = `<button id="b">x</button>`;
+		expect(nearestVisibleAnchor(byId("b"))?.id).toBe("b");
+	});
+
+	test("an item in a closed popup anchors to the popup's trigger", () => {
+		document.body.innerHTML = `<button id="more" aria-controls="other menu">More</button>
+			<div id="menu" role="menu" style="visibility: hidden"><div role="menuitem" id="edit">Edit</div></div>`;
+		expect(nearestVisibleAnchor(byId("edit"))?.id).toBe("more");
+	});
+
+	test("an item in a closed submenu anchors to the first visible trigger up the chain", () => {
+		document.body.innerHTML = `<button id="more" aria-controls="menu">More</button>
+			<div id="menu" style="visibility: hidden">
+				<div role="menuitem" id="sub-trigger" aria-controls="sub">Move</div>
+				<div id="sub" style="opacity: 0"><div role="menuitem" id="item">Up</div></div>
+			</div>`;
+		expect(nearestVisibleAnchor(byId("item"))?.id).toBe("more");
+	});
+
+	test("an element faded out by an ancestor is not visible", () => {
+		document.body.innerHTML = `<div style="opacity: 0"><button id="b">x</button></div>`;
+		expect(nearestVisibleAnchor(byId("b"))).toBeNull();
+	});
+
+	test("a morph source hidden while its overlay is open still counts as visible", () => {
+		document.body.innerHTML = `<div role="row" id="row" ${MORPH_HIDDEN} style="visibility: hidden">x</div>`;
+		expect(nearestVisibleAnchor(byId("row"))?.id).toBe("row");
+	});
+
+	test("a hidden morph source inside a closed popup anchors to its trigger", () => {
+		document.body.innerHTML = `<button id="more" aria-controls="menu">More</button>
+			<div id="menu" style="visibility: hidden"><div role="menuitem" id="edit" ${MORPH_HIDDEN} style="visibility: hidden">Edit</div></div>`;
+		expect(nearestVisibleAnchor(byId("edit"))?.id).toBe("more");
+	});
+
+	test("a hidden morph source faded out itself is not visible", () => {
+		document.body.innerHTML = `<div role="row" id="row" ${MORPH_HIDDEN} style="visibility: hidden; opacity: 0">x</div>`;
+		expect(nearestVisibleAnchor(byId("row"))).toBeNull();
+	});
+
+	test("of several controls naming the popup, the visible one is the trigger", () => {
+		document.body.innerHTML = `<button id="hidden-copy" aria-controls="menu" style="visibility: hidden">More</button>
+			<button id="more" aria-controls="menu">More</button>
+			<div id="menu" style="visibility: hidden"><div role="menuitem" id="edit">Edit</div></div>`;
+		expect(nearestVisibleAnchor(byId("edit"))?.id).toBe("more");
+	});
+
+	test("an item of a menu unmounted on close anchors to the trigger that still names it", () => {
+		// Ark drops `aria-controls` while the content is unmounted; `data-controls` stays.
+		document.body.innerHTML = `<button id="more" data-controls="menu">More</button>`;
+		const menu = document.createElement("div");
+		menu.id = "menu";
+		const item = document.createElement("div");
+		item.setAttribute("role", "menuitem");
+		menu.append(item);
+		expect(nearestVisibleAnchor(item)?.id).toBe("more");
+	});
+
+	test("an element with no layout box and no popup has no anchor", () => {
+		document.body.innerHTML = `<button id="b">x</button>`;
+		vi.spyOn(HTMLElement.prototype, "getClientRects").mockReturnValue({
+			length: 0,
+		} as DOMRectList);
+		expect(nearestVisibleAnchor(byId("b"))).toBeNull();
+	});
+
+	test("a detached element or null has no anchor", () => {
+		expect(
+			nearestVisibleAnchor(document.createElement("button"))
+		).toBeNull();
+		expect(nearestVisibleAnchor(null)).toBeNull();
+	});
+
+	test("uses the browser's own visibility check when it has one", () => {
+		document.body.innerHTML = `<button id="b">x</button>`;
+		const button = byId("b");
+		const isVisibleSpy = vi.fn(() => false);
+		Object.assign(button ?? {}, { checkVisibility: isVisibleSpy });
+		expect(nearestVisibleAnchor(button)).toBeNull();
+		expect(isVisibleSpy).toHaveBeenCalledWith({
+			visibilityProperty: true,
+			opacityProperty: true,
+		});
+	});
 });

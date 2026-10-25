@@ -1,13 +1,13 @@
 import { Accordion, isTypingTarget } from "@j-os/design-system";
 import { createHotkey, type Hotkey } from "@tanstack/solid-hotkeys";
 import { useMutation } from "convex-solidjs";
-import { createSignal, onMount, Show } from "solid-js";
+import { type Accessor, createSignal, onMount, Show } from "solid-js";
 
 import { api } from "../../../../convex/_generated/api";
-import type { Doc } from "../../../../convex/_generated/dataModel";
-import type { PersonStatus } from "../../../../convex/lib/derive.ts";
+import type { PersonRow } from "../../../../convex/people.ts";
 import { call } from "../../../lib/call.ts";
 import { createActionError } from "../../../shared/createActionError.ts";
+import { DIALOG_CONTENT } from "../../../shared/dialogSelectors.ts";
 import { InlineError } from "../../../shared/InlineError.tsx";
 import { headline } from "../status/copy.ts";
 import { PersonTimeline } from "../status/PersonTimeline.tsx";
@@ -21,12 +21,12 @@ import { ReadOnlyDetail } from "./PersonReadOnly.tsx";
 /** The sheet's collapsible sections and the key that toggles each — the key is
  * the section's own initial (Status/Info/Notes/History), shown as a header chip
  * while peeking and bound below. */
-const ACCORDION_SECTIONS: { value: string; key: Hotkey }[] = [
-	{ value: "status", key: "S" },
-	{ value: "info", key: "I" },
-	{ value: "notes", key: "N" },
-	{ value: "history", key: "H" },
-];
+const SECTION_KEYS = {
+	status: "S",
+	info: "I",
+	notes: "N",
+	history: "H",
+} as const satisfies Record<string, Hotkey>;
 
 /**
  * Which accordion sections are open, controlled so the S/I/N/H keys can toggle
@@ -62,18 +62,16 @@ function useSheetSections() {
 	const [sheetElement, setSheetElement] = createSignal<HTMLElement>();
 	onMount(() => {
 		setSheetElement(
-			anchorElement?.closest<HTMLElement>(
-				'[data-scope="dialog"][data-part="content"]'
-			) ?? undefined
+			anchorElement?.closest<HTMLElement>(DIALOG_CONTENT) ?? undefined
 		);
 	});
-	for (const section of ACCORDION_SECTIONS) {
+	for (const [value, key] of Object.entries(SECTION_KEYS)) {
 		createHotkey(
-			section.key,
+			key,
 			(event) => {
 				if (event.repeat || isTypingTarget(event.target)) return;
 				event.preventDefault();
-				toggleSection(section.value);
+				toggleSection(value);
 			},
 			() => ({
 				target: sheetElement(),
@@ -86,10 +84,7 @@ function useSheetSections() {
 	return { openSections, setOpenSections, assignAnchor };
 }
 
-function StatusSectionItem(props: {
-	person: Doc<"people"> & { status: PersonStatus };
-	editing?: boolean;
-}) {
+function StatusSectionItem(props: { person: PersonRow; editing?: boolean }) {
 	const completeBoardStep = useMutation(api.people.completeBoardStep);
 	const { error: stepError, trackResult } = createActionError(
 		() => props.person._id
@@ -102,7 +97,7 @@ function StatusSectionItem(props: {
 		    colour it carried was misleading anyway — it went red for a
 		    missing agreement, which made a perfectly active member
 		    read as though their membership were the problem. */}
-			<Accordion.ItemTitle shortcut="S">
+			<Accordion.ItemTitle shortcut={SECTION_KEYS.status}>
 				Status
 				<Accordion.ItemSubtitle>
 					{headline(props.person.status)}
@@ -151,8 +146,10 @@ function StatusSectionItem(props: {
  * section instead.
  */
 export function PersonDetail(props: {
-	person: Doc<"people"> & { status: PersonStatus };
+	person: PersonRow;
 	editing?: boolean;
+	/** The sheet is open: an edit failing once it closed toasts. */
+	isOpen: Accessor<boolean>;
 }) {
 	const sections = useSheetSections();
 
@@ -171,13 +168,18 @@ export function PersonDetail(props: {
 					editing={props.editing}
 				/>
 				<Accordion.Item value="info" class={styles.section}>
-					<Accordion.ItemTitle shortcut="I">Info</Accordion.ItemTitle>
+					<Accordion.ItemTitle shortcut={SECTION_KEYS.info}>
+						Info
+					</Accordion.ItemTitle>
 					<Accordion.ItemContent class={styles.sectionBody}>
 						<Show
 							when={props.editing}
 							fallback={<ReadOnlyDetail person={props.person} />}
 						>
-							<EditableDetail person={props.person} />
+							<EditableDetail
+								person={props.person}
+								isOpen={props.isOpen}
+							/>
 						</Show>
 					</Accordion.ItemContent>
 				</Accordion.Item>
@@ -185,7 +187,7 @@ export function PersonDetail(props: {
 					{/* The board's own channel, its own section — a thread you add to
 					    without entering edit mode, open by default because it is where
 					    triage happens. */}
-					<Accordion.ItemTitle shortcut="N">
+					<Accordion.ItemTitle shortcut={SECTION_KEYS.notes}>
 						Notes
 					</Accordion.ItemTitle>
 					<Accordion.ItemContent class={styles.sectionBody}>
@@ -193,7 +195,7 @@ export function PersonDetail(props: {
 					</Accordion.ItemContent>
 				</Accordion.Item>
 				<Accordion.Item value="history" class={styles.section}>
-					<Accordion.ItemTitle shortcut="H">
+					<Accordion.ItemTitle shortcut={SECTION_KEYS.history}>
 						History
 					</Accordion.ItemTitle>
 					<Accordion.ItemContent class={styles.sectionBody}>

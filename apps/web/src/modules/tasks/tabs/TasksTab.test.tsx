@@ -18,15 +18,28 @@ vi.mock("../../../shared/data/boardLevel.tsx", () => ({
 	useBoardLevel: () => ({ data: () => [] }),
 }));
 vi.mock("../kanban/KanbanBoard.tsx", () => ({
-	KanbanBoard: (props: { tasks: unknown }) => {
+	KanbanBoard: (props: { tasks: unknown; onCardHoverIntent: () => void }) => {
 		// eslint-disable-next-line solid/reactivity -- records the first value handed in
 		kanbanTasks.push(props.tasks);
-		return null;
+		return (
+			<button
+				type="button"
+				onClick={() => {
+					props.onCardHoverIntent();
+				}}
+			>
+				rest on a card
+			</button>
+		);
 	},
 }));
 vi.mock("../sheets/TaskSheet.tsx", () => ({
-	TaskSheet: (props: { open: boolean }) => (
-		<div data-testid="task-sheet" data-open={String(props.open)} />
+	TaskSheet: (props: { open: boolean; prebuild?: boolean }) => (
+		<div
+			data-testid="task-sheet"
+			data-open={String(props.open)}
+			data-prebuild={String(props.prebuild)}
+		/>
 	),
 }));
 
@@ -79,4 +92,14 @@ test("its New task action sits in the tab bar and opens the create sheet", () =>
 		"data-open",
 		"true"
 	);
+});
+
+test("resting on a card builds the sheet before it opens", () => {
+	taskRows.current = [];
+	renderTab();
+	const sheet = screen.getByTestId("task-sheet");
+	expect(sheet).toHaveAttribute("data-prebuild", "false");
+	fireEvent.click(screen.getByRole("button", { name: "rest on a card" }));
+	expect(sheet).toHaveAttribute("data-prebuild", "true");
+	expect(sheet).toHaveAttribute("data-open", "false");
 });

@@ -1,5 +1,7 @@
 import type { Accessor } from "solid-js";
 
+import { displayName } from "../../../convex/lib/names.ts";
+import type { PersonRow } from "../../../convex/people.ts";
 import { prefetchSpec } from "../../shared/data/queryKeeper.ts";
 import type { EntityDescriptor } from "../../shared/entity/entityDescriptor.ts";
 import { ICONS } from "../../shared/icons.ts";
@@ -9,7 +11,6 @@ import {
 	useGuests,
 	useMembers,
 } from "./data/communityData.tsx";
-import type { PersonRow } from "./insights/metrics.ts";
 import { attendedEventsQuery } from "./queries.ts";
 
 /**
@@ -42,7 +43,7 @@ export const personEntity: EntityDescriptor<PersonRow> = {
 			...(applications.data() ?? []),
 		];
 	},
-	label: (row) => `${row.firstName} ${row.lastName}`.trim(),
+	label: (row) => displayName(row),
 	// The email is often how a board member knows someone, but it is not a
 	// better name for them — keywords rank below the name by design.
 	keywords: (row) =>

@@ -20,7 +20,6 @@ vi.mock("convex-solidjs", () => ({
 	useQuery: () => ({ data: () => {} }),
 }));
 
-import styles from "./KanbanBoard.module.scss";
 import { KanbanBoard } from "./KanbanBoard.tsx";
 
 function board(tasks: never[] | undefined) {
@@ -57,7 +56,7 @@ test("tasks empty: counts read 0 and no skeletons", () => {
 
 test("the board handles its own drags (cards, marquee), so a tab swipe never starts on it", () => {
 	const { container } = board([]);
-	expect(container.querySelector(`.${styles.board}`)).toHaveAttribute(
-		OWN_GESTURES_ATTR
-	);
+	expect(
+		container.querySelector('[data-part="kanban-board"]')
+	).toHaveAttribute(OWN_GESTURES_ATTR);
 });

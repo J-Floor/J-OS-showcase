@@ -36,7 +36,13 @@ export function createToaster(
 
 function StatusIcon(): JSX.Element {
 	const iconName = useStatusIcon();
-	return <Icon class={styles.icon}>{iconName()}</Icon>;
+	// The typography mixin sizes the glyph from this wrapper; on the Icon itself
+	// it would also set the heading font and show the ligature as text.
+	return (
+		<span class={styles.icon}>
+			<Icon>{iconName()}</Icon>
+		</span>
+	);
 }
 
 /** A click on a toast runs that toast's own `action`, so the root takes no

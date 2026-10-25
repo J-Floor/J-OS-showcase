@@ -14,6 +14,7 @@ import {
 import styles from "./JFloorProvider.module.scss";
 import "./styles/index.scss";
 import { trackActivation } from "./utils/activation.ts";
+import { readStored, writeStored } from "./utils/storage.ts";
 
 export type Theme = "light" | "dark";
 
@@ -36,8 +37,7 @@ export function useTheme(): ThemeContextValue {
 const THEME_STORAGE_KEY = "jf-theme";
 
 function storedTheme(): Theme | undefined {
-	if (typeof localStorage === "undefined") return undefined;
-	const value = localStorage.getItem(THEME_STORAGE_KEY);
+	const value = readStored("local", THEME_STORAGE_KEY).unwrapOr(null);
 	return value === "light" || value === "dark" ? value : undefined;
 }
 
@@ -75,9 +75,8 @@ export function JFloorProvider(props: JFloorProviderProps): JSX.Element {
 	function setTheme(next: Theme) {
 		if (props.theme !== undefined) return; // controlled: ignore
 		setInternalTheme(next);
-		if (typeof localStorage !== "undefined") {
-			localStorage.setItem(THEME_STORAGE_KEY, next);
-		}
+		// A blocked or full store: the theme just does not persist.
+		writeStored("local", THEME_STORAGE_KEY, next);
 	}
 	function toggle() {
 		setTheme(theme() === "light" ? "dark" : "light");

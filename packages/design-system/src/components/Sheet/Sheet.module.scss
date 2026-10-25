@@ -79,17 +79,17 @@ $stack-step: 0.04;
 	border-radius: var(--jf-radius-floating-container);
 	box-shadow: var(--jf-shadow-surface-elevation);
 
-	/* A sheet opened from inside another sheet stacks on it: Ark mirrors the
-	   number of layers above this one as `--nested-layer-count`, and the lower
-	   card steps back. `scale` and `translate` are separate properties from
+	/* An overlay opened over the sheet stacks on it: the overlay layer counts
+	   the overlays shown above this one (`--jf-overlays-above`), and the card
+	   steps back. `scale` and `translate` are separate properties from
 	   `transform`, so this composes with the open/close transform below.
 	   The stacked origin is `top center`, but the plain pop-in must stay
 	   centred. Un-stacking keeps the stacked origin until `scale` is back to 1
 	   (a delayed, instant swap), or the card jumps as it grows back. */
 	--origin-delay: var(--jf-animation-duration-default);
 
-	scale: calc(1 - $stack-step * var(--nested-layer-count, 0));
-	translate: 0 calc(-1 * var(--jf-spacing-far) * var(--nested-layer-count, 0));
+	scale: calc(1 - $stack-step * var(--jf-overlays-above));
+	translate: 0 calc(-1 * var(--jf-spacing-far) * var(--jf-overlays-above));
 	transition:
 		opacity var(--jf-animation-duration-default)
 			var(--jf-animation-ease-standard),
@@ -102,18 +102,15 @@ $stack-step: 0.04;
 		transform-origin 0s var(--origin-delay);
 
 	/* A morph is doing the animating; the pop-in would play inside it. The
-	   upper sheet's close morph is exactly when this one un-stacks, so the
-	   origin swap stays delayed here too. */
+	   morph of the overlay above is when this card steps back or forward:
+	   it reaches its place in the update, and the morph moves it there as
+	   its own group (`jf-morph-stacked-<n>`), so a card closing into a
+	   button on it lands where the button rests. */
 	:root[data-vt~="morph"] & {
-		transition:
-			scale var(--jf-animation-duration-default)
-				var(--jf-animation-ease-standard),
-			translate var(--jf-animation-duration-default)
-				var(--jf-animation-ease-standard),
-			transform-origin 0s var(--origin-delay);
+		transition: none;
 	}
 
-	&[data-has-nested] {
+	&[data-overlay-covered] {
 		--origin-delay: 0s;
 
 		transform-origin: top center;

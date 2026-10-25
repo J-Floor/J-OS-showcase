@@ -8,9 +8,11 @@ import { render } from "@solidjs/testing-library";
 import type { JSX } from "solid-js";
 
 import { AbilityProvider } from "../../../lib/ability.tsx";
+import { OPEN_DIALOG_CONTENT } from "../../../shared/dialogSelectors.ts";
 import { createEntitySelection } from "../../../shared/entity/createEntitySelection.ts";
+import type { Identified } from "../../../shared/types.ts";
 
-import type { PersonReference, PersonSelection } from "./TabProps.ts";
+import type { PersonSelection } from "./TabProps.ts";
 
 /**
  * Renders a roster tab the way the page does: inside a router, handed the
@@ -35,7 +37,7 @@ export function renderWithSelection(
 	});
 	let location: ReturnType<typeof useLocation> | undefined;
 	function Page() {
-		const selection = createEntitySelection<PersonReference>({
+		const selection = createEntitySelection<Identified<"people">>({
 			rows: () => {},
 			param: "person",
 		});
@@ -55,7 +57,5 @@ export function renderWithSelection(
 /** The sheet panel Ark is actually showing. Closed content stays in the DOM,
  *  so "is the text there" is not the same question as "is the sheet open". */
 export function openPanel(): HTMLElement | null {
-	return document.querySelector<HTMLElement>(
-		'[data-scope="dialog"][data-part="content"][data-state="open"]'
-	);
+	return document.querySelector<HTMLElement>(OPEN_DIALOG_CONTENT);
 }

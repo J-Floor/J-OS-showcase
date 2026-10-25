@@ -1,29 +1,30 @@
-import type { useSearchParams } from "@solidjs/router";
 import { ResultAsync } from "neverthrow";
 import { createSignal } from "solid-js";
 
+import { useConfirm } from "../../../shared/confirm.tsx";
+import type { EntitySelection } from "../../../shared/entity/createEntitySelection.ts";
+import type { SetParams } from "../../../shared/types.ts";
 import type { Item } from "../data/inventoryData.ts";
 import { useLookupItemByAssetTag } from "../data/inventoryData.ts";
 
-import { resolveScannedTag } from "./resolveScannedTag.ts";
+import { resolveScannedTag, type ScanResolution } from "./resolveScannedTag.ts";
 
 const INVALID_QR = "This QR isn't an asset tag (expected e.g. A00000).";
 
-type SetParams = ReturnType<typeof useSearchParams>[1];
-
 /**
  * The QR scanner dialog's state and what a scan does: an invalid code shows an
- * error, a known tag opens that item, an unknown tag asks whether to add it.
+ * error, a known tag opens that item, an unknown tag closes the scanner and
+ * asks whether to add it.
  */
 export function createInventoryScanner(options: {
 	itemRows: () => Item[] | undefined;
-	itemSelection: { openRow: (row: Item) => void };
+	itemSelection: Pick<EntitySelection<Item>, "openRow">;
 	openNewItem: (assetTag: string) => void;
 	setParams: SetParams;
 }) {
 	const [scanOpen, setScanOpen] = createSignal(false);
 	const [scanError, setScanError] = createSignal<string>();
-	const [unknownTag, setUnknownTag] = createSignal<string>();
+	const confirm = useConfirm();
 	const lookup = useLookupItemByAssetTag();
 	let isScanBusy = false;
 
@@ -31,18 +32,18 @@ export function createInventoryScanner(options: {
 		isScanBusy = false;
 		setScanOpen(false);
 		setScanError(undefined);
-		setUnknownTag(undefined);
 	}
 
 	function openScanner() {
 		isScanBusy = false;
 		setScanError(undefined);
-		setUnknownTag(undefined);
 		setScanOpen(true);
 	}
 
 	/** Opens the scanned item, from our subscription when it has the row. */
-	function openScannedItem(result: { id: string; assetTag: string }) {
+	function openScannedItem(
+		result: Extract<ScanResolution, { kind: "open" }>
+	) {
 		closeScanner();
 		const row = options
 			.itemRows()
@@ -83,24 +84,22 @@ export function createInventoryScanner(options: {
 			openScannedItem(result);
 			return;
 		}
-		setScanError(undefined);
-		setUnknownTag(result.assetTag);
+		closeScanner();
+		const isAdd = await confirm({
+			title: `No item for ${result.assetTag}`,
+			message:
+				"Nothing is registered under this asset tag. Add a new item with this tag?",
+			confirmLabel: "Add item",
+		});
+		if (isAdd) options.openNewItem(result.assetTag);
 	}
 
 	return {
 		scanOpen,
 		setScanOpen,
 		scanError,
-		unknownTag,
 		closeScanner,
 		openScanner,
 		onDetect,
-		/** The scanned tag has no item: closes the scanner and starts a new
-		 *  item with that tag. */
-		addUnknown: (): void => {
-			const tag = unknownTag();
-			closeScanner();
-			if (tag !== undefined) options.openNewItem(tag);
-		},
 	};
 }

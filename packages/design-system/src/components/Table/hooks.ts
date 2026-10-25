@@ -11,7 +11,13 @@ import {
 	type FilterFn,
 	type Table as TanTable,
 } from "@tanstack/solid-table";
-import { createComputed, createEffect, createSignal, on } from "solid-js";
+import {
+	createComputed,
+	createEffect,
+	createMemo,
+	createSignal,
+	on,
+} from "solid-js";
 
 import {
 	ACTIONS_COLUMN_ID,
@@ -240,21 +246,28 @@ export function createTable<Data extends Record<string, unknown>>(
 	);
 	const [rowSelection, setRowSelection] = createSignal<RowSelectionState>({});
 
-	const columns = (
-		options.enableRowSelection
-			? [selectColumn<Data>(), ...options.columns]
-			: options.columns
-	).map((column) => processColumn(column));
-
-	// The actions column renders pinned to the trailing edge, in the last
-	// track, whatever its place in the list.
-	warnMisplacedActionsColumn(columns);
+	// Follows `options.columns`, so columns built from data (an enum filter's
+	// options) update after mount. TanStack keys its row model on `data`
+	// alone, so new columns rebuild the cells, never the rows.
+	const columns = createMemo(() => {
+		const processed = (
+			options.enableRowSelection
+				? [selectColumn<Data>(), ...options.columns]
+				: options.columns
+		).map((column) => processColumn(column));
+		// The actions column renders pinned to the trailing edge, in the last
+		// track, whatever its place in the list.
+		warnMisplacedActionsColumn(processed);
+		return processed;
+	});
 
 	const table = createSolidTable<Data>({
 		get data() {
 			return options.data();
 		},
-		columns,
+		get columns() {
+			return columns();
+		},
 		getRowId: options.getRowId,
 		state: {
 			get sorting() {

@@ -14,6 +14,7 @@ import type {
 	PersonStatus,
 	StatusFact,
 } from "../../../../convex/lib/derive.ts";
+import { displayName } from "../../../../convex/lib/names.ts";
 import { ICONS } from "../../../shared/icons.ts";
 import { personFields } from "../fields.ts";
 import { useOpenAgreement } from "../openAgreement.ts";
@@ -109,7 +110,7 @@ function FactValue(props: {
 	editing?: boolean;
 }): JSX.Element {
 	function name(): string {
-		return `${props.person.firstName} ${props.person.lastName}`.trim();
+		return displayName(props.person);
 	}
 	return (
 		<Switch

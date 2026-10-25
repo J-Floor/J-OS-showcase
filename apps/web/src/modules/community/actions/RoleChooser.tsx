@@ -1,8 +1,8 @@
-import { DatePicker, Segment } from "@j-os/design-system";
-import type { Result } from "neverthrow";
+import { Button, DatePicker, Segment } from "@j-os/design-system";
 import {
 	For,
 	Show,
+	createContext,
 	createMemo,
 	createSignal,
 	type Accessor,
@@ -16,14 +16,25 @@ import {
 	minExpiryIso,
 	SITE_TIMEZONE,
 } from "../../../../convex/lib/time.ts";
-import type { ClientError } from "../../../lib/call.ts";
+import { useRequiredContext } from "../../../shared/compound.ts";
 import { createActionError } from "../../../shared/createActionError.ts";
 import { InlineError } from "../../../shared/InlineError.tsx";
 
 import styles from "./RoleChooser.module.scss";
 import { MOVES, type RoleMove } from "./roleMoves.ts";
+import type { MoveResult } from "./triage.ts";
 
 type Via = (typeof MOVES)[number]["via"][number];
+
+/** What {@link RoleChooser.Commit} reads from the chooser it sits in. */
+type Chooser = {
+	/** The move the current choice resolves to, or undefined if none. */
+	move: Accessor<RoleMove | undefined>;
+	saving: Accessor<boolean>;
+	commit: () => void;
+};
+
+const RoleChooserContext = createContext<Chooser>();
 
 /** The first of `move.via` that is legal from every one of `states`. */
 function firstLegalEvent(move: (typeof MOVES)[number], states: StateId[]) {
@@ -77,22 +88,19 @@ function toRoleMove(
  * and taking the generic one where a specific one exists silently skips its
  * effects (see the invariant note on `MOVES`).
  *
- * Owns the choice, the date and the in-flight flag; the caller owns what
- * "confirm" looks like and what happens after. Nothing resets it explicitly:
- * the dialog mounts this only while open, so a cancelled choice dies with the
- * component instead of surviving into the next opening.
+ * Owns the choice, the date and the in-flight flag; the caller owns the layout
+ * around the shared {@link RoleChooser.Commit} button and what happens after.
+ * Nothing resets it explicitly: the dialog mounts this only while open, so a
+ * cancelled choice dies with the component instead of surviving into the next
+ * opening.
  */
-export function RoleChooser(props: {
+function RoleChooserRoot(props: {
 	/** Machine state of every person this applies to. */
 	states: StateId[];
-	/** Renders the confirm control, given a ready-to-dispatch move. */
-	children: (chooser: {
-		/** The move the current choice resolves to, or undefined if none. */
-		move: Accessor<RoleMove | undefined>;
-		saving: Accessor<boolean>;
-		commit: () => void;
-	}) => JSX.Element;
-	onMove: (move: RoleMove) => Promise<Result<unknown, ClientError>>;
+	/** Parts: a {@link RoleChooser.Commit}, and whatever else the caller lays
+	 *  out beside it. */
+	children?: JSX.Element;
+	onMove: (move: RoleMove) => Promise<MoveResult>;
 	/** Called after a successful move — the dialog closes itself with it. */
 	onDone?: () => void;
 }): JSX.Element {
@@ -147,7 +155,7 @@ export function RoleChooser(props: {
 	}
 
 	return (
-		<>
+		<RoleChooserContext.Provider value={{ move, saving, commit }}>
 			<Segment.Root
 				aria-label="New role"
 				class={styles.segment}
@@ -175,7 +183,32 @@ export function RoleChooser(props: {
 				/>
 			</Show>
 			<InlineError message={error()} />
-			{props.children({ move, saving, commit })}
-		</>
+			{props.children}
+		</RoleChooserContext.Provider>
 	);
 }
+
+/** The confirm button: enabled once the choice resolves to a move, loading
+ *  while it is being applied. Sits inside a {@link RoleChooser.Root}. */
+function RoleChooserCommit(): JSX.Element {
+	const chooser = useRequiredContext(
+		RoleChooserContext,
+		"RoleChooser.Commit",
+		"RoleChooser.Root"
+	);
+	return (
+		<Button
+			isLoading={chooser.saving()}
+			disabled={chooser.move() === undefined}
+			shamefullyOmitDisabledReason
+			onClick={chooser.commit}
+		>
+			Change role
+		</Button>
+	);
+}
+
+export const RoleChooser = {
+	Root: RoleChooserRoot,
+	Commit: RoleChooserCommit,
+};

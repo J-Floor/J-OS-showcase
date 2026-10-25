@@ -1,3 +1,5 @@
+@use "@j-os/design-system/hover";
+
 // Measured on the live pill: both copies travel one line (25px) up, the
 // outgoing copy shrinks to 0.7 and the incoming one grows from 0.7 to 1. The
 // easing is the live spring sampled frame by frame (starts from rest, reaches
@@ -60,8 +62,12 @@
 }
 
 @media (hover: hover) {
-	:is(a, button):hover .roll {
-		@include rolled;
+	:is(a, button) {
+		@include hover.hover {
+			.roll {
+				@include rolled;
+			}
+		}
 	}
 }
 

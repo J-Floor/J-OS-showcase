@@ -9,20 +9,26 @@ export type Rosters = {
 	guests: readonly PersonRow[];
 };
 
-export type ExportRow = {
-	firstName: string;
-	lastName: string;
-	email: string;
-	phone?: string;
-	tier: string;
-	stage: string;
-	formerReason?: string;
+/** The person's own fields, as stored. */
+type ExportedPersonFields = Pick<
+	PersonRow,
+	| "firstName"
+	| "lastName"
+	| "email"
+	| "phone"
+	| "tier"
+	| "stage"
+	| "formerReason"
+	| "vertical"
+	| "venture"
+	| "hostedBy"
+>;
+
+export type ExportRow = ExportedPersonFields & {
+	/** The access window and submission time, as ISO strings. */
 	accessFrom?: string;
 	accessUntil?: string;
 	submittedAt?: string;
-	vertical?: string[];
-	venture?: NonNullable<PersonRow["venture"]>;
-	hostedBy?: string;
 	score?: number;
 	notes?: { author?: string; at: string; text: string }[];
 };
@@ -45,12 +51,16 @@ function iso(ms: number | undefined): string | undefined {
 	return ms === undefined ? undefined : new Date(ms).toISOString();
 }
 
+/** The row's fields before empty ones are dropped: each is its final type or
+ *  absent, so a field that drifts from {@link ExportRow} stops compiling. */
+type ExportDraft = { [Key in keyof ExportRow]: ExportRow[Key] | undefined };
+
 /** Drop undefined and empty-string values, keeping key order. */
-function compact(out: Record<string, unknown>): ExportRow {
+function compact(out: ExportDraft): ExportRow {
 	const kept = Object.entries(out).filter(
 		([, value]) => value !== undefined && value !== ""
 	);
-	return Object.fromEntries(kept) as unknown as ExportRow;
+	return Object.fromEntries(kept) as ExportRow;
 }
 
 /** Lightweight row: only what a reader needs, undefined/empty fields omitted. */
@@ -69,7 +79,7 @@ export function toExportRow(
 			text: note.text,
 		};
 	});
-	const out = {
+	const out: ExportDraft = {
 		firstName: row.firstName,
 		lastName: row.lastName,
 		email: row.email,

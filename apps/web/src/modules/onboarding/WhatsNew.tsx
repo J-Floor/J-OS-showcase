@@ -1,8 +1,7 @@
-import { Button, Dialog } from "@j-os/design-system";
-import { For, Show, createEffect, createSignal } from "solid-js";
+import { Button, Dialog, readStored, writeStored } from "@j-os/design-system";
+import { For, createEffect, createSignal } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
-import { readLocal, writeLocal } from "../../lib/browserStorage.ts";
 import { useQuery } from "../../shared/data/useQuery.ts";
 
 import {
@@ -12,6 +11,7 @@ import {
 	isNewer,
 } from "./changelog.ts";
 import { doorsIntroPending } from "./doorIntroState.ts";
+import { tourWillRun } from "./WelcomeTour.tsx";
 import styles from "./WhatsNew.module.scss";
 
 /** Per-device record of the last version whose notes were acknowledged. Notes
@@ -20,12 +20,12 @@ import styles from "./WhatsNew.module.scss";
 const STORAGE_KEY = "jos:whatsNewSeen";
 
 function readSeen(): string | null {
-	return readLocal(STORAGE_KEY).unwrapOr(null);
+	return readStored("local", STORAGE_KEY).unwrapOr(null);
 }
 
 function writeSeen(version: string): void {
 	// Storage denied: the dialog just shows again next load, harmless.
-	writeLocal(STORAGE_KEY, version).unwrapOr(undefined);
+	writeStored("local", STORAGE_KEY, version).unwrapOr(undefined);
 }
 
 /**
@@ -71,9 +71,7 @@ export function WhatsNew() {
 		// have no `onboarding` record at all, so a `!tourSeen` check misread them
 		// as brand-new and hid What's New from its own audience. Record the
 		// version so a first-timer does not get the whole changelog on return.
-		const onboarding = data.person?.onboarding;
-		const isTourWillRun = onboarding !== undefined && !onboarding.tourSeen;
-		if (isTourWillRun) {
+		if (tourWillRun(data.person)) {
 			writeSeen(APP_VERSION);
 			return;
 		}
@@ -97,39 +95,35 @@ export function WhatsNew() {
 	return (
 		<Dialog.Root
 			open={open()}
-			onOpenChange={(details) => {
-				if (!details.open) dismiss();
+			onOpenChange={(isOpen) => {
+				if (!isOpen) dismiss();
 			}}
 		>
 			<Dialog.Content>
-				<Dialog.Title>What's new</Dialog.Title>
-				<Show when={open()}>
-					<div class={styles.body}>
-						<For each={fresh()}>
-							{(entry) => (
-								<section class={styles.entry}>
-									<h3 class={styles.entryTitle}>
-										{entry.title}
-									</h3>
-									<ul class={styles.items}>
-										<For each={entry.items}>
-											{(item) => <li>{item}</li>}
-										</For>
-									</ul>
-								</section>
-							)}
-						</For>
-					</div>
-					<div class={styles.footer}>
-						<Dialog.CloseTrigger
-							asChild={(closeProps) => (
-								<Button triggerProps={closeProps()}>
-									Got it
-								</Button>
-							)}
-						/>
-					</div>
-				</Show>
+				<Dialog.Header>
+					<Dialog.Title>What's new</Dialog.Title>
+				</Dialog.Header>
+				<Dialog.Body>
+					<For each={fresh()}>
+						{(entry) => (
+							<section class={styles.entry}>
+								<h3 class={styles.entryTitle}>{entry.title}</h3>
+								<ul class={styles.items}>
+									<For each={entry.items}>
+										{(item) => <li>{item}</li>}
+									</For>
+								</ul>
+							</section>
+						)}
+					</For>
+				</Dialog.Body>
+				<Dialog.Footer>
+					<Dialog.CloseTrigger
+						asChild={(closeProps) => (
+							<Button triggerProps={closeProps()}>Got it</Button>
+						)}
+					/>
+				</Dialog.Footer>
 			</Dialog.Content>
 		</Dialog.Root>
 	);

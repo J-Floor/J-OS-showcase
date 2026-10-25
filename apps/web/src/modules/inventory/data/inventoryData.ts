@@ -1,7 +1,12 @@
+import type { FunctionArgs, FunctionReference } from "convex/server";
 import { useConvexClient, useMutation } from "convex-solidjs";
 
 import { api } from "../../../../convex/_generated/api";
-import type { Doc, Id } from "../../../../convex/_generated/dataModel";
+import type {
+	Doc,
+	Id,
+	TableNames,
+} from "../../../../convex/_generated/dataModel";
 import type { ItemRow, ItemTypeRow } from "../../../../convex/inventory.ts";
 import { useQuery } from "../../../shared/data/useQuery.ts";
 import { itemsByTypeQuery, itemTypesByCategoryQuery } from "../queries.ts";
@@ -66,41 +71,64 @@ export function useLookupItemByAssetTag() {
 	};
 }
 
-export function useCategoryActions() {
-	const create = useMutation(api.inventory.createCategory);
-	const update = useMutation(api.inventory.updateCategory);
-	const remove = useMutation(api.inventory.removeCategory);
+/** The create, update and remove mutations of one inventory table. */
+function useEntityActions<
+	Create extends FunctionReference<"mutation">,
+	Update extends FunctionReference<"mutation">,
+	Remove extends FunctionReference<
+		"mutation",
+		"public",
+		{ id: Id<TableNames> }
+	>,
+>(references: { create: Create; update: Update; remove: Remove }) {
+	const create = useMutation(references.create);
+	const update = useMutation(references.update);
+	const remove = useMutation(references.remove);
 	return {
-		create: (args: Parameters<typeof create.mutate>[0]) =>
-			create.mutate(args),
-		update: (args: Parameters<typeof update.mutate>[0]) =>
-			update.mutate(args),
-		remove: (id: Id<"itemCategories">) => remove.mutate({ id }),
+		create: (args: FunctionArgs<Create>) => create.mutate(args),
+		update: (args: FunctionArgs<Update>) => update.mutate(args),
+		remove: (id: FunctionArgs<Remove>["id"]) => remove.mutate({ id }),
 	};
+}
+
+export function useCategoryActions() {
+	return useEntityActions({
+		create: api.inventory.createCategory,
+		update: api.inventory.updateCategory,
+		remove: api.inventory.removeCategory,
+	});
 }
 
 export function useItemTypeActions() {
-	const create = useMutation(api.inventory.createItemType);
-	const update = useMutation(api.inventory.updateItemType);
-	const remove = useMutation(api.inventory.removeItemType);
-	return {
-		create: (args: Parameters<typeof create.mutate>[0]) =>
-			create.mutate(args),
-		update: (args: Parameters<typeof update.mutate>[0]) =>
-			update.mutate(args),
-		remove: (id: Id<"itemTypes">) => remove.mutate({ id }),
-	};
+	return useEntityActions({
+		create: api.inventory.createItemType,
+		update: api.inventory.updateItemType,
+		remove: api.inventory.removeItemType,
+	});
 }
 
 export function useItemActions() {
-	const create = useMutation(api.inventory.createItem);
-	const update = useMutation(api.inventory.updateItem);
-	const remove = useMutation(api.inventory.removeItem);
-	return {
-		create: (args: Parameters<typeof create.mutate>[0]) =>
-			create.mutate(args),
-		update: (args: Parameters<typeof update.mutate>[0]) =>
-			update.mutate(args),
-		remove: (id: Id<"items">) => remove.mutate({ id }),
-	};
+	return useEntityActions({
+		create: api.inventory.createItem,
+		update: api.inventory.updateItem,
+		remove: api.inventory.removeItem,
+	});
 }
+
+/** The fields an item's autosaved edit can change. */
+export type ItemPatch = Omit<
+	FunctionArgs<typeof api.inventory.updateItem>,
+	"id"
+>;
+
+/** The fields an item type's autosaved edit can change. */
+export type ItemTypePatch = Omit<
+	FunctionArgs<typeof api.inventory.updateItemType>,
+	"id"
+>;
+
+/** The fields a category's autosaved edit can change. */
+export type CategoryPatch = Omit<
+	FunctionArgs<typeof api.inventory.updateCategory>,
+	"id"
+>;

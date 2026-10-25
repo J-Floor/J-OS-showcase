@@ -1,4 +1,5 @@
 @use "../../styles/typography" as typo;
+@use "../../styles/hover";
 
 /* Wider than a normal dialog and pinned near the top: a palette you type into
    should not move down the screen as its result list grows. */
@@ -10,11 +11,6 @@
 	   Dialog, which swallowed the wheel before the result list ever saw it — the
 	   whole palette moved instead of the rows. Only the list scrolls. */
 	overflow: hidden;
-}
-
-/* The dialog's close affordance is suppressed — see the note in the component. */
-.hiddenClose {
-	display: none;
 }
 
 .combobox {
@@ -111,8 +107,8 @@
 		background-color: var(--jf-surface-bg-raised);
 	}
 
-	/* stylelint-disable-next-line defensive-css/no-accidental-hover -- pointer-driven surface; the palette is not a touch target */
-	&:hover {
+	/* Pointer-driven surface; the palette is not a touch target. */
+	@include hover.hover {
 		background-color: var(--jf-surface-bg-raised);
 	}
 }

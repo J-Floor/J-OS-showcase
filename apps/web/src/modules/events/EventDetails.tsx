@@ -6,8 +6,9 @@ import {
 	PropertyRow,
 	Query,
 	TimePicker,
+	useSaveTracker,
 } from "@j-os/design-system";
-import type { FunctionReturnType } from "convex/server";
+import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { useMutation } from "convex-solidjs";
 import { For, Show, type Accessor } from "solid-js";
 
@@ -23,6 +24,7 @@ import {
 } from "../../../convex/lib/time.ts";
 import { NAME_MAX } from "../../../convex/lib/validate.ts";
 import { call } from "../../lib/call.ts";
+import { reportSave } from "../../lib/reportSave.ts";
 import {
 	createActionError,
 	scopeOfFields,
@@ -33,14 +35,18 @@ import { InlineError } from "../../shared/InlineError.tsx";
 
 import { eventsEntity } from "./entity.ts";
 import styles from "./EventSheet.module.scss";
-import { eventFields } from "./fields.ts";
+import { END_TIME_LABEL, START_TIME_LABEL, eventFields } from "./fields.ts";
 
 /** One row of an event's attendee list. */
 export type Attendee = FunctionReturnType<
 	typeof api.events.listEventAttendees
 >[number];
 
-type EventPatch = { startsAtLocal: string } | { endsAtLocal: string };
+/** The fields one edit writes: any subset of what `updateEvent` takes. */
+export type EventPatch = Omit<
+	FunctionArgs<typeof api.events.updateEvent>,
+	"eventId"
+>;
 
 /** The zoned IXDTF source for an event's start/end. Required on the schema (the
  *  prod backfill populated every row and `createEvent` always writes both), so
@@ -58,7 +64,7 @@ function endLocal(event: Doc<"events">): string {
 const BOUNDARIES = {
 	start: {
 		field: eventFields.startsAt,
-		timeLabel: "Start time (Zurich)",
+		timeLabel: START_TIME_LABEL,
 		local: startLocal,
 		patch: (local: string): EventPatch => ({ startsAtLocal: local }),
 		isAllowed: (composed: ZonedValue, event: Doc<"events">): boolean =>
@@ -66,7 +72,7 @@ const BOUNDARIES = {
 	},
 	end: {
 		field: eventFields.endsAt,
-		timeLabel: "End time (Zurich)",
+		timeLabel: END_TIME_LABEL,
 		local: endLocal,
 		patch: (local: string): EventPatch => ({ endsAtLocal: local }),
 		isAllowed: (composed: ZonedValue, event: Doc<"events">): boolean =>
@@ -81,7 +87,7 @@ function EventBoundaryRow(props: {
 	boundary: keyof typeof BOUNDARIES;
 	event: Accessor<Doc<"events">>;
 	isEditing: Accessor<boolean>;
-	onPatch: (patch: EventPatch) => Promise<void>;
+	onPatch: (patch: EventPatch) => void;
 }) {
 	function boundary() {
 		return BOUNDARIES[props.boundary];
@@ -91,7 +97,7 @@ function EventBoundaryRow(props: {
 	}
 	function commit(composed: ZonedValue) {
 		if (boundary().isAllowed(composed, props.event()))
-			void props.onPatch(boundary().patch(composed.local));
+			props.onPatch(boundary().patch(composed.local));
 	}
 	return (
 		<PropertyRow field={boundary().field}>
@@ -135,23 +141,31 @@ function EventBoundaryRow(props: {
 	);
 }
 
-/** The "Details" section: name and start/end, editable while `isEditing`. */
+/** The "Details" section: name and start/end, editable while `isEditing`.
+ *  Each change saves at once and reports to the sheet's save status. */
 export function EventDetailsItem(props: {
 	event: Accessor<Doc<"events">>;
 	isEditing: Accessor<boolean>;
+	/** The sheet is open: a change failing once it closed toasts. */
+	isOpen: Accessor<boolean>;
 }) {
 	const updateEvent = useMutation(api.events.updateEvent);
+	const tracker = useSaveTracker();
 	const { error, trackResult } = createActionError();
-	async function patch(change: EventPatch | { name: string }) {
-		await trackResult(
-			call(
-				updateEvent.mutateAsync({
-					eventId: props.event()._id,
-					...change,
-				}),
-				"Could not save that change."
-			),
-			scopeOfFields(change)
+	function patch(change: EventPatch): void {
+		const eventId = props.event()._id;
+		const scope = scopeOfFields(change);
+		reportSave(
+			tracker?.track(scope),
+			() =>
+				trackResult(
+					call(
+						updateEvent.mutateAsync({ eventId, ...change }),
+						"Could not save that change."
+					),
+					scope
+				),
+			props.isOpen
 		);
 	}
 	return (
@@ -169,7 +183,7 @@ export function EventDetailsItem(props: {
 								value={props.event().name}
 								maxLength={NAME_MAX}
 								onCommit={(value) => {
-									void patch({ name: value });
+									patch({ name: value });
 								}}
 							/>
 						</Show>

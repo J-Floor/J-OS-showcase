@@ -96,14 +96,14 @@ test("never shows to someone the door is closed to", async () => {
 	state.person = { ...OPEN_DOOR_MEMBER, door: { override: "force_off" } };
 	render(() => <DoorsIntro />);
 	await new Promise((resolve) => setTimeout(resolve, 0));
-	expect(screen.queryByText("Getting in")).toBeNull();
+	expect(screen.queryByRole("dialog")).toBeNull();
 });
 
 test("never shows again once seen", async () => {
 	state.person = { ...OPEN_DOOR_MEMBER, doorsIntroSeenAt: 1 };
 	render(() => <DoorsIntro />);
 	await new Promise((resolve) => setTimeout(resolve, 0));
-	expect(screen.queryByText("Getting in")).toBeNull();
+	expect(screen.queryByRole("dialog")).toBeNull();
 });
 
 test("Got it marks it seen and closes it", async () => {
@@ -112,7 +112,7 @@ test("Got it marks it seen and closes it", async () => {
 	fireEvent.click(await screen.findByRole("button", { name: "Got it" }));
 	expect(mutateAsync).toHaveBeenCalledWith({});
 	await waitFor(() => {
-		expect(screen.queryByText("Getting in")).toBeNull();
+		expect(screen.queryByRole("dialog")).toBeNull();
 	});
 	expect(navigate).not.toHaveBeenCalled();
 });
@@ -135,7 +135,7 @@ test("Escape closes it for this session without marking it seen", async () => {
 		key: "Escape",
 	});
 	await waitFor(() => {
-		expect(screen.queryByText("Getting in")).toBeNull();
+		expect(screen.queryByRole("dialog")).toBeNull();
 	});
 	expect(mutateAsync).not.toHaveBeenCalled();
 	expect(navigate).not.toHaveBeenCalled();
@@ -147,6 +147,18 @@ test("a failed save still closes it and is not an unhandled rejection", async ()
 	render(() => <DoorsIntro />);
 	fireEvent.click(await screen.findByRole("button", { name: "Got it" }));
 	expect(mutateAsync).toHaveBeenCalledWith({});
+	await waitFor(() => {
+		expect(screen.queryByRole("dialog")).toBeNull();
+	});
+});
+
+test("closing keeps the content mounted, so the exit has something to animate", async () => {
+	state.person = { ...OPEN_DOOR_MEMBER };
+	render(() => <DoorsIntro />);
+	fireEvent.click(await screen.findByRole("button", { name: "Got it" }));
+	expect(screen.getByText("Getting in")).toBeInTheDocument();
+	expect(screen.getByText("Go to Doors")).toBeInTheDocument();
+	// No exit animation runs here, so the content goes once the close is done.
 	await waitFor(() => {
 		expect(screen.queryByText("Getting in")).toBeNull();
 	});

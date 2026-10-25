@@ -3,6 +3,7 @@ import { cleanup, render, screen } from "@solidjs/testing-library";
 import type { JSX } from "solid-js";
 import { afterEach, expect, test } from "vitest";
 
+import type { PersonRow } from "../../../../convex/people.ts";
 import {
 	FREE_TEXT_SIZE,
 	SHORT_TEXT_SIZE,
@@ -13,7 +14,6 @@ import { personFields } from "../fields.ts";
 import {
 	applicationColumns,
 	submissionDateText,
-	type ApplicationRow,
 } from "./applicationColumns.tsx";
 import { guestColumns } from "./guestColumns.tsx";
 import { memberColumns } from "./memberColumns.tsx";
@@ -27,7 +27,7 @@ type Link = { label?: string; url: string };
  *  are plain data, so the cell can be exercised without mounting the table (and
  *  without the Convex client the neighbouring editable cells need). */
 function renderLinks(links: Link[]): void {
-	const column = ventureColumns<ApplicationRow>().find(
+	const column = ventureColumns<PersonRow>().find(
 		(candidate) => candidate.id === "links"
 	);
 	if (!column?.cell || typeof column.cell !== "function") {
@@ -35,7 +35,7 @@ function renderLinks(links: Link[]): void {
 	}
 	const cell = column.cell;
 	const info = {
-		row: { original: { venture: { links } } as unknown as ApplicationRow },
+		row: { original: { venture: { links } } as unknown as PersonRow },
 	};
 	render(() => cell(info as never) as JSX.Element);
 }
@@ -158,7 +158,7 @@ function measured(column: SizedColumn, row: unknown): string {
 }
 
 test("the venture columns leave the vertical to the default enum cell and free text to wrap", () => {
-	const columns = ventureColumns<ApplicationRow>();
+	const columns = ventureColumns<PersonRow>();
 	const vertical = byId(columns, "vertical");
 	expect(vertical.size).toBe("content");
 	expect(vertical.dataType).toBe("enum");
@@ -221,8 +221,8 @@ test("notes wrap in a weighted share, and the date fits its text", () => {
 	const date = byId(applications, "createdAt");
 	expect(date.size).toBe("content");
 	const row = { submittedAt: Date.UTC(2026, 9, 1), _creationTime: 0 };
-	expect(measured(date, row)).toBe(submissionDateText(row as ApplicationRow));
-	expect(submissionDateText(row as ApplicationRow)).toBe(
+	expect(measured(date, row)).toBe(submissionDateText(row as PersonRow));
+	expect(submissionDateText(row as PersonRow)).toBe(
 		formatDate(row.submittedAt)
 	);
 	expect(

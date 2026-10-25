@@ -1,11 +1,16 @@
+import { type SaveTracker, useSaveTracker } from "@j-os/design-system";
 import {
 	type Accessor,
+	createComputed,
 	createEffect,
 	createSignal,
+	createUniqueId,
 	on,
 	onCleanup,
 	untrack,
 } from "solid-js";
+
+import { reportSave, type SaveWrite } from "./reportSave.ts";
 
 /** A form field whose value is the local source of truth while editing, kept in
  * sync with an async remote (e.g. a Convex document). */
@@ -28,8 +33,15 @@ export type SyncedFieldOptions<T> = {
 	 * Include open-state here if the field lives in a reusable form that should
 	 * re-seed each time it opens. */
 	key: Accessor<unknown>;
-	/** Persists a committed value (the mutation). */
-	write: (value: T) => void;
+	/** Persists a committed value: the mutation's Result, which the sheet's
+	 *  save status reports, or nothing when there is no row yet. */
+	write: (value: T) => ReturnType<SaveWrite>;
+	/** The sheet's open state. Closing sends a waiting write at once (as a
+	 *  blur does), and a write failing once closed toasts. */
+	open?: Accessor<boolean>;
+	/** The save tracker to report to; the surrounding sheet's by default
+	 *  (pass one when the field is built outside its `Sheet.Root`). */
+	tracker?: SaveTracker;
 	/** Debounce before the write fires. Default `400`. Use `0` for discrete
 	 * controls (selects, date pickers) that should write on every change. */
 	debounceMs?: number;
@@ -60,6 +72,12 @@ export function createSyncedField<T>(
 	const isEqual =
 		options.equals ?? ((left: T, right: T) => Object.is(left, right));
 	const debounceMs = options.debounceMs ?? DEFAULT_DEBOUNCE_MS;
+	const tracked = (options.tracker ?? useSaveTracker())?.track(
+		createUniqueId()
+	);
+	function isShown(): boolean {
+		return options.open?.() ?? true;
+	}
 
 	const [local, setLocal] = createSignal<T>(untrack(options.remote));
 	// Last server value we reconciled against (see the doc comment).
@@ -84,18 +102,34 @@ export function createSyncedField<T>(
 		}
 		const value = pending.value;
 		pending = undefined;
-		options.write(value);
+		reportSave(tracked, () => options.write(value), isShown);
 	}
 
 	function set(value: T): void {
 		setLocal(() => value);
 		pending = { value };
+		tracked?.pending();
 		if (debounceMs <= 0) {
 			flush();
 		} else {
 			clearTimer();
 			timer = setTimeout(flush, debounceMs);
 		}
+	}
+
+	// A close sends the waiting write before the reseed below drops it. A
+	// computation, so it runs ahead of that effect, while the sheet still
+	// shows the record the write is for.
+	if (options.open) {
+		createComputed(
+			on(
+				options.open,
+				(isOpen) => {
+					if (!isOpen) flush();
+				},
+				{ defer: true }
+			)
+		);
 	}
 
 	// Hard reseed when the edited record (or open-state) changes: drop any write
@@ -105,6 +139,7 @@ export function createSyncedField<T>(
 		on(options.key, () => {
 			clearTimer();
 			pending = undefined;
+			tracked?.clear();
 			const remoteValue = untrack(options.remote);
 			synced = remoteValue;
 			setLocal(() => remoteValue);

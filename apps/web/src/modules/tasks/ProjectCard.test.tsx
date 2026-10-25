@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen } from "@solidjs/testing-library";
-import { afterEach, expect, test } from "vitest";
+import { HOVER_INTENT_MS } from "@j-os/design-system";
+import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
+import { afterEach, expect, test, vi } from "vitest";
 
 import type { Id } from "../../../convex/_generated/dataModel";
 import { entityIn } from "../../../test-stubs/morphKeys.tsx";
@@ -45,4 +46,23 @@ test("a boxed card draws its box on the element that morphs, so the box goes wit
 	const box = container.querySelector("[data-boxed]");
 	expect(box).not.toBeNull();
 	expect(box).toBe(entityIn(container));
+});
+
+test("fires hover intent once the pointer rests on the card", () => {
+	vi.useFakeTimers();
+	const onHoverIntent = vi.fn();
+	render(() => (
+		<ProjectCard
+			id={id}
+			name="Roof"
+			taskCount={0}
+			onClick={() => {}}
+			onHoverIntent={onHoverIntent}
+		/>
+	));
+	fireEvent.pointerEnter(screen.getByRole("button", { name: /Roof/ }));
+	expect(onHoverIntent).not.toHaveBeenCalled();
+	vi.advanceTimersByTime(HOVER_INTENT_MS);
+	vi.useRealTimers();
+	expect(onHoverIntent).toHaveBeenCalledTimes(1);
 });

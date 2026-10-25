@@ -17,7 +17,7 @@ const PREFS_FAILED_COPY = "Couldn't load notification settings.";
 const PUSH_OFF_HINT =
 	"Turn on push notifications above to choose what gets pushed here.";
 
-type Channel = "push" | "email";
+type Channel = keyof Pick<CategoryPrefRow, "push" | "email">;
 
 function labelId(category: Category): string {
 	return `notification-category-${category}`;

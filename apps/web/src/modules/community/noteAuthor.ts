@@ -1,4 +1,4 @@
-import type { Id } from "../../../convex/_generated/dataModel";
+import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { staffName, type StaffMember } from "../../shared/data/boardLevel.tsx";
 
 const BOARD = "Board";
@@ -16,4 +16,9 @@ export function noteAuthor(
 	if (!authorId) return BOARD;
 	const name = staffName(staff, authorId);
 	return name === null ? BOARD : name;
+}
+
+/** The most recent board note on a person, if there is one. */
+export function latestNote(person: Pick<Doc<"people">, "board">) {
+	return person.board?.noteLog?.at(-1);
 }

@@ -19,22 +19,23 @@ export function CountdownCard() {
 	}
 	return (
 		<Show when={person.data() === undefined || until() !== undefined}>
-			<SpaceCard
-				title="Access"
-				helpText="Days left on your access."
-				loading={person.data() === undefined}
-			>
-				<Show when={until()}>
-					{(accessUntil) => (
-						<div class={styles.count}>
-							<span class={styles.num}>
-								{daysLeft(accessUntil(), Date.now())}
-							</span>
-							<span class={styles.label}>days left</span>
-						</div>
-					)}
-				</Show>
-			</SpaceCard>
+			<SpaceCard.Root loading={person.data() === undefined}>
+				<SpaceCard.Header title="Access" />
+				<SpaceCard.Help>Days left on your access.</SpaceCard.Help>
+				<SpaceCard.Body>
+					<Show when={until()}>
+						{(accessUntil) => (
+							<div class={styles.count}>
+								<span class={styles.num}>
+									{daysLeft(accessUntil(), Date.now())}
+								</span>
+								<span class={styles.label}>days left</span>
+							</div>
+						)}
+					</Show>
+				</SpaceCard.Body>
+				<SpaceCard.Skeleton />
+			</SpaceCard.Root>
 		</Show>
 	);
 }

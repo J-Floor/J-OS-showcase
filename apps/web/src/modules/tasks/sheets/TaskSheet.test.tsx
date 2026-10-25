@@ -1,5 +1,11 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@solidjs/testing-library";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 
 import { sheetSkeleton } from "../../../../test-stubs/morphKeys.tsx";
@@ -143,6 +149,26 @@ test("loading with a task also set (stale-during-refetch) still shows the skelet
 	));
 	expect(screen.queryByDisplayValue("Fix the bug")).toBeNull();
 	expect(screen.queryByText("Task")).toBeNull();
+});
+
+test("create: a typed title asks before Escape throws it away", async () => {
+	const onOpenChange = vi.fn();
+	render(() => (
+		<TaskSheet open onOpenChange={onOpenChange} people={[]} projects={[]} />
+	));
+	fireEvent.input(screen.getByLabelText("Title"), {
+		target: { value: "Fix the bug" },
+	});
+	const sheet = screen.getByRole("dialog", { name: "New task" });
+	// Ark hears Escape a moment after the open: press until it asks.
+	await waitFor(() => {
+		if (!screen.queryByRole("dialog", { name: "Discard new task?" }))
+			fireEvent.keyDown(sheet, { key: "Escape" });
+		expect(
+			screen.getByRole("dialog", { name: "Discard new task?" })
+		).toBeInTheDocument();
+	});
+	expect(onOpenChange).not.toHaveBeenCalled();
 });
 
 test("no task, not loading: shows the create form and 'New task' title", () => {

@@ -203,11 +203,11 @@ function createTableModel<Data extends Record<string, unknown>>(
 ) {
 	const { table, rowSelection, setRowSelection } = createTable<Data>({
 		data: () => props.data ?? [],
-		// columns/enableRowSelection/groupBy are table config read once at setup
-		// (createTable only takes `data` as a reactive getter); they are static per
-		// Table instance, so reading them eagerly here is intentional.
-		// eslint-disable-next-line solid/reactivity -- static table config, read once at setup
-		columns: props.columns,
+		get columns() {
+			return props.columns;
+		},
+		// enableRowSelection/groupBy/getRowId are read once at setup: they are
+		// static per Table instance, so reading them eagerly here is intentional.
 		initialColumnSorting: props.initialColumnSorting,
 		initialColumnFilters: props.initialColumnFilters,
 		// eslint-disable-next-line solid/reactivity -- static table config, read once at setup
