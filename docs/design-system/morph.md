@@ -243,12 +243,13 @@ toggle is `table-collapse` or `table-expand` (opposites).
 **Page attributes** (all in `morphNames.ts`): `data-morph-ghost`,
 `data-morph-pinned` (value `held`; `MORPH_PINNED_SELECTOR` is
 `[data-morph-pinned="held"]`), `data-morph-scrim`, `data-morph-hidden`,
-`data-morph-picked`, `data-morph-layer` (a shown overlay's content, set by
-the overlay layer), plus the markers `data-morph-of`, `data-morph-title`,
-`data-morph-key`. `data-sheet-skeleton` (in `morphPairing.ts`) marks
-placeholder content that never takes part. The overlay layer's own
-`data-overlay-covered` and `--jf-overlays-above` (in `overlayLayer.tsx`)
-say what is shown above a content.
+`data-morph-picked`, `data-list-row` (on every `List.Item`),
+`data-morph-layer` (a shown overlay's content, set by the overlay layer),
+plus the markers `data-morph-of`, `data-morph-title`, `data-morph-key`.
+`data-sheet-skeleton` (in `morphPairing.ts`) marks placeholder content that
+never takes part. The overlay layer's own `data-overlay-covered` and
+`--jf-overlays-above` (in `overlayLayer.tsx`) say what is shown above a
+content.
 
 **Custom properties** (all in `morphNames.ts`): the two ends' surfaces
 `--jf-morph-from-*` / `--jf-morph-to-*` (`background`, `border-color`,
@@ -342,13 +343,15 @@ unhovered, unpinned copy), or it is a field whose input wrapper paints.
    It records the opener (the focused element outside the overlay). If a
    closing overlay is offering a handoff, this overlay claims it and joins
    (see _Handoff_). Otherwise the **source** is the recent activation, else
-   the first on-screen `morphFrom` candidate (`openFrom`). The activation
-   resolves to its nearest visible anchor (`nearestVisibleAnchor`): itself,
-   else the trigger of the closed popup it sat in (`aria-controls`), else
-   none. A menu item whose menu has closed resolves to the menu's button.
-   An element with `data-morph-hidden` is judged by its parent. Whether the
-   source will be hidden is measured now (`takesPlaceOf`: animating and the
-   source has a container).
+   the first on-screen `morphFrom` candidate (`openFrom`); an activation
+   inside an on-screen `morphFrom` candidate (a button on a bar the overlay
+   grows from) makes that candidate the source, and the close returns to it.
+   The activation resolves to its nearest visible anchor
+   (`nearestVisibleAnchor`): itself, else the trigger of the closed popup it
+   sat in (`aria-controls`), else none. A menu item whose menu has closed
+   resolves to the menu's button. An element with `data-morph-hidden` is
+   judged by its parent. Whether the source will be hidden is measured now
+   (`takesPlaceOf`: animating and the source has a container).
 3. **`morph` prepares the old snapshot** (the `MorphEnds` constructor), in
    this order, because each step reads the live style the next one changes:
    1. Pick the look. A surface morph needs the box look, the API, no running
@@ -401,8 +404,9 @@ unhovered, unpinned copy), or it is a field whose input wrapper paints.
    marks the overlay as closing.
 2. **The close's source** (`closeFrom`) is the element inside the overlay
    marked `data-morph-picked` (the palette's picked row), else a row picked
-   inside it, else the overlay content. A picked row is an `li` or an entity
-   row holding the recent activation. A pick made in a popup opened from
+   inside it, else the overlay content. A picked row is an `li`, a list row
+   (`List.Item`, marked `data-list-row` whatever its role) or an entity row
+   holding the recent activation. A pick made in a popup opened from
    inside the overlay resolves to that popup's trigger
    (`isActivationThroughPopup()`); it is not a picked row, so the close
    comes from the content. A direct press on that trigger is an ordinary

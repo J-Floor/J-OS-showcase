@@ -17,7 +17,7 @@ import {
 	joinHandoff,
 	morph,
 } from "./morph.ts";
-import { MORPH_HIDDEN, MORPH_PICKED } from "./morphNames.ts";
+import { MORPH_HIDDEN, MORPH_LIST_ROW, MORPH_PICKED } from "./morphNames.ts";
 import { ENTITY_ROW, findMorphTarget } from "./morphPairing.ts";
 import { afterTransition, canAnimate } from "./viewTransition.ts";
 import { hasLayoutBox, nearestVisibleAnchor } from "./visibleArea.ts";
@@ -56,8 +56,8 @@ export function overlayMorphOptions(props: MorphOverlayProps) {
 }
 
 /** A row picked inside an overlay, the close's source: an entity row, or
- *  any list item (a palette result that shows no entity, a page). */
-const PICKED_ROW = `li, ${ENTITY_ROW}`;
+ *  any list row (a palette result that shows no entity, a page). */
+const PICKED_ROW = `li, [${MORPH_LIST_ROW}], ${ENTITY_ROW}`;
 
 type MorphPresence = {
 	/** Pass to Ark as `open`. */
@@ -105,14 +105,22 @@ function outside<T extends HTMLElement>(
 }
 
 /** What the overlay opens out of: the last activation, else the first
- *  fallback on screen. */
+ *  fallback on screen. An activation inside a fallback on screen belongs to
+ *  that surface (a button on a bar the overlay grows from): the fallback is
+ *  the source then. */
 function openFrom(options: {
 	content: () => HTMLElement | null;
 	morphFrom?: MorphFrom;
 }): HTMLElement | null {
 	const content = options.content();
-	const fallback = [options.morphFrom?.()].flat().find(hasLayoutBox) ?? null;
-	return outside(content, recentActivation()) ?? outside(content, fallback);
+	const fallbacks = [options.morphFrom?.()].flat().filter(hasLayoutBox);
+	const activation = outside(content, recentActivation());
+	const surface = fallbacks.find((fallback) => fallback.contains(activation));
+	return (
+		outside(content, surface ?? null) ??
+		activation ??
+		outside(content, fallbacks[0] ?? null)
+	);
 }
 
 function closeFrom(content: HTMLElement | null): HTMLElement | null {

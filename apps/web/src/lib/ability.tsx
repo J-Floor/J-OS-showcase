@@ -43,6 +43,8 @@ export type Subject =
 	| "Notifications"
 	| "Tasks"
 	| "Inventory";
+/** One thing a role may do: what a gated item or page asks the ability. */
+export type Permission = { action: Action; subject: Subject };
 export type AppAbility = MongoAbility<[Action, Subject]>;
 export type Role = (typeof ACCESS_TIERS)[number] | "none";
 

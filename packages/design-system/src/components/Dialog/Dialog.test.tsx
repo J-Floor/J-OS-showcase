@@ -19,6 +19,7 @@ import {
 	transitionSettled,
 } from "../../test/viewTransitionFakes.ts";
 import { MORPH_SCRIM, MORPH_TITLE } from "../../utils/morphNames.ts";
+import { SWIPE_MIN_DISTANCE } from "../../utils/swipe.ts";
 
 import { Dialog } from "./Dialog.tsx";
 
@@ -437,4 +438,131 @@ test("Content reopened while its close morph still runs builds afresh", async ()
 	expect(screen.getByText("body")).toBeInTheDocument();
 	expect(build).toHaveBeenCalledTimes(2);
 	transitions.finish();
+});
+
+function renderPlaced(placement?: "bottom") {
+	const onOpenChange = vi.fn();
+	render(() => (
+		<Dialog.Root open onOpenChange={onOpenChange}>
+			<Dialog.Content placement={placement}>
+				<Dialog.Title>Placed</Dialog.Title>
+				<p>card body</p>
+			</Dialog.Content>
+		</Dialog.Root>
+	));
+	return { onOpenChange };
+}
+
+function touch(
+	type: "pointerdown" | "pointerup",
+	target: Element,
+	clientY: number
+): void {
+	target.dispatchEvent(
+		new PointerEvent(type, {
+			bubbles: true,
+			pointerId: 1,
+			pointerType: "touch",
+			isPrimary: true,
+			clientX: 100,
+			clientY,
+		})
+	);
+}
+
+function dragDown(target: Element, distance: number): void {
+	touch("pointerdown", target, 100);
+	touch("pointerup", target, 100 + distance);
+}
+
+test("the card is centred by default", () => {
+	renderPlaced();
+	expect(screen.getByRole("dialog")).toHaveAttribute(
+		"data-placement",
+		"center"
+	);
+});
+
+test("placement bottom marks the card and its positioner for the stylesheet", () => {
+	renderPlaced("bottom");
+	const dialog = screen.getByRole("dialog");
+	expect(dialog).toHaveAttribute("data-placement", "bottom");
+	expect(dialog.parentElement).toHaveAttribute("data-placement", "bottom");
+});
+
+test("a bottom card closes on a swipe down", async () => {
+	const { onOpenChange } = renderPlaced("bottom");
+	dragDown(screen.getByText("card body"), SWIPE_MIN_DISTANCE);
+	await waitFor(() => {
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+	});
+});
+
+test("a bottom card stays open on a short drag or a swipe up", () => {
+	const { onOpenChange } = renderPlaced("bottom");
+	dragDown(screen.getByText("card body"), SWIPE_MIN_DISTANCE - 1);
+	dragDown(screen.getByText("card body"), -SWIPE_MIN_DISTANCE);
+	expect(onOpenChange).not.toHaveBeenCalled();
+});
+
+test("a centred card does not close on a swipe down", () => {
+	const { onOpenChange } = renderPlaced();
+	dragDown(screen.getByText("card body"), SWIPE_MIN_DISTANCE * 2);
+	expect(onOpenChange).not.toHaveBeenCalled();
+});
+
+/** A body taller than its box, as the browser would lay it out. */
+function scrollingBody(body: HTMLElement): void {
+	body.style.setProperty("overflow-block", "auto");
+	body.style.setProperty("overflow-y", "auto");
+	Object.defineProperty(body, "scrollHeight", { value: 400 });
+	Object.defineProperty(body, "clientHeight", { value: 100 });
+}
+
+function renderLongBottom() {
+	const onOpenChange = vi.fn();
+	render(() => (
+		<Dialog.Root open onOpenChange={onOpenChange}>
+			<Dialog.Content placement="bottom">
+				<Dialog.Header>
+					<Dialog.Title>Long</Dialog.Title>
+				</Dialog.Header>
+				<Dialog.Body>
+					<p>long text</p>
+				</Dialog.Body>
+			</Dialog.Content>
+		</Dialog.Root>
+	));
+	scrollingBody(screen.getByText("long text").parentElement!);
+	return { onOpenChange };
+}
+
+test("a swipe down that starts in a scrolling body scrolls it and leaves the dialog open", () => {
+	const { onOpenChange } = renderLongBottom();
+	dragDown(screen.getByText("long text"), SWIPE_MIN_DISTANCE * 2);
+	expect(onOpenChange).not.toHaveBeenCalled();
+});
+
+test("a swipe down that starts outside the scrolling body closes the dialog", async () => {
+	const { onOpenChange } = renderLongBottom();
+	dragDown(screen.getByText("Long"), SWIPE_MIN_DISTANCE);
+	await waitFor(() => {
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+	});
+});
+
+test("flush marks the card to drop its padding", () => {
+	render(() => (
+		<Dialog.Root open>
+			<Dialog.Content flush>
+				<Dialog.Title>Flush</Dialog.Title>
+			</Dialog.Content>
+		</Dialog.Root>
+	));
+	expect(screen.getByRole("dialog")).toHaveAttribute("data-flush");
+});
+
+test("a card is padded unless it asks to be flush", () => {
+	renderPlaced();
+	expect(screen.getByRole("dialog")).not.toHaveAttribute("data-flush");
 });

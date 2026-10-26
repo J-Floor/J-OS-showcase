@@ -2,13 +2,14 @@ import { Button, Dialog, readStored, writeStored } from "@j-os/design-system";
 import { For, createEffect, createSignal } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
+import { useAbility } from "../../lib/ability.tsx";
 import { useQuery } from "../../shared/data/useQuery.ts";
 
 import {
 	APP_VERSION,
 	CHANGELOG,
 	type ChangeEntry,
-	isNewer,
+	visibleNotes,
 } from "./changelog.ts";
 import { doorsIntroPending } from "./doorIntroState.ts";
 import { tourWillRun } from "./WelcomeTour.tsx";
@@ -46,6 +47,7 @@ function writeSeen(version: string): void {
  */
 export function WhatsNew() {
 	const state = useQuery(api.onboarding.getState, {});
+	const ability = useAbility();
 	const [open, setOpen] = createSignal(false);
 	const [fresh, setFresh] = createSignal<ChangeEntry[]>([]);
 
@@ -76,9 +78,7 @@ export function WhatsNew() {
 			return;
 		}
 
-		const entries = CHANGELOG.filter((entry) =>
-			isNewer(entry.version, seen)
-		);
+		const entries = visibleNotes(CHANGELOG, seen, ability());
 		if (entries.length === 0) {
 			writeSeen(APP_VERSION);
 			return;
@@ -110,7 +110,7 @@ export function WhatsNew() {
 								<h3 class={styles.entryTitle}>{entry.title}</h3>
 								<ul class={styles.items}>
 									<For each={entry.items}>
-										{(item) => <li>{item}</li>}
+										{(item) => <li>{item.text}</li>}
 									</For>
 								</ul>
 							</section>

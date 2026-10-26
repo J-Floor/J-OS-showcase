@@ -3,8 +3,10 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
 	OWN_GESTURES_ATTR,
 	listenForSwipe,
+	listenForVerticalSwipe,
 	ownsGesture,
 	swipeDirection,
+	verticalSwipeDirection,
 } from "./swipe.ts";
 
 let boundary: HTMLElement;
@@ -133,6 +135,43 @@ describe("swipeDirection", () => {
 	});
 });
 
+describe("verticalSwipeDirection", () => {
+	test("a long vertical move is a swipe the way the finger went", () => {
+		expect(verticalSwipeDirection(10, 80)).toBe("down");
+		expect(verticalSwipeDirection(-10, -80)).toBe("up");
+	});
+
+	test("a short, diagonal or horizontal move is not", () => {
+		expect(verticalSwipeDirection(0, 20)).toBeUndefined();
+		expect(verticalSwipeDirection(60, 80)).toBeUndefined();
+		expect(verticalSwipeDirection(200, 5)).toBeUndefined();
+	});
+});
+
+function scrollingDown(element: HTMLElement, isScrolling: boolean): void {
+	Object.defineProperty(element, "scrollHeight", { value: 500 });
+	Object.defineProperty(element, "clientHeight", {
+		value: isScrolling ? 300 : 500,
+	});
+}
+
+describe("ownsGesture along the vertical axis", () => {
+	test("a vertical scroller that overflows does, a sideways one does not", () => {
+		const target = child(
+			'<div style="overflow-y: auto"><span data-target>x</span></div>'
+		);
+		scrollingDown(parentOf(target), true);
+		expect(ownsGesture(target, boundary, "vertical")).toBe(true);
+		expect(ownsGesture(target, boundary)).toBe(false);
+	});
+
+	test("form fields and marked content do on either axis", () => {
+		expect(
+			ownsGesture(child("<input data-target />"), boundary, "vertical")
+		).toBe(true);
+	});
+});
+
 type Point = { x: number; y: number };
 
 function pointer(
@@ -238,6 +277,57 @@ describe("listenForSwipe", () => {
 		const { onSwipe, stop } = listen();
 		stop();
 		swipe(child("<p data-target>x</p>"), { x: 100, y: 100 });
+		expect(onSwipe).not.toHaveBeenCalled();
+	});
+});
+
+function listenVertically() {
+	const onSwipe = vi.fn();
+	const stop = listenForVerticalSwipe(boundary, {
+		startsHere: () => true,
+		onSwipe,
+	});
+	return { onSwipe, stop };
+}
+
+describe("listenForVerticalSwipe", () => {
+	test("reports a touch swipe down and up on pointerup", () => {
+		const { onSwipe } = listenVertically();
+		const target = child("<p data-target>x</p>");
+		swipe(target, { x: 205, y: 300 });
+		expect(onSwipe).toHaveBeenCalledWith("down");
+		swipe(target, { x: 195, y: -100 });
+		expect(onSwipe).toHaveBeenLastCalledWith("up");
+	});
+
+	test("a sideways swipe is not one, and a mouse never swipes", () => {
+		const { onSwipe } = listenVertically();
+		const target = child("<p data-target>x</p>");
+		swipe(target, { x: 100, y: 105 });
+		swipe(target, { x: 200, y: 300 }, { pointerType: "mouse" });
+		expect(onSwipe).not.toHaveBeenCalled();
+	});
+
+	test("a horizontal listener ignores a vertical swipe", () => {
+		const { onSwipe } = listen();
+		swipe(child("<p data-target>x</p>"), { x: 205, y: 300 });
+		expect(onSwipe).not.toHaveBeenCalled();
+	});
+
+	test("ignores a gesture that starts on a vertical scroller that overflows", () => {
+		const { onSwipe } = listenVertically();
+		const target = child(
+			'<div style="overflow-y: auto"><span data-target>x</span></div>'
+		);
+		scrollingDown(parentOf(target), true);
+		swipe(target, { x: 200, y: 300 });
+		expect(onSwipe).not.toHaveBeenCalled();
+	});
+
+	test("stops listening once cleaned up", () => {
+		const { onSwipe, stop } = listenVertically();
+		stop();
+		swipe(child("<p data-target>x</p>"), { x: 200, y: 300 });
 		expect(onSwipe).not.toHaveBeenCalled();
 	});
 });

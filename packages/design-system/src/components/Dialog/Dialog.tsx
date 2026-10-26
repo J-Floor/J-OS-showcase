@@ -1,9 +1,17 @@
 import { Dialog as ArkDialog } from "@ark-ui/solid";
 import clsx from "clsx";
-import { splitProps, type JSX } from "solid-js";
+import {
+	createContext,
+	createEffect,
+	createSignal,
+	onCleanup,
+	splitProps,
+	type JSX,
+} from "solid-js";
 import { Portal } from "solid-js/web";
 
 import { ICONS } from "../../icons.ts";
+import { useRequiredContext } from "../../utils/context.ts";
 import { type MorphOverlayProps } from "../../utils/morphPresence.ts";
 import {
 	OverlayBackdrop,
@@ -17,14 +25,30 @@ import {
 	getPartStyles,
 	type WithPartClasses,
 } from "../../utils/partStyling.ts";
+import { listenForVerticalSwipe } from "../../utils/swipe.ts";
 import type { DistributiveOmit } from "../../utils/types.ts";
 import { Button, type ButtonProps } from "../Button/Button.tsx";
 import { IconButton } from "../IconButton/IconButton.tsx";
 
 import styles from "./Dialog.module.scss";
 
+/** Where the card sits: centred in the page, or against the bottom edge. */
+export type DialogPlacement = "center" | "bottom";
+
 export type DialogContentProps = ArkDialog.ContentProps &
-	WithPartClasses<"backdrop" | "positioner" | "content">;
+	WithPartClasses<"backdrop" | "positioner" | "content"> & {
+		/**
+		 * `bottom` makes a bottom sheet: the card is full width against the
+		 * bottom edge, its top corners rounded, and a swipe down on it
+		 * closes the dialog. The card itself does not scroll (it leaves
+		 * vertical pans to the swipe): a long {@link Body} scrolls instead,
+		 * and a swipe that starts inside it scrolls it. Default `center`.
+		 */
+		placement?: DialogPlacement;
+		/** Drops the card's padding and gap, for a card whose parts reach
+		 *  its edges (a row that repeats a bar). */
+		flush?: boolean;
+	};
 
 export type DialogRootProps = Omit<
 	ArkDialog.RootProps,
@@ -33,6 +57,10 @@ export type DialogRootProps = Omit<
 	MorphOverlayProps &
 	Pick<OverlayOpenProps, "open"> &
 	Partial<Pick<OverlayOpenProps, "onOpenChange">>;
+
+/** How a part asks the root to close: the same request Escape and the close
+ *  button make, heard as `onOpenChange(false)`. */
+const CloseContext = createContext<() => void>();
 
 /**
  * Modal dialog. Ported from EmboUI's Dialog (React→Solid: `@ark-ui/react` →
@@ -53,16 +81,47 @@ function Content(props: DialogContentProps) {
 		"classOverride",
 		"class",
 		"children",
+		"placement",
+		"flush",
+		"ref",
 	]);
+	const close = useRequiredContext(
+		CloseContext,
+		"Dialog.Content",
+		"Dialog.Root"
+	);
+	const [card, setCard] = createSignal<HTMLElement>();
+	createEffect(() => {
+		const element = card();
+		if (!element || local.placement !== "bottom") return;
+		onCleanup(
+			listenForVerticalSwipe(element, {
+				startsHere: () => true,
+				onSwipe: (direction) => {
+					if (direction === "down") close();
+				},
+			})
+		);
+	});
+	function placement(): DialogPlacement {
+		return local.placement ?? "center";
+	}
 	return (
 		<Portal>
 			{/* Fades with the morph: see MORPH_SCRIM. */}
 			<OverlayBackdrop class={getPartStyles(styles, local, "backdrop")} />
 			<ArkDialog.Positioner
 				class={getPartStyles(styles, local, "positioner")}
+				data-placement={placement()}
 			>
 				<OverlayContent
 					{...rest}
+					data-placement={placement()}
+					data-flush={local.flush ? "" : undefined}
+					ref={(element: HTMLDivElement) => {
+						setCard(element);
+						if (typeof local.ref === "function") local.ref(element);
+					}}
 					class={clsx(
 						getPartStyles(styles, local, "content"),
 						local.class
@@ -201,7 +260,14 @@ function firstDialogFocusable(content: HTMLElement | null): HTMLElement | null {
  *   through the overlay layer (`OverlayRoot`); see {@link MorphOverlayProps}.
  */
 function Root(props: DialogRootProps) {
-	return <OverlayRoot {...props} defaultFocus={firstDialogFocusable} />;
+	function close(): void {
+		props.onOpenChange?.(false);
+	}
+	return (
+		<CloseContext.Provider value={close}>
+			<OverlayRoot {...props} defaultFocus={firstDialogFocusable} />
+		</CloseContext.Provider>
+	);
 }
 
 export const Dialog = {

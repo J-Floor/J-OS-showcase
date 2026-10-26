@@ -50,12 +50,22 @@ vi.mock("convex-solidjs", async () => {
 	};
 });
 
+import { AbilityProvider, type Role } from "../../lib/ability.tsx";
 import { OPEN_DIALOG_CONTENT } from "../../shared/dialogSelectors.ts";
 
 import { APP_VERSION, CHANGELOG, isNewer } from "./changelog.ts";
 import { WhatsNew } from "./WhatsNew.tsx";
 
-const ALT_LINE = CHANGELOG[0].items[0];
+const ALT_LINE = CHANGELOG[0].items[0].text;
+const BOARD_LINE = "Edit the Wi-Fi details";
+
+function renderFor(role: Role) {
+	return render(() => (
+		<AbilityProvider role={role}>
+			<WhatsNew />
+		</AbilityProvider>
+	));
+}
 
 beforeEach(() => {
 	localStorage.clear();
@@ -73,7 +83,7 @@ test("isNewer: null seen is always new; compares field by field", () => {
 test("shows the changelog to a member who finished the tour and has not seen this version", async () => {
 	state.onboarding = { tourSeen: true };
 	// seen is null (cleared) → everything is new.
-	render(() => <WhatsNew />);
+	renderFor("member");
 	await waitFor(() => {
 		expect(screen.getByText(ALT_LINE)).toBeInTheDocument();
 	});
@@ -84,7 +94,7 @@ test("shows to board/admin, who have no onboarding record — they are its audie
 	// (no onboarding) as brand-new and hid What's New from the very people it is
 	// written for.
 	state.onboarding = undefined;
-	render(() => <WhatsNew />);
+	renderFor("board");
 	await waitFor(() => {
 		expect(screen.getByText(ALT_LINE)).toBeInTheDocument();
 	});
@@ -92,7 +102,7 @@ test("shows to board/admin, who have no onboarding record — they are its audie
 
 test("does NOT show while the welcome tour will run (member still onboarding) — records the version", async () => {
 	state.onboarding = { tourSeen: false }; // tour will run for them
-	render(() => <WhatsNew />);
+	renderFor("member");
 	await waitFor(() => {
 		expect(localStorage.getItem("jos:whatsNewSeen")).toBe(APP_VERSION);
 	});
@@ -102,7 +112,7 @@ test("does NOT show while the welcome tour will run (member still onboarding) �
 test("does NOT show when this version has already been acknowledged", async () => {
 	state.onboarding = { tourSeen: true };
 	localStorage.setItem("jos:whatsNewSeen", APP_VERSION);
-	render(() => <WhatsNew />);
+	renderFor("member");
 	// Nothing to show; the item never appears.
 	await new Promise((resolve) => setTimeout(resolve, 0));
 	expect(screen.queryByText(ALT_LINE)).toBeNull();
@@ -112,7 +122,7 @@ const OPEN_DOOR_MEMBER = { tier: "member", stage: "active", stageSince: 0 };
 
 test("waits while the doors intro is pending: shows nothing and records nothing", async () => {
 	state.extra = { ...OPEN_DOOR_MEMBER };
-	render(() => <WhatsNew />);
+	renderFor("member");
 	await new Promise((resolve) => setTimeout(resolve, 0));
 	expect(screen.queryByText(ALT_LINE)).toBeNull();
 	expect(localStorage.getItem("jos:whatsNewSeen")).toBeNull();
@@ -120,7 +130,7 @@ test("waits while the doors intro is pending: shows nothing and records nothing"
 
 test("shows once the doors intro is dismissed", async () => {
 	state.extra = { ...OPEN_DOOR_MEMBER };
-	render(() => <WhatsNew />);
+	renderFor("member");
 	await new Promise((resolve) => setTimeout(resolve, 0));
 	expect(screen.queryByText(ALT_LINE)).toBeNull();
 
@@ -133,14 +143,14 @@ test("shows once the doors intro is dismissed", async () => {
 
 test("is not held back for someone the door is closed to — they get no intro", async () => {
 	state.extra = { ...OPEN_DOOR_MEMBER, door: { override: "force_off" } };
-	render(() => <WhatsNew />);
+	renderFor("member");
 	await waitFor(() => {
 		expect(screen.getByText(ALT_LINE)).toBeInTheDocument();
 	});
 });
 
 test("closing keeps the notes mounted, so the exit has something to animate", async () => {
-	render(() => <WhatsNew />);
+	renderFor("member");
 	await waitFor(() => {
 		expect(document.querySelector(OPEN_DIALOG_CONTENT)).not.toBeNull();
 	});
@@ -150,4 +160,35 @@ test("closing keeps the notes mounted, so the exit has something to animate", as
 		expect(document.querySelector(OPEN_DIALOG_CONTENT)).toBeNull();
 	});
 	expect(screen.getByText(ALT_LINE)).toBeInTheDocument();
+});
+
+test("a member sees the everyone items but not the board ones", async () => {
+	renderFor("member");
+	await waitFor(() => {
+		expect(screen.getByText(ALT_LINE)).toBeInTheDocument();
+	});
+	expect(screen.queryByText(BOARD_LINE, { exact: false })).toBeNull();
+});
+
+test("staff see the doors item but not the community-only ones", async () => {
+	state.onboarding = undefined;
+	renderFor("staff");
+	await waitFor(() => {
+		expect(screen.getByText(ALT_LINE)).toBeInTheDocument();
+	});
+	expect(screen.queryByText(/notifications on your phone/i)).toBeNull();
+	expect(screen.queryByText(/house rules/i)).toBeNull();
+	expect(screen.queryByText(/start and an end time/i)).toBeNull();
+	expect(screen.queryByText(/Wi-Fi network/i)).toBeNull();
+	expect(screen.queryByText(/Events: create/i)).toBeNull();
+});
+
+test("the board sees the board items too", async () => {
+	state.onboarding = undefined;
+	renderFor("board");
+	await waitFor(() => {
+		expect(
+			screen.getByText(BOARD_LINE, { exact: false })
+		).toBeInTheDocument();
+	});
 });

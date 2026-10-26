@@ -41,6 +41,12 @@
 
 .positioner {
 	@include overlay.centred-overlay-positioner;
+
+	/* A bottom sheet sits against the edge, with no margin around it. */
+	&[data-placement="bottom"] {
+		align-items: flex-end;
+		padding: 0;
+	}
 }
 
 .content {
@@ -70,6 +76,28 @@
 	&[data-state="open"] {
 		flex-direction: column;
 	}
+
+	/* A bottom sheet: full width against the bottom edge, its top corners
+	   rounded, clear of the device's home indicator. The card does not
+	   scroll (a scroller would take the vertical pans the swipe down needs,
+	   which script handles in swipe.ts): its body scrolls instead. */
+	&[data-placement="bottom"] {
+		flex-direction: column;
+		max-inline-size: none;
+		padding-block-end: env(safe-area-inset-bottom);
+		overflow-block: clip;
+		touch-action: pan-x pinch-zoom;
+		border-end-end-radius: 0;
+		border-end-start-radius: 0;
+		border-start-start-radius: var(--jf-radius-container);
+		border-start-end-radius: var(--jf-radius-container);
+	}
+
+	/* Parts that reach the card's edges. After the placements, so it wins. */
+	&[data-flush] {
+		gap: 0;
+		padding: 0;
+	}
 }
 
 /* Pin the close IconButton to the top-trailing corner — it brings its own round
@@ -92,6 +120,18 @@
 	display: flex;
 	flex-direction: column;
 	gap: var(--jf-spacing-far);
+
+	/* In a bottom card, the card does not scroll, so a long body does: it
+	   shrinks to the card's height and keeps its vertical pans. The swipe
+	   down does not start inside it (swipe.ts: it scrolls along the axis). */
+	.content[data-placement="bottom"] & {
+		flex: 0 1 auto;
+		min-block-size: 0;
+		overflow-block: auto;
+		overscroll-behavior-block: contain;
+		scrollbar-gutter: stable;
+		touch-action: auto;
+	}
 }
 
 /* The decision buttons, right-aligned. */

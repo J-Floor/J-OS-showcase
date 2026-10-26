@@ -20,10 +20,11 @@ export default {
 						</Button>
 					)}
 				/>
-				{/* Its content is built for each opening and kept while it
-				    morphs closed: type in the field, close, reopen, and it is
-				    empty again. */}
-				<Dialog.Content>
+				{/* The bottom placement is a phone sheet: full width on the
+				    bottom edge, closing on a swipe down. The content is built
+				    for each opening and kept while it morphs closed: type in
+				    the field, close, reopen, and it is empty again. */}
+				<Dialog.Content placement={p.placement} flush={p.flush}>
 					<Dialog.Header>
 						<Dialog.Title>{p.title}</Dialog.Title>
 						<Dialog.Description>{p.description}</Dialog.Description>
@@ -47,6 +48,12 @@ export default {
 	},
 	controls: {
 		morph: { type: "boolean", default: true },
+		flush: { type: "boolean", default: false },
+		placement: {
+			type: "select",
+			options: ["center", "bottom"],
+			default: "center",
+		},
 		title: { type: "text", default: "Delete project?" },
 		description: {
 			type: "text",

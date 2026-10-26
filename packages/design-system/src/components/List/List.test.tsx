@@ -1,7 +1,11 @@
 import { fireEvent, render, screen } from "@solidjs/testing-library";
 import { vi } from "vitest";
 
-import { MORPH_OF, MORPH_TITLE } from "../../utils/morphNames.ts";
+import {
+	MORPH_LIST_ROW,
+	MORPH_OF,
+	MORPH_TITLE,
+} from "../../utils/morphNames.ts";
 import { Icon } from "../Icon/Icon.tsx";
 
 import { List } from "./List.tsx";
@@ -164,4 +168,27 @@ test("a wrapping description is marked so it can run over several lines", () => 
 	));
 	expect(screen.getByText("A long body")).toHaveAttribute("data-wrap");
 	expect(screen.getByText("Short")).not.toHaveAttribute("data-wrap");
+});
+
+test("every row carries the list row marker, inside a list or not, clickable or not", () => {
+	render(() => (
+		<>
+			<List.Root>
+				<List.Item data-testid="plain">
+					<List.ItemTitle>A</List.ItemTitle>
+				</List.Item>
+				<List.Item data-testid="clickable" onClick={() => {}}>
+					<List.ItemTitle>B</List.ItemTitle>
+				</List.Item>
+			</List.Root>
+			<List.Item data-testid="loose">
+				<List.ItemTitle>C</List.ItemTitle>
+			</List.Item>
+			<List.Item data-testid="loose-clickable" onClick={() => {}}>
+				<List.ItemTitle>D</List.ItemTitle>
+			</List.Item>
+		</>
+	));
+	for (const id of ["plain", "clickable", "loose", "loose-clickable"])
+		expect(screen.getByTestId(id)).toHaveAttribute(MORPH_LIST_ROW);
 });

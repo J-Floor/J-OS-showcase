@@ -63,7 +63,6 @@ flip
 forum
 function
 group
-groups
 handshake
 hardware
 help
@@ -100,11 +99,11 @@ login
 logout
 mail
 manufacturing
-meeting_room
 menu
 merge
 message
 mode
+more_horiz
 more_vert
 mouse
 move
@@ -155,7 +154,6 @@ settings
 share
 shift
 shortcut
-skeleton
 source
 stack
 stairs
@@ -189,7 +187,6 @@ update
 verified
 warning
 weight
-widgets
 width
 wifi
 window

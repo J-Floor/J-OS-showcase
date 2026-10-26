@@ -5,6 +5,7 @@ import {
 	render,
 	screen,
 	waitFor,
+	within,
 } from "@solidjs/testing-library";
 import { createSignal } from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
@@ -61,11 +62,17 @@ function renderDialog(
 test("each row shows the asset tag next to the item type", () => {
 	renderDialog();
 	expect(
-		screen.getByRole("button", { name: "A00001 Chair" })
+		screen.getByRole("button", { name: /A00001.*Chair/ })
 	).toBeInTheDocument();
 	expect(
-		screen.getByRole("button", { name: "B00002 Kettle" })
+		screen.getByRole("button", { name: /B00002.*Kettle/ })
 	).toBeInTheDocument();
+});
+
+test("results are list rows inside a list", () => {
+	renderDialog();
+	const list = screen.getByRole("list");
+	expect(within(list).getAllByRole("listitem")).toHaveLength(2);
 });
 
 test("typing in the asset tag field narrows the list by tag", () => {
@@ -74,10 +81,10 @@ test("typing in the asset tag field narrows the list by tag", () => {
 		target: { value: "A000" },
 	});
 	expect(
-		screen.getByRole("button", { name: "A00001 Chair" })
+		screen.getByRole("button", { name: /A00001.*Chair/ })
 	).toBeInTheDocument();
 	expect(
-		screen.queryByRole("button", { name: "B00002 Kettle" })
+		screen.queryByRole("button", { name: /B00002.*Kettle/ })
 	).not.toBeInTheDocument();
 });
 
@@ -88,13 +95,13 @@ test("a type name is not enough to match a row", () => {
 	});
 	expect(screen.getByText("No matching asset tags")).toBeInTheDocument();
 	expect(
-		screen.queryByRole("button", { name: "A00001 Chair" })
+		screen.queryByRole("button", { name: /A00001.*Chair/ })
 	).not.toBeInTheDocument();
 });
 
 test("lists no rows while idle", () => {
 	renderDialog({ open: false });
-	expect(screen.queryByRole("button", { name: "A00001 Chair" })).toBeNull();
+	expect(screen.queryByRole("button", { name: /A00001.*Chair/ })).toBeNull();
 });
 
 test("keeps its content mounted through its close", () => {
@@ -107,7 +114,7 @@ test("keeps its content mounted through its close", () => {
 			onSelect={() => {}}
 		/>
 	));
-	const row = screen.getByRole("button", { name: "A00001 Chair" });
+	const row = screen.getByRole("button", { name: /A00001.*Chair/ });
 	setOpen(false);
 	expect(row).toBeInTheDocument();
 	expect(
@@ -132,7 +139,7 @@ test("keeps its filter through its close, and opens again unfiltered", async () 
 	setOpen(false);
 
 	expect(screen.getByLabelText("Asset tag")).toHaveValue("A000");
-	expect(screen.queryByRole("button", { name: "B00002 Kettle" })).toBeNull();
+	expect(screen.queryByRole("button", { name: /B00002.*Kettle/ })).toBeNull();
 
 	// The exit ends (no animation runs here): the search goes with it.
 	await waitFor(() => {
@@ -140,14 +147,14 @@ test("keeps its filter through its close, and opens again unfiltered", async () 
 	});
 	setOpen(true);
 	expect(
-		await screen.findByRole("button", { name: "B00002 Kettle" })
+		await screen.findByRole("button", { name: /B00002.*Kettle/ })
 	).toBeInTheDocument();
 	expect(screen.getByLabelText("Asset tag")).toHaveValue("");
 });
 
 test("choosing a row calls onSelect with that item", () => {
 	const { onSelect, onOpenChange } = renderDialog();
-	fireEvent.click(screen.getByRole("button", { name: "A00001 Chair" }));
+	fireEvent.click(screen.getByRole("button", { name: /A00001.*Chair/ }));
 	expect(onSelect).toHaveBeenCalledTimes(1);
 	expect(onSelect).toHaveBeenCalledWith(chair);
 	expect(onOpenChange).toHaveBeenCalledWith(false);

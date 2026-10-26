@@ -209,7 +209,9 @@ export {
 	afterTransition,
 	canAnimate,
 	viewTransition,
+	type AppTransitionName,
 } from "./utils/viewTransition.ts";
+export { createMediaQuery, PHONE_QUERY } from "./utils/media.ts";
 export { createMorphHold } from "./utils/morphPresence.ts";
 export {
 	BRAND_SCREEN,

@@ -12,6 +12,7 @@ import {
 	useContext,
 } from "solid-js";
 
+import { MORPH_LIST_ROW } from "../../utils/morphNames.ts";
 import { Icon, type IconProps } from "../Icon/Icon.tsx";
 import {
 	MorphScope,
@@ -144,6 +145,7 @@ function ListItem(props: ListItemProps): JSX.Element {
 		<div
 			{...rest}
 			role={role()}
+			{...{ [MORPH_LIST_ROW]: "" }}
 			class={clsx(styles.listItem, own.class)}
 			data-clickable={own.onClick ? "" : undefined}
 			{...morphAttributes(own)}

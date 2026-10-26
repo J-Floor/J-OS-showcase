@@ -1,5 +1,5 @@
-import { Dialog, Input } from "@j-os/design-system";
-import { For, createSignal, type JSX } from "solid-js";
+import { Dialog, Input, List } from "@j-os/design-system";
+import { For, Show, createSignal, type JSX } from "solid-js";
 
 import type { OpenProps } from "../../../shared/types.ts";
 import type { Item } from "../data/inventoryData.ts";
@@ -30,28 +30,27 @@ function CopyFromItemSearch(props: {
 					setQuery(event.currentTarget.value);
 				}}
 			/>
-			<div class={styles.results}>
-				<For
-					each={matches()}
-					fallback={
-						<p class={styles.empty}>No matching asset tags</p>
-					}
-				>
-					{(row) => (
-						<button
-							type="button"
-							class={styles.row}
-							aria-label={`${row.assetTag} ${row.typeName}`}
-							onClick={() => {
-								props.onPick(row);
-							}}
-						>
-							<span class={styles.tag}>{row.assetTag}</span>
-							<span class={styles.type}>{row.typeName}</span>
-						</button>
-					)}
-				</For>
-			</div>
+			<Show
+				when={matches().length > 0}
+				fallback={<p class={styles.empty}>No matching asset tags</p>}
+			>
+				<List.Root class={styles.results}>
+					<For each={matches()}>
+						{(row) => (
+							<List.Item
+								onClick={() => {
+									props.onPick(row);
+								}}
+							>
+								<List.ItemTitle>{row.assetTag}</List.ItemTitle>
+								<List.ItemDescription>
+									{row.typeName}
+								</List.ItemDescription>
+							</List.Item>
+						)}
+					</For>
+				</List.Root>
+			</Show>
 		</Dialog.Body>
 	);
 }

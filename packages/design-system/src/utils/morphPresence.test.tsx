@@ -1,7 +1,15 @@
 import { render } from "@solidjs/testing-library";
-import { type Accessor, batch, createEffect, createSignal, on } from "solid-js";
+import {
+	type Accessor,
+	type JSX,
+	batch,
+	createEffect,
+	createSignal,
+	on,
+} from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
 
+import { List } from "../components/List/List.tsx";
 import {
 	fakeViewTransitions,
 	installViewTransitions,
@@ -271,6 +279,69 @@ test("the picked mark is cleared after a close with morph switched off", async (
 	flag.enabled = false;
 	setOpen(false);
 	expect(marked).not.toHaveAttribute(MORPH_PICKED);
+});
+
+/** Opens the overlay with `body` in its content, presses the `pressed` selector, closes,
+ *  and returns the ids named at the close's old snapshot. */
+async function closeAfterPress(
+	body: () => JSX.Element,
+	pressed: string
+): Promise<string[]> {
+	const old: string[][] = [];
+	fakeViewTransitions({ onStart: () => old.push(namedIds()) });
+	mockLayoutBoxes();
+	const uninstall = trackActivation();
+	const { setOpen } = setup();
+	const content = document.getElementById("content")!;
+	render(body, { container: content });
+	setOpen(true);
+	await transitionSettled();
+	old.length = 0;
+	activate(document.querySelector<HTMLElement>(pressed));
+	setOpen(false);
+	await transitionSettled();
+	uninstall();
+	return old.flat();
+}
+
+test("a List row pressed inside the overlay is the close's source", async () => {
+	const named = await closeAfterPress(
+		() => (
+			<List.Root>
+				<List.Item id="row" onClick={() => {}}>
+					<List.ItemTitle>Chair</List.ItemTitle>
+				</List.Item>
+			</List.Root>
+		),
+		"#row button"
+	);
+	expect(named).toContain("row");
+	expect(named).not.toContain("content");
+});
+
+test("a List row outside a List.Root is a close source too", async () => {
+	const named = await closeAfterPress(
+		() => (
+			<List.Item id="row" onClick={() => {}}>
+				<List.ItemTitle>Chair</List.ItemTitle>
+			</List.Item>
+		),
+		"#row button"
+	);
+	expect(named).toContain("row");
+});
+
+test("a bare button inside the overlay is not a close source", async () => {
+	const named = await closeAfterPress(
+		() => (
+			<button type="button" id="cancel">
+				Cancel
+			</button>
+		),
+		"#cancel"
+	);
+	expect(named).not.toContain("cancel");
+	expect(named).toContain("content");
 });
 
 test("closeTarget is used when the source is gone", async () => {
@@ -657,6 +728,52 @@ test("an activation wins over the fallback source", async () => {
 	await transitionSettled();
 	expect(document.getElementById("opener")).toHaveAttribute(MORPH_HIDDEN);
 	expect(document.getElementById("other")).not.toHaveAttribute(MORPH_HIDDEN);
+	uninstall();
+});
+
+/** A filled surface holding a button, beside the setup's own buttons. */
+function addSurface(): { surface: HTMLElement; inner: HTMLElement } {
+	const surface = document.createElement("div");
+	surface.id = "surface";
+	fill(surface);
+	const inner = document.createElement("button");
+	inner.id = "inner";
+	surface.append(inner);
+	document.body.append(surface);
+	return { surface, inner };
+}
+
+test("an activation inside a fallback candidate opens from that candidate", async () => {
+	const seen = recordNamed();
+	mockLayoutBoxes();
+	const uninstall = trackActivation();
+	const { surface, inner } = addSurface();
+	const { setOpen } = setup(true, undefined, () => surface);
+	activate(inner);
+	setOpen(true);
+	await transitionSettled();
+	expect(surface).toHaveAttribute(MORPH_HIDDEN);
+	expect(inner).not.toHaveAttribute(MORPH_HIDDEN);
+	setOpen(false);
+	await transitionSettled();
+	expect(surface).not.toHaveAttribute(MORPH_HIDDEN);
+	// The close's new snapshot: the ghost over the surface, not the button.
+	expect(seen.at(-1)).toContain("surface");
+	expect(seen.at(-1)).not.toContain("inner");
+	uninstall();
+});
+
+test("an activation outside every fallback candidate still opens from itself", async () => {
+	fakeViewTransitions();
+	mockLayoutBoxes();
+	const uninstall = trackActivation();
+	const { surface } = addSurface();
+	const { setOpen } = setup(true, undefined, () => surface);
+	activate(document.getElementById("opener"));
+	setOpen(true);
+	await transitionSettled();
+	expect(document.getElementById("opener")).toHaveAttribute(MORPH_HIDDEN);
+	expect(surface).not.toHaveAttribute(MORPH_HIDDEN);
 	uninstall();
 });
 

@@ -1,6 +1,11 @@
 import type { Accessor } from "solid-js";
 
-import type { Action, AppAbility, Subject } from "../../lib/ability.tsx";
+import type {
+	Action,
+	AppAbility,
+	Permission,
+	Subject,
+} from "../../lib/ability.tsx";
 import type { EntityRow, SheetOpenProps } from "../types.ts";
 
 import type { LazyPeek } from "./lazyPeek.tsx";
@@ -33,7 +38,7 @@ export type EntityDescriptor<Row extends EntityRow> = {
 	keywords?: (row: Row) => string[];
 	detail?: (row: Row) => string | undefined;
 	searchOnly?: boolean; // default true
-	ability: { action: Action; subject: Subject };
+	ability: Permission;
 	/** Tabbed pages with a FIXED tab per entity type (inventory: item→"items").
 	 *  A static string, NOT a per-row function: a per-row tab would bake a
 	 *  guessable-stale tab into shared links (see community note in Task 8). */

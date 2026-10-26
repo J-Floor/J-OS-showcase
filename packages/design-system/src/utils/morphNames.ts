@@ -28,6 +28,9 @@ export const MORPH_KEY = "data-morph-key";
  *  input, so the activation alone cannot tell). */
 export const MORPH_PICKED = "data-morph-picked";
 
+/** On every `List.Item`: a row of a list, whatever its role. */
+export const MORPH_LIST_ROW = "data-list-row";
+
 /**
  * An overlay's content while it is shown, set by the overlay layer. A morph
  * names every one under the overlay it opens or closes: each steps back or

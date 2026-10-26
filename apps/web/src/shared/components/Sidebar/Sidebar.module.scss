@@ -5,6 +5,7 @@
 /* Phone bottom bar contents, top to bottom: its border, its padding, an
    item's padding, the h5 glyph, the item gap and the body-small label line.
    The bar is exactly this tall, so the height it publishes is never stale. */
+$bar-slots: 5;
 $nav-icon-size: 1.5rem;
 $nav-label-line: 0.75rem * 1.5;
 $nav-item-content: calc(
@@ -102,11 +103,26 @@ $nav-block-size: calc(
 	color: var(--jf-fg-default);
 	white-space: nowrap;
 	text-decoration: none;
+
+	/* The more item is a button; these make it look like the links. */
+	cursor: pointer;
+	background: transparent;
+	border: none;
 	border-radius: var(--jf-radius-button);
 
 	@include hover.hover {
 		background: var(--jf-surface-bg-overlay);
 	}
+}
+
+/* The bar's row is phone structure. On the rail it dissolves into the nav, so
+   the pages flow as before; the more item has no place there. */
+.row {
+	display: contents;
+}
+
+.more {
+	display: none;
 }
 
 /* Fixed lane = the collapsed rail's inner width, so the glyph is centred while
@@ -130,8 +146,9 @@ $nav-block-size: calc(
 	}
 }
 
-/* Active route (router sets aria-current="page"): filled glyph + bold label. */
-.item[aria-current="page"] {
+/* Active route (router sets aria-current="page"): filled glyph + bold label.
+   The more item sets it too when the current page is in its sheet. */
+.item[aria-current] {
 	color: var(--jf-fg-strong);
 
 	& .icon {
@@ -194,6 +211,39 @@ $nav-block-size: calc(
 			var(--jf-border-subtle);
 		border-radius: 0;
 		transition: none;
+	}
+
+	.row {
+		/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+		display: flex;
+		flex: 1;
+		justify-content: space-around;
+	}
+
+	.more {
+		/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
+		display: flex;
+	}
+
+	/* Five columns like the bar (PHONE_BAR_SLOTS in phoneBar.ts), each page
+	   icon over label. */
+	.sheetPages,
+	.sheetRow {
+		display: grid;
+		grid-template-columns: repeat($bar-slots, minmax(0, 1fr));
+	}
+
+	.sheetPages {
+		padding-block: var(--jf-spacing-close);
+	}
+
+	/* The bar, drawn again where the bar is: the same height, padding and
+	   divider, so the pages on it do not appear to move. */
+	.sheetRow {
+		block-size: var(--app-bottom-nav-height);
+		padding-block: var(--jf-spacing-close);
+		border-block-start: var(--jf-border-width-decorative) solid
+			var(--jf-border-subtle);
 	}
 
 	/* The monogram is a link home — which on a bar is what the first tab

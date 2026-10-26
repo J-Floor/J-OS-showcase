@@ -6,6 +6,7 @@ import { ICONS as UI_ICONS } from "@j-os/design-system/icons";
  *  never override a design-system key. */
 export const ICONS = {
 	...UI_ICONS,
+	navMore: "more_horiz",
 	unlock: "lock_open_right",
 	lock: "lock",
 	door: "door_front",
