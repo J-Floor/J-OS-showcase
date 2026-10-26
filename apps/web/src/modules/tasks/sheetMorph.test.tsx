@@ -100,13 +100,6 @@ beforeEach(() => {
 		length: 1,
 	} as DOMRectList);
 	HTMLElement.prototype.setPointerCapture = () => {};
-	if (!("ResizeObserver" in globalThis)) {
-		globalThis.ResizeObserver = class {
-			observe() {}
-			unobserve() {}
-			disconnect() {}
-		};
-	}
 	const today = Date.now();
 	rows.projects = [
 		{
@@ -247,6 +240,8 @@ test("a task card's fields carry the keys of the task sheet's rows", () => {
 		{ _id: "u1", firstName: "Ada", lastName: "Lovelace" },
 	] as never;
 	const projects = [{ _id: "p1", name: "Roof" }] as never;
+	// The sheet reads the projects itself.
+	rows.projects = projects;
 	const task = {
 		_id: "t1",
 		_creationTime: 0,
@@ -264,13 +259,7 @@ test("a task card's fields carry the keys of the task sheet's rows", () => {
 				projects={projects}
 				onClick={() => {}}
 			/>
-			<TaskSheet
-				open
-				onOpenChange={() => {}}
-				task={task}
-				people={people}
-				projects={projects}
-			/>
+			<TaskSheet open onOpenChange={() => {}} task={task} />
 		</>
 	));
 	const card = document.querySelector("article")!;

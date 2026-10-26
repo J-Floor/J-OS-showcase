@@ -102,15 +102,6 @@ vi.mock("../../shared/data/boardLevel.tsx", () => ({
 	}),
 }));
 
-// jsdom gaps ark Tabs touches at mount.
-if (!("ResizeObserver" in globalThis)) {
-	globalThis.ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-
 import { AbilityProvider, type Role } from "../../lib/ability.tsx";
 
 import { CommunityPage } from "./CommunityPage.tsx";

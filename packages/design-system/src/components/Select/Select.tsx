@@ -19,7 +19,10 @@ import { Portal } from "solid-js/web";
 import { ICONS } from "../../icons.ts";
 import { useRequiredContext } from "../../utils/context.ts";
 import { type PropsWithDisabling } from "../../utils/disablingProps.ts";
-import { splitMakeFieldProps } from "../../utils/makeFieldProps.ts";
+import {
+	fieldBoxHandlers,
+	splitMakeFieldProps,
+} from "../../utils/makeFieldProps.ts";
 import {
 	chipsRenderer,
 	clearLabel,
@@ -124,7 +127,7 @@ function Control(
 		chips: (() => JSX.Element) | undefined;
 		setControlElement: (element: HTMLDivElement) => void;
 		setTriggerElement: (element: HTMLButtonElement) => void;
-		clickTrigger: () => void;
+		getTriggerElement: () => HTMLButtonElement | undefined;
 	}
 ): JSX.Element {
 	const select = useSelectContext();
@@ -136,10 +139,7 @@ function Control(
 			// The chips and the chevron sit outside the trigger, so a click
 			// anywhere on the field that is not a button of its own drives
 			// the trigger.
-			onClick={(event) => {
-				if ((event.target as HTMLElement).closest("button")) return;
-				props.clickTrigger();
-			}}
+			{...fieldBoxHandlers(props.getTriggerElement)}
 		>
 			{props.chips?.()}
 			<ArkSelect.Trigger
@@ -296,7 +296,7 @@ function Root(props: SelectRootProps): JSX.Element {
 						setTriggerElement={(element) => {
 							triggerElement = element;
 						}}
-						clickTrigger={clickTrigger}
+						getTriggerElement={() => triggerElement}
 					/>
 					<ArkSelect.HiddenSelect />
 					<Popup parts={listParts(parts())} />

@@ -2,23 +2,13 @@
 import { Sheet } from "@j-os/design-system";
 import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
 import type { JSX } from "solid-js";
-import { afterEach, beforeAll, expect, test, vi } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 
 import type { SheetNavState } from "../../lib/createSheetNav.ts";
 
 import { EntitySheetHeader } from "./EntitySheetHeader.tsx";
 
 afterEach(cleanup);
-
-beforeAll(() => {
-	if (!("ResizeObserver" in globalThis)) {
-		globalThis.ResizeObserver = class {
-			observe() {}
-			unobserve() {}
-			disconnect() {}
-		};
-	}
-});
 
 /** `actions` is built inside the sheet, where its parts find their context. */
 function renderHeader(actions?: () => JSX.Element, nav?: SheetNavState): void {

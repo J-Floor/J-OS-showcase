@@ -36,26 +36,12 @@ vi.mock("../columns/HostSelect.tsx", () => ({
 
 import { GuestExpiryProvider, useGuestExpiry } from "./guestExpiry.tsx";
 
-// jsdom gaps ark-ui touches at mount: it measures (no layout engine, no
-// ResizeObserver) and drives pointer capture on the Select trigger.
-if (!(Element.prototype as { scrollTo?: unknown }).scrollTo) {
-	Element.prototype.scrollTo = () => {};
-}
-if (!(Element.prototype as { hasPointerCapture?: unknown }).hasPointerCapture) {
-	Element.prototype.hasPointerCapture = () => false;
-}
+// jsdom gap ark-ui touches: the Select trigger releases pointer capture.
 if (
 	!(Element.prototype as { releasePointerCapture?: unknown })
 		.releasePointerCapture
 ) {
 	Element.prototype.releasePointerCapture = () => {};
-}
-if (!("ResizeObserver" in globalThis)) {
-	(globalThis as Record<string, unknown>).ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
 }
 
 /** Stands in for the "Make guest" button on a row or in the sheet. */

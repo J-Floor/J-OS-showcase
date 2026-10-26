@@ -16,6 +16,7 @@ import {
 	shallowArrayEquals,
 } from "../../../lib/createSyncedField.ts";
 import { DescriptionField } from "../../../shared/components/DescriptionField.tsx";
+import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
 import {
 	createEntityCommands,
 	createEntityDraft,
@@ -26,7 +27,7 @@ import { ICONS } from "../../../shared/icons.ts";
 import { InlineError } from "../../../shared/InlineError.tsx";
 import type { SheetOpenProps } from "../../../shared/types.ts";
 import type { Person, Project, Task } from "../data/tasksData.tsx";
-import { useTaskActions } from "../data/tasksData.tsx";
+import { useProjects, useTaskActions } from "../data/tasksData.tsx";
 import { taskFields } from "../fields.ts";
 import { TASK_STATUSES } from "../kanban/onDrop.ts";
 
@@ -70,8 +71,6 @@ type TaskSheetProps = SheetOpenProps & {
 	task?: Task;
 	/** Status the form starts with in create mode (e.g. a column's "+" prefills it). */
 	initialStatus?: Task["status"];
-	people: Person[];
-	projects: Project[];
 	/** True when the sheet is open for a real row (`requestedId()` set) whose
 	 *  data hasn't loaded yet — distinct from create, where there is no id at
 	 *  all. Wins over `task` (which is undefined in both states). */
@@ -287,6 +286,8 @@ export function TaskSheet(props: TaskSheetProps): JSX.Element {
 	}
 	const { createTask, deleteTask, failure, fields, saves, draft } =
 		createTaskSheet(props, isEdit);
+	const boardLevel = useBoardLevel();
+	const projects = useProjects();
 
 	// Focused when the sheet opens.
 	let titleElement: HTMLInputElement | undefined;
@@ -335,8 +336,8 @@ export function TaskSheet(props: TaskSheetProps): JSX.Element {
 				<StatusRow status={fields.status} />
 				<TaskDetailRows
 					fields={fields}
-					people={props.people}
-					projects={props.projects}
+					people={boardLevel.data() ?? []}
+					projects={projects.data() ?? []}
 				/>
 				<DescriptionField
 					class={styles.description}

@@ -14,10 +14,17 @@ import {
 	useSearchParams,
 } from "@solidjs/router";
 import { cleanup, render, waitFor } from "@solidjs/testing-library";
-import { createComponent, createEffect, createSignal } from "solid-js";
+import {
+	createComponent,
+	createEffect,
+	createRoot,
+	createSignal,
+	untrack,
+} from "solid-js";
 import { afterEach, expect, onTestFinished, test, vi } from "vitest";
 
 import { createEntitySelection } from "./createEntitySelection.ts";
+import { pushedOpenState } from "./pushedOpen.ts";
 
 afterEach(cleanup);
 
@@ -168,6 +175,28 @@ test("closes when the open row vanishes from the live list", async () => {
 		expect(bag.sel?.open()).toBe(false);
 	});
 	expect(bag.sel?.requestedId()).toBeUndefined();
+});
+
+test("a row absent for one update and back in the same tick keeps the sheet open", async () => {
+	const [rows, setRows] = createSignal<Row[] | undefined>([rowA, rowB]);
+	const history = createMemoryHistory();
+	history.set({ value: "/events", replace: true });
+	const bag = renderHarness(rows, { history });
+
+	bag.sel?.openRow(rowA);
+	await waitFor(() => {
+		expect(bag.search?.()).toContain("x=a1");
+	});
+
+	// Two queries updated by one server message reach the app one after the
+	// other: the row is in neither list for a moment, then in the other.
+	setRows([rowB]);
+	setRows([rowA, rowB]);
+	await new Promise((resolve) => {
+		setTimeout(resolve, 20);
+	});
+	expect(bag.sel?.open()).toBe(true);
+	expect(bag.search?.()).toContain("x=a1");
 });
 
 test("openCreate opens the create form with the reserved ?x=new sentinel", async () => {
@@ -741,4 +770,148 @@ test("an intent to open prebuilds the sheet, and it stays built", () => {
 	bag.sel?.openRow(rowA);
 	bag.sel?.close(false);
 	expect(bag.sel?.prebuild()).toBe(true);
+});
+
+/** A window-bound router on `/home` whose selection mounts only when told to,
+ *  after the test has pushed an entry (as a search pick does). */
+function renderLateMount() {
+	window.history.replaceState(null, "", "/home");
+	const [rows] = createSignal<Row[] | undefined>([rowA, rowB]);
+	const bag: Bag & { navigate?: ReturnType<typeof useNavigate> } = {};
+	const [mounted, setMounted] = createSignal(false);
+	function Harness() {
+		bag.navigate = useNavigate();
+		createEffect(() => {
+			if (mounted())
+				untrack(() => {
+					bag.sel = createEntitySelection<Row>({ rows, param: "x" });
+				});
+		});
+		return null;
+	}
+	render(() =>
+		createComponent(Router, {
+			children: { path: "*", component: Harness },
+		})
+	);
+	return {
+		bag,
+		mount: () => {
+			setMounted(true);
+		},
+	};
+}
+
+test("a selection mounted after an in-app push claims that entry: close and Back pop one entry, no duplicate", async () => {
+	const { bag, mount } = renderLateMount();
+
+	bag.navigate?.("/events");
+	await waitFor(() => {
+		expect(window.location.pathname).toBe("/events");
+	});
+	// What a search pick does: the param goes on while the selection is not
+	// mounted yet, and the selection mounts after the push.
+	bag.navigate?.("/events?x=a1", { state: pushedOpenState("x") });
+	await waitFor(() => {
+		expect(window.location.search).toBe("?x=a1");
+	});
+	const lengthAfterPush = window.history.length;
+	mount();
+	await waitFor(() => {
+		expect(bag.sel?.open()).toBe(true);
+	});
+	// Claiming the entry writes nothing: no replace-and-push pair.
+	expect(window.history).toHaveLength(lengthAfterPush);
+	// The router's own depth bookkeeping rides along with the marker.
+	expect(window.history.state).toMatchObject({ openedByPush: "x" });
+	expect(window.history.state).toHaveProperty("_depth");
+
+	bag.sel?.close();
+	await waitFor(() => {
+		expect(bag.sel?.open()).toBe(false);
+	});
+	expect(window.location.pathname).toBe("/events");
+	expect(window.location.search).toBe("");
+
+	// One entry was pushed, so one Back leaves the list.
+	window.history.back();
+	await waitFor(() => {
+		expect(window.location.pathname).toBe("/home");
+	});
+});
+
+test("stepping row to row on a pushed entry keeps its pushed-open marker", async () => {
+	const { bag, mount } = renderLateMount();
+	bag.navigate?.("/events?x=a1", { state: pushedOpenState("x") });
+	await waitFor(() => {
+		expect(window.location.search).toBe("?x=a1");
+	});
+	mount();
+	await waitFor(() => {
+		expect(bag.sel?.open()).toBe(true);
+	});
+
+	bag.sel?.openRow(rowB);
+	await waitFor(() => {
+		expect(window.location.search).toBe("?x=b1");
+	});
+	expect(window.history.state).toMatchObject({ openedByPush: "x" });
+});
+
+test("a dead link on a pushed entry goes back instead of leaving a duplicate of the page", async () => {
+	const { bag, mount } = renderLateMount();
+	bag.navigate?.("/events");
+	await waitFor(() => {
+		expect(window.location.pathname).toBe("/events");
+	});
+	bag.navigate?.("/events?x=missing", { state: pushedOpenState("x") });
+	await waitFor(() => {
+		expect(window.location.search).toBe("?x=missing");
+	});
+	mount();
+	await waitFor(() => {
+		expect(window.location.search).toBe("");
+	});
+	expect(window.location.pathname).toBe("/events");
+
+	// The pushed entry is gone, not replaced: one Back leaves the page.
+	window.history.back();
+	await waitFor(() => {
+		expect(window.location.pathname).toBe("/home");
+	});
+});
+
+test("a vanish judged after the selection is disposed writes nothing to the URL", async () => {
+	const [rows, setRows] = createSignal<Row[] | undefined>([rowA, rowB]);
+	const history = createMemoryHistory();
+	history.set({ value: "/events", replace: true });
+	const bag: Bag & { dispose?: () => void } = {};
+	function Harness() {
+		const location = useLocation();
+		bag.search = () => location.search;
+		createRoot((dispose) => {
+			bag.dispose = dispose;
+			bag.sel = createEntitySelection<Row>({ rows, param: "x" });
+		});
+		return null;
+	}
+	render(() =>
+		createComponent(MemoryRouter, {
+			history,
+			children: { path: "*", component: Harness },
+		})
+	);
+	bag.sel?.openRow(rowA);
+	await waitFor(() => {
+		expect(bag.search?.()).toContain("x=a1");
+	});
+
+	// The page is left (selection disposed) in the tick the row vanishes: the
+	// judging microtask is already queued, and the URL is the next page's.
+	setRows([rowB]);
+	bag.dispose?.();
+	await new Promise((resolve) => {
+		setTimeout(resolve, 20);
+	});
+	expect(bag.search?.()).toContain("x=a1");
 });

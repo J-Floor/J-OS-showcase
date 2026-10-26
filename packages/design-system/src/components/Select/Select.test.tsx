@@ -212,6 +212,24 @@ describe("Select", () => {
 		});
 	});
 
+	test("clicking the chevron opens the list", async () => {
+		render(() => (
+			<Select.Root label="Plan">
+				<Select.Option value="basic">Basic</Select.Option>
+			</Select.Root>
+		));
+		const indicator = document.querySelector<HTMLElement>(
+			'[data-scope="select"][data-part="indicator"]'
+		);
+		if (!indicator) throw new Error("indicator not found");
+		// The press must not move focus off the trigger to the box.
+		expect(fireEvent.mouseDown(indicator)).toBe(false);
+		fireEvent.click(indicator);
+		await waitFor(() => {
+			expect(trigger()).toHaveAttribute("aria-expanded", "true");
+		});
+	});
+
 	test("a hidden select carries the value into a form", () => {
 		const { container } = render(() => (
 			<form>

@@ -5,14 +5,6 @@ import { afterEach, expect, test, vi } from "vitest";
 
 afterEach(cleanup);
 
-if (!("ResizeObserver" in globalThis)) {
-	(globalThis as Record<string, unknown>).ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-
 const rosters: {
 	members: unknown[] | undefined;
 	guests: unknown[] | undefined;

@@ -123,20 +123,6 @@ vi.mock("./print/printInventoryList.ts", () => ({
 	printInventoryList: mockPrint,
 }));
 
-if (!("ResizeObserver" in globalThis)) {
-	globalThis.ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-if (!(Element.prototype as { scrollTo?: unknown }).scrollTo) {
-	Element.prototype.scrollTo = () => {};
-}
-if (!(Element.prototype as { hasPointerCapture?: unknown }).hasPointerCapture) {
-	Element.prototype.hasPointerCapture = () => false;
-}
-
 import { AbilityProvider, type Role } from "../../lib/ability.tsx";
 import { ConfirmProvider } from "../../shared/confirm.tsx";
 

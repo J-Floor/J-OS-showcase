@@ -15,14 +15,10 @@ import {
 	COMMUNITY_TABS,
 	type CommunityTabKey,
 } from "./communityTabs.ts";
-import {
-	useApplications,
-	useGuests,
-	useMembers,
-} from "./data/communityData.tsx";
 import { InsightsTab } from "./insights/InsightsTab.tsx";
 import { MemberCommunity } from "./MemberCommunity.tsx";
 import { MyProfile } from "./MyProfile.tsx";
+import { rosterOf, useReadyRosters, useRosters } from "./rosterOf.ts";
 import { ApplicationsTab } from "./tabs/ApplicationsTab.tsx";
 import { GuestsTab } from "./tabs/GuestsTab.tsx";
 import { MembersTab } from "./tabs/MembersTab.tsx";
@@ -37,9 +33,8 @@ function useRosterTabs() {
 	// Free here: the same three queries are already subscribed for the whole
 	// session up in the shell (see CommunityDataProvider), so reading them at
 	// page level opens nothing new.
-	const applications = useApplications();
-	const members = useMembers();
-	const guests = useGuests();
+	const rosters = useRosters();
+	const readyRosters = useReadyRosters();
 
 	/**
 	 * The tab a person's row actually lives in.
@@ -51,23 +46,7 @@ function useRosterTabs() {
 	 * tab means a sheet that opens on nobody.
 	 */
 	function tabOf(id: Id<"people">): CommunityTabKey | undefined {
-		if ((applications.data() ?? []).some((row) => row._id === id))
-			return "applications";
-		if ((members.data() ?? []).some((row) => row._id === id))
-			return "members";
-		return (guests.data() ?? []).some((row) => row._id === id)
-			? "guests"
-			: undefined;
-	}
-
-	/** True once every roster has answered, so "in none of them" is a fact
-	 *  rather than "not yet". */
-	function rostersReady(): boolean {
-		return (
-			applications.data() !== undefined &&
-			members.data() !== undefined &&
-			guests.data() !== undefined
-		);
+		return rosterOf(id, rosters());
 	}
 
 	/** The tab a `?person=` link resolves to, when the URL names no tab. The
@@ -87,7 +66,7 @@ function useRosterTabs() {
 		return (
 			typeof params.person === "string" &&
 			!isTabKey(COMMUNITY_TAB_KEYS, params.tab) &&
-			!rostersReady()
+			readyRosters() === undefined
 		);
 	}
 
@@ -108,12 +87,10 @@ function useRosterTabs() {
 	 *  union would make the selection treat a person whose roster is still
 	 *  loading as a dead link and drop `?person=`. */
 	function people(): Identified<"people">[] | undefined {
-		if (!rostersReady()) return undefined;
-		return [
-			...(applications.data() ?? []),
-			...(members.data() ?? []),
-			...(guests.data() ?? []),
-		];
+		const ready = readyRosters();
+		return (
+			ready && [...ready.applications, ...ready.members, ...ready.guests]
+		);
 	}
 
 	return {

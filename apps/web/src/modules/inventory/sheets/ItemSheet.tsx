@@ -7,7 +7,14 @@ import {
 	createSaveTracker,
 	type SaveTracker,
 } from "@j-os/design-system";
-import { Show, createSignal, type Accessor, type JSX } from "solid-js";
+import {
+	Show,
+	createEffect,
+	createSignal,
+	on,
+	type Accessor,
+	type JSX,
+} from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { parseAssetTag } from "../../../../convex/lib/assetTag.ts";
@@ -22,8 +29,12 @@ import { EntitySheetHeader } from "../../../shared/entity/EntitySheetHeader.tsx"
 import { ICONS } from "../../../shared/icons.ts";
 import { InlineError } from "../../../shared/InlineError.tsx";
 import type { SheetOpenProps } from "../../../shared/types.ts";
-import type { Item, ItemPatch, ItemType } from "../data/inventoryData.ts";
-import { useItemActions } from "../data/inventoryData.ts";
+import type { Item, ItemPatch } from "../data/inventoryData.ts";
+import {
+	useItemActions,
+	useItems,
+	useItemTypes,
+} from "../data/inventoryData.ts";
 import { itemEntity } from "../entity.ts";
 import { itemFields } from "../fields.ts";
 
@@ -43,8 +54,6 @@ const PLACEHOLDER_FIELDS = [
 
 type ItemSheetProps = SheetOpenProps & {
 	item?: Item;
-	itemTypes: ItemType[];
-	items?: Item[];
 	initialAssetTag?: string;
 	/** True when the sheet is open for a real row (`requestedId()` set) whose
 	 *  data hasn't loaded yet — distinct from create, where there is no id at
@@ -163,23 +172,44 @@ function createItemForm(props: ItemSheetProps) {
 
 type ItemForm = ReturnType<typeof createItemForm>;
 
-/** Opens the copy-from-item dialog; disabled while there is nothing to copy. */
-function CopyFromItemButton(props: {
-	hasNoItems: boolean;
-	onCopy: () => void;
+/** The create form's copy-from-item button and its dialog. Create-only, so an
+ *  edit sheet (or a peek) never subscribes to the whole items list. The button
+ *  is disabled while there is nothing to copy; the dialog closes with the
+ *  sheet. */
+function CopyFromItem(props: {
+	isSheetOpen: boolean;
+	onCopy: (source: Item) => void;
 }) {
+	const items = useItems();
+	const [copyOpen, setCopyOpen] = createSignal(false);
+	createEffect(
+		on(
+			() => props.isSheetOpen,
+			(isOpen) => {
+				if (!isOpen) setCopyOpen(false);
+			}
+		)
+	);
 	return (
-		<Button
-			variant="tertiary"
-			disabled={props.hasNoItems}
-			disabledReason="No items to copy from yet"
-			onClick={() => {
-				props.onCopy();
-			}}
-		>
-			<Icon>{ICONS.copy}</Icon>
-			Copy from item
-		</Button>
+		<>
+			<Button
+				variant="tertiary"
+				disabled={(items.data() ?? []).length === 0}
+				disabledReason="No items to copy from yet"
+				onClick={() => {
+					setCopyOpen(true);
+				}}
+			>
+				<Icon>{ICONS.copy}</Icon>
+				Copy from item
+			</Button>
+			<CopyFromItemDialog
+				open={copyOpen()}
+				onOpenChange={setCopyOpen}
+				items={items.data() ?? []}
+				onSelect={props.onCopy}
+			/>
+		</>
 	);
 }
 
@@ -231,15 +261,13 @@ function CreateFooter(props: { form: ItemForm }) {
 }
 
 /** The item type picker, labelled "name · category". */
-function ItemTypeSelect(props: {
-	itemTypes: ItemType[];
-	typeId: ItemForm["typeId"];
-}) {
+function ItemTypeSelect(props: { typeId: ItemForm["typeId"] }) {
+	const types = useItemTypes();
 	return (
 		<OptionSelect
 			property={itemFields.typeName}
 			placeholder="Choose a type"
-			options={props.itemTypes.map((itemType) => ({
+			options={(types.data() ?? []).map((itemType) => ({
 				value: itemType._id,
 				label: `${itemType.name} · ${itemType.categoryName}`,
 			}))}
@@ -276,7 +304,6 @@ function ItemQrSection(props: {
  *  action's failure. */
 function ItemFormFields(props: {
 	item?: Item;
-	itemTypes: ItemType[];
 	form: ItemForm;
 	onTagElement: (element: HTMLInputElement) => void;
 }) {
@@ -288,10 +315,7 @@ function ItemFormFields(props: {
 				hasError={props.form.formError() !== null}
 				onElement={props.onTagElement}
 			/>
-			<ItemTypeSelect
-				itemTypes={props.itemTypes}
-				typeId={props.form.typeId}
-			/>
+			<ItemTypeSelect typeId={props.form.typeId} />
 			<DescriptionValue
 				field={itemFields.description}
 				description={props.form.description}
@@ -303,7 +327,6 @@ function ItemFormFields(props: {
 
 export function ItemSheet(props: ItemSheetProps): JSX.Element {
 	const form = createItemForm(props);
-	const [copyOpen, setCopyOpen] = createSignal(false);
 	// Controlled + onValueChange so the section actually collapses (matches
 	// community's PersonDetail). A bare `value` with no setter pins it open.
 	const [openSections, setOpenSections] = createSignal(["qr"]);
@@ -315,74 +338,60 @@ export function ItemSheet(props: ItemSheetProps): JSX.Element {
 	let tagElement: HTMLInputElement | undefined;
 
 	return (
-		<>
-			<Sheet.Root
-				open={props.open}
-				prebuild={props.prebuild}
-				morphId={props.item?._id}
-				{...form.sheet}
-				onOpenChange={(isOpen) => {
-					if (!isOpen) {
-						setCopyOpen(false);
-						form.clearFormError();
-					}
-					form.draft.onOpenChange(isOpen);
-				}}
-				initialFocusEl={() => tagElement ?? null}
+		<Sheet.Root
+			open={props.open}
+			prebuild={props.prebuild}
+			morphId={props.item?._id}
+			{...form.sheet}
+			onOpenChange={(isOpen) => {
+				if (!isOpen) form.clearFormError();
+				form.draft.onOpenChange(isOpen);
+			}}
+			initialFocusEl={() => tagElement ?? null}
+		>
+			<EntitySheetHeader.Root
+				title={props.item?.assetTag ?? "New item"}
+				loading={props.loading}
+				nav={props.nav}
+				saveStatus={isEdit() && !props.loading}
 			>
-				<EntitySheetHeader.Root
-					title={props.item?.assetTag ?? "New item"}
-					loading={props.loading}
-					nav={props.nav}
-					saveStatus={isEdit() && !props.loading}
-				>
-					<Show when={isEdit()}>
-						<EntitySheetHeader.Delete
-							label="Delete item"
-							onDelete={() => void form.deleteItem()}
-						/>
-					</Show>
-				</EntitySheetHeader.Root>
-				<Sheet.Skeleton>
-					<FieldsPlaceholder fields={PLACEHOLDER_FIELDS} />
-				</Sheet.Skeleton>
-				<Sheet.Body loading={props.loading}>
-					<Show when={!isEdit()}>
-						<CopyFromItemButton
-							hasNoItems={(props.items ?? []).length === 0}
-							onCopy={() => {
-								setCopyOpen(true);
-							}}
-						/>
-					</Show>
-					<ItemFormFields
-						item={props.item}
-						itemTypes={props.itemTypes}
-						form={form}
-						onTagElement={(element) => {
-							tagElement = element;
-						}}
+				<Show when={isEdit()}>
+					<EntitySheetHeader.Delete
+						label="Delete item"
+						onDelete={() => void form.deleteItem()}
 					/>
-					<Show when={props.item}>
-						{(item) => (
-							<ItemQrSection
-								item={item}
-								openSections={openSections}
-								onOpenSectionsChange={setOpenSections}
-							/>
-						)}
-					</Show>
-				</Sheet.Body>
-				<Show when={!props.loading && !isEdit()}>
-					<CreateFooter form={form} />
 				</Show>
-			</Sheet.Root>
-			<CopyFromItemDialog
-				open={copyOpen()}
-				onOpenChange={setCopyOpen}
-				items={props.items ?? []}
-				onSelect={form.copyFrom}
-			/>
-		</>
+			</EntitySheetHeader.Root>
+			<Sheet.Skeleton>
+				<FieldsPlaceholder fields={PLACEHOLDER_FIELDS} />
+			</Sheet.Skeleton>
+			<Sheet.Body loading={props.loading}>
+				<Show when={!isEdit()}>
+					<CopyFromItem
+						isSheetOpen={props.open}
+						onCopy={form.copyFrom}
+					/>
+				</Show>
+				<ItemFormFields
+					item={props.item}
+					form={form}
+					onTagElement={(element) => {
+						tagElement = element;
+					}}
+				/>
+				<Show when={props.item}>
+					{(item) => (
+						<ItemQrSection
+							item={item}
+							openSections={openSections}
+							onOpenSectionsChange={setOpenSections}
+						/>
+					)}
+				</Show>
+			</Sheet.Body>
+			<Show when={!props.loading && !isEdit()}>
+				<CreateFooter form={form} />
+			</Show>
+		</Sheet.Root>
 	);
 }

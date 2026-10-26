@@ -19,14 +19,6 @@ import { afterEach, expect, test, vi } from "vitest";
 
 afterEach(cleanup);
 
-if (!("ResizeObserver" in globalThis)) {
-	globalThis.ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-
 const TASK1 = {
 	_id: "task1",
 	_creationTime: 0,

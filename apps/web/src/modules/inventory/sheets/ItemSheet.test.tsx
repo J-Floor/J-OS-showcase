@@ -9,7 +9,8 @@ import {
 } from "@solidjs/testing-library";
 import { afterEach, expect, test, vi } from "vitest";
 
-const { mockCreate, mockUpdate, mockRemove } = vi.hoisted(() => ({
+const { mockCreate, mockUpdate, mockRemove, mockUseItems } = vi.hoisted(() => ({
+	mockUseItems: vi.fn(),
 	mockCreate: vi.fn(),
 	mockUpdate: vi.fn().mockResolvedValue(undefined),
 	mockRemove: vi.fn(),
@@ -17,9 +18,11 @@ const { mockCreate, mockUpdate, mockRemove } = vi.hoisted(() => ({
 
 afterEach(() => {
 	cleanup();
+	setData([], []);
 	mockCreate.mockClear();
 	mockUpdate.mockClear();
 	mockRemove.mockClear();
+	mockUseItems.mockClear();
 });
 
 vi.mock("convex-solidjs", () => ({
@@ -27,21 +30,29 @@ vi.mock("convex-solidjs", () => ({
 	useQuery: () => ({ data: () => {} }),
 }));
 
+const { data, setData } = vi.hoisted(() => {
+	const state = { types: [] as unknown[], items: [] as unknown[] };
+	return {
+		data: state,
+		setData: (types: unknown[], items: unknown[]) => {
+			state.types = types;
+			state.items = items;
+		},
+	};
+});
+
 vi.mock("../data/inventoryData.ts", () => ({
+	useItemTypes: () => ({ data: () => data.types }),
+	useItems: () => {
+		mockUseItems();
+		return { data: () => data.items };
+	},
 	useItemActions: () => ({
 		create: mockCreate,
 		update: mockUpdate,
 		remove: mockRemove,
 	}),
 }));
-
-if (!("ResizeObserver" in globalThis)) {
-	globalThis.ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
 
 import type { Id } from "../../../../convex/_generated/dataModel";
 import {
@@ -80,13 +91,9 @@ const chair: Item = {
 };
 
 test("new item with initialAssetTag shows that tag in the field", () => {
+	setData([], []);
 	render(() => (
-		<ItemSheet
-			open
-			onOpenChange={() => {}}
-			itemTypes={[]}
-			initialAssetTag="A00001"
-		/>
+		<ItemSheet open onOpenChange={() => {}} initialAssetTag="A00001" />
 	));
 	expect(screen.getByLabelText("Asset tag letter")).toHaveValue("A");
 	expect(screen.getByLabelText("Asset tag number")).toHaveValue("00001");
@@ -95,13 +102,9 @@ test("new item with initialAssetTag shows that tag in the field", () => {
 
 test("a scanned tag is where the new item starts: Escape closes without asking", async () => {
 	const onOpenChange = vi.fn();
+	setData([], []);
 	render(() => (
-		<ItemSheet
-			open
-			onOpenChange={onOpenChange}
-			itemTypes={[]}
-			initialAssetTag="A00001"
-		/>
+		<ItemSheet open onOpenChange={onOpenChange} initialAssetTag="A00001" />
 	));
 	const sheet = screen.getByRole("dialog", { name: "New item" });
 	await waitFor(() => {
@@ -115,13 +118,9 @@ test("a scanned tag is where the new item starts: Escape closes without asking",
 
 test("a new item with a typed description asks before Escape throws it away", async () => {
 	const onOpenChange = vi.fn();
+	setData([], []);
 	render(() => (
-		<ItemSheet
-			open
-			onOpenChange={onOpenChange}
-			itemTypes={[]}
-			initialAssetTag="A00001"
-		/>
+		<ItemSheet open onOpenChange={onOpenChange} initialAssetTag="A00001" />
 	));
 	fireEvent.input(screen.getByLabelText("Description"), {
 		target: { value: "Meeting room" },
@@ -139,36 +138,32 @@ test("a new item with a typed description asks before Escape throws it away", as
 });
 
 test("copy from item is offered on a new item, not when editing", () => {
-	render(() => (
-		<ItemSheet open onOpenChange={() => {}} itemTypes={[]} items={[]} />
-	));
+	setData([], []);
+	render(() => <ItemSheet open onOpenChange={() => {}} />);
 	const copy = screen.getByRole("button", { name: /Copy from item/ });
 	expect(copy).toBeDisabled();
 	cleanup();
 
-	render(() => (
-		<ItemSheet
-			open
-			onOpenChange={() => {}}
-			item={chair}
-			itemTypes={[chairType]}
-			items={[chair]}
-		/>
-	));
+	setData([chairType], [chair]);
+	render(() => <ItemSheet open onOpenChange={() => {}} item={chair} />);
 	expect(
 		screen.queryByRole("button", { name: /Copy from item/ })
 	).not.toBeInTheDocument();
 });
 
+test("only the create form reads the whole items list", () => {
+	setData([chairType], [chair]);
+	render(() => <ItemSheet open onOpenChange={() => {}} item={chair} />);
+	expect(mockUseItems).not.toHaveBeenCalled();
+	cleanup();
+	render(() => <ItemSheet open onOpenChange={() => {}} />);
+	expect(mockUseItems).toHaveBeenCalled();
+});
+
 test("picking a source copies type and description and leaves the asset tag", async () => {
+	setData([chairType], [chair]);
 	render(() => (
-		<ItemSheet
-			open
-			onOpenChange={() => {}}
-			itemTypes={[chairType]}
-			items={[chair]}
-			initialAssetTag="Z00099"
-		/>
+		<ItemSheet open onOpenChange={() => {}} initialAssetTag="Z00099" />
 	));
 	fireEvent.click(screen.getByRole("button", { name: /Copy from item/ }));
 	fireEvent.click(
@@ -184,15 +179,8 @@ test("picking a source copies type and description and leaves the asset tag", as
 });
 
 test("blurring the description field autosaves that field only", () => {
-	render(() => (
-		<ItemSheet
-			open
-			onOpenChange={() => {}}
-			item={chair}
-			itemTypes={[chairType]}
-			items={[chair]}
-		/>
-	));
+	setData([chairType], [chair]);
+	render(() => <ItemSheet open onOpenChange={() => {}} item={chair} />);
 	const description = screen.getByLabelText("Description");
 	fireEvent.input(description, {
 		target: { value: "Storage room" },
@@ -208,15 +196,8 @@ test("blurring the description field autosaves that field only", () => {
 
 test("asset tag is read-only in edit mode and editing another field autosaves without closing", () => {
 	const onOpenChange = vi.fn();
-	render(() => (
-		<ItemSheet
-			open
-			onOpenChange={onOpenChange}
-			item={chair}
-			itemTypes={[chairType]}
-			items={[chair]}
-		/>
-	));
+	setData([chairType], [chair]);
+	render(() => <ItemSheet open onOpenChange={onOpenChange} item={chair} />);
 
 	// In edit mode the asset tag is read-only text, not an editable input: the
 	// tag is the slug, and autosaving it on blur would change the slug out from
@@ -241,14 +222,8 @@ test("asset tag is read-only in edit mode and editing another field autosaves wi
 });
 
 test("copying details does not invent an asset tag", async () => {
-	render(() => (
-		<ItemSheet
-			open
-			onOpenChange={() => {}}
-			itemTypes={[chairType]}
-			items={[chair]}
-		/>
-	));
+	setData([chairType], [chair]);
+	render(() => <ItemSheet open onOpenChange={() => {}} />);
 	fireEvent.click(screen.getByRole("button", { name: /Copy from item/ }));
 	fireEvent.click(
 		await screen.findByRole("button", { name: "A00001 Chair" })
@@ -261,9 +236,8 @@ test("copying details does not invent an asset tag", async () => {
 // --- tri-state: create / loading / loaded --------------------------------
 
 test("loading: shows the skeleton (shaped like the loaded fields), not the create form or the 'New item' title", () => {
-	render(() => (
-		<ItemSheet open onOpenChange={() => {}} itemTypes={[]} loading />
-	));
+	setData([], []);
+	render(() => <ItemSheet open onOpenChange={() => {}} loading />);
 	expect(screen.queryByText("New item")).toBeNull();
 	expect(screen.queryByRole("group", { name: "Asset tag" })).toBeNull();
 	expect(screen.queryByRole("button", { name: /Create item/ })).toBeNull();
@@ -272,23 +246,17 @@ test("loading: shows the skeleton (shaped like the loaded fields), not the creat
 });
 
 test("loading with an item also set (stale-during-refetch) still shows the skeleton, not the asset tag", () => {
+	setData([chairType], []);
 	render(() => (
-		<ItemSheet
-			open
-			onOpenChange={() => {}}
-			item={chair}
-			itemTypes={[chairType]}
-			loading
-		/>
+		<ItemSheet open onOpenChange={() => {}} item={chair} loading />
 	));
 	expect(screen.queryByText("A00001")).toBeNull();
 	expect(screen.queryByText("Item")).toBeNull();
 });
 
 test("no item, not loading: shows the create form and 'New item' title", () => {
-	render(() => (
-		<ItemSheet open onOpenChange={() => {}} itemTypes={[chairType]} />
-	));
+	setData([chairType], []);
+	render(() => <ItemSheet open onOpenChange={() => {}} />);
 	expect(screen.getByText("New item")).toBeInTheDocument();
 	expect(
 		screen.getByRole("group", { name: "Asset tag" })
@@ -299,14 +267,9 @@ test("no item, not loading: shows the create form and 'New item' title", () => {
 });
 
 test("an invalid asset tag keeps Create disabled even with a type chosen", async () => {
+	setData([chairType], [chair]);
 	render(() => (
-		<ItemSheet
-			open
-			onOpenChange={() => {}}
-			itemTypes={[chairType]}
-			items={[chair]}
-			initialAssetTag="not-a-tag"
-		/>
+		<ItemSheet open onOpenChange={() => {}} initialAssetTag="not-a-tag" />
 	));
 	fireEvent.click(screen.getByRole("button", { name: /Copy from item/ }));
 	fireEvent.click(
@@ -317,14 +280,8 @@ test("an invalid asset tag keeps Create disabled even with a type chosen", async
 });
 
 test("pasting a full tag with a type chosen enables Create", async () => {
-	render(() => (
-		<ItemSheet
-			open
-			onOpenChange={() => {}}
-			itemTypes={[chairType]}
-			items={[chair]}
-		/>
-	));
+	setData([chairType], [chair]);
+	render(() => <ItemSheet open onOpenChange={() => {}} />);
 	fireEvent.click(screen.getByRole("button", { name: /Copy from item/ }));
 	fireEvent.click(
 		await screen.findByRole("button", { name: "A00001 Chair" })
@@ -339,9 +296,8 @@ test("pasting a full tag with a type chosen enables Create", async () => {
 });
 
 test("an incomplete asset tag says what to enter once the group is left", () => {
-	render(() => (
-		<ItemSheet open onOpenChange={() => {}} itemTypes={[chairType]} />
-	));
+	setData([chairType], []);
+	render(() => <ItemSheet open onOpenChange={() => {}} />);
 	const letter = screen.getByLabelText("Asset tag letter");
 	const number = screen.getByLabelText("Asset tag number");
 	fireEvent.input(letter, { target: { value: "a" } });
@@ -362,9 +318,8 @@ test("an incomplete asset tag says what to enter once the group is left", () => 
 });
 
 test("an empty asset tag shows the hint, not an error, after leaving the group", () => {
-	render(() => (
-		<ItemSheet open onOpenChange={() => {}} itemTypes={[chairType]} />
-	));
+	setData([chairType], []);
+	render(() => <ItemSheet open onOpenChange={() => {}} />);
 	fireEvent.focusOut(screen.getByLabelText("Asset tag letter"), {
 		relatedTarget: document.body,
 	});
@@ -376,15 +331,8 @@ test("morph: the item's columns pair with the sheet values showing the same fiel
 	expect(row.title).toBe("assetTag");
 	expect(row.cells).toEqual(["typeName", "categoryName", "description"]);
 
-	render(() => (
-		<ItemSheet
-			open
-			onOpenChange={() => {}}
-			item={chair}
-			itemTypes={[chairType]}
-			items={[chair]}
-		/>
-	));
+	setData([chairType], [chair]);
+	render(() => <ItemSheet open onOpenChange={() => {}} item={chair} />);
 	// The asset tag column is the row's title: it flies into the sheet title
 	// (the asset tag), so the body's tag row carries no key of its own; the
 	// category has no row either (it follows the type).
@@ -395,22 +343,15 @@ test("morph: the item's columns pair with the sheet values showing the same fiel
 });
 
 test("the header shows the item's asset tag in edit mode, not 'Item'", () => {
-	render(() => (
-		<ItemSheet
-			open
-			onOpenChange={() => {}}
-			item={chair}
-			itemTypes={[chairType]}
-		/>
-	));
+	setData([chairType], []);
+	render(() => <ItemSheet open onOpenChange={() => {}} item={chair} />);
 	expect(screen.getByRole("heading", { name: "A00001" })).toBeInTheDocument();
 	expect(screen.queryByRole("heading", { name: "Item" })).toBeNull();
 });
 
 test("morph: the loading skeleton's plain-label rows carry no key", () => {
-	render(() => (
-		<ItemSheet open onOpenChange={() => {}} itemTypes={[]} loading />
-	));
+	setData([], []);
+	render(() => <ItemSheet open onOpenChange={() => {}} loading />);
 	expect(sheetSkeleton()).toBeInTheDocument();
 	expect(keyedIn(document)).toHaveLength(0);
 });

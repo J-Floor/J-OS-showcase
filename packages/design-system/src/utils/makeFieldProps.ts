@@ -84,14 +84,65 @@ export function splitFieldPartProps<T extends object>(
 	];
 }
 
+/** Parts of a field that take their own clicks. */
+const INTERACTIVE_PART =
+	"button, a[href], input, textarea, select, [role='button']";
+
+/**
+ * The handlers for a field's box: a press on a static part (its icon, a
+ * shortcut hint, the empty area) is a press on the control. The mouse press
+ * keeps focus where it is instead of moving it to the nearest focusable
+ * ancestor, and the click focuses the control and clicks it, so a handler on
+ * the control (the search field that opens the palette) runs for the whole
+ * box. A disabled or aria-disabled control, the control itself, interactive
+ * parts and the field's own parts (`isOwnPart`, e.g. date segments) keep
+ * their own behaviour.
+ */
+export function fieldBoxHandlers(
+	control: () => HTMLElement | undefined,
+	isOwnPart: (target: Element) => boolean = () => false
+): {
+	onMouseDown: (event: MouseEvent) => void;
+	onClick: (event: MouseEvent) => void;
+} {
+	function staticTarget(event: MouseEvent): HTMLElement | undefined {
+		const element = control();
+		const target = event.target;
+		return !element ||
+			("disabled" in element && element.disabled === true) ||
+			element.getAttribute("aria-disabled") === "true" ||
+			!(target instanceof Element) ||
+			element.contains(target) ||
+			target.closest(INTERACTIVE_PART) !== null ||
+			isOwnPart(target)
+			? undefined
+			: element;
+	}
+	return {
+		onMouseDown(event) {
+			if (staticTarget(event)) event.preventDefault();
+		},
+		onClick(event) {
+			const element = staticTarget(event);
+			if (!element) return;
+			element.focus();
+			element.click();
+		},
+	};
+}
+
 /**
  * The control element of a field, for the click-anywhere-to-focus box around
  * it: `setReference` goes on the control as its `ref` (it also calls the
- * consumer's own ref), and `focus` is the box's click handler.
+ * consumer's own ref), and `box` holds the handlers for the box element (see
+ * {@link fieldBoxHandlers}).
  */
 export function createFieldControl<Element extends HTMLElement>(
 	consumerReference: () => Element | ((element: Element) => void) | undefined
-): { setReference: (element: Element) => void; focus: () => void } {
+): {
+	setReference: (element: Element) => void;
+	box: ReturnType<typeof fieldBoxHandlers>;
+} {
 	let control: Element | undefined;
 	return {
 		setReference(element) {
@@ -99,8 +150,6 @@ export function createFieldControl<Element extends HTMLElement>(
 			const reference = consumerReference();
 			if (typeof reference === "function") reference(element);
 		},
-		focus() {
-			control?.focus();
-		},
+		box: fieldBoxHandlers(() => control),
 	};
 }

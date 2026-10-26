@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { For, Show, createSignal, type JSX } from "solid-js";
 
 import { ICONS } from "../../icons.ts";
+import { fieldBoxHandlers } from "../../utils/makeFieldProps.ts";
 import { type MorphOverlayProps } from "../../utils/morphPresence.ts";
 import { type OverlayOpenProps } from "../../utils/overlayLayer.tsx";
 import { createSlotPart } from "../../utils/presence.tsx";
@@ -105,8 +106,12 @@ function SearchField(props: {
 	setInput: (element: HTMLInputElement) => void;
 	onClear: () => void;
 }): JSX.Element {
+	let input: HTMLInputElement | undefined;
 	return (
-		<Combobox.Control class={styles.control}>
+		<Combobox.Control
+			class={styles.control}
+			{...fieldBoxHandlers(() => input)}
+		>
 			<Icon class={styles.searchIcon}>{ICONS.search}</Icon>
 			{/* NO `autofocus`. The palette stays mounted while closed
 		    (an overlay cannot gate its own mount), so this input is in
@@ -120,7 +125,10 @@ function SearchField(props: {
 			<Combobox.Input
 				class={styles.input}
 				placeholder={props.placeholder ?? "Search…"}
-				ref={props.setInput}
+				ref={(element) => {
+					input = element;
+					props.setInput(element);
+				}}
 			/>
 			{/* Only once there is something to clear: a permanent X
 		    on an empty field is a button that does nothing.

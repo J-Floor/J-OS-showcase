@@ -64,15 +64,6 @@ afterEach(() => {
 	doorHealthCalls.count = 0;
 });
 
-// jsdom gaps ark Tabs touches at mount.
-if (!("ResizeObserver" in globalThis)) {
-	globalThis.ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-
 function renderSpace(role: "member" | "board" | "staff") {
 	return render(() => (
 		<MemoryRouter>

@@ -327,9 +327,6 @@ export function ProjectsTab(props: ProjectsTabProps): JSX.Element {
 				initialStart={selection.createStart()}
 				initialEnd={selection.createEnd()}
 				morphFrom={selection.createFrom}
-				people={boardLevel.data() ?? []}
-				projects={all()}
-				tasks={tasks.data()}
 				onTaskClick={(task) => {
 					// Transitioning to the nested task sheet, not returning to
 					// the list — clear in place, don't pop history.
@@ -342,8 +339,6 @@ export function ProjectsTab(props: ProjectsTabProps): JSX.Element {
 				open={nestedTask.taskOpen()}
 				onOpenChange={nestedTask.setTaskOpen}
 				task={nestedTask.editingTask()}
-				people={boardLevel.data() ?? []}
-				projects={all()}
 			/>
 		</div>
 	);

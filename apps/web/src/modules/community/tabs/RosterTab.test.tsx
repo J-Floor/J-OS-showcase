@@ -17,21 +17,6 @@ import { openPanel, renderWithSelection } from "./testSelection.tsx";
 
 afterEach(cleanup);
 
-// jsdom gaps that ark-ui / the design-system Table touch at mount.
-if (!(Element.prototype as { scrollTo?: unknown }).scrollTo) {
-	Element.prototype.scrollTo = () => {};
-}
-if (!(Element.prototype as { hasPointerCapture?: unknown }).hasPointerCapture) {
-	Element.prototype.hasPointerCapture = () => false;
-}
-if (!("ResizeObserver" in globalThis)) {
-	(globalThis as Record<string, unknown>).ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-
 // The sheet's PersonDetail opens Convex subscriptions and mutations; stub the
 // client so the scaffold mounts without a ConvexProvider.
 vi.mock("convex-solidjs", () => ({
@@ -83,7 +68,7 @@ function columns(): JfColumnDefinition<PersonRow>[] {
 	];
 }
 
-test("RosterTab.FooterLead renders in the sheet footer with the open person and follows the sheet's paging", async () => {
+test("footerLead renders in the sheet footer with the open person and follows the sheet's paging", async () => {
 	renderWithSelection(
 		(selection) => (
 			<RosterTab.Root<PersonRow>
@@ -93,11 +78,10 @@ test("RosterTab.FooterLead renders in the sheet footer with the open person and 
 				groupBy="group"
 				actions={() => []}
 				scope="members"
-			>
-				<RosterTab.FooterLead>
-					{(open) => <p data-testid="lead">{open().firstName}</p>}
-				</RosterTab.FooterLead>
-			</RosterTab.Root>
+				footerLead={(open) => (
+					<p data-testid="lead">{open().firstName}</p>
+				)}
+			/>
 		),
 		{ path: "/community?person=p1" }
 	);
@@ -124,7 +108,7 @@ test("RosterTab.FooterLead renders in the sheet footer with the open person and 
 	expect(within(panel).getByTestId("lead")).toBe(lead);
 });
 
-test("no FooterLead: the sheet footer carries only the tab's own buttons", async () => {
+test("no footerLead: the sheet footer carries only the tab's own buttons", async () => {
 	renderWithSelection(
 		(selection) => (
 			<RosterTab.Root<PersonRow>

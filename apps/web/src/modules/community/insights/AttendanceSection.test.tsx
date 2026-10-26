@@ -14,14 +14,6 @@ import { afterEach, expect, test, vi } from "vitest";
 import { dayKey } from "../../../../convex/lib/occupancy/accrual.ts";
 import type { AttendanceAnswer } from "../../../../convex/occupancy.ts";
 
-if (!("ResizeObserver" in globalThis)) {
-	(globalThis as Record<string, unknown>).ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-
 const [answer, setAnswer] = createSignal<AttendanceAnswer | undefined>();
 const [error, setError] = createSignal<Error | undefined>();
 

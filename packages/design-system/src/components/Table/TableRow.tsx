@@ -23,6 +23,7 @@ import { ACTIONS_COLUMN_ID, SELECT_COLUMN_ID } from "./columnTracks.ts";
 import { COLUMN_ID_ATTR, TEXT_CELL_ATTR } from "./domContract.ts";
 import { EmptyContent } from "./Empty.tsx";
 import type { GridFocus } from "./gridFocus.ts";
+import { GROUP_KEY_ATTR, toggleGroupWithMotion } from "./groupMotion.ts";
 import type { RangeSelection } from "./rangeSelection.ts";
 import type { RowGroup, RowGroups } from "./rowGroups.ts";
 import styles from "./Table.module.scss";
@@ -281,6 +282,7 @@ export function GroupHeaderRow<Data extends Record<string, unknown>>(
 			role="row"
 			data-index={rowProps.index}
 			class={styles.groupRow}
+			{...{ [GROUP_KEY_ATTR]: rowProps.group.key }}
 		>
 			<td
 				class={styles.groupCell}
@@ -295,8 +297,16 @@ export function GroupHeaderRow<Data extends Record<string, unknown>>(
 							styles.groupToggleSelectable
 					)}
 					aria-expanded={expanded()}
-					onClick={() => {
-						rowProps.context.groups.toggleGroup(rowProps.group.key);
+					onClick={(event) => {
+						const { groups } = rowProps.context;
+						const key = rowProps.group.key;
+						toggleGroupWithMotion(
+							event.currentTarget.closest("tbody"),
+							groups.isGroupExpanded(key),
+							() => {
+								groups.toggleGroup(key);
+							}
+						);
 					}}
 				>
 					<span class={styles.groupIndicator}>

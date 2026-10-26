@@ -229,6 +229,18 @@ describe("CommandPalette", () => {
 		expect(labels()).toHaveLength(items().length);
 	});
 
+	it("focuses the search input when its icon is clicked", () => {
+		render(() => (
+			<CommandPalette open onOpenChange={() => {}} items={items()} />
+		));
+		document.body.focus();
+		expect(screen.getByRole("combobox")).not.toHaveFocus();
+		// The press must not move focus off the input to the box.
+		expect(fireEvent.mouseDown(screen.getByText("search"))).toBe(false);
+		fireEvent.click(screen.getByText("search"));
+		expect(screen.getByRole("combobox")).toHaveFocus();
+	});
+
 	it("highlights why a row matched", async () => {
 		render(() => (
 			<CommandPalette open onOpenChange={() => {}} items={items()} />

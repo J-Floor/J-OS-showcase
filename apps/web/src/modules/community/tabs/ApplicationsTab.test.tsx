@@ -8,7 +8,7 @@ import {
 } from "@solidjs/testing-library";
 import { okAsync } from "neverthrow";
 import { createSignal } from "solid-js";
-import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { keyedIn, keyedValue } from "../../../../test-stubs/morphKeys.tsx";
 import {
@@ -22,26 +22,6 @@ import {
 // binding registered by one test (this tab now binds D/G/M/U) outlives it,
 // and the next test's keydown fires every stale handler alongside its own.
 afterEach(cleanup);
-
-// jsdom gaps that ark-ui / the Table touch.
-beforeAll(() => {
-	globalThis.ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-	Object.defineProperty(Element.prototype, "scrollTo", {
-		value: () => {},
-		writable: true,
-		configurable: true,
-	});
-	if (
-		!(Element.prototype as { hasPointerCapture?: unknown })
-			.hasPointerCapture
-	) {
-		Element.prototype.hasPointerCapture = () => false;
-	}
-});
 
 // Minimal column set: enough to render group headers (triageGroup) + a leaf
 // cell. Avoids pulling in the real applicationColumns (which import the convex

@@ -69,19 +69,16 @@ function MemberBatchActions(props: {
 }
 
 /**
- * Members tab: members / board / kicked-out grouped, with batch triage and a
- * change-role dialog. The roster + sheet scaffold is {@link RosterTab}; this
- * file owns what is member-specific — the change-role flow and the selection
- * bar.
+ * The Members sheet's own setup, shared by the tab and the peek: the action
+ * descriptors and the one change-role dialog both ways in feed.
  *
  * Change role has one dialog for both ways in: the selection bar's button
  * (over the checked rows) and the `R` key / sheet footer (one person, who has
- * no checkbox selection). It sits BESIDE the roster, not in the selection
- * bar: the bar only exists while rows are checked, and a successful move
- * clears the selection, which would unmount the dialog mid-close.
+ * no checkbox selection). Render `RoleDialog` BESIDE the roster, not in the
+ * selection bar: the bar only exists while rows are checked, and a successful
+ * move clears the selection, which would unmount the dialog mid-close.
  */
-export function MembersTab(props: TabProps): JSX.Element {
-	const members = useMembers();
+export function useMembersSheet() {
 	const triage = useTriage();
 	const [isRoleOpen, setRoleOpen] = createSignal(false);
 	// Kept after the dialog closes: dropping it would unmount the dialog
@@ -107,24 +104,8 @@ export function MembersTab(props: TabProps): JSX.Element {
 		invariant(action, "useMemberActions: no 'kick' descriptor");
 		return action;
 	}
-
-	return (
-		<>
-			<RosterTab.Root<PersonRow>
-				tab={props}
-				scope="members"
-				data={() => members.data()}
-				columns={() => memberColumns()}
-				groupBy="group"
-				actions={memberActions.actions}
-			>
-				<Table.BatchActions>
-					<MemberBatchActions
-						onChangeRole={openRoleDialog}
-						kickOutAction={kickOutAction}
-					/>
-				</Table.BatchActions>
-			</RosterTab.Root>
+	function RoleDialog(): JSX.Element {
+		return (
 			<Show when={roleTarget()}>
 				{(target) => (
 					<ChangeRoleDialog
@@ -143,6 +124,46 @@ export function MembersTab(props: TabProps): JSX.Element {
 					/>
 				)}
 			</Show>
+		);
+	}
+
+	return {
+		scope: "members",
+		actions: memberActions.actions,
+		kickOutAction,
+		openRoleDialog,
+		RoleDialog,
+	} as const;
+}
+
+/**
+ * Members tab: members / board / kicked-out grouped, with batch triage and a
+ * change-role dialog. The roster + sheet scaffold is {@link RosterTab}; this
+ * file owns what is member-specific — the selection bar. The change-role flow
+ * is {@link useMembersSheet}'s.
+ */
+export function MembersTab(props: TabProps): JSX.Element {
+	const members = useMembers();
+	const sheet = useMembersSheet();
+
+	return (
+		<>
+			<RosterTab.Root<PersonRow>
+				tab={props}
+				scope={sheet.scope}
+				data={() => members.data()}
+				columns={() => memberColumns()}
+				groupBy="group"
+				actions={sheet.actions}
+			>
+				<Table.BatchActions>
+					<MemberBatchActions
+						onChangeRole={sheet.openRoleDialog}
+						kickOutAction={sheet.kickOutAction}
+					/>
+				</Table.BatchActions>
+			</RosterTab.Root>
+			<sheet.RoleDialog />
 		</>
 	);
 }

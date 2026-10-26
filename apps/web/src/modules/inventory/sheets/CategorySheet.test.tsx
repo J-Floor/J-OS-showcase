@@ -51,14 +51,6 @@ vi.mock("../data/inventoryData.ts", () => ({
 	},
 }));
 
-if (!("ResizeObserver" in globalThis)) {
-	globalThis.ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-
 import {
 	sheetKeys,
 	sheetSkeleton,

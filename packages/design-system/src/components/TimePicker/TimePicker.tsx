@@ -13,8 +13,15 @@ import {
 } from "solid-js";
 
 import { ICONS } from "../../icons.ts";
+import {
+	firstEditableSegment,
+	isEditableSegment,
+} from "../../utils/dateSegments.ts";
 import { type PropsWithDisabling } from "../../utils/disablingProps.ts";
-import { splitMakeFieldProps } from "../../utils/makeFieldProps.ts";
+import {
+	fieldBoxHandlers,
+	splitMakeFieldProps,
+} from "../../utils/makeFieldProps.ts";
 import { splitArkProps } from "../../utils/splitArkProps.ts";
 import type { MakeFieldOwnProps } from "../../utils/types.ts";
 import { Icon } from "../Icon/Icon.tsx";
@@ -83,16 +90,6 @@ function Segments(props: { api: UseDateInputContext }): JSX.Element {
 			)}
 		</Index>
 	);
-}
-
-const EDITABLE_SEGMENT = "[data-part=segment][data-editable]";
-
-function isEditableSegment(element: HTMLElement): boolean {
-	return element.closest(EDITABLE_SEGMENT) !== null;
-}
-
-function focusFirstEditableSegment(control: HTMLElement | undefined): void {
-	control?.querySelector<HTMLElement>(EDITABLE_SEGMENT)?.focus();
 }
 
 /**
@@ -196,11 +193,8 @@ export function TimePicker(props: TimePickerProps): JSX.Element {
 			: makeFieldProps.errorText
 	);
 
-	// Focus the first EDITABLE segment. The ":" separator also carries
-	// data-part="segment" but is aria-hidden and non-focusable (no
-	// data-editable) — selecting [data-editable] skips it and lands on hour.
 	function focusInput(): void {
-		focusFirstEditableSegment(controlElement);
+		firstEditableSegment(controlElement)?.focus();
 	}
 
 	return (
@@ -218,14 +212,10 @@ export function TimePicker(props: TimePickerProps): JSX.Element {
 					}}
 					class={styles.control}
 					data-invalid={isInvalid() ? "true" : undefined}
-					onClick={(event) => {
-						// Clicking the empty field area (or the icon) focuses
-						// the first segment, like a normal text field. Clicks
-						// on an editable segment keep their own behaviour.
-						if (!isEditableSegment(event.target as HTMLElement)) {
-							focusInput();
-						}
-					}}
+					{...fieldBoxHandlers(
+						() => firstEditableSegment(controlElement),
+						isEditableSegment
+					)}
 				>
 					<Icon class={styles.icon}>{ICONS.time}</Icon>
 					<DateInput.SegmentGroup class={styles.segmentGroup}>

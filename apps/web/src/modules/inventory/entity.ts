@@ -5,6 +5,7 @@ import {
 	entityUrl,
 	type EntityDescriptor,
 } from "../../shared/entity/entityDescriptor.ts";
+import { lazyPeek } from "../../shared/entity/lazyPeek.tsx";
 import { ICONS } from "../../shared/icons.ts";
 
 import type { Category, Item, ItemType } from "./data/inventoryData.ts";
@@ -41,6 +42,9 @@ export const itemEntity: EntityDescriptor<Item> = {
 	detail: (row) => row.typeName,
 	ability: { action: "view", subject: "Inventory" },
 	tab: "items",
+	peek: lazyPeek(() =>
+		import("./ItemPeek.tsx").then((module) => module.ItemPeek)
+	),
 };
 // Assigned after the literal so the closure can reference `itemEntity` itself
 // without a use-before-define — `entityUrl` needs the full descriptor (route,
@@ -63,6 +67,9 @@ export const itemTypeEntity: EntityDescriptor<ItemType> = {
 	detail: (row) => row.categoryName,
 	ability: { action: "view", subject: "Inventory" },
 	tab: "types",
+	peek: lazyPeek(() =>
+		import("./ItemTypePeek.tsx").then((module) => module.ItemTypePeek)
+	),
 	prefetch: (row) => {
 		prefetchSpec(itemsByTypeQuery, row._id);
 	},
@@ -79,6 +86,9 @@ export const categoryEntity: EntityDescriptor<Category> = {
 	label: (row) => row.name,
 	ability: { action: "view", subject: "Inventory" },
 	tab: "categories",
+	peek: lazyPeek(() =>
+		import("./CategoryPeek.tsx").then((module) => module.CategoryPeek)
+	),
 	prefetch: (row) => {
 		prefetchSpec(itemTypesByCategoryQuery, row._id);
 	},

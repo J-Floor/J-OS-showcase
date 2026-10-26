@@ -17,8 +17,15 @@ import {
 import { Portal } from "solid-js/web";
 
 import { ICONS } from "../../icons.ts";
+import {
+	firstEditableSegment,
+	isEditableSegment,
+} from "../../utils/dateSegments.ts";
 import { type PropsWithDisabling } from "../../utils/disablingProps.ts";
-import { splitMakeFieldProps } from "../../utils/makeFieldProps.ts";
+import {
+	fieldBoxHandlers,
+	splitMakeFieldProps,
+} from "../../utils/makeFieldProps.ts";
 import {
 	getPartStyles,
 	type WithPartClasses,
@@ -94,8 +101,6 @@ const OWN_KEYS = [
 	"minIso",
 	"maxIso",
 ] as const satisfies readonly (keyof DatePickerProps)[];
-
-const EDITABLE_SEGMENT = "[data-part=segment][data-editable]";
 
 /** The machine's value for the ISO `value` prop: `undefined` (no prop)
  *  leaves the picker uncontrolled, `null` or `""` is a controlled empty. */
@@ -192,9 +197,7 @@ export function DatePicker(props: DatePickerProps): JSX.Element {
 	}));
 
 	function focusFirstSegment(): void {
-		segmentGroupElement
-			?.querySelector<HTMLElement>(EDITABLE_SEGMENT)
-			?.focus();
+		firstEditableSegment(segmentGroupElement)?.focus();
 	}
 
 	return (
@@ -213,6 +216,10 @@ export function DatePicker(props: DatePickerProps): JSX.Element {
 					>
 						<ArkDatePicker.Control
 							class={styles.pickerControl}
+							{...fieldBoxHandlers(
+								() => firstEditableSegment(segmentGroupElement),
+								isEditableSegment
+							)}
 							data-invalid={
 								makeFieldProps.invalid ? "true" : undefined
 							}

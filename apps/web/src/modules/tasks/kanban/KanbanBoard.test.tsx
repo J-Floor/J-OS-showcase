@@ -1,19 +1,9 @@
 // @vitest-environment happy-dom
 import { OWN_GESTURES_ATTR } from "@j-os/design-system";
 import { cleanup, render } from "@solidjs/testing-library";
-import { afterEach, beforeAll, expect, test, vi } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 
 afterEach(cleanup);
-
-beforeAll(() => {
-	if (!("ResizeObserver" in globalThis)) {
-		globalThis.ResizeObserver = class {
-			observe() {}
-			unobserve() {}
-			disconnect() {}
-		};
-	}
-});
 
 vi.mock("convex-solidjs", () => ({
 	useMutation: () => ({ mutate: vi.fn().mockResolvedValue(undefined) }),

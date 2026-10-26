@@ -6,12 +6,11 @@
 	gap: var(--jf-spacing-near);
 }
 
-// Aligns an accordion section's body with the community sheet's `.sectionBody`.
+// An accordion section's fields, one under the other.
 .section {
 	display: flex;
 	flex-direction: column;
 	gap: var(--jf-spacing-near);
-	padding-block: var(--jf-spacing-near);
 }
 
 // A date + its time picker side by side; wraps to a column on narrow sheets

@@ -182,14 +182,6 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-if (!("ResizeObserver" in globalThis)) {
-	globalThis.ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-
 async function mounted() {
 	const view = render(() => <DiagnosticsTab />);
 	// The floor has resolved once the head query is enabled and read.

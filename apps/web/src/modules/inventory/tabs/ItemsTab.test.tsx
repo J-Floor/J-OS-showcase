@@ -19,20 +19,6 @@ import type { Item } from "../data/inventoryData.ts";
 
 afterEach(cleanup);
 
-if (!(Element.prototype as { scrollTo?: unknown }).scrollTo) {
-	Element.prototype.scrollTo = () => {};
-}
-if (!(Element.prototype as { hasPointerCapture?: unknown }).hasPointerCapture) {
-	Element.prototype.hasPointerCapture = () => false;
-}
-if (!("ResizeObserver" in globalThis)) {
-	globalThis.ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-
 const { mockRemove, mockGenerate, mockDownload, mockFilename } = vi.hoisted(
 	() => ({
 		mockRemove: vi.fn(() => Promise.resolve()),
@@ -67,7 +53,6 @@ const rows = [
 
 vi.mock("../data/inventoryData.ts", () => ({
 	useItems: () => ({ data: () => rows }),
-	useItemTypes: () => ({ data: () => [] }),
 	useItemActions: () => ({
 		create: vi.fn(),
 		update: vi.fn(),

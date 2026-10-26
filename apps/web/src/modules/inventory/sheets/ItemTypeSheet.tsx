@@ -15,12 +15,12 @@ import { EntityCreateFooter } from "../../../shared/entity/EntityCreateFooter.ts
 import { EntitySheetHeader } from "../../../shared/entity/EntitySheetHeader.tsx";
 import { InlineError } from "../../../shared/InlineError.tsx";
 import type { SheetOpenProps } from "../../../shared/types.ts";
-import type {
-	Category,
-	ItemType,
-	ItemTypePatch,
+import type { ItemType, ItemTypePatch } from "../data/inventoryData.ts";
+import {
+	useCategories,
+	useItemsByType,
+	useItemTypeActions,
 } from "../data/inventoryData.ts";
-import { useItemsByType, useItemTypeActions } from "../data/inventoryData.ts";
 import { itemTypeFields } from "../fields.ts";
 
 import { FieldsPlaceholder } from "./FieldsPlaceholder.tsx";
@@ -30,7 +30,6 @@ import { RelatedListSection } from "./RelatedListSection.tsx";
 
 type ItemTypeSheetProps = SheetOpenProps & {
 	itemType?: ItemType;
-	categories: Category[];
 	/** True when the sheet is open for a real row (`requestedId()` set) whose
 	 *  data hasn't loaded yet — distinct from create, where there is no id at
 	 *  all. Wins over `itemType` (which is undefined in both states). */
@@ -173,6 +172,7 @@ export function ItemTypeSheet(props: ItemTypeSheetProps): JSX.Element {
 	}
 
 	const itemsQuery = useOpenTypeItems(props);
+	const categories = useCategories();
 
 	let nameElement: HTMLInputElement | undefined;
 
@@ -216,7 +216,7 @@ export function ItemTypeSheet(props: ItemTypeSheetProps): JSX.Element {
 				<OptionSelect
 					property={itemTypeFields.categoryName}
 					placeholder="Choose a category"
-					options={props.categories.map((category) => ({
+					options={(categories.data() ?? []).map((category) => ({
 						value: category._id,
 						label: category.name,
 					}))}

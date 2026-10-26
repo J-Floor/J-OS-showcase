@@ -187,3 +187,28 @@ test("classOverride restyles the calendar content", async () => {
 	await open();
 	expect(content()).toHaveClass("custom-content");
 });
+
+const EDITABLE_SEGMENT = '[data-part="segment"][data-editable]';
+
+function pickerControl(): HTMLElement {
+	const element = document.querySelector<HTMLElement>(
+		'[data-scope="date-picker"][data-part="control"]'
+	);
+	if (!element) throw new Error("control not found");
+	return element;
+}
+
+test("a click on the control outside the segments focuses the first segment", () => {
+	render(() => <DatePicker label="Due" />);
+	const segments = document.querySelectorAll<HTMLElement>(EDITABLE_SEGMENT);
+	fireEvent.click(pickerControl());
+	expect(segments[0]).toHaveFocus();
+});
+
+test("a click on a segment keeps that segment focused", () => {
+	render(() => <DatePicker label="Due" />);
+	const segments = document.querySelectorAll<HTMLElement>(EDITABLE_SEGMENT);
+	segments[1].focus();
+	fireEvent.click(segments[1]);
+	expect(segments[1]).toHaveFocus();
+});

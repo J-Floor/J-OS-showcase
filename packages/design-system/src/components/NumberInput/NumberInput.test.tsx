@@ -105,3 +105,9 @@ test("the increment stepper announces the max once it is reached", async () => {
 		"aria-description"
 	);
 });
+
+test("a click on the leading icon focuses the input", () => {
+	render(() => <NumberInput label="N" leadingIconName="search" />);
+	fireEvent.click(screen.getByText("search"));
+	expect(screen.getByRole("spinbutton")).toHaveFocus();
+});

@@ -14,21 +14,6 @@ import { ALL_EVENTS } from "../../../../convex/lib/lifecycle.ts";
 
 import { ChangeRoleDialog, MOVES } from "./ChangeRoleDialog.tsx";
 
-// jsdom gaps that ark-ui / the design-system Segment + Dialog touch at mount.
-if (!(Element.prototype as { scrollTo?: unknown }).scrollTo) {
-	Element.prototype.scrollTo = () => {};
-}
-if (!(Element.prototype as { hasPointerCapture?: unknown }).hasPointerCapture) {
-	Element.prototype.hasPointerCapture = () => false;
-}
-if (!("ResizeObserver" in globalThis)) {
-	(globalThis as Record<string, unknown>).ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-
 afterEach(cleanup);
 
 function alphabetical(first: string, second: string) {

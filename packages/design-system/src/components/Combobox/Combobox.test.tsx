@@ -114,6 +114,14 @@ describe("Combobox", () => {
 		expect(onOpenChange).not.toHaveBeenCalled();
 	});
 
+	test("a click on the empty control area focuses the input", () => {
+		render(() => <Combobox.Root label="Topic">{options()}</Combobox.Root>);
+		// The press must not move focus off the input to the box.
+		expect(fireEvent.mouseDown(control())).toBe(false);
+		fireEvent.click(control());
+		expect(screen.getByRole("combobox")).toHaveFocus();
+	});
+
 	test("Backspace in an empty input removes the last chip's value", async () => {
 		const onValueChange = vi.fn();
 		render(() => (

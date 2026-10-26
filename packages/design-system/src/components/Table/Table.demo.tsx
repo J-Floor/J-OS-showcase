@@ -140,6 +140,30 @@ const data: Item[] = [
 		onSite: true,
 		bio: "Found the first actual bug and kept it in the logbook.",
 	},
+	{
+		name: "Margaret Hamilton",
+		role: "eng",
+		age: 33,
+		shift: "07:00",
+		onSite: true,
+		bio: "Wrote the flight software that landed on the Moon.",
+	},
+	{
+		name: "Katherine Johnson",
+		role: "research",
+		age: 50,
+		shift: "11:00",
+		onSite: false,
+		bio: "Checked the orbit by hand before anyone trusted the computer.",
+	},
+	{
+		name: "Edsger Dijkstra",
+		role: "research",
+		age: 42,
+		shift: "15:00",
+		onSite: true,
+		bio: "Found the shortest path and argued against goto.",
+	},
 ];
 
 /** The batch bar's actions, reading the checked rows from the table. */

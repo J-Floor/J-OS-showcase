@@ -9,18 +9,34 @@ import {
 import { createSignal } from "solid-js";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
-const { head, clientQuery, markRead, markAllRead, navigate, toasterCreate } =
-	vi.hoisted(() => ({
-		head: {
-			data: undefined as unknown[] | undefined,
-			error: undefined as Error | undefined,
-		},
-		clientQuery: vi.fn(),
-		markRead: vi.fn(() => Promise.resolve(null)),
-		markAllRead: vi.fn(() => Promise.resolve(null)),
-		navigate: vi.fn(),
-		toasterCreate: vi.fn(),
-	}));
+const {
+	head,
+	clientQuery,
+	markRead,
+	markAllRead,
+	navigate,
+	setParams,
+	location,
+	preloadPeek,
+	preloadEventPeek,
+	preloadItemPeek,
+	toasterCreate,
+} = vi.hoisted(() => ({
+	head: {
+		data: undefined as unknown[] | undefined,
+		error: undefined as Error | undefined,
+	},
+	clientQuery: vi.fn(),
+	markRead: vi.fn(() => Promise.resolve(null)),
+	markAllRead: vi.fn(() => Promise.resolve(null)),
+	navigate: vi.fn(),
+	setParams: vi.fn(),
+	location: { pathname: "/events" },
+	preloadPeek: vi.fn(() => Promise.resolve()),
+	preloadEventPeek: vi.fn(() => Promise.resolve()),
+	preloadItemPeek: vi.fn(() => Promise.resolve()),
+	toasterCreate: vi.fn(),
+}));
 
 vi.mock("convex-solidjs", () => ({
 	useQuery: () => ({ data: () => head.data, error: () => head.error }),
@@ -42,7 +58,36 @@ vi.mock("../../../convex/_generated/api", () => ({
 		},
 	},
 }));
-vi.mock("@solidjs/router", () => ({ useNavigate: () => navigate }));
+vi.mock("@solidjs/router", () => ({
+	useNavigate: () => navigate,
+	useLocation: () => location,
+	useSearchParams: () => [{}, setParams],
+}));
+vi.mock("../entity/entityDescriptors.ts", () => ({
+	entityDescriptors: [
+		{
+			key: "person",
+			route: "/community",
+			param: "person",
+			ability: { action: "view", subject: "Applications" },
+			peek: Object.assign(() => null, { preload: preloadPeek }),
+		},
+		{
+			key: "event",
+			route: "/events",
+			param: "event",
+			ability: { action: "view", subject: "Events" },
+			peek: Object.assign(() => null, { preload: preloadEventPeek }),
+		},
+		{
+			key: "item",
+			route: "/inventory",
+			param: "item",
+			ability: { action: "view", subject: "Inventory" },
+			peek: Object.assign(() => null, { preload: preloadItemPeek }),
+		},
+	],
+}));
 vi.mock("../toaster.ts", () => ({ toaster: { create: toasterCreate } }));
 
 /** One per sentinel mount, in mount order, with the elements it observes. */
@@ -81,6 +126,9 @@ function listBeforeCalls(): number {
 	return clientQuery.mock.calls.filter((call) => call[0] === "listBefore")
 		.length;
 }
+
+import { AbilityProvider, type Role } from "../../lib/ability.tsx";
+import { pushedOpenState } from "../entity/pushedOpen.ts";
 
 import styles from "./NotificationList.module.scss";
 import { NotificationList } from "./NotificationList.tsx";
@@ -122,6 +170,7 @@ function renderList(
 		open?: () => boolean;
 		onClose?: () => void;
 		exposed?: { inbox?: Inbox };
+		role?: Role;
 	} = {}
 ) {
 	function Harness() {
@@ -134,7 +183,11 @@ function renderList(
 			/>
 		);
 	}
-	return render(() => <Harness />);
+	return render(() => (
+		<AbilityProvider role={options.role ?? "board"}>
+			<Harness />
+		</AbilityProvider>
+	));
 }
 
 function rowOf(title: string): HTMLElement {
@@ -154,6 +207,7 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 	intersections.length = 0;
 	vi.clearAllMocks();
+	location.pathname = "/events";
 	head.data = undefined;
 	head.error = undefined;
 });
@@ -363,7 +417,11 @@ test("a history that has not loaded yet shows a loading skeleton, not the empty 
 		markRead: vi.fn(),
 		markAllRead: vi.fn(),
 	} as unknown as Inbox;
-	render(() => <NotificationList inbox={inbox} onClose={() => {}} />);
+	render(() => (
+		<AbilityProvider role="board">
+			<NotificationList inbox={inbox} onClose={() => {}} />
+		</AbilityProvider>
+	));
 	expect(screen.getByRole("status", { name: "Loading" })).toBeInTheDocument();
 	expect(screen.queryByText("No notifications yet")).toBeNull();
 });
@@ -473,7 +531,11 @@ test("a refetch with a new row on top keeps the existing rows' DOM", () => {
 		markRead: vi.fn(),
 		markAllRead: vi.fn(),
 	} as unknown as Inbox;
-	render(() => <NotificationList inbox={inbox} onClose={() => {}} />);
+	render(() => (
+		<AbilityProvider role="board">
+			<NotificationList inbox={inbox} onClose={() => {}} />
+		</AbilityProvider>
+	));
 	const task = rowOf("New task assigned");
 	const heading = screen.getByRole("heading", { name: "Today" });
 
@@ -486,4 +548,57 @@ test("a refetch with a new row on top keeps the existing rows' DOM", () => {
 	expect(screen.getByText("Fresh one")).toBeInTheDocument();
 	expect(rowOf("New task assigned")).toBe(task);
 	expect(screen.getByRole("heading", { name: "Today" })).toBe(heading);
+});
+
+test("a row naming an entity opens it as a peek over the current page", () => {
+	head.data = [{ ...TASK, url: "/community?person=p1" }];
+	serve({ since: null });
+	renderList();
+	fireEvent.click(screen.getByRole("button", { name: /New task assigned/ }));
+	expect(setParams).toHaveBeenCalledWith(
+		{ open: "person:p1" },
+		{ state: pushedOpenState("open"), replace: false }
+	);
+	expect(navigate).not.toHaveBeenCalled();
+	expect(markRead).toHaveBeenCalledWith({ id: "n1" });
+});
+
+test("a row naming an entity the viewer may not see navigates to its page instead", () => {
+	head.data = [{ ...TASK, url: "/community?person=p1" }];
+	serve({ since: null });
+	renderList({ role: "member" });
+	fireEvent.click(screen.getByRole("button", { name: /New task assigned/ }));
+	expect(navigate).toHaveBeenCalledWith("/community?person=p1");
+	expect(setParams).not.toHaveBeenCalled();
+});
+
+test("a row naming a page without a single entity navigates there", () => {
+	head.data = [{ ...TASK, url: "/space?tab=diagnostics" }];
+	serve({ since: null });
+	renderList();
+	fireEvent.click(screen.getByRole("button", { name: /New task assigned/ }));
+	expect(navigate).toHaveBeenCalledWith("/space?tab=diagnostics");
+	expect(setParams).not.toHaveBeenCalled();
+});
+
+test("hovering a row preloads its entity's peek", () => {
+	head.data = [{ ...TASK, url: "/community?person=p1" }];
+	serve({ since: null });
+	renderList();
+	preloadPeek.mockClear();
+	fireEvent.pointerEnter(rowOf("New task assigned"));
+	expect(preloadPeek).toHaveBeenCalledTimes(1);
+});
+
+test("rendering the list warms the peek of each kind its rows link to, once", () => {
+	head.data = [
+		{ ...TASK, url: "/community?person=p1" },
+		{ ...EVENT, url: "/community?person=p2" },
+		{ ...GUEST, url: "/events?event=e1" },
+	];
+	serve({ since: null });
+	renderList();
+	expect(preloadPeek).toHaveBeenCalledTimes(1);
+	expect(preloadEventPeek).toHaveBeenCalledTimes(1);
+	expect(preloadItemPeek).not.toHaveBeenCalled();
 });

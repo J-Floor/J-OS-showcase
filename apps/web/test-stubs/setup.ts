@@ -18,6 +18,24 @@ function guardedSetTimeout(
 }
 globalThis.setTimeout = guardedSetTimeout as unknown as typeof setTimeout;
 
+// jsdom lacks these; ark-ui machines and the design-system table touch them.
+// Edge-runtime suites have no DOM, so there is nothing to fill in.
+if (typeof Element !== "undefined") {
+	if (!("ResizeObserver" in globalThis)) {
+		globalThis.ResizeObserver = class {
+			observe() {}
+			unobserve() {}
+			disconnect() {}
+		};
+	}
+	if (!Reflect.has(Element.prototype, "scrollTo")) {
+		Element.prototype.scrollTo = () => {};
+	}
+	if (!Reflect.has(Element.prototype, "hasPointerCapture")) {
+		Element.prototype.hasPointerCapture = () => false;
+	}
+}
+
 // See packages/design-system/vitest.setup.ts: design-system tables and sheets
 // defer their bodies by one paint; tests assert synchronously.
 //

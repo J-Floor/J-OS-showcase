@@ -9,11 +9,7 @@ import { ICONS } from "../../../shared/icons.ts";
 import { InlineError } from "../../../shared/InlineError.tsx";
 import { createItemColumns } from "../columns/itemColumns.tsx";
 import type { Item } from "../data/inventoryData.ts";
-import {
-	useItemActions,
-	useItemTypes,
-	useItems,
-} from "../data/inventoryData.ts";
+import { useItemActions, useItems } from "../data/inventoryData.ts";
 import { printInventoryList } from "../print/printInventoryList.ts";
 import { ItemSheet } from "../sheets/ItemSheet.tsx";
 
@@ -98,7 +94,6 @@ export function ItemsTab(props: {
 	newItemAssetTag?: () => string | undefined;
 }): JSX.Element {
 	const items = useItems();
-	const types = useItemTypes();
 	const columns = createItemColumns(() => items.data() ?? []);
 
 	return (
@@ -116,8 +111,6 @@ export function ItemsTab(props: {
 						prebuild={sheet.prebuild()}
 						onOpenChange={sheet.onOpenChange}
 						item={sheet.row()}
-						itemTypes={types.data() ?? []}
-						items={items.data() ?? []}
 						initialAssetTag={sheet.initialAssetTag()}
 						loading={props.selection.loading()}
 						nav={sheet.nav}

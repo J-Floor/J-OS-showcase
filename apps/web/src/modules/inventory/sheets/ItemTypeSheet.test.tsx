@@ -28,6 +28,15 @@ afterEach(() => {
 });
 
 vi.mock("../data/inventoryData.ts", () => ({
+	useCategories: () => ({
+		data: () => [
+			{
+				_id: "itemCategories:furniture",
+				_creationTime: 0,
+				name: "Furniture",
+			},
+		],
+	}),
 	useItemTypeActions: () => ({
 		create: mockCreate,
 		update: mockUpdate,
@@ -45,14 +54,6 @@ vi.mock("../data/inventoryData.ts", () => ({
 	},
 }));
 
-if (!("ResizeObserver" in globalThis)) {
-	globalThis.ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-
 import type { Id } from "../../../../convex/_generated/dataModel";
 import {
 	sheetKeys,
@@ -60,17 +61,11 @@ import {
 	tableRowKeys,
 } from "../../../../test-stubs/morphKeys.tsx";
 import { itemTypeColumns } from "../columns/itemTypeColumns.tsx";
-import type { Category, ItemType } from "../data/inventoryData.ts";
+import type { ItemType } from "../data/inventoryData.ts";
 
 import { ItemTypeSheet } from "./ItemTypeSheet.tsx";
 
 const CATEGORY_ID = "itemCategories:furniture" as Id<"itemCategories">;
-
-const furniture: Category = {
-	_id: CATEGORY_ID,
-	_creationTime: 0,
-	name: "Furniture",
-};
 
 const chairType: ItemType = {
 	_id: "itemTypes:chair" as ItemType["_id"],
@@ -82,9 +77,7 @@ const chairType: ItemType = {
 };
 
 test("new item type: Create is disabled until a name and category are set", () => {
-	render(() => (
-		<ItemTypeSheet open onOpenChange={() => {}} categories={[furniture]} />
-	));
+	render(() => <ItemTypeSheet open onOpenChange={() => {}} />);
 	expect(screen.getByText("New item type")).toBeInTheDocument();
 	expect(
 		screen.getByRole("button", { name: /Create item type/ })
@@ -93,12 +86,7 @@ test("new item type: Create is disabled until a name and category are set", () =
 
 test("editing an existing item type shows its fields and no create button", () => {
 	render(() => (
-		<ItemTypeSheet
-			open
-			onOpenChange={() => {}}
-			itemType={chairType}
-			categories={[furniture]}
-		/>
+		<ItemTypeSheet open onOpenChange={() => {}} itemType={chairType} />
 	));
 	expect(screen.getByRole("heading", { name: "Chair" })).toBeInTheDocument();
 	expect(screen.getByLabelText("Name")).toHaveValue("Chair");
@@ -110,12 +98,7 @@ test("editing an existing item type shows its fields and no create button", () =
 
 test("blurring the name field autosaves that field only", () => {
 	render(() => (
-		<ItemTypeSheet
-			open
-			onOpenChange={() => {}}
-			itemType={chairType}
-			categories={[furniture]}
-		/>
+		<ItemTypeSheet open onOpenChange={() => {}} itemType={chairType} />
 	));
 	const name = screen.getByLabelText("Name");
 	fireEvent.input(name, { target: { value: "Armchair" } });
@@ -130,12 +113,7 @@ test("blurring the name field autosaves that field only", () => {
 
 test("edit mode: the items accordion lists the type's items by asset tag", () => {
 	render(() => (
-		<ItemTypeSheet
-			open
-			onOpenChange={() => {}}
-			itemType={chairType}
-			categories={[furniture]}
-		/>
+		<ItemTypeSheet open onOpenChange={() => {}} itemType={chairType} />
 	));
 	expect(mockUseItemsByType).toHaveBeenCalledWith(chairType._id);
 	expect(screen.getByText("Items (2)")).toBeInTheDocument();
@@ -144,9 +122,7 @@ test("edit mode: the items accordion lists the type's items by asset tag", () =>
 });
 
 test("create mode: no items sublist is rendered and no type id is requested", () => {
-	render(() => (
-		<ItemTypeSheet open onOpenChange={() => {}} categories={[furniture]} />
-	));
+	render(() => <ItemTypeSheet open onOpenChange={() => {}} />);
 	expect(mockUseItemsByType).toHaveBeenCalledWith(undefined);
 	expect(screen.queryByText(/^Items \(/)).not.toBeInTheDocument();
 	expect(screen.queryByText("A00001")).not.toBeInTheDocument();
@@ -155,14 +131,7 @@ test("create mode: no items sublist is rendered and no type id is requested", ()
 // --- tri-state: create / loading / loaded --------------------------------
 
 test("loading: shows a skeleton, not the create form or the 'New item type' title", () => {
-	render(() => (
-		<ItemTypeSheet
-			open
-			onOpenChange={() => {}}
-			categories={[furniture]}
-			loading
-		/>
-	));
+	render(() => <ItemTypeSheet open onOpenChange={() => {}} loading />);
 	expect(screen.queryByText("New item type")).toBeNull();
 	expect(screen.queryByLabelText("Name")).toBeNull();
 	expect(
@@ -178,7 +147,6 @@ test("loading with an item type also set (stale-during-refetch) still shows the 
 			open
 			onOpenChange={() => {}}
 			itemType={chairType}
-			categories={[furniture]}
 			loading
 		/>
 	));
@@ -187,9 +155,7 @@ test("loading with an item type also set (stale-during-refetch) still shows the 
 });
 
 test("no item type, not loading: shows the create form and 'New item type' title", () => {
-	render(() => (
-		<ItemTypeSheet open onOpenChange={() => {}} categories={[furniture]} />
-	));
+	render(() => <ItemTypeSheet open onOpenChange={() => {}} />);
 	expect(screen.getByText("New item type")).toBeInTheDocument();
 	expect(screen.getByLabelText("Name")).toBeInTheDocument();
 	expect(
@@ -206,7 +172,6 @@ test("items still loading: skeleton list and count skeleton, no '(0)' or empty c
 				...chairType,
 				_id: "itemTypes:pending" as ItemType["_id"],
 			}}
-			categories={[furniture]}
 		/>
 	));
 	expect(document.querySelector("[data-skeleton-list]")).toBeInTheDocument();
@@ -223,7 +188,6 @@ test("items loaded empty: shows (0) and the empty copy", () => {
 				...chairType,
 				_id: "itemTypes:empty" as ItemType["_id"],
 			}}
-			categories={[furniture]}
 		/>
 	));
 	expect(screen.getByText("Items (0)")).toBeInTheDocument();
@@ -237,12 +201,7 @@ test("morph: the item type's columns pair with the sheet values showing the same
 	expect(row.cells).toEqual(["categoryName", "description"]);
 
 	render(() => (
-		<ItemTypeSheet
-			open
-			onOpenChange={() => {}}
-			itemType={chairType}
-			categories={[furniture]}
-		/>
+		<ItemTypeSheet open onOpenChange={() => {}} itemType={chairType} />
 	));
 	// The name column is the row's title: it flies into the sheet title.
 	expect(sheetKeys()).toEqual(["categoryName", "description"]);
@@ -250,19 +209,12 @@ test("morph: the item type's columns pair with the sheet values showing the same
 
 test("the header names the item type in edit mode and says 'New item type' in create mode", () => {
 	render(() => (
-		<ItemTypeSheet
-			open
-			onOpenChange={() => {}}
-			itemType={chairType}
-			categories={[furniture]}
-		/>
+		<ItemTypeSheet open onOpenChange={() => {}} itemType={chairType} />
 	));
 	expect(screen.getByRole("heading", { name: "Chair" })).toBeInTheDocument();
 	cleanup();
 
-	render(() => (
-		<ItemTypeSheet open onOpenChange={() => {}} categories={[furniture]} />
-	));
+	render(() => <ItemTypeSheet open onOpenChange={() => {}} />);
 	expect(
 		screen.getByRole("heading", { name: "New item type" })
 	).toBeInTheDocument();

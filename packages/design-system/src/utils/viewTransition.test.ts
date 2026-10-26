@@ -12,10 +12,14 @@ import {
 import {
 	PART_CLASS,
 	SETTLE_CAP_MS,
+	TABLE_GROUP_CLASS,
+	TABLE_ROW_CLASS,
 	type TransitionScope,
 	afterTransition,
 	isTransitionRunning,
 	partName,
+	tableGroupName,
+	tableRowName,
 	viewTransition,
 } from "./viewTransition.ts";
 
@@ -155,6 +159,38 @@ test("a key that is not a CSS ident is escaped, and distinct keys keep distinct 
 	expect(partName("a.b")).toBe(String.raw`jf-morph-part-a\.b`);
 	expect(new Set(names).size).toBe(keys.length);
 	expect(keys.map((key) => partName(key))).toEqual(names);
+});
+
+test("a table row and a group header carry the row family's classes, and keep apart", async () => {
+	const { finishAll } = fakeTransitions();
+	const row = document.createElement("tr");
+	const header = document.createElement("tr");
+	const done = viewTransition(() => {}, {
+		names: [
+			[row, tableRowName("a")],
+			[header, tableGroupName("a")],
+		],
+	});
+	expect(row.style.getPropertyValue("view-transition-name")).toBe(
+		"jf-table-row-a"
+	);
+	expect(row.style.getPropertyValue("view-transition-class")).toBe(
+		TABLE_ROW_CLASS
+	);
+	expect(header.style.getPropertyValue("view-transition-name")).toBe(
+		"jf-table-group-a"
+	);
+	expect(header.style.getPropertyValue("view-transition-class")).toBe(
+		`${TABLE_ROW_CLASS} ${TABLE_GROUP_CLASS}`
+	);
+	expect(tableRowName("a b")).toBe(String.raw`jf-table-row-a\ b`);
+	await vi.waitFor(() => {
+		finishAll();
+		expect(document.documentElement.dataset.vt).toBeUndefined();
+	});
+	await done;
+	expect(row.style.getPropertyValue("view-transition-class")).toBe("");
+	expect(header.style.getPropertyValue("view-transition-class")).toBe("");
 });
 
 test("a call during a running update joins it instead of starting another", async () => {

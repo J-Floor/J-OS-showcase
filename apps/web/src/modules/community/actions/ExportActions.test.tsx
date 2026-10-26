@@ -48,21 +48,6 @@ vi.mock("../data/communityData.tsx", () => ({
 	useGuests: () => ({ data: () => guestRows }),
 }));
 
-// jsdom gaps that ark-ui / the design-system Dialog touch at mount.
-if (!(Element.prototype as { scrollTo?: unknown }).scrollTo) {
-	Element.prototype.scrollTo = () => {};
-}
-if (!(Element.prototype as { hasPointerCapture?: unknown }).hasPointerCapture) {
-	Element.prototype.hasPointerCapture = () => false;
-}
-if (!("ResizeObserver" in globalThis)) {
-	(globalThis as Record<string, unknown>).ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-
 let blobs: Blob[] = [];
 let clickSpy: ReturnType<typeof vi.spyOn>;
 let downloadNames: string[] = [];

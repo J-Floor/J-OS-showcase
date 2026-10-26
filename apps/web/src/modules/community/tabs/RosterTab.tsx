@@ -1,50 +1,30 @@
 import {
-	Sheet,
-	SheetNav,
 	type JfColumnDefinition,
-	morphPart,
 	Table,
 	type TableRootProps,
 } from "@j-os/design-system";
-import {
-	type Accessor,
-	type JSX,
-	Show,
-	createContext,
-	createEffect,
-	createSignal,
-	on,
-} from "solid-js";
+import { type JSX, Show, createContext, createSignal } from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { PersonRow } from "../../../../convex/people.ts";
-import {
-	createSheetNav,
-	type SheetNavState,
-} from "../../../lib/createSheetNav.ts";
-import {
-	createPartSlot,
-	useRequiredContext,
-	type PartSlot,
-} from "../../../shared/compound.ts";
+import { createSheetNav } from "../../../lib/createSheetNav.ts";
+import { useRequiredContext } from "../../../shared/compound.ts";
 import { useRowPrefetch } from "../../../shared/entity/useRowPrefetch.ts";
 import type { Identified } from "../../../shared/types.ts";
 import { createActionKeys } from "../actions/createActionKeys.ts";
 import {
 	RosterActionError,
-	setShownPerson,
 	settleRosterAction,
 } from "../actions/RosterActionError.tsx";
 import type { ActionDescriptor, ShortcutScope } from "../actions/shortcuts.ts";
 import type { TriageResult } from "../actions/triage.ts";
 import { personEntity } from "../entity.ts";
-import { personFields } from "../fields.ts";
-import { DecisionBar } from "../sheets/DecisionBar.tsx";
-import { EditToggle } from "../sheets/EditToggle.tsx";
-import { PersonDetail } from "../sheets/PersonDetail.tsx";
-import { PersonDetailPlaceholder } from "../sheets/PersonDetailPlaceholder.tsx";
 
-import styles from "./RosterTab.module.scss";
+import {
+	RosterSheet,
+	useSheetEditing,
+	type FooterLead,
+} from "./RosterSheet.tsx";
 import type { TabProps } from "./TabProps.ts";
 
 /** Run each row through a per-row mutation (Convex mutations are individually
@@ -56,15 +36,9 @@ export type RunBatch = (
 	clearSelection: () => void
 ) => Promise<void>;
 
-/** What goes in the sheet's footer above the decision buttons, given the
- *  person the sheet shows. */
-type FooterLead = (person: Accessor<PersonRow>) => JSX.Element;
-
-/** What {@link RosterTab.Root}'s parts and the tab's own selection-bar
- *  children read from the roster they sit in. */
+/** What the tab's own selection-bar children read from the roster they sit in. */
 type Roster = {
 	runBatch: RunBatch;
-	footerLead: PartSlot<FooterLead>;
 };
 
 const RosterContext = createContext<Roster>();
@@ -77,23 +51,6 @@ function useRoster(part: string): Roster {
  *  buttons a tab puts in its `Table.BatchActions`. */
 export function useRosterBatch(): RunBatch {
 	return useRoster("useRosterBatch").runBatch;
-}
-
-/**
- * Rendered in the sheet footer ABOVE the decision buttons — Applications puts
- * a score field here so the board can score without leaving the sheet. A child
- * of {@link RosterTab.Root}; it renders nothing where it is placed.
- *
- * Handed an accessor for the open person, not the row: the sheet pages from
- * person to person while it is open, and a roster refetch hands new row
- * objects for the same people, so the lead updates in place instead of
- * remounting (which would cancel a morph in flight).
- */
-function RosterFooterLead(props: { children: FooterLead }): JSX.Element {
-	const roster = useRoster("RosterTab.FooterLead");
-	// eslint-disable-next-line solid/reactivity -- `fill` reads the accessor in a render effect
-	roster.footerLead.fill(() => props.children);
-	return null;
 }
 
 /**
@@ -137,105 +94,6 @@ function useRosterSelection<Row extends PersonRow>(
 	return { selection, selected, open };
 }
 
-/** The sheet's title: the person's full name, each half its own field so
- *  the row's name cells fly into it (and back) on their own. */
-function PersonTitle(props: {
-	isLoading: boolean;
-	person: PersonRow | undefined;
-}): JSX.Element {
-	return (
-		<Sheet.Title loading={props.isLoading}>
-			<span {...morphPart(personFields.firstName)}>
-				{props.person?.firstName}
-			</span>{" "}
-			<span {...morphPart(personFields.lastName)}>
-				{props.person?.lastName}
-			</span>
-		</Sheet.Title>
-	);
-}
-
-function RosterSheet<Row extends PersonRow>(props: {
-	isOpen: boolean;
-	/** Build the sheet ahead of its first open (a row's hover intent). */
-	prebuild: boolean;
-	isLoading: boolean;
-	selected: Row | undefined;
-	isEditing: boolean;
-	onToggleEditing: () => void;
-	nav: SheetNavState;
-	onClose: () => void;
-	actions: ActionDescriptor<Row>[];
-	scope: ShortcutScope;
-}): JSX.Element {
-	const roster = useRoster("RosterSheet");
-	return (
-		<Sheet.Root
-			open={props.isOpen}
-			prebuild={props.prebuild}
-			morphId={props.selected?._id}
-			onOpenChange={(isOpen) => {
-				if (!isOpen) props.onClose();
-			}}
-		>
-			<Sheet.Header>
-				<PersonTitle
-					isLoading={props.isLoading}
-					person={props.selected}
-				/>
-				<Sheet.HeaderActions>
-					<Sheet.SaveStatus />
-					<EditToggle
-						editing={props.isEditing}
-						enabled={props.isOpen}
-						onToggle={props.onToggleEditing}
-					/>
-					<SheetNav
-						onPrev={props.nav.onPrev}
-						onNext={props.nav.onNext}
-						hasPrev={props.nav.hasPrev()}
-						hasNext={props.nav.hasNext()}
-					/>
-					<Sheet.Close />
-				</Sheet.HeaderActions>
-			</Sheet.Header>
-			<Sheet.Skeleton>
-				<PersonDetailPlaceholder />
-			</Sheet.Skeleton>
-			<Sheet.Body loading={props.isLoading}>
-				<Show when={props.selected}>
-					{(person) => (
-						<PersonDetail
-							person={person()}
-							editing={props.isEditing}
-							isOpen={() => props.isOpen}
-						/>
-					)}
-				</Show>
-			</Sheet.Body>
-			<Show when={props.selected}>
-				{(person) => (
-					<Sheet.Footer>
-						<div class={styles.footer}>
-							{roster.footerLead.value()?.(person)}
-							<RosterActionError
-								scope={props.scope}
-								personId={person()._id}
-							/>
-							<div class={styles.footerActions}>
-								<DecisionBar
-									person={person()}
-									actions={props.actions}
-								/>
-							</div>
-						</div>
-					</Sheet.Footer>
-				)}
-			</Show>
-		</Sheet.Root>
-	);
-}
-
 function batchRunner(scope: ShortcutScope): RunBatch {
 	return async function runBatch(rows, action, clearSelection) {
 		for (const row of rows) {
@@ -248,28 +106,6 @@ function batchRunner(scope: ShortcutScope): RunBatch {
 		}
 		clearSelection();
 	};
-}
-
-/** Edit mode for the sheet: flips the profile fields to inputs. Reset
- *  whenever a different person is opened or the sheet closes. */
-function useSheetEditing(
-	isOpen: () => boolean,
-	selection: TabProps["selection"],
-	scope: ShortcutScope
-) {
-	const [editing, setEditing] = createSignal(false);
-	createEffect(
-		on(
-			() => (isOpen() ? selection.requestedId() : undefined),
-			(personId) => {
-				setEditing(false);
-				// A failure belongs to the person the sheet showed: paging on or
-				// closing drops it.
-				setShownPerson(scope, personId);
-			}
-		)
-	);
-	return [editing, setEditing] as const;
 }
 
 /** What the roster knows about its sheet and its checked rows. */
@@ -358,8 +194,11 @@ type RosterTabProps<Row extends PersonRow> = {
 	actions: () => ActionDescriptor<Row>[];
 	/** The tab's own scope: where its failed actions are kept and shown. */
 	scope: ShortcutScope;
+	/** Rendered in the sheet footer above the decision buttons (Applications'
+	 *  score field). */
+	footerLead?: FooterLead;
 	/** Parts: the tab's `Table.BatchActions` (its buttons read
-	 *  {@link useRosterBatch}) and a {@link RosterTab.FooterLead}. */
+	 *  {@link useRosterBatch}). */
 	children?: JSX.Element;
 	/**
 	 * Lets a tab bind extra document-level keys that act on the *focused* row
@@ -418,8 +257,8 @@ function useRosterFocus<Row extends PersonRow>(
 /**
  * The scaffold every community roster tab shares: a grouped, virtualised,
  * selectable {@link Table} with keyboard row-focus, a selection bar, and a detail
- * {@link Sheet} (edit toggle + prev/next nav in the header, a {@link DecisionBar}
- * of the tab's actions in the footer, {@link PersonDetail} in the body).
+ * sheet (edit toggle + prev/next nav in the header, a decision bar
+ * of the tab's actions in the footer, `PersonDetail` in the body).
  *
  * The three tabs differ only in their data, columns, grouping, sort, action
  * descriptors and selection-bar contents — everything else (the sheet, the
@@ -429,11 +268,11 @@ function useRosterFocus<Row extends PersonRow>(
  * What stays with each tab is what is genuinely its own: which query feeds it,
  * its columns, its `useXActions` descriptors (with their tab-specific callbacks),
  * and the parts it passes as children: its `Table.BatchActions` and, if it has
- * one, a {@link RosterTab.FooterLead}. Any other chrome a tab needs (a provider,
+ * one, a `footerLead`. Any other chrome a tab needs (a provider,
  * a dialog) goes around or beside the `RosterTab.Root`.
  *
  * Every roster row is a {@link PersonRow}: a person carrying its derived
- * status, enough for the sheet's {@link PersonDetail}, the id lookups here
+ * status, enough for the sheet's `PersonDetail`, the id lookups here
  * and the person descriptor's prefetch.
  */
 function RosterTabRoot<Row extends PersonRow>(
@@ -445,9 +284,8 @@ function RosterTabRoot<Row extends PersonRow>(
 	);
 	const [editing, setEditing] = useSheetEditing(
 		open,
-		selection,
-		// eslint-disable-next-line solid/reactivity -- the scope is a constant of the tab, read once
-		props.scope
+		() => selection.requestedId(),
+		() => props.scope
 	);
 	const [checked, setChecked] = createSignal<Row[]>([]);
 	const { onFocusedRowChange, onHoverIntent, setFocusApi } = useRosterFocus(
@@ -458,14 +296,11 @@ function RosterTabRoot<Row extends PersonRow>(
 		selection.openRow(row);
 	});
 
-	const footerLead = createPartSlot<FooterLead>();
-
 	return (
 		<RosterContext.Provider
 			value={{
 				// eslint-disable-next-line solid/reactivity -- the scope is a constant of the tab, read once
 				runBatch: batchRunner(props.scope),
-				footerLead,
 			}}
 		>
 			<Show when={!open()}>
@@ -517,6 +352,7 @@ function RosterTabRoot<Row extends PersonRow>(
 				onClose={selection.close}
 				actions={props.actions()}
 				scope={props.scope}
+				footerLead={props.footerLead}
 			/>
 		</RosterContext.Provider>
 	);
@@ -524,5 +360,4 @@ function RosterTabRoot<Row extends PersonRow>(
 
 export const RosterTab = {
 	Root: RosterTabRoot,
-	FooterLead: RosterFooterLead,
 };

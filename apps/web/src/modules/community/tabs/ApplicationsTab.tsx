@@ -5,7 +5,7 @@ import {
 	type Hotkey,
 } from "@tanstack/solid-hotkeys";
 import { useMutation } from "convex-solidjs";
-import { type JSX, Show } from "solid-js";
+import { type Accessor, type JSX, Show } from "solid-js";
 
 import { api } from "../../../../convex/_generated/api";
 import { legalEvents } from "../../../../convex/lib/lifecycle.ts";
@@ -57,16 +57,16 @@ const DIGIT_KEYS = [
  * `Denied` — with batch triage (deny / make guest / make member / undo).
  *
  * The roster + sheet scaffold is {@link RosterTab}; this file owns what is
- * application-specific: the make-guest expiry dialog provider, the "current
- * person" context its cells read, the decision descriptors, and the selection
- * bar. The `GuestExpiryProvider` wraps the whole tab so the row cells and the
- * selection bar can both open the expiry dialog.
+ * application-specific: the decision descriptors, the selection bar and the
+ * row keys. The {@link ApplicationsSheetProvider} (the make-guest expiry
+ * dialog and the "current person" the score cells read) wraps the whole tab so
+ * the row cells and the selection bar can both open the expiry dialog.
  */
 export function ApplicationsTab(props: TabProps): JSX.Element {
 	return (
-		<GuestExpiryProvider>
+		<ApplicationsSheetProvider>
 			<ApplicationsRoster {...props} />
-		</GuestExpiryProvider>
+		</ApplicationsSheetProvider>
 	);
 }
 
@@ -253,41 +253,75 @@ function useApplicationRowKeys(
 	);
 }
 
-function ApplicationsRoster(props: TabProps): JSX.Element {
-	const applications = useApplications();
+/** The sheet's score field reads who is signed in; the tab's score cells
+ *  read the same. */
+function CurrentPersonProvider(props: { children: JSX.Element }): JSX.Element {
 	const currentPerson = useQuery(api.people.getCurrentPerson, {});
-	const setScore = useMutation(api.applications.setScore);
-	// Read only for its `.actions()` descriptors — the selection bar goes
-	// through `triage`/`confirm`/`requestGuestExpiry` directly.
-	const decisions = useApplicationDecisions();
-
 	return (
 		<CurrentPersonContext.Provider value={currentPerson.data}>
-			<RosterTab.Root<PersonRow>
-				tab={props}
-				scope="applications"
-				data={() => applications.data()}
-				columns={() => applicationColumns()}
-				groupBy="triageGroup"
-				// Score first, date as the tie-break: the scored "Queue" group
-				// orders by score descending, while every row in "To score" scores
-				// equal (unscored reads as 0) and falls through to newest first.
-				initialColumnSorting={[
-					{ id: "score", desc: true },
-					{ id: "createdAt", desc: true },
-				]}
-				actions={decisions.actions}
-				focusedRowKeys={(focused) => {
-					useApplicationRowKeys(focused, setScore);
-				}}
-			>
-				<RosterTab.FooterLead>
-					{(person) => <ScoreField person={person()} />}
-				</RosterTab.FooterLead>
-				<Table.BatchActions>
-					<ApplicationBatchActions />
-				</Table.BatchActions>
-			</RosterTab.Root>
+			{props.children}
 		</CurrentPersonContext.Provider>
+	);
+}
+
+/** Everything the Applications sheet needs around it: the make-guest expiry
+ *  dialog and the signed-in person. The tab and the peek both sit inside it. */
+export function ApplicationsSheetProvider(props: {
+	children: JSX.Element;
+}): JSX.Element {
+	return (
+		<GuestExpiryProvider>
+			<CurrentPersonProvider>{props.children}</CurrentPersonProvider>
+		</GuestExpiryProvider>
+	);
+}
+
+/**
+ * The Applications sheet's own setup, shared by the tab and the peek: the
+ * decision descriptors (footer buttons and action keys), the score field
+ * above them and the digit keys that score the person the sheet shows. Call
+ * it inside an {@link ApplicationsSheetProvider}.
+ */
+export function useApplicationsSheet() {
+	const setScore = useMutation(api.applications.setScore);
+	const decisions = useApplicationDecisions();
+	return {
+		scope: "applications",
+		actions: decisions.actions,
+		footerLead: (person: Accessor<PersonRow>) => (
+			<ScoreField person={person()} />
+		),
+		focusedRowKeys: (focused: () => PersonRow | undefined) => {
+			useApplicationRowKeys(focused, setScore);
+		},
+	} as const;
+}
+
+function ApplicationsRoster(props: TabProps): JSX.Element {
+	const applications = useApplications();
+	const sheet = useApplicationsSheet();
+
+	return (
+		<RosterTab.Root<PersonRow>
+			tab={props}
+			scope={sheet.scope}
+			data={() => applications.data()}
+			columns={() => applicationColumns()}
+			groupBy="triageGroup"
+			// Score first, date as the tie-break: the scored "Queue" group
+			// orders by score descending, while every row in "To score" scores
+			// equal (unscored reads as 0) and falls through to newest first.
+			initialColumnSorting={[
+				{ id: "score", desc: true },
+				{ id: "createdAt", desc: true },
+			]}
+			actions={sheet.actions}
+			footerLead={sheet.footerLead}
+			focusedRowKeys={sheet.focusedRowKeys}
+		>
+			<Table.BatchActions>
+				<ApplicationBatchActions />
+			</Table.BatchActions>
+		</RosterTab.Root>
 	);
 }

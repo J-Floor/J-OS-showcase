@@ -52,10 +52,42 @@ export function stackedName(index: number): StackedName {
 	return `${STACKED_PREFIX}${index}`;
 }
 
+const TABLE_ROW_PREFIX = "jf-table-row-";
+const TABLE_GROUP_PREFIX = "jf-table-group-";
+
+/**
+ * The class of every table row and group header on screen while a group
+ * collapses or expands (Table/groupMotion.ts): a row on both sides glides,
+ * one on one side only slides under its header or out from it.
+ */
+export const TABLE_ROW_CLASS = "jf-table-row";
+
+/** The class a group header carries besides {@link TABLE_ROW_CLASS}: its
+ *  rows slide under it, so it stacks above them. */
+export const TABLE_GROUP_CLASS = "jf-table-group";
+
+/** A table row's name for a group's motion: `jf-table-row-` and its id. */
+export type TableRowName = `${typeof TABLE_ROW_PREFIX}${string}`;
+
+/** A group header's name: `jf-table-group-` and its group's key. */
+export type TableGroupName = `${typeof TABLE_GROUP_PREFIX}${string}`;
+
+/** The name of the row with id `id`, escaped into a valid CSS ident. */
+export function tableRowName(id: string): TableRowName {
+	return `${TABLE_ROW_PREFIX}${CSS.escape(id)}`;
+}
+
+/** The name of the header of the group keyed `key`, escaped likewise. */
+export function tableGroupName(key: string): TableGroupName {
+	return `${TABLE_GROUP_PREFIX}${CSS.escape(key)}`;
+}
+
 /** The class each family of numbered names carries. */
 const NAME_CLASSES: readonly (readonly [prefix: string, cls: string])[] = [
 	[PART_PREFIX, PART_CLASS],
 	[STACKED_PREFIX, STACKED_CLASS],
+	[TABLE_ROW_PREFIX, TABLE_ROW_CLASS],
+	[TABLE_GROUP_PREFIX, `${TABLE_ROW_CLASS} ${TABLE_GROUP_CLASS}`],
 ];
 
 /**
@@ -73,6 +105,8 @@ export type TransitionName =
 	| "jf-morph-title"
 	| PartName
 	| StackedName
+	| TableRowName
+	| TableGroupName
 	| "jf-sheet-body"
 	| "jf-brand-backdrop"
 	| "jf-brand-frame"
@@ -92,6 +126,8 @@ export type TransitionKind =
 	| "sheet-prev"
 	| "brand"
 	| "brand-reveal"
+	| "table-collapse"
+	| "table-expand"
 	| AppTransitionName;
 
 export type TransitionScope = {
@@ -150,6 +186,8 @@ const OPPOSITE_KIND: Partial<Record<TransitionKind, TransitionKind>> = {
 	"tab-back": "tab-forward",
 	"sheet-next": "sheet-prev",
 	"sheet-prev": "sheet-next",
+	"table-collapse": "table-expand",
+	"table-expand": "table-collapse",
 };
 
 /** Without a transition: names and kinds do nothing. Fresh per call, so

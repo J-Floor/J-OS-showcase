@@ -5,7 +5,9 @@
    `jf-brand-frame`, `jf-brand-mark`), but for the value flights,
    `jf-morph-part-<key>`, all of class `jf-morph-part`, and the overlays
    under a morphing one, `jf-morph-stacked-<n>`, all of class
-   `jf-morph-stacked`. `data-vt` on <html>
+   `jf-morph-stacked`, and a table group's rows and headers,
+   `jf-table-row-<id>` and `jf-table-group-<key>`, all of class
+   `jf-table-row`. `data-vt` on <html>
    is a space-separated list of kinds for the running transition. An app's
    own names and kinds start with `app-` and live in its own stylesheet
    (viewTransition.ts). */
@@ -425,6 +427,44 @@ $box-slots: 8;
 /* Sheet prev/next. */
 @include slide(sheet-next, jf-sheet-body, up, below);
 @include slide(sheet-prev, jf-sheet-body, down, above);
+
+/* A table group's collapse or expand (Table/groupMotion.ts): each row and
+   group header on screen is `jf-table-row-<id>` or `jf-table-group-<key>`,
+   all of class `jf-table-row`, headers also `jf-table-group`. A row on both
+   sides glides with the browser's geometry. A collapsing group's rows (old
+   side only) slide up under their header as they fade; an expanding
+   group's (new side only) slide down out from under it. A row only one
+   side has in the other direction (scrolled into or out of view) just
+   fades. Headers stack above rows, so the rows slide beneath them. */
+::view-transition-group(*.jf-table-row) {
+	animation-duration: var(--jf-animation-duration-default);
+	animation-timing-function: var(--jf-animation-ease-standard);
+}
+
+::view-transition-group(*.jf-table-group) {
+	z-index: 1;
+}
+
+/* A snapshot ignores the table's sideways scroll: cut it to the visible
+   width (groupMotion.ts sets the inset). */
+::view-transition-old(*.jf-table-row),
+::view-transition-new(*.jf-table-row) {
+	clip-path: var(--jf-table-row-clip);
+	animation-duration: var(--jf-animation-duration-default);
+	animation-timing-function: var(--jf-animation-ease-standard);
+}
+
+:root[data-vt~="table-collapse"]::view-transition-old(
+		*.jf-table-row
+	):only-child {
+	animation: jf-vt-out-up var(--jf-animation-duration-default)
+		var(--jf-animation-ease-standard) both;
+}
+
+:root[data-vt~="table-expand"]::view-transition-new(*.jf-table-row):only-child {
+	animation: jf-vt-in-above var(--jf-animation-duration-default)
+		var(--jf-animation-ease-standard) both;
+}
 
 @media (prefers-reduced-motion: reduce) {
 	::view-transition-group(*),

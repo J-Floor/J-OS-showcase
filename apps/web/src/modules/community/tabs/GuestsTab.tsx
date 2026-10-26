@@ -59,6 +59,12 @@ function GuestBatchActions(): JSX.Element {
 	);
 }
 
+/** The Guests sheet's own setup, shared by the tab and the peek: the action
+ *  descriptors behind the footer buttons and the action keys. */
+export function useGuestsSheet() {
+	return { scope: "guests", actions: useGuestActions().actions } as const;
+}
+
 /**
  * Guests tab: guest people in a selectable roster, with batch triage (kick out /
  * upgrade to member) over the checked rows. The roster + sheet scaffold is
@@ -68,7 +74,7 @@ function GuestBatchActions(): JSX.Element {
 export function GuestsTab(props: TabProps): JSX.Element {
 	const guests = useGuests();
 	const boardLevel = useBoardLevel();
-	const guestActions = useGuestActions();
+	const sheet = useGuestsSheet();
 	// "Hosted by" filters on an enum of the current board, so the options only
 	// exist once the board list has loaded. Memoised: rebuilding the columns on every
 	// render would remount every cell.
@@ -79,12 +85,12 @@ export function GuestsTab(props: TabProps): JSX.Element {
 	return (
 		<RosterTab.Root<PersonRow>
 			tab={props}
-			scope="guests"
+			scope={sheet.scope}
 			data={() => guests.data()}
 			columns={columns}
 			groupBy="guestStatus"
 			initialColumnSorting={[{ id: "joinedAt", desc: true }]}
-			actions={guestActions.actions}
+			actions={sheet.actions}
 		>
 			<Table.BatchActions>
 				<GuestBatchActions />

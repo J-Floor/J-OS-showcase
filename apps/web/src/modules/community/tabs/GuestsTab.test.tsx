@@ -18,21 +18,6 @@ import { DIALOG_CONTENT } from "../../../shared/dialogSelectors.ts";
 // between tests so nodes don't accumulate and slow later queries under load.
 afterEach(cleanup);
 
-// jsdom gaps that ark-ui's Checkbox (used by the Table selection column) touches.
-if (!(Element.prototype as { scrollTo?: unknown }).scrollTo) {
-	Element.prototype.scrollTo = () => {};
-}
-if (!(Element.prototype as { hasPointerCapture?: unknown }).hasPointerCapture) {
-	Element.prototype.hasPointerCapture = () => false;
-}
-if (!("ResizeObserver" in globalThis)) {
-	(globalThis as Record<string, unknown>).ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-
 // One shared timestamp for all three fixtures' `_creationTime` so they compare
 // EQUAL under the `joinedAt desc` sort — a stable sort then keeps the fixture's
 // own order (p1, p2, p3), which several tests rely on ("the ring starts on p1").

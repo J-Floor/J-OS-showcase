@@ -4,14 +4,6 @@ import { afterEach, expect, test, vi } from "vitest";
 
 afterEach(cleanup);
 
-if (!("ResizeObserver" in globalThis)) {
-	globalThis.ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-
 import type { Doc } from "../../../../../convex/_generated/dataModel";
 import { RULES_SEARCH_LABEL } from "../../../../shared/rules/rulesContent.ts";
 

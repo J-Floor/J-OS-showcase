@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { expect, test } from "vitest";
 
 import * as morphNames from "../utils/morphNames.ts";
+import { TABLE_GROUP_CLASS, TABLE_ROW_CLASS } from "../utils/viewTransition.ts";
 
 const SOURCE_ROOT = join(import.meta.dirname, "..");
 const STYLESHEET = /\.s?css$/;
@@ -13,11 +14,12 @@ const HOVER_MIXIN = "styles/_hover.scss";
 /** The stylesheet with every `::view-transition-*` rule. */
 const TRANSITIONS = "styles/viewTransition.scss";
 
-/** A morph attribute or a custom property the morph code writes. */
+/** A morph attribute or a custom property the morph code (or a table
+ *  group's motion) writes. */
 const MORPH_NAME =
-	/data-morph-[a-z-]*[a-z]|--jf-(?:morph|ghost)-[a-z0-9-]*[a-z]/g;
+	/data-morph-[a-z-]*[a-z]|--jf-(?:morph|ghost|table-row)-[a-z0-9-]*[a-z]/g;
 /** A custom property the stylesheet declares itself. */
-const DECLARED = /(--jf-(?:morph|ghost)-[a-z0-9-]*[a-z])\s*:/g;
+const DECLARED = /(--jf-(?:morph|ghost|table-row)-[a-z0-9-]*[a-z])\s*:/g;
 /** The pinned attribute with its value: the selector the mixin writes. A
  *  bare `[data-morph-pinned]` test is not one. */
 const PINNED_SELECTOR = /data-morph-pinned\s*=/;
@@ -86,4 +88,48 @@ test("the stylesheet has a box-flight slot for each one the morph code fills", (
 	const source = withoutComments(TRANSITIONS);
 	const slots = /\$box-slots:\s*(\d+);/.exec(source)?.[1];
 	expect(Number(slots)).toBe(morphNames.MORPH_BOX_SLOTS);
+});
+
+/** A rule's body, all whitespace dropped: what follows `selector` (written
+ *  without spaces) up to its closing brace. The formatter may break a long
+ *  selector inside its parentheses. */
+function ruleAfter(source: string, selector: string): string | undefined {
+	const flat = source.replaceAll(/\s/g, "");
+	const start = flat.indexOf(selector);
+	return start === -1
+		? undefined
+		: flat.slice(start, flat.indexOf("}", start));
+}
+
+const ROW = `*.${TABLE_ROW_CLASS}`;
+const DEFAULT_MOTION =
+	/--jf-animation-duration-default[\s\S]*--jf-animation-ease-standard/;
+
+test("the table-row family glides on the default duration and standard ease", () => {
+	const source = withoutComments(TRANSITIONS);
+	expect(ruleAfter(source, `::view-transition-group(${ROW})`)).toMatch(
+		DEFAULT_MOTION
+	);
+	expect(source).toContain(`::view-transition-group(*.${TABLE_GROUP_CLASS})`);
+});
+
+test.each([
+	["table-collapse", "old", "jf-vt-out-up"],
+	["table-expand", "new", "jf-vt-in-above"],
+] as const)(
+	"a %s slides the rows only its %s snapshot has, under their header",
+	(kind, image, keyframes) => {
+		const source = withoutComments(TRANSITIONS);
+		const rule = ruleAfter(
+			source,
+			`:root[data-vt~="${kind}"]::view-transition-${image}(${ROW}):only-child`
+		);
+		expect(rule).toContain(keyframes);
+		expect(rule).toMatch(DEFAULT_MOTION);
+	}
+);
+
+test("the table rows' snapshots are cut to the table's visible width", () => {
+	const source = withoutComments(TRANSITIONS);
+	expect(source).toContain(`clip-path: var(${morphNames.TABLE_ROW_CLIP_VAR}`);
 });

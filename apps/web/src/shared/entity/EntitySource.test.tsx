@@ -7,11 +7,17 @@ import { AbilityProvider, type Role } from "../../lib/ability.tsx";
 
 import { entityPath, type EntityDescriptor } from "./entityDescriptor.ts";
 import { EntitySource } from "./EntitySource.tsx";
+import { lazyPeek } from "./lazyPeek.tsx";
+import { pushedOpenState } from "./pushedOpen.ts";
 
 const navigate = vi.fn();
+const setParams = vi.fn();
+const location = { pathname: "/things" };
 
 vi.mock("@solidjs/router", () => ({
 	useNavigate: () => navigate,
+	useLocation: () => location,
+	useSearchParams: () => [{}, setParams],
 }));
 
 const prefetchModule = vi.fn();
@@ -26,6 +32,8 @@ vi.mock("../../modules/prefetchModule.ts", () => ({
 afterEach(() => {
 	cleanup();
 	navigate.mockClear();
+	setParams.mockClear();
+	location.pathname = "/things";
 });
 
 type Row = { _id: string; name: string };
@@ -123,4 +131,40 @@ test("onHighlight prefetches the descriptor's module and extras with the ability
 		s: string
 	) => boolean;
 	expect(canPerform("view", "Inventory")).toBe(true);
+});
+
+test("a pick on another page peeks the row over it", async () => {
+	location.pathname = "/events";
+	const emit = vi.fn();
+	renderSource("board", emit);
+	await waitFor(() => {
+		expect(emit).toHaveBeenCalled();
+	});
+	const items = emit.mock.calls.at(-1)?.[0] as CommandPaletteItem[];
+	items.find((item) => item.value === "thing:a1")?.onSelect();
+
+	expect(setParams).toHaveBeenCalledWith(
+		{ open: "thing:a1" },
+		{ state: pushedOpenState("open"), replace: false }
+	);
+	expect(navigate).not.toHaveBeenCalled();
+});
+
+test("onHighlight preloads the descriptor's peek", async () => {
+	const load = vi.fn(() => Promise.resolve(() => null));
+	const peek = lazyPeek(load);
+	const withPeek: EntityDescriptor<Row> = { ...descriptor, peek };
+	const emit = vi.fn();
+	render(() => (
+		<AbilityProvider role="board">
+			<EntitySource descriptor={withPeek} emit={emit} />
+		</AbilityProvider>
+	));
+	await waitFor(() => {
+		expect(emit).toHaveBeenCalled();
+	});
+	const items = emit.mock.calls.at(-1)?.[0] as CommandPaletteItem[];
+	items.find((item) => item.value === "thing:a1")?.onHighlight?.();
+
+	expect(load).toHaveBeenCalledTimes(1);
 });

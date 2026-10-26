@@ -161,7 +161,9 @@ function ItemContent(props: AccordionItemContentProps): JSX.Element {
 			{...rest}
 			class={clsx(styles.itemContent, local.class)}
 		>
-			{local.children}
+			{/* The padding sits inside the part that slides: on the sliding
+			    part itself it would stay when the slide reaches 0. */}
+			<div class={styles.itemBody}>{local.children}</div>
 		</ArkAccordion.ItemContent>
 	);
 }

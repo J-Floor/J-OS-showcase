@@ -1,11 +1,14 @@
-import { Sheet, SheetNav, IconButton } from "@j-os/design-system";
+import { Sheet, IconButton } from "@j-os/design-system";
 import { Show, type JSX } from "solid-js";
 
 import type { SheetNavState } from "../../lib/createSheetNav.ts";
 import { ICONS } from "../icons.ts";
 
-/** The title, the save status, prev/next, the caller's own actions (its
- *  `Delete`, an edit toggle) and close. */
+import { EntitySheetNav } from "./EntitySheetNav.tsx";
+
+/** The title, the save status, prev/next (or, in a peek, the link to the
+ *  entity's page), the caller's own actions (its `Delete`, an edit toggle)
+ *  and close. */
 function Root(props: {
 	title: string;
 	loading?: boolean;
@@ -22,16 +25,7 @@ function Root(props: {
 				<Show when={props.saveStatus}>
 					<Sheet.SaveStatus />
 				</Show>
-				<Show when={props.nav}>
-					{(nav) => (
-						<SheetNav
-							onPrev={nav().onPrev}
-							onNext={nav().onNext}
-							hasPrev={nav().hasPrev()}
-							hasNext={nav().hasNext()}
-						/>
-					)}
-				</Show>
+				<EntitySheetNav nav={props.nav} />
 				{props.children}
 				<Sheet.Close />
 			</Sheet.HeaderActions>

@@ -223,19 +223,22 @@ flowchart TD
 **Transition names** (one element each per transition; a duplicate makes the
 browser skip the whole transition, so `scope.name` refuses a second holder):
 
-| Name                                              | Carried by                                                                                                                                                                                                                   | Snapshot          |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
-| `jf-morph`                                        | Open: the ghost (old), the overlay content (new). Close: the content (old), a ghost over the target (new). Handoff: the closer's source (old), the claimant's content (new). Scale look: the field and the content directly. | both              |
-| `jf-morph-source`                                 | The trigger's painted box, fill and all, fading where it is. Open: old only. Close: new only.                                                                                                                                | one               |
-| `jf-morph-scrim`                                  | The overlay's backdrop. Open: new only. Close: old only. Handoff: the closer's (old), the claimant's (new).                                                                                                                  | one, or both      |
-| `jf-morph-title`                                  | The marked title of each end.                                                                                                                                                                                                | both, or old only |
-| `jf-morph-part-<key>` (class `jf-morph-part`)     | Each keyed value, paired across ends by exact key: the box it paints, if any, else the value itself. A box flight adds `jf-morph-box jf-morph-box-<slot>` on the new end.                                                    | both, or old only |
-| `jf-morph-stacked-<n>` (class `jf-morph-stacked`) | Each overlay shown under the one opening or closing (`data-morph-layer`), so it steps back or forward as its own group. None in a morph that joins a running transition.                                                     | both              |
+| Name                                                           | Carried by                                                                                                                                                                                                                   | Snapshot          |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| `jf-morph`                                                     | Open: the ghost (old), the overlay content (new). Close: the content (old), a ghost over the target (new). Handoff: the closer's source (old), the claimant's content (new). Scale look: the field and the content directly. | both              |
+| `jf-morph-source`                                              | The trigger's painted box, fill and all, fading where it is. Open: old only. Close: new only.                                                                                                                                | one               |
+| `jf-morph-scrim`                                               | The overlay's backdrop. Open: new only. Close: old only. Handoff: the closer's (old), the claimant's (new).                                                                                                                  | one, or both      |
+| `jf-morph-title`                                               | The marked title of each end.                                                                                                                                                                                                | both, or old only |
+| `jf-morph-part-<key>` (class `jf-morph-part`)                  | Each keyed value, paired across ends by exact key: the box it paints, if any, else the value itself. A box flight adds `jf-morph-box jf-morph-box-<slot>` on the new end.                                                    | both, or old only |
+| `jf-morph-stacked-<n>` (class `jf-morph-stacked`)              | Each overlay shown under the one opening or closing (`data-morph-layer`), so it steps back or forward as its own group. None in a morph that joins a running transition.                                                     | both              |
+| `jf-table-row-<id>` (class `jf-table-row`)                     | A table row on screen while a group collapses or expands (see _Table groups_).                                                                                                                                               | both, or one      |
+| `jf-table-group-<key>` (classes `jf-table-row jf-table-group`) | A group header on screen while a group collapses or expands.                                                                                                                                                                 | both              |
 
 **Kinds** (space-separated in `<html data-vt>`): `morph` always; `morph-box` or
 `morph-scale` (opposites, the latest wins); `morph-grow` (open with a surface),
 `morph-shrink` (close with a surface) or `morph-handoff` (a close handed to
-an overlay opening in the same transition, with a surface).
+an overlay opening in the same transition, with a surface). A table group's
+toggle is `table-collapse` or `table-expand` (opposites).
 
 **Page attributes** (all in `morphNames.ts`): `data-morph-ghost`,
 `data-morph-pinned` (value `held`; `MORPH_PINNED_SELECTOR` is
@@ -587,6 +590,14 @@ handoff. A handoff only happens when the second overlay opens inside the
 first one's update (within the 50 ms cap); a slower open scales in from the
 page centre.
 
+**Peeks.** In the web app, a palette pick or a notification click on an
+entity opens that entity's sheet over the current page (`PeekHost` in
+`apps/web/src/shared/entity/`). It is the same handoff: the palette or the
+notifications sheet closes, and the peek's sheet claims it. To open inside
+the cap, a peek's code is loaded ahead, on the palette row's highlight and
+the notification row's hover or focus; a peek whose code is not loaded yet
+scales in instead.
+
 ## Overlapping morphs
 
 A row clicked again while its sheet is still closing into it starts a morph
@@ -596,6 +607,47 @@ flight's slot vars, the root clip) is held by exactly one morph at a time
 (`Holds` in `morph.ts`); a new morph takes it, and the earlier morph's
 cleanup lets go only of what it still holds. Transition names follow the
 same rule in `viewTransition.ts` (`owner`).
+
+## Table groups
+
+Collapsing or expanding a table group is a View Transition through the
+coordinator too (`components/Table/groupMotion.ts`, called from the group
+header's toggle). It is not a morph, but follows the same rules.
+
+1. **Instant when it must be:** while another transition runs (a morph
+   still animating would be cut short), without the API, under reduced
+   motion, or with no row on screen, the group just toggles.
+2. **Old state:** every row (`data-morph-of`) and group header
+   (`data-group-key`) of that table's body whose whole height is on screen
+   and that nothing covers is named: `jf-table-row-<id>`, or
+   `jf-table-group-<key>` for a header. Covered is probed with
+   `elementFromPoint` at the row's visible corners and centre: a snapshot
+   paints above the whole page, so a row under the sticky head, an app bar
+   or the batch bar would show through. The sideways clip
+   (`--jf-table-row-clip` on `<html>`, `TABLE_ROW_CLIP_VAR`) cuts every row's
+   snapshot to the table's visible width; a wide table scrolled sideways is
+   otherwise captured whole. Kind `table-collapse` or `table-expand`.
+3. **Update:** the old names are dropped and the group toggles.
+4. **New state** (`beforeSnapshot`): the rows and headers on screen then
+   are named, except those covered in the old state. Hit testing finds only
+   `<html>` while an update runs, so covers are not probed again; a toggle
+   moves no row under the head (the rows above the header stay put, the
+   rest stay below it).
+5. **Cleanup:** the coordinator clears the names at `finished`; the clip
+   var goes with them.
+
+The CSS (`viewTransition.scss`): every `*.jf-table-row` group and image
+runs on `--jf-animation-duration-default` and `--jf-animation-ease-standard`.
+A row on both sides glides (the browser's geometry). Under
+`table-collapse`, an old-only row (a collapsing group's) slides up and fades
+(`jf-vt-out-up`); under `table-expand`, a new-only row slides down out from
+under its header (`jf-vt-in-above`). A one-sided row in the other direction
+(scrolled into or out of view by the toggle) just fades. Headers
+(`*.jf-table-group`) stack above rows, so rows slide beneath them.
+
+Flat-grouped and virtualized bodies both work: only rendered, on-screen
+rows are named, and rows are keyed by id, so none is replaced mid-transition.
+A virtualized body re-measures in the update, inside the 50 ms cap.
 
 ## Limits
 
@@ -641,6 +693,12 @@ These only ever cost an animation; the page always ends in the right state.
 - Several on-screen elements with the same `data-morph-of`: the close goes to
   the first, with a development warning.
 - On iOS a swipe-back plays Safari's own animation.
+- Table groups: a row that comes on screen from below a collapse (or leaves
+  below an expand) is named on one side only, so it fades rather than
+  glides. A scroll or a virtualized re-window during the group's animation
+  can unmount a named row, and the browser skips the rest. A row pushed
+  under a floating bar by an expand is not probed again and glides over the
+  bar.
 
 ## How it is tested
 
@@ -668,9 +726,18 @@ These only ever cost an animation; the page always ends in the right state.
   itself (found through its import, by any name); every file that renders
   `OverlayRoot` imports a stylesheet containing `data-vt~="morph"`.
 - `styles/viewTransition.contract.test.ts`: every `data-morph-*` attribute
-  and morph custom property any stylesheet under `src/` uses is spelled the
-  same in `morphNames.ts`; only `styles/_hover.scss` writes the pinned
-  selector; the box-flight slot count matches.
+  and morph (or `--jf-table-row-*`) custom property any stylesheet under
+  `src/` uses is spelled the same in `morphNames.ts`; only
+  `styles/_hover.scss` writes the pinned selector; the box-flight slot count
+  matches; the table-row family's rules (glide, the collapse and expand
+  slides, the clip) use the row classes and the default duration and
+  standard ease.
+- `components/Table/groupMotion.test.tsx`: a toggle starts one transition;
+  every on-screen row and header is named once in each snapshot, and
+  nothing after; instant under reduced motion, without the API and while
+  another transition runs; off-screen and covered rows take no part (a
+  covered one stays out of the new state too); a virtualized body names
+  only its rendered window.
 - `styles/hover.contract.test.ts`: the hover mixin's selector equals
   `MORPH_PINNED_SELECTOR`.
 - `styles/base.test.ts`: reduced motion zeroes every duration token.

@@ -11,14 +11,6 @@ vi.mock("./tabs/ProjectsTab.tsx", () => ({
 	ProjectsTab: () => <div>projects-tab</div>,
 }));
 
-if (!("ResizeObserver" in globalThis)) {
-	globalThis.ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-
 import { AbilityProvider, type Role } from "../../lib/ability.tsx";
 
 import { TasksPage } from "./TasksPage.tsx";

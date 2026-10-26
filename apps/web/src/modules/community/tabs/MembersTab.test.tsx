@@ -27,21 +27,6 @@ import { DIALOG_CONTENT } from "../../../shared/dialogSelectors.ts";
 // between tests so nodes don't accumulate and slow later queries under load.
 afterEach(cleanup);
 
-// jsdom gaps that ark-ui / the design-system Table touch at mount.
-if (!(Element.prototype as { scrollTo?: unknown }).scrollTo) {
-	Element.prototype.scrollTo = () => {};
-}
-if (!(Element.prototype as { hasPointerCapture?: unknown }).hasPointerCapture) {
-	Element.prototype.hasPointerCapture = () => false;
-}
-if (!("ResizeObserver" in globalThis)) {
-	(globalThis as Record<string, unknown>).ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-
 const {
 	kickOutMock,
 	upgradeToMemberMock,

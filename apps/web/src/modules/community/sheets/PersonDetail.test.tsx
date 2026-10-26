@@ -17,16 +17,6 @@ import { factLine, headline } from "../status/copy.ts";
 
 afterEach(cleanup);
 
-// Edit mode mounts Selects, whose ark machines observe their trigger. jsdom has
-// no ResizeObserver.
-if (!("ResizeObserver" in globalThis)) {
-	(globalThis as Record<string, unknown>).ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-
 // `PersonDetail` calls `useMutation(api.people.completeBoardStep)` directly
 // (for the Status section's board-task "Done" button) and opens two more
 // `useQuery` subscriptions: `PersonTimeline`'s

@@ -5,14 +5,6 @@ import { afterEach, expect, test } from "vitest";
 
 afterEach(cleanup);
 
-if (!("ResizeObserver" in globalThis)) {
-	globalThis.ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-
 import type { Doc } from "../../../convex/_generated/dataModel";
 
 import { OnboardingWizardView } from "./OnboardingWizard.tsx";

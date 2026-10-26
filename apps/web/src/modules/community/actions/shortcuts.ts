@@ -1,6 +1,7 @@
 import type { Hotkey } from "@tanstack/solid-hotkeys";
 
 import { invariant } from "../../../../convex/lib/result.ts";
+import type { RosterKey } from "../rosterOf.ts";
 
 /** A settled roster action. A refusal has already been shown, so callers
  *  only learn whether there was one (to stop a batch or keep a ring). */
@@ -9,12 +10,15 @@ export type SettledAction = { refused: boolean };
 /** How an async action ended; `undefined` when the board cancelled it. */
 export type RosterActionOutcome = SettledAction | undefined;
 
+/** The scope of a person sheet that is in no roster (yet): it owns no keys. */
+export const SHEET_SCOPE = "sheet";
+
 /**
  * Where a key is live. Two actions may share a letter across scopes but never
  * within one — `M` means "make them a member" on both Applications and Guests,
  * and that is the point.
  */
-export type ShortcutScope = "applications" | "members" | "guests" | "sheet";
+export type ShortcutScope = RosterKey | typeof SHEET_SCOPE;
 
 /**
  * One action, in one object.

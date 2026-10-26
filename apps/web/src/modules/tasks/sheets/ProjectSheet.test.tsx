@@ -1,25 +1,12 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen } from "@solidjs/testing-library";
-import { afterEach, beforeAll, expect, test, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
+import { afterEach, expect, test, vi } from "vitest";
 
 import { sheetSkeleton } from "../../../../test-stubs/morphKeys.tsx";
 
-afterEach(cleanup);
-
-beforeAll(() => {
-	if (!("ResizeObserver" in globalThis)) {
-		globalThis.ResizeObserver = class {
-			observe() {}
-			unobserve() {}
-			disconnect() {}
-		};
-	}
-	if (
-		!(Element.prototype as { hasPointerCapture?: unknown })
-			.hasPointerCapture
-	) {
-		Element.prototype.hasPointerCapture = () => false;
-	}
+afterEach(() => {
+	cleanup();
+	taskRows.current = undefined;
 });
 
 // Mock convex-solidjs so ProjectSheet's useProjectActions doesn't need a
@@ -28,6 +15,18 @@ beforeAll(() => {
 vi.mock("convex-solidjs", () => ({
 	useMutation: () => ({ mutate: vi.fn().mockResolvedValue(undefined) }),
 	useQuery: () => ({ data: () => {} }),
+}));
+
+const { taskRows } = vi.hoisted(() => ({
+	taskRows: { current: undefined as unknown[] | undefined },
+}));
+vi.mock("../../../shared/data/boardLevel.tsx", () => ({
+	useBoardLevel: () => ({ data: () => [] }),
+}));
+vi.mock("../data/tasksData.tsx", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../data/tasksData.tsx")>()),
+	useProjects: () => ({ data: () => [] }),
+	useTasks: () => ({ data: () => taskRows.current }),
 }));
 
 import { ProjectSheet } from "./ProjectSheet.tsx";
@@ -46,9 +45,6 @@ test("loading: shows a skeleton, not the create form or the 'New project' title"
 		<ProjectSheet
 			open
 			onOpenChange={() => {}}
-			people={[]}
-			projects={[]}
-			tasks={[]}
 			onTaskClick={() => {}}
 			loading
 		/>
@@ -65,11 +61,8 @@ test("loading with a project also set (stale-during-refetch) still shows the ske
 		<ProjectSheet
 			open
 			onOpenChange={() => {}}
-			project={project}
-			people={[]}
-			projects={[]}
-			tasks={[]}
 			onTaskClick={() => {}}
+			project={project}
 			loading
 		/>
 	));
@@ -79,14 +72,7 @@ test("loading with a project also set (stale-during-refetch) still shows the ske
 
 test("no project, not loading: shows the create form and 'New project' title", () => {
 	render(() => (
-		<ProjectSheet
-			open
-			onOpenChange={() => {}}
-			people={[]}
-			projects={[]}
-			tasks={[]}
-			onTaskClick={() => {}}
-		/>
+		<ProjectSheet open onOpenChange={() => {}} onTaskClick={() => {}} />
 	));
 	expect(screen.getByText("New project")).toBeInTheDocument();
 	expect(screen.getByPlaceholderText("Project name")).toBeInTheDocument();
@@ -100,11 +86,8 @@ test("tasks undefined: shows a skeleton list, not 'No tasks yet.'", () => {
 		<ProjectSheet
 			open
 			onOpenChange={() => {}}
-			project={project}
-			people={[]}
-			projects={[]}
-			tasks={undefined}
 			onTaskClick={() => {}}
+			project={project}
 		/>
 	));
 	expect(document.querySelector("[data-skeleton-list]")).toBeInTheDocument();
@@ -112,17 +95,43 @@ test("tasks undefined: shows a skeleton list, not 'No tasks yet.'", () => {
 });
 
 test("tasks empty: shows 'No tasks yet.'", () => {
+	taskRows.current = [];
+	render(() => (
+		<ProjectSheet
+			open
+			onOpenChange={() => {}}
+			onTaskClick={() => {}}
+			project={project}
+		/>
+	));
+	expect(screen.getByText("No tasks yet.")).toBeInTheDocument();
+	expect(document.querySelector("[data-skeleton-list]")).toBeNull();
+});
+
+test("on a page (no peek) a task click calls the tab's handler and leaves the URL alone", () => {
+	taskRows.current = [
+		{
+			_id: "task-1",
+			_creationTime: 0,
+			title: "Fix the gutter",
+			status: "backlog",
+			assigneeIds: [],
+			projectId: "project-1",
+		},
+	];
+	const onTaskClick = vi.fn();
 	render(() => (
 		<ProjectSheet
 			open
 			onOpenChange={() => {}}
 			project={project}
-			people={[]}
-			projects={[]}
-			tasks={[]}
-			onTaskClick={() => {}}
+			onTaskClick={onTaskClick}
 		/>
 	));
-	expect(screen.getByText("No tasks yet.")).toBeInTheDocument();
-	expect(document.querySelector("[data-skeleton-list]")).toBeNull();
+	fireEvent.click(screen.getByText("Fix the gutter"));
+	expect(onTaskClick).toHaveBeenCalledTimes(1);
+	expect(onTaskClick).toHaveBeenCalledWith(
+		expect.objectContaining({ _id: "task-1" })
+	);
+	expect(window.location.search).not.toContain("open=");
 });

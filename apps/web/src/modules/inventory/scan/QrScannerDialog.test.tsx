@@ -10,14 +10,6 @@ vi.mock("./qrScan.ts", async (importOriginal) => {
 	return { ...actual, startQrScan: mockStart };
 });
 
-if (!("ResizeObserver" in globalThis)) {
-	globalThis.ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-
 import { QrScannerDialog } from "./QrScannerDialog.tsx";
 
 afterEach(() => {

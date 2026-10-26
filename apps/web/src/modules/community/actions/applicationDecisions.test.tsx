@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { cleanup, render, screen } from "@solidjs/testing-library";
-import { afterEach, beforeAll, expect, test, vi } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 
 // applicationDecisions and GuestExpiryProvider both resolve mutations through
 // `useTriage`; mocking it here is enough to mount the real hook tree without a
@@ -13,16 +13,6 @@ vi.mock("./triage.ts", () => ({
 		undeny: vi.fn(),
 	}),
 }));
-
-// Dialog.Root (mounted, unopened, by GuestExpiryProvider) touches ResizeObserver
-// on mount even while closed.
-beforeAll(() => {
-	globalThis.ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-});
 
 afterEach(cleanup);
 

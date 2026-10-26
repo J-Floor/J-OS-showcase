@@ -137,14 +137,6 @@ function setAttempt(id: string, row: AttemptRow) {
 	setAttemptRows((rows) => ({ ...rows, [id]: row }));
 }
 
-if (!("ResizeObserver" in globalThis)) {
-	globalThis.ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-
 afterEach(() => {
 	cleanup();
 	setDeferredImmediate(false);

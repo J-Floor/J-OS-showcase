@@ -65,6 +65,10 @@
 	}
 }
 
+.itemBody {
+	padding: var(--jf-spacing-near);
+}
+
 /* Its own line under the title; any other child stays inline with the text. */
 .itemSubtitle {
 	display: block;

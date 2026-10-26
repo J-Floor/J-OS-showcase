@@ -169,3 +169,22 @@ test("a custom errorText overrides the default out-of-range message", () => {
 		container.querySelector('[data-part="error-text"]')
 	).toHaveTextContent("Too late");
 });
+
+test("a click on the icon focuses the first segment", () => {
+	render(() => <TimePicker label="Start" />);
+	const segments = document.querySelectorAll<HTMLElement>(
+		'[data-part="segment"][data-editable]'
+	);
+	fireEvent.click(screen.getByText("schedule"));
+	expect(segments[0]).toHaveFocus();
+});
+
+test("a click on a segment keeps that segment focused", () => {
+	render(() => <TimePicker label="Start" />);
+	const segments = document.querySelectorAll<HTMLElement>(
+		'[data-part="segment"][data-editable]'
+	);
+	segments[1].focus();
+	fireEvent.click(segments[1]);
+	expect(segments[1]).toHaveFocus();
+});

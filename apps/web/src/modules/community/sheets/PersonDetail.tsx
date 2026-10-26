@@ -103,7 +103,7 @@ function StatusSectionItem(props: { person: PersonRow; editing?: boolean }) {
 					{headline(props.person.status)}
 				</Accordion.ItemSubtitle>
 			</Accordion.ItemTitle>
-			<Accordion.ItemContent class={styles.sectionBody}>
+			<Accordion.ItemContent>
 				<StatusSection
 					status={props.person.status}
 					person={props.person}
@@ -171,7 +171,7 @@ export function PersonDetail(props: {
 					<Accordion.ItemTitle shortcut={SECTION_KEYS.info}>
 						Info
 					</Accordion.ItemTitle>
-					<Accordion.ItemContent class={styles.sectionBody}>
+					<Accordion.ItemContent>
 						<Show
 							when={props.editing}
 							fallback={<ReadOnlyDetail person={props.person} />}
@@ -190,7 +190,7 @@ export function PersonDetail(props: {
 					<Accordion.ItemTitle shortcut={SECTION_KEYS.notes}>
 						Notes
 					</Accordion.ItemTitle>
-					<Accordion.ItemContent class={styles.sectionBody}>
+					<Accordion.ItemContent>
 						<BoardNotes person={props.person} />
 					</Accordion.ItemContent>
 				</Accordion.Item>
@@ -198,7 +198,7 @@ export function PersonDetail(props: {
 					<Accordion.ItemTitle shortcut={SECTION_KEYS.history}>
 						History
 					</Accordion.ItemTitle>
-					<Accordion.ItemContent class={styles.sectionBody}>
+					<Accordion.ItemContent>
 						{/* Mounted only once the section is opened: the timeline
 				    opens its own Convex subscription, and the sheet is
 				    re-rendered for every row the board steps through. */}

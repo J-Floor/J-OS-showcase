@@ -12,6 +12,11 @@ import {
 	untrack,
 } from "solid-js";
 
+import { useAbility } from "../../lib/ability.tsx";
+import { canView, descriptorForLink } from "../entity/entityDescriptor.ts";
+import { entityDescriptors } from "../entity/entityDescriptors.ts";
+import { warmPeek } from "../entity/lazyPeek.tsx";
+import { useOpenEntity } from "../entity/openEntity.ts";
 import { ICONS } from "../icons.ts";
 import { dayLabel, formatAgo } from "../time.ts";
 
@@ -83,12 +88,19 @@ function LoadingMoreRows(): JSX.Element {
 function NotificationRow(props: {
 	row: InboxRow;
 	onOpen: (row: InboxRow) => void;
+	onIntent: (row: InboxRow) => void;
 }): JSX.Element {
 	return (
 		<List.Item
 			class={rowClass(props.row)}
 			onClick={() => {
 				props.onOpen(props.row);
+			}}
+			onPointerEnter={() => {
+				props.onIntent(props.row);
+			}}
+			onFocus={() => {
+				props.onIntent(props.row);
 			}}
 		>
 			<List.ItemTitle class={styles.title}>
@@ -167,16 +179,56 @@ function LoadMoreFooter(props: { inbox: Inbox }): JSX.Element {
 	);
 }
 
+/** What a click on a row does: closes the sheet, opens the row's entity over
+ *  the current page (or navigates to its page) and marks the row read. */
+function useOpenRow(
+	inbox: () => Inbox,
+	onClose: () => void
+): (row: InboxRow) => void {
+	const navigate = useNavigate();
+	const openEntity = useOpenEntity();
+	const ability = useAbility();
+	return (row) => {
+		onClose();
+		const link = descriptorForLink(row.url, entityDescriptors);
+		// A kind the viewer may not peek at goes to its page, as any link does.
+		if (link && canView(ability(), link.desc))
+			openEntity(link.desc, link.slug);
+		else navigate(row.url);
+		inbox().markRead(row._id);
+	};
+}
+
+/** A touch screen has no hover, so the first intent is the tap itself, too
+ *  late for the handoff. Warms each kind the rows link to, once, as they show. */
+function useWarmKinds(rows: () => Map<string, InboxRow>): void {
+	const ability = useAbility();
+	const warmed = new Set<string>();
+	createEffect(() => {
+		for (const row of rows().values()) {
+			const link = descriptorForLink(row.url, entityDescriptors);
+			if (
+				!link ||
+				warmed.has(link.desc.key) ||
+				!canView(ability(), link.desc)
+			)
+				continue;
+			warmed.add(link.desc.key);
+			warmPeek(link.desc);
+		}
+	});
+}
+
 /**
  * The sheet's notification history: rows grouped by day, unread ones
- * marked. A click closes the sheet, opens the row's page and marks it read
- * without waiting; older rows load a page at a time as the end scrolls into view.
+ * marked. A click closes the sheet, opens the row's entity over the current
+ * page (or its page) and marks it read without waiting; older rows load a page
+ * at a time as the end scrolls into view.
  */
 export function NotificationList(props: {
 	inbox: Inbox;
 	onClose: () => void;
 }): JSX.Element {
-	const navigate = useNavigate();
 	// An unchanged row keeps its object, so `<For>` keeps its DOM when the
 	// live head refetches.
 	const rows = createMemo<Map<string, InboxRow>>((previous) => {
@@ -192,11 +244,20 @@ export function NotificationList(props: {
 		groupByDay([...rows().values()], Date.now())
 	);
 
-	function open(row: InboxRow): void {
-		props.onClose();
-		navigate(row.url);
-		props.inbox.markRead(row._id);
+	const open = useOpenRow(
+		() => props.inbox,
+		() => {
+			props.onClose();
+		}
+	);
+
+	/** The sheet must be loaded in time to take the close handoff. */
+	function warm(row: InboxRow): void {
+		const link = descriptorForLink(row.url, entityDescriptors);
+		if (link) warmPeek(link.desc);
 	}
+
+	useWarmKinds(() => rows());
 
 	return (
 		<Show
@@ -229,6 +290,7 @@ export function NotificationList(props: {
 													<NotificationRow
 														row={row}
 														onOpen={open}
+														onIntent={warm}
 													/>
 												)}
 											</For>

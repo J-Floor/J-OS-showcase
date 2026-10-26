@@ -1,3 +1,4 @@
+// jscpd:ignore-start -- an import block: import-x/order fixes its shape, and TaskSheet needs the same dependencies
 import {
 	Sheet,
 	Input,
@@ -12,6 +13,7 @@ import { NAME_MAX, TEXT_MAX } from "../../../../convex/lib/validate.ts";
 import type { SheetNavState } from "../../../lib/createSheetNav.ts";
 import { createSyncedField } from "../../../lib/createSyncedField.ts";
 import { DescriptionField } from "../../../shared/components/DescriptionField.tsx";
+import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
 import {
 	createEntityCommands,
 	createEntityDraft,
@@ -23,13 +25,18 @@ import { InlineError } from "../../../shared/InlineError.tsx";
 import type { SheetOpenProps } from "../../../shared/types.ts";
 import { dateToIso, isoToMs } from "../data/taskHelpers.ts";
 import type { Person, Project, Task } from "../data/tasksData.tsx";
-import { useProjectActions } from "../data/tasksData.tsx";
+import {
+	useProjectActions,
+	useProjects,
+	useTasks,
+} from "../data/tasksData.tsx";
 import { projectFields } from "../fields.ts";
 import { TaskCard } from "../kanban/TaskCard.tsx";
 
 import { DateField } from "./fields/DateField.tsx";
 import { PersonSelect } from "./fields/PersonSelect.tsx";
 import styles from "./ProjectSheet.module.scss";
+// jscpd:ignore-end
 
 // UTC-midnight ms for the local "today" — matches how dates are stored.
 function todayMs(): number | undefined {
@@ -72,9 +79,7 @@ type ProjectSheetProps = SheetOpenProps & {
 	/** What a create sheet opens out of when nothing was just clicked (a
 	 *  range dragged on the timeline). */
 	morphFrom?: () => HTMLElement | null;
-	people: Person[];
-	projects: Project[];
-	tasks: Task[] | undefined;
+	/** What a click on one of the project's tasks does. */
 	onTaskClick: (task: Task) => void;
 	/** True when the sheet is open for a real row (`requestedId()` set) whose
 	 *  data hasn't loaded yet — distinct from create, where there is no id at
@@ -306,6 +311,9 @@ export function ProjectSheet(props: ProjectSheetProps): JSX.Element {
 	}
 	const { createProject, deleteProject, failure, fields, saves, draft } =
 		createProjectSheet(props, isEdit);
+	const boardLevel = useBoardLevel();
+	const projects = useProjects();
+	const tasks = useTasks();
 
 	return (
 		<Sheet.Root
@@ -346,7 +354,10 @@ export function ProjectSheet(props: ProjectSheetProps): JSX.Element {
 					onBlur={fields.name.flush}
 				/>
 
-				<ProjectDetailRows fields={fields} people={props.people} />
+				<ProjectDetailRows
+					fields={fields}
+					people={boardLevel.data() ?? []}
+				/>
 
 				<DescriptionField
 					class={styles.description}
@@ -357,9 +368,9 @@ export function ProjectSheet(props: ProjectSheetProps): JSX.Element {
 
 				<Show when={isEdit()}>
 					<ProjectTasksSection
-						tasks={tasksOf(props.project, props.tasks)}
-						people={props.people}
-						projects={props.projects}
+						tasks={tasksOf(props.project, tasks.data())}
+						people={boardLevel.data() ?? []}
+						projects={projects.data() ?? []}
 						onTaskClick={props.onTaskClick}
 					/>
 				</Show>

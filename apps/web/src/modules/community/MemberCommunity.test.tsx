@@ -7,16 +7,6 @@ vi.mock("convex-solidjs", () => ({
 	useMutation: () => ({ mutateAsync: vi.fn() }),
 }));
 
-// jsdom gaps ark Tabs touches at mount (syncs the sliding indicator via
-// ResizeObserver).
-if (!("ResizeObserver" in globalThis)) {
-	globalThis.ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-
 import { MemberCommunity } from "./MemberCommunity.tsx";
 
 describe("MemberCommunity", () => {

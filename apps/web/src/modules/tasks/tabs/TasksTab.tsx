@@ -165,8 +165,6 @@ export function TasksTab(props: {
 				task={selected()}
 				loading={loading()}
 				initialStatus={createStatus()}
-				people={boardLevel.data() ?? []}
-				projects={projects.data() ?? []}
 				nav={nav}
 			/>
 		</div>

@@ -40,14 +40,6 @@ vi.mock("../../../shared/data/queryKeeper.ts", async (orig) => ({
 
 afterEach(cleanup);
 
-if (!("ResizeObserver" in globalThis)) {
-	globalThis.ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-
 type Row = { _id: string; name: string };
 
 const COLUMNS: JfColumnDefinition<Row>[] = [

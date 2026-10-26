@@ -1,5 +1,4 @@
 import type { CommandPaletteItem } from "@j-os/design-system";
-import { useNavigate } from "@solidjs/router";
 import { Show, createEffect, type JSX } from "solid-js";
 
 import { useAbility } from "../../lib/ability.tsx";
@@ -9,11 +8,10 @@ import {
 } from "../../modules/prefetchModule.ts";
 import type { EntityRow } from "../types.ts";
 
-import {
-	entityPath,
-	slugOf,
-	type EntityDescriptor,
-} from "./entityDescriptor.ts";
+import { canView, slugOf, type EntityDescriptor } from "./entityDescriptor.ts";
+import { warmPeek } from "./lazyPeek.tsx";
+import { useOpenEntity } from "./openEntity.ts";
+import { peekValue } from "./peekParam.ts";
 import { useRowPrefetch } from "./useRowPrefetch.ts";
 
 export type Emit = (items: CommandPaletteItem[]) => void;
@@ -34,7 +32,7 @@ function EntitySourceRows<Row extends EntityRow>(props: {
 	// component instance (a different descriptor mounts a different `<Show>`
 	// child), and `useRows()` is a hook factory that must be called exactly
 	// once during setup, like `useQuery` itself.
-	const navigate = useNavigate();
+	const openEntity = useOpenEntity();
 	// eslint-disable-next-line solid/reactivity -- one-time hook-factory call, not a reactive prop read
 	const rows = props.descriptor.useRows();
 	// eslint-disable-next-line solid/reactivity -- the descriptor is fixed for this instance
@@ -44,7 +42,7 @@ function EntitySourceRows<Row extends EntityRow>(props: {
 		const desc = props.descriptor;
 		props.emit(
 			(rows() ?? []).map((row) => ({
-				value: `${desc.key}:${slugOf(desc, row)}`,
+				value: peekValue(desc, slugOf(desc, row)),
 				label: desc.label(row),
 				group: desc.group,
 				icon: desc.icon,
@@ -52,11 +50,12 @@ function EntitySourceRows<Row extends EntityRow>(props: {
 				detail: desc.detail?.(row),
 				searchOnly: desc.searchOnly ?? true,
 				onSelect: () => {
-					navigate(entityPath(desc, row));
+					openEntity(desc, slugOf(desc, row));
 				},
 				onHighlight: () => {
 					const module = descriptorModule(desc);
 					if (module) prefetchModule(module);
+					warmPeek(desc);
 					prefetchRow(row);
 				},
 			}))
@@ -78,12 +77,7 @@ export function EntitySource<Row extends EntityRow>(props: {
 }): JSX.Element {
 	const ability = useAbility();
 	return (
-		<Show
-			when={ability().can(
-				props.descriptor.ability.action,
-				props.descriptor.ability.subject
-			)}
-		>
+		<Show when={canView(ability(), props.descriptor)}>
 			<EntitySourceRows descriptor={props.descriptor} emit={props.emit} />
 		</Show>
 	);

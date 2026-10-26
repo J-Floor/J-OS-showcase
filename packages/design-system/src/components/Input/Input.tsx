@@ -78,9 +78,7 @@ export function Input(props: InputProps): JSX.Element {
 		<MakeField {...makeFieldProps} ref={own.rootRef}>
 			<div
 				class={styles.inputWrapper}
-				onClick={() => {
-					control.focus();
-				}}
+				{...control.box}
 				data-invalid={props.invalid ? "true" : undefined}
 			>
 				<Show when={own.leadingIconName}>

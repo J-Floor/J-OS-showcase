@@ -16,14 +16,6 @@ import { CopyFromItemDialog } from "./CopyFromItemDialog.tsx";
 
 afterEach(cleanup);
 
-if (!("ResizeObserver" in globalThis)) {
-	globalThis.ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-
 const TYPE_CHAIR = "itemTypes:chair" as Id<"itemTypes">;
 const TYPE_KETTLE = "itemTypes:kettle" as Id<"itemTypes">;
 const CATEGORY = "itemCategories:furniture" as Id<"itemCategories">;

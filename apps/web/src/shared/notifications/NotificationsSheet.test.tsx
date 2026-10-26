@@ -7,7 +7,7 @@ import {
 	waitFor,
 } from "@solidjs/testing-library";
 import { createSignal } from "solid-js";
-import { afterEach, beforeAll, expect, test, vi } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 
 const { unread, inbox, device } = await vi.hoisted(async () => {
 	const { createSignal } = await import("solid-js");
@@ -90,15 +90,6 @@ vi.mock("./NotificationCategories.tsx", () => ({
 import { NotificationsSheet } from "./NotificationsSheet.tsx";
 import type { NotificationsTab } from "./notificationsState.ts";
 
-beforeAll(() => {
-	if (!("ResizeObserver" in globalThis)) {
-		globalThis.ResizeObserver = class {
-			observe() {}
-			unobserve() {}
-			disconnect() {}
-		};
-	}
-});
 afterEach(() => {
 	cleanup();
 	unread.value = 0;

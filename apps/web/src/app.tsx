@@ -25,6 +25,7 @@ import { Sidebar } from "./shared/components/Sidebar/Sidebar.tsx";
 import { ConfirmProvider } from "./shared/confirm.tsx";
 import { BoardLevelProvider } from "./shared/data/boardLevel.tsx";
 import { ShellWarmup } from "./shared/data/ShellWarmup.tsx";
+import { PeekHost } from "./shared/entity/PeekHost.tsx";
 import { InstallPwaPrompt } from "./shared/InstallPwaPrompt.tsx";
 import { NotificationsHost } from "./shared/notifications/NotificationsHost.tsx";
 import { NotificationsPrompt } from "./shared/notifications/NotificationsPrompt.tsx";
@@ -101,6 +102,11 @@ function ShellBody(props: ParentProps) {
 							</Can>
 							<InstallPwaPrompt />
 						</FloatingStack>
+						{/* An entity picked from search or a notification opens here,
+						    over the current page. */}
+						<AppErrorBoundary>
+							<PeekHost />
+						</AppErrorBoundary>
 						{/* Staff get no notifications: no sheet, and no push re-sync. */}
 						<Can I="view" the="Notifications">
 							<AppErrorBoundary>

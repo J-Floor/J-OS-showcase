@@ -4,6 +4,7 @@ import { api } from "../../../convex/_generated/api";
 import type { Doc } from "../../../convex/_generated/dataModel";
 import { useQuery } from "../../shared/data/useQuery.ts";
 import type { EntityDescriptor } from "../../shared/entity/entityDescriptor.ts";
+import { lazyPeek } from "../../shared/entity/lazyPeek.tsx";
 import { ICONS } from "../../shared/icons.ts";
 
 /** `useRows` factory for the task descriptor — wraps `tasks.list`. Must be
@@ -32,6 +33,9 @@ export const taskEntity: EntityDescriptor<Doc<"tasks">> = {
 	label: (row) => row.title,
 	detail: (row) => row.status,
 	ability: { action: "view", subject: "Tasks" },
+	peek: lazyPeek(() =>
+		import("./TaskPeek.tsx").then((module) => module.TaskPeek)
+	),
 };
 
 /** Project entity descriptor: board/core-visible timeline row, linking into
@@ -45,4 +49,7 @@ export const projectEntity: EntityDescriptor<Doc<"projects">> = {
 	useRows: useProjectRows,
 	label: (row) => row.name,
 	ability: { action: "view", subject: "Tasks" },
+	peek: lazyPeek(() =>
+		import("./ProjectPeek.tsx").then((module) => module.ProjectPeek)
+	),
 };

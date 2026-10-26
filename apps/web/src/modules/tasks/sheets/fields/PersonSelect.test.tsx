@@ -2,13 +2,6 @@
 import { cleanup, render, screen } from "@solidjs/testing-library";
 import { afterEach, expect, test } from "vitest";
 
-if (!("ResizeObserver" in globalThis)) {
-	globalThis.ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
 afterEach(cleanup);
 
 import { AssigneeSelect } from "./AssigneeSelect.tsx";

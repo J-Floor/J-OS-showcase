@@ -133,3 +133,8 @@ export const GHOST_GEOMETRY_VARS = {
 /** The `clip-path` cutting the `jf-morph-source` snapshot to what of its
  *  element was on screen, on `<html>` for the transition. */
 export const SOURCE_CLIP_VAR = "--jf-morph-source-clip";
+
+/** The `clip-path` cutting each table row's snapshot to the part of its
+ *  table on screen sideways, on `<html>` while a group collapses or expands
+ *  (Table/groupMotion.ts): a row scrolled sideways is captured whole. */
+export const TABLE_ROW_CLIP_VAR = "--jf-table-row-clip";

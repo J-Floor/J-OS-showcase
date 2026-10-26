@@ -11,11 +11,18 @@ import {
 	createEffect,
 	createSignal,
 	on,
+	onCleanup,
 	type Setter,
 } from "solid-js";
 
 import type { SetParams } from "../types.ts";
 import type { EntityRow } from "../types.ts";
+
+import {
+	createParameterClearer,
+	isPushedOpen,
+	pushedOpenState,
+} from "./pushedOpen.ts";
 
 /** Reserved param value for the create form. A row's slug is its `_id` (or a
  *  per-module override like `assetTag`), so `new` cannot collide with one. It
@@ -32,6 +39,8 @@ function parameterInWindowUrl(parameter: string): string | undefined {
 		: (new URLSearchParams(window.location.search).get(parameter) ??
 				undefined);
 }
+
+type Navigate = ReturnType<typeof useNavigate>;
 
 type SearchParameters = ReturnType<typeof useSearchParams>[0];
 
@@ -164,11 +173,18 @@ function useInboundParameterSync<Row extends EntityRow>(context: {
 	options: EntitySelectionOptions<Row>;
 	params: SearchParameters;
 	setParams: SetParams;
+	navigate: Navigate;
 	slugOf: (row: Row) => string;
 	state: SelectionState;
 	resetLocal: () => void;
 }): void {
 	const { options, params, setParams, state } = context;
+	const clear = createParameterClearer(
+		options.param,
+		params,
+		setParams,
+		context.navigate
+	);
 	createEffect(
 		on(
 			[() => params[options.param], options.rows, state.isActive],
@@ -198,12 +214,7 @@ function useInboundParameterSync<Row extends EntityRow>(context: {
 						// with no sheet and no further effect run. `wanted` came
 						// from `params[opts.param]`, so it is already set here; the
 						// guard just avoids a redundant write.
-						if (params[options.param] !== undefined) {
-							setParams(
-								{ [options.param]: undefined },
-								{ replace: true }
-							);
-						}
+						if (params[options.param] !== undefined) clear();
 						break;
 					}
 					case "open": {
@@ -251,7 +262,9 @@ function useInboundParameterSync<Row extends EntityRow>(context: {
 // A pick made while already on this list (no sheet open) needs no base:
 // the router pushed the param entry right on top of the list entry. Claim
 // that entry instead, or Back would close the sheet and then stall on a
-// second copy of the list.
+// second copy of the list. The same goes for a selection that mounts after
+// an in-app push (the entry carries `pushedOpenState`): it has seen no
+// earlier location, but the entry is its own to claim.
 function useColdInboundHistoryBase(context: {
 	param: string;
 	params: SearchParameters;
@@ -304,7 +317,7 @@ function useColdInboundHistoryBase(context: {
 			parameterInWindowUrl(param) !== wanted
 		)
 			return;
-		if (cameFromThisList()) {
+		if (cameFromThisList() || isPushedOpen(param)) {
 			state.entry.isOwned = true;
 			return;
 		}
@@ -319,10 +332,46 @@ function useColdInboundHistoryBase(context: {
 	});
 }
 
+/** Closes the sheet if the open row vanishes from a loaded list (deleted here
+ *  or by someone else) rather than falling back to create mode. */
+function closeOnVanish<Row extends EntityRow>(context: {
+	rows: () => Row[] | undefined;
+	requestedId: () => string | undefined;
+	slugOf: (row: Row) => string;
+	close: (shouldPop?: boolean) => void;
+}): void {
+	const { rows, requestedId, slugOf } = context;
+	// The page may be left before the judging microtask runs; the URL it
+	// would write is then the next page's.
+	let isDisposed = false;
+	onCleanup(() => {
+		isDisposed = true;
+	});
+	createEffect(() => {
+		const id = requestedId();
+		if (id === undefined || !isDeadLink(id, rows(), slugOf)) return;
+		// Judged a microtask later: lists fed by separate queries reach the
+		// app one after the other, so a row that moved between two of them is
+		// briefly in neither. Still absent once they have all landed is a
+		// real vanish.
+		queueMicrotask(() => {
+			if (
+				isDisposed ||
+				requestedId() !== id ||
+				!isDeadLink(id, rows(), slugOf)
+			)
+				return;
+			// In place, no history traversal: the row vanished (often a remote
+			// delete), which is not the user navigating.
+			context.close(false);
+		});
+	});
+}
+
 function createSelectionActions<Row extends EntityRow>(context: {
 	param: string;
 	setParams: SetParams;
-	navigate: ReturnType<typeof useNavigate>;
+	navigate: Navigate;
 	slugOf: (row: Row) => string;
 	state: SelectionState;
 }): Pick<EntitySelectionApi<Row>, "close" | "openCreate" | "openRow"> {
@@ -336,7 +385,17 @@ function createSelectionActions<Row extends EntityRow>(context: {
 	function writeParameter(value: string): void {
 		if (!isActive()) return;
 		if (open()) {
-			setParams({ [param]: value }, { replace: true });
+			// The replaced entry keeps its pushed-open marker, so it stays
+			// identifiable as one the app pushed.
+			setParams(
+				{ [param]: value },
+				{
+					replace: true,
+					state: isPushedOpen(param)
+						? pushedOpenState(param)
+						: undefined,
+				}
+			);
 		} else {
 			setParams({ [param]: value }, { replace: false });
 			state.entry.isOwned = true;
@@ -479,6 +538,7 @@ export function createEntitySelection<Row extends EntityRow>(
 		options,
 		params,
 		setParams,
+		navigate,
 		slugOf,
 		state,
 		resetLocal,
@@ -493,17 +553,7 @@ export function createEntitySelection<Row extends EntityRow>(
 		state,
 	});
 
-	// Close the sheet if the open row vanishes from a loaded list (deleted
-	// here or by someone else) rather than falling back to create mode.
-	createEffect(() => {
-		const rows = options.rows();
-		const id = requestedId();
-		if (id !== undefined && isDeadLink(id, rows, slugOf)) {
-			// In place, no history traversal: the row vanished (often a remote
-			// delete), which is not the user navigating.
-			close(false);
-		}
-	});
+	closeOnVanish({ rows: options.rows, requestedId, slugOf, close });
 
 	return {
 		selected,

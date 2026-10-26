@@ -8,21 +8,6 @@ import type { PersonStatus } from "../../../../convex/lib/derive.ts";
 
 afterEach(cleanup);
 
-// The date picker and the segment both measure; jsdom does neither.
-if (!("ResizeObserver" in globalThis)) {
-	(globalThis as Record<string, unknown>).ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-if (!(Element.prototype as { hasPointerCapture?: unknown }).hasPointerCapture) {
-	Element.prototype.hasPointerCapture = () => false;
-}
-if (!(Element.prototype as { scrollTo?: unknown }).scrollTo) {
-	Element.prototype.scrollTo = () => {};
-}
-
 const extendWindow = vi.fn().mockResolvedValue(undefined);
 vi.mock("../actions/triage.ts", () => ({
 	useTriage: () => ({ extendWindow }),

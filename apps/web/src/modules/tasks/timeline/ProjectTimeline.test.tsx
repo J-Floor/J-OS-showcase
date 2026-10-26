@@ -9,15 +9,7 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-beforeAll(() => {
-	if (!("ResizeObserver" in globalThis)) {
-		globalThis.ResizeObserver = class {
-			observe() {}
-			unobserve() {}
-			disconnect() {}
-		};
-	}
-});
+beforeAll(() => {});
 
 vi.mock("convex-solidjs", () => ({
 	useMutation: () => ({ mutate: vi.fn().mockResolvedValue(undefined) }),

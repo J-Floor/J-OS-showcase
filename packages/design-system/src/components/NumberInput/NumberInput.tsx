@@ -175,9 +175,7 @@ export function NumberInput(props: NumberInputProps): JSX.Element {
 				</Show>
 				<div
 					class={styles.inputWrapper}
-					onClick={() => {
-						control.focus();
-					}}
+					{...control.box}
 					data-invalid={makeFieldProps.invalid ? "true" : undefined}
 				>
 					<Show when={own.leadingIconName}>

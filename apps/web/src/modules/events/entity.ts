@@ -5,6 +5,7 @@ import type { Doc } from "../../../convex/_generated/dataModel";
 import { prefetchSpec } from "../../shared/data/queryKeeper.ts";
 import { useQuery } from "../../shared/data/useQuery.ts";
 import type { EntityDescriptor } from "../../shared/entity/entityDescriptor.ts";
+import { lazyPeek } from "../../shared/entity/lazyPeek.tsx";
 import { ICONS } from "../../shared/icons.ts";
 
 import { formatEventDate } from "./eventDate.ts";
@@ -30,6 +31,9 @@ export const eventsEntity: EntityDescriptor<Doc<"events">> = {
 	label: (row) => row.name,
 	detail: (row) => formatEventDate(row.startsAt),
 	ability: { action: "view", subject: "Events" },
+	peek: lazyPeek(() =>
+		import("./EventPeek.tsx").then((module) => module.EventPeek)
+	),
 	prefetch: (row, canPerform) => {
 		if (canPerform("manage", "Events"))
 			prefetchSpec(eventAttendeesQuery, row._id);

@@ -24,7 +24,10 @@ import { Portal } from "solid-js/web";
 
 import { ICONS } from "../../icons.ts";
 import { useRequiredContext } from "../../utils/context.ts";
-import { splitMakeFieldProps } from "../../utils/makeFieldProps.ts";
+import {
+	fieldBoxHandlers,
+	splitMakeFieldProps,
+} from "../../utils/makeFieldProps.ts";
 import {
 	chipsRenderer,
 	clearLabel,
@@ -189,14 +192,7 @@ function InputControl(
 			// focus it and open the list (`openOnClick`). The real
 			// controls (clear, expand, each chip's dismiss) are buttons
 			// and keep their own behaviour.
-			onClick={(event) => {
-				const target = event.target as HTMLElement;
-				const input = props.getInputElement();
-				if (input?.isSameNode(target) || target.closest("button"))
-					return;
-				input?.focus();
-				input?.click();
-			}}
+			{...fieldBoxHandlers(props.getInputElement)}
 		>
 			<ArkCombobox.Context>
 				{(context) => (

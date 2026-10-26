@@ -43,14 +43,6 @@ vi.mock("@solidjs/router", () => ({ useNavigate: () => navigate }));
 
 import { DoorsIntro } from "./DoorsIntro.tsx";
 
-if (!("ResizeObserver" in globalThis)) {
-	globalThis.ResizeObserver = class {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
-	};
-}
-
 const OPEN_DOOR_MEMBER = { tier: "member", stage: "active", stageSince: 0 };
 
 afterEach(cleanup);

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
 import { ConvexError } from "convex/values";
-import { afterEach, beforeAll, expect, test, vi } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 
 const { mutate } = vi.hoisted(() => ({ mutate: vi.fn() }));
 
@@ -10,27 +10,18 @@ afterEach(() => {
 	mutate.mockReset();
 });
 
-beforeAll(() => {
-	if (!("ResizeObserver" in globalThis)) {
-		globalThis.ResizeObserver = class {
-			observe() {}
-			unobserve() {}
-			disconnect() {}
-		};
-	}
-	if (
-		!(Element.prototype as { hasPointerCapture?: unknown })
-			.hasPointerCapture
-	) {
-		Element.prototype.hasPointerCapture = () => false;
-	}
-});
-
 vi.mock("convex-solidjs", () => ({
 	useMutation: () => ({ mutate }),
 	useQuery: () => ({ data: () => {} }),
 }));
 vi.mock("../../../../../convex/_generated/api", () => ({ api: {} }));
+vi.mock("../../../shared/data/boardLevel.tsx", () => ({
+	useBoardLevel: () => ({ data: () => [] }),
+}));
+vi.mock("../data/tasksData.tsx", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../data/tasksData.tsx")>()),
+	useProjects: () => ({ data: () => [] }),
+}));
 
 import { TaskSheet } from "./TaskSheet.tsx";
 
@@ -42,9 +33,7 @@ const REFUSED = new ConvexError({
 test("a refused create shows the reason in the sheet and keeps it open", async () => {
 	mutate.mockRejectedValue(REFUSED);
 	const onOpenChange = vi.fn();
-	render(() => (
-		<TaskSheet open onOpenChange={onOpenChange} people={[]} projects={[]} />
-	));
+	render(() => <TaskSheet open onOpenChange={onOpenChange} />);
 	fireEvent.input(screen.getByLabelText(/Title/), {
 		target: { value: "Write the report" },
 	});
@@ -55,9 +44,7 @@ test("a refused create shows the reason in the sheet and keeps it open", async (
 
 test("a failure without a server message shows the fallback", async () => {
 	mutate.mockRejectedValue(new Error("boom"));
-	render(() => (
-		<TaskSheet open onOpenChange={() => {}} people={[]} projects={[]} />
-	));
+	render(() => <TaskSheet open onOpenChange={() => {}} />);
 	fireEvent.input(screen.getByLabelText(/Title/), {
 		target: { value: "Write the report" },
 	});

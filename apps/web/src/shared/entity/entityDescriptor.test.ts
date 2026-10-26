@@ -1,8 +1,16 @@
 // @vitest-environment happy-dom
 import { expect, test } from "vitest";
 
+import { defineAbilityFor } from "../../lib/ability.tsx";
+
 import type { EntityDescriptor } from "./entityDescriptor.ts";
-import { entityPath, entityUrl, slugOf } from "./entityDescriptor.ts";
+import {
+	canView,
+	descriptorForLink,
+	entityPath,
+	entityUrl,
+	slugOf,
+} from "./entityDescriptor.ts";
 
 type EventRow = {
 	_id: string;
@@ -100,4 +108,45 @@ test("slugOf uses the descriptor's slug fn when provided", () => {
 	};
 
 	expect(slugOf(itemDescriptor, row)).toBe("A00001");
+});
+
+test("canView follows the viewer's ability on the descriptor's subject", () => {
+	expect(canView(defineAbilityFor("board"), itemDescriptor)).toBe(true);
+	expect(canView(defineAbilityFor("none"), itemDescriptor)).toBe(false);
+});
+
+const taskDescriptor: EntityDescriptor<EventRow> = {
+	...eventDescriptor,
+	key: "task",
+	route: "/tasks",
+	param: "task",
+};
+
+test("descriptorForLink finds the kind a page link names", () => {
+	const descriptors = [eventDescriptor, taskDescriptor];
+	expect(descriptorForLink("/events?event=e1", descriptors)).toEqual({
+		desc: eventDescriptor,
+		slug: "e1",
+	});
+	expect(descriptorForLink("/tasks?task=t1", descriptors)).toEqual({
+		desc: taskDescriptor,
+		slug: "t1",
+	});
+});
+
+test("descriptorForLink returns nothing for a page that holds no single entity", () => {
+	const descriptors = [eventDescriptor, taskDescriptor];
+	expect(
+		descriptorForLink("/space?tab=diagnostics", descriptors)
+	).toBeUndefined();
+	expect(descriptorForLink("/", descriptors)).toBeUndefined();
+	expect(descriptorForLink("/events?task=x", descriptors)).toBeUndefined();
+});
+
+test("descriptorForLink resolves an absolute link on its path", () => {
+	expect(
+		descriptorForLink("https://example.com/events?event=e1", [
+			eventDescriptor,
+		])
+	).toEqual({ desc: eventDescriptor, slug: "e1" });
 });
