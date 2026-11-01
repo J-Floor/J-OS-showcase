@@ -1,6 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+import { PERK_CATEGORIES, PERK_REQUEST_STATUSES } from "./lib/perks.ts";
 import { ACCESS_TIERS } from "./lib/roles.ts";
 import { notificationPrefsValidator } from "./notify/categories.ts";
 
@@ -280,6 +281,17 @@ export const projectFields = {
 	startDate: v.optional(v.number()),
 	endDate: v.optional(v.number()),
 };
+
+/** A perk's category, built from `lib/perks#PERK_CATEGORIES`, which the app's
+ *  labels follow too. */
+export const perkCategory = v.union(
+	...PERK_CATEGORIES.map((category) => v.literal(category))
+);
+
+/** Where a perk request stands (`lib/perks#PERK_REQUEST_STATUSES`). */
+export const perkRequestStatus = v.union(
+	...PERK_REQUEST_STATUSES.map((status) => v.literal(status))
+);
 
 export default defineSchema({
 	people: defineTable({
@@ -712,4 +724,47 @@ export default defineSchema({
 		ssid: v.string(),
 		password: v.string(),
 	}),
+
+	/**
+	 * Deals J floor negotiated with partners. `validUntil` is an inclusive
+	 * Zurich date (`lib/perks#isPerkExpired`); absent, the perk never expires.
+	 * `link` is stored as `normalizeHttpUrl` returns it. `createPerk` requires
+	 * `contactId`, but it is optional here so that erasing the contact strips
+	 * it and keeps the perk.
+	 */
+	perks: defineTable({
+		partner: v.string(),
+		title: v.string(),
+		terms: v.string(),
+		category: perkCategory,
+		link: v.optional(v.string()),
+		validUntil: v.optional(v.string()),
+		contactId: v.optional(v.id("people")),
+		// Optional so erasing the creator (`purge.purgeEmail`) keeps the row.
+		createdBy: v.optional(v.id("people")),
+		createdAt: v.number(),
+	})
+		// Each person id leads an index, so merge and erasure look rows up
+		// instead of scanning the table (`lib/peopleRefs`).
+		.index("by_contactId", ["contactId"])
+		.index("by_createdBy", ["createdBy"]),
+
+	/**
+	 * A person asking for a perk. `personId` is the requester, so erasing
+	 * them deletes the row. `note` is their optional message, trimmed and
+	 * never edited after sending. Only the board sees `status`.
+	 */
+	perkRequests: defineTable({
+		perkId: v.id("perks"),
+		personId: v.id("people"),
+		requestedAt: v.number(),
+		note: v.optional(v.string()),
+		status: perkRequestStatus,
+		statusAt: v.number(),
+		statusById: v.optional(v.id("people")),
+	})
+		.index("by_personId_and_perkId", ["personId", "perkId"])
+		.index("by_perkId_and_requestedAt", ["perkId", "requestedAt"])
+		.index("by_requestedAt", ["requestedAt"])
+		.index("by_statusById", ["statusById"]),
 });

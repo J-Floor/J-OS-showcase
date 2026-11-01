@@ -56,7 +56,13 @@ import { OPEN_DIALOG_CONTENT } from "../../shared/dialogSelectors.ts";
 import { APP_VERSION, CHANGELOG, isNewer } from "./changelog.ts";
 import { WhatsNew } from "./WhatsNew.tsx";
 
-const ALT_LINE = CHANGELOG[0].items[0].text;
+// The newest item for everyone, staff included: the tests below render staff
+// too, and an item gated on a community subject would be hidden from them.
+const everyoneItem = CHANGELOG.flatMap((entry) => entry.items).find(
+	(item) => item.audience === undefined
+);
+if (!everyoneItem) throw new Error("the changelog needs an item for everyone");
+const ALT_LINE = everyoneItem.text;
 const BOARD_LINE = "Edit the Wi-Fi details";
 
 function renderFor(role: Role) {

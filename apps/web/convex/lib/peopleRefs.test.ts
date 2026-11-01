@@ -27,6 +27,8 @@ describe("peopleReferenceTables", () => {
 				"events",
 				"notifications",
 				"people",
+				"perkRequests",
+				"perks",
 				"personEvents",
 				"personState",
 				"projects",
@@ -51,6 +53,8 @@ describe("peopleReferencePlans", () => {
 				"eventAttendance",
 				"doorLog",
 				"notifications",
+				"perkRequests",
+				"perks",
 				"personState",
 				"pushSubscriptions",
 				"signatures",
@@ -197,5 +201,25 @@ describe("documentsNaming", () => {
 			return result.isOk();
 		});
 		expect(isWalked).toBe(true);
+	});
+});
+
+describe("peopleReferencePlans for perks", () => {
+	it("looks up perks and perk requests by index, one lookup per person id", () => {
+		const plans = peopleReferencePlans();
+		expect(plans.perks).toEqual({
+			mode: "index",
+			lookups: [
+				{ index: "by_contactId", field: "contactId" },
+				{ index: "by_createdBy", field: "createdBy" },
+			],
+		});
+		expect(plans.perkRequests).toEqual({
+			mode: "index",
+			lookups: [
+				{ index: "by_personId_and_perkId", field: "personId" },
+				{ index: "by_statusById", field: "statusById" },
+			],
+		});
 	});
 });

@@ -8,6 +8,7 @@ import {
 	eventUrl,
 	homeUrl,
 	manageNotificationsUrl,
+	perkUrl,
 	personUrl,
 	projectUrl,
 	spaceUrl,
@@ -69,4 +70,11 @@ test("confirmUrl carries the encoded token on the purpose's confirm path", () =>
 	expect(confirmUrl("application", "t")).toBe(
 		"https://j.floor/apply/confirm?token=t"
 	);
+});
+
+test("perkUrl opens the encoded perk on the Perks page and names no tab", () => {
+	vi.stubEnv("SITE_URL", "https://app.example.com");
+	// Exact strings: they also pin that no `tab=` rides along.
+	expect(perkUrl("pk1")).toBe("https://app.example.com/perks?perk=pk1");
+	expect(perkUrl("a&b")).toBe("https://app.example.com/perks?perk=a%26b");
 });

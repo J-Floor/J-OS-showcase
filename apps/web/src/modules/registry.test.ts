@@ -23,3 +23,15 @@ test("convex MODULE_PATHS matches the module registry paths", () => {
 			.sort((first, second) => first.localeCompare(second))
 	);
 });
+
+// Perks sits in the slot kept for it, after Inventory and before Tasks.
+test("the modules run in phone priority order", () => {
+	expect(modules.map((entry) => entry.id)).toEqual([
+		"community",
+		"space",
+		"events",
+		"inventory",
+		"perks",
+		"tasks",
+	]);
+});

@@ -696,6 +696,33 @@ async function seedEverywhere(backend: ReturnType<typeof setup>) {
 				url: "/tasks",
 				createdAt: at,
 			});
+		// Their own request, a perk they are the contact for and created, and
+		// someone else's request whose status they last moved.
+		const perkId = await context.db.insert("perks", {
+			partner: "Example Cloud",
+			title: "Cloud credits",
+			terms: "Credits for the first year.",
+			category: "cloud",
+			contactId: goneId,
+			createdBy: goneId,
+			createdAt: at,
+		});
+		await context.db.insert("perkRequests", {
+			perkId,
+			personId: goneId,
+			requestedAt: at,
+			note: `${name} here, keen on this one.`,
+			status: "requested",
+			statusAt: at,
+		});
+		await context.db.insert("perkRequests", {
+			perkId,
+			personId: stayId,
+			requestedAt: at,
+			status: "granted",
+			statusAt: at,
+			statusById: goneId,
+		});
 		return { goneId, stayId, fileId, signatureId, taskId, projectId };
 	});
 	const user = (await backend.mutation(components.betterAuth.adapter.create, {
@@ -842,6 +869,7 @@ describe("exportPerson", () => {
 			"doorLog",
 			"eventAttendance",
 			"notifications",
+			"perkRequests",
 			"personEvents",
 			"pushSubscriptions",
 			"signatures",
@@ -1065,5 +1093,129 @@ describe("purgeEmail erases every address the person used", () => {
 			)) as { page: unknown[] };
 			expect(page, model).toEqual([]);
 		}
+	});
+});
+
+describe("purgeEmail and perks", () => {
+	it("deletes the requester's perk requests and keeps the perk and other people's", async () => {
+		const backend = setup();
+		const at = Date.now();
+		const ids = await backend.run(async (context) => {
+			const goneId = await context.db.insert("people", {
+				email: "gone@example.com",
+				firstName: "Gone",
+				lastName: "Person",
+				tier: "member",
+				stage: "active",
+				stageSince: at,
+			});
+			const stayId = await context.db.insert("people", {
+				email: "stay@example.com",
+				firstName: "Stay",
+				lastName: "Board",
+				tier: "board",
+				stage: "active",
+				stageSince: at,
+			});
+			const perkId = await context.db.insert("perks", {
+				partner: "Example Cloud",
+				title: "Cloud credits",
+				terms: "Credits for the first year.",
+				category: "cloud",
+				contactId: stayId,
+				createdBy: stayId,
+				createdAt: at,
+			});
+			for (const personId of [goneId, stayId])
+				await context.db.insert("perkRequests", {
+					perkId,
+					personId,
+					requestedAt: at,
+					note: "Keen on this one.",
+					status: "requested",
+					statusAt: at,
+				});
+			return { stayId, perkId };
+		});
+
+		const result = await backend.mutation(internal.purge.purgeEmail, {
+			email: "gone@example.com",
+		});
+
+		// The person and their one request.
+		expect(result.deleted).toBe(2);
+		const left = await backend.run(async (context) => ({
+			perk: await context.db.get(ids.perkId),
+			requests: await context.db.query("perkRequests").collect(),
+		}));
+		expect(left.perk?.contactId).toBe(ids.stayId);
+		expect(left.requests.map((request) => request.personId)).toEqual([
+			ids.stayId,
+		]);
+	});
+
+	it("strips an erased contact, creator and status changer, and keeps the perk and the request", async () => {
+		const backend = setup();
+		const at = Date.now();
+		const ids = await backend.run(async (context) => {
+			const goneId = await context.db.insert("people", {
+				email: "gone@example.com",
+				firstName: "Gone",
+				lastName: "Board",
+				tier: "board",
+				stage: "active",
+				stageSince: at,
+			});
+			const stayId = await context.db.insert("people", {
+				email: "stay@example.com",
+				firstName: "Stay",
+				lastName: "Person",
+				tier: "member",
+				stage: "active",
+				stageSince: at,
+			});
+			const perkId = await context.db.insert("perks", {
+				partner: "Example Cloud",
+				title: "Cloud credits",
+				terms: "Credits for the first year.",
+				category: "cloud",
+				validUntil: "2026-12-31",
+				contactId: goneId,
+				createdBy: goneId,
+				createdAt: at,
+			});
+			const requestId = await context.db.insert("perkRequests", {
+				perkId,
+				personId: stayId,
+				requestedAt: at,
+				status: "granted",
+				statusAt: at,
+				statusById: goneId,
+			});
+			return { stayId, perkId, requestId };
+		});
+
+		const result = await backend.mutation(internal.purge.purgeEmail, {
+			email: "gone@example.com",
+		});
+
+		// The perk and the request each lose the person's id.
+		expect(result.stripped).toBe(2);
+		const kept = await backend.run(async (context) => ({
+			perk: await context.db.get(ids.perkId),
+			request: await context.db.get(ids.requestId),
+		}));
+		expect(kept.perk).toMatchObject({
+			partner: "Example Cloud",
+			title: "Cloud credits",
+			validUntil: "2026-12-31",
+		});
+		expect(kept.perk?.contactId).toBeUndefined();
+		expect(kept.perk?.createdBy).toBeUndefined();
+		expect(kept.request).toMatchObject({
+			personId: ids.stayId,
+			status: "granted",
+		});
+		expect(kept.request?.statusById).toBeUndefined();
 	});
 });

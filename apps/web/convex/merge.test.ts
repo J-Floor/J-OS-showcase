@@ -133,6 +133,23 @@ async function seed(backend: T) {
 			outcome: "ok",
 		} as const;
 		await context.db.insert("doorLog", logRow);
+		const perk = await context.db.insert("perks", {
+			partner: "Example Cloud",
+			title: "Cloud credits",
+			terms: "t",
+			category: "cloud",
+			contactId: drop,
+			createdBy: drop,
+			createdAt: 1,
+		});
+		await context.db.insert("perkRequests", {
+			perkId: perk,
+			personId: drop,
+			requestedAt: 1,
+			status: "contacted",
+			statusAt: 1,
+			statusById: drop,
+		});
 		return { keep, drop, guest };
 	});
 }
@@ -898,5 +915,47 @@ describe("merge.run", () => {
 		expect(
 			await backend.run((context) => context.db.get(drop))
 		).not.toBeNull();
+	});
+});
+
+describe("merge perks", () => {
+	it("re-points the dropped person's perk roles and requests, keeping both requests for one perk", async () => {
+		const backend = convexTest(schema, modules);
+		const { keep, drop } = await seed(backend);
+		// Both people asked for the seeded perk. Two open requests after a
+		// merge are harmless, so neither is dropped.
+		await backend.run(async (context) => {
+			const [perk] = await context.db.query("perks").collect();
+			await context.db.insert("perkRequests", {
+				perkId: perk._id,
+				personId: keep,
+				requestedAt: 2,
+				status: "requested",
+				statusAt: 2,
+			});
+		});
+
+		await backend.mutation(internal.merge.apply, {
+			keepId: keep,
+			dropId: drop,
+			patch: {},
+		});
+
+		await backend.run(async (context) => {
+			const [perk] = await context.db.query("perks").collect();
+			expect([perk.contactId, perk.createdBy]).toEqual([keep, keep]);
+			const requests = await context.db
+				.query("perkRequests")
+				.withIndex("by_personId_and_perkId", (range) =>
+					range.eq("personId", keep).eq("perkId", perk._id)
+				)
+				.collect();
+			expect(
+				requests.map((request) => [request.status, request.statusById])
+			).toEqual([
+				["contacted", keep],
+				["requested", undefined],
+			]);
+		});
 	});
 });

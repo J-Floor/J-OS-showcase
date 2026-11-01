@@ -8,6 +8,7 @@ export const MODULE_PATHS = [
 	"/events",
 	"/tasks",
 	"/inventory",
+	"/perks",
 ] as const;
 
 export type ModulePath = (typeof MODULE_PATHS)[number];

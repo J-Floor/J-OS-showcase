@@ -1,0 +1,26 @@
+// An accordion section's fields, one under the other.
+.section {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+}
+
+// Terms keep the line breaks they were typed with.
+.terms {
+	margin: 0;
+	white-space: pre-line;
+	overflow-wrap: anywhere;
+}
+
+// The member's note keeps their line breaks and spacing, as the board's
+// Requests section shows it.
+.note {
+	margin: 0;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+// A URL is one long word: it wraps anywhere rather than widen the sheet.
+.link {
+	overflow-wrap: anywhere;
+}

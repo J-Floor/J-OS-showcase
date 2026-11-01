@@ -1,0 +1,9 @@
+@use "../../shared/listShell" as shell;
+
+.console {
+	@include shell.console;
+}
+
+.panel:not([hidden]) {
+	@include shell.panel;
+}

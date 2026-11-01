@@ -1,6 +1,7 @@
 import { communityModule } from "./community/index.ts";
 import { eventsModule } from "./events/index.ts";
 import { inventoryModule } from "./inventory/index.ts";
+import { perksModule } from "./perks/index.ts";
 import { spaceModule } from "./space/index.ts";
 import { tasksModule } from "./tasks/index.ts";
 import type { ModuleManifest } from "./types.ts";
@@ -16,6 +17,6 @@ export const modules: ModuleManifest[] = [
 	spaceModule,
 	eventsModule,
 	inventoryModule,
-	// perk page goes here
+	perksModule,
 	tasksModule,
 ];

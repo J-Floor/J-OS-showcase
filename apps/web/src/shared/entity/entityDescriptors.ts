@@ -5,6 +5,7 @@ import {
 	itemEntity,
 	itemTypeEntity,
 } from "../../modules/inventory/entity.ts";
+import { perksEntity } from "../../modules/perks/entity.ts";
 import { projectEntity, taskEntity } from "../../modules/tasks/entity.ts";
 import type { EntityRow } from "../types.ts";
 
@@ -29,13 +30,16 @@ function erase<Row extends EntityRow>(
  * `personEntity`'s docstring: which roster someone belongs to changes, and a
  * guessed `?tab=` would go stale). Tasks/projects are board+core only, which
  * is who `tasks.list`/`projects.list` answer for. Events are searchable for
- * anyone who can view the Events page.
+ * anyone who can view the Events page, and so are perks: a member finds the
+ * ones still running and any ended one their request is still open on, the
+ * board every one.
  */
 export const entityDescriptors: EntityDescriptor<EntityRow>[] = [
 	erase(personEntity),
 	erase(taskEntity),
 	erase(projectEntity),
 	erase(eventsEntity),
+	erase(perksEntity),
 	erase(itemEntity),
 	erase(itemTypeEntity),
 	erase(categoryEntity),

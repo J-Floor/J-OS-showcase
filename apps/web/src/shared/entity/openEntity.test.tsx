@@ -9,7 +9,7 @@ import { cleanup, render, waitFor } from "@solidjs/testing-library";
 import { afterEach, expect, test } from "vitest";
 
 import type { EntityDescriptor } from "./entityDescriptor.ts";
-import { useOpenEntity } from "./openEntity.ts";
+import { useOpenEntity, useOpenPeek } from "./openEntity.ts";
 
 afterEach(cleanup);
 
@@ -114,5 +114,34 @@ test("on the kind's own page with a peek open it replaces the peek's entry: clos
 	history.back();
 	await waitFor(() => {
 		expect(url()).toBe("/");
+	});
+});
+
+function PeekPage() {
+	const openPeek = useOpenPeek();
+	seen.location = useLocation();
+	openPeek(person, "p1");
+	return null;
+}
+
+function peekFrom(startAt: string) {
+	const history = createMemoryHistory();
+	history.set({ value: startAt });
+	render(() => (
+		<MemoryRouter history={history}>
+			<Route path="*" component={PeekPage} />
+		</MemoryRouter>
+	));
+	return { url: currentUrl, history };
+}
+
+test("a peek opens on the kind's own page too, over the tab on screen; Back closes it", async () => {
+	const { url, history } = peekFrom("/community?tab=guests");
+	await waitFor(() => {
+		expect(url()).toBe("/community?tab=guests&open=person%3Ap1");
+	});
+	history.back();
+	await waitFor(() => {
+		expect(url()).toBe("/community?tab=guests");
 	});
 });

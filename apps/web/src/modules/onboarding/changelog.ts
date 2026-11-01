@@ -39,8 +39,26 @@ const SPACE_INFO_VIEWERS = { action: "view", subject: "SpaceInfo" } as const;
 const AGREEMENT_VIEWERS = { action: "view", subject: "Members" } as const;
 /** Who sees the Inventory module: the board. */
 const INVENTORY_VIEWERS = { action: "view", subject: "Inventory" } as const;
+/** Who sees the Perks module and may request a perk: every community tier. */
+const PERK_VIEWERS = { action: "view", subject: "Perks" } as const;
+/** Who tracks perk requests: the board. */
+const PERK_MANAGERS = { action: "manage", subject: "Perks" } as const;
 
 export const CHANGELOG: ChangeEntry[] = [
+	{
+		version: "1.4",
+		title: "Partner perks",
+		items: [
+			{
+				text: "Browse partner perks and request one from the app.",
+				audience: PERK_VIEWERS,
+			},
+			{
+				text: "Track perk requests from requested to granted.",
+				audience: PERK_MANAGERS,
+			},
+		],
+	},
 	{
 		version: "1.3",
 		title: "Doors, notifications & the phone app",

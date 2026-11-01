@@ -14,6 +14,7 @@ export const CATEGORIES = [
 	"doors",
 	"guests",
 	"tasks",
+	"perks",
 ] as const;
 export type Category = (typeof CATEGORIES)[number];
 
@@ -75,6 +76,11 @@ export const CATEGORY_INFO: Record<Category, CategoryInfo> = {
 		label: "Tasks",
 		description: "You are assigned a task or made lead of a project.",
 		tiers: CORE_AND_BOARD,
+	},
+	perks: {
+		label: "Perks",
+		description: "Someone requests a perk you're the contact for.",
+		tiers: BOARD_LEVEL,
 	},
 };
 

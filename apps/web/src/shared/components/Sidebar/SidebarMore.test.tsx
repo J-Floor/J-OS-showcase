@@ -96,8 +96,10 @@ async function opens(): Promise<void> {
 // happy-dom applies no media queries, so these assert the markup the phone
 // layout styles; the layout itself is Sidebar.module.scss.
 describe("the phone bar's more item", () => {
+	// Five of the registry's pages and one more: six, however many pages the
+	// registry holds.
 	const sixPages: ModuleManifest[] = [
-		...modules,
+		...modules.slice(0, 5),
 		{ ...modules[0], id: "extra", label: "Extra", path: "/extra" },
 	];
 
@@ -126,11 +128,31 @@ describe("the phone bar's more item", () => {
 		));
 	}
 
-	test("today's registry fits the five slots, with no more item", () => {
-		renderBar("board");
-		expect(screen.getAllByRole("link")).toHaveLength(6);
+	test("a core member's five pages fit the five slots, with no more item", () => {
+		renderBar("core");
+		// The brand link, then Community, Space, Events, Perks and Tasks.
+		expect(
+			screen.getAllByRole("link").map((link) => link.getAttribute("href"))
+		).toEqual(["/", "/community", "/space", "/events", "/perks", "/tasks"]);
 		expect(screen.queryByRole("button")).toBeNull();
 		expect(screen.queryByRole("dialog", { hidden: true })).toBeNull();
+	});
+
+	test("the board's six pages overflow Perks and Tasks into the more item", async () => {
+		renderBar("board");
+		const bar = within(screen.getByTestId("phone-bar-row"));
+		expect(bar.getAllByRole("link")).toHaveLength(4);
+		// Nowhere else in the nav either: the sheet is their only place.
+		expect(
+			within(screen.getByRole("navigation"))
+				.getAllByRole("link")
+				.map((link) => link.getAttribute("href"))
+		).toEqual(["/", "/community", "/space", "/events", "/inventory"]);
+		await opens();
+		const links = within(sheet()).getAllByRole("link");
+		expect(
+			links.slice(0, 2).map((link) => link.getAttribute("href"))
+		).toEqual(["/perks", "/tasks"]);
 	});
 
 	test("six pages show four items and a collapsed more button", () => {
@@ -149,12 +171,12 @@ describe("the phone bar's more item", () => {
 		const links = within(sheet()).getAllByRole("link");
 		// The overflow first, then the bar's four pages again.
 		expect(links.map((link) => link.getAttribute("href"))).toEqual([
-			"/tasks",
+			"/perks",
 			"/extra",
 			...modules.slice(0, 4).map((module) => module.path),
 		]);
 		// Icon and label in each.
-		expect(links[0]?.textContent).toMatch(/^\S+Tasks$/);
+		expect(links[0]?.textContent).toMatch(/^\S+Perks$/);
 		expect(
 			within(sheet()).getByRole("button", { name: "Close" })
 		).toBeTruthy();
@@ -270,5 +292,31 @@ describe("the phone bar's more item", () => {
 	test("more is not active when the page is on the bar", () => {
 		renderBar("board", sixPages, "/events");
 		expect(moreButton().hasAttribute("aria-current")).toBe(false);
+	});
+
+	test("the desktop rail lists each of the board's six pages once, in registry order", () => {
+		renderBar("board", undefined, "/", false);
+		// The brand link, then every page: the rail has room for them all.
+		expect(
+			within(screen.getByRole("navigation"))
+				.getAllByRole("link")
+				.map((link) => link.getAttribute("href"))
+		).toEqual([
+			"/",
+			"/community",
+			"/space",
+			"/events",
+			"/inventory",
+			"/perks",
+			"/tasks",
+		]);
+	});
+
+	test("on the desktop rail a page past the bar's four carries the active state", () => {
+		renderBar("board", undefined, "/tasks", false);
+		const tasks = within(screen.getByRole("navigation")).getByRole("link", {
+			name: /Tasks$/,
+		});
+		expect(tasks.getAttribute("aria-current")).toBe("page");
 	});
 });

@@ -1,0 +1,8 @@
+@use "@j-os/design-system/utils.scss" as utils;
+
+/* One line of the member's note; the perk's sheet shows all of it. */
+.note {
+	@include utils.ellipsis;
+
+	display: block;
+}

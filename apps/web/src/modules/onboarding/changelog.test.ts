@@ -1,8 +1,8 @@
 import { expect, test } from "vitest";
 
-import { defineAbilityFor } from "../../lib/ability.tsx";
+import { defineAbilityFor, type Role } from "../../lib/ability.tsx";
 
-import { type ChangeEntry, visibleNotes } from "./changelog.ts";
+import { CHANGELOG, type ChangeEntry, visibleNotes } from "./changelog.ts";
 
 const EVERYONE = { text: "For everyone" };
 const BOARD = {
@@ -52,4 +52,23 @@ test("versions not newer than the seen one are dropped", () => {
 		"1.3",
 	]);
 	expect(visibleNotes(ENTRIES, "1.3", boardAbility)).toEqual([]);
+});
+
+test("the perks release offers browsing to the community and tracking to the board", () => {
+	const browse = "Browse partner perks and request one from the app.";
+	const track = "Track perk requests from requested to granted.";
+	const release = CHANGELOG.filter((entry) =>
+		entry.items.some((item) => item.text === browse)
+	);
+	expect(release.map((entry) => entry.version)).toEqual(["1.4"]);
+	function textsFor(role: Role): string[] {
+		return visibleNotes(release, null, defineAbilityFor(role)).flatMap(
+			(entry) => entry.items.map((item) => item.text)
+		);
+	}
+	expect(textsFor("guest")).toEqual([browse]);
+	expect(textsFor("member")).toEqual([browse]);
+	expect(textsFor("board")).toEqual([browse, track]);
+	expect(textsFor("admin")).toEqual([browse, track]);
+	expect(textsFor("staff")).toEqual([]);
 });

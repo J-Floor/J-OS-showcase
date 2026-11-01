@@ -13,6 +13,7 @@ import { NAME_MAX, TEXT_MAX } from "../../../../convex/lib/validate.ts";
 import type { SheetNavState } from "../../../lib/createSheetNav.ts";
 import { createSyncedField } from "../../../lib/createSyncedField.ts";
 import { DescriptionField } from "../../../shared/components/DescriptionField.tsx";
+import { PersonSelect } from "../../../shared/components/PersonSelect.tsx";
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
 import {
 	createEntityCommands,
@@ -34,7 +35,6 @@ import { projectFields } from "../fields.ts";
 import { TaskCard } from "../kanban/TaskCard.tsx";
 
 import { DateField } from "./fields/DateField.tsx";
-import { PersonSelect } from "./fields/PersonSelect.tsx";
 import styles from "./ProjectSheet.module.scss";
 // jscpd:ignore-end
 

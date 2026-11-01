@@ -40,6 +40,7 @@ export const ICONS = {
 	guestApplication: "identity_platform",
 	upgradeToMember: "person_add",
 	host: "handshake",
+	partner: "handshake",
 	name: "text_fields_alt",
 	role: "badge",
 	kickOut: "block",
@@ -52,8 +53,10 @@ export const ICONS = {
 	wifi: "wifi",
 	notifications: "notifications",
 	print: "print",
+	download: "download",
 	qr: "qr_code_2",
 	inventory: "inventory_2",
 	events: "event",
 	space: "factory",
+	perks: "redeem",
 } as const;

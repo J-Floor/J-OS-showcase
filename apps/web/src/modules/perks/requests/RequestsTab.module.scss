@@ -1,0 +1,54 @@
+@use "@j-os/design-system/breakpoints" as bp;
+@use "@j-os/design-system/typography" as typo;
+
+/* Fills the page's panel: the group-by bar on top, the table in the height
+   left under it. */
+.tab {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+	min-block-size: 0;
+}
+
+.bar {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--jf-spacing-near);
+	align-items: end;
+	justify-content: space-between;
+
+	/* On a phone the group-by control takes the bar's width (the segment
+	   stretches in its field, and `.option` shares it between the items). */
+	@include bp.phone {
+		flex-direction: column;
+		align-items: stretch;
+	}
+}
+
+.option {
+	@include bp.phone {
+		flex: 1 1 0;
+		min-inline-size: 0;
+		padding-inline: var(--jf-spacing-near);
+	}
+}
+
+/* The table's height: what the bar leaves. The table's own wrapper takes
+   all of it (`block-size: 100%`), so its scroll box is bounded: the header
+   sticks and the rows window. Straight under `.tab`, that 100% would be the
+   whole tab, the bar's height too tall. The same box as the door log's on
+   the Space page's Diagnostics tab. */
+.table {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-block-size: 0;
+}
+
+.cap {
+	@include typo.jf-typo-body-small;
+
+	margin: 0;
+	color: var(--jf-fg-muted);
+}

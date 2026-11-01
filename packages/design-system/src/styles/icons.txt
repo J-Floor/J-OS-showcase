@@ -24,6 +24,7 @@ chevron_right
 class
 clear
 close
+cloud
 code
 code_blocks
 collapse_all
@@ -57,6 +58,7 @@ expand_more
 factory
 filter
 filter_list
+finance
 fingerprint
 flag
 flip
@@ -132,6 +134,7 @@ qr_code_scanner
 queue
 radio
 radio_button_unchecked
+redeem
 refresh
 reminder
 remove

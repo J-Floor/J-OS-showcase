@@ -19,8 +19,8 @@ import styles from "./Sidebar.module.scss";
 
 /**
  * A phone shows the first four viewable pages and a more item that opens the
- * rest in a bottom sheet; the CSS hides the more item on the desktop rail,
- * where every page shows as before.
+ * rest in a bottom sheet. The desktop rail lists every page, and the CSS
+ * hides the more item there.
  */
 export function Sidebar() {
 	// Explicit hover state instead of CSS :hover/:focus-within — the latter stuck
@@ -46,11 +46,10 @@ export function Sidebar() {
 	// all, a member sees just the directory + Space), listed so the phone bar
 	// can count them.
 	const ability = useAbility();
-	const split = createMemo(() =>
-		splitPhoneBar(
-			modules.filter((module) => ability().can("view", module.subject))
-		)
+	const pages = createMemo(() =>
+		modules.filter((module) => ability().can("view", module.subject))
 	);
+	const split = createMemo(() => splitPhoneBar(pages()));
 	function hasOverflow(): boolean {
 		return split().overflow.length > 0;
 	}
@@ -74,7 +73,8 @@ export function Sidebar() {
 				<Logo variant="monogram" class={styles.logo} />
 			</A>
 			<div class={styles.row} data-testid="phone-bar-row">
-				<For each={split().bar}>
+				{/* Only the phone bar folds the overflow into more. */}
+				<For each={isPhone() ? split().bar : pages()}>
 					{(module) => <NavItem module={module} />}
 				</For>
 				<Show when={hasOverflow()}>

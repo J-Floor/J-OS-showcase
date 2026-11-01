@@ -99,4 +99,40 @@ describe("notification preferences", () => {
 			events: { push: true, email: false },
 		});
 	});
+
+	it("offers the board the perks switch and stores it", async () => {
+		const backend = convexTest(schema, modules);
+		const id = await seed(backend, "b@example.org", "board");
+		const board = backend.withIdentity({ email: "b@example.org" });
+		const rows = await board.query(api.notify.prefs.mine, {});
+		expect(rows.find((row) => row.category === "perks")).toMatchObject({
+			label: "Perks",
+			description: "Someone requests a perk you're the contact for.",
+			push: true,
+			email: true,
+		});
+		await board.mutation(api.notify.prefs.set, {
+			category: "perks",
+			push: true,
+			email: false,
+		});
+		const person = await backend.run((context) => context.db.get(id));
+		expect(person?.notificationPrefs).toEqual({
+			perks: { push: true, email: false },
+		});
+	});
+
+	it("refuses the perks switch to a member", async () => {
+		const backend = convexTest(schema, modules);
+		await seed(backend, "m@example.org", "member");
+		await expect(
+			backend
+				.withIdentity({ email: "m@example.org" })
+				.mutation(api.notify.prefs.set, {
+					category: "perks",
+					push: false,
+					email: false,
+				})
+		).rejects.toThrow(/Forbidden/);
+	});
 });

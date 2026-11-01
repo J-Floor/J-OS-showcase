@@ -52,6 +52,10 @@ export function eventUrl(eventId: string): string {
 	return `${siteUrl()}/events?event=${encodeURIComponent(eventId)}`;
 }
 
+export function perkUrl(perkId: string): string {
+	return `${siteUrl()}/perks?perk=${encodeURIComponent(perkId)}`;
+}
+
 /** The community roster, with no person open. */
 export function communityUrl(): string {
 	return `${siteUrl()}/community`;

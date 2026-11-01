@@ -66,3 +66,23 @@ test("every community role gets notifications; no role, none", () => {
 	expect(defineAbilityFor("none").can("view", "Notifications")).toBe(false);
 	expect(defineAbilityFor("none").can("view", "Space")).toBe(false);
 });
+
+test("every community tier views Perks; only the board creates and manages them", () => {
+	for (const role of ["guest", "member", "core"] as const) {
+		const ability = defineAbilityFor(role);
+		expect(ability.can("view", "Perks")).toBe(true);
+		expect(ability.can("create", "Perks")).toBe(false);
+		expect(ability.can("manage", "Perks")).toBe(false);
+	}
+	for (const role of ["board", "admin"] as const) {
+		const ability = defineAbilityFor(role);
+		expect(ability.can("view", "Perks")).toBe(true);
+		expect(ability.can("create", "Perks")).toBe(true);
+		expect(ability.can("manage", "Perks")).toBe(true);
+	}
+});
+
+test("staff and no role do not see Perks", () => {
+	expect(defineAbilityFor("staff").can("view", "Perks")).toBe(false);
+	expect(defineAbilityFor("none").can("view", "Perks")).toBe(false);
+});

@@ -42,7 +42,10 @@ export type Subject =
 	// The bell, the push prompt and the notifications sheet.
 	| "Notifications"
 	| "Tasks"
-	| "Inventory";
+	| "Inventory"
+	// Partner deals: the community browses and requests them, the board runs
+	// them and tracks the requests.
+	| "Perks";
 /** One thing a role may do: what a gated item or page asks the ability. */
 export type Permission = { action: Action; subject: Subject };
 export type AppAbility = MongoAbility<[Action, Subject]>;
@@ -66,6 +69,10 @@ export function defineAbilityFor(role: Role): AppAbility {
 		can("manage", "Tasks");
 		can("view", "Inventory");
 		can("manage", "Inventory");
+		// Board/admin add and edit perks and track their requests; `view` is
+		// granted to the whole community below.
+		can("create", "Perks");
+		can("manage", "Perks");
 		// Board/admin can create events and manage the Events module; `view` is
 		// granted to everyone (incl. guests) below.
 		can("create", "Events");
@@ -93,6 +100,7 @@ export function defineAbilityFor(role: Role): AppAbility {
 	if (isCommunityTier(role)) {
 		can("view", "SpaceInfo");
 		can("view", "Events");
+		can("view", "Perks");
 		can("view", "Notifications");
 	}
 	return build();

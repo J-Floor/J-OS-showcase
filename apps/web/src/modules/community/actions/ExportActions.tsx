@@ -3,6 +3,7 @@ import { createHotkey } from "@tanstack/solid-hotkeys";
 import { type JSX, createSignal, onCleanup } from "solid-js";
 
 import { useConfirm } from "../../../shared/confirm.tsx";
+import { downloadBlob } from "../../../shared/downloadBlob.ts";
 import { ICONS } from "../../../shared/icons.ts";
 import {
 	useApplications,
@@ -16,13 +17,7 @@ import { buildFullExport, buildLightExport } from "./exportShape.ts";
 const BYTES_PER_KILOBYTE = 1024;
 
 function downloadFile(json: string, filename: string) {
-	const blob = new Blob([json], { type: "application/json" });
-	const url = URL.createObjectURL(blob);
-	const link = document.createElement("a");
-	link.href = url;
-	link.download = filename;
-	link.click();
-	URL.revokeObjectURL(url);
+	downloadBlob(new Blob([json], { type: "application/json" }), filename);
 }
 
 /** Transient success flag: flips true, auto-reverts after `ms`. */
@@ -134,7 +129,7 @@ export function ExportActions(): JSX.Element {
 		<div class={styles.actions}>
 			<SwapIconButton
 				tooltipLabel="Download JSON"
-				idleIcon="download"
+				idleIcon={ICONS.download}
 				shortcut="D"
 				success={downloaded()}
 				onClick={download}
