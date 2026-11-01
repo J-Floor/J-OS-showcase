@@ -270,6 +270,16 @@ describe("disablePush, resyncPush, pushSubscribed", () => {
 		expect(error.message).toBe("Could not turn off notifications.");
 	});
 
+	test("disablePush treats a registration without push support (an iOS Safari tab) as no subscription", async () => {
+		setNavigator("serviceWorker", {
+			ready: Promise.resolve({}),
+			getRegistration: vi.fn(() => Promise.resolve({})),
+		});
+		const result = await disablePush();
+		expect(result.isOk()).toBe(true);
+		expect(mutation).not.toHaveBeenCalled();
+	});
+
 	test("disablePush does nothing without a subscription", async () => {
 		installPush({ permission: "granted", existing: null });
 		await disablePush();

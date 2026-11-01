@@ -80,23 +80,25 @@ export async function mayPublicSubmit(
 }
 
 /**
- * The caps a magic-link send must pass: the per-address `magicLinkAddress`
- * bucket, then, only for an address with no `people` row, the global
- * `magicLink` bucket, so a flood of strangers cannot lock members out. True
- * when the email may be sent; the caller answers the same either way.
+ * What a magic-link request gets: the per-address `magicLinkAddress` bucket
+ * first (`limited` when spent), then the person lookup. A known person gets
+ * the `link`. An address with no `people` row spends the global `magicLink`
+ * bucket, so a flood of strangers cannot lock members out, and gets the
+ * `noAccount` email, or `limited` when that bucket is spent. The caller
+ * answers the same either way.
  */
-export async function mayMagicLink(
+export async function magicLinkDecision(
 	context: RunMutationCtx,
 	email: string
-): Promise<boolean> {
+): Promise<"link" | "noAccount" | "limited"> {
 	const perAddress = await rateLimiter.limit(context, "magicLinkAddress", {
 		key: normalizeEmail(email),
 	});
-	if (!perAddress.ok) return false;
+	if (!perAddress.ok) return "limited";
 	const person = await context.runQuery(internal.people.getPersonByEmail, {
 		email,
 	});
-	if (person) return true;
+	if (person) return "link";
 	const overall = await rateLimiter.limit(context, "magicLink");
-	return overall.ok;
+	return overall.ok ? "noAccount" : "limited";
 }

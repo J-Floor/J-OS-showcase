@@ -44,6 +44,7 @@ import type * as emails_generated_emailChanged from "../emails/generated/emailCh
 import type * as emails_generated_eventInvite from "../emails/generated/eventInvite.js";
 import type * as emails_generated_magicLink from "../emails/generated/magicLink.js";
 import type * as emails_generated_memberUpgrade from "../emails/generated/memberUpgrade.js";
+import type * as emails_generated_noAccount from "../emails/generated/noAccount.js";
 import type * as emails_generated_notice from "../emails/generated/notice.js";
 import type * as emails_generated_perkRequested from "../emails/generated/perkRequested.js";
 import type * as emails_generated_projectAssigned from "../emails/generated/projectAssigned.js";
@@ -218,6 +219,7 @@ declare const fullApi: ApiFromModules<{
   "emails/generated/eventInvite": typeof emails_generated_eventInvite;
   "emails/generated/magicLink": typeof emails_generated_magicLink;
   "emails/generated/memberUpgrade": typeof emails_generated_memberUpgrade;
+  "emails/generated/noAccount": typeof emails_generated_noAccount;
   "emails/generated/notice": typeof emails_generated_notice;
   "emails/generated/perkRequested": typeof emails_generated_perkRequested;
   "emails/generated/projectAssigned": typeof emails_generated_projectAssigned;

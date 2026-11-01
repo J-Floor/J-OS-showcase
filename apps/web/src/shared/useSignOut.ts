@@ -15,7 +15,8 @@ const SIGN_OUT_FAILED = "Could not sign out. Try again.";
  *
  * This device's push subscription goes first, while the session still exists:
  * on a shared device the next person must not receive the previous person's
- * notifications. A failure there is logged and never blocks signing out.
+ * notifications. Nothing in that step, a returned failure or a throw, can stop
+ * signing out: it is logged and signing out goes on.
  * The data session ends before the auth session does, so the unmounting
  * signed-in pages cannot refill the caches. If signing out fails and the
  * session still has its user, the keeper comes back on; with no user it
@@ -28,7 +29,10 @@ export function useSignOut(options?: {
 	const navigate = useNavigate();
 	const session = authClient.useSession();
 	return async function signOut(): Promise<void> {
-		const unsubscribed = await disablePush();
+		const unsubscribed = await ResultAsync.fromPromise(
+			disablePush(),
+			(error) => error
+		).andThen((result) => result);
 		if (unsubscribed.isErr()) {
 			// eslint-disable-next-line no-console -- a failed unsubscribe must not block signing out; surface it for debugging
 			console.error(

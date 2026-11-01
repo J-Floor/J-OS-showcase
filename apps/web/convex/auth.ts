@@ -8,9 +8,10 @@ import type { DataModel } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 import authConfig from "./auth.config.ts";
 import { magicLink as magicLinkEmail } from "./emails/generated/magicLink.ts";
+import { noAccount } from "./emails/generated/noAccount.ts";
 import { emailUrls } from "./emails/urls.ts";
 import { sendEmail } from "./lib/email.ts";
-import { mayMagicLink } from "./lib/rateLimit.ts";
+import { magicLinkDecision } from "./lib/rateLimit.ts";
 import { invariant } from "./lib/result.ts";
 
 const siteUrl = process.env.SITE_URL!;
@@ -35,10 +36,29 @@ export function createAuth(context: GenericCtx<DataModel>) {
 						"runMutation" in context,
 						"sendMagicLink needs an action context"
 					);
-					// Exhausted → send nothing; Better Auth still answers
-					// success, so the endpoint stays non-enumerable.
-					if (!(await mayMagicLink(context, email))) return;
-					const { logoUrl } = emailUrls();
+					// Every branch answers the same (Better Auth reports success),
+					// so the endpoint stays non-enumerable: only the mailbox
+					// owner can tell a link from "no account".
+					const decision = await magicLinkDecision(context, email);
+					if (decision === "limited") return;
+					const { logoUrl, signinUrl, signUpUrl, privacyUrl } =
+						emailUrls();
+					if (decision === "noAccount") {
+						const { html, text } = noAccount({
+							signinUrl,
+							signUpUrl,
+							logoUrl,
+							privacyUrl,
+						});
+						await sendEmail({
+							to: email,
+							subject: "No J floor account for this email",
+							html,
+							text,
+							devLog: `[no-account] ${email}`,
+						});
+						return;
+					}
 					const { html, text } = magicLinkEmail({ url, logoUrl });
 					await sendEmail({
 						to: email,

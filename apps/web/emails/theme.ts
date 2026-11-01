@@ -19,6 +19,7 @@ export const fontStack =
 
 /** Shared style objects so every template/layout looks identical. */
 export const styles = {
+	link: { color: palette.link },
 	body: { backgroundColor: palette.bg, margin: "0", padding: "0" },
 	container: {
 		maxWidth: "480px",

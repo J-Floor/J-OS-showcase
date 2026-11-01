@@ -41,6 +41,11 @@ export const TEMPLATES: Entry[] = [
 		fields: ["greeting", "signinUrl", "logoUrl", "privacyUrl"],
 	},
 	{
+		name: "noAccount",
+		file: "templates/noAccount.tsx",
+		fields: ["signinUrl", "signUpUrl", "logoUrl", "privacyUrl"],
+	},
+	{
 		name: "reapplyAfter",
 		file: "templates/reapplyAfter.tsx",
 		fields: ["until", "logoUrl", "privacyUrl"],

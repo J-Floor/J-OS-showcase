@@ -110,8 +110,13 @@ function currentSubscription(
 	message: string
 ): ResultAsync<PushSubscription | null, ClientError> {
 	return registration(message).andThen(
-		(reg): ResultAsync<PushSubscription | null, ClientError> =>
-			reg
+		// An iOS Safari tab has a registration but no `pushManager`.
+		(
+			reg:
+				| Partial<Pick<ServiceWorkerRegistration, "pushManager">>
+				| undefined
+		): ResultAsync<PushSubscription | null, ClientError> =>
+			reg?.pushManager
 				? fromBrowser(reg.pushManager.getSubscription(), message)
 				: okAsync(null)
 	);

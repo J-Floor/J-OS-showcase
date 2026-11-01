@@ -8,6 +8,7 @@ import { approvalGuest } from "./generated/approvalGuest.ts";
 import { boardNewApplication } from "./generated/boardNewApplication.ts";
 import { eventInvite } from "./generated/eventInvite.ts";
 import { magicLink } from "./generated/magicLink.ts";
+import { noAccount } from "./generated/noAccount.ts";
 import { notice } from "./generated/notice.ts";
 import { reapplyAfter } from "./generated/reapplyAfter.ts";
 import { taskAssigned } from "./generated/taskAssigned.ts";
@@ -146,6 +147,8 @@ describe("emails answering a public form", () => {
 	const privacyUrl = "https://app.example.com/privacy";
 	const logoUrl = "https://app.example.com/email/logo.png";
 	const confirmUrl = "https://app.example.com/confirm?token=abc";
+	const signinUrl = "https://app.example.com/signin";
+	const signUpUrl = "https://app.example.com/sign-up";
 	const sent = {
 		verifyApplication: verifyApplication({
 			confirmUrl,
@@ -159,7 +162,7 @@ describe("emails answering a public form", () => {
 		}),
 		alreadyActive: alreadyActive({
 			greeting: "Hi Ada,",
-			signinUrl: "https://app.example.com/signin",
+			signinUrl,
 			logoUrl,
 			privacyUrl,
 		}),
@@ -169,6 +172,7 @@ describe("emails answering a public form", () => {
 			privacyUrl,
 		}),
 		alreadyUnderReview: alreadyUnderReview({ logoUrl, privacyUrl }),
+		noAccount: noAccount({ signinUrl, signUpUrl, logoUrl, privacyUrl }),
 		verifyVisitor: verifyVisitor({ confirmUrl, logoUrl, privacyUrl }),
 		eventInvite: eventInvite({
 			eventName: "Demo Night",
@@ -198,5 +202,13 @@ describe("emails answering a public form", () => {
 			logoUrl,
 		});
 		expect(html).not.toContain("How we handle your data");
+	});
+
+	it("noAccount links sign-in and sign-up and carries no typed text", () => {
+		const { html, text } = sent.noAccount;
+		expect(html).toContain(`href="${signinUrl}"`);
+		expect(html).toContain(`href="${signUpUrl}"`);
+		expect(text).toContain(signUpUrl);
+		expect(text).toContain("no link was sent");
 	});
 });

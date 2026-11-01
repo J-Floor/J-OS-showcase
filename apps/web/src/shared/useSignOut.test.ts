@@ -131,3 +131,13 @@ test("a failed sign-out with no user left keeps the keeper off", async () => {
 	expect(toasterCreate).toHaveBeenCalledOnce();
 	expect(navigate).not.toHaveBeenCalled();
 });
+
+test("still signs out when removing the subscription throws", async () => {
+	disablePush.mockImplementationOnce(() =>
+		Promise.reject(new TypeError("pushManager is undefined"))
+	);
+	vi.spyOn(console, "error").mockImplementation(() => {});
+	await hook()();
+	expect(signOut).toHaveBeenCalledOnce();
+	expect(navigate).toHaveBeenCalledWith("/signin", { replace: true });
+});

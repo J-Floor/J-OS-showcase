@@ -14,6 +14,7 @@ export function emailUrls(): {
 	siteUrl: string;
 	logoUrl: string;
 	signinUrl: string;
+	signUpUrl: string;
 	privacyUrl: string;
 } {
 	const site = siteUrl();
@@ -21,6 +22,7 @@ export function emailUrls(): {
 		siteUrl: site,
 		logoUrl: `${site}/email/logo.png`,
 		signinUrl: `${site}/signin`,
+		signUpUrl: `${site}/sign-up`,
 		privacyUrl: `${site}/privacy`,
 	};
 }
