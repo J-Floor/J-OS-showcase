@@ -49,7 +49,11 @@ export default defineConfig(({ mode }) => ({
               start_url: '/',
               scope: '/',
               display: 'standalone',
-              theme_color: '#ffffff',
+              // No theme_color: Android then colours an installed app's
+              // navigation bar from the phone's light or dark setting. The
+              // plugin fills in a default when the key is missing, so it is
+              // set to undefined, which JSON leaves out.
+              theme_color: undefined,
               background_color: '#ffffff',
               icons: [
                 { src: 'pwa-64x64.png', sizes: '64x64', type: 'image/png' },
