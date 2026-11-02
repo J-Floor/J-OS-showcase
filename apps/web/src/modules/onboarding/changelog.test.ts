@@ -79,9 +79,7 @@ test("perk notifications are announced to everyone who can view Perks", () => {
 	const release = CHANGELOG.filter((entry) =>
 		entry.items.some((item) => item.text === text)
 	);
-	expect(release.map((entry) => entry.version)).toEqual([
-		CHANGELOG[0].version,
-	]);
+	expect(release.map((entry) => entry.version)).toEqual(["1.5"]);
 	for (const role of ["guest", "member", "core", "board", "admin"] as const) {
 		expect(
 			visibleNotes(release, null, defineAbilityFor(role)).flatMap(

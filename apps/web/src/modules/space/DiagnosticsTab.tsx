@@ -1,9 +1,21 @@
-import { Button, Table, type JfColumnDefinition } from "@j-os/design-system";
+import { Table, type JfColumnDefinition } from "@j-os/design-system";
 import { Show, createMemo, type JSX } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
 import { DOOR_LOG_PAGE_SIZE } from "../../../convex/lib/constants.ts";
+import { ActionButton } from "../../shared/actions/ActionButton.tsx";
+import { bindPageKeys } from "../../shared/actions/sheetActions.tsx";
+import {
+	PAGE_TARGET,
+	type ActionDescriptor,
+	type PageTarget,
+} from "../../shared/actions/shortcuts.ts";
 import { useFlooredLog } from "../../shared/data/useFlooredLog.ts";
+import {
+	OPERATION_LABEL,
+	OUTCOME_LABEL,
+} from "../../shared/history/doorWording.ts";
+import { ICONS } from "../../shared/icons.ts";
 import { dayLabel } from "../../shared/time.ts";
 
 import styles from "./DiagnosticsTab.module.scss";
@@ -19,15 +31,6 @@ type AuthLogRow = Pick<LogRow, "at" | "operation" | "trigger" | "outcome"> & {
 	noResponse: boolean;
 };
 
-// Typed `Record<union, string>` so a new schema member is a compile error here
-// and not a filter option that quietly never shows.
-const operationLabels: Record<LogRow["operation"], string> = {
-	grant: "Grant",
-	revoke: "Revoke",
-	unlock: "Unlock",
-	lock: "Lock",
-};
-
 const triggerLabels: Record<LogRow["trigger"], string> = {
 	cron: "Cron",
 	lifecycle: "Lifecycle",
@@ -37,14 +40,6 @@ const triggerLabels: Record<LogRow["trigger"], string> = {
 	gc: "GC",
 	app: "App",
 	switchover: "Switchover",
-};
-
-const outcomeLabels: Record<LogRow["outcome"], string> = {
-	ok: "Ok",
-	partial: "Partial",
-	failed: "Failed",
-	"dry-run": "Dry run",
-	busy: "Busy",
 };
 
 function enumOptions<Member extends string>(
@@ -80,7 +75,7 @@ const columns: JfColumnDefinition<AuthLogRow>[] = [
 		header: "Operation",
 		dataType: "enum",
 		size: "content",
-		enumOptions: enumOptions(operationLabels),
+		enumOptions: enumOptions(OPERATION_LABEL),
 	},
 	{
 		accessorKey: "trigger",
@@ -100,7 +95,7 @@ const columns: JfColumnDefinition<AuthLogRow>[] = [
 		header: "Outcome",
 		dataType: "enum",
 		size: "content",
-		enumOptions: enumOptions(outcomeLabels),
+		enumOptions: enumOptions(OUTCOME_LABEL),
 	},
 	{
 		accessorKey: "toDoor",
@@ -140,6 +135,27 @@ function toRow(row: LogRow, now: number): AuthLogRow {
 	};
 }
 
+/** "Try again" for a page of older entries that failed to load, and its key.
+ *  The tab mounts only while it is open, so the key needs no `active` flag of
+ *  its own: it lives while the tab does, and acts only while the button shows. */
+function createLogRetry(log: {
+	loadMoreFailed: () => boolean;
+	loadMore: () => Promise<unknown>;
+}): ActionDescriptor<PageTarget> {
+	const retry: ActionDescriptor<PageTarget> = {
+		id: "retry-door-log",
+		label: "Try again",
+		icon: ICONS.refresh,
+		hotkey: "R",
+		can: () => log.loadMoreFailed(),
+		run: () => {
+			void log.loadMore();
+		},
+	};
+	bindPageKeys("space-door-log", [retry], () => true);
+	return retry;
+}
+
 /**
  * Board-only door ops view: per-lock reachability plus every grant, revoke
  * and app unlock the app has recorded since this log existed. The log is one
@@ -152,6 +168,8 @@ export function DiagnosticsTab(): JSX.Element {
 		pageSize: DOOR_LOG_PAGE_SIZE,
 		start: () => true,
 	});
+
+	const retry = createLogRetry(log);
 
 	const rows = createMemo<AuthLogRow[] | undefined>(() => {
 		const now = Date.now();
@@ -197,14 +215,11 @@ export function DiagnosticsTab(): JSX.Element {
 				<Show when={log.loadMoreFailed()}>
 					<div class={styles.retry}>
 						<p class={styles.empty}>Couldn't load older entries.</p>
-						<Button
+						<ActionButton
+							action={retry}
+							target={PAGE_TARGET}
 							variant="tertiary"
-							onClick={() => {
-								void log.loadMore();
-							}}
-						>
-							Try again
-						</Button>
+						/>
 					</div>
 				</Show>
 			</section>

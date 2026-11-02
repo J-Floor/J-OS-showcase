@@ -1,5 +1,4 @@
 import { Accordion, PropertyRow, Sheet } from "@j-os/design-system";
-import { useMutation } from "convex-solidjs";
 import {
 	Show,
 	createEffect,
@@ -9,35 +8,31 @@ import {
 	type Accessor,
 } from "solid-js";
 
-import { api } from "../../../convex/_generated/api";
 import type { PerkRow } from "../../../convex/perks.ts";
 import { Can } from "../../lib/ability.tsx";
-import { call } from "../../lib/call.ts";
+import { ActionBar } from "../../shared/actions/ActionBar.tsx";
+import type {
+	ActionDescriptor,
+	CreateTarget,
+} from "../../shared/actions/shortcuts.ts";
 import { EditToggle } from "../../shared/components/EditToggle.tsx";
-import type { ConfirmOptions } from "../../shared/confirm.tsx";
 import { createDraftGuard } from "../../shared/entity/createDraftGuard.ts";
-import { EntityDeleteButton } from "../../shared/entity/EntityDeleteButton.tsx";
 import { EntitySheetHeader } from "../../shared/entity/EntitySheetHeader.tsx";
+import { SheetCreateFooter } from "../../shared/entity/SheetCreateFooter.tsx";
+import { SheetFooter } from "../../shared/entity/SheetFooter.tsx";
 import { SheetSection } from "../../shared/entity/SheetSection.tsx";
-import { InlineError } from "../../shared/InlineError.tsx";
 import type { SheetOpenProps } from "../../shared/types.ts";
 
 import { perkFields } from "./fields.ts";
+import { createPerkSheetActions } from "./perkActions.tsx";
 import { PerkAdminRequests } from "./PerkAdminRequests.tsx";
-import {
-	PerkCreateFooter,
-	PerkCreateForm,
-	createPerkCreateForm,
-	type PerkCreateFormState,
-} from "./PerkCreateForm.tsx";
+import { PerkCreateForm, createPerkCreateForm } from "./PerkCreateForm.tsx";
 import { PerkDetailsItem } from "./PerkDetails.tsx";
 import {
-	PerkRequestButton,
 	PerkRequestNote,
 	createPerkRequestForm,
 	type PerkRequestForm,
 } from "./PerkRequestForm.tsx";
-import styles from "./PerkSheet.module.scss";
 
 /** The sections a perk's sheet opens with. "requests" is the board's. */
 const ALL_SECTIONS = ["details", "requests"];
@@ -78,7 +73,7 @@ function PerkSheetHeader(
 	}
 ) {
 	return (
-		<EntitySheetHeader.Root
+		<EntitySheetHeader
 			title={props.perk?.title ?? "New perk"}
 			loading={props.loading}
 			saveStatus={!props.loading && props.perk !== undefined}
@@ -92,7 +87,7 @@ function PerkSheetHeader(
 					/>
 				</Show>
 			</Can>
-		</EntitySheetHeader.Root>
+		</EntitySheetHeader>
 	);
 }
 
@@ -126,63 +121,36 @@ function PerkDetailAccordion(props: {
 	);
 }
 
-const DELETE_PERK_CONFIRM: ConfirmOptions = {
-	title: "Delete perk?",
-	message: "This removes the perk and its request history.",
-	confirmLabel: "Delete",
-	tone: "danger",
-};
-
-/** The footer. On a loaded perk: the optional note, why a request failed,
- *  Delete perk for the board, and the Request button, last as the primary
- *  action. On the create form: Create, for the board. Nothing while the row
- *  is still loading. The perk's `Show` is not keyed: a refetched row must
- *  not remount Delete and lose its refusal. */
+/** The footer. On a loaded perk: the note over the actions (Request perk,
+ *  and Delete perk for the board), with why one failed. On the create form:
+ *  Create perk, for the board. Nothing while the row is still loading. The
+ *  perk's `Show` is not keyed: a refetched row must not remount the bar and
+ *  lose a refusal. */
 function PerkSheetFooter(
-	props: Pick<PerkSheetProps, "perk" | "loading"> & {
+	props: Pick<PerkSheetProps, "perk" | "loading" | "open"> & {
 		form: PerkRequestForm;
-		createForm: PerkCreateFormState;
-		onClose: () => void;
+		create: ActionDescriptor<CreateTarget>;
+		actions: Accessor<ActionDescriptor<PerkRow>[]>;
+		error: Accessor<string | null>;
 	}
 ) {
-	const deletePerk = useMutation(api.perks.deletePerk);
 	return (
 		<Show when={!props.loading}>
 			<Show
 				when={props.perk}
 				fallback={
 					<Can I="create" the="Perks">
-						<PerkCreateFooter form={props.createForm} />
+						<SheetCreateFooter create={props.create} isCreating />
 					</Can>
 				}
 			>
 				{(perk) => (
-					<Sheet.Footer>
-						<div class={styles.footer}>
-							<PerkRequestNote form={props.form} perk={perk} />
-							<InlineError message={props.form.error()} />
-							<div class={styles.footerActions}>
-								<Can I="manage" the="Perks">
-									<EntityDeleteButton
-										key={perk()._id}
-										confirm={DELETE_PERK_CONFIRM}
-										remove={() =>
-											call(
-												deletePerk.mutateAsync({
-													perkId: perk()._id,
-												}),
-												"Could not delete the perk."
-											)
-										}
-										onClose={props.onClose}
-									>
-										Delete perk
-									</EntityDeleteButton>
-								</Can>
-								<PerkRequestButton form={props.form} />
-							</div>
-						</div>
-					</Sheet.Footer>
+					<SheetFooter
+						lead={<PerkRequestNote form={props.form} perk={perk} />}
+						error={props.error()}
+					>
+						<ActionBar actions={props.actions()} target={perk()} />
+					</SheetFooter>
 				)}
 			</Show>
 		</Show>
@@ -257,10 +225,10 @@ function createPerkCreateMode(
 /**
  * A perk's sheet, built like the event sheet: an accordion of
  * `PropertyRow`s that morphs out of the perk's row. Every community tier
- * reads the details and asks for an active perk from the footer, with an
- * optional note; once asked, the sheet says when and shows the note
- * read-only. A typed, unsent note is a draft: closing asks before it is
- * thrown away.
+ * reads the details and asks for an active perk from the footer, with a
+ * one-line note; once asked, the sheet says when and shows the note
+ * read-only. Request perk is `R` and, for the board, Delete perk is `Delete`.
+ * A typed, unsent note is a draft: closing asks before it is thrown away.
  *
  * The board also gets the padlock (each field then autosaves), Delete perk,
  * and the Requests section, where it moves each request's status. Create
@@ -301,6 +269,11 @@ export function PerkSheet(props: PerkSheetProps) {
 	const noteDraft = createNoteDraft(props, form);
 	const createMode = createPerkCreateMode(props, noteDraft);
 
+	const perkActions = createPerkSheetActions(props, {
+		form,
+		createForm: createMode.form,
+	});
+
 	return (
 		<Sheet.Root
 			open={props.open}
@@ -309,6 +282,7 @@ export function PerkSheet(props: PerkSheetProps) {
 			discardLabel={props.perk === undefined ? "new perk" : "your note"}
 			morphId={props.perk?._id}
 		>
+			<perkActions.Keys />
 			<PerkSheetHeader
 				perk={props.perk}
 				loading={props.loading}
@@ -325,7 +299,10 @@ export function PerkSheet(props: PerkSheetProps) {
 					when={props.perk}
 					fallback={
 						<Can I="create" the="Perks">
-							<PerkCreateForm form={createMode.form} />
+							<PerkCreateForm
+								form={createMode.form}
+								create={perkActions.create}
+							/>
 						</Can>
 					}
 				>
@@ -345,11 +322,11 @@ export function PerkSheet(props: PerkSheetProps) {
 			<PerkSheetFooter
 				perk={props.perk}
 				loading={props.loading}
+				open={props.open}
 				form={form}
-				createForm={createMode.form}
-				onClose={() => {
-					props.onOpenChange(false);
-				}}
+				create={perkActions.create}
+				actions={perkActions.actions}
+				error={() => form.error() ?? perkActions.deleteError()}
 			/>
 		</Sheet.Root>
 	);

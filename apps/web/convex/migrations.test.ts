@@ -362,3 +362,255 @@ describe("repairGuestWithoutAgreement", () => {
 		).rejects.toThrow();
 	});
 });
+
+/** A requester, a board member who moved requests, a perk, and requests
+ *  written raw with no events: how rows from before the log look. */
+async function seedLegacy(backend: Tester) {
+	return backend.run(async (context) => {
+		const person = {
+			lastName: "Example",
+			tier: "member",
+			stage: "active",
+			stageSince: 1,
+		} as const;
+		const requesterId = await context.db.insert("people", {
+			...person,
+			email: "ada@example.com",
+			firstName: "Ada",
+		});
+		const boardId = await context.db.insert("people", {
+			...person,
+			email: "bo@example.com",
+			firstName: "Bo",
+			tier: "board",
+		});
+		const perkId = await context.db.insert("perks", {
+			partner: "Example Cloud",
+			title: "Cloud credits",
+			terms: "Credits for the first year.",
+			category: "cloud",
+			createdAt: 1,
+		});
+		const grantedId = await context.db.insert("perkRequests", {
+			perkId,
+			personId: requesterId,
+			requestedAt: 1000,
+			status: "granted",
+			statusAt: 2000,
+			statusById: boardId,
+		});
+		const openId = await context.db.insert("perkRequests", {
+			perkId,
+			personId: requesterId,
+			requestedAt: 3000,
+			status: "requested",
+			statusAt: 3000,
+		});
+		return { requesterId, boardId, perkId, grantedId, openId };
+	});
+}
+
+async function perkEvents(backend: Tester) {
+	const rows = await backend.run((context) =>
+		context.db
+			.query("personEvents")
+			.withIndex("by_kind_and_at", (range) => range.eq("kind", "perk"))
+			.collect()
+	);
+	return rows.map(
+		({ personId, actorId, event, perkRequestId, meta, at }) => ({
+			personId,
+			actorId,
+			event,
+			perkRequestId,
+			meta: meta as { perkId: Id<"perks"> },
+			at,
+		})
+	);
+}
+
+describe("backfillPerkEvents", () => {
+	it("writes Requested by the requester, then the current status by whoever set it", async () => {
+		const backend = createTester();
+		const ids = await seedLegacy(backend);
+		const result = await backend.mutation(
+			internal.migrations.backfillPerkEvents,
+			{}
+		);
+		expect(result).toEqual(
+			expect.objectContaining({ requests: 2, events: 3, isDone: true })
+		);
+		const shared = {
+			personId: ids.requesterId,
+			meta: { perkId: ids.perkId },
+		};
+		expect(await perkEvents(backend)).toEqual([
+			{
+				...shared,
+				actorId: ids.requesterId,
+				event: "requested",
+				perkRequestId: ids.grantedId,
+				at: 1000,
+			},
+			{
+				...shared,
+				actorId: ids.boardId,
+				event: "granted",
+				perkRequestId: ids.grantedId,
+				at: 2000,
+			},
+			{
+				...shared,
+				actorId: ids.requesterId,
+				event: "requested",
+				perkRequestId: ids.openId,
+				at: 3000,
+			},
+		]);
+	});
+
+	it("reports what it would write on a dry run, and writes nothing", async () => {
+		const backend = createTester();
+		await seedLegacy(backend);
+		const result = await backend.mutation(
+			internal.migrations.backfillPerkEvents,
+			{ dryRun: true }
+		);
+		expect(result).toEqual(
+			expect.objectContaining({
+				requests: 2,
+				events: 3,
+				isDone: true,
+				dryRun: true,
+			})
+		);
+		expect(await perkEvents(backend)).toEqual([]);
+		const jobs = await backend.run((context) =>
+			context.db.system.query("_scheduled_functions").collect()
+		);
+		expect(jobs).toEqual([]);
+	});
+
+	it("skips a request that already has its events, so a re-run is a no-op", async () => {
+		const backend = createTester();
+		const ids = await seedLegacy(backend);
+		await backend.run(async (context) => {
+			await context.db.insert("personEvents", {
+				personId: ids.requesterId,
+				actorId: ids.requesterId,
+				at: 3000,
+				kind: "perk",
+				event: "requested",
+				perkRequestId: ids.openId,
+				meta: { perkId: ids.perkId },
+			});
+		});
+		const first = await backend.mutation(
+			internal.migrations.backfillPerkEvents,
+			{}
+		);
+		expect(first).toEqual(
+			expect.objectContaining({ requests: 1, events: 2 })
+		);
+		const second = await backend.mutation(
+			internal.migrations.backfillPerkEvents,
+			{}
+		);
+		expect(second).toEqual(
+			expect.objectContaining({ requests: 0, events: 0 })
+		);
+		// The one seeded, and the granted request's two.
+		expect(await perkEvents(backend)).toHaveLength(3);
+	});
+
+	it("a request moved before the backfill keeps a Requested, and a re-run writes nothing", async () => {
+		const backend = createTester();
+		const ids = await seedLegacy(backend);
+		// Granted after the deploy: the move logged its own step only.
+		await backend.run(async (context) => {
+			await context.db.insert("personEvents", {
+				personId: ids.requesterId,
+				actorId: ids.boardId,
+				at: 2000,
+				kind: "perk",
+				event: "granted",
+				perkRequestId: ids.grantedId,
+				meta: { perkId: ids.perkId },
+			});
+		});
+		const first = await backend.mutation(
+			internal.migrations.backfillPerkEvents,
+			{}
+		);
+		expect(first).toEqual(
+			expect.objectContaining({ requests: 2, events: 2 })
+		);
+		const events = await perkEvents(backend);
+		const granted = events.filter(
+			(row) => row.perkRequestId === ids.grantedId
+		);
+		expect(granted.map((row) => [row.event, row.actorId, row.at])).toEqual([
+			["requested", ids.requesterId, 1000],
+			["granted", ids.boardId, 2000],
+		]);
+		const second = await backend.mutation(
+			internal.migrations.backfillPerkEvents,
+			{}
+		);
+		expect(second).toEqual(
+			expect.objectContaining({ requests: 0, events: 0 })
+		);
+		expect(await perkEvents(backend)).toHaveLength(3);
+	});
+
+	it("a request with its Requested logged gets only its current status", async () => {
+		const backend = createTester();
+		const ids = await seedLegacy(backend);
+		await backend.run(async (context) => {
+			await context.db.insert("personEvents", {
+				personId: ids.requesterId,
+				actorId: ids.requesterId,
+				at: 1000,
+				kind: "perk",
+				event: "requested",
+				perkRequestId: ids.grantedId,
+				meta: { perkId: ids.perkId },
+			});
+		});
+		await backend.mutation(internal.migrations.backfillPerkEvents, {});
+		const events = await perkEvents(backend);
+		const granted = events.filter(
+			(row) => row.perkRequestId === ids.grantedId
+		);
+		expect(granted.map((row) => row.event)).toEqual([
+			"requested",
+			"granted",
+		]);
+	});
+
+	it("walks every page by scheduling itself", async () => {
+		const backend = createTester();
+		const ids = await seedLegacy(backend);
+		const extra = 150;
+		await backend.run(async (context) => {
+			for (let index = 0; index < extra; index++) {
+				await context.db.insert("perkRequests", {
+					perkId: ids.perkId,
+					personId: ids.requesterId,
+					requestedAt: 4000 + index,
+					status: "requested",
+					statusAt: 4000 + index,
+				});
+			}
+		});
+		let first: unknown;
+		await runAndCollectLogs(backend, async () => {
+			first = await backend.mutation(
+				internal.migrations.backfillPerkEvents,
+				{}
+			);
+		});
+		expect(first).toEqual(expect.objectContaining({ isDone: false }));
+		expect(await perkEvents(backend)).toHaveLength(3 + extra);
+	});
+});

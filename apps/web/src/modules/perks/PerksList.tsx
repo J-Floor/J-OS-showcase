@@ -1,11 +1,16 @@
 import { EmptyState, Table } from "@j-os/design-system";
 
 import type { PerkRow } from "../../../convex/perks.ts";
+import type {
+	ActionDescriptor,
+	PageTarget,
+} from "../../shared/actions/shortcuts.ts";
 import { createEntitySelection } from "../../shared/entity/createEntitySelection.ts";
 import { useRowPrefetch } from "../../shared/entity/useRowPrefetch.ts";
 import { ICONS } from "../../shared/icons.ts";
 
 import { perksEntity } from "./entity.ts";
+import { createPerksPageActions } from "./perkActions.tsx";
 import { PERKS_DEFAULT_SORT, perkColumns } from "./perkColumns.tsx";
 import { PerkSheet } from "./PerkSheet.tsx";
 
@@ -17,9 +22,9 @@ type PerksListProps = {
 	/** A `?perk=` link arrived while the Requests tab was showing: switch to
 	 *  the Perks tab so the selection can open it. */
 	onNeedTab?: (slug: string) => void;
-	/** Hands the board's page the opener of the create sheet, once, for the
-	 *  New perk button in its tab bar. Omitted, the list offers no create. */
-	openCreateRef?: (openCreate: () => void) => void;
+	/** Hands the board's page New perk (`N`), once, for the button in its
+	 *  tab bar. Omitted, the list offers no create and binds no key. */
+	newPerkRef?: (newPerk: ActionDescriptor<PageTarget>) => void;
 };
 
 /**
@@ -28,9 +33,9 @@ type PerksListProps = {
  * open (`visiblePerks`). A row opens the perk's sheet (`?perk=<id>`), the
  * sheet a palette pick or a request email opens too. The board's page also
  * opens the same sheet empty, in create mode, from its New perk button
- * (`openCreateRef`). No shell and no page title of its own: `PerksPage` puts
- * it straight in its panel, so the table keeps a sticky header as Inventory's
- * items do, and the sidebar names the page.
+ * (`newPerkRef`), or from the `N` key. No shell and no page title of its
+ * own: `PerksPage` puts it straight in its panel, so the table keeps a sticky
+ * header as Inventory's items do, and the sidebar names the page.
  */
 export function PerksList(props: PerksListProps) {
 	// The descriptor's rows, so the page, the palette and a peek list the
@@ -56,8 +61,18 @@ export function PerksList(props: PerksListProps) {
 			props.onNeedTab?.(slug);
 		},
 	});
+	// New perk is the page's, bound here since the list knows when a sheet
+	// is open: N must not start a second perk over the one on screen. Only
+	// where the page offers create.
 	// eslint-disable-next-line solid/reactivity -- handed over once, like a ref
-	props.openCreateRef?.(openCreate);
+	const handOver = props.newPerkRef;
+	if (handOver !== undefined)
+		handOver(
+			createPerksPageActions({
+				openCreate,
+				isLive: () => (props.active?.() ?? true) && !open(),
+			})
+		);
 
 	return (
 		<>

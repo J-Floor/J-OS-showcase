@@ -171,11 +171,11 @@ describe("perkRequested messages", () => {
 		note: "Could you introduce us this week?",
 	};
 
-	it("pushes who asked for what, linked to the perk, and never the note", () => {
+	it("pushes who asked for what, linked to the request, and never the note", () => {
 		expect(KINDS.perkRequested.push(withNote, recipient(CONTACT))).toEqual({
 			title: "Perk requested",
 			body: "Ada Lovelace requested Cloud credits (Nimbus)",
-			url: `${SITE}/perks?perk=perk1`,
+			url: `${SITE}/perks?tab=requests&request=request1`,
 			tag: "perk-request-request1",
 		});
 	});
@@ -195,7 +195,9 @@ describe("perkRequested messages", () => {
 			"You're the contact for this perk.\n\nTheir note: Could you introduce us this week?\n\nView the request"
 		);
 		expect(email?.html).toContain("View the request");
-		expect(email?.html).toContain(`href="${SITE}/perks?perk=perk1"`);
+		expect(email?.html).toContain(
+			`href="${SITE}/perks?tab=requests&amp;request=request1"`
+		);
 		expect(email?.html).toContain(`${SITE}/?notifications=open`);
 	});
 
@@ -284,7 +286,7 @@ describe("perkRequested dispatch", () => {
 				kind: "perkRequested",
 				title: "Perk requested",
 				body: "Ada Lovelace requested Cloud credits (Nimbus)",
-				url: "/perks?perk=perk1",
+				url: "/perks?tab=requests&request=request1",
 			}),
 		]);
 	});

@@ -14,7 +14,7 @@ import {
 	screen,
 	waitFor,
 } from "@solidjs/testing-library";
-import { createSignal, Suspense } from "solid-js";
+import { createSignal, Suspense, untrack } from "solid-js";
 import { afterEach, expect, onTestFinished, test, vi } from "vitest";
 
 import { AbilityProvider, type Role } from "../../lib/ability.tsx";
@@ -22,7 +22,7 @@ import { AbilityProvider, type Role } from "../../lib/ability.tsx";
 import type { EntityDescriptor, PeekProps } from "./entityDescriptor.ts";
 import { lazyPeek } from "./lazyPeek.tsx";
 import { usePeek } from "./PeekContext.tsx";
-import { PeekHost } from "./PeekHost.tsx";
+import { PEEK_CHUNK_WAIT_MS, PeekHost } from "./PeekHost.tsx";
 import { pushedOpenState } from "./pushedOpen.ts";
 
 type Row = { _id: string; name: string };
@@ -38,17 +38,21 @@ function currentUrl(): string {
 		: "";
 }
 
-const { fake, bare, slow, broken, second, late } = vi.hoisted(() => ({
-	second: {} as EntityDescriptor<Row>,
-	late: {} as EntityDescriptor<Row>,
-	fake: {} as EntityDescriptor<Row>,
-	bare: {} as EntityDescriptor<Row>,
-	slow: {} as EntityDescriptor<Row>,
-	broken: {} as EntityDescriptor<Row>,
-}));
+const { fake, bare, slow, broken, second, late, cold, stalled } = vi.hoisted(
+	() => ({
+		cold: {} as EntityDescriptor<Row>,
+		stalled: {} as EntityDescriptor<Row>,
+		second: {} as EntityDescriptor<Row>,
+		late: {} as EntityDescriptor<Row>,
+		fake: {} as EntityDescriptor<Row>,
+		bare: {} as EntityDescriptor<Row>,
+		slow: {} as EntityDescriptor<Row>,
+		broken: {} as EntityDescriptor<Row>,
+	})
+);
 
 vi.mock("./entityDescriptors.ts", () => ({
-	entityDescriptors: [fake, bare, slow, broken, second, late],
+	entityDescriptors: [fake, bare, slow, broken, second, late, cold, stalled],
 }));
 
 function FakePeek(props: PeekProps<Row>) {
@@ -340,4 +344,66 @@ test("clearing the param on a pushed entry pops it: no duplicate of the page is 
 	await waitFor(() => {
 		expect(url()).toBe("/start");
 	});
+});
+
+/** A peek that records whether it was open when it mounted: an overlay that
+ *  mounts open shows at once, without its morph (`createMorphPresence`
+ *  starts from the first `open` it is given). */
+const openOnMount: boolean[] = [];
+
+function RecordingPeek(props: PeekProps<Row>) {
+	openOnMount.push(untrack(() => props.open));
+	return <FakePeek {...props} />;
+}
+
+/** A chunk the test delivers, for a kind whose peek has not been loaded. */
+function chunkOnCue(): {
+	peek: ReturnType<typeof lazyPeek<Row>>;
+	arrive: () => void;
+} {
+	const cue: { resolve?: (peek: typeof RecordingPeek) => void } = {};
+	const peek = lazyPeek<Row>(
+		() =>
+			new Promise<typeof RecordingPeek>((resolve) => {
+				cue.resolve = resolve;
+			})
+	);
+	return {
+		peek,
+		arrive: () => {
+			cue.resolve?.(RecordingPeek);
+		},
+	};
+}
+
+const coldChunk = chunkOnCue();
+Object.assign(cold, fake, { key: "cold", peek: coldChunk.peek });
+const stalledChunk = chunkOnCue();
+Object.assign(stalled, fake, { key: "stalled", peek: stalledChunk.peek });
+
+test("opening a peek whose chunk has not loaded waits for it, so the peek mounts closed and opens through its morph", async () => {
+	openOnMount.length = 0;
+	renderHost("/events?open=cold%3Ar1");
+	await new Promise((resolve) => {
+		setTimeout(resolve, 20);
+	});
+	expect(screen.queryByTestId("peek")).toBeNull();
+	coldChunk.arrive();
+	await waitFor(() => {
+		expect(screen.getByTestId("peek")).toHaveAttribute("data-open", "true");
+	});
+	expect(openOnMount).toEqual([false]);
+});
+
+test("a chunk slower than the wait opens the peek without its morph once it arrives", async () => {
+	openOnMount.length = 0;
+	renderHost("/events?open=stalled%3Ar1");
+	await new Promise((resolve) => {
+		setTimeout(resolve, PEEK_CHUNK_WAIT_MS + 20);
+	});
+	stalledChunk.arrive();
+	await waitFor(() => {
+		expect(screen.getByTestId("peek")).toHaveAttribute("data-open", "true");
+	});
+	expect(openOnMount).toEqual([true]);
 });

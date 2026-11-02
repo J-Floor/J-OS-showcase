@@ -1,8 +1,13 @@
-import { IconButton, isTypingTarget } from "@j-os/design-system";
-import { createHotkey } from "@tanstack/solid-hotkeys";
+import { IconButton } from "@j-os/design-system";
 import type { JSX } from "solid-js";
 
+import { createActionKeys } from "../actions/createActionKeys.ts";
+import type { ActionDescriptor } from "../actions/shortcuts.ts";
 import { ICONS } from "../icons.ts";
+
+/** What the toggle acts on: its own sheet's fields. */
+const FIELDS_TARGET = "fields";
+type FieldsTarget = typeof FIELDS_TARGET;
 
 /**
  * An entity sheet's lock/unlock toggle. Puts the sheet into edit mode, and
@@ -31,27 +36,32 @@ export function EditToggle(props: {
 	 *  to be told, not inferred, since it has no other way to know. */
 	enabled: boolean;
 }): JSX.Element {
-	// `preventDefault: false`: a bare letter has no native browser behaviour
-	// worth cancelling on match, and cancelling it before this guard gets to
-	// run `isTypingTarget` would swallow the same keystroke while it is typed
-	// into a field elsewhere in the open sheet. `ignoreInputs` is not set
-	// here: the app root's `HotkeysProvider` supplies `false` for every binding.
-	createHotkey(
-		"E",
-		(event) => {
-			if (event.repeat || isTypingTarget(event.target)) return;
-			event.preventDefault();
+	// Keyed like every other action: ignored while typing or on a repeat,
+	// and quiet while an overlay covers the sheet holding the toggle (bound
+	// from inside it).
+	const toggle: ActionDescriptor<FieldsTarget> = {
+		id: "toggle-editing",
+		get label() {
+			return props.editing ? "Lock these fields" : "Unlock to edit";
+		},
+		icon: ICONS.lock,
+		hotkey: "E",
+		can: () => true,
+		run: () => {
 			props.onToggle();
 		},
-		() => ({ enabled: props.enabled, preventDefault: false })
-	);
+	};
+	createActionKeys<FieldsTarget>({
+		scope: "edit-toggle",
+		actions: () => [toggle],
+		target: () => FIELDS_TARGET,
+		active: () => props.enabled,
+	});
 
 	return (
 		<IconButton
-			tooltipLabel={
-				props.editing ? "Lock these fields" : "Unlock to edit"
-			}
-			shortcut="E"
+			tooltipLabel={toggle.label}
+			shortcut={toggle.hotkey}
 			onClick={() => {
 				props.onToggle();
 			}}

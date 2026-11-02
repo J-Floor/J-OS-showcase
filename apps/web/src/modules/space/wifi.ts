@@ -1,5 +1,10 @@
 import type { Wifi } from "../../../convex/lib/wifi.ts";
 
+/** What the Wi-Fi card's actions (Edit, Save, Cancel, Copy password) act
+ *  on: the card. */
+export const WIFI_TARGET = "wifi";
+export type WifiTarget = typeof WIFI_TARGET;
+
 /**
  * Escape the characters that are special in a `WIFI:` join string. The format
  * is delimited by `;` and `:`, so a credential containing any of `\ ; , : "`

@@ -6,6 +6,7 @@ import type { Doc } from "./_generated/dataModel";
 import {
 	internalMutation,
 	internalQuery,
+	type MutationCtx,
 	type QueryCtx,
 } from "./_generated/server";
 import { compliance } from "./lib/derive.ts";
@@ -21,6 +22,7 @@ import {
 	stateOf,
 } from "./lib/lifecycle.ts";
 import { invariant } from "./lib/result.ts";
+import { appendPerkEvent } from "./perkRequests.ts";
 
 /**
  * One-off data fixes, run via `bunx convex run migrations:<name>` (CLI/dashboard
@@ -216,7 +218,7 @@ export const backfillActivatedAt = internalMutation({
 				// eslint-disable-next-line convex/no-collect-in-mutation -- one person's events, in a completed one-off
 				const events = await context.db
 					.query("personEvents")
-					.withIndex("by_person", (range) =>
+					.withIndex("by_personId_and_at", (range) =>
 						range.eq("personId", person._id)
 					)
 					.collect();
@@ -282,5 +284,101 @@ export const repairGuestWithoutAgreement = internalMutation({
 			to: "guest.onboarding",
 		});
 		return null;
+	},
+});
+
+/** What a request's row still records of its past: Requested, by the
+ *  requester, and its current status, by whoever set it, once it moved. */
+function perkStepsOf(
+	request: Doc<"perkRequests">
+): Parameters<typeof appendPerkEvent>[2][] {
+	const requested = {
+		event: "requested" as const,
+		at: request.requestedAt,
+		actorId: request.personId,
+	};
+	if (request.status === "requested") return [requested];
+	return [
+		requested,
+		{
+			event: request.status,
+			at: request.statusAt,
+			actorId: request.statusById,
+		},
+	];
+}
+
+/** How many of a request's history events the backfill reads to see which
+ *  steps are logged: a request moves a handful of times. */
+const PERK_EVENTS_READ_PER_REQUEST = 100;
+
+/** The steps of `request` (`perkStepsOf`) its history does not log yet: a
+ *  step is logged when an event of its status exists for the request. */
+async function missingPerkSteps(
+	context: MutationCtx,
+	request: Doc<"perkRequests">
+): Promise<ReturnType<typeof perkStepsOf>> {
+	const logged = await context.db
+		.query("personEvents")
+		.withIndex("by_perkRequestId_and_at", (range) =>
+			range.eq("perkRequestId", request._id)
+		)
+		.take(PERK_EVENTS_READ_PER_REQUEST);
+	const events = new Set(logged.map((row) => row.event));
+	return perkStepsOf(request).filter((step) => !events.has(step.event));
+}
+
+/**
+ * One-off: write the `perk` history events of requests made before those
+ * were logged, from what their row still records (`perkStepsOf`). Each step
+ * is written only when the request's history lacks an event of that status,
+ * so a request moved after the deploy (its move logged, its Requested not)
+ * still gets its Requested, and a re-run is a no-op.
+ * One cursor page of `perkRequests` per transaction; a real run schedules the
+ * next page, so one CLI call walks the table. A dry run writes and schedules
+ * nothing and reports one page: pass its `continueCursor` back as `cursor`
+ * until `isDone` (Convex allows one paginated query per transaction, so a
+ * dry run cannot total every page itself).
+ *
+ *   bunx convex run migrations:backfillPerkEvents '{"dryRun":true}' --prod
+ *   bunx convex run migrations:backfillPerkEvents '{"dryRun":true,"cursor":"<continueCursor>"}' --prod  # until isDone
+ *   bunx convex run migrations:backfillPerkEvents --prod
+ *   bunx convex run migrations:backfillPerkEvents '{"dryRun":true}' --prod  # 0 left, every page
+ */
+export const backfillPerkEvents = internalMutation({
+	args: {
+		cursor: v.optional(v.union(v.string(), v.null())),
+		dryRun: v.optional(v.boolean()),
+	},
+	handler: async (context, { cursor, dryRun }) => {
+		const page = await context.db.query("perkRequests").paginate({
+			cursor: cursor ?? null,
+			numItems: MIGRATION_PAGE_SIZE,
+		});
+		let requests = 0;
+		let events = 0;
+		for (const request of page.page) {
+			const steps = await missingPerkSteps(context, request);
+			if (steps.length === 0) continue;
+			requests++;
+			events += steps.length;
+			if (dryRun === true) continue;
+			for (const step of steps)
+				await appendPerkEvent(context, request, step);
+		}
+		if (dryRun !== true && !page.isDone) {
+			await context.scheduler.runAfter(
+				0,
+				internal.migrations.backfillPerkEvents,
+				{ cursor: page.continueCursor }
+			);
+		}
+		return {
+			requests,
+			events,
+			isDone: page.isDone,
+			continueCursor: page.continueCursor,
+			dryRun: dryRun === true,
+		};
 	},
 });

@@ -1,4 +1,4 @@
-import { Button, Input, Skeleton } from "@j-os/design-system";
+import { Input, Skeleton } from "@j-os/design-system";
 import { useMutation } from "convex-solidjs";
 import { Show, createSignal, onMount, type Accessor } from "solid-js";
 
@@ -7,11 +7,17 @@ import { SSID_MAX, WIFI_PASSWORD_MAX } from "../../../convex/lib/validate.ts";
 import type { Wifi } from "../../../convex/lib/wifi.ts";
 import { useAbility } from "../../lib/ability.tsx";
 import { call, ignoreFailure } from "../../lib/call.ts";
+import { ActionButton } from "../../shared/actions/ActionButton.tsx";
+import { ActionForm } from "../../shared/actions/ActionForm.tsx";
+import { createActionKeys } from "../../shared/actions/createActionKeys.ts";
+import type { ActionDescriptor } from "../../shared/actions/shortcuts.ts";
 import { createActionError } from "../../shared/createActionError.ts";
 import { useQuery } from "../../shared/data/useQuery.ts";
+import { ICONS } from "../../shared/icons.ts";
 import { InlineError } from "../../shared/InlineError.tsx";
 
 import { SpaceCard } from "./SpaceCard.tsx";
+import { WIFI_TARGET, type WifiTarget } from "./wifi.ts";
 import styles from "./WifiCard.module.scss";
 import { WifiContent } from "./WifiContent.tsx";
 
@@ -64,14 +70,68 @@ function createWifiEditing(credentials: { data: Accessor<Wifi | undefined> }) {
 	};
 }
 
-function WifiEditForm(props: { edit: ReturnType<typeof createWifiEditing> }) {
+const WIFI_SCOPE = "space-wifi-edit";
+
+/** The card's actions and their keys: Edit (`E`) opens the form; Save
+ *  (`Mod+Enter`) and Cancel (`Escape`) type nothing, so they work from
+ *  inside its fields. */
+function createWifiActions(options: {
+	edit: ReturnType<typeof createWifiEditing>;
+	canEdit: () => boolean;
+	active: () => boolean;
+}) {
+	const { edit } = options;
+	const startEdit: ActionDescriptor<WifiTarget> = {
+		id: "edit-wifi",
+		label: "Edit",
+		icon: ICONS.edit,
+		hotkey: "E",
+		can: () => options.canEdit() && !edit.editing(),
+		run: () => {
+			edit.startEditing();
+		},
+	};
+	const save: ActionDescriptor<WifiTarget> = {
+		id: "save-wifi",
+		label: "Save",
+		icon: ICONS.check,
+		hotkey: "Mod+Enter",
+		can: () => edit.editing(),
+		run: async () => {
+			await edit.save();
+			return { refused: edit.error() !== null };
+		},
+	};
+	const cancel: ActionDescriptor<WifiTarget> = {
+		id: "cancel-wifi",
+		label: "Cancel",
+		icon: ICONS.close,
+		hotkey: "Escape",
+		can: () => edit.editing(),
+		run: () => {
+			edit.cancelEditing();
+		},
+	};
+	createActionKeys<WifiTarget>({
+		scope: WIFI_SCOPE,
+		actions: () => [startEdit, save, cancel],
+		target: () => WIFI_TARGET,
+		active: options.active,
+	});
+	return { startEdit, save, cancel };
+}
+
+type WifiActions = ReturnType<typeof createWifiActions>;
+
+function WifiEditForm(props: {
+	edit: ReturnType<typeof createWifiEditing>;
+	actions: WifiActions;
+}) {
 	return (
-		<form
+		<ActionForm
 			class={styles.editForm}
-			onSubmit={(event) => {
-				event.preventDefault();
-				void props.edit.save();
-			}}
+			action={props.actions.save}
+			target={WIFI_TARGET}
 		>
 			<Input
 				label="Network name"
@@ -91,21 +151,17 @@ function WifiEditForm(props: { edit: ReturnType<typeof createWifiEditing> }) {
 			/>
 			<InlineError message={props.edit.error()} />
 			<div class={styles.editActions}>
-				<Button
-					type="button"
+				<ActionButton
+					action={props.actions.cancel}
+					target={WIFI_TARGET}
 					variant="tertiary"
-					onClick={props.edit.cancelEditing}
-				>
-					Cancel
-				</Button>
-				<Button
-					type="submit"
-					isLoading={props.edit.updateWifi.isLoading()}
-				>
-					Save
-				</Button>
+				/>
+				<ActionButton
+					action={props.actions.save}
+					target={WIFI_TARGET}
+				/>
 			</div>
-		</form>
+		</ActionForm>
 	);
 }
 
@@ -119,7 +175,7 @@ function WifiEditForm(props: { edit: ReturnType<typeof createWifiEditing> }) {
  * Gated on `manage`/`Space`: `Space`'s `view` is granted to every access
  * tier, `manage` only to board/admin.
  */
-export function WifiCard() {
+export function WifiCard(props: { active?: boolean }) {
 	const ability = useAbility();
 	const credentials = useQuery(api.wifi.get, {});
 	const logWifiOpen = useMutation(api.people.logWifiOpen);
@@ -137,14 +193,23 @@ export function WifiCard() {
 		return ability().can("manage", "Space");
 	}
 
+	const actions = createWifiActions({
+		edit,
+		canEdit: canEditWifi,
+		// Only while the card is on screen, and not before its details load.
+		active: () => props.active === true && credentials.data() !== undefined,
+	});
+
 	return (
 		<SpaceCard.Root loading={credentials.data() === undefined}>
 			<SpaceCard.Header title="Wi-Fi network">
 				<SpaceCard.Action>
 					<Show when={canEditWifi() && !edit.editing()}>
-						<Button variant="tertiary" onClick={edit.startEditing}>
-							Edit
-						</Button>
+						<ActionButton
+							action={actions.startEdit}
+							target={WIFI_TARGET}
+							variant="tertiary"
+						/>
 					</Show>
 				</SpaceCard.Action>
 			</SpaceCard.Header>
@@ -156,11 +221,16 @@ export function WifiCard() {
 					when={edit.editing()}
 					fallback={
 						<Show when={credentials.data()} keyed>
-							{(current) => <WifiContent {...current} />}
+							{(current) => (
+								<WifiContent
+									{...current}
+									keysActive={props.active === true}
+								/>
+							)}
 						</Show>
 					}
 				>
-					<WifiEditForm edit={edit} />
+					<WifiEditForm edit={edit} actions={actions} />
 				</Show>
 			</SpaceCard.Body>
 			<SpaceCard.Note>

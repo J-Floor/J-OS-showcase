@@ -8,8 +8,8 @@
    sheet's edge instead of sharing the space. `min(100%, …)` guards the floor
    itself, for a container narrower than the floor.
 
-   Above the phone breakpoint this is three across; below it, one per row (see
-   the query inside). */
+   Above the phone breakpoint a sheet fits three across; below it, one per row
+   (see the query inside). */
 .bar {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
@@ -28,10 +28,14 @@
 	}
 
 	/* Fill the column: `Button` is `fit-content` by default, so without this
-	   each hugs its label and the equal columns are invisible. The `Confetti`
-	   wrapper around "Make member" is itself a grid item, hence both. */
+	   each hugs its label and the equal columns are invisible. A wrapper around
+	   a button (`Confetti`, a disabled button's reason tooltip, or both: a
+	   celebrated action that is disabled) is itself the grid item, so every
+	   level down to the button fills its parent. */
 	> *,
-	> * > button {
+	> * > button,
+	> * > [data-disabled],
+	> * > [data-disabled] > button {
 		inline-size: 100%;
 		min-inline-size: 0;
 	}

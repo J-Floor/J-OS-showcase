@@ -10,6 +10,7 @@ import {
 	recentActivation,
 	trackActivation,
 } from "./activation.ts";
+import { MORPH_OF, MORPH_OPENER } from "./morphNames.ts";
 
 let uninstall: () => void;
 
@@ -31,6 +32,26 @@ test("records the closest activatable ancestor on pointerdown", () => {
 	document
 		.getElementById("cell")
 		?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+	expect(recentActivation()?.id).toBe("row");
+});
+
+test("an entity's opener records the element showing that entity", () => {
+	document.body.innerHTML = `<div ${MORPH_OF}="p1" id="row"><button ${MORPH_OPENER} id="open">Ada</button><button id="other">Status</button></div>`;
+	for (const id of ["open", "other"]) {
+		document
+			.getElementById(id)
+			?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+		expect(recentActivation()?.id).toBe(id === "open" ? "row" : "other");
+	}
+});
+
+test("an entity's opener pressed with Enter records the element showing that entity", () => {
+	document.body.innerHTML = `<div ${MORPH_OF}="p1" id="row"><button ${MORPH_OPENER} id="open">Ada</button></div>`;
+	document
+		.getElementById("open")
+		?.dispatchEvent(
+			new KeyboardEvent("keydown", { key: "Enter", bubbles: true })
+		);
 	expect(recentActivation()?.id).toBe("row");
 });
 

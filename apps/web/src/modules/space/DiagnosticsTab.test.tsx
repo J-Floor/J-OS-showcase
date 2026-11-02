@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { ShortcutPeekProvider } from "@j-os/design-system";
 import {
 	cleanup,
 	fireEvent,
@@ -16,6 +17,7 @@ import {
 	doorLogOutcome,
 	doorLogTrigger,
 } from "../../../convex/schema.ts";
+import { ShortcutPeekButton } from "../../shared/ShortcutPeekButton.tsx";
 
 const health: { value: unknown } = {
 	value: {
@@ -554,4 +556,61 @@ test("the log's columns fit their content and leave the rest to Person and Locks
 	// No override: the default measures the accessor value, the same string the
 	// cell shows.
 	expect(columns.get("toDoor")?.measureText).toBeUndefined();
+});
+
+test("R retries a failed older load, once, and only while Try again shows", async () => {
+	state.head = [row("a", at(0), "Ada A")];
+	state.listBefore
+		.mockRejectedValueOnce(new Error("boom"))
+		.mockResolvedValueOnce(page([row("o1", at(3), "Old One")], "c1", true));
+	await mounted();
+	fireEvent.keyDown(document, { key: "r" });
+	expect(state.listBefore).not.toHaveBeenCalled();
+	endReached();
+	await screen.findByText("Couldn't load older entries.");
+	expect(screen.getByRole("button", { name: "Try again" })).toHaveAttribute(
+		"aria-keyshortcuts",
+		"R"
+	);
+	fireEvent.keyDown(document, { key: "r", repeat: true });
+	expect(state.listBefore).toHaveBeenCalledTimes(1);
+	fireEvent.keyDown(document, { key: "r" });
+	expect(await screen.findByText("Old One")).toBeInTheDocument();
+	expect(state.listBefore).toHaveBeenCalledTimes(2);
+});
+
+test("R is ignored while typing in a field", async () => {
+	state.head = [row("a", at(0), "Ada A")];
+	state.listBefore.mockRejectedValueOnce(new Error("boom"));
+	await mounted();
+	endReached();
+	await screen.findByText("Couldn't load older entries.");
+	const input = document.createElement("input");
+	document.body.append(input);
+	try {
+		fireEvent.keyDown(input, { key: "r" });
+		expect(state.listBefore).toHaveBeenCalledTimes(1);
+	} finally {
+		input.remove();
+	}
+});
+
+test("Try again names its key in a chip while peeking", async () => {
+	state.head = [row("a", at(0), "Ada A")];
+	state.listBefore.mockRejectedValueOnce(new Error("boom"));
+	render(() => (
+		<ShortcutPeekProvider>
+			<ShortcutPeekButton />
+			<DiagnosticsTab />
+		</ShortcutPeekProvider>
+	));
+	await waitFor(() => {
+		expect(table.onEndReached).toBeDefined();
+	});
+	endReached();
+	await screen.findByText("Couldn't load older entries.");
+	const retry = screen.getByRole("button", { name: "Try again" });
+	expect(retry.querySelector("kbd")).toBeNull();
+	fireEvent.click(screen.getByRole("button", { name: /shortcut/i }));
+	expect(retry.querySelector("kbd")).not.toBeNull();
 });

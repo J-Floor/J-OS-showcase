@@ -12,15 +12,18 @@ import { For, Show, type JSX } from "solid-js";
 import { NAME_MAX, TEXT_MAX } from "../../../../convex/lib/validate.ts";
 import type { SheetNavState } from "../../../lib/createSheetNav.ts";
 import { createSyncedField } from "../../../lib/createSyncedField.ts";
+import { RowActionButton } from "../../../shared/actions/RowActions.tsx";
+import { createSheetActions } from "../../../shared/actions/sheetActions.tsx";
 import { DescriptionField } from "../../../shared/components/DescriptionField.tsx";
 import { PersonSelect } from "../../../shared/components/PersonSelect.tsx";
+import type { ConfirmOptions } from "../../../shared/confirm.tsx";
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
 import {
 	createEntityCommands,
 	createEntityDraft,
 } from "../../../shared/entity/entityCommands.ts";
-import { EntityCreateFooter } from "../../../shared/entity/EntityCreateFooter.tsx";
 import { EntitySheetHeader } from "../../../shared/entity/EntitySheetHeader.tsx";
+import { SheetCreateFooter } from "../../../shared/entity/SheetCreateFooter.tsx";
 import { ICONS } from "../../../shared/icons.ts";
 import { InlineError } from "../../../shared/InlineError.tsx";
 import type { SheetOpenProps } from "../../../shared/types.ts";
@@ -37,6 +40,13 @@ import { TaskCard } from "../kanban/TaskCard.tsx";
 import { DateField } from "./fields/DateField.tsx";
 import styles from "./ProjectSheet.module.scss";
 // jscpd:ignore-end
+
+const DELETE_PROJECT_CONFIRM: ConfirmOptions = {
+	title: "Delete project?",
+	message: "Its tasks stay on the board, with no project.",
+	confirmLabel: "Delete",
+	tone: "danger",
+};
 
 // UTC-midnight ms for the local "today" — matches how dates are stored.
 function todayMs(): number | undefined {
@@ -160,9 +170,8 @@ function createProjectFields(
 
 type ProjectFields = ReturnType<typeof createProjectFields>;
 
-/** Creating a project from the drafts, and deleting the open one. */
+/** Creating a project from the drafts. */
 function createProjectCommands(
-	props: ProjectSheetProps,
 	fields: ProjectFields,
 	commands: ProjectSheetCommands
 ) {
@@ -177,11 +186,7 @@ function createProjectCommands(
 		});
 	}
 
-	async function deleteProject() {
-		await commands.remove(props.project?._id);
-	}
-
-	return { createProject, deleteProject };
+	return { createProject };
 }
 
 /** Leader, then start and end dates kept ordered: pushing start past end
@@ -296,8 +301,24 @@ function createProjectSheet(props: ProjectSheetProps, isEdit: () => boolean) {
 	});
 	const fields = createProjectFields(props, commands.patch, saves);
 	const draft = createEntityDraft(props, isEdit, fields, "new project");
+	const { createProject } = createProjectCommands(fields, commands);
+	const actions = createSheetActions<Project>({
+		scope: "project-sheet",
+		noun: "project",
+		confirm: DELETE_PROJECT_CONFIRM,
+		isOpen: () => props.open,
+		isLoading: () => props.loading,
+		row: () => props.project,
+		remove: commands.remove,
+		error: commands.failure.error,
+		create: {
+			can: () => fields.name.value().trim() !== "",
+			disabledReason: () => "Add a name first",
+			run: createProject,
+		},
+	});
 	return {
-		...createProjectCommands(props, fields, commands),
+		actions,
 		failure: commands.failure,
 		fields,
 		saves,
@@ -309,8 +330,10 @@ export function ProjectSheet(props: ProjectSheetProps): JSX.Element {
 	function isEdit() {
 		return props.project !== undefined;
 	}
-	const { createProject, deleteProject, failure, fields, saves, draft } =
-		createProjectSheet(props, isEdit);
+	const { actions, failure, fields, saves, draft } = createProjectSheet(
+		props,
+		isEdit
+	);
 	const boardLevel = useBoardLevel();
 	const projects = useProjects();
 	const tasks = useTasks();
@@ -324,19 +347,22 @@ export function ProjectSheet(props: ProjectSheetProps): JSX.Element {
 			morphId={props.project?._id}
 			morphFrom={props.morphFrom}
 		>
-			<EntitySheetHeader.Root
+			<actions.Keys />
+			<EntitySheetHeader
 				title={props.project?.name ?? "New project"}
 				loading={props.loading}
 				nav={props.nav}
 				saveStatus={isEdit() && !props.loading}
 			>
-				<Show when={isEdit()}>
-					<EntitySheetHeader.Delete
-						label="Delete project"
-						onDelete={() => void deleteProject()}
-					/>
+				<Show when={props.project} keyed>
+					{(project) => (
+						<RowActionButton
+							action={actions.remove}
+							row={project}
+						/>
+					)}
 				</Show>
-			</EntitySheetHeader.Root>
+			</EntitySheetHeader>
 			<Sheet.Skeleton>
 				<ProjectFieldsPlaceholder />
 			</Sheet.Skeleton>
@@ -360,7 +386,6 @@ export function ProjectSheet(props: ProjectSheetProps): JSX.Element {
 				/>
 
 				<DescriptionField
-					class={styles.description}
 					description={fields.description}
 					maxLength={TEXT_MAX}
 				/>
@@ -375,16 +400,10 @@ export function ProjectSheet(props: ProjectSheetProps): JSX.Element {
 					/>
 				</Show>
 			</Sheet.Body>
-			<Show when={!props.loading && !isEdit()}>
-				<EntityCreateFooter
-					label="Create project"
-					disabledReason="Add a name first"
-					canCreate={fields.name.value().trim() !== ""}
-					onCreate={() => {
-						void createProject();
-					}}
-				/>
-			</Show>
+			<SheetCreateFooter
+				create={actions.create}
+				isCreating={!props.loading && !isEdit()}
+			/>
 		</Sheet.Root>
 	);
 }

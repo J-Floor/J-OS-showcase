@@ -16,24 +16,34 @@ vi.mock("./triage.ts", () => ({
 
 afterEach(cleanup);
 
+import { ActionBar } from "../../../shared/actions/ActionBar.tsx";
+import {
+	claimKeys,
+	type ActionDescriptor,
+} from "../../../shared/actions/shortcuts.ts";
 import { ConfirmProvider } from "../../../shared/confirm.tsx";
-import { DecisionBar } from "../sheets/DecisionBar.tsx";
 
 import {
 	useApplicationDecisions,
 	type Applicant,
 } from "./applicationDecisions.ts";
 import { GuestExpiryProvider } from "./guestExpiry.tsx";
-import { assertNoCollisions, type ActionDescriptor } from "./shortcuts.ts";
 
 let captured: ActionDescriptor<Applicant>[] = [];
 
-// DecisionBar is now a pure renderer of an `ActionDescriptor` list (each tab
-// feeds its own). This harness supplies the application descriptors from the real
-// hook, so the test still exercises the actual availability rules end to end.
+// The sheet's decision bar is an `ActionBar` of the tab's descriptors that
+// hides what does not apply. This harness supplies the application
+// descriptors from the real hook, so the test still exercises the actual
+// availability rules end to end.
 function DecisionBarHarness(props: { person: Applicant }) {
 	const decide = useApplicationDecisions();
-	return <DecisionBar person={props.person} actions={decide.actions()} />;
+	return (
+		<ActionBar
+			target={props.person}
+			actions={decide.actions()}
+			hideUnavailable
+		/>
+	);
 }
 
 function Harness() {
@@ -43,7 +53,7 @@ function Harness() {
 }
 
 /**
- * `shortcuts.test.ts`'s own collision tests exercise `assertNoCollisions`
+ * `shortcuts.test.ts`'s own collision tests exercise `claimKeys`
  * against stub data; this one runs it against the actual descriptors
  * `useApplicationDecisions` produces, so a real duplicated hotkey in
  * `applicationDecisions.ts` fails a test instead of shipping silently.
@@ -56,7 +66,7 @@ test("the real application actions have four distinct hotkeys and no collisions"
 	));
 
 	expect(() => {
-		assertNoCollisions(captured);
+		claimKeys("test", captured)();
 	}).not.toThrow();
 	expect(
 		captured

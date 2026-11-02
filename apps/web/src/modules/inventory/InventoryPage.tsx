@@ -1,5 +1,6 @@
 import { PermissionDenied, Tabs } from "@j-os/design-system";
 import { useSearchParams } from "@solidjs/router";
+import { createSignal } from "solid-js";
 
 import { Can } from "../../lib/ability.tsx";
 
@@ -7,6 +8,7 @@ import {
 	activeInventoryTab,
 	createInventorySelections,
 } from "./createInventorySelections.ts";
+import { createInventoryPageActions } from "./inventoryActions.ts";
 import styles from "./InventoryPage.module.scss";
 import { InventoryTabBar } from "./InventoryTabBar.tsx";
 import { INVENTORY_TAB_KEYS, type InventoryTabKey } from "./inventoryTabs.ts";
@@ -34,6 +36,21 @@ export function InventoryPage() {
 		openNewItem,
 	} = selections;
 	const scanner = createInventoryScanner({ ...selections, setParams });
+	const [selectedCount, setSelectedCount] = createSignal(0);
+	const actions = createInventoryPageActions({
+		activeTab,
+		isOverlayOpen: () =>
+			itemSelection.open() ||
+			typeSelection.open() ||
+			categorySelection.open() ||
+			scanner.scanOpen(),
+		itemRows,
+		selectedCount,
+		openNewItem,
+		openNewType: typeSelection.openCreate,
+		openNewCategory: categorySelection.openCreate,
+		openScanner: scanner.openScanner,
+	});
 
 	return (
 		<Can I="view" the="Inventory" fallback={<PermissionDenied />}>
@@ -65,23 +82,13 @@ export function InventoryPage() {
 					keys: INVENTORY_TAB_KEYS,
 				}}
 			>
-				<InventoryTabBar
-					itemRows={itemRows}
-					onScan={scanner.openScanner}
-					onNewItem={() => {
-						openNewItem();
-					}}
-					onNewType={() => {
-						typeSelection.openCreate();
-					}}
-					onNewCategory={() => {
-						categorySelection.openCreate();
-					}}
-				/>
+				<InventoryTabBar actions={actions} />
 				<Tabs.Content value="items" class={styles.panel}>
 					<ItemsTab
 						selection={itemSelection}
 						newItemAssetTag={newItemTag}
+						active={activeTab() === "items" && !scanner.scanOpen()}
+						onSelectedCountChange={setSelectedCount}
 					/>
 				</Tabs.Content>
 				<Tabs.Content value="types" class={styles.panel}>

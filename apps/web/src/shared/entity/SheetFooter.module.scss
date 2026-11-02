@@ -1,0 +1,17 @@
+/* The footer stacks a lead slot (a field, a note) and a refusal above the
+   actions. `flex: 1` so it fills the footer's width: Sheet.Footer is a
+   right-aligned flex row, and without this the column would hug the right
+   edge. */
+.footer {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+}
+
+.footerActions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--jf-spacing-near);
+	justify-content: flex-end;
+}

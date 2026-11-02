@@ -9,6 +9,10 @@ import { For, createSignal } from "solid-js";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { invariant } from "../../../../convex/lib/result.ts";
 import type { PersonRow } from "../../../../convex/people.ts";
+import {
+	RowActionButton,
+	RowActions,
+} from "../../../shared/actions/RowActions.tsx";
 import { SHORT_TEXT_SIZE } from "../../../shared/columnSizes.ts";
 import { ChangeRoleDialog } from "../actions/ChangeRoleDialog.tsx";
 import type { RoleMove } from "../actions/ChangeRoleDialog.tsx";
@@ -23,7 +27,6 @@ import { personFields } from "../fields.ts";
 
 import { flagsColumn } from "./flagsColumn.tsx";
 import { joinedColumn } from "./joinedColumn.ts";
-import { RowActionButton, RowActions } from "./RowActions.tsx";
 import { ventureColumns } from "./ventureColumns.tsx";
 
 /** The group a person falls into in the Members tab, derived from the machine.

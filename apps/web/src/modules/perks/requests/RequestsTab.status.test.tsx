@@ -113,7 +113,7 @@ function renderTab() {
 							</Tabs.List>
 						</Tabs.Bar>
 						<Tabs.Content value="requests">
-							<RequestsTab />
+							<RequestsTab active={() => true} />
 						</Tabs.Content>
 					</Tabs.Root>
 				)}

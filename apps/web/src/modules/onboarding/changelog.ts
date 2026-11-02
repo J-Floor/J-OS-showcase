@@ -46,6 +46,16 @@ const PERK_MANAGERS = { action: "manage", subject: "Perks" } as const;
 
 export const CHANGELOG: ChangeEntry[] = [
 	{
+		version: "1.6",
+		title: "Perk request cards",
+		items: [
+			{
+				text: "Track every perk request on its own card, with its history.",
+				audience: PERK_MANAGERS,
+			},
+		],
+	},
+	{
 		version: "1.5",
 		title: "Perk notifications",
 		items: [

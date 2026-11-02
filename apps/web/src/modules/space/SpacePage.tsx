@@ -54,7 +54,21 @@ function createSpaceTabs() {
 			keys: tabKeys(),
 		};
 	}
-	return { params, showsInfo, infoTabs, boardOnlyTabs, urlParameter };
+	/** Whether the Access tab is the one showing: its cards' keys follow it
+	 *  (Ark keeps hidden panels mounted). An unknown tab falls back to it. */
+	function isAccessTab(): boolean {
+		return (
+			!tabKeys().includes(String(params.tab)) || params.tab === "access"
+		);
+	}
+	return {
+		params,
+		showsInfo,
+		infoTabs,
+		boardOnlyTabs,
+		urlParameter,
+		isAccessTab,
+	};
 }
 
 /**
@@ -69,8 +83,14 @@ function createSpaceTabs() {
  */
 export function SpacePage() {
 	const [rulesQuery, setRulesQuery] = createSignal("");
-	const { params, showsInfo, infoTabs, boardOnlyTabs, urlParameter } =
-		createSpaceTabs();
+	const {
+		params,
+		showsInfo,
+		infoTabs,
+		boardOnlyTabs,
+		urlParameter,
+		isAccessTab,
+	} = createSpaceTabs();
 
 	return (
 		<Tabs.Root class={styles.console} urlParam={urlParameter()}>
@@ -109,11 +129,11 @@ export function SpacePage() {
 			</Tabs.Bar>
 			<Tabs.Content value="access">
 				<div class={styles.grid}>
-					<UnlockCard />
+					<UnlockCard active={isAccessTab()} />
 					<Show when={showsInfo()}>
 						{/* Renders nothing for non-guests (no access window). */}
 						<CountdownCard />
-						<WifiCard />
+						<WifiCard active={isAccessTab()} />
 						{/* Renders nothing while occupancy is disabled. */}
 						<OccupancyCard />
 					</Show>

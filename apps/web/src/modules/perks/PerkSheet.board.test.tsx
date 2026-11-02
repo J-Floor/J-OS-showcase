@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { MORPH_OF } from "@j-os/design-system";
+import { MemoryRouter, Route, createMemoryHistory } from "@solidjs/router";
 import {
 	cleanup,
 	fireEvent,
@@ -9,7 +11,7 @@ import {
 } from "@solidjs/testing-library";
 import { getFunctionName } from "convex/server";
 import { ConvexError } from "convex/values";
-import { createSignal } from "solid-js";
+import { createSignal, type JSX } from "solid-js";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 afterEach(cleanup);
@@ -75,11 +77,14 @@ vi.mock("convex-solidjs", () => ({
 }));
 
 import { SITE_TIMEZONE } from "../../../convex/lib/time.ts";
+import type { PerkRequestRow } from "../../../convex/perkRequests.ts";
+import { askToDiscard } from "../../../test-stubs/askToDiscard.ts";
 import { AbilityProvider, type Role } from "../../lib/ability.tsx";
 import { ConfirmProvider } from "../../shared/confirm.tsx";
 import { formatDateIn } from "../../shared/time.ts";
 
 import { PerkSheet } from "./PerkSheet.tsx";
+import { RequestSheet } from "./requests/RequestSheet.tsx";
 
 const BOARD = [
 	{ _id: "person1", firstName: "Grace", lastName: "Hopper", tier: "board" },
@@ -174,8 +179,21 @@ afterEach(() => {
 	vi.clearAllMocks();
 });
 
+/** `tree` on the Perks page, in a router: a request in the sheet opens as
+ *  a peek, through the URL. */
+function renderAtPerks(tree: () => JSX.Element) {
+	const history = createMemoryHistory();
+	history.set({ value: "/perks?perk=perk1", scroll: false, replace: true });
+	const rendered = render(() => (
+		<MemoryRouter history={history}>
+			<Route path="*" component={tree} />
+		</MemoryRouter>
+	));
+	return { ...rendered, history };
+}
+
 function renderSheet(role: Role, props: Record<string, unknown> = {}) {
-	return render(() => (
+	return renderAtPerks(() => (
 		<ConfirmProvider>
 			<AbilityProvider role={role}>
 				<PerkSheet open onOpenChange={() => {}} {...props} />
@@ -329,11 +347,7 @@ test("create: a typed partner asks before Escape throws it away; Discard closes"
 	renderSheet("board", { onOpenChange });
 	fill("Partner", "Acme Cloud");
 	const sheet = screen.getByRole("dialog", { name: "New perk" });
-	// Ark hears Escape a moment after the open: press until it asks.
-	await waitFor(() => {
-		if (!discardPrompt()) fireEvent.keyDown(sheet, { key: "Escape" });
-		expect(discardPrompt()).toBeInTheDocument();
-	});
+	await askToDiscard(sheet, "Discard new perk?");
 	expect(onOpenChange).not.toHaveBeenCalled();
 	fireEvent.click(screen.getByRole("button", { name: "Discard" }));
 	await waitFor(() => {
@@ -379,7 +393,7 @@ test("edit: committing the partner sends updatePerk with that field alone", asyn
 
 test("edit: the refetch after an autosave leaves the fields unlocked", async () => {
 	const [shown, setShown] = createSignal(perkRow());
-	render(() => (
+	renderAtPerks(() => (
 		<ConfirmProvider>
 			<AbilityProvider role="board">
 				<PerkSheet open onOpenChange={() => {}} perk={shown()} />
@@ -473,7 +487,7 @@ test("edit: a refusal that lands after the board locked the sheet still shows, t
 	const save = deferred();
 	backend.updatePerk.mockImplementationOnce(() => save.promise);
 	const [shown, setShown] = createSignal(perkRow());
-	render(() => (
+	renderAtPerks(() => (
 		<ConfirmProvider>
 			<AbilityProvider role="board">
 				<PerkSheet open onOpenChange={() => {}} perk={shown()} />
@@ -601,7 +615,7 @@ test("a refused delete shows the reason in the footer and keeps the sheet open",
 test("a delete refusal stays with its perk: a refetch keeps it, stepping to another perk clears it", async () => {
 	backend.deletePerk.mockRejectedValueOnce(REFUSED);
 	const [shown, setShown] = createSignal(perkRow());
-	render(() => (
+	renderAtPerks(() => (
 		<ConfirmProvider>
 			<AbilityProvider role="board">
 				<PerkSheet open onOpenChange={() => {}} perk={shown()} />
@@ -629,6 +643,117 @@ test("a delete refusal stays with its perk: a refetch keeps it, stepping to anot
 		).toBeInTheDocument();
 	});
 	expect(screen.queryByText("You can't do that.")).toBeNull();
+});
+
+test("the Delete key asks to delete the perk, but not while typing", async () => {
+	renderSheet("board", { perk: perkRow() });
+	// Delete in a field edits the field.
+	fireEvent.keyDown(screen.getByRole("textbox"), { key: "Delete" });
+	expect(screen.queryByText("Delete perk?")).toBeNull();
+	fireEvent.keyDown(document.body, { key: "Delete" });
+	await screen.findByText("Delete perk?");
+	expect(backend.deletePerk).not.toHaveBeenCalled();
+});
+
+test("R requests the perk for the board too", async () => {
+	renderSheet("board", { perk: perkRow() });
+	fireEvent.keyDown(document.body, { key: "r" });
+	await waitFor(() => {
+		expect(backend.otherMutation).toHaveBeenCalledWith({ perkId: "perk1" });
+	});
+});
+
+test("under the request's peek, R and Delete leave the perk alone; the request's own keys answer", async () => {
+	renderAtPerks(() => (
+		<ConfirmProvider>
+			<AbilityProvider role="board">
+				<PerkSheet open onOpenChange={() => {}} perk={perkRow()} />
+				<RequestSheet
+					open
+					onOpenChange={() => {}}
+					request={REQUEST as unknown as PerkRequestRow}
+				/>
+			</AbilityProvider>
+		</ConfirmProvider>
+	));
+	fireEvent.keyDown(document.body, { key: "r" });
+	fireEvent.keyDown(document.body, { key: "Delete" });
+	fireEvent.keyDown(document.body, { key: "g" });
+	await waitFor(() => {
+		expect(backend.setPerkRequestStatus).toHaveBeenCalledWith({
+			requestId: "request1",
+			status: "granted",
+		});
+	});
+	expect(backend.otherMutation).not.toHaveBeenCalled();
+	expect(screen.queryByText("Delete perk?")).toBeNull();
+});
+
+test("create: Mod+Enter creates the perk from inside a field, once it is filled", async () => {
+	renderSheet("board");
+	fill("Partner", "Acme Cloud");
+	fill("Perk", "Cloud credits");
+	fill("Terms", "Credits for the first year.");
+	await pick("Category", "Cloud");
+	// Not filled yet: the contact is missing.
+	fireEvent.keyDown(screen.getByLabelText(/Partner/), {
+		key: "Enter",
+		ctrlKey: true,
+	});
+	expect(backend.createPerk).not.toHaveBeenCalled();
+	await pick("Contact", "Grace Hopper");
+	fireEvent.keyDown(screen.getByLabelText(/Partner/), {
+		key: "Enter",
+		ctrlKey: true,
+	});
+	await waitFor(() => {
+		expect(backend.createPerk).toHaveBeenCalledTimes(1);
+	});
+});
+
+/** A create form with every required field filled. */
+async function fillCreateForm(): Promise<void> {
+	fill("Partner", "Acme Cloud");
+	fill("Perk", "Cloud credits");
+	fill("Terms", "Credits for the first year.");
+	await pick("Category", "Cloud");
+	await pick("Contact", "Grace Hopper");
+	await waitFor(() => {
+		expect(createButton()).not.toBeDisabled();
+	});
+}
+
+test("create: Enter in a field of a filled form creates the perk once", async () => {
+	renderSheet("board");
+	await fillCreateForm();
+	const partner = screen.getByLabelText(/Partner/);
+	fireEvent.keyDown(partner, { key: "Enter" });
+	fireEvent.keyUp(partner, { key: "Enter" });
+	// A browser submits the form when Enter is pressed in a field and the
+	// form has a submit button; happy-dom does not, so press that button.
+	const submit = document.querySelector<HTMLButtonElement>(
+		'form button[type="submit"]'
+	);
+	expect(submit).not.toBeNull();
+	submit?.click();
+	await waitFor(() => {
+		expect(backend.createPerk).toHaveBeenCalledTimes(1);
+	});
+});
+
+test("create: Mod+Enter does nothing while the discard prompt is open over the sheet", async () => {
+	renderSheet("board");
+	await fillCreateForm();
+	const sheet = screen.getByRole("dialog", { name: "New perk" });
+	await askToDiscard(sheet, "Discard new perk?");
+	// Pressed in the sheet's own field, under the prompt: where the sheet's
+	// binding would hear it if the prompt did not cover it. On the prompt's
+	// focused button it would never reach that binding at all.
+	fireEvent.keyDown(screen.getByLabelText(/Partner/), {
+		key: "Enter",
+		ctrlKey: true,
+	});
+	expect(backend.createPerk).not.toHaveBeenCalled();
 });
 
 // --- requests ------------------------------------------------------------
@@ -664,6 +789,40 @@ test("requests (board): counts and lists each request with its avatar and note",
 	expect(
 		within(section).getByText("We run our build farm on it.")
 	).toBeInTheDocument();
+});
+
+test("requests (board): a request opens its own sheet as a peek over the perk's", async () => {
+	const { history } = renderSheet("board", { perk: perkRow() });
+	fireEvent.click(
+		within(requestsSection()).getByRole("button", { name: /Ada Lovelace/ })
+	);
+	await waitFor(() => {
+		expect(history.get()).toContain("open=request%3Arequest1");
+	});
+	// Stacked on the perk's sheet, which stays open under it.
+	expect(history.get()).toContain("perk=perk1");
+});
+
+test("requests (board): a request's item morphs as the request", () => {
+	renderSheet("board", { perk: perkRow() });
+	expect(
+		within(requestsSection())
+			.getByRole("button", { name: /Ada Lovelace/ })
+			.closest(`[${MORPH_OF}]`)
+	).toHaveAttribute(MORPH_OF, "request1");
+});
+
+test("requests (board): picking a status opens nothing", async () => {
+	const { history } = renderSheet("board", { perk: perkRow() });
+	fireEvent.click(
+		within(requestItem("Ada Lovelace")).getByRole("combobox", {
+			name: "Status",
+		})
+	);
+	await new Promise((resolve) => {
+		setTimeout(resolve, 0);
+	});
+	expect(history.get()).not.toContain("open=");
 });
 
 test("requests (board): none yet shows the empty copy", () => {

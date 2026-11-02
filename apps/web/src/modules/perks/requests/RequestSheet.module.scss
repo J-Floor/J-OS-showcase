@@ -1,0 +1,33 @@
+@use "@j-os/design-system/typography" as typo;
+@use "@j-os/design-system/utils" as utils;
+@use "../note";
+
+/* The title over the perk asked for, beside the header's actions. */
+.heading {
+	display: flex;
+	flex-direction: column;
+	min-inline-size: 0;
+}
+
+.subtitle {
+	@include typo.jf-typo-body-regular;
+
+	margin: 0;
+	color: var(--jf-fg-muted);
+}
+
+/* The perk, as a link-like button that opens its sheet. */
+.link {
+	@include typo.jf-typo-body-regular;
+	@include utils.focus-outline;
+	@include utils.bare-button;
+
+	text-align: start;
+	text-decoration: underline;
+	overflow-wrap: anywhere;
+}
+
+/* The member's note, as they wrote it. */
+.note {
+	@include note.member-note;
+}

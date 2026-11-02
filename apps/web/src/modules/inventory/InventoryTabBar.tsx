@@ -1,28 +1,19 @@
-import { Button, Icon, IconButton, Tabs } from "@j-os/design-system";
-import { For, type Accessor } from "solid-js";
+import { Tabs } from "@j-os/design-system";
+import { For } from "solid-js";
 
-import { ICONS } from "../../shared/icons.ts";
+import { ActionButton } from "../../shared/actions/ActionButton.tsx";
+import { RowActionButton } from "../../shared/actions/RowActions.tsx";
+import { PAGE_TARGET } from "../../shared/actions/shortcuts.ts";
 
-import type { Item } from "./data/inventoryData.ts";
+import type { createInventoryPageActions } from "./inventoryActions.ts";
 import { INVENTORY_TABS } from "./inventoryTabs.ts";
-import { printInventoryList } from "./print/printInventoryList.ts";
 
 /** The tab triggers, and each tab's header actions: print and scan and new
- *  item on Items, a "new" button on the other two. */
+ *  item on Items, a "new" button on the other two. Every button is fed by the
+ *  page's action descriptors, the same ones its keys run. */
 export function InventoryTabBar(props: {
-	itemRows: Accessor<Item[] | undefined>;
-	onScan: () => void;
-	onNewItem: () => void;
-	onNewType: () => void;
-	onNewCategory: () => void;
+	actions: ReturnType<typeof createInventoryPageActions>;
 }) {
-	function printAll() {
-		// Prints the whole list in its query order (the PDF renderer does not
-		// sort). The batch action in ItemsTab prints only the checked rows; this
-		// toolbar button is the "print everything" shortcut.
-		void printInventoryList(props.itemRows() ?? []);
-	}
-
 	return (
 		<Tabs.Bar>
 			<Tabs.List>
@@ -35,34 +26,31 @@ export function InventoryTabBar(props: {
 				</For>
 			</Tabs.List>
 			<Tabs.Actions value="items">
-				<IconButton
-					tooltipLabel="Print inventory list"
-					disabled={(props.itemRows()?.length ?? 0) === 0}
-					disabledReason={
-						props.itemRows() === undefined
-							? "Loading items…"
-							: "No items to print"
-					}
-					onClick={printAll}
-				>
-					{ICONS.print}
-				</IconButton>
-				<Button variant="secondary" onClick={props.onScan}>
-					<Icon>qr_code_scanner</Icon> Scan QR
-				</Button>
-				<Button onClick={props.onNewItem}>
-					<Icon>{ICONS.add}</Icon> New item
-				</Button>
+				<RowActionButton
+					action={props.actions.printList}
+					row={PAGE_TARGET}
+				/>
+				<ActionButton
+					action={props.actions.scan}
+					target={PAGE_TARGET}
+					variant="secondary"
+				/>
+				<ActionButton
+					action={props.actions.newItem}
+					target={PAGE_TARGET}
+				/>
 			</Tabs.Actions>
 			<Tabs.Actions value="types">
-				<Button onClick={props.onNewType}>
-					<Icon>{ICONS.add}</Icon> New item type
-				</Button>
+				<ActionButton
+					action={props.actions.newType}
+					target={PAGE_TARGET}
+				/>
 			</Tabs.Actions>
 			<Tabs.Actions value="categories">
-				<Button onClick={props.onNewCategory}>
-					<Icon>{ICONS.add}</Icon> New category
-				</Button>
+				<ActionButton
+					action={props.actions.newCategory}
+					target={PAGE_TARGET}
+				/>
 			</Tabs.Actions>
 		</Tabs.Bar>
 	);

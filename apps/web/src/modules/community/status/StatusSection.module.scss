@@ -1,4 +1,5 @@
 @use "@j-os/design-system/hover";
+@use "@j-os/design-system/utils" as utils;
 
 /* Values are plain text on the same baseline as their label — a row of pills
    gave every line a different height and pushed the values off that baseline.
@@ -28,12 +29,10 @@
    storage link minted on demand, so the destination does not exist until the
    click has already happened. */
 .link {
-	padding: 0;
+	@include utils.bare-button;
+
 	color: var(--jf-status-fg);
 	text-decoration: underline;
-	cursor: pointer;
-	background: none;
-	border: none;
 
 	&:disabled {
 		cursor: default;

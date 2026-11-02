@@ -36,13 +36,14 @@ import { SHEET_SKELETON } from "../../utils/morphPairing.ts";
 import {
 	OVERLAYS_ABOVE_VAR,
 	OVERLAY_COVERED,
+	useOverlayCovered,
 } from "../../utils/overlayLayer.tsx";
 import {
 	type SaveTracker,
 	createSaveTracker,
 	useSaveTracker,
 } from "../../utils/saveTracker.ts";
-import { stackedName } from "../../utils/viewTransition.ts";
+import { canAnimate, stackedName } from "../../utils/viewTransition.ts";
 import { setDeferredImmediate } from "../Deferred/Deferred.tsx";
 import { Dialog } from "../Dialog/Dialog.tsx";
 import { PropertyRow } from "../PropertyRow/PropertyRow.tsx";
@@ -122,6 +123,12 @@ function OpensOnMount(): JSX.Element {
 		</Sheet.Root>
 	);
 }
+
+// Every describe and the tests between them install fakes: a fake left
+// installed turns the next tests' closes into real morphs.
+afterEach(() => {
+	restoreViewTransitions();
+});
 
 describe("Sheet", () => {
 	it("renders title, body and footer parts when open", () => {
@@ -423,10 +430,6 @@ describe("Sheet", () => {
 	});
 
 	describe("morph", () => {
-		afterEach(() => {
-			restoreViewTransitions();
-		});
-
 		test("closes into the on-screen element for its entity when the source is gone", async () => {
 			const names = recordEntityNames();
 			const [open, setOpen] = createSignal(true);
@@ -521,6 +524,112 @@ describe("Sheet", () => {
 			setSelected("b");
 			await transitionSettled();
 			expect(row).toHaveAttribute(MORPH_HIDDEN);
+		});
+
+		test("a sheet that names its entity once it has loaded keeps its source hidden; a later step releases it", async () => {
+			stubViewTransition();
+			const uninstall = trackActivation();
+			onTestFinished(uninstall);
+			const [open, setOpen] = createSignal(false);
+			const [entity, setEntity] = createSignal<string>();
+			render(() => (
+				<>
+					<div id="row-b" role="row" data-morph-of="b" />
+					<Sheet.Root
+						open={open()}
+						onOpenChange={setOpen}
+						morphId={entity()}
+					>
+						<Sheet.Header>
+							<Sheet.Title>Task</Sheet.Title>
+						</Sheet.Header>
+						<Sheet.Body>body</Sheet.Body>
+					</Sheet.Root>
+				</>
+			));
+			await new Promise((resolve) => setTimeout(resolve, 5));
+			const row = document.getElementById("row-b");
+			row?.dispatchEvent(
+				new PointerEvent("pointerdown", { bubbles: true })
+			);
+			setOpen(true);
+			await transitionSettled();
+			expect(row).toHaveAttribute(MORPH_HIDDEN);
+			setEntity("b");
+			expect(row).toHaveAttribute(MORPH_HIDDEN);
+			setEntity("c");
+			expect(row).not.toHaveAttribute(MORPH_HIDDEN);
+		});
+
+		test("a sheet opened from a plain button, then named, releases its source", async () => {
+			stubViewTransition();
+			const uninstall = trackActivation();
+			onTestFinished(uninstall);
+			const [open, setOpen] = createSignal(false);
+			const [entity, setEntity] = createSignal<string>();
+			render(() => (
+				<>
+					<div id="row-x" role="row" data-morph-of="x" />
+					{/* Filled: a container, which the sheet takes the place of. */}
+					<button id="new" ref={fill}>
+						New
+					</button>
+					<Sheet.Root
+						open={open()}
+						onOpenChange={setOpen}
+						morphId={entity()}
+					>
+						<Sheet.Header>
+							<Sheet.Title>Task</Sheet.Title>
+						</Sheet.Header>
+						<Sheet.Body>body</Sheet.Body>
+					</Sheet.Root>
+				</>
+			));
+			await new Promise((resolve) => setTimeout(resolve, 5));
+			const button = document.getElementById("new");
+			button?.dispatchEvent(
+				new PointerEvent("pointerdown", { bubbles: true })
+			);
+			setOpen(true);
+			await transitionSettled();
+			expect(button).toHaveAttribute(MORPH_HIDDEN);
+			setEntity("x");
+			expect(button).not.toHaveAttribute(MORPH_HIDDEN);
+		});
+
+		test("a cold open from one row, then named for another, releases its source", async () => {
+			stubViewTransition();
+			const uninstall = trackActivation();
+			onTestFinished(uninstall);
+			const [open, setOpen] = createSignal(false);
+			const [entity, setEntity] = createSignal<string>();
+			render(() => (
+				<>
+					<div id="row-a" role="row" data-morph-of="a" />
+					<div id="row-b" role="row" data-morph-of="b" />
+					<Sheet.Root
+						open={open()}
+						onOpenChange={setOpen}
+						morphId={entity()}
+					>
+						<Sheet.Header>
+							<Sheet.Title>Task</Sheet.Title>
+						</Sheet.Header>
+						<Sheet.Body>body</Sheet.Body>
+					</Sheet.Root>
+				</>
+			));
+			await new Promise((resolve) => setTimeout(resolve, 5));
+			const rowA = document.getElementById("row-a");
+			rowA?.dispatchEvent(
+				new PointerEvent("pointerdown", { bubbles: true })
+			);
+			setOpen(true);
+			await transitionSettled();
+			expect(rowA).toHaveAttribute(MORPH_HIDDEN);
+			setEntity("b");
+			expect(rowA).not.toHaveAttribute(MORPH_HIDDEN);
 		});
 
 		test("closing flies the sheet's title into the row's title", async () => {
@@ -1007,6 +1116,13 @@ describe("confirmClose", () => {
 		},
 	};
 
+	// First in the describe, after a test outside it that installs a fake:
+	// a fake left installed makes these tests run real morphs, and one still
+	// running when the morph test below starts takes in its first morph.
+	test("starts with no view-transition fake left over from an earlier test", () => {
+		expect(canAnimate()).toBe(false);
+	});
+
 	for (const [way, leave] of Object.entries(WAYS_OUT)) {
 		test(`while dirty, ${way} asks instead of closing`, async () => {
 			const onOpenChange = renderGuarded(true);
@@ -1183,4 +1299,43 @@ test("a sheet steps back and forward with a morph, not inside it: its own transi
 	expect(content).toContain(`var(${OVERLAYS_ABOVE_VAR})`);
 	expect(content).toContain(`&[${OVERLAY_COVERED}]`);
 	expect(content).not.toMatch(/nested-layer-count|data-has-nested/);
+});
+
+test("useOverlayCovered: a sheet's parts are covered by an overlay asked open above it, the page by any", async () => {
+	let isSheetCovered: (() => boolean) | undefined;
+	let isPageCovered: (() => boolean) | undefined;
+	function SheetReader(): JSX.Element {
+		isSheetCovered = useOverlayCovered();
+		return null;
+	}
+	function PageReader(): JSX.Element {
+		isPageCovered = useOverlayCovered();
+		return null;
+	}
+	const [isDialogOpen, setDialogOpen] = createSignal(false);
+	render(() => (
+		<>
+			<PageReader />
+			<Sheet.Root open onOpenChange={() => {}}>
+				<SheetReader />
+			</Sheet.Root>
+			<Dialog.Root open={isDialogOpen()} onOpenChange={setDialogOpen}>
+				<Dialog.Content>
+					<Dialog.Header>
+						<Dialog.Title>Confirm</Dialog.Title>
+					</Dialog.Header>
+				</Dialog.Content>
+			</Dialog.Root>
+		</>
+	));
+	await new Promise((resolve) => setTimeout(resolve, 5));
+	expect(isSheetCovered?.()).toBe(false);
+	expect(isPageCovered?.()).toBe(true);
+	setDialogOpen(true);
+	await waitFor(() => {
+		expect(isSheetCovered?.()).toBe(true);
+	});
+	// Closing counts at once: it is on its way out.
+	setDialogOpen(false);
+	expect(isSheetCovered?.()).toBe(false);
 });

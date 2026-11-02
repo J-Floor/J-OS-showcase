@@ -9,6 +9,13 @@
 export const MORPH_OF = "data-morph-of";
 
 /**
+ * Marks the control that opens the entity the element around it shows (a
+ * person's name in a sheet's list row): activating it activates that
+ * element, so the overlay grows out of the whole row, not the control.
+ */
+export const MORPH_OPENER = "data-morph-opener";
+
+/**
  * Marks the title inside a morph source or target; it flies on its own. Its
  * value may be a field key (a table's title cell carries its column id): the
  * title then flies into the target's value with that key when it has one,

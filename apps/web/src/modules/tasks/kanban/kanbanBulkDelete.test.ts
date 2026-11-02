@@ -1,5 +1,8 @@
 // @vitest-environment happy-dom
-import { createRoot } from "solid-js";
+import { Sheet, useOverlayCovered } from "@j-os/design-system";
+import { waitFor } from "@solidjs/testing-library";
+import { createComponent, createRoot } from "solid-js";
+import { render } from "solid-js/web";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { TaskActions } from "../data/tasksData.tsx";
@@ -70,15 +73,26 @@ describe("createBulkDelete", () => {
 		expect(event.defaultPrevented).toBe(false);
 	});
 
-	it("does nothing while a dialog is open", () => {
+	it("does nothing while a sheet is open over the board", async () => {
 		const bulk = setup(["a"]);
-		const dialog = document.createElement("div");
-		dialog.setAttribute("role", "dialog");
-		dialog.dataset.state = "open";
-		document.body.append(dialog);
+		const host = document.createElement("div");
+		document.body.append(host);
+		let isCovered: (() => boolean) | undefined;
+		const unmount = render(() => {
+			isCovered = useOverlayCovered();
+			return createComponent(Sheet.Root, {
+				open: true,
+				onOpenChange: () => {},
+				children: [],
+			});
+		}, host);
+		await waitFor(() => {
+			expect(isCovered?.()).toBe(true);
+		});
 		const event = press("Delete");
 		expect(bulk.confirmOpen()).toBe(false);
 		expect(event.defaultPrevented).toBe(false);
+		unmount();
 	});
 
 	it("stops listening with its owner", () => {

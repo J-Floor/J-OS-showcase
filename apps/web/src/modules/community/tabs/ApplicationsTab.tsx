@@ -1,4 +1,10 @@
-import { Button, Icon, isTypingTarget, Table } from "@j-os/design-system";
+import {
+	Button,
+	Icon,
+	isTypingTarget,
+	Table,
+	useOverlayCovered,
+} from "@j-os/design-system";
 import {
 	createHotkey,
 	createHotkeys,
@@ -201,24 +207,33 @@ function ApplicationBatchActions(): JSX.Element {
 	);
 }
 
+/** Whether a row key may fire: not while typing, not on a repeat, and not
+ *  while an overlay covers where the keys are bound (`isCovered`). */
+function isRowKeyLive(event: KeyboardEvent, isCovered: () => boolean): boolean {
+	return !event.repeat && !isTypingTarget(event.target) && !isCovered();
+}
+
 /**
  * 0–9 set the ringed applicant's score outright (the score is shared, so a
  * digit overwrites it, same as the cell). Inert unless a row is ringed — no
  * sheet, no selection, this tab on screen — because `focused()` is `undefined`
  * otherwise. `n` drops focus into the ringed row's note composer; only the live
  * table has a `data-focused` row, so the document query resolves to the right
- * one.
+ * one. Both are ignored while typing, on a repeat, and while an overlay
+ * covers where they are bound: the page, or inside the tab's sheet or a peek
+ * (`isRowKeyLive`).
  */
 function useApplicationRowKeys(
 	focused: () => PersonRow | undefined,
 	setScore: ReturnType<typeof useMutation<typeof api.applications.setScore>>
 ): void {
+	const isCovered = useOverlayCovered();
 	createHotkeys(
 		() =>
 			DIGIT_KEYS.map((digit) => ({
 				hotkey: digit,
 				callback: (event: KeyboardEvent) => {
-					if (event.repeat || isTypingTarget(event.target)) return;
+					if (!isRowKeyLive(event, isCovered)) return;
 					const row = focused();
 					if (!row) return;
 					event.preventDefault();
@@ -240,8 +255,7 @@ function useApplicationRowKeys(
 	createHotkey(
 		"N",
 		(event) => {
-			if (event.repeat || isTypingTarget(event.target) || !focused())
-				return;
+			if (!isRowKeyLive(event, isCovered) || !focused()) return;
 			const input = document.querySelector<HTMLInputElement>(
 				'tr[data-focused="true"] [data-note-cell] input'
 			);

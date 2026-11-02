@@ -7,16 +7,23 @@ import { type JSX, Show, createContext, createSignal } from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { PersonRow } from "../../../../convex/people.ts";
-import { createSheetNav } from "../../../lib/createSheetNav.ts";
+import {
+	createSheetNav,
+	type SheetNavState,
+} from "../../../lib/createSheetNav.ts";
+import {
+	ActionKeys,
+	createActionKeys,
+} from "../../../shared/actions/createActionKeys.ts";
+import type { ActionDescriptor } from "../../../shared/actions/shortcuts.ts";
 import { useRequiredContext } from "../../../shared/compound.ts";
 import { useRowPrefetch } from "../../../shared/entity/useRowPrefetch.ts";
 import type { Identified } from "../../../shared/types.ts";
-import { createActionKeys } from "../actions/createActionKeys.ts";
 import {
 	RosterActionError,
 	settleRosterAction,
 } from "../actions/RosterActionError.tsx";
-import type { ActionDescriptor, ShortcutScope } from "../actions/shortcuts.ts";
+import type { ShortcutScope } from "../actions/shortcuts.ts";
 import type { TriageResult } from "../actions/triage.ts";
 import { personEntity } from "../entity.ts";
 
@@ -25,7 +32,7 @@ import {
 	useSheetEditing,
 	type FooterLead,
 } from "./RosterSheet.tsx";
-import type { TabProps } from "./TabProps.ts";
+import type { PersonSelection, TabProps } from "./TabProps.ts";
 
 /** Run each row through a per-row mutation (Convex mutations are individually
  *  transactional), then clear the selection. Stops at the first failure, shows
@@ -117,35 +124,54 @@ type RosterState<Row> = {
 	intend: () => void;
 };
 
-/** The document-level action keys: they act on the sheet's person, else the
- *  checked rows, else the ringed row. */
+/** The page's action keys: they act on the checked rows, else the ringed
+ *  row. Quiet while the sheet (or anything) is open over the page: the
+ *  sheet's own keys (`RosterSheetKeys`) act on its person then. */
 function useRosterActionKeys<Row extends PersonRow>(
 	props: {
 		tab: TabProps;
+		scope: ShortcutScope;
 		actions: () => ActionDescriptor<Row>[];
 	},
-	state: RosterState<Row> & {
+	state: Pick<RosterState<Row>, "checked"> & {
 		focusedRow: () => Row | undefined;
 		onAdvance: () => void;
 		onClearSelection: () => void;
 	}
 ): void {
 	createActionKeys<Row>({
+		scope: props.scope,
 		// Wrapped, not passed by reference: reading `props.actions` directly here
 		// (outside a tracked scope) would fix the accessor at setup; the arrow
 		// defers the read into `createActionKeys`' own tracked scope.
 		actions: () => props.actions(),
-		// The sheet wins over the roster: whoever it shows is who you are looking
-		// at, whatever the ring or the checkboxes say underneath it.
-		sheetPerson: () => (state.open() ? state.selected() : undefined),
 		selected: state.checked,
 		focused: state.focusedRow,
 		onAdvance: state.onAdvance,
 		onClearSelection: state.onClearSelection,
-		// Live when this tab is on screen, or its sheet is up — the selection
-		// alone cannot express the idle-on-screen case.
-		active: () => (props.tab.active ?? false) || state.open(),
+		active: () => props.tab.active ?? false,
 	});
+}
+
+/** The sheet's keys, rendered inside it: the tab's actions, and the tab's
+ *  own row keys (`focusedRowKeys`), on the person the sheet shows. */
+function RosterSheetKeys<Row extends PersonRow>(props: {
+	scope: ShortcutScope;
+	actions: () => ActionDescriptor<Row>[];
+	shown: () => Row | undefined;
+	isOpen: () => boolean;
+	focusedRowKeys?: (focused: () => Row | undefined) => void;
+}): JSX.Element {
+	// eslint-disable-next-line solid/reactivity -- bound once at setup; the keys read the accessor
+	props.focusedRowKeys?.(props.shown);
+	return (
+		<ActionKeys<Row>
+			scope={props.scope}
+			actions={props.actions}
+			target={props.shown}
+			active={props.isOpen}
+		/>
+	);
 }
 
 /** The sheet's prev/next, stepping through the rows on screen (sorted,
@@ -207,9 +233,10 @@ type RosterTabProps<Row extends PersonRow> = {
 	 * checked, so a handler that bails on `undefined` is automatically inert in
 	 * both. While a sheet is open the row it shows IS reported (the table pins
 	 * the ring to it), so the letters act on that person. Invoked once at setup,
-	 * inside this component's reactive owner, so the callback can call
-	 * `createHotkey(s)` directly. Applications uses it for number-to-score and
-	 * `n`-to-note.
+	 * inside a reactive owner, so the callback can call `createHotkey(s)`
+	 * directly. Applications uses it for number-to-score and `n`-to-note.
+	 * Bound twice: on the page for the ringed row, and inside the sheet for
+	 * its person, so each binding yields to what is shown over it.
 	 */
 	focusedRowKeys?: (focused: () => Row | undefined) => void;
 };
@@ -239,7 +266,6 @@ function useRosterFocus<Row extends PersonRow>(
 	// `focusedRow` is already cleared whenever the ring is not the target, so
 	// they fire only when they should). A one-time setup call, like
 	// `createActionKeys` above, not a reactive read.
-
 	props.focusedRowKeys?.(focusedRow);
 	return {
 		onFocusedRowChange,
@@ -252,6 +278,47 @@ function useRosterFocus<Row extends PersonRow>(
 			focusApi = api;
 		},
 	};
+}
+
+/** The tab's person sheet: its edit mode, its decision footer and its
+ *  keys. */
+function RosterTabSheet<Row extends PersonRow>(props: {
+	roster: RosterTabProps<Row>;
+	selection: PersonSelection;
+	isOpen: boolean;
+	selected: Row | undefined;
+	nav: SheetNavState;
+}): JSX.Element {
+	const [editing, setEditing] = useSheetEditing(
+		() => props.isOpen,
+		() => props.selection.requestedId(),
+		() => props.roster.scope
+	);
+	return (
+		<RosterSheet
+			isOpen={props.isOpen}
+			prebuild={props.selection.prebuild()}
+			isLoading={props.roster.data() === undefined}
+			selected={props.selected}
+			isEditing={editing()}
+			onToggleEditing={() => {
+				setEditing((isEditing) => !isEditing);
+			}}
+			nav={props.nav}
+			onClose={props.selection.close}
+			actions={props.roster.actions()}
+			scope={props.roster.scope}
+			footerLead={props.roster.footerLead}
+		>
+			<RosterSheetKeys
+				scope={props.roster.scope}
+				actions={() => props.roster.actions()}
+				shown={() => (props.isOpen ? props.selected : undefined)}
+				isOpen={() => props.isOpen}
+				focusedRowKeys={props.roster.focusedRowKeys}
+			/>
+		</RosterSheet>
+	);
 }
 
 /**
@@ -282,15 +349,16 @@ function RosterTabRoot<Row extends PersonRow>(
 	const { selection, selected, open } = useRosterSelection(props.tab, () =>
 		props.data()
 	);
-	const [editing, setEditing] = useSheetEditing(
-		open,
-		() => selection.requestedId(),
-		() => props.scope
-	);
 	const [checked, setChecked] = createSignal<Row[]>([]);
 	const { onFocusedRowChange, onHoverIntent, setFocusApi } = useRosterFocus(
 		props,
-		{ open, selected, checked, setChecked, intend: selection.intend }
+		{
+			open,
+			selected,
+			checked,
+			setChecked,
+			intend: selection.intend,
+		}
 	);
 	const { nav, setDisplayed } = useDisplayedRowsNav(selected, (row) => {
 		selection.openRow(row);
@@ -339,20 +407,12 @@ function RosterTabRoot<Row extends PersonRow>(
 			>
 				{props.children}
 			</Table.Root>
-			<RosterSheet
+			<RosterTabSheet
+				roster={props}
+				selection={selection}
 				isOpen={open()}
-				prebuild={selection.prebuild()}
-				isLoading={props.data() === undefined}
 				selected={selected()}
-				isEditing={editing()}
-				onToggleEditing={() => {
-					setEditing((isEditing) => !isEditing);
-				}}
 				nav={nav}
-				onClose={selection.close}
-				actions={props.actions()}
-				scope={props.scope}
-				footerLead={props.footerLead}
 			/>
 		</RosterContext.Provider>
 	);

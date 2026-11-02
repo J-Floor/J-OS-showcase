@@ -1,4 +1,4 @@
-import { Button, Icon, Skeleton } from "@j-os/design-system";
+import { Button, Skeleton } from "@j-os/design-system";
 import {
 	For,
 	Match,
@@ -12,7 +12,10 @@ import {
 
 import { type LockSlot } from "../../../convex/lib/doorLocks.ts";
 import { type DoorAction } from "../../../convex/lib/doorProvider.ts";
+import { ActionGlyph } from "../../shared/actions/ActionGlyph.tsx";
+import type { ActionDescriptor } from "../../shared/actions/shortcuts.ts";
 
+import { type DoorsTarget } from "./doorActions.ts";
 import { ACTION_COPY, DOOR_ACTIONS } from "./doorCopy.ts";
 import { type DoorStatus, type SlotView } from "./doorView.ts";
 import { slotInfo } from "./lockSlots.ts";
@@ -74,11 +77,36 @@ function PendingSlot(): JSX.Element {
 	);
 }
 
+/** One door button: its icon (or, while peeking, the key's chip) and label.
+ *  `action` is the descriptor the key runs, so the chip names the key that
+ *  fires this very button. */
+function DoorButton(props: {
+	action: ActionDescriptor<DoorsTarget>;
+	icon: string;
+	ariaLabel?: string;
+	onPress: () => void;
+	children: JSX.Element;
+}): JSX.Element {
+	return (
+		<Button
+			class={styles.door}
+			aria-label={props.ariaLabel}
+			shortcut={props.action.hotkey}
+			onClick={props.onPress}
+		>
+			<ActionGlyph icon={props.icon} hotkey={props.action.hotkey} />
+			{props.children}
+		</Button>
+	);
+}
+
 /** One door's slot: its status text, its one big full-width button, or its
- *  name over Unlock and Lock side by side. */
+ *  name over Unlock and Lock side by side. Each button names its own key
+ *  (`actions`, the same descriptors the keys run). */
 export function DoorSlot(props: {
 	slot: LockSlot;
 	view: () => SlotView;
+	actions: Record<DoorAction, ActionDescriptor<DoorsTarget>>;
 	onPress: (action: DoorAction) => void;
 }): JSX.Element {
 	const slotReference = createSlotFocusKeeper(props);
@@ -120,15 +148,15 @@ export function DoorSlot(props: {
 				</Match>
 				<Match when={button()}>
 					{(current) => (
-						<Button
-							class={styles.door}
-							onClick={() => {
+						<DoorButton
+							action={props.actions[current().action]}
+							icon={ACTION_COPY[current().action].icon}
+							onPress={() => {
 								props.onPress(current().action);
 							}}
 						>
-							<Icon>{ACTION_COPY[current().action].icon}</Icon>
 							{`${ACTION_COPY[current().action].label} ${info().buttonLabel}`}
-						</Button>
+						</DoorButton>
 					)}
 				</Match>
 				<Match when={kind() === "both"}>
@@ -136,16 +164,16 @@ export function DoorSlot(props: {
 					<div class={styles.both}>
 						<For each={DOOR_ACTIONS}>
 							{(each) => (
-								<Button
-									class={styles.door}
-									aria-label={`${ACTION_COPY[each].label} ${info().buttonLabel}`}
-									onClick={() => {
+								<DoorButton
+									action={props.actions[each]}
+									icon={ACTION_COPY[each].icon}
+									ariaLabel={`${ACTION_COPY[each].label} ${info().buttonLabel}`}
+									onPress={() => {
 										props.onPress(each);
 									}}
 								>
-									<Icon>{ACTION_COPY[each].icon}</Icon>
 									{ACTION_COPY[each].label}
-								</Button>
+								</DoorButton>
 							)}
 						</For>
 					</div>

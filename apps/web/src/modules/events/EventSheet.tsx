@@ -1,21 +1,17 @@
-import { Accordion, Button, Sheet, PropertyRow } from "@j-os/design-system";
-import { useMutation } from "convex-solidjs";
+import { Accordion, Sheet, PropertyRow } from "@j-os/design-system";
 import { Show, createEffect, createSignal, on, type Accessor } from "solid-js";
 
-import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { Can, useAbility } from "../../lib/ability.tsx";
-import { call } from "../../lib/call.ts";
 import { EditToggle } from "../../shared/components/EditToggle.tsx";
-import type { ConfirmOptions } from "../../shared/confirm.tsx";
 import { useQuery } from "../../shared/data/useQuery.ts";
 import { createDraftGuard } from "../../shared/entity/createDraftGuard.ts";
-import { EntityDeleteButton } from "../../shared/entity/EntityDeleteButton.tsx";
 import { EntitySheetHeader } from "../../shared/entity/EntitySheetHeader.tsx";
 import { SheetSection } from "../../shared/entity/SheetSection.tsx";
 import { ICONS } from "../../shared/icons.ts";
 import type { SheetOpenProps } from "../../shared/types.ts";
 
+import { createEventSheetActions } from "./eventActions.ts";
 import {
 	EventCreateForm,
 	createEventCreateForm,
@@ -26,6 +22,7 @@ import {
 	EventDetailsItem,
 	type Attendee,
 } from "./EventDetails.tsx";
+import { EventSheetFooter } from "./EventSheetFooter.tsx";
 import { eventAttendeesQuery } from "./queries.ts";
 
 /**
@@ -76,7 +73,7 @@ function EventSheetHeader(
 	}
 ) {
 	return (
-		<EntitySheetHeader.Root
+		<EntitySheetHeader
 			title={props.event ? props.event.name : "New event"}
 			loading={props.loading}
 			saveStatus={!props.loading && props.event !== undefined}
@@ -94,7 +91,7 @@ function EventSheetHeader(
 					onToggle={props.onToggleEditing}
 				/>
 			</Show>
-		</EntitySheetHeader.Root>
+		</EntitySheetHeader>
 	);
 }
 
@@ -129,70 +126,6 @@ function EventDetailAccordion(props: {
 				/>
 			</Show>
 		</Accordion.Root>
-	);
-}
-
-const DELETE_EVENT_CONFIRM: ConfirmOptions = {
-	title: "Delete event?",
-	message: "This removes the event and its attendance records.",
-	confirmLabel: "Delete",
-	tone: "danger",
-};
-
-/** The sheet's footer: Delete on an existing event (board/admin), Create
- *  on the create form. Nothing while the row is still loading. */
-function EventSheetFooter(
-	props: Pick<EventSheetProps, "event" | "loading"> & {
-		canManage: boolean;
-		form: EventCreateFormState;
-		onClose: () => void;
-	}
-) {
-	const deleteEvent = useMutation(api.events.deleteEvent);
-
-	return (
-		<Show when={!props.loading}>
-			<Show
-				when={props.event === undefined}
-				fallback={
-					<Show when={props.canManage && props.event}>
-						{(event) => (
-							<Sheet.Footer>
-								<EntityDeleteButton
-									key={event()._id}
-									confirm={DELETE_EVENT_CONFIRM}
-									remove={() =>
-										call(
-											deleteEvent.mutateAsync({
-												eventId: event()._id,
-											}),
-											"Could not delete the event."
-										)
-									}
-									onClose={props.onClose}
-								>
-									Delete event
-								</EntityDeleteButton>
-							</Sheet.Footer>
-						)}
-					</Show>
-				}
-			>
-				<Can I="create" the="Events">
-					<Sheet.Footer>
-						<Button
-							type="submit"
-							form="event-create-form"
-							disabled={!props.form.canSubmit()}
-							disabledReason={props.form.disabledReason()}
-							isLoading={props.form.submitting()}
-						>
-							Create
-						</Button>
-					</Sheet.Footer>
-				</Can>
-			</Show>
-		</Show>
 	);
 }
 
@@ -231,6 +164,27 @@ function createEventDraft(props: EventSheetProps, form: EventCreateFormState) {
 	});
 }
 
+/** Fresh create form + locked fields on a sheet OPEN or a switch to a
+ *  different event — keyed on `open` + the event id, NOT the event object, so
+ *  a live-query refetch after an autosaved edit doesn't re-lock the fields
+ *  mid-edit. */
+function resetOnOpen(
+	props: EventSheetProps,
+	form: EventCreateFormState,
+	lockFields: () => void
+) {
+	createEffect(
+		on(
+			() => [props.open, props.event?._id] as const,
+			([isOpen]) => {
+				if (!isOpen) return;
+				lockFields();
+				if (props.event === undefined) form.reset();
+			}
+		)
+	);
+}
+
 /**
  * One sheet for creating and viewing/editing an event, styled like the
  * community person sheet: an accordion of `PropertyRow`s, a padlock
@@ -265,22 +219,13 @@ export function EventSheet(props: EventSheetProps) {
 	// community's PersonDetail). A bare `value` with no setter pins them open.
 	const [openSections, setOpenSections] = createSignal(ALL_SECTIONS);
 
-	// Fresh create form + locked fields on a sheet OPEN or a switch to a
-	// different event — keyed on `open` + the event id, NOT the event object, so
-	// a live-query refetch after an autosaved edit doesn't re-lock the fields
-	// mid-edit.
-	createEffect(
-		on(
-			() => [props.open, props.event?._id] as const,
-			([isOpen]) => {
-				if (!isOpen) return;
-				setEditing(false);
-				if (props.event === undefined) form.reset();
-			}
-		)
-	);
+	resetOnOpen(props, form, () => {
+		setEditing(false);
+	});
 	// After the reset above, so the reset form is the draft's baseline.
 	const draft = createEventDraft(props, form);
+
+	const actions = createEventSheetActions(props, form);
 
 	return (
 		<Sheet.Root
@@ -292,6 +237,7 @@ export function EventSheet(props: EventSheetProps) {
 			discardLabel="new event"
 			morphId={props.event?._id}
 		>
+			<actions.Keys />
 			<EventSheetHeader
 				event={props.event}
 				loading={props.loading}
@@ -309,7 +255,10 @@ export function EventSheet(props: EventSheetProps) {
 					when={props.event}
 					fallback={
 						<Can I="create" the="Events">
-							<EventCreateForm form={form} />
+							<EventCreateForm
+								form={form}
+								create={actions.create}
+							/>
 						</Can>
 					}
 				>
@@ -331,10 +280,7 @@ export function EventSheet(props: EventSheetProps) {
 				event={props.event}
 				loading={props.loading}
 				canManage={canManage()}
-				form={form}
-				onClose={() => {
-					props.onOpenChange(false);
-				}}
+				actions={actions}
 			/>
 		</Sheet.Root>
 	);

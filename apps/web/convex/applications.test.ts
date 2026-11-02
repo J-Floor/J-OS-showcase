@@ -223,7 +223,9 @@ describe("applications", () => {
 		const events = await backend.run(async (context) =>
 			context.db
 				.query("personEvents")
-				.withIndex("by_person", (range) => range.eq("personId", id))
+				.withIndex("by_personId_and_at", (range) =>
+					range.eq("personId", id)
+				)
 				.collect()
 		);
 		expect(
@@ -269,7 +271,9 @@ describe("applications", () => {
 		const edits = await backend.run(async (context) =>
 			context.db
 				.query("personEvents")
-				.withIndex("by_person", (range) => range.eq("personId", id))
+				.withIndex("by_personId_and_at", (range) =>
+					range.eq("personId", id)
+				)
 				.collect()
 		);
 		expect(
@@ -314,7 +318,9 @@ describe("applications", () => {
 		const cleared = await backend.run(async (context) =>
 			context.db
 				.query("personEvents")
-				.withIndex("by_person", (range) => range.eq("personId", id))
+				.withIndex("by_personId_and_at", (range) =>
+					range.eq("personId", id)
+				)
 				.collect()
 		);
 		expect(
@@ -426,7 +432,9 @@ describe("applications.decide", () => {
 		const events = await backend.run(async (context) =>
 			context.db
 				.query("personEvents")
-				.withIndex("by_person", (range) => range.eq("personId", id))
+				.withIndex("by_personId_and_at", (range) =>
+					range.eq("personId", id)
+				)
 				.collect()
 		);
 		const door = events.filter((event) => event.kind === "door");
@@ -529,7 +537,9 @@ describe("applications.decide", () => {
 		const events = await backend.run(async (context) =>
 			context.db
 				.query("personEvents")
-				.withIndex("by_person", (range) => range.eq("personId", id))
+				.withIndex("by_personId_and_at", (range) =>
+					range.eq("personId", id)
+				)
 				.collect()
 		);
 		expect(events).toHaveLength(0);
@@ -1707,7 +1717,7 @@ describe("submitApplication", () => {
 		const eventsBefore = await backend.run((context) =>
 			context.db
 				.query("personEvents")
-				.withIndex("by_person", (range) =>
+				.withIndex("by_personId_and_at", (range) =>
 					range.eq("personId", armed._id)
 				)
 				.collect()
@@ -1733,7 +1743,7 @@ describe("submitApplication", () => {
 		const eventsAfter = await backend.run((context) =>
 			context.db
 				.query("personEvents")
-				.withIndex("by_person", (range) =>
+				.withIndex("by_personId_and_at", (range) =>
 					range.eq("personId", armed._id)
 				)
 				.collect()
@@ -1937,7 +1947,9 @@ describe("confirmApplication", () => {
 		const events = await backend.run((context) =>
 			context.db
 				.query("personEvents")
-				.withIndex("by_person", (range) => range.eq("personId", id))
+				.withIndex("by_personId_and_at", (range) =>
+					range.eq("personId", id)
+				)
 				.collect()
 		);
 		expect(
@@ -2307,7 +2319,7 @@ async function fieldEdits(backend: TestConvex<typeof schema>, id: string) {
 	const rows = await backend.run(async (context) =>
 		context.db
 			.query("personEvents")
-			.withIndex("by_person", (range) =>
+			.withIndex("by_personId_and_at", (range) =>
 				range.eq("personId", id as never)
 			)
 			.collect()
@@ -2699,7 +2711,9 @@ describe("people.confirmEmailChange", () => {
 		const edits = await backend.run(async (context) =>
 			context.db
 				.query("personEvents")
-				.withIndex("by_person", (range) => range.eq("personId", id))
+				.withIndex("by_personId_and_at", (range) =>
+					range.eq("personId", id)
+				)
 				.collect()
 		);
 		expect(edits).toEqual([

@@ -154,7 +154,10 @@ export const personEventKind = v.union(
 	// The first time a person opened the Wi-Fi dialog. Recorded once, ever.
 	v.literal("wifi"),
 	// Another person row was folded into this one (`merge.ts`).
-	v.literal("merge")
+	v.literal("merge"),
+	// A perk request was made or moved to a new status. `event` is the new
+	// status, `perkRequestId` the request, `meta.perkId` its perk.
+	v.literal("perk")
 );
 
 export const doorLogOperation = v.union(
@@ -436,10 +439,16 @@ export default defineSchema({
 		before: v.optional(v.any()),
 		after: v.optional(v.any()),
 		meta: v.optional(v.any()),
+		// Set only on `perk` rows: the request sheet reads one request's
+		// history through it.
+		perkRequestId: v.optional(v.id("perkRequests")),
 	})
-		.index("by_person", ["personId"])
+		// A person's rows, oldest first; the history reads them newest first,
+		// bounded.
+		.index("by_personId_and_at", ["personId", "at"])
 		.index("by_person_and_kind", ["personId", "kind"])
-		.index("by_kind_and_at", ["kind", "at"]),
+		.index("by_kind_and_at", ["kind", "at"])
+		.index("by_perkRequestId_and_at", ["perkRequestId", "at"]),
 	/**
 	 * Per-person UI state that changes often (the last module route viewed).
 	 * Kept off `people` on purpose: the roster queries are live subscriptions

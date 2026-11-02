@@ -1,9 +1,14 @@
-import { Button, Icon, Tabs } from "@j-os/design-system";
+import { Tabs } from "@j-os/design-system";
 import { useSearchParams } from "@solidjs/router";
-import { createMemo, Show, type JSX } from "solid-js";
+import { createMemo, createSignal, Show, type JSX } from "solid-js";
 
 import { Can } from "../../lib/ability.tsx";
-import { ICONS } from "../../shared/icons.ts";
+import { ActionButton } from "../../shared/actions/ActionButton.tsx";
+import {
+	PAGE_TARGET,
+	type ActionDescriptor,
+	type PageTarget,
+} from "../../shared/actions/shortcuts.ts";
 import { tabKeyOf } from "../../shared/tabKey.ts";
 
 import { PerksList } from "./PerksList.tsx";
@@ -36,8 +41,8 @@ function BoardPerks(): JSX.Element {
 	);
 
 	// The Perks tab's list owns the selection the create sheet opens in, and
-	// hands over its opener as it mounts.
-	let openCreate: (() => void) | undefined;
+	// hands over New perk as it mounts.
+	const [newPerk, setNewPerk] = createSignal<ActionDescriptor<PageTarget>>();
 
 	return (
 		// No `lazyMount`: the Perks panel stays mounted behind the Requests
@@ -69,20 +74,19 @@ function BoardPerks(): JSX.Element {
 				    stays mounted behind the Requests tab, and on a phone a
 				    toolbar of its own would float over that tab. */}
 				<Tabs.Actions value="perks">
-					<Button
-						onClick={() => {
-							openCreate?.();
-						}}
-					>
-						<Icon>{ICONS.add}</Icon> New perk
-					</Button>
+					<Show when={newPerk()}>
+						{(action) => (
+							<ActionButton
+								action={action()}
+								target={PAGE_TARGET}
+							/>
+						)}
+					</Show>
 				</Tabs.Actions>
 			</Can>
 			<Tabs.Content value="perks" class={styles.panel}>
 				<PerksList
-					openCreateRef={(open) => {
-						openCreate = open;
-					}}
+					newPerkRef={setNewPerk}
 					active={() => activeTab() === "perks"}
 					onNeedTab={() => {
 						// Keep `perk`: it is the id this switch exists to open.
@@ -92,7 +96,7 @@ function BoardPerks(): JSX.Element {
 			</Tabs.Content>
 			<Tabs.Content value="requests" class={styles.panel}>
 				<Show when={wasVisited()}>
-					<RequestsTab />
+					<RequestsTab active={() => activeTab() === "requests"} />
 				</Show>
 			</Tabs.Content>
 		</Tabs.Root>

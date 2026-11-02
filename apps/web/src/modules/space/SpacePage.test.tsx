@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { MemoryRouter, Route } from "@solidjs/router";
+import { MemoryRouter, Route, createMemoryHistory } from "@solidjs/router";
 import {
 	cleanup,
 	fireEvent,
@@ -58,15 +58,23 @@ vi.mock("convex-solidjs", async () => {
 	};
 });
 
+// The door keys fetch a presence token; it is not the thing under test.
+vi.mock("./presence.ts", async () => {
+	const { ok } = await import("neverthrow");
+	return { fetchPresenceToken: () => Promise.resolve(ok(null)) };
+});
+
 afterEach(() => {
 	cleanup();
 	me.value = undefined;
 	doorHealthCalls.count = 0;
 });
 
-function renderSpace(role: "member" | "board" | "staff") {
+function renderSpace(role: "member" | "board" | "staff", url = "/") {
+	const history = createMemoryHistory();
+	history.set({ value: url });
 	return render(() => (
-		<MemoryRouter>
+		<MemoryRouter history={history}>
 			<Route
 				path="*"
 				component={() => (
@@ -161,4 +169,15 @@ test("the rules search sits in the tab bar on the Rules tab only", async () => {
 	await waitFor(() => {
 		expect(screen.getAllByRole("listitem")).toHaveLength(1);
 	});
+});
+
+test("a door key acts on the Access tab only", () => {
+	me.value = { tier: "member", stage: "active", stageSince: 0 };
+	renderSpace("member");
+	fireEvent.keyDown(document, { key: "d" });
+	expect(screen.getByText("Sending…")).toBeInTheDocument();
+	cleanup();
+	renderSpace("member", "/?tab=rules");
+	fireEvent.keyDown(document, { key: "d" });
+	expect(screen.queryByText("Sending…")).not.toBeInTheDocument();
 });

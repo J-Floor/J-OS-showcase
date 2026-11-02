@@ -3,10 +3,11 @@ import { createSignal, type JSX } from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { ClientError } from "../../../lib/call.ts";
+import type { SettledAction } from "../../../shared/actions/shortcuts.ts";
 import { isLateAnswer } from "../../../shared/createActionError.ts";
 import { InlineError } from "../../../shared/InlineError.tsx";
 
-import type { SettledAction, ShortcutScope } from "./shortcuts.ts";
+import type { ShortcutScope } from "./shortcuts.ts";
 
 type PersonId = Id<"people">;
 
@@ -71,23 +72,32 @@ export async function settleRosterAction(
 }
 
 /**
- * The tab's last failed action, in the sheet footer (`personId` = who it
- * shows) or in the strip above the table (`personId` omitted).
+ * The tab's last failed action, for the sheet footer (`personId` = who it
+ * shows) or the strip above the table (`personId` omitted).
  */
+export function rosterActionMessage(
+	scope: ShortcutScope,
+	personId?: PersonId
+): string | null {
+	const failure = tabState(scope).failure();
+	if (!failure) return null;
+	// The strip (no `personId`) shows whatever failed; the sheet only what
+	// concerns its person or a whole batch.
+	return personId === undefined ||
+		failure.personId === undefined ||
+		failure.personId === personId
+		? failure.message
+		: null;
+}
+
+/** `rosterActionMessage` as an inline error. */
 export function RosterActionError(props: {
 	scope: ShortcutScope;
 	personId?: PersonId;
 }): JSX.Element {
-	function message(): string | null {
-		const failure = tabState(props.scope).failure();
-		if (!failure) return null;
-		// The strip (no `personId`) shows whatever failed; the sheet only what
-		// concerns its person or a whole batch.
-		return props.personId === undefined ||
-			failure.personId === undefined ||
-			failure.personId === props.personId
-			? failure.message
-			: null;
-	}
-	return <InlineError message={message()} />;
+	return (
+		<InlineError
+			message={rosterActionMessage(props.scope, props.personId)}
+		/>
+	);
 }

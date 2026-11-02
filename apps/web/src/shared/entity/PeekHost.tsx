@@ -1,6 +1,14 @@
 import { createMorphHold } from "@j-os/design-system";
 import { useNavigate, useSearchParams } from "@solidjs/router";
-import { createEffect, For, Show, type JSX } from "solid-js";
+import {
+	createEffect,
+	createSignal,
+	For,
+	on,
+	Show,
+	type Accessor,
+	type JSX,
+} from "solid-js";
 
 import { useAbility } from "../../lib/ability.tsx";
 import type { EntityRow } from "../types.ts";
@@ -92,6 +100,49 @@ function PeekKind<Row extends EntityRow>(props: {
 	);
 }
 
+/** How long an open waits for its peek's chunk. A chunk slower than this
+ *  (a slow network) opens the peek when it arrives, without its morph. */
+export const PEEK_CHUNK_WAIT_MS = 300;
+
+/**
+ * The kind to show: `wanted`, once its peek's chunk has loaded (the same
+ * `preload` a warm-up starts) or `PEEK_CHUNK_WAIT_MS` has passed. The peek's
+ * sheet morphs open only when it mounts closed and then opens: a chunk still
+ * on its way when the open is asked for would mount it already open, and it
+ * would show flat (a key's Enter, or a click quicker than the hover warm-up).
+ * A kind waited for once is not waited for again.
+ */
+function createLoadedKind(
+	wanted: Accessor<EntityDescriptor<EntityRow> | undefined>
+): Accessor<EntityDescriptor<EntityRow> | undefined> {
+	const [loaded, setLoaded] = createSignal<ReadonlySet<string>>(new Set());
+	function markLoaded(key: string): void {
+		setLoaded((keys) => (keys.has(key) ? keys : new Set(keys).add(key)));
+	}
+	createEffect(
+		on(wanted, (desc) => {
+			if (desc?.peek === undefined || loaded().has(desc.key)) return;
+			const { key } = desc;
+			const timer = setTimeout(() => {
+				markLoaded(key);
+			}, PEEK_CHUNK_WAIT_MS);
+			// A failed load is the peek's to handle: it retries, then closes.
+			void desc.peek
+				.preload()
+				.catch(() => {})
+				.finally(() => {
+					clearTimeout(timer);
+					markLoaded(key);
+				});
+		})
+	);
+	function loadedKind(): EntityDescriptor<EntityRow> | undefined {
+		const desc = wanted();
+		return desc !== undefined && loaded().has(desc.key) ? desc : undefined;
+	}
+	return loadedKind;
+}
+
 /** Every descriptor the palette searches is the peek's lookup table. */
 export function PeekHost(): JSX.Element {
 	const [params, setParams] = useSearchParams();
@@ -122,9 +173,10 @@ export function PeekHost(): JSX.Element {
 		if (params[PEEK_PARAM] !== undefined && descriptor() === undefined)
 			clear();
 	});
+	const peeking = createLoadedKind(descriptor);
 	return (
 		<For each={peekable}>
-			{(desc) => <PeekKind descriptor={desc} peeking={descriptor} />}
+			{(desc) => <PeekKind descriptor={desc} peeking={peeking} />}
 		</For>
 	);
 }

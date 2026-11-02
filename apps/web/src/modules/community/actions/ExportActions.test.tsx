@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { Sheet, ShortcutPeekProvider } from "@j-os/design-system";
 import {
 	cleanup,
 	fireEvent,
@@ -7,10 +8,12 @@ import {
 	waitFor,
 	within,
 } from "@solidjs/testing-library";
+import { createSignal } from "solid-js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PersonRow } from "../../../../convex/people.ts";
 import { ConfirmProvider } from "../../../shared/confirm.tsx";
+import { ShortcutPeekButton } from "../../../shared/ShortcutPeekButton.tsx";
 
 import { ExportActions } from "./ExportActions.tsx";
 
@@ -78,6 +81,13 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
+/** The D and C buttons' key chips, `null` where hidden. */
+function chips(): (Element | null)[] {
+	return ["Download JSON", "Copy JSON"].map((name) =>
+		screen.getByRole("button", { name }).querySelector("kbd")
+	);
+}
+
 describe("ExportActions", () => {
 	it("copies the light JSON without status or _id", async () => {
 		render(() => <ExportActions />);
@@ -130,5 +140,58 @@ describe("ExportActions", () => {
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		expect(clickSpy).not.toHaveBeenCalled();
 		expect(blobs).toHaveLength(0);
+	});
+
+	it("D downloads and C copies, but neither while an overlay covers the page", async () => {
+		const [isCovering, setCovering] = createSignal(true);
+		render(() => (
+			<>
+				<ExportActions />
+				<Sheet.Root open={isCovering()} onOpenChange={() => {}}>
+					<Sheet.Header>
+						<Sheet.Title>Covering sheet</Sheet.Title>
+					</Sheet.Header>
+				</Sheet.Root>
+			</>
+		));
+		fireEvent.keyDown(document, { key: "d" });
+		fireEvent.keyDown(document, { key: "c" });
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(clickSpy).not.toHaveBeenCalled();
+		expect(writeText).not.toHaveBeenCalled();
+		setCovering(false);
+		await waitFor(() => {
+			fireEvent.keyDown(document, { key: "d" });
+			expect(downloadNames).toContain("jfloor-export.json");
+		});
+		fireEvent.keyDown(document, { key: "c" });
+		await waitFor(() => {
+			expect(writeText).toHaveBeenCalledOnce();
+		});
+	});
+
+	it("hides the D and C chips while peeking under a covering sheet: their keys are quiet", async () => {
+		const [isCovering, setCovering] = createSignal(false);
+		render(() => (
+			<ShortcutPeekProvider>
+				<ShortcutPeekButton />
+				<ExportActions />
+				<Sheet.Root open={isCovering()} onOpenChange={() => {}}>
+					<Sheet.Header>
+						<Sheet.Title>Covering sheet</Sheet.Title>
+					</Sheet.Header>
+				</Sheet.Root>
+			</ShortcutPeekProvider>
+		));
+		fireEvent.click(screen.getByRole("button", { name: /shortcut/i }));
+		expect(chips().every((chip) => chip !== null)).toBe(true);
+		setCovering(true);
+		await waitFor(() => {
+			expect(chips()).toEqual([null, null]);
+		});
+		setCovering(false);
+		await waitFor(() => {
+			expect(chips().every((chip) => chip !== null)).toBe(true);
+		});
 	});
 });

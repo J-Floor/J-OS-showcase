@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { ShortcutPeekProvider } from "@j-os/design-system";
 import { MemoryRouter, Route } from "@solidjs/router";
 import {
 	cleanup,
@@ -91,9 +92,11 @@ function renderAs(role: Role) {
 			<Route
 				path="*"
 				component={() => (
-					<AbilityProvider role={role}>
-						<PerksPage />
-					</AbilityProvider>
+					<ShortcutPeekProvider>
+						<AbilityProvider role={role}>
+							<PerksPage />
+						</AbilityProvider>
+					</ShortcutPeekProvider>
 				)}
 			/>
 		</MemoryRouter>
@@ -193,4 +196,15 @@ test("board: New perk opens the create sheet", async () => {
 		await screen.findByRole("dialog", { name: "New perk" })
 	).toBeInTheDocument();
 	expect(screen.getByRole("button", { name: /^Create/ })).toBeInTheDocument();
+});
+
+test("board: while peeking, New perk shows its key in the icon's place", async () => {
+	renderAs("board");
+	const button = await screen.findByRole("button", { name: /New perk/ });
+	expect(button.querySelector("kbd")).toBeNull();
+	fireEvent.keyDown(document, { key: "Alt", altKey: true });
+	await waitFor(() => {
+		expect(button.querySelector("kbd")).not.toBeNull();
+	});
+	fireEvent.keyUp(document, { key: "Alt" });
 });

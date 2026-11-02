@@ -1,12 +1,13 @@
-import { Icon, IconButton } from "@j-os/design-system";
+import { Icon } from "@j-os/design-system";
 import { Show, type JSX } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
 import { doorOpensFor } from "../../../convex/lib/derive.ts";
 import { canLock, type LockSlot } from "../../../convex/lib/doorLocks.ts";
+import { RowActionButton } from "../../shared/actions/RowActions.tsx";
 import { useQuery } from "../../shared/data/useQuery.ts";
-import { ICONS } from "../../shared/icons.ts";
 
+import { DOORS_TARGET, createDoorKeys } from "./doorActions.ts";
 import { createDoorActuation } from "./doorActuation.ts";
 import { LOCKABLE_SLOTS, createDoorPositions } from "./doorPositions.ts";
 import { DoorSlot } from "./DoorSlot.tsx";
@@ -42,7 +43,7 @@ import styles from "./UnlockCard.module.scss";
  * reaction arrives: the attempt's `actuatedAt` is the server's clock, and a
  * phone's can be seconds off. A door that never reacts says so.
  */
-export function UnlockCard(): JSX.Element {
+export function UnlockCard(props: { active?: boolean }): JSX.Element {
 	const person = useQuery(api.people.getCurrentPerson, {});
 	const holds = createDoorStatusHolds((slot) => {
 		if (canLock(slot)) doors.readFresh(slot);
@@ -68,16 +69,24 @@ export function UnlockCard(): JSX.Element {
 			: { kind: "button", action: "unlock" };
 	}
 
-	function refreshPositions() {
-		for (const slot of LOCKABLE_SLOTS)
-			if (!holds.statuses().has(slot)) doors.recheck(slot);
-	}
+	const refresh = createDoorRefresh(holds, doors);
+	const keys = createDoorKeys({
+		view: slotView,
+		press: (slot, action) => void actuate(slot, action),
+		canRefresh: refresh.canRefresh,
+		refresh: refresh.refresh,
+		isChecking: () => LOCKABLE_SLOTS.some((slot) => doors.isChecking(slot)),
+		// The keys follow the card: only while it is on screen (the person's
+		// door opens, the Access tab is the one showing).
+		active: () => props.active === true && canSeeDoors(),
+	});
 
 	function door(slot: LockSlot): JSX.Element {
 		return (
 			<DoorSlot
 				slot={slot}
 				view={() => slotView(slot)}
+				actions={keys.doors[slot]}
 				onPress={(action) => void actuate(slot, action)}
 			/>
 		);
@@ -91,19 +100,10 @@ export function UnlockCard(): JSX.Element {
 					subtitle="An internet connection is required."
 				>
 					<SpaceCard.Action>
-						<IconButton
-							tooltipLabel="Check again"
-							isLoading={LOCKABLE_SLOTS.some((slot) =>
-								doors.isChecking(slot)
-							)}
-							disabled={LOCKABLE_SLOTS.every((slot) =>
-								holds.statuses().has(slot)
-							)}
-							disabledReason="A door action is in progress…"
-							onClick={refreshPositions}
-						>
-							{ICONS.refresh}
-						</IconButton>
+						<RowActionButton
+							action={keys.checkAgain}
+							row={DOORS_TARGET}
+						/>
 					</SpaceCard.Action>
 				</SpaceCard.Header>
 				<SpaceCard.Body>
@@ -117,6 +117,25 @@ export function UnlockCard(): JSX.Element {
 			</SpaceCard.Root>
 		</Show>
 	);
+}
+
+/** The header's "Check again": re-reads every bolt that is not held on a
+ *  status line, and whether it can run right now. */
+function createDoorRefresh(
+	holds: ReturnType<typeof createDoorStatusHolds>,
+	doors: ReturnType<typeof createDoorPositions>
+) {
+	return {
+		refresh: (): void => {
+			// A check already running is not started again (the button is
+			// loading then, and a key press must not get past that).
+			if (LOCKABLE_SLOTS.some((slot) => doors.isChecking(slot))) return;
+			for (const slot of LOCKABLE_SLOTS)
+				if (!holds.statuses().has(slot)) doors.recheck(slot);
+		},
+		canRefresh: (): boolean =>
+			!LOCKABLE_SLOTS.every((slot) => holds.statuses().has(slot)),
+	};
 }
 
 /** "[stairs] or [elevator]" between the buttons: how to get upstairs. */

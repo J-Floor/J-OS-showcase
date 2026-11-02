@@ -4,7 +4,12 @@
  * (the title, and each value paired with the other end's value showing the
  * same field). See morph.ts.
  */
-import { MORPH_KEY, MORPH_OF, MORPH_TITLE } from "./morphNames.ts";
+import {
+	MORPH_KEY,
+	MORPH_OF,
+	MORPH_OPENER,
+	MORPH_TITLE,
+} from "./morphNames.ts";
 import { hasLayoutBox } from "./visibleArea.ts";
 
 /** An element that shows one entity and is a surface by what it is,
@@ -34,6 +39,10 @@ export function findMorphTarget(of: string): HTMLElement | null {
 
 /** Spread on the element holding a morph source's or target's title. */
 export const morphTitle = { [MORPH_TITLE]: "" } as const;
+
+/** Spread on the control that opens the entity its element (a `Morph`)
+ *  shows, inside that element: the overlay grows out of the element. */
+export const morphOpener = { [MORPH_OPENER]: "" } as const;
 
 /**
  * Marks a sheet's loading skeleton (either variant), also the hook a test

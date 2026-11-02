@@ -25,9 +25,12 @@ import { NAME_MAX } from "../../../convex/lib/validate.ts";
 import { PersonListItem } from "../../shared/components/PersonListItem.tsx";
 import { createEntityPatch } from "../../shared/entity/createEntityPatch.ts";
 import { EntityQrBlock } from "../../shared/entity/EntityQr.tsx";
+import { warmPeek } from "../../shared/entity/lazyPeek.tsx";
+import { useOpenPeek } from "../../shared/entity/openEntity.ts";
 import { SheetSection } from "../../shared/entity/SheetSection.tsx";
 import { ICONS } from "../../shared/icons.ts";
 import { InlineError } from "../../shared/InlineError.tsx";
+import { personEntity } from "../community/entity.ts";
 
 import { eventsEntity } from "./entity.ts";
 import styles from "./EventSheet.module.scss";
@@ -186,7 +189,10 @@ export function EventDetailsItem(props: {
 	);
 }
 
+/** Who registered. Each attendee opens their person's peek over the event,
+ *  morphing out of their row. */
 function AttendeeList(props: { attendees: Accessor<Attendee[]> }) {
+	const openPeek = useOpenPeek();
 	return (
 		<ul class={styles.attendees}>
 			<For each={props.attendees()}>
@@ -195,6 +201,13 @@ function AttendeeList(props: { attendees: Accessor<Attendee[]> }) {
 						<PersonListItem
 							name={attendee.name}
 							detail={attendee.email}
+							open={() => {
+								openPeek(personEntity, attendee.personId);
+							}}
+							warm={() => {
+								warmPeek(personEntity);
+							}}
+							morphOf={attendee.personId}
 						/>
 					</li>
 				)}

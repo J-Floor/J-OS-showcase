@@ -23,7 +23,6 @@ import {
 	SITE_TIMEZONE,
 } from "../../../../convex/lib/time.ts";
 import { ICONS } from "../../../shared/icons.ts";
-import { LOCK_SLOTS } from "../../space/lockSlots.ts";
 
 /**
  * Every user-facing word for a person's lifecycle status, in one file.
@@ -401,35 +400,6 @@ const FIELD_LABEL: Record<string, string> = {
 
 export function fieldLabel(field: string | undefined): string {
 	return field === undefined ? "A field" : (FIELD_LABEL[field] ?? field);
-}
-
-/** A door audit row records the override it moved to. */
-export function doorEventLabel(override: unknown): string {
-	if (override === "force_off") return "Door access blocked by the board";
-	return override === "force_on"
-		? "Door access forced open by the board"
-		: "Door override cleared — back to normal rules";
-}
-
-/** "the Downstairs door", worded from the Space page's own door labels so the
- *  timeline and the unlock buttons never name a door differently. */
-function doorName(slot: unknown): string {
-	const label = LOCK_SLOTS.find((info) => info.slot === slot)?.label;
-	return label === undefined ? "a door" : `the ${label} door`;
-}
-
-/** A door the person unlocked or locked from the app. A failed one says so:
- *  "Unlocked" on a door that never opened would be a false alibi. */
-export function doorActionLabel(
-	action: unknown,
-	slot: unknown,
-	outcome: unknown
-): string {
-	const verb = action === "lock" ? "lock" : "unlock";
-	if (outcome === "busy")
-		return `Tried to ${verb} ${doorName(slot)} — the lock was still busy`;
-	if (outcome !== "ok") return `Tried to ${verb} ${doorName(slot)} — failed`;
-	return `${verb === "lock" ? "Locked" : "Unlocked"} ${doorName(slot)}`;
 }
 
 const EMAIL_LABEL: Record<string, string> = {

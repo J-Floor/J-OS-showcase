@@ -16,6 +16,7 @@ import { createEntitySelection } from "../../../shared/entity/createEntitySelect
 import { personName } from "../data/taskHelpers.ts";
 import type { Person, Project, Task } from "../data/tasksData.tsx";
 import { useProjects, useTasks } from "../data/tasksData.tsx";
+import { createProjectsPageActions } from "../pageActions.ts";
 import { ProjectCard } from "../ProjectCard.tsx";
 import { ProjectSheet } from "../sheets/ProjectSheet.tsx";
 import { TaskSheet } from "../sheets/TaskSheet.tsx";
@@ -217,19 +218,29 @@ function TimelineView(props: {
 		from: HTMLElement | null
 	) => void;
 	onNewProject: () => void;
+	/** Whether the tab is on screen with no sheet over it: the page keys
+	 *  (`T`, `P`) are live only then. */
+	isIdle: () => boolean;
 }): JSX.Element {
 	const [mode, setMode] = createSignal<ViewMode>("day");
 	let timelineApi: ProjectTimelineApi | undefined;
+	const { today, newProject } = createProjectsPageActions({
+		jumpToday: () => {
+			timelineApi?.scrollToToday();
+		},
+		openNew: () => {
+			props.onNewProject();
+		},
+		isIdle: () => props.isIdle(),
+	});
 	return (
 		<>
 			<Tabs.Actions value="projects">
 				<ProjectTabActions
 					mode={mode}
 					onModeChange={setMode}
-					onJumpToday={() => {
-						timelineApi?.scrollToToday();
-					}}
-					onNewProject={props.onNewProject}
+					today={today}
+					newProject={newProject}
 				/>
 			</Tabs.Actions>
 			<ProjectTimeline
@@ -303,6 +314,9 @@ export function ProjectsTab(props: ProjectsTabProps): JSX.Element {
 				onHoverIntent={projSel.intend}
 				onCreateRange={selection.openNewRange}
 				onNewProject={selection.openNew}
+				isIdle={() =>
+					props.active() && !projSel.open() && !nestedTask.taskOpen()
+				}
 			/>
 			{/* While projects load, the timeline shows the skeleton. */}
 			<Show when={undated().length}>

@@ -1,0 +1,8 @@
+/* A member's note as they wrote it: their line breaks and spacing kept, and
+   a long word wrapped rather than widening the sheet. The perk sheet, its
+   Requests section and the request's own sheet all show it so. */
+@mixin member-note {
+	margin: 0;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}

@@ -1122,7 +1122,9 @@ describe("the machine owns every member and guest write", () => {
 		const events = await backend.run(async (context) =>
 			context.db
 				.query("personEvents")
-				.withIndex("by_person", (range) => range.eq("personId", id))
+				.withIndex("by_personId_and_at", (range) =>
+					range.eq("personId", id)
+				)
 				.collect()
 		);
 		expect(events).toEqual([]);
@@ -1410,7 +1412,9 @@ describe("the machine owns every member and guest write", () => {
 		const events = await backend.run(async (context) =>
 			context.db
 				.query("personEvents")
-				.withIndex("by_person", (range) => range.eq("personId", id))
+				.withIndex("by_personId_and_at", (range) =>
+					range.eq("personId", id)
+				)
 				.collect()
 		);
 		expect(events.at(-1)).toMatchObject({
@@ -1780,7 +1784,9 @@ describe("updateOwnProfile", () => {
 		const events = await backend.run(async (context) =>
 			context.db
 				.query("personEvents")
-				.withIndex("by_person", (range) => range.eq("personId", id))
+				.withIndex("by_personId_and_at", (range) =>
+					range.eq("personId", id)
+				)
 				.collect()
 		);
 		expect(
@@ -1858,7 +1864,9 @@ describe("logWifiOpen", () => {
 		const events = await backend.run(async (context) =>
 			context.db
 				.query("personEvents")
-				.withIndex("by_person", (range) => range.eq("personId", id))
+				.withIndex("by_personId_and_at", (range) =>
+					range.eq("personId", id)
+				)
 				.collect()
 		);
 		expect(events.filter((event) => event.kind === "wifi")).toHaveLength(1);
@@ -1911,7 +1919,9 @@ describe("logWifiOpen", () => {
 		const events = await backend.run(async (context) =>
 			context.db
 				.query("personEvents")
-				.withIndex("by_person", (range) => range.eq("personId", id))
+				.withIndex("by_personId_and_at", (range) =>
+					range.eq("personId", id)
+				)
 				.collect()
 		);
 		expect(events.filter((event) => event.kind === "wifi")).toHaveLength(1);
@@ -2128,7 +2138,7 @@ describe("unmarkBoardStepDone", () => {
 				await context.db.get(board),
 				await context.db
 					.query("personEvents")
-					.withIndex("by_person", (range) =>
+					.withIndex("by_personId_and_at", (range) =>
 						range.eq("personId", cli)
 					)
 					.collect(),
@@ -2166,7 +2176,9 @@ describe("addDirect", () => {
 			const events = await backend.run((context) =>
 				context.db
 					.query("personEvents")
-					.withIndex("by_person", (range) => range.eq("personId", id))
+					.withIndex("by_personId_and_at", (range) =>
+						range.eq("personId", id)
+					)
 					.collect()
 			);
 			expect(events.some((event) => event.to === "staff.active")).toBe(

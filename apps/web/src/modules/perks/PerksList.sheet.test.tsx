@@ -42,6 +42,7 @@ vi.mock("convex-solidjs", () => ({
 
 import { SITE_TIMEZONE } from "../../../convex/lib/time.ts";
 import { AbilityProvider } from "../../lib/ability.tsx";
+import type { ActionDescriptor } from "../../shared/actions/shortcuts.ts";
 import { formatDateIn } from "../../shared/time.ts";
 
 import { PerksList } from "./PerksList.tsx";
@@ -152,8 +153,8 @@ test("with no request open on it, a member does not see an expired perk", () => 
 	expect(screen.queryByText("Expired")).toBeNull();
 });
 
-test("on its own the list offers no New perk, even to the board; the opener it hands over opens the create sheet", async () => {
-	let openCreate: (() => void) | undefined;
+test("on its own the list offers no New perk, even to the board; the New perk it hands over opens the create sheet", async () => {
+	let newPerk: ActionDescriptor<"page"> | undefined;
 	render(() => (
 		<MemoryRouter>
 			<Route
@@ -161,8 +162,8 @@ test("on its own the list offers no New perk, even to the board; the opener it h
 				component={() => (
 					<AbilityProvider role="board">
 						<PerksList
-							openCreateRef={(open) => {
-								openCreate = open;
+							newPerkRef={(action) => {
+								newPerk = action;
 							}}
 						/>
 					</AbilityProvider>
@@ -173,9 +174,51 @@ test("on its own the list offers no New perk, even to the board; the opener it h
 	expect(screen.getAllByText("Hosting credits")[0]).toBeInTheDocument();
 	// The button is the board page's, in its tab bar (PerksPage.test.tsx).
 	expect(screen.queryByRole("button", { name: /New perk/ })).toBeNull();
-	if (!openCreate) throw new Error("the list handed over no opener");
-	openCreate();
+	if (!newPerk) throw new Error("the list handed over no New perk");
+	void newPerk.run("page");
 	expect(
 		await screen.findByRole("dialog", { name: "New perk" })
 	).toBeInTheDocument();
+});
+
+/** The list as the board's page mounts it: with New perk handed on. */
+function renderBoardList() {
+	render(() => (
+		<MemoryRouter>
+			<Route
+				path="*"
+				component={() => (
+					<AbilityProvider role="board">
+						<PerksList newPerkRef={() => {}} />
+					</AbilityProvider>
+				)}
+			/>
+		</MemoryRouter>
+	));
+}
+
+test("N opens the create sheet on the board's page, not while typing", async () => {
+	renderBoardList();
+	const field = document.body.appendChild(document.createElement("input"));
+	fireEvent.keyDown(field, { key: "n" });
+	field.remove();
+	expect(screen.queryByRole("dialog")).toBeNull();
+	fireEvent.keyDown(document.body, { key: "n" });
+	expect(
+		await screen.findByRole("dialog", { name: "New perk" })
+	).toBeInTheDocument();
+});
+
+test("N does not start a new perk over an open one", async () => {
+	renderBoardList();
+	fireEvent.click(screen.getAllByText("Hosting credits")[0]);
+	await screen.findByRole("dialog", { name: "Hosting credits" });
+	fireEvent.keyDown(document.body, { key: "n" });
+	expect(screen.queryByRole("dialog", { name: "New perk" })).toBeNull();
+});
+
+test("N does nothing on a page without New perk", () => {
+	renderList();
+	fireEvent.keyDown(document.body, { key: "n" });
+	expect(screen.queryByRole("dialog")).toBeNull();
 });

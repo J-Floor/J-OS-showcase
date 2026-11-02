@@ -40,7 +40,9 @@ vi.mock("convex-solidjs", () => ({
 }));
 
 import { SITE_TIMEZONE } from "../../../convex/lib/time.ts";
+import { TEXT_MAX } from "../../../convex/lib/validate.ts";
 import type { PerkRow } from "../../../convex/perks.ts";
+import { askToDiscard } from "../../../test-stubs/askToDiscard.ts";
 import {
 	sheetKeys,
 	sheetSkeleton,
@@ -99,10 +101,8 @@ function renderSheet(role: Role, props: Record<string, unknown>) {
 	));
 }
 
-/** The note field, opened from "Add a note" when it is still closed. */
+/** The note field: always there while the viewer can still request. */
 function noteField(): HTMLElement {
-	const add = screen.queryByRole("button", { name: "Add a note" });
-	if (add) fireEvent.click(add);
 	return screen.getByLabelText(NOTE_LABEL);
 }
 
@@ -179,26 +179,24 @@ test("Request perk sends the typed note, trimmed, and empties the field", async 
 		});
 	});
 	await waitFor(() => {
-		expect(screen.queryByLabelText(NOTE_LABEL)).toBeNull();
+		expect(noteField()).toHaveValue("");
 	});
 });
 
-test("Request with no note is one click: the field stays closed and no note is sent", async () => {
+test("Request with no note is one click: the field is there, empty, and no note is sent", async () => {
 	renderSheet("member", { perk });
-	expect(screen.queryByLabelText(NOTE_LABEL)).toBeNull();
+	expect(noteField()).toHaveValue("");
 	fireEvent.click(requestButton());
 	await waitFor(() => {
 		expect(mutateAsync).toHaveBeenCalledWith({ perkId: "perk1" });
 	});
 });
 
-test("Add a note opens the field above the Request button, focused", async () => {
+test("the note is a one-line field above the Request button, and there is no Add a note button", () => {
 	renderSheet("member", { perk });
-	fireEvent.click(screen.getByRole("button", { name: "Add a note" }));
-	const field = screen.getByLabelText(NOTE_LABEL);
-	await waitFor(() => {
-		expect(field).toHaveFocus();
-	});
+	const field = noteField();
+	// One line: an input, not a text area.
+	expect(field.tagName).toBe("INPUT");
 	expect(screen.queryByRole("button", { name: "Add a note" })).toBeNull();
 	// In the footer, before the button.
 	expect(field.closest("footer")).toContainElement(requestButton());
@@ -208,9 +206,13 @@ test("Add a note opens the field above the Request button, focused", async () =>
 	).toBeTruthy();
 });
 
+test("the note stops at the length cap", () => {
+	renderSheet("member", { perk });
+	expect(noteField()).toHaveAttribute("maxlength", String(TEXT_MAX));
+});
+
 test("with no contact the note is for the J floor team", () => {
 	renderSheet("member", { perk: noContact });
-	fireEvent.click(screen.getByRole("button", { name: "Add a note" }));
 	expect(
 		screen.getByLabelText("Note for the J floor team")
 	).toBeInTheDocument();
@@ -272,7 +274,7 @@ test("an open request: the button says when it went, and the sent note shows rea
 		name: `Requested on ${formatDateIn(requestedAt, SITE_TIMEZONE)}`,
 	});
 	expect(button).toBeDisabled();
-	// The date says it all: no reason, so no tooltip.
+	// The date says it all: no reason, so no tooltip to linger after a tap.
 	expect(button).not.toHaveAttribute("aria-description");
 	expect(screen.queryByLabelText(NOTE_LABEL)).toBeNull();
 	expect(screen.queryByRole("button", { name: "Add a note" })).toBeNull();
@@ -386,11 +388,7 @@ test("a typed, unsent note asks before Escape throws it away; Discard closes", a
 		target: { value: "For our launch in March." },
 	});
 	const sheet = screen.getByRole("dialog", { name: "Hosting credits" });
-	// Ark hears Escape a moment after the open: press until it asks.
-	await waitFor(() => {
-		if (!discardPrompt()) fireEvent.keyDown(sheet, { key: "Escape" });
-		expect(discardPrompt()).toBeInTheDocument();
-	});
+	await askToDiscard(sheet, "Discard your note?");
 	expect(onOpenChange).not.toHaveBeenCalled();
 	fireEvent.click(screen.getByRole("button", { name: "Discard" }));
 	await waitFor(() => {
@@ -416,14 +414,11 @@ test("a live refetch of the open perk keeps the typed note, and closing still as
 	setShown({ ...perk });
 	expect(noteField()).toHaveValue("For our launch in March.");
 	const sheet = screen.getByRole("dialog", { name: "Hosting credits" });
-	await waitFor(() => {
-		if (!discardPrompt()) fireEvent.keyDown(sheet, { key: "Escape" });
-		expect(discardPrompt()).toBeInTheDocument();
-	});
+	await askToDiscard(sheet, "Discard your note?");
 	expect(onOpenChange).not.toHaveBeenCalled();
 });
 
-test("moving to another perk closes the note field and empties it", () => {
+test("moving to another perk empties the note", () => {
 	const [shown, setShown] = createSignal(perk);
 	render(() => (
 		<ConfirmProvider>
@@ -436,8 +431,6 @@ test("moving to another perk closes the note field and empties it", () => {
 		target: { value: "For our launch in March." },
 	});
 	setShown({ ...perk, _id: "perk2" } as PerkRow);
-	expect(screen.queryByLabelText(NOTE_LABEL)).toBeNull();
-	fireEvent.click(screen.getByRole("button", { name: "Add a note" }));
 	expect(screen.getByLabelText(NOTE_LABEL)).toHaveValue("");
 });
 
@@ -484,4 +477,47 @@ test("morph: the perk's table cells pair with the sheet's rows", () => {
 		"contact",
 		"terms",
 	]);
+});
+
+// --- keys ------------------------------------------------------------------
+
+test("R requests the perk, carrying the typed note", async () => {
+	renderSheet("member", { perk });
+	fireEvent.input(noteField(), { target: { value: "For March." } });
+	// Typing in the note: the key is the field's, not an action.
+	fireEvent.keyDown(noteField(), { key: "r" });
+	expect(mutateAsync).not.toHaveBeenCalled();
+	fireEvent.keyDown(document.body, { key: "r" });
+	await waitFor(() => {
+		expect(mutateAsync).toHaveBeenCalledWith({
+			perkId: "perk1",
+			note: "For March.",
+		});
+	});
+});
+
+test("R does nothing on an expired perk", () => {
+	renderSheet("member", { perk: expired });
+	fireEvent.keyDown(document.body, { key: "r" });
+	expect(mutateAsync).not.toHaveBeenCalled();
+});
+
+test("R does nothing once a request is open", () => {
+	myOpenRequests = [{ perkId: "perk1", requestedAt }];
+	renderSheet("member", { perk });
+	fireEvent.keyDown(document.body, { key: "r" });
+	expect(mutateAsync).not.toHaveBeenCalled();
+});
+
+test("R does nothing while the sheet is closed", () => {
+	renderSheet("member", { perk, open: false });
+	fireEvent.keyDown(document.body, { key: "r" });
+	expect(mutateAsync).not.toHaveBeenCalled();
+});
+
+test("a member has no Delete key", () => {
+	renderSheet("member", { perk });
+	fireEvent.keyDown(document.body, { key: "Delete" });
+	expect(mutateAsync).not.toHaveBeenCalled();
+	expect(screen.queryByText("Delete perk?")).toBeNull();
 });

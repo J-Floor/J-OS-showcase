@@ -10,6 +10,13 @@ import {
 } from "../../../convex/lib/time.ts";
 import { NAME_MAX } from "../../../convex/lib/validate.ts";
 import { call } from "../../lib/call.ts";
+import { ActionForm } from "../../shared/actions/ActionForm.tsx";
+import {
+	CREATE_TARGET,
+	type ActionDescriptor,
+	type CreateTarget,
+	type SettledAction,
+} from "../../shared/actions/shortcuts.ts";
 import { createActionError } from "../../shared/createActionError.ts";
 import { InlineError } from "../../shared/InlineError.tsx";
 
@@ -48,23 +55,22 @@ export function createEventCreateForm(options: { onCreated: () => void }) {
 	const [endsAt, setEndsAt] = createSignal<string | null>(null);
 	const [startTime, setStartTime] = createSignal(DEFAULT_START_TIME);
 	const [endTime, setEndTime] = createSignal(DEFAULT_END_TIME);
-	const [submitting, setSubmitting] = createSignal(false);
 	const { error, trackResult, clear } = createActionError();
 
 	function composedRange() {
 		return composeRange(startsAt(), endsAt(), startTime(), endTime());
 	}
 
-	async function submit(): Promise<void> {
+	/** Creates the event; `refused` when the form is not ready or the server
+	 * said no (the form shows why). */
+	async function submit(): Promise<SettledAction> {
 		const range = composedRange();
 		if (
 			name().trim() === "" ||
 			range === null ||
-			range.start.utc > range.end.utc ||
-			submitting()
+			range.start.utc > range.end.utc
 		)
-			return;
-		setSubmitting(true);
+			return { refused: true };
 		const result = await trackResult(
 			call(
 				createEvent.mutateAsync({
@@ -75,9 +81,9 @@ export function createEventCreateForm(options: { onCreated: () => void }) {
 				"Could not create the event."
 			)
 		);
-		setSubmitting(false);
-		if (result.isErr()) return;
+		if (result.isErr()) return { refused: true };
 		options.onCreated();
+		return { refused: false };
 	}
 
 	return {
@@ -91,8 +97,8 @@ export function createEventCreateForm(options: { onCreated: () => void }) {
 		setStartTime,
 		endTime,
 		setEndTime,
-		submitting,
 		error,
+		submit,
 		/** A fresh, empty create form. */
 		reset() {
 			setName("");
@@ -122,24 +128,22 @@ export function createEventCreateForm(options: { onCreated: () => void }) {
 				? "The start must be on or before the end."
 				: MISSING_FIELDS_REASON;
 		},
-		onSubmit: (event: SubmitEvent): void => {
-			event.preventDefault();
-			void submit();
-		},
 	};
 }
 
 export type EventCreateFormState = ReturnType<typeof createEventCreateForm>;
 
-/** The name and start/end fields for a new event. */
-export function EventCreateForm(props: { form: EventCreateFormState }) {
+/** The name and start/end fields for a new event. Enter in a field runs
+ *  `create`, as the footer's button and its key do. */
+export function EventCreateForm(props: {
+	form: EventCreateFormState;
+	create: ActionDescriptor<CreateTarget>;
+}) {
 	return (
-		<form
-			id="event-create-form"
+		<ActionForm
 			class={styles.form}
-			onSubmit={(event) => {
-				props.form.onSubmit(event);
-			}}
+			action={props.create}
+			target={CREATE_TARGET}
 		>
 			<Input
 				label="Name"
@@ -183,6 +187,6 @@ export function EventCreateForm(props: { form: EventCreateFormState }) {
 				from.
 			</p>
 			<InlineError message={props.form.error()} />
-		</form>
+		</ActionForm>
 	);
 }

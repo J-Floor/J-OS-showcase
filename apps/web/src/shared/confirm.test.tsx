@@ -88,3 +88,38 @@ test("cancelling resolves false", async () => {
 		expect(results).toEqual([false]);
 	});
 });
+
+test("a second ask while one is open is turned down, and the first still answers", async () => {
+	const results: string[] = [];
+	function Twice() {
+		const confirm = useConfirm();
+		return (
+			<button
+				onClick={() => {
+					void confirm({ title: "Delete it?" }).then((isConfirmed) =>
+						results.push(`first:${String(isConfirmed)}`)
+					);
+					void confirm({ title: "Delete it again?" }).then(
+						(isConfirmed) =>
+							results.push(`second:${String(isConfirmed)}`)
+					);
+				}}
+			>
+				twice
+			</button>
+		);
+	}
+	render(() => (
+		<ConfirmProvider>
+			<Twice />
+		</ConfirmProvider>
+	));
+	fireEvent.click(screen.getByText("twice"));
+	await waitFor(() => {
+		expect(results).toEqual(["second:false"]);
+	});
+	fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+	await waitFor(() => {
+		expect(results).toEqual(["second:false", "first:true"]);
+	});
+});

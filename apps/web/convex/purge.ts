@@ -85,7 +85,9 @@ export const purgeUnverified = internalMutation({
 async function deleteAbandoned(context: MutationCtx, personId: Id<"people">) {
 	const events = await context.db
 		.query("personEvents")
-		.withIndex("by_person", (range) => range.eq("personId", personId))
+		.withIndex("by_personId_and_at", (range) =>
+			range.eq("personId", personId)
+		)
 		.collect();
 	for (const event of events) await context.db.delete(event._id);
 	const state = await personStateOf(context, personId);

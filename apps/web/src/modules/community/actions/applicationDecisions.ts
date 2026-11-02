@@ -2,12 +2,15 @@ import type { Doc } from "../../../../convex/_generated/dataModel";
 import { legalEvents } from "../../../../convex/lib/lifecycle.ts";
 import type { EventType } from "../../../../convex/lib/lifecycleTypes.ts";
 import { displayName } from "../../../../convex/lib/names.ts";
+import type {
+	ActionDescriptor,
+	ActionOutcome,
+} from "../../../shared/actions/shortcuts.ts";
 import { useConfirm } from "../../../shared/confirm.tsx";
 import { ICONS } from "../../../shared/icons.ts";
 
 import { useGuestExpiry } from "./guestExpiry.tsx";
 import { settleRosterAction } from "./RosterActionError.tsx";
-import type { ActionDescriptor, RosterActionOutcome } from "./shortcuts.ts";
 import { useTriage } from "./triage.ts";
 
 /** Just enough of a person to decide on their application. */
@@ -19,9 +22,9 @@ export type Applicant = Pick<
 type ApplicationDecisionHandlers = {
 	can: (person: Applicant, action: Action) => boolean;
 	makeGuest: (person: Applicant) => void;
-	makeMember: (person: Applicant) => Promise<RosterActionOutcome>;
-	turnDown: (person: Applicant) => Promise<RosterActionOutcome>;
-	undeny: (person: Applicant) => Promise<RosterActionOutcome>;
+	makeMember: (person: Applicant) => Promise<ActionOutcome>;
+	turnDown: (person: Applicant) => Promise<ActionOutcome>;
+	undeny: (person: Applicant) => Promise<ActionOutcome>;
 };
 
 function events(person: Applicant): readonly EventType[] {
@@ -37,7 +40,6 @@ function describeActions(
 			label: "Make guest",
 			icon: ICONS.guestApplication,
 			hotkey: "G",
-			scope: "applications",
 			can: (person) => decisions.can(person, "guest"),
 			run: (person) => {
 				decisions.makeGuest(person);
@@ -48,7 +50,6 @@ function describeActions(
 			label: "Make member",
 			icon: ICONS.memberApplication,
 			hotkey: "M",
-			scope: "applications",
 			celebrate: true,
 			can: (person) => decisions.can(person, "member"),
 			run: (person) => decisions.makeMember(person),
@@ -60,7 +61,6 @@ function describeActions(
 			// X, to match the close/✕ icon — a mnemonic the glyph already
 			// teaches. (Not "D" for deny: the letter the eye sees is the ✕.)
 			hotkey: "X",
-			scope: "applications",
 			can: (person) => decisions.can(person, "deny"),
 			run: (person) => decisions.turnDown(person),
 		},
@@ -69,7 +69,6 @@ function describeActions(
 			label: "Undo deny",
 			icon: ICONS.undo,
 			hotkey: "U",
-			scope: "applications",
 			can: (person) => decisions.can(person, "undeny"),
 			run: (person) => decisions.undeny(person),
 		},
@@ -107,7 +106,7 @@ export function useApplicationDecisions(): ApplicationDecisionHandlers & {
 			requestGuestExpiry([person._id]);
 		},
 
-		makeMember: async (person: Applicant): Promise<RosterActionOutcome> => {
+		makeMember: async (person: Applicant): Promise<ActionOutcome> => {
 			if (
 				await confirm({
 					title: "Make member?",
@@ -122,7 +121,7 @@ export function useApplicationDecisions(): ApplicationDecisionHandlers & {
 				);
 		},
 
-		turnDown: async (person: Applicant): Promise<RosterActionOutcome> => {
+		turnDown: async (person: Applicant): Promise<ActionOutcome> => {
 			if (
 				await confirm({
 					title: "Turn down application?",
@@ -148,7 +147,10 @@ export function useApplicationDecisions(): ApplicationDecisionHandlers & {
 			),
 	};
 
-	return { ...decisions, actions: () => describeActions(decisions) };
+	// Built once: the key and the footer button must hold the same objects,
+	// or the run guard (`runAction`) cannot tell they are one action.
+	const actions = describeActions(decisions);
+	return { ...decisions, actions: () => actions };
 }
 
 export type Action = "guest" | "member" | "deny" | "undeny";

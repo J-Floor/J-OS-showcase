@@ -76,7 +76,7 @@ describe("door.setOverride", () => {
 		const events = await backend.run(async (context) =>
 			context.db
 				.query("personEvents")
-				.withIndex("by_person", (range) =>
+				.withIndex("by_personId_and_at", (range) =>
 					range.eq("personId", memberId)
 				)
 				.collect()
@@ -212,7 +212,7 @@ describe("door.setOverride", () => {
 		const events = await backend.run(async (context) =>
 			context.db
 				.query("personEvents")
-				.withIndex("by_person", (range) =>
+				.withIndex("by_personId_and_at", (range) =>
 					range.eq("personId", memberId)
 				)
 				.collect()

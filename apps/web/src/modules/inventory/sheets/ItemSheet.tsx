@@ -1,8 +1,6 @@
 import {
 	Accordion,
-	Button,
 	Sheet,
-	Icon,
 	PropertyRow,
 	createSaveTracker,
 	type SaveTracker,
@@ -21,13 +19,14 @@ import { parseAssetTag } from "../../../../convex/lib/assetTag.ts";
 import type { SheetNavState } from "../../../lib/createSheetNav.ts";
 import { createSyncedField } from "../../../lib/createSyncedField.ts";
 import type { SaveWrite } from "../../../lib/reportSave.ts";
+import { ActionButton } from "../../../shared/actions/ActionButton.tsx";
+import { CREATE_TARGET } from "../../../shared/actions/shortcuts.ts";
+import { DescriptionField } from "../../../shared/components/DescriptionField.tsx";
 import { OptionSelect } from "../../../shared/components/OptionSelect.tsx";
-import { useConfirm } from "../../../shared/confirm.tsx";
+import type { ConfirmOptions } from "../../../shared/confirm.tsx";
 import { createEntityDraft } from "../../../shared/entity/entityCommands.ts";
-import { EntityCreateFooter } from "../../../shared/entity/EntityCreateFooter.tsx";
 import { EntityQrBlock } from "../../../shared/entity/EntityQr.tsx";
-import { EntitySheetHeader } from "../../../shared/entity/EntitySheetHeader.tsx";
-import { ICONS } from "../../../shared/icons.ts";
+import { SheetCreateFooter } from "../../../shared/entity/SheetCreateFooter.tsx";
 import { InlineError } from "../../../shared/InlineError.tsx";
 import type { SheetOpenProps } from "../../../shared/types.ts";
 import type { Item, ItemPatch } from "../data/inventoryData.ts";
@@ -38,13 +37,23 @@ import {
 } from "../data/inventoryData.ts";
 import { itemEntity } from "../entity.ts";
 import { itemFields } from "../fields.ts";
+import { createCopyFromKeys } from "../inventoryActions.ts";
 
 import { AssetTagInput } from "./AssetTagInput.tsx";
 import { detailsFromItem } from "./copyFromItem.ts";
 import { CopyFromItemDialog } from "./CopyFromItemDialog.tsx";
-import { FieldsPlaceholder } from "./FieldsPlaceholder.tsx";
 import { createInventoryCommands } from "./inventoryCommands.ts";
-import { DescriptionValue } from "./InventoryForm.tsx";
+import {
+	createInventorySheetActions,
+	InventorySheetHeader,
+} from "./SheetHeaderActions.tsx";
+
+const DELETE_ITEM_CONFIRM: ConfirmOptions = {
+	title: "Delete this item?",
+	message: "This can't be undone.",
+	confirmLabel: "Delete",
+	tone: "danger",
+};
 
 /** The rows the skeleton stands in for: the sheet's own fields. */
 const PLACEHOLDER_FIELDS = [
@@ -106,7 +115,6 @@ function isAssetTagValid(tag: string): boolean {
 /** The item's fields and the actions that create and delete it. */
 function createItemForm(props: ItemSheetProps) {
 	const actions = useItemActions();
-	const confirm = useConfirm();
 
 	const commands = createInventoryCommands<
 		Parameters<typeof actions.create>[0],
@@ -157,17 +165,8 @@ function createItemForm(props: ItemSheetProps) {
 				description: fields.description.value().trim() || undefined,
 			});
 		},
-		async deleteItem() {
-			if (!props.item) return;
-			const isOk = await confirm({
-				title: "Delete this item?",
-				message: "This can't be undone.",
-				confirmLabel: "Delete",
-				tone: "danger",
-			});
-			if (!isOk) return;
-			await commands.remove(props.item._id);
-		},
+		/** Deletes the open row (asked first, by its Delete). */
+		remove: commands.remove,
 	};
 }
 
@@ -183,6 +182,13 @@ function CopyFromItem(props: {
 }) {
 	const items = useItems();
 	const [copyOpen, setCopyOpen] = createSignal(false);
+	const copy = createCopyFromKeys({
+		isFormOpen: () => props.isSheetOpen,
+		hasItems: () => (items.data() ?? []).length > 0,
+		openDialog: () => {
+			setCopyOpen(true);
+		},
+	});
 	createEffect(
 		on(
 			() => props.isSheetOpen,
@@ -193,17 +199,11 @@ function CopyFromItem(props: {
 	);
 	return (
 		<>
-			<Button
+			<ActionButton
+				action={copy}
+				target={CREATE_TARGET}
 				variant="tertiary"
-				disabled={(items.data() ?? []).length === 0}
-				disabledReason="No items to copy from yet"
-				onClick={() => {
-					setCopyOpen(true);
-				}}
-			>
-				<Icon>{ICONS.copy}</Icon>
-				Copy from item
-			</Button>
+			/>
 			<CopyFromItemDialog
 				open={copyOpen()}
 				onOpenChange={setCopyOpen}
@@ -244,41 +244,34 @@ function AssetTagField(props: {
 	);
 }
 
-/** The create button, enabled once there is a valid asset tag and a type. */
-function CreateFooter(props: { form: ItemForm }) {
-	return (
-		<EntityCreateFooter
-			label="Create item"
-			disabledReason="Add a valid asset tag and type first"
-			canCreate={
-				props.form.tagLooksValid() &&
-				props.form.typeId.value() !== undefined
-			}
-			onCreate={() => {
-				void props.form.createItem();
-			}}
-		/>
-	);
-}
-
 /** The item type picker, labelled "name · category". */
-function ItemTypeSelect(props: { typeId: ItemForm["typeId"] }) {
+function ItemTypeSelect(props: {
+	typeId: ItemForm["typeId"];
+	/** The type's label, shown in place of the picker while locked. */
+	lockedLabel?: string;
+	locked: boolean;
+}) {
 	const types = useItemTypes();
 	return (
 		<PropertyRow field={itemFields.typeName}>
-			<OptionSelect
-				label={itemFields.typeName.label}
-				labelHidden
-				placeholder="Choose a type"
-				options={(types.data() ?? []).map((itemType) => ({
-					value: itemType._id,
-					label: `${itemType.name} · ${itemType.categoryName}`,
-				}))}
-				value={props.typeId.value()}
-				onChange={(value) => {
-					props.typeId.set(value);
-				}}
-			/>
+			<Show
+				when={!props.locked}
+				fallback={<span>{props.lockedLabel}</span>}
+			>
+				<OptionSelect
+					label={itemFields.typeName.label}
+					labelHidden
+					placeholder="Choose a type"
+					options={(types.data() ?? []).map((itemType) => ({
+						value: itemType._id,
+						label: `${itemType.name} · ${itemType.categoryName}`,
+					}))}
+					value={props.typeId.value()}
+					onChange={(value) => {
+						props.typeId.set(value);
+					}}
+				/>
+			</Show>
 		</PropertyRow>
 	);
 }
@@ -312,6 +305,7 @@ function ItemQrSection(props: {
 function ItemFormFields(props: {
 	item?: Item;
 	form: ItemForm;
+	locked: boolean;
 	onTagElement: (element: HTMLInputElement) => void;
 }) {
 	return (
@@ -322,10 +316,18 @@ function ItemFormFields(props: {
 				hasError={props.form.formError() !== null}
 				onElement={props.onTagElement}
 			/>
-			<ItemTypeSelect typeId={props.form.typeId} />
-			<DescriptionValue
+			<ItemTypeSelect
+				typeId={props.form.typeId}
+				locked={props.locked}
+				lockedLabel={
+					props.item &&
+					`${props.item.typeName} · ${props.item.categoryName}`
+				}
+			/>
+			<DescriptionField
 				field={itemFields.description}
 				description={props.form.description}
+				readOnly={props.locked}
 			/>
 			<InlineError message={props.form.formError()} />
 		</>
@@ -342,6 +344,23 @@ export function ItemSheet(props: ItemSheetProps): JSX.Element {
 		return props.item !== undefined;
 	}
 
+	const actions = createInventorySheetActions({
+		scope: "item-sheet",
+		noun: "item",
+		confirm: DELETE_ITEM_CONFIRM,
+		isOpen: () => props.open,
+		isLoading: () => props.loading,
+		row: () => props.item,
+		remove: form.remove,
+		error: form.formError,
+		create: {
+			can: () =>
+				form.tagLooksValid() && form.typeId.value() !== undefined,
+			disabledReason: () => "Add a valid asset tag and type first",
+			run: () => form.createItem(),
+		},
+	});
+
 	let tagElement: HTMLInputElement | undefined;
 
 	return (
@@ -356,32 +375,25 @@ export function ItemSheet(props: ItemSheetProps): JSX.Element {
 			}}
 			initialFocusEl={() => tagElement ?? null}
 		>
-			<EntitySheetHeader.Root
+			<InventorySheetHeader
 				title={props.item?.assetTag ?? "New item"}
 				loading={props.loading}
 				nav={props.nav}
-				saveStatus={isEdit() && !props.loading}
-			>
-				<Show when={isEdit()}>
-					<EntitySheetHeader.Delete
-						label="Delete item"
-						onDelete={() => void form.deleteItem()}
-					/>
-				</Show>
-			</EntitySheetHeader.Root>
-			<Sheet.Skeleton>
-				<FieldsPlaceholder fields={PLACEHOLDER_FIELDS} />
-			</Sheet.Skeleton>
+				actions={actions}
+				isOpen={props.open}
+				placeholderFields={PLACEHOLDER_FIELDS}
+			/>
 			<Sheet.Body loading={props.loading}>
 				<Show when={!isEdit()}>
 					<CopyFromItem
-						isSheetOpen={props.open}
+						isSheetOpen={props.open && !props.loading}
 						onCopy={form.copyFrom}
 					/>
 				</Show>
 				<ItemFormFields
 					item={props.item}
 					form={form}
+					locked={actions.isLocked()}
 					onTagElement={(element) => {
 						tagElement = element;
 					}}
@@ -396,9 +408,10 @@ export function ItemSheet(props: ItemSheetProps): JSX.Element {
 					)}
 				</Show>
 			</Sheet.Body>
-			<Show when={!props.loading && !isEdit()}>
-				<CreateFooter form={form} />
-			</Show>
+			<SheetCreateFooter
+				create={actions.create}
+				isCreating={actions.isCreating()}
+			/>
 		</Sheet.Root>
 	);
 }

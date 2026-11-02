@@ -105,7 +105,9 @@ describe("onboarding.completeStep", () => {
 		const events = await backend.run(async (context) =>
 			context.db
 				.query("personEvents")
-				.withIndex("by_person", (range) => range.eq("personId", id))
+				.withIndex("by_personId_and_at", (range) =>
+					range.eq("personId", id)
+				)
 				.collect()
 		);
 		expect(events).toMatchObject([
@@ -167,7 +169,9 @@ describe("onboarding.completeStep", () => {
 		const events = await backend.run(async (context) =>
 			context.db
 				.query("personEvents")
-				.withIndex("by_person", (range) => range.eq("personId", id))
+				.withIndex("by_personId_and_at", (range) =>
+					range.eq("personId", id)
+				)
 				.collect()
 		);
 		expect(events.every((event) => event.kind === "step")).toBe(true);
@@ -252,7 +256,9 @@ describe("onboarding.completeStep", () => {
 		const events = await backend.run(async (context) =>
 			context.db
 				.query("personEvents")
-				.withIndex("by_person", (range) => range.eq("personId", id))
+				.withIndex("by_personId_and_at", (range) =>
+					range.eq("personId", id)
+				)
 				.collect()
 		);
 		expect(events).toHaveLength(1);

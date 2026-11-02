@@ -57,6 +57,7 @@ Consumers write almost nothing:
 <Card.Root morphId={task._id} onHoverIntent={prebuild}>…</Card.Root>  // something a sheet can close into
 <Morph morphId={task._id}>…card…</Morph>        // the same, around any element
 <h4 {...morphTitle}>{task.title}</h4>           // the text that flies as the title
+<button {...morphOpener}>…</button>             // a row's opener: the overlay grows out of the row
 <PropertyRow field={fields.status}>…             // a value paired by field key
 <span {...morphPart(fields.dueDate)}>…</span>    // the same, outside a PropertyRow
 ```
@@ -248,7 +249,8 @@ toggle is `table-collapse` or `table-expand` (opposites).
 `[data-morph-pinned="held"]`), `data-morph-scrim`, `data-morph-hidden`,
 `data-morph-picked`, `data-list-row` (on every `List.Item`),
 `data-morph-layer` (a shown overlay's content, set by the overlay layer),
-plus the markers `data-morph-of`, `data-morph-title`, `data-morph-key`.
+plus the markers `data-morph-of`, `data-morph-opener`, `data-morph-title`,
+`data-morph-key`.
 `data-sheet-skeleton` (in `morphPairing.ts`) marks placeholder content that
 never takes part. The overlay layer's own `data-overlay-covered` and
 `--jf-overlays-above` (in `overlayLayer.tsx`) say what is shown above a
@@ -338,9 +340,13 @@ unhovered, unpinned copy), or it is a field whose input wrapper paints.
    interactive role, menu items among them, a row, an option or a
    `[data-morph-of]` element). On Enter or Space they first follow
    `aria-activedescendant`, so Enter on a focused grid records the ring row.
-   Any other key records the visible control that names it in
-   `aria-keyshortcuts`: inside the focused row first, else inside the
-   overlay holding focus, else anywhere outside rows. `Button` and
+   An entity's opener (`morphOpener`, `data-morph-opener`: the button inside
+   a row that opens what the row shows, such as a person's name in a sheet's
+   list) records the `[data-morph-of]` element around it instead, so the
+   overlay grows out of the whole row, not out of the button. Any other key
+   records the visible control that names it in `aria-keyshortcuts`:
+   inside the focused row first, else inside the overlay holding focus,
+   else anywhere outside rows. `Button` and
    `IconButton` write that attribute from `shortcut` (`keyShortcutsOf`).
    A press or key that activates nothing clears the record: a press on
    nothing activatable (a read-only field), a key pressed outside a text
@@ -428,9 +434,16 @@ unhovered, unpinned copy), or it is a field whose input wrapper paints.
    is the on-screen element showing the overlay's `morphId`
    (`findMorphTarget`: `[data-morph-of="<id>"]`), else none. A sheet that
    stepped to another record (prev/next) has already forgotten its source,
-   so it closes into that record's row. The target is read **once, as the
-   close is asked for**: it is on screen already, and which values fly is
-   decided against it before the transition starts.
+   so it closes into that record's row. An overlay that opened naming no
+   record (a peek opened before its rows loaded) and names one once they
+   arrive has not stepped: it keeps its source, but only when that source
+   shows the record it names (it, or its closest `[data-morph-of]`, carries
+   that id). Any other source is forgotten as on a step: a create sheet
+   opened from a New button that then shows a picked record, or a cold
+   peek opened from one row whose param moved to another before it loaded.
+   The target is read **once, as the close is asked for**: it is on screen
+   already, and which values fly is decided against it before the
+   transition starts.
 4. **Old-side names**: `jf-morph` on the close source, `jf-morph-scrim` on
    the closing overlay's backdrop, its title, and each keyed value that has a
    visible counterpart in the target (one with nowhere to land is left

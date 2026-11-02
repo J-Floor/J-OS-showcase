@@ -1,5 +1,9 @@
 import { displayName } from "../../../../convex/lib/names.ts";
 import type { PersonRow } from "../../../../convex/people.ts";
+import type {
+	ActionDescriptor,
+	ActionOutcome,
+} from "../../../shared/actions/shortcuts.ts";
 import { useConfirm } from "../../../shared/confirm.tsx";
 import { ICONS } from "../../../shared/icons.ts";
 import { useOpenAgreement } from "../openAgreement.ts";
@@ -7,7 +11,6 @@ import { useOpenAgreement } from "../openAgreement.ts";
 import { agreementAction } from "./agreementAction.ts";
 import { useKickOutAction } from "./kickOutAction.ts";
 import { settleRosterAction } from "./RosterActionError.tsx";
-import type { ActionDescriptor, RosterActionOutcome } from "./shortcuts.ts";
 import { useTriage } from "./triage.ts";
 
 // A guest whose access already ended (expired, or already former) can't be
@@ -30,7 +33,7 @@ export function useGuestActions(): {
 	const confirm = useConfirm();
 	const agreement = useOpenAgreement();
 
-	async function upgrade(person: PersonRow): Promise<RosterActionOutcome> {
+	async function upgrade(person: PersonRow): Promise<ActionOutcome> {
 		if (
 			await confirm({
 				title: "Upgrade to member?",
@@ -50,22 +53,21 @@ export function useGuestActions(): {
 		disabledReason: "Guest access has already ended",
 	});
 
-	function actions(): ActionDescriptor<PersonRow>[] {
-		return [
-			{
-				id: "member",
-				label: "Upgrade to member",
-				icon: ICONS.upgradeToMember,
-				hotkey: "M",
-				scope: "guests",
-				celebrate: true,
-				can: () => true,
-				run: (person) => upgrade(person),
-			},
-			kickOut,
-			agreementAction(agreement, "guests"),
-		];
-	}
+	// Built once: the key and the footer button must hold the same objects,
+	// or the run guard (`runAction`) cannot tell they are one action.
+	const list: ActionDescriptor<PersonRow>[] = [
+		{
+			id: "member",
+			label: "Upgrade to member",
+			icon: ICONS.upgradeToMember,
+			hotkey: "M",
+			celebrate: true,
+			can: () => true,
+			run: (person) => upgrade(person),
+		},
+		kickOut,
+		agreementAction(agreement),
+	];
 
-	return { actions };
+	return { actions: () => list };
 }

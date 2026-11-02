@@ -14,6 +14,7 @@
 @use "../../styles/animation" as anim;
 @use "../../styles/typography" as typo;
 @use "../MakeField/field.mixins" as field;
+@use "../../styles/utils";
 
 .positioner {
 	inline-size: min-content;
@@ -124,24 +125,19 @@
    `buttonface` background, the border and the default padding — so only the icon
    shows and the two controls sit tight together at the field's end. */
 .trigger {
+	@include utils.bare-button;
+
 	display: flex;
 	flex-wrap: nowrap;
 	align-items: center;
-	padding: 0;
-	color: inherit;
-	cursor: pointer;
-	background: none;
-	border: none;
 }
 
 .clearTrigger {
+	@include utils.bare-button;
+
 	display: flex;
 	flex-wrap: nowrap;
 	align-items: center;
-	padding: 0;
-	cursor: pointer;
-	background: none;
-	border: none;
 
 	[data-icon] {
 		color: var(--jf-status-fg);

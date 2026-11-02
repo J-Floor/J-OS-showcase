@@ -7,6 +7,7 @@ import {
 	createRenderEffect,
 	createSignal,
 	type JSX,
+	useContext,
 	Show,
 	children,
 	on,
@@ -43,6 +44,8 @@ type OverlayLayer = {
 	 *  that closed until its morph has finished, else `undefined`. */
 	bodyFor: Accessor<number | undefined>;
 	setContent: (element: HTMLElement) => void;
+	/** Its place in the stack of shown overlays. */
+	entry: StackEntry;
 };
 
 const OverlayContext = createContext<OverlayLayer>();
@@ -121,6 +124,16 @@ function withoutLayer(
 	return stack.filter((entry) => entry !== layer);
 }
 
+/** Whether an overlay still asked open is shown above `entry` in `stack`
+ *  (above every one, for no entry or one not shown). */
+function isCoveredAbove(
+	stack: readonly StackEntry[],
+	entry: StackEntry | undefined
+): boolean {
+	const ownIndex = entry === undefined ? -1 : stack.indexOf(entry);
+	return stack.slice(ownIndex + 1).some((other) => other.isAsked());
+}
+
 /**
  * Whether an overlay that stays open covers `node`: one shown above the
  * overlay holding `node` (above every one, for the page), and still asked
@@ -130,10 +143,25 @@ function withoutLayer(
  */
 export function isUnderOpenOverlay(node: Node): boolean {
 	const stack = untrack(shownStack);
-	const ownIndex = stack.findLastIndex(
-		(entry) => entry.content()?.contains(node) === true
+	return untrack(() =>
+		isCoveredAbove(
+			stack,
+			stack.findLast((entry) => entry.content()?.contains(node) === true)
+		)
 	);
-	return stack.slice(ownIndex + 1).some((entry) => entry.isAsked());
+}
+
+/**
+ * Whether an overlay that stays open covers what calls this: inside an
+ * overlay's parts, one shown above that overlay; anywhere else, any, as for
+ * the page. The same rule as `isUnderOpenOverlay`, without an element to
+ * look up, so a part can ask before it has mounted one. Reactive: a key
+ * handler reads it once per press, a key chip hides while it is true.
+ */
+export function useOverlayCovered(): () => boolean {
+	const layer = useContext(OverlayContext);
+	// Read by the caller: in a key handler, or a chip's JSX.
+	return () => isCoveredAbove(shownStack(), layer?.entry);
 }
 
 /** Keeps this overlay in the stack while shown; returns how many overlays
@@ -209,12 +237,14 @@ export function OverlayRoot(props: OverlayRootProps): JSX.Element {
 		(wasBuilt: boolean) => wasBuilt || isShown() || local.prebuild === true,
 		false
 	);
+	const entry: StackEntry = {
+		isAsked: () => local.open,
+		content: () => contentElement,
+	};
 	const layer: OverlayLayer = {
 		isShown,
-		above: createStackPlace(isShown, {
-			isAsked: () => local.open,
-			content: () => contentElement,
-		}),
+		above: createStackPlace(isShown, entry),
+		entry,
 		isBuilt,
 		bodyFor: createMorphHold(createShowCount(isShown), isShown, () =>
 			ownExit(contentElement)

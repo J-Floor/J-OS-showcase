@@ -15,14 +15,17 @@ import {
 	createSyncedField,
 	shallowArrayEquals,
 } from "../../../lib/createSyncedField.ts";
+import { RowActionButton } from "../../../shared/actions/RowActions.tsx";
+import { createSheetActions } from "../../../shared/actions/sheetActions.tsx";
 import { DescriptionField } from "../../../shared/components/DescriptionField.tsx";
+import type { ConfirmOptions } from "../../../shared/confirm.tsx";
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
 import {
 	createEntityCommands,
 	createEntityDraft,
 } from "../../../shared/entity/entityCommands.ts";
-import { EntityCreateFooter } from "../../../shared/entity/EntityCreateFooter.tsx";
 import { EntitySheetHeader } from "../../../shared/entity/EntitySheetHeader.tsx";
+import { SheetCreateFooter } from "../../../shared/entity/SheetCreateFooter.tsx";
 import { ICONS } from "../../../shared/icons.ts";
 import { InlineError } from "../../../shared/InlineError.tsx";
 import type { SheetOpenProps } from "../../../shared/types.ts";
@@ -35,6 +38,13 @@ import { AssigneeSelect } from "./fields/AssigneeSelect.tsx";
 import { DateField } from "./fields/DateField.tsx";
 import { ProjectSelect } from "./fields/ProjectSelect.tsx";
 import styles from "./TaskSheet.module.scss";
+
+const DELETE_TASK_CONFIRM: ConfirmOptions = {
+	title: "Delete task?",
+	message: "This removes the task.",
+	confirmLabel: "Delete",
+	tone: "danger",
+};
 
 /**
  * Placeholder field layout shown by `Sheet.Skeleton` while
@@ -237,12 +247,8 @@ function TaskDetailRows(props: {
 	);
 }
 
-/** Creating a task from the drafts, and deleting the open one. */
-function createTaskCommands(
-	props: TaskSheetProps,
-	fields: TaskFields,
-	commands: TaskSheetCommands
-) {
+/** Creating a task from the drafts. */
+function createTaskCommands(fields: TaskFields, commands: TaskSheetCommands) {
 	async function createTask() {
 		if (!fields.title.value().trim()) return;
 		await commands.create({
@@ -255,11 +261,7 @@ function createTaskCommands(
 		});
 	}
 
-	async function deleteTask() {
-		await commands.remove(props.task?._id);
-	}
-
-	return { createTask, deleteTask };
+	return { createTask };
 }
 
 /** The sheet's fields, what they save, and the create form's draft
@@ -271,8 +273,24 @@ function createTaskSheet(props: TaskSheetProps, isEdit: () => boolean) {
 	});
 	const fields = createTaskFields(props, commands.patch, saves);
 	const draft = createEntityDraft(props, isEdit, fields, "new task");
+	const { createTask } = createTaskCommands(fields, commands);
+	const actions = createSheetActions<Task>({
+		scope: "task-sheet",
+		noun: "task",
+		confirm: DELETE_TASK_CONFIRM,
+		isOpen: () => props.open,
+		isLoading: () => props.loading,
+		row: () => props.task,
+		remove: commands.remove,
+		error: commands.failure.error,
+		create: {
+			can: () => fields.title.value().trim() !== "",
+			disabledReason: () => "Add a title first",
+			run: createTask,
+		},
+	});
 	return {
-		...createTaskCommands(props, fields, commands),
+		actions,
 		failure: commands.failure,
 		fields,
 		saves,
@@ -284,8 +302,10 @@ export function TaskSheet(props: TaskSheetProps): JSX.Element {
 	function isEdit() {
 		return props.task !== undefined;
 	}
-	const { createTask, deleteTask, failure, fields, saves, draft } =
-		createTaskSheet(props, isEdit);
+	const { actions, failure, fields, saves, draft } = createTaskSheet(
+		props,
+		isEdit
+	);
 	const boardLevel = useBoardLevel();
 	const projects = useProjects();
 
@@ -301,19 +321,19 @@ export function TaskSheet(props: TaskSheetProps): JSX.Element {
 			saveTracker={saves}
 			initialFocusEl={() => titleElement ?? null}
 		>
-			<EntitySheetHeader.Root
+			<actions.Keys />
+			<EntitySheetHeader
 				title={props.task?.title ?? "New task"}
 				loading={props.loading}
 				nav={props.nav}
 				saveStatus={isEdit() && !props.loading}
 			>
-				<Show when={isEdit()}>
-					<EntitySheetHeader.Delete
-						label="Delete task"
-						onDelete={() => void deleteTask()}
-					/>
+				<Show when={props.task} keyed>
+					{(task) => (
+						<RowActionButton action={actions.remove} row={task} />
+					)}
 				</Show>
-			</EntitySheetHeader.Root>
+			</EntitySheetHeader>
 			<Sheet.Skeleton>
 				<TaskFieldsPlaceholder />
 			</Sheet.Skeleton>
@@ -340,22 +360,15 @@ export function TaskSheet(props: TaskSheetProps): JSX.Element {
 					projects={projects.data() ?? []}
 				/>
 				<DescriptionField
-					class={styles.description}
 					description={fields.description}
 					maxLength={TEXT_MAX}
 				/>
 				<InlineError message={failure.error()} />
 			</Sheet.Body>
-			<Show when={!props.loading && !isEdit()}>
-				<EntityCreateFooter
-					label="Create task"
-					disabledReason="Add a title first"
-					canCreate={fields.title.value().trim() !== ""}
-					onCreate={() => {
-						void createTask();
-					}}
-				/>
-			</Show>
+			<SheetCreateFooter
+				create={actions.create}
+				isCreating={!props.loading && !isEdit()}
+			/>
 		</Sheet.Root>
 	);
 }

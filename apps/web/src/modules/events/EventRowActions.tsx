@@ -1,7 +1,7 @@
 import type { Doc } from "../../../convex/_generated/dataModel";
 import { Can } from "../../lib/ability.tsx";
+import { RowActions } from "../../shared/actions/RowActions.tsx";
 import { EntityQrActions } from "../../shared/entity/EntityQr.tsx";
-import { RowActions } from "../community/columns/RowActions.tsx";
 
 import { eventsEntity } from "./entity.ts";
 

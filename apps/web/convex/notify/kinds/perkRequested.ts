@@ -4,7 +4,7 @@ import { perkRequested as perkRequestedEmail } from "../../emails/generated/perk
 import {
 	emailUrls,
 	manageNotificationsUrl,
-	perkUrl,
+	perkRequestUrl,
 } from "../../emails/urls.ts";
 import { isActiveContact } from "../../lib/perks.ts";
 import { boardIds } from "../audience.ts";
@@ -55,10 +55,10 @@ export const perkRequested = defineKind({
 			? [contact._id]
 			: boardIds(context, now);
 	},
-	push: ({ requestId, perkId, perkTitle, partner, requesterName }) => ({
+	push: ({ requestId, perkTitle, partner, requesterName }) => ({
 		title: "Perk requested",
 		body: `${requesterName} requested ${perkTitle} (${partner})`,
-		url: perkUrl(perkId),
+		url: perkRequestUrl(requestId),
 		tag: `perk-request-${requestId}`,
 	}),
 	email: (details, recipient) => {
@@ -75,7 +75,7 @@ export const perkRequested = defineKind({
 					? CONTACT_REASON
 					: BOARD_REASON,
 			note: details.note ? [{ text: details.note }] : [],
-			viewUrl: perkUrl(details.perkId),
+			viewUrl: perkRequestUrl(details.requestId),
 			manageUrl: manageNotificationsUrl(),
 			logoUrl: emailUrls().logoUrl,
 		});

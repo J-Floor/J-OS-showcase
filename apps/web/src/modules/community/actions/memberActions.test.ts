@@ -9,22 +9,21 @@ import { createRoot } from "solid-js";
 import { expect, test, vi } from "vitest";
 
 import type { PersonRow } from "../../../../convex/people.ts";
+import {
+	claimKeys,
+	eligible,
+	type ActionDescriptor,
+} from "../../../shared/actions/shortcuts.ts";
 import { ICONS } from "../../../shared/icons.ts";
 
 import { useGuestActions } from "./guestActions.ts";
 import { useMemberActions } from "./memberActions.ts";
-import {
-	assertNoCollisions,
-	eligible,
-	type ActionDescriptor,
-} from "./shortcuts.ts";
 
 const kickOutStub: ActionDescriptor<{ _id: string; group: string }> = {
 	id: "kick",
 	label: "Kick out",
 	icon: "block",
 	hotkey: "K",
-	scope: "members",
 	can: (person) => person.group !== "kicked_out",
 	run: () => {},
 };
@@ -126,17 +125,17 @@ test("useMemberActions offers R/change role, K/kick out, A/view agreement, with 
 		}).actions()
 	);
 	expect(() => {
-		assertNoCollisions(actions);
+		claimKeys("test", actions)();
 	}).not.toThrow();
 	expect(
 		actions
-			.map((action) => [action.id, action.hotkey, action.scope])
+			.map((action) => [action.id, action.hotkey])
 			// eslint-disable-next-line id-length -- conventional comparator parameter names
 			.sort((a, b) => a[0].localeCompare(b[0]))
 	).toEqual([
-		["agreement", "A", "members"],
-		["kick", "K", "members"],
-		["role", "R", "members"],
+		["agreement", "A"],
+		["kick", "K"],
+		["role", "R"],
 	]);
 });
 
@@ -260,19 +259,19 @@ test("kick out's run confirms, then calls triage.kickOut with the person's id", 
 test("useGuestActions offers M/upgrade, K/kick out and A/view agreement, with no collisions", () => {
 	const actions = withRoot(() => useGuestActions().actions());
 	expect(() => {
-		assertNoCollisions(actions);
+		claimKeys("test", actions)();
 	}).not.toThrow();
 	// Agreement is now a descriptor here too (was a keyless standalone button),
 	// matching the Members tab — same letter `A`, same place in the set.
 	expect(
 		actions
-			.map((action) => [action.id, action.hotkey, action.scope])
+			.map((action) => [action.id, action.hotkey])
 			// eslint-disable-next-line id-length -- conventional comparator parameter names
 			.sort((a, b) => a[0].localeCompare(b[0]))
 	).toEqual([
-		["agreement", "A", "guests"],
-		["kick", "K", "guests"],
-		["member", "M", "guests"],
+		["agreement", "A"],
+		["kick", "K"],
+		["member", "M"],
 	]);
 });
 

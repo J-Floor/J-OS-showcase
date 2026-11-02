@@ -1,7 +1,13 @@
-import { isTypingTarget, SwapIconButton } from "@j-os/design-system";
-import { createHotkey } from "@tanstack/solid-hotkeys";
+import { SwapIconButton, useOverlayCovered } from "@j-os/design-system";
 import { type JSX, createSignal, onCleanup } from "solid-js";
 
+import { runAction } from "../../../shared/actions/runAction.ts";
+import { bindPageKeys } from "../../../shared/actions/sheetActions.tsx";
+import {
+	PAGE_TARGET,
+	type ActionDescriptor,
+	type PageTarget,
+} from "../../../shared/actions/shortcuts.ts";
 import { useConfirm } from "../../../shared/confirm.tsx";
 import { downloadBlob } from "../../../shared/downloadBlob.ts";
 import { ICONS } from "../../../shared/icons.ts";
@@ -39,31 +45,38 @@ function useDoneFlag(ms = 1500) {
  * D downloads, C copies — global while the console is on screen, since the
  * export spans all three rosters and does not belong to any one tab. `D` is
  * free now that deny moved to `X`; neither collides with a tab's action keys.
- * `isTypingTarget` guards them so typing into a field or an open overlay never
- * fires an export.
+ * Ignored while typing, and quiet while an overlay (a person's sheet) covers
+ * the page.
  */
 function useExportHotkeys(actions: {
 	download: () => void;
 	copy: () => Promise<void>;
-}) {
-	createHotkey(
-		"D",
-		(event) => {
-			if (event.repeat || isTypingTarget(event.target)) return;
-			event.preventDefault();
-			actions.download();
+}): [ActionDescriptor<PageTarget>, ActionDescriptor<PageTarget>] {
+	const keys: [ActionDescriptor<PageTarget>, ActionDescriptor<PageTarget>] = [
+		{
+			id: "download-json",
+			label: "Download JSON",
+			icon: ICONS.download,
+			hotkey: "D",
+			can: () => true,
+			run: () => {
+				actions.download();
+			},
 		},
-		() => ({ preventDefault: false })
-	);
-	createHotkey(
-		"C",
-		(event) => {
-			if (event.repeat || isTypingTarget(event.target)) return;
-			event.preventDefault();
-			void actions.copy();
+		{
+			id: "copy-json",
+			label: "Copy JSON",
+			icon: ICONS.copy,
+			hotkey: "C",
+			can: () => true,
+			run: async () => {
+				await actions.copy();
+				return { refused: false };
+			},
 		},
-		() => ({ preventDefault: false })
-	);
+	];
+	bindPageKeys("community-export", keys, () => true);
+	return keys;
 }
 
 /**
@@ -123,23 +136,26 @@ export function ExportActions(): JSX.Element {
 		flashFullDownloaded();
 	}
 
-	useExportHotkeys({ download, copy });
+	const [downloadKey, copyKey] = useExportHotkeys({ download, copy });
+	// Under a covering sheet the keys are quiet, so the chips hide with them,
+	// as on `RowActionButton`.
+	const isCovered = useOverlayCovered();
 
 	return (
 		<div class={styles.actions}>
 			<SwapIconButton
-				tooltipLabel="Download JSON"
-				idleIcon={ICONS.download}
-				shortcut="D"
+				tooltipLabel={downloadKey.label}
+				idleIcon={downloadKey.icon}
+				shortcut={isCovered() ? undefined : downloadKey.hotkey}
 				success={downloaded()}
-				onClick={download}
+				onClick={() => void runAction(downloadKey, PAGE_TARGET)}
 			/>
 			<SwapIconButton
-				tooltipLabel="Copy JSON"
-				idleIcon={ICONS.copy}
-				shortcut="C"
+				tooltipLabel={copyKey.label}
+				idleIcon={copyKey.icon}
+				shortcut={isCovered() ? undefined : copyKey.hotkey}
 				success={copied()}
-				onClick={() => void copy()}
+				onClick={() => void runAction(copyKey, PAGE_TARGET)}
 			/>
 			<SwapIconButton
 				tooltipLabel="Download full JSON (dev)"

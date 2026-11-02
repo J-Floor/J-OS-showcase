@@ -23,6 +23,10 @@ import { api } from "../../../../convex/_generated/api";
 import type { Doc } from "../../../../convex/_generated/dataModel";
 import type { PersonRow } from "../../../../convex/people.ts";
 import {
+	RowActionButton,
+	RowActions,
+} from "../../../shared/actions/RowActions.tsx";
+import {
 	FREE_TEXT_SIZE,
 	SHORT_TEXT_SIZE,
 } from "../../../shared/columnSizes.ts";
@@ -35,7 +39,6 @@ import { latestNote, noteAuthor } from "../noteAuthor.ts";
 import { useAddNote } from "../useAddNote.ts";
 
 import styles from "./applicationColumns.module.scss";
-import { RowActionButton, RowActions } from "./RowActions.tsx";
 import { useScoreDraft } from "./useScoreDraft.ts";
 import { ventureColumns } from "./ventureColumns.tsx";
 

@@ -1147,7 +1147,9 @@ async function unmarkBoardStep(
 	});
 	const events = await context.db
 		.query("personEvents")
-		.withIndex("by_person", (range) => range.eq("personId", person._id))
+		.withIndex("by_personId_and_at", (range) =>
+			range.eq("personId", person._id)
+		)
 		.collect();
 	for (const event of events)
 		if (

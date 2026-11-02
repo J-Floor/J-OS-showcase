@@ -1,10 +1,4 @@
-import {
-	Button,
-	DatePicker,
-	Input,
-	Sheet,
-	TextArea,
-} from "@j-os/design-system";
+import { DatePicker, Input, TextArea } from "@j-os/design-system";
 import type { FunctionArgs } from "convex/server";
 import { useMutation } from "convex-solidjs";
 import { createSignal, type JSX } from "solid-js";
@@ -14,6 +8,13 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import type { PerkCategory } from "../../../convex/lib/perks.ts";
 import { NAME_MAX, TEXT_MAX } from "../../../convex/lib/validate.ts";
 import { call } from "../../lib/call.ts";
+import { ActionForm } from "../../shared/actions/ActionForm.tsx";
+import {
+	CREATE_TARGET,
+	type ActionDescriptor,
+	type CreateTarget,
+	type SettledAction,
+} from "../../shared/actions/shortcuts.ts";
 import { OptionSelect } from "../../shared/components/OptionSelect.tsx";
 import { PersonSelect } from "../../shared/components/PersonSelect.tsx";
 import { createActionError } from "../../shared/createActionError.ts";
@@ -23,9 +24,6 @@ import { InlineError } from "../../shared/InlineError.tsx";
 import { perkFields } from "./fields.ts";
 import styles from "./PerkCreateForm.module.scss";
 import { PERK_CATEGORY_OPTIONS } from "./perkOptions.ts";
-
-/** The form's id: the footer's Create button submits it from outside. */
-const PERK_CREATE_FORM_ID = "perk-create-form";
 
 const MISSING_FIELDS_REASON =
 	"Add the partner, perk, category, contact and terms first";
@@ -107,24 +105,24 @@ export function createPerkCreateForm(options: { onCreated: () => void }) {
 	const createPerk = useMutation(api.perks.createPerk);
 	// `clearFields` stays inside: `reset` is the one public way to empty the form.
 	const { clearFields, ...fields } = createPerkFields();
-	const [submitting, setSubmitting] = createSignal(false);
 	const { error, trackResult, clear } = createActionError();
 
-	async function submit(): Promise<void> {
+	/** Creates the perk. `undefined` when nothing was sent (a field is
+	 *  missing). */
+	async function submit(): Promise<SettledAction | undefined> {
 		const args = createArgs(fields);
-		if (args === null || submitting()) return;
-		setSubmitting(true);
+		if (args === null) return undefined;
 		const result = await trackResult(
 			call(createPerk.mutateAsync(args), "Could not create the perk.")
 		);
-		setSubmitting(false);
-		if (result.isErr()) return;
+		if (result.isErr()) return { refused: true };
 		options.onCreated();
+		return { refused: false };
 	}
 
 	return {
 		...fields,
-		submitting,
+		submit,
 		error,
 		/** A fresh, empty create form. */
 		reset(): void {
@@ -137,10 +135,6 @@ export function createPerkCreateForm(options: { onCreated: () => void }) {
 		/** Why Create is disabled: what the form still needs. */
 		disabledReason(): string {
 			return MISSING_FIELDS_REASON;
-		},
-		onSubmit: (event: SubmitEvent): void => {
-			event.preventDefault();
-			void submit();
 		},
 	};
 }
@@ -228,41 +222,21 @@ function PerkHandlingFields(props: { form: PerkCreateFormState }): JSX.Element {
 	);
 }
 
-/** The fields for a new perk. The footer's Create submits it. */
+/** The fields for a new perk. Enter in a field runs `create`, as the
+ *  footer's button and its key do. */
 export function PerkCreateForm(props: {
 	form: PerkCreateFormState;
+	create: ActionDescriptor<CreateTarget>;
 }): JSX.Element {
 	return (
-		<form
-			id={PERK_CREATE_FORM_ID}
+		<ActionForm
 			class={styles.form}
-			onSubmit={(event) => {
-				props.form.onSubmit(event);
-			}}
+			action={props.create}
+			target={CREATE_TARGET}
 		>
 			<PerkOfferFields form={props.form} />
 			<PerkHandlingFields form={props.form} />
 			<InlineError message={props.form.error()} />
-		</form>
-	);
-}
-
-/** The create sheet's footer: Create, enabled once the required fields are
- *  filled, submitting the form by its id. */
-export function PerkCreateFooter(props: {
-	form: PerkCreateFormState;
-}): JSX.Element {
-	return (
-		<Sheet.Footer>
-			<Button
-				type="submit"
-				form={PERK_CREATE_FORM_ID}
-				disabled={!props.form.canSubmit()}
-				disabledReason={props.form.disabledReason()}
-				isLoading={props.form.submitting()}
-			>
-				Create
-			</Button>
-		</Sheet.Footer>
+		</ActionForm>
 	);
 }

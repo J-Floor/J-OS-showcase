@@ -1,7 +1,14 @@
 import { v } from "convex/values";
 
 import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, query, type QueryCtx } from "./_generated/server";
+import {
+	type MutationCtx,
+	mutation,
+	query,
+	type QueryCtx,
+} from "./_generated/server";
+import { historyFor } from "./history/historyFor.ts";
+import type { HistoryEntry } from "./history/types.ts";
 import { requireRole } from "./lib/authGuard.ts";
 import { displayName, nameOf } from "./lib/names.ts";
 import {
@@ -107,6 +114,28 @@ async function joinRequests(
 	return rows.filter((row): row is PerkRequestRow => row !== null);
 }
 
+/** Logs a request made or moved to `event` in the requester's history, in
+ *  the same mutation as the row change. `history/` reads these back. */
+export async function appendPerkEvent(
+	context: MutationCtx,
+	request: Pick<Doc<"perkRequests">, "_id" | "personId" | "perkId">,
+	{
+		event,
+		at,
+		actorId,
+	}: { event: PerkRequestStatus; at: number; actorId?: Id<"people"> }
+): Promise<void> {
+	await context.db.insert("personEvents", {
+		personId: request.personId,
+		at,
+		actorId,
+		kind: "perk",
+		event,
+		perkRequestId: request._id,
+		meta: { perkId: request.perkId },
+	});
+}
+
 /** The person's open request for this perk, if any. Newest first, since an
  *  open request is normally the latest. Capped like a perk's own request
  *  list, which one person's history with that perk never comes near. */
@@ -153,6 +182,11 @@ export const requestPerk = mutation({
 			status: "requested",
 			statusAt: now,
 		});
+		await appendPerkEvent(
+			context,
+			{ _id: requestId, personId: person._id, perkId },
+			{ event: "requested", at: now, actorId: person._id }
+		);
 		await notify(context, "perkRequested", {
 			requestId,
 			perkId,
@@ -237,22 +271,63 @@ export const listRequestsForPerk = query({
 	},
 });
 
+/** One request for its sheet, joined like a list row. Null once the
+ *  request, its perk or its requester is gone, or when the id is not a
+ *  perk request's at all (a hand-edited link): the sheet then closes as a
+ *  dead link. A string, not `v.id`, so a malformed id answers null instead
+ *  of failing validation. */
+export const getPerkRequest = query({
+	args: { requestId: v.string() },
+	handler: async (context, args): Promise<PerkRequestRow | null> => {
+		unwrap(await requireRole(context, BOARD_LEVEL));
+		const requestId = context.db.normalizeId(
+			"perkRequests",
+			args.requestId
+		);
+		if (requestId === null) return null;
+		const request = await context.db.get(requestId);
+		return request
+			? joinRequest(readOnce(context), request, Date.now())
+			: null;
+	},
+});
+
+/** One request's history for its sheet, newest first: its own events.
+ *  Capped by `historyFor`. */
+export const perkRequestHistory = query({
+	args: { requestId: v.id("perkRequests") },
+	handler: async (context, { requestId }): Promise<HistoryEntry[]> => {
+		unwrap(await requireRole(context, BOARD_LEVEL));
+		return historyFor(context, { perkRequestId: requestId });
+	},
+});
+
 /** Any board member moves a request to any status. The stamp records who
  *  moved it and when. Landing on an answer (Granted or Declined) that differs
- *  from the request's status tells the requester; nothing else does. */
+ *  from the request's status tells the requester; nothing else does. The
+ *  status it already has is a no-op. */
 export const setPerkRequestStatus = mutation({
 	args: { requestId: v.id("perkRequests"), status: perkRequestStatus },
 	handler: async (context, { requestId, status }): Promise<null> => {
 		const caller = unwrap(await requireRole(context, BOARD_LEVEL));
 		const request = await context.db.get(requestId);
 		if (!request) return refuse({ type: "PerkRequestNotFound" });
+		// Moving to where it already is changes nothing: no stamp, no event,
+		// no notification.
+		if (status === request.status) return null;
+		const now = Date.now();
+		await appendPerkEvent(context, request, {
+			event: status,
+			at: now,
+			actorId: caller._id,
+		});
 		await context.db.patch(requestId, {
 			status,
-			statusAt: Date.now(),
+			statusAt: now,
 			statusById: caller._id,
 		});
 		const perk = await context.db.get(request.perkId);
-		if (perk && isAnswer(status) && status !== request.status) {
+		if (perk && isAnswer(status)) {
 			await notify(context, "perkRequestOutcome", {
 				requestId,
 				perkId: perk._id,

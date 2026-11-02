@@ -17,7 +17,12 @@ import {
 	joinHandoff,
 	morph,
 } from "./morph.ts";
-import { MORPH_HIDDEN, MORPH_LIST_ROW, MORPH_PICKED } from "./morphNames.ts";
+import {
+	MORPH_HIDDEN,
+	MORPH_LIST_ROW,
+	MORPH_OF,
+	MORPH_PICKED,
+} from "./morphNames.ts";
 import { ENTITY_ROW, findMorphTarget } from "./morphPairing.ts";
 import { afterTransition, canAnimate } from "./viewTransition.ts";
 import { hasLayoutBox, nearestVisibleAnchor } from "./visibleArea.ts";
@@ -160,13 +165,24 @@ function unhideSource(source: HTMLElement | null): void {
 	source?.removeAttribute(MORPH_HIDDEN);
 }
 
+/** Whether `source` is (or sits inside) the surface of entity `value`. */
+function showsEntity(source: HTMLElement | null, value: unknown): boolean {
+	const entity = source?.closest<HTMLElement>(`[${MORPH_OF}]`);
+	return entity?.getAttribute(MORPH_OF) === value;
+}
+
 /**
  * Calls `release` when `shows` moves on from what the overlay opened for (a
- * prev/next step). Opening and naming the entity in one flush is not a step.
+ * prev/next step). Opening and naming the entity in one flush is not a step,
+ * nor is naming it later, once it has loaded, in an overlay that opened
+ * naming nothing (a peek opened before its rows arrived), as long as its
+ * source shows that entity: that first name is what it opened for. A
+ * source that shows something else (a New button, another row) is
+ * released.
  */
 function releaseOnStep(
 	shows: Accessor<unknown> | undefined,
-	openedFor: () => unknown,
+	state: Pick<PresenceState, "openedFor" | "source">,
 	release: () => void
 ): void {
 	if (!shows) return;
@@ -174,7 +190,10 @@ function releaseOnStep(
 		on(
 			shows,
 			(value) => {
-				if (value !== openedFor()) release();
+				if (state.openedFor === undefined) {
+					state.openedFor = value;
+					if (!showsEntity(state.source, value)) release();
+				} else if (value !== state.openedFor) release();
 			},
 			{ defer: true }
 		)
@@ -352,13 +371,9 @@ export function createMorphPresence(options: PresenceOptions): MorphPresence {
 			else hide(state, options);
 		})
 	);
-	releaseOnStep(
-		options.shows,
-		() => state.openedFor,
-		() => {
-			releaseSource(state);
-		}
-	);
+	releaseOnStep(options.shows, state, () => {
+		releaseSource(state);
+	});
 	return { shown };
 }
 

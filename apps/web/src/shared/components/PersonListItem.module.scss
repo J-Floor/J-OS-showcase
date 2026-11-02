@@ -1,4 +1,6 @@
+@use "@j-os/design-system/hover";
 @use "@j-os/design-system/typography" as typo;
+@use "@j-os/design-system/utils" as utils;
 
 .row {
 	display: flex;
@@ -7,6 +9,32 @@
 	align-items: center;
 }
 
+/* The avatar and name as one button: it takes the name column's share of
+   the row, so the trailing slot keeps its place beside it. It lights up
+   under the pointer on its own: the trailing slot (a status picker) is not
+   part of what opens. */
+.open {
+	@include utils.focus-outline;
+	@include utils.bare-button;
+
+	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- the avatar beside the name, always one line; the name column shrinks */
+	display: flex;
+	flex: 1 1 12rem;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+	min-inline-size: 0;
+	text-align: start;
+	border-radius: var(--jf-radius-container);
+
+	@media (hover: hover) {
+		@include hover.hover {
+			background: var(--jf-surface-bg-raised);
+		}
+	}
+}
+
+/* The name column: inside the open button too, where it shrinks to what
+   the button leaves beside the avatar. */
 .who {
 	display: flex;
 	flex: 1 1 12rem;

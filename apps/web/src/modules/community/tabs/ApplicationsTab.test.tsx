@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { Sheet } from "@j-os/design-system";
 import {
 	screen,
 	fireEvent,
@@ -6,7 +7,7 @@ import {
 	within,
 	cleanup,
 } from "@solidjs/testing-library";
-import { okAsync } from "neverthrow";
+import { ResultAsync, okAsync } from "neverthrow";
 import { createSignal } from "solid-js";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -69,13 +70,16 @@ vi.mock("../columns/applicationColumns.tsx", async () => {
 // ApplicationsTable reads the current person via convex-solidjs' useQuery to seed
 // CurrentPersonContext; that needs a ConvexProvider we don't mount here. Stub the
 // hook to a no-data accessor so the table renders without the Convex client.
+/** Every write the tab's mutations send, a score among them. */
+const writes = vi.hoisted(() => vi.fn(() => Promise.resolve()));
+
 vi.mock("convex-solidjs", () => ({
 	useQuery: () => ({ data: () => {} }),
 	// The shared sheet opens mutations of its own (the board's door override,
 	// the onboarding step "Done" button); this tab used to render a sheet that
 	// had none.
 	useMutation: () => ({
-		mutateAsync: () => Promise.resolve(),
+		mutateAsync: writes,
 		mutate: vi.fn(),
 		data: () => {},
 		error: () => {},
@@ -189,7 +193,7 @@ vi.mock("../actions/triage.ts", () => ({
 }));
 
 import { ApplicationsTab } from "./ApplicationsTab.tsx";
-import { renderWithSelection } from "./testSelection.tsx";
+import { openPanel, renderWithSelection } from "./testSelection.tsx";
 
 describe("ApplicationsTab", () => {
 	test("renders a group header per triage bucket", () => {
@@ -469,6 +473,31 @@ describe("ApplicationsTab", () => {
 		});
 	});
 
+	test("U then a click on the footer's Undo deny runs one undeny: the key and the button hold the same action", async () => {
+		undeny.mockClear();
+		// In flight until the test ends, so the click lands while the key's
+		// run is still on its way.
+		undeny.mockImplementation(() =>
+			ResultAsync.fromSafePromise(new Promise<undefined>(() => {}))
+		);
+		const { container } = renderWithSelection((selection) => (
+			<ApplicationsTab selection={selection} />
+		));
+		fireEvent.click(within(container).getAllByText("Charles")[0]);
+		const panel = await waitFor(() => {
+			const open = openPanel();
+			expect(open).not.toBeNull();
+			return open!;
+		});
+		fireEvent.keyDown(document, { key: "u" });
+		fireEvent.click(
+			await within(panel).findByRole("button", { name: /Undo deny/ })
+		);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(undeny).toHaveBeenCalledTimes(1);
+		undeny.mockImplementation(() => okAsync(undefined));
+	});
+
 	test("X does nothing while this tab is not the one on screen and no sheet is open", async () => {
 		deny.mockClear();
 		renderWithSelection((selection) => (
@@ -509,6 +538,35 @@ describe("ApplicationsTab", () => {
 		// row at mount, and the ArrowDown then steps it one on; not asserting a
 		// specific id, since the `active` gate is what this test pins.
 		expect(["app1", "app2", "app3"]).toContain(deny.mock.calls[0][0]);
+	});
+
+	test("a digit scores the ringed row, but not while an overlay covers the page", async () => {
+		writes.mockClear();
+		const [isCovering, setCovering] = createSignal(true);
+		renderWithSelection((selection) => (
+			<>
+				<ApplicationsTab selection={selection} active />
+				<Sheet.Root open={isCovering()} onOpenChange={() => {}}>
+					<Sheet.Header>
+						<Sheet.Title>Covering sheet</Sheet.Title>
+					</Sheet.Header>
+				</Sheet.Root>
+			</>
+		));
+		const grid = screen.getByRole("grid");
+		grid.focus();
+		fireEvent.keyDown(document, { key: "7" });
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(writes).not.toHaveBeenCalled();
+		setCovering(false);
+		await waitFor(() => {
+			// The overlay's close hands focus back; put the ring on a row again.
+			grid.focus();
+			fireEvent.keyDown(document, { key: "7" });
+			expect(writes).toHaveBeenCalledWith(
+				expect.objectContaining({ value: 7 })
+			);
+		});
 	});
 
 	test("the sheet's score box is the one element keyed score, in either mode", async () => {

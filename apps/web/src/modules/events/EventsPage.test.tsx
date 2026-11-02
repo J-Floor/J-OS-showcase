@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { ShortcutPeekProvider } from "@j-os/design-system";
 import { MemoryRouter, Route, createMemoryHistory } from "@solidjs/router";
 import {
 	cleanup,
@@ -55,6 +56,7 @@ vi.mock("convex-solidjs", () => ({
 }));
 
 import { AbilityProvider, type Role } from "../../lib/ability.tsx";
+import { ShortcutPeekButton } from "../../shared/ShortcutPeekButton.tsx";
 
 import { EventsPage } from "./EventsPage.tsx";
 
@@ -329,4 +331,60 @@ test("board: closing the sheet via the Close button clears ?event=", async () =>
 		expect(screen.queryByRole("dialog")).toBeNull();
 	});
 	expect(history.get()).not.toContain("event=");
+});
+
+test("board: N opens the create sheet, once", async () => {
+	renderAs("board");
+	fireEvent.keyDown(document, { key: "n" });
+	await waitFor(() => {
+		expect(screen.getByRole("dialog")).toBeInTheDocument();
+	});
+	expect(screen.getAllByRole("dialog")).toHaveLength(1);
+});
+
+test("N is ignored while typing, for a member, and while a sheet is open", async () => {
+	renderAs("member");
+	fireEvent.keyDown(document, { key: "n" });
+	await Promise.resolve();
+	expect(screen.queryByRole("dialog")).toBeNull();
+	cleanup();
+
+	renderAs("board");
+	const input = document.createElement("input");
+	document.body.append(input);
+	fireEvent.keyDown(input, { key: "n" });
+	input.remove();
+	await Promise.resolve();
+	expect(screen.queryByRole("dialog")).toBeNull();
+
+	fireEvent.click(screen.getAllByText("Open House")[0]);
+	await screen.findByRole("dialog");
+	fireEvent.keyDown(document, { key: "n" });
+	await Promise.resolve();
+	expect(
+		screen.getByRole("dialog", { name: "Open House" })
+	).toBeInTheDocument();
+});
+
+test("the New event button names its key in a chip while peeking", () => {
+	render(() => (
+		<ShortcutPeekProvider>
+			<ShortcutPeekButton />
+			<MemoryRouter>
+				<Route
+					path="*"
+					component={() => (
+						<AbilityProvider role="board">
+							<EventsPage />
+						</AbilityProvider>
+					)}
+				/>
+			</MemoryRouter>
+		</ShortcutPeekProvider>
+	));
+	const add = screen.getByRole("button", { name: /New event/ });
+	expect(add).toHaveAttribute("aria-keyshortcuts", "N");
+	expect(add.querySelector("kbd")).toBeNull();
+	fireEvent.click(screen.getByRole("button", { name: /shortcut/i }));
+	expect(add.querySelector("kbd")).not.toBeNull();
 });

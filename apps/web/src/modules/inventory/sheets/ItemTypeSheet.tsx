@@ -10,11 +10,11 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import type { SheetNavState } from "../../../lib/createSheetNav.ts";
 import { createSyncedField } from "../../../lib/createSyncedField.ts";
 import type { SaveWrite } from "../../../lib/reportSave.ts";
+import { DescriptionField } from "../../../shared/components/DescriptionField.tsx";
 import { OptionSelect } from "../../../shared/components/OptionSelect.tsx";
-import { useConfirm } from "../../../shared/confirm.tsx";
+import type { ConfirmOptions } from "../../../shared/confirm.tsx";
 import { createEntityDraft } from "../../../shared/entity/entityCommands.ts";
-import { EntityCreateFooter } from "../../../shared/entity/EntityCreateFooter.tsx";
-import { EntitySheetHeader } from "../../../shared/entity/EntitySheetHeader.tsx";
+import { SheetCreateFooter } from "../../../shared/entity/SheetCreateFooter.tsx";
 import { InlineError } from "../../../shared/InlineError.tsx";
 import type { SheetOpenProps } from "../../../shared/types.ts";
 import type { ItemType, ItemTypePatch } from "../data/inventoryData.ts";
@@ -25,10 +25,21 @@ import {
 } from "../data/inventoryData.ts";
 import { itemTypeFields } from "../fields.ts";
 
-import { FieldsPlaceholder } from "./FieldsPlaceholder.tsx";
 import { createInventoryCommands } from "./inventoryCommands.ts";
-import { DescriptionValue, NameField } from "./InventoryForm.tsx";
+import { NameField } from "./InventoryForm.tsx";
 import { RelatedListSection } from "./RelatedListSection.tsx";
+import {
+	createInventorySheetActions,
+	InventorySheetHeader,
+} from "./SheetHeaderActions.tsx";
+
+const DELETE_ITEM_TYPE_CONFIRM: ConfirmOptions = {
+	title: "Delete this item type?",
+	message:
+		"This can't be undone. Items that still use it will block the delete.",
+	confirmLabel: "Delete",
+	tone: "danger",
+};
 
 type ItemTypeSheetProps = SheetOpenProps & {
 	itemType?: ItemType;
@@ -73,7 +84,6 @@ function createItemTypeFields(
 /** The item type's fields and the actions that create and delete it. */
 function createItemTypeForm(props: ItemTypeSheetProps) {
 	const actions = useItemTypeActions();
-	const confirm = useConfirm();
 
 	const commands = createInventoryCommands<
 		Parameters<typeof actions.create>[0],
@@ -119,36 +129,9 @@ function createItemTypeForm(props: ItemTypeSheetProps) {
 				description: fields.description.value().trim() || undefined,
 			});
 		},
-		async deleteItemType() {
-			if (!props.itemType) return;
-			const isOk = await confirm({
-				title: "Delete this item type?",
-				message:
-					"This can't be undone. Items that still use it will block the delete.",
-				confirmLabel: "Delete",
-				tone: "danger",
-			});
-			if (!isOk) return;
-			await commands.remove(props.itemType._id);
-		},
+		/** Deletes the open row (asked first, by its Delete). */
+		remove: commands.remove,
 	};
-}
-
-/** The create button, enabled once there is a name and a category. */
-function CreateFooter(props: { form: ReturnType<typeof createItemTypeForm> }) {
-	return (
-		<EntityCreateFooter
-			label="Create item type"
-			disabledReason="Add a name and category first"
-			canCreate={
-				props.form.name.value().trim() !== "" &&
-				props.form.categoryId.value() !== undefined
-			}
-			onCreate={() => {
-				void props.form.createItemType();
-			}}
-		/>
-	);
 }
 
 /** The open type's items. Subscribes only while the sheet is open AND an
@@ -163,25 +146,58 @@ function useOpenTypeItems(props: ItemTypeSheetProps) {
 /** The type's category picker. */
 function CategoryRow(props: {
 	categoryId: ReturnType<typeof createItemTypeForm>["categoryId"];
+	/** The category's name, shown in place of the picker while locked. */
+	lockedLabel?: string;
+	locked: boolean;
 }): JSX.Element {
 	const categories = useCategories();
 	return (
 		<PropertyRow field={itemTypeFields.categoryName}>
-			<OptionSelect
-				label={itemTypeFields.categoryName.label}
-				labelHidden
-				placeholder="Choose a category"
-				options={(categories.data() ?? []).map((category) => ({
-					value: category._id,
-					label: category.name,
-				}))}
-				value={props.categoryId.value()}
-				onChange={(value) => {
-					props.categoryId.set(value);
-				}}
-			/>
+			<Show
+				when={!props.locked}
+				fallback={<span>{props.lockedLabel}</span>}
+			>
+				<OptionSelect
+					label={itemTypeFields.categoryName.label}
+					labelHidden
+					placeholder="Choose a category"
+					options={(categories.data() ?? []).map((category) => ({
+						value: category._id,
+						label: category.name,
+					}))}
+					value={props.categoryId.value()}
+					onChange={(value) => {
+						props.categoryId.set(value);
+					}}
+				/>
+			</Show>
 		</PropertyRow>
 	);
+}
+
+/** The sheet's actions: Delete and the edit lock on a type, Create on the
+ *  form. */
+function createItemTypeActions(
+	props: ItemTypeSheetProps,
+	form: ReturnType<typeof createItemTypeForm>
+) {
+	return createInventorySheetActions({
+		scope: "item-type-sheet",
+		noun: "item type",
+		confirm: DELETE_ITEM_TYPE_CONFIRM,
+		isOpen: () => props.open,
+		isLoading: () => props.loading,
+		row: () => props.itemType,
+		remove: form.remove,
+		error: form.formError,
+		create: {
+			can: () =>
+				form.name.value().trim() !== "" &&
+				form.categoryId.value() !== undefined,
+			disabledReason: () => "Add a name and category first",
+			run: () => form.createItemType(),
+		},
+	});
 }
 
 export function ItemTypeSheet(props: ItemTypeSheetProps): JSX.Element {
@@ -198,6 +214,7 @@ export function ItemTypeSheet(props: ItemTypeSheetProps): JSX.Element {
 	}
 
 	const itemsQuery = useOpenTypeItems(props);
+	const actions = createItemTypeActions(props, form);
 
 	let nameElement: HTMLInputElement | undefined;
 
@@ -209,39 +226,35 @@ export function ItemTypeSheet(props: ItemTypeSheetProps): JSX.Element {
 			{...form.sheet}
 			initialFocusEl={() => nameElement ?? null}
 		>
-			<EntitySheetHeader.Root
+			<InventorySheetHeader
 				title={props.itemType?.name ?? "New item type"}
 				loading={props.loading}
 				nav={props.nav}
-				saveStatus={isEdit() && !props.loading}
-			>
-				<Show when={isEdit()}>
-					<EntitySheetHeader.Delete
-						label="Delete item type"
-						onDelete={() => void form.deleteItemType()}
-					/>
-				</Show>
-			</EntitySheetHeader.Root>
-			<Sheet.Skeleton>
-				<FieldsPlaceholder
-					fields={[
-						itemTypeFields.name,
-						itemTypeFields.categoryName,
-						itemTypeFields.description,
-					]}
-				/>
-			</Sheet.Skeleton>
+				actions={actions}
+				isOpen={props.open}
+				placeholderFields={[
+					itemTypeFields.name,
+					itemTypeFields.categoryName,
+					itemTypeFields.description,
+				]}
+			/>
 			<Sheet.Body loading={props.loading}>
 				<NameField
 					form={form}
+					locked={actions.isLocked()}
 					ref={(element) => {
 						nameElement = element;
 					}}
 				/>
-				<CategoryRow categoryId={form.categoryId} />
-				<DescriptionValue
+				<CategoryRow
+					categoryId={form.categoryId}
+					locked={actions.isLocked()}
+					lockedLabel={props.itemType?.categoryName}
+				/>
+				<DescriptionField
 					field={itemTypeFields.description}
 					description={form.description}
+					readOnly={actions.isLocked()}
 				/>
 				<InlineError message={form.formError()} />
 				<Show when={isEdit()}>
@@ -256,9 +269,10 @@ export function ItemTypeSheet(props: ItemTypeSheetProps): JSX.Element {
 					/>
 				</Show>
 			</Sheet.Body>
-			<Show when={!props.loading && !isEdit()}>
-				<CreateFooter form={form} />
-			</Show>
+			<SheetCreateFooter
+				create={actions.create}
+				isCreating={actions.isCreating()}
+			/>
 		</Sheet.Root>
 	);
 }

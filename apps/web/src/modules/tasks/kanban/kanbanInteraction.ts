@@ -1,10 +1,11 @@
-import { isTypingTarget } from "@j-os/design-system";
-import { createHotkey } from "@tanstack/solid-hotkeys";
 import { useDragDropContext } from "@thisbeyond/solid-dnd";
 import { createEffect, createSignal, type Accessor } from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { celebrate } from "../../../lib/celebrate.ts";
+import { createActionKeys } from "../../../shared/actions/createActionKeys.ts";
+import type { ActionDescriptor } from "../../../shared/actions/shortcuts.ts";
+import { ICONS } from "../../../shared/icons.ts";
 import { toaster } from "../../../shared/toaster.ts";
 import type { Task, TaskActions } from "../data/tasksData.tsx";
 
@@ -129,7 +130,8 @@ export function createMarqueeSelection() {
 }
 
 type DragContext = NonNullable<ReturnType<typeof useDragDropContext>>;
-type MarqueeSelection = ReturnType<typeof createMarqueeSelection>;
+/** The board's card selection and its marquee. */
+export type MarqueeSelection = ReturnType<typeof createMarqueeSelection>;
 
 /** Group drag: selected cards slide onto the dragged card. Per-card offset
  *  (captured at drag start) brings each selected card to the dragged card's
@@ -266,13 +268,12 @@ export function createDropHandler(options: {
 	});
 }
 
-/** Only a key that opens the confirm is cancelled, and it still bubbles. */
-const BULK_DELETE_KEY_OPTIONS = {
-	preventDefault: false,
-	stopPropagation: false,
-};
+/** What the bulk-delete action acts on: the selected cards as a whole. */
+export const SELECTION_TARGET = "selection";
+type SelectionTarget = typeof SELECTION_TARGET;
 
-/** Backspace/Delete → confirm → bulk delete of the selected cards. */
+/** Delete (or Backspace) → confirm → bulk delete of the selected cards. The
+ *  returned `action` feeds the "Delete N selected" button and the key. */
 export function createBulkDelete(options: {
 	selection: MarqueeSelection;
 	actions: TaskActions;
@@ -280,20 +281,44 @@ export function createBulkDelete(options: {
 	const { selection, actions } = options;
 	const [confirmOpen, setConfirmOpen] = createSignal(false);
 
-	function onKey(event: KeyboardEvent) {
-		if (
-			selection.selected().size === 0 ||
-			isTypingTarget(event.target) ||
-			document.querySelector('[role="dialog"][data-state="open"]')
-		)
-			return;
-		event.preventDefault();
-		setConfirmOpen(true);
-	}
-	createHotkey("Backspace", onKey, BULK_DELETE_KEY_OPTIONS);
-	createHotkey("Delete", onKey, BULK_DELETE_KEY_OPTIONS);
+	const action: ActionDescriptor<SelectionTarget> = {
+		id: "delete-selected",
+		get label() {
+			return `Delete ${String(selection.selected().size)} selected`;
+		},
+		icon: ICONS.delete,
+		hotkey: "Delete",
+		can: () => selection.selected().size > 0,
+		run: () => {
+			setConfirmOpen(true);
+		},
+	};
+	// The descriptor holds one key; Backspace is the same action under a second
+	// descriptor, so the one `createActionKeys` binds both. Its label is read
+	// through, not copied: a spread would freeze the count.
+	const backspace: ActionDescriptor<SelectionTarget> = {
+		id: "delete-selected-backspace",
+		get label() {
+			return action.label;
+		},
+		icon: action.icon,
+		hotkey: "Backspace",
+		can: action.can,
+		run: action.run,
+	};
+	// Quiet under any overlay (a sheet over the board), as every page key is.
+	createActionKeys<SelectionTarget>({
+		scope: "kanban",
+		actions: () => [action, backspace],
+		target: () =>
+			selection.selected().size > 0 ? SELECTION_TARGET : undefined,
+		active: () => true,
+	});
 
 	return {
+		action,
+		/** How many cards are selected: what the Delete acts on. */
+		count: (): number => selection.selected().size,
 		confirmOpen,
 		setConfirmOpen,
 		deleteSelected: (): void => {
@@ -313,3 +338,19 @@ export function createBulkDelete(options: {
 		},
 	};
 }
+
+/** The selected cards' Delete: its action, keys and confirm. */
+export type BulkDelete = ReturnType<typeof createBulkDelete>;
+
+/** The board's selected cards and their Delete, made by the tab that holds
+ *  the board, so its bar can carry the Delete. */
+export function createCardSelection(actions: TaskActions): {
+	selection: MarqueeSelection;
+	bulkDelete: BulkDelete;
+} {
+	const selection = createMarqueeSelection();
+	return { selection, bulkDelete: createBulkDelete({ selection, actions }) };
+}
+
+/** What `createCardSelection` makes. */
+export type CardSelection = ReturnType<typeof createCardSelection>;

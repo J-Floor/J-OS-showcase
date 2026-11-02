@@ -1,14 +1,11 @@
 import { type JSX, createMemo } from "solid-js";
 
 import type { PersonRow } from "../../../convex/people.ts";
+import { ActionKeys } from "../../shared/actions/createActionKeys.ts";
+import type { ActionDescriptor } from "../../shared/actions/shortcuts.ts";
 import type { PeekProps } from "../../shared/entity/entityDescriptor.ts";
 
-import { createActionKeys } from "./actions/createActionKeys.ts";
-import {
-	SHEET_SCOPE,
-	type ActionDescriptor,
-	type ShortcutScope,
-} from "./actions/shortcuts.ts";
+import { SHEET_SCOPE, type ShortcutScope } from "./actions/shortcuts.ts";
 import { rosterOf, useReadyRosters, type RosterKey } from "./rosterOf.ts";
 import {
 	ApplicationsSheetProvider,
@@ -17,6 +14,10 @@ import {
 import { useGuestsSheet } from "./tabs/GuestsTab.tsx";
 import { useMembersSheet } from "./tabs/MembersTab.tsx";
 import { RosterSheet, useSheetEditing } from "./tabs/RosterSheet.tsx";
+
+/** Where a peek's keys are live: one roster's at a time, whichever the
+ *  person is in. */
+const PEEK_SCOPE = "person-peek";
 
 /** The roster the person is in, once all three have answered. `undefined`
  *  while they are loading and for a person in none of them. A memo, so the
@@ -60,20 +61,23 @@ function PeekBody(props: PeekProps<PersonRow>): JSX.Element {
 		() => props.row?._id,
 		scope
 	);
-	createActionKeys<PersonRow>({
-		actions,
-		sheetPerson,
-		// No table under a peek: nothing is checked or ringed.
-		selected: () => [],
-		focused: () => {},
-		onAdvance: () => {},
-		onClearSelection: () => {},
-		active: () => props.open,
-	});
-	// eslint-disable-next-line solid/reactivity -- handed on as an accessor, read by the keys' own handlers
-	applications.focusedRowKeys(() =>
-		roster() === "applications" ? sheetPerson() : undefined
-	);
+	/** The peek's keys, inside its sheet: the person's roster's actions
+	 *  and, for an applicant, the score and note keys. No table under a
+	 *  peek: nothing is checked or ringed. */
+	function PeekKeys(): JSX.Element {
+		// eslint-disable-next-line solid/reactivity -- handed on as an accessor, read by the keys' own handlers
+		applications.focusedRowKeys(() =>
+			roster() === "applications" ? sheetPerson() : undefined
+		);
+		return (
+			<ActionKeys<PersonRow>
+				scope={PEEK_SCOPE}
+				actions={actions}
+				target={sheetPerson}
+				active={() => props.open}
+			/>
+		);
+	}
 
 	return (
 		<>
@@ -96,7 +100,9 @@ function PeekBody(props: PeekProps<PersonRow>): JSX.Element {
 						? applications.footerLead
 						: undefined
 				}
-			/>
+			>
+				<PeekKeys />
+			</RosterSheet>
 			<sheets.members.RoleDialog />
 		</>
 	);

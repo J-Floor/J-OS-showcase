@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { ShortcutPeekProvider } from "@j-os/design-system";
 import {
 	createMemoryHistory,
 	MemoryRouter,
@@ -50,8 +51,9 @@ vi.mock("./tabs/ItemsTab.tsx", () => ({
 			selected: () => { assetTag: string } | undefined;
 		};
 		newItemAssetTag?: () => string | undefined;
+		active: boolean;
 	}) => (
-		<div>
+		<div data-active={String(props.active)}>
 			items-tab
 			<Show when={props.selection.creating()}>
 				<div role="dialog">New item {props.newItemAssetTag?.()}</div>
@@ -125,6 +127,7 @@ vi.mock("./print/printInventoryList.ts", () => ({
 
 import { AbilityProvider, type Role } from "../../lib/ability.tsx";
 import { ConfirmProvider } from "../../shared/confirm.tsx";
+import { ShortcutPeekButton } from "../../shared/ShortcutPeekButton.tsx";
 
 import { InventoryPage } from "./InventoryPage.tsx";
 
@@ -443,4 +446,138 @@ test("the toolbar Print button is disabled when there are no items", () => {
 	expect(
 		screen.getByRole("button", { name: /print inventory list/i })
 	).toBeDisabled();
+});
+
+// --- keys ---------------------------------------------------------------
+
+function renderAtWithHistory(start: string) {
+	const history = createMemoryHistory();
+	history.set({ value: start, scroll: false, replace: true });
+	render(() => (
+		<ShortcutPeekProvider>
+			<ShortcutPeekButton />
+			<MemoryRouter history={history}>
+				<Route
+					path="/inventory"
+					component={() => (
+						<AbilityProvider role="board">
+							<ConfirmProvider>
+								<InventoryPage />
+							</ConfirmProvider>
+						</AbilityProvider>
+					)}
+				/>
+			</MemoryRouter>
+		</ShortcutPeekProvider>
+	));
+	return history;
+}
+
+test("N opens the new item sheet, once", async () => {
+	renderAtWithHistory("/inventory");
+	fireEvent.keyDown(document, { key: "n" });
+	expect(await screen.findByRole("dialog")).toHaveTextContent("New item");
+	expect(screen.getAllByRole("dialog")).toHaveLength(1);
+});
+
+test("Y and G open a new type and a new category on their own tabs only", async () => {
+	const history = renderAtWithHistory("/inventory?tab=types");
+	fireEvent.keyDown(document, { key: "g" });
+	await Promise.resolve();
+	expect(history.get()).not.toContain("category=");
+	fireEvent.keyDown(document, { key: "y" });
+	await waitFor(() => {
+		expect(history.get()).toContain("type=");
+	});
+	cleanup();
+
+	const other = renderAtWithHistory("/inventory?tab=categories");
+	fireEvent.keyDown(document, { key: "y" });
+	await Promise.resolve();
+	expect(other.get()).not.toContain("type=");
+	fireEvent.keyDown(document, { key: "g" });
+	await waitFor(() => {
+		expect(other.get()).toContain("category=");
+	});
+});
+
+test("S opens the scanner and P prints the whole list", async () => {
+	hangUntilAbort();
+	itemsData.current = [chairItem];
+	renderAtWithHistory("/inventory");
+	fireEvent.keyDown(document, { key: "p" });
+	await waitFor(() => {
+		expect(mockPrint).toHaveBeenCalledTimes(1);
+	});
+	expect(mockPrint).toHaveBeenCalledWith([chairItem]);
+	fireEvent.keyDown(document, { key: "s" });
+	expect(await screen.findByText("Scan asset tag")).toBeInTheDocument();
+});
+
+test("P does nothing with no items to print", async () => {
+	itemsData.current = [];
+	renderAtWithHistory("/inventory");
+	fireEvent.keyDown(document, { key: "p" });
+	await Promise.resolve();
+	expect(mockPrint).not.toHaveBeenCalled();
+});
+
+test("the page keys are ignored while typing, over an open sheet and over the scanner", async () => {
+	hangUntilAbort();
+	itemsData.current = [chairItem];
+	renderAtWithHistory("/inventory?tab=items&item=A00001");
+	await screen.findByRole("dialog");
+	const input = document.createElement("input");
+	document.body.append(input);
+	for (const key of ["n", "s", "p"]) fireEvent.keyDown(input, { key });
+	input.remove();
+	for (const key of ["n", "s", "p"]) fireEvent.keyDown(document, { key });
+	await Promise.resolve();
+	expect(screen.getByRole("dialog")).toHaveTextContent("Item A00001");
+	expect(screen.queryByText("Scan asset tag")).toBeNull();
+	expect(mockPrint).not.toHaveBeenCalled();
+});
+
+test("the toolbar buttons name their keys in a chip while peeking", () => {
+	itemsData.current = [chairItem];
+	renderAtWithHistory("/inventory");
+	const keys = [
+		[/New item/, "N"],
+		[/Scan QR/, "S"],
+		[/Print inventory list/, "P"],
+	] as const;
+	for (const [name, key] of keys) {
+		const button = screen.getByRole("button", { name });
+		expect(button).toHaveAttribute("aria-keyshortcuts", key);
+		expect(button.querySelector("kbd")).toBeNull();
+	}
+	fireEvent.click(screen.getByRole("button", { name: /show keyboard/i }));
+	for (const [name] of keys) {
+		expect(
+			screen.getByRole("button", { name }).querySelector("kbd")
+		).not.toBeNull();
+	}
+});
+
+test("the type and category buttons name their keys in a chip while peeking", () => {
+	renderAtWithHistory("/inventory?tab=types");
+	const add = screen.getByRole("button", { name: /New item type/ });
+	expect(add).toHaveAttribute("aria-keyshortcuts", "Y");
+	fireEvent.click(screen.getByRole("button", { name: /show keyboard/i }));
+	expect(add.querySelector("kbd")).not.toBeNull();
+	cleanup();
+
+	renderAtWithHistory("/inventory?tab=categories");
+	const addCategory = screen.getByRole("button", { name: /New category/ });
+	expect(addCategory).toHaveAttribute("aria-keyshortcuts", "G");
+});
+
+test("the items tab hands its batch keys no focus while the scanner is open", async () => {
+	hangUntilAbort();
+	renderAtWithHistory("/inventory");
+	const tab = screen.getByText("items-tab");
+	expect(tab).toHaveAttribute("data-active", "true");
+	fireEvent.click(screen.getByRole("button", { name: /Scan QR/ }));
+	await screen.findByText("Scan asset tag");
+	expect(tab).toHaveAttribute("data-active", "false");
 });

@@ -1,20 +1,17 @@
-import {
-	Button,
-	EmptyState,
-	FloatingToolbar,
-	Icon,
-	Table,
-} from "@j-os/design-system";
+import { EmptyState, FloatingToolbar, Table } from "@j-os/design-system";
 
 import { api } from "../../../convex/_generated/api";
 import type { Doc } from "../../../convex/_generated/dataModel";
 import { Can } from "../../lib/ability.tsx";
+import { ActionButton } from "../../shared/actions/ActionButton.tsx";
+import { PAGE_TARGET } from "../../shared/actions/shortcuts.ts";
 import { useQuery } from "../../shared/data/useQuery.ts";
 import { createEntitySelection } from "../../shared/entity/createEntitySelection.ts";
 import { useRowPrefetch } from "../../shared/entity/useRowPrefetch.ts";
 import { ICONS } from "../../shared/icons.ts";
 
 import { eventsEntity } from "./entity.ts";
+import { createEventsPageActions } from "./eventActions.ts";
 import { EVENTS_DEFAULT_SORT, eventColumns } from "./eventColumns.tsx";
 import { EventSheet } from "./EventSheet.tsx";
 import styles from "./EventsPage.module.scss";
@@ -44,14 +41,17 @@ export function EventsPage() {
 		param: "event",
 	});
 
+	const newEvent = createEventsPageActions({
+		openCreate,
+		isSheetOpen: open,
+	});
+
 	return (
 		<div class={styles.console}>
 			<div class={styles.bar}>
 				<Can I="create" the="Events">
 					<FloatingToolbar>
-						<Button onClick={openCreate}>
-							<Icon>{ICONS.add}</Icon> New event
-						</Button>
+						<ActionButton action={newEvent} target={PAGE_TARGET} />
 					</FloatingToolbar>
 				</Can>
 			</div>

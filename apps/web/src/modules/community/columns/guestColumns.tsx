@@ -7,6 +7,10 @@ import {
 import { For } from "solid-js";
 
 import type { PersonRow } from "../../../../convex/people.ts";
+import {
+	RowActionButton,
+	RowActions,
+} from "../../../shared/actions/RowActions.tsx";
 import { SHORT_TEXT_SIZE } from "../../../shared/columnSizes.ts";
 import { formatDistance } from "../../../shared/time.ts";
 import { useGuestActions } from "../actions/guestActions.ts";
@@ -18,7 +22,6 @@ import { flagsColumn } from "./flagsColumn.tsx";
 import { hostValue } from "./hostOptions.ts";
 import { HostSelectCell } from "./HostSelectCell.tsx";
 import { joinedColumn } from "./joinedColumn.ts";
-import { RowActionButton, RowActions } from "./RowActions.tsx";
 import { ventureColumns } from "./ventureColumns.tsx";
 
 /** Guests tab grouping, straight off the machine's stage. A guest who left of

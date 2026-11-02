@@ -1,15 +1,14 @@
-import { Sheet, IconButton } from "@j-os/design-system";
+import { Sheet } from "@j-os/design-system";
 import { Show, type JSX } from "solid-js";
 
 import type { SheetNavState } from "../../lib/createSheetNav.ts";
-import { ICONS } from "../icons.ts";
 
 import { EntitySheetNav } from "./EntitySheetNav.tsx";
 
 /** The title, the save status, prev/next (or, in a peek, the link to the
- *  entity's page), the caller's own actions (its `Delete`, an edit toggle)
+ *  entity's page), the caller's own actions (an edit toggle, a delete)
  *  and close. */
-function Root(props: {
+export function EntitySheetHeader(props: {
 	title: string;
 	loading?: boolean;
 	nav?: SheetNavState;
@@ -32,19 +31,3 @@ function Root(props: {
 		</Sheet.Header>
 	);
 }
-
-/** The delete button for an existing row. */
-function Delete(props: { label: string; onDelete: () => void }): JSX.Element {
-	return (
-		<IconButton
-			tooltipLabel={props.label}
-			onClick={() => {
-				props.onDelete();
-			}}
-		>
-			{ICONS.delete}
-		</IconButton>
-	);
-}
-
-export const EntitySheetHeader = { Root, Delete };

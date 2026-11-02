@@ -11,6 +11,7 @@
 @use "../../styles/animation" as anim;
 @use "../../styles/typography" as typo;
 @use "../MakeField/field.mixins" as field;
+@use "../../styles/utils";
 
 .positioner {
 	inline-size: min-content;
@@ -100,18 +101,15 @@
 /* The trigger paints nothing: it is the field's open/close button and holds
    its value text. It takes the line unless chips replace that text. */
 .trigger {
+	@include utils.bare-button;
+
 	display: flex;
 	flex: 1 1 auto;
 	flex-wrap: nowrap;
 	align-items: center;
 	align-self: stretch;
 	min-inline-size: 0;
-	padding: 0;
-	color: inherit;
 	text-align: start;
-	cursor: pointer;
-	background: none;
-	border: none;
 	outline: none;
 
 	&:empty {
@@ -144,12 +142,9 @@
 }
 
 .clearTrigger {
+	@include utils.bare-button;
+
 	display: flex;
 	flex-wrap: nowrap;
 	align-items: center;
-	padding: 0;
-	color: inherit;
-	cursor: pointer;
-	background: none;
-	border: none;
 }

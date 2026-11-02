@@ -6,6 +6,7 @@ import {
 	itemTypeEntity,
 } from "../../modules/inventory/entity.ts";
 import { perksEntity } from "../../modules/perks/entity.ts";
+import { requestEntity } from "../../modules/perks/requests/requestEntity.ts";
 import { projectEntity, taskEntity } from "../../modules/tasks/entity.ts";
 import type { EntityRow } from "../types.ts";
 
@@ -32,7 +33,10 @@ function erase<Row extends EntityRow>(
  * is who `tasks.list`/`projects.list` answer for. Events are searchable for
  * anyone who can view the Events page, and so are perks: a member finds the
  * ones still running and any ended one their request is still open on, the
- * board every one.
+ * board every one. Perk requests are the board's, and list at most one:
+ * the last request a peek showed while the palette is open (kept until the
+ * palette closes, even once that peek has), else none. The board finds
+ * requests on their own tab.
  */
 export const entityDescriptors: EntityDescriptor<EntityRow>[] = [
 	erase(personEntity),
@@ -40,6 +44,7 @@ export const entityDescriptors: EntityDescriptor<EntityRow>[] = [
 	erase(projectEntity),
 	erase(eventsEntity),
 	erase(perksEntity),
+	erase(requestEntity),
 	erase(itemEntity),
 	erase(itemTypeEntity),
 	erase(categoryEntity),

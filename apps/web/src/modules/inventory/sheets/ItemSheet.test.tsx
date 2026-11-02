@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { ShortcutPeekProvider } from "@j-os/design-system";
 import {
 	cleanup,
 	fireEvent,
@@ -7,6 +8,7 @@ import {
 	waitFor,
 	within,
 } from "@solidjs/testing-library";
+import { createSignal } from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
 
 const { mockCreate, mockUpdate, mockRemove, mockUseItems } = vi.hoisted(() => ({
@@ -55,6 +57,7 @@ vi.mock("../data/inventoryData.ts", () => ({
 }));
 
 import type { Id } from "../../../../convex/_generated/dataModel";
+import { askToDiscard } from "../../../../test-stubs/askToDiscard.ts";
 import {
 	keyedIn,
 	sheetKeys,
@@ -63,6 +66,7 @@ import {
 	titleAround,
 	titleKeyOf,
 } from "../../../../test-stubs/morphKeys.tsx";
+import { ShortcutPeekButton } from "../../../shared/ShortcutPeekButton.tsx";
 import { itemColumns } from "../columns/itemColumns.tsx";
 import type { Item, ItemType } from "../data/inventoryData.ts";
 
@@ -126,14 +130,7 @@ test("a new item with a typed description asks before Escape throws it away", as
 		target: { value: "Meeting room" },
 	});
 	const sheet = screen.getByRole("dialog", { name: "New item" });
-	// Ark hears Escape a moment after the open: press until it asks.
-	await waitFor(() => {
-		if (!screen.queryByRole("dialog", { name: "Discard new item?" }))
-			fireEvent.keyDown(sheet, { key: "Escape" });
-		expect(
-			screen.getByRole("dialog", { name: "Discard new item?" })
-		).toBeInTheDocument();
-	});
+	await askToDiscard(sheet, "Discard new item?");
 	expect(onOpenChange).not.toHaveBeenCalled();
 });
 
@@ -365,4 +362,107 @@ test("morph: the loading skeleton's plain-label rows carry no key", () => {
 	render(() => <ItemSheet open onOpenChange={() => {}} loading />);
 	expect(sheetSkeleton()).toBeInTheDocument();
 	expect(keyedIn(document)).toHaveLength(0);
+});
+
+// --- keys: E unlocks, Delete deletes ---------------------------------------
+
+test("item: E unlocks the fields, once; they start locked", () => {
+	setData([chairType], [chair]);
+	render(() => <ItemSheet open onOpenChange={() => {}} item={chair} />);
+	const name = screen.getByLabelText("Description");
+	expect(name).toHaveAttribute("readonly");
+	fireEvent.keyDown(document, { key: "e" });
+	expect(name).not.toHaveAttribute("readonly");
+	fireEvent.keyDown(document, { key: "e" });
+	expect(name).toHaveAttribute("readonly");
+});
+
+test("item: Delete removes the open row once; typing, a shut sheet and a create form ignore it", async () => {
+	setData([chairType], [chair]);
+	mockRemove.mockResolvedValue(undefined);
+	const [open, setOpen] = createSignal(true);
+	render(() => (
+		<ItemSheet open={open()} onOpenChange={() => {}} item={chair} />
+	));
+
+	const input = screen.getByLabelText("Description");
+	fireEvent.keyDown(input, { key: "Delete" });
+	await Promise.resolve();
+	expect(mockRemove).not.toHaveBeenCalled();
+
+	fireEvent.keyDown(document, { key: "Delete" });
+	await waitFor(() => {
+		expect(mockRemove).toHaveBeenCalledTimes(1);
+	});
+	expect(mockRemove).toHaveBeenCalledWith(chair._id);
+
+	mockRemove.mockClear();
+	setOpen(false);
+	fireEvent.keyDown(document, { key: "Delete" });
+	await Promise.resolve();
+	expect(mockRemove).not.toHaveBeenCalled();
+	cleanup();
+
+	render(() => <ItemSheet open onOpenChange={() => {}} />);
+	fireEvent.keyDown(document, { key: "Delete" });
+	await Promise.resolve();
+	expect(mockRemove).not.toHaveBeenCalled();
+});
+
+test("item: the header Delete and unlock buttons name their keys in a chip while peeking", () => {
+	setData([chairType], [chair]);
+	render(() => (
+		<ShortcutPeekProvider>
+			<ShortcutPeekButton />
+			<ItemSheet open onOpenChange={() => {}} item={chair} />
+		</ShortcutPeekProvider>
+	));
+	const remove = screen.getByRole("button", { name: "Delete item" });
+	const unlock = screen.getByRole("button", { name: "Unlock to edit" });
+	expect(remove).toHaveAttribute("aria-keyshortcuts", "Delete");
+	expect(unlock).toHaveAttribute("aria-keyshortcuts", "E");
+	expect(remove.querySelector("kbd")).toBeNull();
+	fireEvent.click(screen.getByRole("button", { name: /shortcut/i }));
+	expect(remove.querySelector("kbd")).not.toBeNull();
+	expect(unlock.querySelector("kbd")).not.toBeNull();
+});
+
+test("F opens the copy-from dialog on a new item, once; typing, a missing list and an edit ignore it", async () => {
+	setData([chairType], []);
+	render(() => <ItemSheet open onOpenChange={() => {}} />);
+	fireEvent.keyDown(document, { key: "f" });
+	await Promise.resolve();
+	expect(screen.queryByRole("button", { name: "A00001 Chair" })).toBeNull();
+	cleanup();
+
+	setData([chairType], [chair]);
+	render(() => <ItemSheet open onOpenChange={() => {}} />);
+	fireEvent.keyDown(screen.getByLabelText("Description"), { key: "f" });
+	await Promise.resolve();
+	expect(screen.queryByRole("button", { name: "A00001 Chair" })).toBeNull();
+	fireEvent.keyDown(document, { key: "f" });
+	expect(
+		await screen.findByRole("button", { name: "A00001 Chair" })
+	).toBeInTheDocument();
+	cleanup();
+
+	render(() => <ItemSheet open onOpenChange={() => {}} item={chair} />);
+	fireEvent.keyDown(document, { key: "f" });
+	await Promise.resolve();
+	expect(screen.queryByRole("button", { name: "A00001 Chair" })).toBeNull();
+});
+
+test("the Copy from item button names its key in a chip while peeking", () => {
+	setData([chairType], [chair]);
+	render(() => (
+		<ShortcutPeekProvider>
+			<ShortcutPeekButton />
+			<ItemSheet open onOpenChange={() => {}} />
+		</ShortcutPeekProvider>
+	));
+	const copy = screen.getByRole("button", { name: /Copy from item/ });
+	expect(copy).toHaveAttribute("aria-keyshortcuts", "F");
+	expect(copy.querySelector("kbd")).toBeNull();
+	fireEvent.click(screen.getByRole("button", { name: /show keyboard/i }));
+	expect(copy.querySelector("kbd")).not.toBeNull();
 });

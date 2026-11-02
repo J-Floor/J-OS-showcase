@@ -6,6 +6,7 @@ import {
 	parseHotkey,
 } from "@tanstack/solid-hotkeys";
 
+import { MORPH_OF, MORPH_OPENER } from "./morphNames.ts";
 import { ENTITY_ROW } from "./morphPairing.ts";
 import { type ShortcutHint } from "./types.ts";
 import { isTypingTarget } from "./typingTarget.ts";
@@ -83,12 +84,20 @@ function remember(element: HTMLElement | null): void {
 	last = element ? { element, at: Date.now() } : undefined;
 }
 
+/** What activating `element` activates: for an entity's opener
+ *  (`MORPH_OPENER`), the element showing that entity. */
+function activatedBy(element: HTMLElement | null): HTMLElement | null {
+	return element?.hasAttribute(MORPH_OPENER) === true
+		? (element.closest<HTMLElement>(`[${MORPH_OF}]`) ?? element)
+		: element;
+}
+
 function record(event: Event): void {
 	const target = event.target;
 	if (!(target instanceof Element)) return;
 	const acted =
 		(event.type === "keydown" ? activeDescendant(target) : null) ?? target;
-	remember(acted.closest<HTMLElement>(ACTIVATABLE));
+	remember(activatedBy(acted.closest<HTMLElement>(ACTIVATABLE)));
 }
 
 /** Whether `element` names the key `event` pressed. The same matcher the

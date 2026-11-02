@@ -138,6 +138,10 @@ export {
 	type DialogRootProps,
 } from "./components/Dialog/Dialog.tsx";
 export type { OverlayOpenProps } from "./utils/overlayLayer.tsx";
+/** Whether an overlay shown above the one holding the caller (above the
+ *  page, for a caller outside every overlay) covers it: an app's keys, and
+ *  their chips, for what is covered stay quiet. */
+export { useOverlayCovered } from "./utils/overlayLayer.tsx";
 export {
 	Sheet,
 	type SheetBodyProps,
@@ -304,13 +308,18 @@ export {
 } from "./components/Combobox/Combobox.tsx";
 export { Morph, type MorphProps } from "./components/Morph/Morph.tsx";
 export type { OptionRecord } from "./utils/optionCollection.ts";
-export { morphTitle } from "./utils/morphPairing.ts";
+export { morphOpener, morphTitle } from "./utils/morphPairing.ts";
 /**
  * The attributes a morph pairs on, for tests that assert an app marks a
  * column, a sheet row and a card with the same field. App code spreads
  * `morphPart` / `morphTitle` and never writes these itself.
  */
-export { MORPH_KEY, MORPH_OF, MORPH_TITLE } from "./utils/morphNames.ts";
+export {
+	MORPH_KEY,
+	MORPH_OF,
+	MORPH_OPENER,
+	MORPH_TITLE,
+} from "./utils/morphNames.ts";
 export { SHEET_SKELETON } from "./utils/morphPairing.ts";
 /** The row-actions column's id (a test can drop the column by it), and the
  *  width that column needs for a number of icon buttons. */

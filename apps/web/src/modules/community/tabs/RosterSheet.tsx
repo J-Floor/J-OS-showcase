@@ -10,19 +10,19 @@ import {
 
 import type { PersonRow } from "../../../../convex/people.ts";
 import type { SheetNavState } from "../../../lib/createSheetNav.ts";
+import { ActionBar } from "../../../shared/actions/ActionBar.tsx";
+import type { ActionDescriptor } from "../../../shared/actions/shortcuts.ts";
 import { EditToggle } from "../../../shared/components/EditToggle.tsx";
 import { EntitySheetNav } from "../../../shared/entity/EntitySheetNav.tsx";
+import { SheetFooter } from "../../../shared/entity/SheetFooter.tsx";
 import {
-	RosterActionError,
+	rosterActionMessage,
 	setShownPerson,
 } from "../actions/RosterActionError.tsx";
-import type { ActionDescriptor, ShortcutScope } from "../actions/shortcuts.ts";
+import type { ShortcutScope } from "../actions/shortcuts.ts";
 import { personFields } from "../fields.ts";
-import { DecisionBar } from "../sheets/DecisionBar.tsx";
 import { PersonDetail } from "../sheets/PersonDetail.tsx";
 import { PersonDetailPlaceholder } from "../sheets/PersonDetailPlaceholder.tsx";
-
-import styles from "./RosterSheet.module.scss";
 
 /** What goes in the sheet's footer above the decision buttons, given the
  *  person the sheet shows. */
@@ -62,6 +62,9 @@ export function RosterSheet<Row extends PersonRow>(props: {
 	scope: ShortcutScope;
 	/** Rendered above the decision buttons (Applications' score field). */
 	footerLead?: FooterLead;
+	/** The sheet's keys (`ActionKeys`), bound inside it so they yield to
+	 *  what is shown over it. */
+	children?: JSX.Element;
 }): JSX.Element {
 	return (
 		<Sheet.Root
@@ -72,6 +75,7 @@ export function RosterSheet<Row extends PersonRow>(props: {
 				if (!isOpen) props.onClose();
 			}}
 		>
+			{props.children}
 			<Sheet.Header>
 				<PersonTitle
 					isLoading={props.isLoading}
@@ -104,21 +108,18 @@ export function RosterSheet<Row extends PersonRow>(props: {
 			</Sheet.Body>
 			<Show when={props.selected}>
 				{(person) => (
-					<Sheet.Footer>
-						<div class={styles.footer}>
-							{props.footerLead?.(person)}
-							<RosterActionError
-								scope={props.scope}
-								personId={person()._id}
-							/>
-							<div class={styles.footerActions}>
-								<DecisionBar
-									person={person()}
-									actions={props.actions}
-								/>
-							</div>
-						</div>
-					</Sheet.Footer>
+					<SheetFooter
+						lead={props.footerLead?.(person)}
+						error={rosterActionMessage(props.scope, person()._id)}
+					>
+						{/* Every action on offer for the person, none primary:
+						    which decision they deserve is the board's call. */}
+						<ActionBar
+							target={person()}
+							actions={props.actions}
+							hideUnavailable
+						/>
+					</SheetFooter>
 				)}
 			</Show>
 		</Sheet.Root>

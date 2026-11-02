@@ -1,8 +1,7 @@
 import type { Id } from "../../../../convex/_generated/dataModel";
+import type { ActionDescriptor } from "../../../shared/actions/shortcuts.ts";
 import { ICONS } from "../../../shared/icons.ts";
 import type { useOpenAgreement } from "../openAgreement.ts";
-
-import type { ActionDescriptor, ShortcutScope } from "./shortcuts.ts";
 
 /**
  * The "View agreement" row action (`A`), shared by the Members and Guests tabs
@@ -10,16 +9,12 @@ import type { ActionDescriptor, ShortcutScope } from "./shortcuts.ts";
  */
 export function agreementAction<
 	Person extends { _id: Id<"people">; hasAgreement: boolean },
->(
-	agreement: ReturnType<typeof useOpenAgreement>,
-	scope: ShortcutScope
-): ActionDescriptor<Person> {
+>(agreement: ReturnType<typeof useOpenAgreement>): ActionDescriptor<Person> {
 	return {
 		id: "agreement",
 		label: "View agreement",
 		icon: ICONS.agreement,
 		hotkey: "A",
-		scope,
 		can: (person) => person.hasAgreement && !agreement.loading(),
 		// The two reasons AgreementButton has always given, kept apart:
 		// "there is none" and "one is on its way" are different answers.

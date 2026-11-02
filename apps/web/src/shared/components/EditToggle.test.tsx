@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
-import { render, fireEvent, cleanup } from "@solidjs/testing-library";
+import { Sheet } from "@j-os/design-system";
+import { render, fireEvent, cleanup, waitFor } from "@solidjs/testing-library";
 import { HotkeysProvider } from "@tanstack/solid-hotkeys";
+import { createSignal } from "solid-js";
 import { afterEach, expect, test } from "vitest";
 
 import { EditToggle } from "./EditToggle.tsx";
@@ -68,4 +70,32 @@ test("E does nothing while focus is in a text input", () => {
 	document.body.append(field);
 	fireEvent.keyDown(field, { key: "e" });
 	expect(toggled).toBe(0);
+});
+
+test("E does nothing while an overlay covers the toggle, and toggles again once it closes", async () => {
+	let toggled = 0;
+	const [isCovering, setCovering] = createSignal(true);
+	render(() => (
+		<HotkeysProvider defaultOptions={{ hotkey: { ignoreInputs: false } }}>
+			<EditToggle
+				editing={false}
+				enabled
+				onToggle={() => {
+					toggled += 1;
+				}}
+			/>
+			<Sheet.Root open={isCovering()} onOpenChange={() => {}}>
+				<Sheet.Header>
+					<Sheet.Title>Covering sheet</Sheet.Title>
+				</Sheet.Header>
+			</Sheet.Root>
+		</HotkeysProvider>
+	));
+	fireEvent.keyDown(document, { key: "e" });
+	expect(toggled).toBe(0);
+	setCovering(false);
+	await waitFor(() => {
+		fireEvent.keyDown(document, { key: "e" });
+		expect(toggled).toBe(1);
+	});
 });

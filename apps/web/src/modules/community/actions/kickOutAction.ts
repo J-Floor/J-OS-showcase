@@ -1,10 +1,13 @@
 import type { PersonRow } from "../../../../convex/people.ts";
+import type {
+	ActionDescriptor,
+	ActionOutcome,
+} from "../../../shared/actions/shortcuts.ts";
 import { useConfirm } from "../../../shared/confirm.tsx";
 import { ICONS } from "../../../shared/icons.ts";
 
 import { kickOutPrompt, type KickOutKind } from "./kickOutPrompt.ts";
 import { settleRosterAction } from "./RosterActionError.tsx";
-import type { ActionDescriptor, RosterActionOutcome } from "./shortcuts.ts";
 import { useTriage } from "./triage.ts";
 
 /**
@@ -23,7 +26,7 @@ export function useKickOutAction(
 	const confirm = useConfirm();
 	const scope = kind === "guest" ? "guests" : "members";
 
-	async function kickOut(person: PersonRow): Promise<RosterActionOutcome> {
+	async function kickOut(person: PersonRow): Promise<ActionOutcome> {
 		if (await confirm(kickOutPrompt(kind, person)))
 			return settleRosterAction(
 				scope,
@@ -37,7 +40,6 @@ export function useKickOutAction(
 		label: "Kick out",
 		icon: ICONS.kickOut,
 		hotkey: "K",
-		scope,
 		can: rule.can,
 		disabledReason: () => rule.disabledReason,
 		run: (person) => kickOut(person),

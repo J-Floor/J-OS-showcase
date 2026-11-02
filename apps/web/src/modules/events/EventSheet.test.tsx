@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { MORPH_OF, Sheet, ShortcutPeekProvider } from "@j-os/design-system";
+import { MemoryRouter, Route, createMemoryHistory } from "@solidjs/router";
 import {
 	cleanup,
 	fireEvent,
@@ -8,7 +10,7 @@ import {
 	within,
 } from "@solidjs/testing-library";
 import { ConvexError } from "convex/values";
-import { createSignal } from "solid-js";
+import { createSignal, type JSX } from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
 
 afterEach(cleanup);
@@ -42,6 +44,7 @@ vi.mock("convex-solidjs", () => ({
 
 import type { Doc } from "../../../convex/_generated/dataModel";
 import { utcFromLocal } from "../../../convex/lib/time.ts";
+import { askToDiscard } from "../../../test-stubs/askToDiscard.ts";
 import {
 	sheetKeys,
 	sheetSkeleton,
@@ -49,6 +52,7 @@ import {
 } from "../../../test-stubs/morphKeys.tsx";
 import { AbilityProvider, type Role } from "../../lib/ability.tsx";
 import { ConfirmProvider } from "../../shared/confirm.tsx";
+import { ShortcutPeekButton } from "../../shared/ShortcutPeekButton.tsx";
 
 import { eventColumns } from "./eventColumns.tsx";
 import { EventSheet } from "./EventSheet.tsx";
@@ -74,8 +78,25 @@ afterEach(() => {
 	mutateAsync.mockClear();
 });
 
+/** `tree` on the Events page, in a router: an attendee in the sheet opens
+ *  as a peek, through the URL. */
+function renderAtEvents(tree: () => JSX.Element) {
+	const history = createMemoryHistory();
+	history.set({
+		value: "/events?event=event1",
+		scroll: false,
+		replace: true,
+	});
+	const rendered = render(() => (
+		<MemoryRouter history={history}>
+			<Route path="*" component={tree} />
+		</MemoryRouter>
+	));
+	return { ...rendered, history };
+}
+
 function renderSheet(role: Role, props: Record<string, unknown>) {
-	return render(() => (
+	return renderAtEvents(() => (
 		<ConfirmProvider>
 			<AbilityProvider role={role}>
 				<EventSheet open onOpenChange={() => {}} {...props} />
@@ -94,6 +115,24 @@ test("detail (board): shows name, visitor QR download, attendees and delete", ()
 	expect(
 		screen.getByRole("button", { name: /Delete event/ })
 	).toBeInTheDocument();
+});
+
+test("detail (board): an attendee opens their person's peek over the event", async () => {
+	const { history } = renderSheet("board", { event });
+	fireEvent.click(screen.getByRole("button", { name: /Ada Lovelace/ }));
+	await waitFor(() => {
+		expect(history.get()).toContain("open=person%3Ap1");
+	});
+	expect(history.get()).toContain("event=event1");
+});
+
+test("detail (board): an attendee's row morphs as the person", () => {
+	renderSheet("board", { event });
+	expect(
+		screen
+			.getByRole("button", { name: /Ada Lovelace/ })
+			.closest(`[${MORPH_OF}]`)
+	).toHaveAttribute(MORPH_OF, "p1");
 });
 
 test("detail (member): name only — no QR, attendees, delete or edit", () => {
@@ -426,7 +465,7 @@ test("a refused delete shows the reason in the footer and keeps the sheet open",
 test("a refused delete keeps its reason when the live row is replaced by a same-id copy", async () => {
 	mutateAsync.mockRejectedValueOnce(REFUSED);
 	const [live, setLive] = createSignal<Doc<"events">>(event);
-	render(() => (
+	renderAtEvents(() => (
 		<ConfirmProvider>
 			<AbilityProvider role="board">
 				<EventSheet open onOpenChange={() => {}} event={live()} />
@@ -496,11 +535,7 @@ test("create: a typed name asks before Escape throws it away; Discard closes", a
 		target: { value: "Open House" },
 	});
 	const sheet = screen.getByRole("dialog", { name: "New event" });
-	// Ark hears Escape a moment after the open: press until it asks.
-	await waitFor(() => {
-		if (!discardPrompt()) fireEvent.keyDown(sheet, { key: "Escape" });
-		expect(discardPrompt()).toBeInTheDocument();
-	});
+	await askToDiscard(sheet, "Discard new event?");
 	expect(onOpenChange).not.toHaveBeenCalled();
 	fireEvent.click(screen.getByRole("button", { name: "Discard" }));
 	await waitFor(() => {
@@ -540,4 +575,207 @@ test("edit: a rename says Saving… then Changes saved", async () => {
 	await waitFor(() => {
 		expect(status).toHaveTextContent("Changes saved");
 	});
+});
+
+// --- keyboard actions ----------------------------------------------------
+
+/** An input outside the sheet's own, to press a key "while typing". */
+function typingInput(): HTMLInputElement {
+	const input = document.createElement("input");
+	document.body.append(input);
+	return input;
+}
+
+test("Delete opens the delete confirm once for the open event", async () => {
+	renderSheet("board", { event });
+	fireEvent.keyDown(document, { key: "Delete" });
+	await screen.findByText("Delete event?");
+	expect(screen.getAllByText("Delete event?")).toHaveLength(1);
+	expect(mutateAsync).not.toHaveBeenCalled();
+});
+
+test("Delete leaves the event alone under an attendee's peek, and answers again once it closes", async () => {
+	const [isPeekOpen, setPeekOpen] = createSignal(true);
+	renderAtEvents(() => (
+		<ConfirmProvider>
+			<AbilityProvider role="board">
+				<EventSheet open onOpenChange={() => {}} event={event} />
+				{/* Stands in for the person's peek, a sheet over this one. */}
+				<Sheet.Root open={isPeekOpen()} onOpenChange={() => {}}>
+					<Sheet.Header>
+						<Sheet.Title>Ada Lovelace</Sheet.Title>
+					</Sheet.Header>
+				</Sheet.Root>
+			</AbilityProvider>
+		</ConfirmProvider>
+	));
+	fireEvent.keyDown(document, { key: "Delete" });
+	await new Promise((resolve) => {
+		setTimeout(resolve, 0);
+	});
+	expect(screen.queryByText("Delete event?")).toBeNull();
+	setPeekOpen(false);
+	await waitFor(() => {
+		expect(
+			screen.queryByRole("dialog", { name: "Ada Lovelace" })
+		).toBeNull();
+	});
+	fireEvent.keyDown(document, { key: "Delete" });
+	await screen.findByText("Delete event?");
+});
+
+test("Delete is ignored while typing", async () => {
+	renderSheet("board", { event });
+	const input = typingInput();
+	fireEvent.keyDown(input, { key: "Delete" });
+	input.remove();
+	await Promise.resolve();
+	expect(screen.queryByText("Delete event?")).toBeNull();
+});
+
+test("Delete is ignored while the sheet is shut", async () => {
+	renderSheet("board", { event, open: false });
+	fireEvent.keyDown(document, { key: "Delete" });
+	await Promise.resolve();
+	expect(screen.queryByText("Delete event?")).toBeNull();
+});
+
+test("Delete is ignored for a member", async () => {
+	renderSheet("member", { event });
+	fireEvent.keyDown(document, { key: "Delete" });
+	await Promise.resolve();
+	expect(screen.queryByText("Delete event?")).toBeNull();
+});
+
+test("a delete refused by key shows in the footer, survives a same-id copy and clears for another event", async () => {
+	mutateAsync.mockRejectedValueOnce(REFUSED);
+	const [live, setLive] = createSignal<Doc<"events">>(event);
+	renderAtEvents(() => (
+		<ConfirmProvider>
+			<AbilityProvider role="board">
+				<EventSheet open onOpenChange={() => {}} event={live()} />
+			</AbilityProvider>
+		</ConfirmProvider>
+	));
+	fireEvent.keyDown(document, { key: "Delete" });
+	await screen.findByText("Delete event?");
+	const footer = screen.getByRole("button", {
+		name: /Cancel/,
+		hidden: true,
+	}).parentElement!;
+	fireEvent.click(
+		within(footer).getByRole("button", { name: /Delete/, hidden: true })
+	);
+	expect(await screen.findByText("You can't do that.")).toBeInTheDocument();
+
+	setLive((previous) => ({ ...previous, name: "Open House (live)" }));
+	await Promise.resolve();
+	expect(screen.getByText("You can't do that.")).toBeInTheDocument();
+
+	setLive((previous) => ({ ...previous, _id: "event2" }) as never);
+	await waitFor(() => {
+		expect(screen.queryByText("You can't do that.")).toBeNull();
+	});
+});
+
+test("Delete confirmed by key deletes the event and closes the sheet", async () => {
+	const onOpenChange = vi.fn();
+	renderSheet("board", { event, onOpenChange });
+	fireEvent.keyDown(document, { key: "Delete" });
+	await screen.findByText("Delete event?");
+	const footer = screen.getByRole("button", {
+		name: /Cancel/,
+		hidden: true,
+	}).parentElement!;
+	fireEvent.click(
+		within(footer).getByRole("button", { name: /Delete/, hidden: true })
+	);
+	await waitFor(() => {
+		expect(mutateAsync).toHaveBeenCalledWith({ eventId: "event1" });
+	});
+	await waitFor(() => {
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+	});
+});
+
+test("the Delete button names its key in a chip while peeking", () => {
+	renderAtEvents(() => (
+		<ShortcutPeekProvider>
+			<ShortcutPeekButton />
+			<ConfirmProvider>
+				<AbilityProvider role="board">
+					<EventSheet open onOpenChange={() => {}} event={event} />
+				</AbilityProvider>
+			</ConfirmProvider>
+		</ShortcutPeekProvider>
+	));
+	const remove = screen.getByRole("button", { name: /Delete event/ });
+	expect(remove).toHaveAttribute("aria-keyshortcuts", "Delete");
+	expect(remove.querySelector("kbd")).toBeNull();
+	fireEvent.click(screen.getByRole("button", { name: /shortcut/i }));
+	expect(remove.querySelector("kbd")).not.toBeNull();
+});
+
+async function fillCreateForm(): Promise<void> {
+	fireEvent.input(screen.getByLabelText("Name"), {
+		target: { value: "Autumn Mixer" },
+	});
+	await pasteDate("Starts", "2026-11-03");
+	await pasteDate("Ends", "2026-11-05");
+	await waitFor(() => {
+		expect(
+			screen.getByRole("button", { name: /^Create/ })
+		).not.toBeDisabled();
+	});
+}
+
+test("Mod+Enter creates the event from a filled form, once", async () => {
+	renderSheet("board", {});
+	await fillCreateForm();
+	fireEvent.keyDown(document, { key: "Enter", ctrlKey: true });
+	await waitFor(() => {
+		expect(mutateAsync).toHaveBeenCalledTimes(1);
+	});
+});
+
+test("Mod+Enter creates the event from inside a field: it types nothing", async () => {
+	renderSheet("board", {});
+	await fillCreateForm();
+	fireEvent.keyDown(screen.getByLabelText("Name"), {
+		key: "Enter",
+		ctrlKey: true,
+	});
+	await waitFor(() => {
+		expect(mutateAsync).toHaveBeenCalledTimes(1);
+	});
+});
+
+test("Mod+Enter does nothing on an incomplete form, or when shut", async () => {
+	renderSheet("board", {});
+	fireEvent.keyDown(screen.getByLabelText("Name"), {
+		key: "Enter",
+		ctrlKey: true,
+	});
+	cleanup();
+	renderSheet("board", { open: false });
+	fireEvent.keyDown(document, { key: "Enter", ctrlKey: true });
+	await Promise.resolve();
+	expect(mutateAsync).not.toHaveBeenCalled();
+});
+
+test("the Create button names its key in a chip while peeking", () => {
+	renderAtEvents(() => (
+		<ShortcutPeekProvider>
+			<ShortcutPeekButton />
+			<ConfirmProvider>
+				<AbilityProvider role="board">
+					<EventSheet open onOpenChange={() => {}} />
+				</AbilityProvider>
+			</ConfirmProvider>
+		</ShortcutPeekProvider>
+	));
+	const create = screen.getByRole("button", { name: /^Create/ });
+	expect(create.querySelector("kbd")).toBeNull();
+	fireEvent.click(screen.getByRole("button", { name: /shortcut/i }));
+	expect(create.querySelector("kbd")).not.toBeNull();
 });

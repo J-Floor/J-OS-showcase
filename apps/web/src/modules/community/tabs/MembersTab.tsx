@@ -5,10 +5,13 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import type { StateId } from "../../../../convex/lib/lifecycleTypes.ts";
 import { invariant } from "../../../../convex/lib/result.ts";
 import type { PersonRow } from "../../../../convex/people.ts";
+import {
+	eligible,
+	type ActionDescriptor,
+} from "../../../shared/actions/shortcuts.ts";
 import { ICONS } from "../../../shared/icons.ts";
 import { ChangeRoleDialog } from "../actions/ChangeRoleDialog.tsx";
 import { useMemberActions } from "../actions/memberActions.ts";
-import { eligible, type ActionDescriptor } from "../actions/shortcuts.ts";
 import { useTriage } from "../actions/triage.ts";
 import {
 	applyMove,

@@ -1,13 +1,8 @@
 // @vitest-environment happy-dom
-import {
-	cleanup,
-	fireEvent,
-	render,
-	screen,
-	waitFor,
-} from "@solidjs/testing-library";
+import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
+import { askToDiscard } from "../../../../test-stubs/askToDiscard.ts";
 import { sheetSkeleton } from "../../../../test-stubs/morphKeys.tsx";
 
 afterEach(cleanup);
@@ -122,14 +117,7 @@ test("create: a typed title asks before Escape throws it away", async () => {
 		target: { value: "Fix the bug" },
 	});
 	const sheet = screen.getByRole("dialog", { name: "New task" });
-	// Ark hears Escape a moment after the open: press until it asks.
-	await waitFor(() => {
-		if (!screen.queryByRole("dialog", { name: "Discard new task?" }))
-			fireEvent.keyDown(sheet, { key: "Escape" });
-		expect(
-			screen.getByRole("dialog", { name: "Discard new task?" })
-		).toBeInTheDocument();
-	});
+	await askToDiscard(sheet, "Discard new task?");
 	expect(onOpenChange).not.toHaveBeenCalled();
 });
 

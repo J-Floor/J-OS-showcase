@@ -1,5 +1,8 @@
 // @vitest-environment happy-dom
-import { setDeferredImmediate } from "@j-os/design-system";
+import {
+	ShortcutPeekProvider,
+	setDeferredImmediate,
+} from "@j-os/design-system";
 import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
 import { getFunctionName } from "convex/server";
 import { ConvexError } from "convex/values";
@@ -42,6 +45,7 @@ vi.mock("convex-solidjs", () => ({
 }));
 
 import { AbilityProvider, type Role } from "../../lib/ability.tsx";
+import { ShortcutPeekButton } from "../../shared/ShortcutPeekButton.tsx";
 
 import { WifiCard } from "./WifiCard.tsx";
 
@@ -156,4 +160,119 @@ test("shows no skeleton once the credentials are here", () => {
 	const { container } = renderAs("member");
 	expect(container.querySelector("[data-wifi-skeleton]")).toBeNull();
 	expect(screen.getByText("J floor")).toBeInTheDocument();
+});
+
+// Keys. Edit, Save and Cancel live only while the card is active.
+
+function renderActive(role: Role) {
+	return render(() => (
+		<ShortcutPeekProvider>
+			<ShortcutPeekButton />
+			<AbilityProvider role={role}>
+				<WifiCard active />
+			</AbilityProvider>
+		</ShortcutPeekProvider>
+	));
+}
+
+const MOD_ENTER = { key: "Enter", ctrlKey: true };
+
+test("E opens the edit form for the board, once", () => {
+	renderActive("board");
+	fireEvent.keyDown(document, { key: "e" });
+	expect(screen.getByLabelText("Network name")).toBeInTheDocument();
+	// Typing an "e" into a field is not a second press.
+	fireEvent.keyDown(screen.getByLabelText("Network name"), { key: "e" });
+	expect(screen.getByLabelText("Network name")).toBeInTheDocument();
+});
+
+test("E does nothing for a member, while typing or while the card is inactive", () => {
+	renderActive("member");
+	fireEvent.keyDown(document, { key: "e" });
+	expect(screen.queryByLabelText("Network name")).not.toBeInTheDocument();
+	cleanup();
+	renderAs("board");
+	fireEvent.keyDown(document, { key: "e" });
+	expect(screen.queryByLabelText("Network name")).not.toBeInTheDocument();
+	cleanup();
+	render(() => (
+		<AbilityProvider role="board">
+			<input aria-label="note" />
+			<WifiCard active />
+		</AbilityProvider>
+	));
+	fireEvent.keyDown(screen.getByLabelText("note"), { key: "e" });
+	expect(screen.queryByLabelText("Network name")).not.toBeInTheDocument();
+});
+
+test("Mod+Enter saves from inside a field, once", () => {
+	renderActive("board");
+	fireEvent.keyDown(document, { key: "e" });
+	const ssid = screen.getByLabelText("Network name");
+	fireEvent.input(ssid, { target: { value: "New network" } });
+	fireEvent.keyDown(ssid, MOD_ENTER);
+	expect(updateWifiMutate).toHaveBeenCalledTimes(1);
+	expect(updateWifiMutate).toHaveBeenCalledWith({
+		ssid: "New network",
+		password: "test-wifi-password",
+	});
+	fireEvent.keyDown(ssid, { ...MOD_ENTER, repeat: true });
+	expect(updateWifiMutate).toHaveBeenCalledTimes(1);
+});
+
+test("Mod+Enter saves nothing while the form is shut or the card is inactive", () => {
+	renderActive("board");
+	fireEvent.keyDown(document, MOD_ENTER);
+	expect(updateWifiMutate).not.toHaveBeenCalled();
+	cleanup();
+	renderAs("board");
+	fireEvent.click(screen.getByRole("button", { name: /^Edit/ }));
+	fireEvent.keyDown(screen.getByLabelText("Network name"), MOD_ENTER);
+	expect(updateWifiMutate).not.toHaveBeenCalled();
+});
+
+test("Escape cancels the edit from inside a field, without saving", () => {
+	renderActive("board");
+	fireEvent.keyDown(document, { key: "e" });
+	const ssid = screen.getByLabelText("Network name");
+	fireEvent.input(ssid, { target: { value: "Typed" } });
+	fireEvent.keyDown(ssid, { key: "Escape" });
+	expect(screen.queryByLabelText("Network name")).not.toBeInTheDocument();
+	expect(screen.getByText("J floor")).toBeInTheDocument();
+	expect(updateWifiMutate).not.toHaveBeenCalled();
+});
+
+test("Edit, Cancel and Save name their keys, in a chip while peeking", () => {
+	renderActive("board");
+	const edit = screen.getByRole("button", { name: /^Edit/ });
+	expect(edit).toHaveAttribute("aria-keyshortcuts", "E");
+	expect(edit.querySelector("kbd")).toBeNull();
+	fireEvent.click(screen.getByRole("button", { name: /shortcut/i }));
+	expect(edit.querySelector("kbd")).not.toBeNull();
+	fireEvent.keyDown(document, { key: "e" });
+	const save = screen.getByRole("button", { name: /Save/ });
+	expect(save).toHaveAttribute("aria-keyshortcuts", "Control+Enter");
+	expect(save.querySelector("kbd")).not.toBeNull();
+	expect(
+		screen.getByRole("button", { name: /Cancel/ }).querySelector("kbd")
+	).not.toBeNull();
+});
+
+test("Save and Cancel keys leave an open dialog's keyboard to it", () => {
+	renderActive("board");
+	fireEvent.keyDown(document, { key: "e" });
+	const dialog = document.createElement("div");
+	dialog.setAttribute("role", "dialog");
+	dialog.setAttribute("data-state", "open");
+	const inside = document.createElement("button");
+	dialog.append(inside);
+	document.body.append(dialog);
+	try {
+		fireEvent.keyDown(inside, { key: "Escape" });
+		fireEvent.keyDown(inside, MOD_ENTER);
+		expect(screen.getByLabelText("Network name")).toBeInTheDocument();
+		expect(updateWifiMutate).not.toHaveBeenCalled();
+	} finally {
+		dialog.remove();
+	}
 });

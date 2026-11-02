@@ -1,4 +1,4 @@
-import { Button, TextArea } from "@j-os/design-system";
+import { Input } from "@j-os/design-system";
 import type { FunctionArgs } from "convex/server";
 import { useMutation } from "convex-solidjs";
 import { Show, createMemo, createSignal, type Accessor } from "solid-js";
@@ -6,13 +6,12 @@ import { Show, createMemo, createSignal, type Accessor } from "solid-js";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { isPerkExpired } from "../../../convex/lib/perks.ts";
-import { SITE_TIMEZONE } from "../../../convex/lib/time.ts";
 import { TEXT_MAX } from "../../../convex/lib/validate.ts";
 import type { PerkRow } from "../../../convex/perks.ts";
 import { call } from "../../lib/call.ts";
 import { APP_NAME } from "../../lib/constants.ts";
+import type { SettledAction } from "../../shared/actions/shortcuts.ts";
 import { createActionError } from "../../shared/createActionError.ts";
-import { formatDateIn } from "../../shared/time.ts";
 import { toaster } from "../../shared/toaster.ts";
 
 import styles from "./PerkSheet.module.scss";
@@ -55,8 +54,6 @@ export function createPerkRequestForm(options: {
 	const perkId = createMemo(() => options.perk()?._id);
 	const openRequest = useMyOpenRequest(() => perkId());
 	const [note, setNote] = createSignal("");
-	const [noteOpened, setNoteOpened] = createSignal(false);
-	const [submitting, setSubmitting] = createSignal(false);
 	// Keyed on the perk: a refusal for one perk never shows on the next.
 	const { error, trackResult, clear } = createActionError(() => perkId());
 
@@ -75,45 +72,38 @@ export function createPerkRequestForm(options: {
 			openRequest() === undefined
 	);
 
-	async function submit(): Promise<void> {
+	/** Sends the request. `undefined` when nothing was sent (no perk). A
+	 *  second send while one is under way never gets here: the Request
+	 *  action runs through `runAction`, which holds it. */
+	async function submit(): Promise<SettledAction | undefined> {
 		const perk = options.perk();
-		if (perk === undefined || submitting()) return;
-		setSubmitting(true);
+		if (perk === undefined) return undefined;
 		const result = await trackResult(
 			call(
 				requestPerk.mutateAsync(requestArgs(perk._id, note())),
 				"Could not send the request."
 			)
 		);
-		setSubmitting(false);
-		if (result.isErr()) return;
+		if (result.isErr()) return { refused: true };
 		setNote("");
-		setNoteOpened(false);
 		toaster.create({
 			type: "success",
 			title: sentMessage(perk.contactFirstName),
 		});
+		return { refused: false };
 	}
 
 	return {
 		note,
 		setNote,
-		submitting,
 		error,
 		submit,
 		openRequest,
 		isExpired,
 		canWriteNote,
-		/** The field shows, not the "Add a note" button: it was opened, or
-		 *  holds text. */
-		isNoteShown: () => noteOpened() || note() !== "",
-		openNote() {
-			setNoteOpened(true);
-		},
-		/** An empty, closed note and no refusal left over. */
+		/** An empty note and no refusal left over. */
 		reset() {
 			setNote("");
-			setNoteOpened(false);
 			clear();
 		},
 	};
@@ -121,19 +111,11 @@ export function createPerkRequestForm(options: {
 
 export type PerkRequestForm = ReturnType<typeof createPerkRequestForm>;
 
-/** The field was opened to be typed in: focus it once it is in the page.
- *  Plain `autofocus` does not fire on a field inserted after page load. */
-function focusOnMount(field: HTMLTextAreaElement): void {
-	queueMicrotask(() => {
-		field.focus();
-	});
-}
-
-/** The footer's note, right above the Request button. While the viewer has
- *  an open request that carried a note, the note as it was sent, read-only.
- *  Otherwise, closed and empty it is a tertiary "Add a note" button, so a
- *  request with no note stays one click; opened it is the field. Nothing
- *  for an open request without a note. */
+/** The footer's note, above the actions. While the viewer has an open
+ *  request that carried a note, the note as it was sent, read-only.
+ *  Otherwise, while they can still request, a one-line field: notes are
+ *  short, and a request with no note needs no click to skip it. Nothing for
+ *  an open request without a note. */
 export function PerkRequestNote(props: {
 	form: PerkRequestForm;
 	perk: Accessor<PerkRow>;
@@ -141,7 +123,7 @@ export function PerkRequestNote(props: {
 	return (
 		<Show
 			when={props.form.openRequest()?.note}
-			fallback={<NoteComposer form={props.form} perk={props.perk} />}
+			fallback={<NoteField form={props.form} perk={props.perk} />}
 		>
 			{(sent) => (
 				<div class={styles.sentNote}>
@@ -153,68 +135,19 @@ export function PerkRequestNote(props: {
 	);
 }
 
-/** The optional note being written, or the button that opens it. */
-function NoteComposer(props: {
-	form: PerkRequestForm;
-	perk: Accessor<PerkRow>;
-}) {
+/** The optional note being written. */
+function NoteField(props: { form: PerkRequestForm; perk: Accessor<PerkRow> }) {
 	return (
 		<Show when={props.form.canWriteNote()}>
-			<Show
-				when={props.form.isNoteShown()}
-				fallback={
-					<Button
-						variant="tertiary"
-						onClick={() => {
-							props.form.openNote();
-						}}
-					>
-						Add a note
-					</Button>
-				}
-			>
-				<TextArea
-					label={`Note for ${props.perk().contactFirstName ?? TEAM_NAME}`}
-					helperText="Optional. Only the board reads it."
-					autoresize
-					ref={focusOnMount}
-					maxLength={TEXT_MAX}
-					value={props.form.note()}
-					onInput={(value) => {
-						props.form.setNote(value);
-					}}
-				/>
-			</Show>
-		</Show>
-	);
-}
-
-/** The footer's Request button. While a request is open it says when it
- *  went, which needs no further reason; on an expired perk it says why it
- *  is off. */
-export function PerkRequestButton(props: { form: PerkRequestForm }) {
-	return (
-		<Show
-			when={props.form.openRequest()}
-			fallback={
-				<Button
-					disabled={props.form.isExpired()}
-					disabledReason="This perk has expired"
-					isLoading={props.form.submitting()}
-					onClick={() => {
-						void props.form.submit();
-					}}
-				>
-					Request perk
-				</Button>
-			}
-		>
-			{(request) => (
-				<Button disabled shamefullyOmitDisabledReason>
-					Requested on{" "}
-					{formatDateIn(request().requestedAt, SITE_TIMEZONE)}
-				</Button>
-			)}
+			<Input
+				label={`Note for ${props.perk().contactFirstName ?? TEAM_NAME}`}
+				placeholder="Optional. Only the board reads it."
+				maxLength={TEXT_MAX}
+				value={props.form.note()}
+				onInput={(event) => {
+					props.form.setNote(event.currentTarget.value);
+				}}
+			/>
 		</Show>
 	);
 }

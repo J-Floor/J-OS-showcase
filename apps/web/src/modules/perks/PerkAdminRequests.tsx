@@ -6,6 +6,8 @@ import type { PerkRequestRow } from "../../../convex/perkRequests.ts";
 import type { PerkRow } from "../../../convex/perks.ts";
 import { PersonListItem } from "../../shared/components/PersonListItem.tsx";
 import { useQuery } from "../../shared/data/useQuery.ts";
+import { warmPeek } from "../../shared/entity/lazyPeek.tsx";
+import { useOpenPeek } from "../../shared/entity/openEntity.ts";
 import { SheetSection } from "../../shared/entity/SheetSection.tsx";
 import { formatDateIn } from "../../shared/time.ts";
 
@@ -13,17 +15,27 @@ import styles from "./PerkAdminRequests.module.scss";
 import { PerkRequestStatusSelect } from "./PerkRequestStatusSelect.tsx";
 import sheetStyles from "./PerkSheet.module.scss";
 import { perkRequestsForPerkQuery } from "./queries.ts";
+import { requestEntity } from "./requests/requestEntity.ts";
 
 /** One request: who asked and when, what they wrote, and its status, which
- *  the board moves from here. */
+ *  the board moves from here. Who asked opens the request's own sheet, over
+ *  the perk's, morphing out of the item. */
 function RequestItem(props: {
 	request: Accessor<PerkRequestRow>;
 }): JSX.Element {
+	const openPeek = useOpenPeek();
 	return (
 		<li class={styles.request}>
 			<PersonListItem
 				name={props.request().requesterName}
 				detail={props.request().requesterEmail}
+				open={() => {
+					openPeek(requestEntity, props.request()._id);
+				}}
+				warm={() => {
+					warmPeek(requestEntity);
+				}}
+				morphOf={props.request()._id}
 			>
 				<span class={styles.requested}>
 					Requested{" "}

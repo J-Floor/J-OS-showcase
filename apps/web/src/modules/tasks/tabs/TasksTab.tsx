@@ -12,9 +12,16 @@ import {
 	ASSIGNEE_FILTER_ME,
 	filterTasksByAssignee,
 } from "../data/taskHelpers.ts";
-import { useCurrentPerson, useProjects, useTasks } from "../data/tasksData.tsx";
+import {
+	useCurrentPerson,
+	useProjects,
+	useTaskActions,
+	useTasks,
+} from "../data/tasksData.tsx";
 import { KanbanBoard } from "../kanban/KanbanBoard.tsx";
+import { createCardSelection } from "../kanban/kanbanInteraction.ts";
 import type { TaskStatus } from "../kanban/onDrop.ts";
+import { createTasksPageActions } from "../pageActions.ts";
 import { TaskSheet } from "../sheets/TaskSheet.tsx";
 import { TasksTabActions } from "../TasksTabActions.tsx";
 
@@ -74,6 +81,19 @@ function useVisibleTasks(options: { assigneeFilter: () => string }) {
 	};
 }
 
+/** Closes the tab's sheet once the tab is no longer the one on screen. */
+function createCloseOnLeave(isActive: () => boolean, close: () => void): void {
+	createEffect(
+		on(
+			isActive,
+			(isActiveNow) => {
+				if (!isActiveNow) close();
+			},
+			{ defer: true }
+		)
+	);
+}
+
 export function TasksTab(props: {
 	/** Whether the Tasks tab is the one on screen — gates the `?task=`
 	 *  read/write side of the entity selection below. */
@@ -108,15 +128,7 @@ export function TasksTab(props: {
 	// clear its own URL param on the way out; the page does that (it owns both
 	// tabs' params). This just drops the LOCAL open/selected state so the
 	// sheet doesn't linger, hidden, behind the tab that's now on screen.
-	createEffect(
-		on(
-			() => props.active(),
-			(active) => {
-				if (!active) close();
-			},
-			{ defer: true }
-		)
-	);
+	createCloseOnLeave(() => props.active(), close);
 
 	// Status the create sheet opens with (a column "+" prefills its own status;
 	// the big CTA uses backlog). Nothing is created until the user hits Create.
@@ -136,6 +148,16 @@ export function TasksTab(props: {
 		openCreate();
 	}
 
+	const newTask = createTasksPageActions({
+		openNew: () => {
+			addToColumn("backlog");
+		},
+		isIdle: () => props.active() && !open(),
+	});
+	// The board's selected cards, held here so the tab bar can carry their
+	// Delete.
+	const cards = createCardSelection(useTaskActions());
+
 	return (
 		<div class={styles.tab}>
 			<Tabs.Actions value="tasks">
@@ -143,9 +165,8 @@ export function TasksTab(props: {
 					options={assigneeOptions}
 					assignee={assignee}
 					onAssigneeChange={setAssignee}
-					onNewTask={() => {
-						addToColumn("backlog");
-					}}
+					newTask={newTask}
+					bulkDelete={cards.bulkDelete}
 				/>
 			</Tabs.Actions>
 			<KanbanBoard
@@ -155,6 +176,7 @@ export function TasksTab(props: {
 				onCardClick={openRow}
 				onCardHoverIntent={selection.intend}
 				onAddTask={addToColumn}
+				cards={cards}
 			/>
 			<TaskSheet
 				open={open()}

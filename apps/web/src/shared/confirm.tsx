@@ -29,13 +29,29 @@ function autoConfirm(): Promise<boolean> {
 	return Promise.resolve(true);
 }
 
-const ConfirmContext = createContext<Confirm>(autoConfirm);
+/** The shared dialog's ask, and whether a question waits for its answer. */
+type ConfirmContextValue = { confirm: Confirm; isAsking: () => boolean };
+
+const ConfirmContext = createContext<ConfirmContextValue>({
+	confirm: autoConfirm,
+	isAsking: () => false,
+});
 
 /** Returns an async `confirm(options)` that resolves true if the user confirms,
  * false if they cancel/dismiss. Under a {@link ConfirmProvider} it opens the
  * shared dialog; without one it auto-confirms. */
 export function useConfirm(): Confirm {
-	return useContext(ConfirmContext);
+	return useContext(ConfirmContext).confirm;
+}
+
+/**
+ * Whether a question has been asked and not answered yet: true from the
+ * `confirm` call on, before its dialog is shown (the dialog opens through a
+ * morph, which shows it only once the browser has captured the page).
+ * Reactive. Without a provider, never: the ask answers itself.
+ */
+export function useConfirmAsking(): () => boolean {
+	return useContext(ConfirmContext).isAsking;
 }
 
 /**
@@ -51,6 +67,9 @@ export function ConfirmProvider(props: ParentProps): JSX.Element {
 	let confirmReference: HTMLElement | undefined;
 
 	function confirm(options: ConfirmOptions): Promise<boolean> {
+		// One question at a time: a second ask (a double press of Delete)
+		// would replace the open one and leave its caller waiting forever.
+		if (resolver !== null) return Promise.resolve(false);
 		setOptions(options);
 		setOpen(true);
 		return new Promise<boolean>((resolve) => {
@@ -65,7 +84,7 @@ export function ConfirmProvider(props: ParentProps): JSX.Element {
 	}
 
 	return (
-		<ConfirmContext.Provider value={confirm}>
+		<ConfirmContext.Provider value={{ confirm, isAsking: open }}>
 			{props.children}
 			<Dialog.Root
 				open={open()}

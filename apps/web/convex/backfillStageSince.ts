@@ -63,7 +63,9 @@ async function recover(
 ): Promise<Recovered> {
 	const events = await context.db
 		.query("personEvents")
-		.withIndex("by_person", (range) => range.eq("personId", person._id))
+		.withIndex("by_personId_and_at", (range) =>
+			range.eq("personId", person._id)
+		)
 		.collect();
 
 	const state = stateOf(person);

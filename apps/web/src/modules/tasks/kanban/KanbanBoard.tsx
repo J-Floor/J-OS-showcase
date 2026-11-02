@@ -25,11 +25,12 @@ import {
 
 import styles from "./KanbanBoard.module.scss";
 import {
-	createBulkDelete,
 	createDropHandler,
 	createGroupDrag,
-	createMarqueeSelection,
 	createStatusOverrides,
+	type BulkDelete,
+	type CardSelection,
+	type MarqueeSelection,
 	type Vec,
 } from "./kanbanInteraction.ts";
 import { TASK_STATUSES, type TaskStatus } from "./onDrop.ts";
@@ -145,10 +146,7 @@ function Column(props: {
 
 /** The confirm dialog for bulk delete; focuses Cancel when it opens (safer
  *  default than Delete/close). */
-function BulkDeleteDialog(props: {
-	count: number;
-	bulkDelete: ReturnType<typeof createBulkDelete>;
-}) {
+function BulkDeleteDialog(props: { count: number; bulkDelete: BulkDelete }) {
 	let cancelElement: HTMLElement | undefined;
 	return (
 		<Dialog.Root
@@ -185,7 +183,7 @@ function BulkDeleteDialog(props: {
 
 /** The rubber-band rectangle while a marquee drag is under way. */
 function MarqueeOutline(props: {
-	marquee: ReturnType<typeof createMarqueeSelection>["marquee"];
+	marquee: MarqueeSelection["marquee"];
 }): JSX.Element {
 	return (
 		<Show when={props.marquee()}>
@@ -212,6 +210,9 @@ type KanbanBoardProps = {
 	/** The pointer rested on a card: its sheet is about to open. */
 	onCardHoverIntent?: (t: Task) => void;
 	onAddTask: (status: TaskStatus) => void;
+	/** The selected cards and their Delete: the tab owns them, so its bar
+	 *  can hold the Delete. */
+	cards: CardSelection;
 };
 
 function Board(props: KanbanBoardProps): JSX.Element {
@@ -220,7 +221,8 @@ function Board(props: KanbanBoardProps): JSX.Element {
 		return props.tasks;
 	}
 	const overrides = createStatusOverrides({ tasks });
-	const selection = createMarqueeSelection();
+	// eslint-disable-next-line solid/reactivity -- created once by the tab
+	const { selection, bulkDelete } = props.cards;
 	const groupDrag = createGroupDrag({ context, selection });
 	const actions = useTaskActions();
 	createDropHandler({
@@ -231,7 +233,6 @@ function Board(props: KanbanBoardProps): JSX.Element {
 		tasks,
 		actions,
 	});
-	const bulkDelete = createBulkDelete({ selection, actions });
 
 	function byStatus(status: TaskStatus): Task[] | undefined {
 		return props.tasks?.filter(

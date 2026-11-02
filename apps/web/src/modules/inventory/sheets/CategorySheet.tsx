@@ -1,12 +1,13 @@
-import { Button, Sheet, createSaveTracker } from "@j-os/design-system";
+import { Sheet, createSaveTracker } from "@j-os/design-system";
 import { Show, createSignal, type JSX } from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { SheetNavState } from "../../../lib/createSheetNav.ts";
 import { createSyncedField } from "../../../lib/createSyncedField.ts";
-import { useConfirm } from "../../../shared/confirm.tsx";
+import { DescriptionField } from "../../../shared/components/DescriptionField.tsx";
+import type { ConfirmOptions } from "../../../shared/confirm.tsx";
 import { createEntityDraft } from "../../../shared/entity/entityCommands.ts";
-import { EntitySheetHeader } from "../../../shared/entity/EntitySheetHeader.tsx";
+import { SheetCreateFooter } from "../../../shared/entity/SheetCreateFooter.tsx";
 import { InlineError } from "../../../shared/InlineError.tsx";
 import type { SheetOpenProps } from "../../../shared/types.ts";
 import type { Category, CategoryPatch } from "../data/inventoryData.ts";
@@ -16,10 +17,21 @@ import {
 } from "../data/inventoryData.ts";
 import { categoryFields } from "../fields.ts";
 
-import { FieldsPlaceholder } from "./FieldsPlaceholder.tsx";
 import { createInventoryCommands } from "./inventoryCommands.ts";
-import { DescriptionValue, NameField } from "./InventoryForm.tsx";
+import { NameField } from "./InventoryForm.tsx";
 import { RelatedListSection } from "./RelatedListSection.tsx";
+import {
+	createInventorySheetActions,
+	InventorySheetHeader,
+} from "./SheetHeaderActions.tsx";
+
+const DELETE_CATEGORY_CONFIRM: ConfirmOptions = {
+	title: "Delete this category?",
+	message:
+		"This can't be undone. Item types that still use it will block the delete.",
+	confirmLabel: "Delete",
+	tone: "danger",
+};
 
 type CategorySheetProps = SheetOpenProps & {
 	category?: Category;
@@ -34,7 +46,6 @@ type CategorySheetProps = SheetOpenProps & {
  *  create and delete it. */
 function createCategoryForm(props: CategorySheetProps) {
 	const actions = useCategoryActions();
-	const confirm = useConfirm();
 
 	function key() {
 		return `${String(props.open)}:${props.category?._id ?? "new"}`;
@@ -100,19 +111,18 @@ function createCategoryForm(props: CategorySheetProps) {
 				description: description.value().trim() || undefined,
 			});
 		},
-		async deleteCategory() {
-			if (!props.category) return;
-			const isOk = await confirm({
-				title: "Delete this category?",
-				message:
-					"This can't be undone. Item types that still use it will block the delete.",
-				confirmLabel: "Delete",
-				tone: "danger",
-			});
-			if (!isOk) return;
-			await commands.remove(props.category._id);
-		},
+		/** Deletes the open row (asked first, by its Delete). */
+		remove: commands.remove,
 	};
+}
+
+/** The open category's item types. Subscribes only while the sheet is open
+ *  AND an existing (saved) category is selected: closed or create-mode passes
+ *  `undefined`, which `useItemTypesByCategory` treats as "don't subscribe". */
+function useOpenCategoryTypes(props: CategorySheetProps) {
+	return useItemTypesByCategory(() =>
+		props.open && props.category ? props.category._id : undefined
+	);
 }
 
 export function CategorySheet(props: CategorySheetProps): JSX.Element {
@@ -128,12 +138,23 @@ export function CategorySheet(props: CategorySheetProps): JSX.Element {
 		return props.category !== undefined;
 	}
 
-	// Subscribes only while the sheet is open AND an existing (saved)
-	// category is selected — closed or create-mode passes `undefined`, which
-	// `useItemTypesByCategory` treats as "don't subscribe".
-	const typesQuery = useItemTypesByCategory(() =>
-		props.open && props.category ? props.category._id : undefined
-	);
+	const typesQuery = useOpenCategoryTypes(props);
+
+	const actions = createInventorySheetActions({
+		scope: "category-sheet",
+		noun: "category",
+		confirm: DELETE_CATEGORY_CONFIRM,
+		isOpen: () => props.open,
+		isLoading: () => props.loading,
+		row: () => props.category,
+		remove: form.remove,
+		error: form.formError,
+		create: {
+			can: () => form.name.value().trim() !== "",
+			disabledReason: () => "Add a name first",
+			run: () => form.createCategory(),
+		},
+	});
 
 	let nameElement: HTMLInputElement | undefined;
 
@@ -145,34 +166,29 @@ export function CategorySheet(props: CategorySheetProps): JSX.Element {
 			{...form.sheet}
 			initialFocusEl={() => nameElement ?? null}
 		>
-			<EntitySheetHeader.Root
+			<InventorySheetHeader
 				title={props.category?.name ?? "New category"}
 				loading={props.loading}
 				nav={props.nav}
-				saveStatus={isEdit() && !props.loading}
-			>
-				<Show when={isEdit()}>
-					<EntitySheetHeader.Delete
-						label="Delete category"
-						onDelete={() => void form.deleteCategory()}
-					/>
-				</Show>
-			</EntitySheetHeader.Root>
-			<Sheet.Skeleton>
-				<FieldsPlaceholder
-					fields={[categoryFields.name, categoryFields.description]}
-				/>
-			</Sheet.Skeleton>
+				actions={actions}
+				isOpen={props.open}
+				placeholderFields={[
+					categoryFields.name,
+					categoryFields.description,
+				]}
+			/>
 			<Sheet.Body loading={props.loading}>
 				<NameField
 					form={form}
+					locked={actions.isLocked()}
 					ref={(element) => {
 						nameElement = element;
 					}}
 				/>
-				<DescriptionValue
+				<DescriptionField
 					field={categoryFields.description}
 					description={form.description}
+					readOnly={actions.isLocked()}
 				/>
 				<InlineError message={form.formError()} />
 				<Show when={isEdit()}>
@@ -187,19 +203,10 @@ export function CategorySheet(props: CategorySheetProps): JSX.Element {
 					/>
 				</Show>
 			</Sheet.Body>
-			<Show when={!props.loading && !isEdit()}>
-				<Sheet.Footer>
-					<Button
-						disabled={!form.name.value().trim()}
-						disabledReason="Add a name first"
-						onClick={() => {
-							void form.createCategory();
-						}}
-					>
-						Create category
-					</Button>
-				</Sheet.Footer>
-			</Show>
+			<SheetCreateFooter
+				create={actions.create}
+				isCreating={actions.isCreating()}
+			/>
 		</Sheet.Root>
 	);
 }

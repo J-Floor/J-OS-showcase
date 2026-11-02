@@ -1,8 +1,8 @@
 import type { JSX } from "solid-js";
 
 import { Can } from "../../../lib/ability.tsx";
+import { RowActions } from "../../../shared/actions/RowActions.tsx";
 import { EntityQrActions } from "../../../shared/entity/EntityQr.tsx";
-import { RowActions } from "../../community/columns/RowActions.tsx";
 import type { Item } from "../data/inventoryData.ts";
 import { itemEntity } from "../entity.ts";
 

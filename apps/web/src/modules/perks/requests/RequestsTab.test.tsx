@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import "@testing-library/jest-dom/vitest";
-import { Tabs } from "@j-os/design-system";
+import { MORPH_OF, ShortcutPeekProvider, Tabs } from "@j-os/design-system";
 import { MemoryRouter, Route, createMemoryHistory } from "@solidjs/router";
 import {
 	cleanup,
@@ -18,6 +18,7 @@ import { SITE_TIMEZONE, todayIn } from "../../../../convex/lib/time.ts";
 import type { PerkRequestRow } from "../../../../convex/perkRequests.ts";
 import { downloadBlob } from "../../../shared/downloadBlob.ts";
 
+import { requestEntity } from "./requestEntity.ts";
 import { capNotice, RequestsTab } from "./RequestsTab.tsx";
 import { perkRequestsCsv } from "./toCsv.ts";
 
@@ -126,26 +127,32 @@ afterEach(() => {
 	vi.mocked(downloadBlob).mockReset();
 });
 
-function renderTab() {
+function renderTab(isActive = true, query = "") {
 	const history = createMemoryHistory();
-	history.set({ value: "/perks?tab=requests", scroll: false, replace: true });
+	history.set({
+		value: `/perks?tab=requests${query}`,
+		scroll: false,
+		replace: true,
+	});
 	render(() => (
 		<MemoryRouter history={history}>
 			<Route
 				path="*"
 				component={() => (
-					<Tabs.Root value="requests">
-						<Tabs.Bar>
-							<Tabs.List>
-								<Tabs.Trigger value="requests">
-									Requests
-								</Tabs.Trigger>
-							</Tabs.List>
-						</Tabs.Bar>
-						<Tabs.Content value="requests">
-							<RequestsTab />
-						</Tabs.Content>
-					</Tabs.Root>
+					<ShortcutPeekProvider>
+						<Tabs.Root value="requests">
+							<Tabs.Bar>
+								<Tabs.List>
+									<Tabs.Trigger value="requests">
+										Requests
+									</Tabs.Trigger>
+								</Tabs.List>
+							</Tabs.Bar>
+							<Tabs.Content value="requests">
+								<RequestsTab active={() => isActive} />
+							</Tabs.Content>
+						</Tabs.Root>
+					</ShortcutPeekProvider>
 				)}
 			/>
 		</MemoryRouter>
@@ -310,15 +317,47 @@ test("every row keeps the status select for its own request, in every grouping",
 	}
 });
 
-test("a row opens its perk's sheet as a peek, over the Requests tab", async () => {
+test("a row opens its request's sheet as a peek, over the Requests tab", async () => {
 	const history = renderTab();
 	fireEvent.click(await screen.findByText("ben Sample"));
 	await waitFor(() => {
-		expect(history.get()).toContain("open=perk%3Aperk1");
+		expect(history.get()).toContain("open=request%3Ar4");
 	});
 	expect(history.get()).toContain("tab=requests");
-	// Not the Perks tab's own param, which would switch tabs to open it.
-	expect(history.get()).not.toContain("perk=perk1");
+	// Not the perk's: the request sheet is what the row morphs into.
+	expect(history.get()).not.toContain("perk%3A");
+	expect(history.get()).not.toContain("perk=");
+});
+
+test("a row morphs as its request, so the request sheet closes back into it", async () => {
+	renderTab();
+	const cell = await screen.findByText("ben Sample");
+	const row = cell.closest("[role=row]");
+	expect(row).toHaveAttribute(MORPH_OF, "r4");
+});
+
+test("a touch on a row loads the request's peek before the open: a touch has no hover", async () => {
+	const preload = vi
+		.spyOn(requestEntity.peek!, "preload")
+		.mockResolvedValue(undefined as never);
+	try {
+		renderTab();
+		const cell = await screen.findByText("ben Sample");
+		expect(preload).not.toHaveBeenCalled();
+		fireEvent.pointerDown(cell, { pointerType: "touch" });
+		expect(preload).toHaveBeenCalled();
+	} finally {
+		preload.mockRestore();
+	}
+});
+
+test("a request link opens the request as a peek over the tab, and drops the link's own param", async () => {
+	const history = renderTab(true, "&request=r2");
+	await waitFor(() => {
+		expect(history.get()).toContain("open=request%3Ar2");
+	});
+	expect(history.get()).not.toContain("request=r2");
+	expect(history.get()).toContain("tab=requests");
 });
 
 test("a click on the status select opens nothing", async () => {
@@ -348,6 +387,55 @@ test("Download CSV saves every loaded row as today's file, whatever the grouping
 	expect(new Uint8Array(await blob.arrayBuffer())).toEqual(
 		new TextEncoder().encode(perkRequestsCsv(ROWS))
 	);
+});
+
+test("D downloads the same file as the button, from the tab on screen", async () => {
+	renderTab();
+	await screen.findByRole("button", { name: "Download CSV" });
+	fireEvent.keyDown(document.body, { key: "d" });
+	expect(downloadBlob).toHaveBeenCalledOnce();
+});
+
+test("D does nothing from behind another tab", async () => {
+	renderTab(false);
+	await screen.findByRole("button", { name: "Download CSV" });
+	fireEvent.keyDown(document.body, { key: "d" });
+	expect(downloadBlob).not.toHaveBeenCalled();
+});
+
+test("D does nothing with nothing to download", async () => {
+	setRows([]);
+	renderTab();
+	await screen.findByText("No requests yet");
+	fireEvent.keyDown(document.body, { key: "d" });
+	expect(downloadBlob).not.toHaveBeenCalled();
+});
+
+test("D does nothing while typing", async () => {
+	renderTab();
+	await screen.findByRole("button", { name: "Download CSV" });
+	const field = document.body.appendChild(document.createElement("input"));
+	fireEvent.keyDown(field, { key: "d" });
+	field.remove();
+	expect(downloadBlob).not.toHaveBeenCalled();
+});
+
+test("D does nothing while a perk's peek is open over the tab", async () => {
+	renderTab(true, "&open=perk1");
+	await screen.findByRole("button", { name: "Download CSV" });
+	fireEvent.keyDown(document.body, { key: "d" });
+	expect(downloadBlob).not.toHaveBeenCalled();
+});
+
+test("while peeking, Download CSV shows its key in the icon's place", async () => {
+	renderTab();
+	const button = await screen.findByRole("button", { name: "Download CSV" });
+	expect(button.querySelector("kbd")).toBeNull();
+	fireEvent.keyDown(document, { key: "Alt", altKey: true });
+	await waitFor(() => {
+		expect(button.querySelector("kbd")).not.toBeNull();
+	});
+	fireEvent.keyUp(document, { key: "Alt" });
 });
 
 test("an empty list says so, and has nothing to download", async () => {

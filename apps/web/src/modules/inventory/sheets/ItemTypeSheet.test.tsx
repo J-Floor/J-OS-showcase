@@ -1,5 +1,13 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
+import { ShortcutPeekProvider } from "@j-os/design-system";
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@solidjs/testing-library";
+import { createSignal } from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
 
 const { mockCreate, mockUpdate, mockRemove, mockUseItemsByType } = vi.hoisted(
@@ -60,6 +68,7 @@ import {
 	sheetSkeleton,
 	tableRowKeys,
 } from "../../../../test-stubs/morphKeys.tsx";
+import { ShortcutPeekButton } from "../../../shared/ShortcutPeekButton.tsx";
 import { itemTypeColumns } from "../columns/itemTypeColumns.tsx";
 import type { ItemType } from "../data/inventoryData.ts";
 
@@ -90,6 +99,9 @@ test("editing an existing item type shows its fields and no create button", () =
 	));
 	expect(screen.getByRole("heading", { name: "Chair" })).toBeInTheDocument();
 	expect(screen.getByLabelText("Name")).toHaveValue("Chair");
+	expect(screen.getByLabelText("Name")).toHaveAttribute("readonly");
+	fireEvent.click(screen.getByRole("button", { name: "Unlock to edit" }));
+	expect(screen.getByLabelText("Name")).not.toHaveAttribute("readonly");
 	expect(screen.getByRole("combobox")).toHaveTextContent("Furniture");
 	expect(
 		screen.queryByRole("button", { name: /Create item type/ })
@@ -100,6 +112,7 @@ test("an item type's category cannot be cleared", () => {
 	render(() => (
 		<ItemTypeSheet open onOpenChange={() => {}} itemType={chairType} />
 	));
+	fireEvent.click(screen.getByRole("button", { name: "Unlock to edit" }));
 	expect(screen.getByRole("combobox")).toHaveTextContent("Furniture");
 	expect(screen.queryByRole("button", { name: /clear/i })).toBeNull();
 });
@@ -226,4 +239,70 @@ test("the header names the item type in edit mode and says 'New item type' in cr
 	expect(
 		screen.getByRole("heading", { name: "New item type" })
 	).toBeInTheDocument();
+});
+
+// --- keys: E unlocks, Delete deletes ---------------------------------------
+
+test("item type: E unlocks the fields, once; they start locked", () => {
+	render(() => (
+		<ItemTypeSheet open onOpenChange={() => {}} itemType={chairType} />
+	));
+	const name = screen.getByLabelText("Name");
+	expect(name).toHaveAttribute("readonly");
+	fireEvent.keyDown(document, { key: "e" });
+	expect(name).not.toHaveAttribute("readonly");
+	fireEvent.keyDown(document, { key: "e" });
+	expect(name).toHaveAttribute("readonly");
+});
+
+test("item type: Delete removes the open row once; typing, a shut sheet and a create form ignore it", async () => {
+	mockRemove.mockResolvedValue(undefined);
+	const [open, setOpen] = createSignal(true);
+	render(() => (
+		<ItemTypeSheet
+			open={open()}
+			onOpenChange={() => {}}
+			itemType={chairType}
+		/>
+	));
+
+	const input = screen.getByLabelText("Name");
+	fireEvent.keyDown(input, { key: "Delete" });
+	await Promise.resolve();
+	expect(mockRemove).not.toHaveBeenCalled();
+
+	fireEvent.keyDown(document, { key: "Delete" });
+	await waitFor(() => {
+		expect(mockRemove).toHaveBeenCalledTimes(1);
+	});
+	expect(mockRemove).toHaveBeenCalledWith(chairType._id);
+
+	mockRemove.mockClear();
+	setOpen(false);
+	fireEvent.keyDown(document, { key: "Delete" });
+	await Promise.resolve();
+	expect(mockRemove).not.toHaveBeenCalled();
+	cleanup();
+
+	render(() => <ItemTypeSheet open onOpenChange={() => {}} />);
+	fireEvent.keyDown(document, { key: "Delete" });
+	await Promise.resolve();
+	expect(mockRemove).not.toHaveBeenCalled();
+});
+
+test("item type: the header Delete and unlock buttons name their keys in a chip while peeking", () => {
+	render(() => (
+		<ShortcutPeekProvider>
+			<ShortcutPeekButton />
+			<ItemTypeSheet open onOpenChange={() => {}} itemType={chairType} />
+		</ShortcutPeekProvider>
+	));
+	const remove = screen.getByRole("button", { name: "Delete item type" });
+	const unlock = screen.getByRole("button", { name: "Unlock to edit" });
+	expect(remove).toHaveAttribute("aria-keyshortcuts", "Delete");
+	expect(unlock).toHaveAttribute("aria-keyshortcuts", "E");
+	expect(remove.querySelector("kbd")).toBeNull();
+	fireEvent.click(screen.getByRole("button", { name: /shortcut/i }));
+	expect(remove.querySelector("kbd")).not.toBeNull();
+	expect(unlock.querySelector("kbd")).not.toBeNull();
 });

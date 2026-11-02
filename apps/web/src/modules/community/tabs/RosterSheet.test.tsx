@@ -1,16 +1,32 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen, waitFor } from "@solidjs/testing-library";
+import {
+	cleanup,
+	render,
+	screen,
+	waitFor,
+	within,
+} from "@solidjs/testing-library";
 import { errAsync } from "neverthrow";
 import { createRoot, createSignal } from "solid-js";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 
+import type { Id } from "../../../../convex/_generated/dataModel";
+import type { PersonRow } from "../../../../convex/people.ts";
+import { OPEN_DIALOG_CONTENT } from "../../../shared/dialogSelectors.ts";
 import {
 	RosterActionError,
+	setShownPerson,
 	settleRosterAction,
 } from "../actions/RosterActionError.tsx";
 import type { ShortcutScope } from "../actions/shortcuts.ts";
 
-import { useSheetEditing } from "./RosterSheet.tsx";
+import { RosterSheet, useSheetEditing } from "./RosterSheet.tsx";
+import { renderWithSelection } from "./testSelection.tsx";
+
+// The footer is under test, not the profile: the detail reads Convex.
+vi.mock("../sheets/PersonDetail.tsx", () => ({
+	PersonDetail: () => <div />,
+}));
 
 afterEach(cleanup);
 
@@ -65,4 +81,56 @@ test("a roster change clears the old roster's shown person", async () => {
 		expect(screen.getByText("Not allowed")).toBeInTheDocument();
 	});
 	sheet.dispose();
+});
+
+test("the sheet footer shows a refusal for its own person only", async () => {
+	const shown = {
+		_id: "p1",
+		firstName: "Ada",
+		lastName: "Example",
+	} as unknown as PersonRow;
+	// No person registered as shown, so a refusal for p2 is recorded rather
+	// than dropped as a late answer: hiding it is then the footer's doing.
+	setShownPerson("guests", undefined);
+	renderWithSelection(() => (
+		<>
+			<RosterActionError scope="guests" />
+			<RosterSheet
+				isOpen
+				isLoading={false}
+				selected={shown}
+				isEditing={false}
+				onToggleEditing={() => {}}
+				onClose={() => {}}
+				actions={[]}
+				scope="guests"
+			/>
+		</>
+	));
+	await waitFor(() => {
+		expect(document.querySelector(OPEN_DIALOG_CONTENT)).not.toBeNull();
+	});
+	const panel = document.querySelector<HTMLElement>(OPEN_DIALOG_CONTENT)!;
+
+	await settleRosterAction(
+		"guests",
+		"p1" as Id<"people">,
+		errAsync({ code: "Refused", message: "Refused for Ada" })
+	);
+	await waitFor(() => {
+		expect(within(panel).getByText("Refused for Ada")).toBeInTheDocument();
+	});
+
+	await settleRosterAction(
+		"guests",
+		"p2" as Id<"people">,
+		errAsync({ code: "Refused", message: "Refused for someone else" })
+	);
+	// The strip above the table shows it; the sheet, about Ada, does not.
+	await waitFor(() => {
+		expect(
+			screen.getByText("Refused for someone else")
+		).toBeInTheDocument();
+	});
+	expect(within(panel).queryByRole("alert")).toBeNull();
 });

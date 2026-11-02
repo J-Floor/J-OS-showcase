@@ -1,10 +1,10 @@
 import type { PersonRow } from "../../../../convex/people.ts";
+import type { ActionDescriptor } from "../../../shared/actions/shortcuts.ts";
 import { ICONS } from "../../../shared/icons.ts";
 import { useOpenAgreement } from "../openAgreement.ts";
 
 import { agreementAction } from "./agreementAction.ts";
 import { useKickOutAction } from "./kickOutAction.ts";
-import type { ActionDescriptor } from "./shortcuts.ts";
 
 /**
  * What the board can do to a member from the roster or the sheet.
@@ -29,23 +29,22 @@ export function useMemberActions(options: {
 		disabledReason: "Already kicked out",
 	});
 
-	function actions(): ActionDescriptor<PersonRow>[] {
-		return [
-			{
-				id: "role",
-				label: "Change role",
-				icon: ICONS.role,
-				hotkey: "R",
-				scope: "members",
-				can: () => true,
-				run: (person) => {
-					options.onChangeRole(person);
-				},
+	// Built once: the key and the footer button must hold the same objects,
+	// or the run guard (`runAction`) cannot tell they are one action.
+	const list: ActionDescriptor<PersonRow>[] = [
+		{
+			id: "role",
+			label: "Change role",
+			icon: ICONS.role,
+			hotkey: "R",
+			can: () => true,
+			run: (person) => {
+				options.onChangeRole(person);
 			},
-			kickOut,
-			agreementAction(agreement, "members"),
-		];
-	}
+		},
+		kickOut,
+		agreementAction(agreement),
+	];
 
-	return { actions };
+	return { actions: () => list };
 }

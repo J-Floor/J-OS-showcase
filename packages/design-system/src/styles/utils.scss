@@ -50,6 +50,17 @@
 	justify-content: center;
 }
 
+/* A button with none of the browser's button chrome (padding, background,
+   border, its own text colour): what shows is its content, as text or an
+   icon. Declarations after the include override it (a link colour). */
+@mixin bare-button {
+	padding: 0;
+	color: inherit;
+	cursor: pointer;
+	background: none;
+	border: none;
+}
+
 @mixin focus-outline {
 	&:focus-visible {
 		outline: var(--jf-border-width-accessibility) solid

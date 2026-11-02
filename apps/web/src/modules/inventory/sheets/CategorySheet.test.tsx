@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { ShortcutPeekProvider } from "@j-os/design-system";
 import {
 	cleanup,
 	fireEvent,
@@ -7,6 +8,7 @@ import {
 	waitFor,
 } from "@solidjs/testing-library";
 import { ConvexError } from "convex/values";
+import { createSignal } from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
 
 const { mockCreate, mockUpdate, mockRemove, mockUseItemTypesByCategory } =
@@ -56,6 +58,7 @@ import {
 	sheetSkeleton,
 	tableRowKeys,
 } from "../../../../test-stubs/morphKeys.tsx";
+import { ShortcutPeekButton } from "../../../shared/ShortcutPeekButton.tsx";
 import { categoryColumns } from "../columns/categoryColumns.tsx";
 import type { Category } from "../data/inventoryData.ts";
 
@@ -221,7 +224,13 @@ test("a refused create keeps the sheet open and says why; a later success closes
 	);
 	expect(onOpenChange).not.toHaveBeenCalled();
 
-	fireEvent.click(screen.getByRole("button", { name: /Create category/ }));
+	// The refused run settles a tick after its error shows; until then the
+	// button is busy and swallows a click.
+	const create = screen.getByRole("button", { name: /Create category/ });
+	await waitFor(() => {
+		expect(create).not.toHaveAttribute("aria-busy", "true");
+	});
+	fireEvent.click(create);
 	await waitFor(() => {
 		expect(onOpenChange).toHaveBeenCalledWith(false);
 	});
@@ -253,4 +262,70 @@ test("the header names the category in edit mode and says 'New category' in crea
 	expect(
 		screen.getByRole("heading", { name: "New category" })
 	).toBeInTheDocument();
+});
+
+// --- keys: E unlocks, Delete deletes ---------------------------------------
+
+test("category: E unlocks the fields, once; they start locked", () => {
+	render(() => (
+		<CategorySheet open onOpenChange={() => {}} category={furniture} />
+	));
+	const name = screen.getByLabelText("Name");
+	expect(name).toHaveAttribute("readonly");
+	fireEvent.keyDown(document, { key: "e" });
+	expect(name).not.toHaveAttribute("readonly");
+	fireEvent.keyDown(document, { key: "e" });
+	expect(name).toHaveAttribute("readonly");
+});
+
+test("category: Delete removes the open row once; typing, a shut sheet and a create form ignore it", async () => {
+	mockRemove.mockResolvedValue(undefined);
+	const [open, setOpen] = createSignal(true);
+	render(() => (
+		<CategorySheet
+			open={open()}
+			onOpenChange={() => {}}
+			category={furniture}
+		/>
+	));
+
+	const input = screen.getByLabelText("Name");
+	fireEvent.keyDown(input, { key: "Delete" });
+	await Promise.resolve();
+	expect(mockRemove).not.toHaveBeenCalled();
+
+	fireEvent.keyDown(document, { key: "Delete" });
+	await waitFor(() => {
+		expect(mockRemove).toHaveBeenCalledTimes(1);
+	});
+	expect(mockRemove).toHaveBeenCalledWith(furniture._id);
+
+	mockRemove.mockClear();
+	setOpen(false);
+	fireEvent.keyDown(document, { key: "Delete" });
+	await Promise.resolve();
+	expect(mockRemove).not.toHaveBeenCalled();
+	cleanup();
+
+	render(() => <CategorySheet open onOpenChange={() => {}} />);
+	fireEvent.keyDown(document, { key: "Delete" });
+	await Promise.resolve();
+	expect(mockRemove).not.toHaveBeenCalled();
+});
+
+test("category: the header Delete and unlock buttons name their keys in a chip while peeking", () => {
+	render(() => (
+		<ShortcutPeekProvider>
+			<ShortcutPeekButton />
+			<CategorySheet open onOpenChange={() => {}} category={furniture} />
+		</ShortcutPeekProvider>
+	));
+	const remove = screen.getByRole("button", { name: "Delete category" });
+	const unlock = screen.getByRole("button", { name: "Unlock to edit" });
+	expect(remove).toHaveAttribute("aria-keyshortcuts", "Delete");
+	expect(unlock).toHaveAttribute("aria-keyshortcuts", "E");
+	expect(remove.querySelector("kbd")).toBeNull();
+	fireEvent.click(screen.getByRole("button", { name: /shortcut/i }));
+	expect(remove.querySelector("kbd")).not.toBeNull();
+	expect(unlock.querySelector("kbd")).not.toBeNull();
 });

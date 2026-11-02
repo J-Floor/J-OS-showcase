@@ -10,18 +10,25 @@ vi.mock("convex-solidjs", () => ({
 	useQuery: () => ({ data: () => {} }),
 }));
 
+import { useTaskActions } from "../data/tasksData.tsx";
+
 import { KanbanBoard } from "./KanbanBoard.tsx";
+import { createCardSelection } from "./kanbanInteraction.ts";
 
 function board(tasks: never[] | undefined) {
-	return render(() => (
-		<KanbanBoard
-			tasks={tasks}
-			people={[]}
-			projects={[]}
-			onCardClick={() => {}}
-			onAddTask={() => {}}
-		/>
-	));
+	return render(() => {
+		const cards = createCardSelection(useTaskActions());
+		return (
+			<KanbanBoard
+				tasks={tasks}
+				people={[]}
+				projects={[]}
+				onCardClick={() => {}}
+				onAddTask={() => {}}
+				cards={cards}
+			/>
+		);
+	});
 }
 
 test("tasks undefined: each column shows a skeleton list and a skeleton count, no zeros", () => {

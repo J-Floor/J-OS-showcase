@@ -1,5 +1,8 @@
 // @vitest-environment happy-dom
-import { setDeferredImmediate } from "@j-os/design-system";
+import {
+	ShortcutPeekProvider,
+	setDeferredImmediate,
+} from "@j-os/design-system";
 import {
 	cleanup,
 	fireEvent,
@@ -101,6 +104,7 @@ vi.mock("./presence.ts", () => ({ fetchPresenceToken }));
 
 import { FRESH_MIN_AGE_MS } from "../../../convex/lib/doorLocks.ts";
 import { type DoorPosition } from "../../../convex/lib/doorProvider.ts";
+import { ShortcutPeekButton } from "../../shared/ShortcutPeekButton.tsx";
 
 import { UnlockCard } from "./UnlockCard.tsx";
 
@@ -1608,4 +1612,180 @@ test("a visibility change during the in-flight first fresh read sends no routine
 	document.dispatchEvent(new Event("visibilitychange"));
 	await settle();
 	expect(positionAsync).toHaveBeenCalledTimes(1);
+});
+
+// Keys. A door key is live only while that door shows the button it names.
+
+function press(key: string, init: KeyboardEventInit = {}, target?: Element) {
+	fireEvent.keyDown(target ?? document, { key, ...init });
+}
+
+const UPSTAIRS_UNLOCK = "Unlock Upstairs (4th floor)";
+const UPSTAIRS_LOCK = "Lock Upstairs (4th floor)";
+
+test("a door's key unlocks it once, with the tap's own presence check", async () => {
+	render(() => <UnlockCard active />);
+	press("d");
+	await waitFor(() => {
+		expect(mutateAsync).toHaveBeenCalledTimes(1);
+	});
+	expect(fetchPresenceToken).toHaveBeenCalledTimes(1);
+	expect(mutateAsync).toHaveBeenCalledWith({
+		lock: "downstairs",
+		presence: "tok",
+	});
+	// The slot now shows a status line, not its button: a second press has
+	// no button to name.
+	await screen.findByText(/Open — pull now/);
+	press("d");
+	await settle();
+	expect(mutateAsync).toHaveBeenCalledTimes(1);
+});
+
+test("a held key does not repeat the door action", async () => {
+	render(() => <UnlockCard active />);
+	press("d", { repeat: true });
+	await settle();
+	expect(mutateAsync).not.toHaveBeenCalled();
+});
+
+test("the off-network refusal still comes from a key press", async () => {
+	fetchPresenceToken.mockResolvedValue(ok(null));
+	render(() => <UnlockCard active />);
+	press("d");
+	expect(
+		await screen.findByText(/Join the J floor Wi-Fi to unlock/)
+	).toBeInTheDocument();
+	expect(mutateAsync).not.toHaveBeenCalled();
+});
+
+test("a door whose bolt is still being read cannot be reached by its key", async () => {
+	const pending = pendingPosition();
+	render(() => <UnlockCard active />);
+	press("u");
+	press("u", { shiftKey: true });
+	await settle();
+	expect(mutateAsync).not.toHaveBeenCalled();
+	expect(lockAsync).not.toHaveBeenCalled();
+	pending.resolve("locked");
+	await screen.findByRole("button", { name: UPSTAIRS_UNLOCK });
+	press("u");
+	await waitFor(() => {
+		expect(mutateAsync).toHaveBeenCalledWith({
+			lock: "upstairs",
+			presence: "tok",
+		});
+	});
+});
+
+test("an unlocked door answers to its lock key only, and a locked one to unlock only", async () => {
+	positionAsync.mockResolvedValue("unlocked");
+	render(() => <UnlockCard active />);
+	await screen.findByRole("button", { name: UPSTAIRS_LOCK });
+	press("u");
+	await settle();
+	expect(mutateAsync).not.toHaveBeenCalled();
+	press("U", { shiftKey: true });
+	await waitFor(() => {
+		expect(lockAsync).toHaveBeenCalledWith({
+			lock: "upstairs",
+			presence: "tok",
+		});
+	});
+	expect(mutateAsync).not.toHaveBeenCalled();
+});
+
+test("a door that cannot lock never answers to a lock key", async () => {
+	render(() => <UnlockCard active />);
+	await screen.findByRole("button", { name: UPSTAIRS_UNLOCK });
+	press("D", { shiftKey: true });
+	await settle();
+	expect(lockAsync).not.toHaveBeenCalled();
+	expect(mutateAsync).not.toHaveBeenCalled();
+});
+
+test("with the position unknown both buttons show, each with its own key", async () => {
+	positionAsync.mockResolvedValue("unknown");
+	render(() => <UnlockCard active />);
+	await screen.findByRole("button", { name: UPSTAIRS_LOCK });
+	press("u");
+	await waitFor(() => {
+		expect(mutateAsync).toHaveBeenCalledTimes(1);
+	});
+	expect(lockAsync).not.toHaveBeenCalled();
+});
+
+test("door keys are ignored while typing, while inactive and before the person loads", async () => {
+	const { unmount } = render(() => (
+		<>
+			<input aria-label="note" />
+			<UnlockCard active />
+		</>
+	));
+	press("d", {}, screen.getByLabelText("note"));
+	await settle();
+	expect(mutateAsync).not.toHaveBeenCalled();
+	unmount();
+	render(() => <UnlockCard />);
+	press("d");
+	await settle();
+	expect(mutateAsync).not.toHaveBeenCalled();
+	cleanup();
+	currentPerson.value = undefined;
+	render(() => <UnlockCard active />);
+	press("d");
+	await settle();
+	expect(mutateAsync).not.toHaveBeenCalled();
+});
+
+test("a door the person has no access to cannot be reached by its key", async () => {
+	currentPerson.value = {
+		tier: "member",
+		stage: "active",
+		door: { override: "force_off" },
+	};
+	render(() => <UnlockCard active />);
+	press("d");
+	await settle();
+	expect(mutateAsync).not.toHaveBeenCalled();
+});
+
+test("R checks the doors again, once, while they are not held", async () => {
+	render(() => <UnlockCard active />);
+	await screen.findByRole("button", { name: UPSTAIRS_UNLOCK });
+	const before = positionAsync.mock.calls.length;
+	vi.useFakeTimers({ shouldAdvanceTime: true });
+	try {
+		await pastFirstFresh();
+		press("r");
+		await settle();
+		expect(positionAsync.mock.calls.length).toBeGreaterThan(before);
+	} finally {
+		vi.useRealTimers();
+	}
+});
+
+test("the door buttons and Check again name their keys in a chip while peeking", async () => {
+	render(() => (
+		<ShortcutPeekProvider>
+			<ShortcutPeekButton />
+			<UnlockCard active />
+		</ShortcutPeekProvider>
+	));
+	const downstairs = screen.getByRole("button", {
+		name: "Unlock Downstairs",
+	});
+	const upstairs = await screen.findByRole("button", {
+		name: UPSTAIRS_UNLOCK,
+	});
+	expect(downstairs).toHaveAttribute("aria-keyshortcuts", "D");
+	expect(upstairs).toHaveAttribute("aria-keyshortcuts", "U");
+	expect(screen.getByRole("button", { name: REFRESH })).toHaveAttribute(
+		"aria-keyshortcuts",
+		"R"
+	);
+	expect(downstairs.querySelector("kbd")).toBeNull();
+	fireEvent.click(screen.getByRole("button", { name: /shortcut/i }));
+	expect(downstairs.querySelector("kbd")).not.toBeNull();
+	expect(upstairs.querySelector("kbd")).not.toBeNull();
 });

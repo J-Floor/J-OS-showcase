@@ -838,6 +838,27 @@ describe("setPerkRequestStatus", () => {
 		]);
 	});
 
+	it("leaves the row alone when the status does not change", async () => {
+		const { backend, contactId, move } = await requested();
+		vi.setSystemTime(T0 + 5000);
+		await move("granted");
+		const [before] = await requestRows(backend);
+		const eventsBefore = await perkEvents(backend);
+		const jobsBefore = await dispatches(backend);
+		vi.setSystemTime(T0 + 6000);
+		await move("granted");
+		expect(await requestRows(backend)).toEqual([before]);
+		expect(await perkEvents(backend)).toEqual(eventsBefore);
+		expect(await dispatches(backend)).toEqual(jobsBefore);
+		expect(before).toEqual(
+			expect.objectContaining({
+				status: "granted",
+				statusAt: T0 + 5000,
+				statusById: contactId,
+			})
+		);
+	});
+
 	it("refuses a request that no longer exists", async () => {
 		const { backend, perkId, asBoard, asRequester } = await setup();
 		const requestId = await asRequester.mutation(
@@ -926,5 +947,207 @@ describe("setPerkRequestStatus tells the requester", () => {
 		expect(
 			outcomes.map((job) => dispatchArgs(job).payload.outcome)
 		).toEqual(["granted", "declined", "declined"]);
+	});
+});
+
+async function perkEvents(backend: Backend) {
+	const rows = await backend.run((context) =>
+		context.db
+			.query("personEvents")
+			.withIndex("by_kind_and_at", (range) => range.eq("kind", "perk"))
+			.collect()
+	);
+	return rows.map(
+		({ personId, actorId, event, perkRequestId, meta, at }) => ({
+			personId,
+			actorId,
+			event,
+			perkRequestId,
+			meta: meta as { perkId: Id<"perks"> },
+			at,
+		})
+	);
+}
+
+describe("perk request history events", () => {
+	it("writes one requested event, with the requester as actor, for a new request", async () => {
+		const { backend, perkId, requesterId, requestId } = await requested();
+		expect(await perkEvents(backend)).toEqual([
+			{
+				personId: requesterId,
+				actorId: requesterId,
+				event: "requested",
+				perkRequestId: requestId,
+				meta: { perkId },
+				at: T0,
+			},
+		]);
+	});
+
+	it("writes nothing when the request is answered with the open one", async () => {
+		const { backend, perkId, asRequester } = await requested();
+		await asRequester.mutation(api.perkRequests.requestPerk, { perkId });
+		expect(await perkEvents(backend)).toHaveLength(1);
+	});
+
+	it("writes one event per real status change, with the board member as actor", async () => {
+		const { backend, perkId, requesterId, contactId, requestId, move } =
+			await requested();
+		vi.setSystemTime(T0 + 5000);
+		await move("contacted");
+		vi.setSystemTime(T0 + 6000);
+		await move("contacted");
+		const events = await perkEvents(backend);
+		expect(events.filter((row) => row.event === "contacted")).toEqual([
+			{
+				personId: requesterId,
+				actorId: contactId,
+				event: "contacted",
+				perkRequestId: requestId,
+				meta: { perkId },
+				at: T0 + 5000,
+			},
+		]);
+		expect(events).toHaveLength(2);
+	});
+});
+
+describe("a request with no events of its own", () => {
+	it("logs only the move: its past is backfillPerkEvents' to write", async () => {
+		const { backend, perkId, requesterId, contactId, asBoard } =
+			await setup();
+		const requestId = await backend.run((context) =>
+			context.db.insert("perkRequests", {
+				perkId,
+				personId: requesterId,
+				requestedAt: T0 - 2 * DAY,
+				status: "contacted",
+				statusAt: T0 - DAY,
+				statusById: contactId,
+			})
+		);
+		await asBoard.mutation(api.perkRequests.setPerkRequestStatus, {
+			requestId,
+			status: "granted",
+		});
+		expect(await perkEvents(backend)).toEqual([
+			{
+				personId: requesterId,
+				actorId: contactId,
+				event: "granted",
+				perkRequestId: requestId,
+				meta: { perkId },
+				at: T0,
+			},
+		]);
+	});
+});
+
+describe("getPerkRequest", () => {
+	it.each(["guest", "member", "core", "staff"] as const)(
+		"refuses a %s",
+		async (tier) => {
+			const { backend, requestId } = await requested();
+			await seedPerson(backend, CALLER, { tier });
+			const asCaller = backend.withIdentity({ email: CALLER });
+			await expect(
+				asCaller.query(api.perkRequests.getPerkRequest, { requestId })
+			).rejects.toThrow(/Forbidden/);
+			await expect(
+				asCaller.query(api.perkRequests.perkRequestHistory, {
+					requestId,
+				})
+			).rejects.toThrow(/Forbidden/);
+		}
+	);
+
+	it("refuses a signed-out caller", async () => {
+		const { backend, requestId } = await requested();
+		await expect(
+			backend.query(api.perkRequests.getPerkRequest, { requestId })
+		).rejects.toThrow(/NotAuthenticated/);
+		await expect(
+			backend.query(api.perkRequests.perkRequestHistory, { requestId })
+		).rejects.toThrow(/NotAuthenticated/);
+	});
+
+	it("returns the board one request with its names joined in", async () => {
+		const { asBoard, perkId, requesterId, requestId, move } =
+			await requested();
+		await move("contacted");
+		expect(
+			await asBoard.query(api.perkRequests.getPerkRequest, { requestId })
+		).toEqual({
+			_id: requestId,
+			perkId,
+			personId: requesterId,
+			requesterName: "Ada Lovelace",
+			requesterEmail: REQUESTER,
+			ventureName: "Acme",
+			perkTitle: "Cloud credits",
+			partner: "Example Cloud",
+			contactName: "Cleo Contact",
+			requestedAt: T0,
+			status: "contacted",
+			statusAt: T0,
+			statusByName: "Cleo Contact",
+		});
+	});
+
+	it("returns null for an id that is not a perk request's", async () => {
+		const { asBoard, perkId } = await requested();
+		for (const requestId of ["not-an-id", perkId])
+			expect(
+				await asBoard.query(api.perkRequests.getPerkRequest, {
+					requestId,
+				})
+			).toBeNull();
+	});
+
+	it("returns null once the request or its perk is gone", async () => {
+		const { backend, asBoard, perkId, requestId } = await requested();
+		await backend.run((context) => context.db.delete(perkId));
+		expect(
+			await asBoard.query(api.perkRequests.getPerkRequest, { requestId })
+		).toBeNull();
+		await backend.run((context) => context.db.delete(requestId));
+		expect(
+			await asBoard.query(api.perkRequests.getPerkRequest, { requestId })
+		).toBeNull();
+	});
+});
+
+describe("perkRequestHistory", () => {
+	it("returns the request's own events, newest first, for the board", async () => {
+		const {
+			backend,
+			asBoard,
+			perkId,
+			contactId,
+			requesterId,
+			requestId,
+			move,
+		} = await requested();
+		vi.setSystemTime(T0 + 5000);
+		await move("granted");
+		// Another request by someone else stays out of this one's history.
+		await seedPerson(backend, OTHER);
+		await backend
+			.withIdentity({ email: OTHER })
+			.mutation(api.perkRequests.requestPerk, { perkId });
+		const history = await asBoard.query(
+			api.perkRequests.perkRequestHistory,
+			{ requestId }
+		);
+		expect(
+			history.map((entry) => [
+				entry.kind,
+				entry.kind === "perk" ? entry.event : undefined,
+				entry.actorId,
+			])
+		).toEqual([
+			["perk", "granted", contactId],
+			["perk", "requested", requesterId],
+		]);
 	});
 });

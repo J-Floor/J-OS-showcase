@@ -59,7 +59,7 @@ async function eventsFor(backend: TestConvex<typeof schema>, personId: string) {
 	return backend.run(async (context) =>
 		context.db
 			.query("personEvents")
-			.withIndex("by_person", (range) =>
+			.withIndex("by_personId_and_at", (range) =>
 				range.eq("personId", personId as never)
 			)
 			.collect()

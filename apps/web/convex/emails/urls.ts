@@ -35,8 +35,9 @@ export function emailUrls(): {
  * open and nothing else: the page works out which tab holds it
  * (`CommunityPage.tabOf`, `TasksPage`), so none of them carry a `?tab=` —
  * that would be the same fact written twice, and the copy that goes stale is
- * the one that wins. The two that name a tab (`doorDiagnosticsUrl`,
- * `insightsUrl`) open a page that holds no entity to find one for.
+ * the one that wins. Three name a tab: `doorDiagnosticsUrl` and
+ * `insightsUrl` open a page that holds no entity to find one for, and
+ * `perkRequestUrl` names the one tab a request is ever on.
  */
 export function personUrl(personId: string): string {
 	return `${siteUrl()}/community?person=${encodeURIComponent(personId)}`;
@@ -56,6 +57,12 @@ export function eventUrl(eventId: string): string {
 
 export function perkUrl(perkId: string): string {
 	return `${siteUrl()}/perks?perk=${encodeURIComponent(perkId)}`;
+}
+
+/** A perk request, on the board's Requests tab, which opens it over the
+ *  tab. Its one tab: a request never moves to another. */
+export function perkRequestUrl(requestId: string): string {
+	return `${siteUrl()}/perks?tab=requests&request=${encodeURIComponent(requestId)}`;
 }
 
 /** The community roster, with no person open. */
