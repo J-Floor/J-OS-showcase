@@ -13,6 +13,10 @@ on:
         description: "Branch, tag or SHA to deploy"
         required: true
         default: main
+      backend:
+        description: "Also deploy the ref's Convex functions to dev (off: frontend only, for older refs)"
+        type: boolean
+        default: true
 
 # One staging slot: a newer run replaces an older one.
 concurrency:
@@ -67,29 +71,32 @@ jobs:
         with:
           server-port: 0
 
-      # Public key; read from the dev deployment so it cannot drift from the
-      # private half that signs the pushes.
-      - name: Read dev VAPID public key
-        working-directory: target/apps/web
-        env:
-          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_DEV }}
-        run: |
-          key=$(bunx --bun convex env get VAPID_PUBLIC_KEY)
-          test -n "$key"
-          echo "VITE_VAPID_PUBLIC_KEY=$key" >> "$GITHUB_ENV"
-
       # Same as prod's deploy step, against dev. This replaces the functions on
       # the dev deployment with the ref's. The dev site URL is the cloud URL's
       # .convex.site twin.
-      - name: Deploy Convex dev backend and build SPA
+      - name: Deploy Convex dev backend (unless frontend only) and build SPA
         working-directory: target/apps/web
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_DEV }}
           VITE_RECAPTCHA_SITE_KEY: ${{ secrets.VITE_RECAPTCHA_SITE_KEY_DEV }}
+          # Public key, kept as a repo variable: the dev deploy key may deploy
+          # but not read the dev environment. Must match dev's VAPID_PUBLIC_KEY.
+          VITE_VAPID_PUBLIC_KEY: ${{ vars.VAPID_PUBLIC_KEY_DEV }}
+          BACKEND: ${{ inputs.backend }}
+          # Dev's public URL, for frontend-only runs that leave dev untouched.
+          DEV_CONVEX_URL: ${{ vars.CONVEX_URL_DEV }}
         run: |
-          bunx --bun convex deploy -y \
-            --cmd-url-env-var-name VITE_CONVEX_URL \
-            --cmd 'VITE_CONVEX_SITE_URL="${VITE_CONVEX_URL%.convex.cloud}.convex.site" bunx --bun turbo build --filter=@j-os/web'
+          if [ "$BACKEND" = "true" ]; then
+            bunx --bun convex deploy -y \
+              --cmd-url-env-var-name VITE_CONVEX_URL \
+              --cmd 'VITE_CONVEX_SITE_URL="${VITE_CONVEX_URL%.convex.cloud}.convex.site" bunx --bun turbo build --filter=@j-os/web'
+          else
+            test -n "$DEV_CONVEX_URL"
+            echo "::notice::Frontend only: dev keeps its current functions; this ref's UI may call functions dev does not have."
+            VITE_CONVEX_URL="$DEV_CONVEX_URL" \
+              VITE_CONVEX_SITE_URL="${DEV_CONVEX_URL%.convex.cloud}.convex.site" \
+              bunx --bun turbo build --filter=@j-os/web
+          fi
 
       # Sign-in on staging needs the ref's backend to trust STAGING_SITE_URL
       # and its client to send an absolute callback. An older ref still
@@ -102,7 +109,27 @@ jobs:
             echo "> **Sign-in unavailable:** this ref predates staging sign-in support." >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      # Tells the installed staging app apart from the real one on a phone,
+      # for any ref (the manifest is rewritten after the build).
+      - name: Name the app as staging
+        run: |
+          manifest=target/apps/web/dist/manifest.webmanifest
+          jq '.name = "J floor staging" | .short_name = "J staging"' "$manifest" > "$RUNNER_TEMP/manifest.json"
+          mv "$RUNNER_TEMP/manifest.json" "$manifest"
+
+      # Builds from before the chunk import map (#226) have no inline map and
+      # need no hash; the CSP's file placeholder is then simply empty.
+      - name: Detect import map
+        id: importmap
+        run: |
+          if grep -q '<script type="importmap">' target/apps/web/dist/index.html; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::This ref has no inline import map; skipping its hash check."
+          fi
+
       - name: Check import map hash
+        if: steps.importmap.outputs.present == 'true'
         uses: ./.github/actions/check-importmap-csp
         with:
           dist: target/apps/web/dist
