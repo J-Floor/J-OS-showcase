@@ -32,7 +32,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -53,7 +53,7 @@ jobs:
 
       - name: Cache Bun downloads
         if: steps.scope.outputs.docs-only != 'true'
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
@@ -79,7 +79,7 @@ jobs:
       # shared by every job, workflow and branch, keyed by turbo's task hash.
       - name: Turborepo remote cache
         if: steps.scope.outputs.docs-only != 'true'
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        uses: rharkor/caching-for-turbo@760158c05c47e7a764f78e9a22ca3b5a6ed8c52e # v2.5.2
         with:
           # A fixed port fails the job when the runner already holds it (EADDRINUSE).
           server-port: 0
@@ -147,7 +147,7 @@ jobs:
       GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
     steps:
       - name: Checkout code
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -184,7 +184,7 @@ jobs:
 
       - name: Cache Bun downloads
         if: steps.scope.outputs.docs-only != 'true'
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
@@ -208,7 +208,7 @@ jobs:
       # shared by every job, workflow and branch, keyed by turbo's task hash.
       - name: Turborepo remote cache
         if: steps.scope.outputs.docs-only != 'true'
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        uses: rharkor/caching-for-turbo@760158c05c47e7a764f78e9a22ca3b5a6ed8c52e # v2.5.2
         with:
           # A fixed port fails the job when the runner already holds it (EADDRINUSE).
           server-port: 0
