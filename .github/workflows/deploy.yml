@@ -61,6 +61,16 @@ jobs:
             --cmd-url-env-var-name VITE_CONVEX_URL \
             --cmd 'bunx --bun turbo build --filter=@j-os/web'
 
+      # The inline import map needs its hash in the CSP header, which Caddy reads
+      # from this file. Never ship a build without it.
+      - name: Check import map hash
+        run: |
+          dist=apps/web/dist
+          test "$(grep -o '<script type="importmap">' "$dist/index.html" | wc -l)" -eq 1
+          map=$(sed -n 's|.*<script type="importmap">\([^<]*\)</script>.*|\1|p' "$dist/index.html")
+          expected="'sha256-$(printf '%s' "$map" | openssl dgst -sha256 -binary | base64)'"
+          test "$(cat "$dist/.importmap-csp")" = "$expected"
+
       # Ship the built static SPA to the VPS, where Caddy serves it from
       # /srv/jfloor/apps/web/dist. The deploy key is locked (rrsync, write-only,
       # no shell) to that directory, so the rsync target "." maps to it.

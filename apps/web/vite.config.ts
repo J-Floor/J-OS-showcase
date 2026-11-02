@@ -5,6 +5,7 @@ import solid from 'vite-plugin-solid'
 import devtools from 'solid-devtools/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import { APP_NAME } from './src/lib/constants.ts'
+import { importMapPlugin } from './vite/importMap.ts'
 
 export default defineConfig(({ mode }) => ({
   // Under Vitest, disable solid-refresh (HMR) injection: it breaks in the jsdom
@@ -15,6 +16,7 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     ...(mode === 'test' ? [] : [devtools({ autoname: true })]),
     solid({ hot: mode !== 'test' }),
+    importMapPlugin(),
     // PWA: only in real builds/dev, never under Vitest (edge-runtime has no
     // service-worker/DOM globals the plugin's virtual modules assume).
     ...(mode === 'test'
@@ -84,7 +86,16 @@ export default defineConfig(({ mode }) => ({
     tsconfigPaths: true,
   },
   build: {
+    // One stylesheet, loaded by index.html. With the chunk import map below,
+    // Vite no longer loads a lazy page's own CSS when the page is imported,
+    // so per-page CSS files would never be applied.
+    cssCodeSplit: false,
     rolldownOptions: {
+      // Chunks import each other by stable keys, and index.html maps the keys
+      // to the hashed files, so one changed chunk no longer renames the rest.
+      experimental: {
+        chunkImportMap: { baseUrl: '/', fileName: 'importmap.json' },
+      },
       output: {
         codeSplitting: {
           groups: [
