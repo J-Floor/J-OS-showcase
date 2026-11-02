@@ -15,6 +15,12 @@ updates:
     # Comment "@dependabot rebase" to rebase one by hand.
     rebase-strategy: "disabled"
     open-pull-requests-limit: 5
+    ignore:
+      # @convex-dev/better-auth 0.12.x peers on better-auth <1.7.0. A newer
+      # better-auth installs a second copy beside the adapter's. Remove this
+      # once an adapter release accepts 1.7.
+      - dependency-name: "better-auth"
+        versions: [">=1.7.0"]
     commit-message:
       prefix: "chore"
       include: "scope"

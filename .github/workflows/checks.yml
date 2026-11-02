@@ -27,7 +27,6 @@ jobs:
   format-and-static:
     name: Format, styles, types
     runs-on: ubuntu-latest
-    if: github.actor != 'dependabot[bot]'
     permissions:
       contents: write
     steps:
@@ -98,8 +97,18 @@ jobs:
             echo "changes=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # Dependabot PRs get a read-only token, so the auto-fix commit below
+      # cannot push to them. Fail instead; run `bun run format` locally and
+      # push the result to the Dependabot branch.
+      - name: Fail on unformatted Dependabot PR
+        if: steps.check-changes.outputs.changes == 'true' && github.event.pull_request.user.login == 'dependabot[bot]'
+        run: |
+          git status --porcelain
+          echo "::error::Formatting changed files. Dependabot PRs cannot take the auto-fix commit. Run 'bun run format' and push to this branch."
+          exit 1
+
       - name: Commit formatting changes
-        if: steps.check-changes.outputs.changes == 'true'
+        if: steps.check-changes.outputs.changes == 'true' && github.event.pull_request.user.login != 'dependabot[bot]'
         run: |
           git config --local user.name "GitHub Actions"
           git config --local user.email "actions@github.com"
@@ -139,7 +148,6 @@ jobs:
   eslint:
     name: ESLint, audit, secret scan
     runs-on: ubuntu-latest
-    if: github.actor != 'dependabot[bot]'
     permissions:
       contents: read
     env:

@@ -30,7 +30,7 @@
 	"dependencies": {
 		"@ark-ui/solid": "catalog:",
 		"@casl/ability": "^7.0.0",
-		"@convex-dev/better-auth": "^0.12.2",
+		"@convex-dev/better-auth": "^0.12.6",
 		"@convex-dev/rate-limiter": "^0.3.2",
 		"@internationalized/date": "^3.12.0",
 		"@j-os/design-system": "workspace:*",
@@ -42,7 +42,7 @@
 		"@solidjs/router": "catalog:",
 		"@tanstack/solid-hotkeys": "catalog:",
 		"@thisbeyond/solid-dnd": "^0.7.5",
-		"better-auth": "1.6.11",
+		"better-auth": "1.6.33",
 		"convex": "catalog:",
 		"convex-solidjs": "catalog:",
 		"neverthrow": "catalog:",
