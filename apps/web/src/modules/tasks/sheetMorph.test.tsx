@@ -91,7 +91,13 @@ function recordTransitions(): { old: Snapshot[]; new: Snapshot[] } {
 			return { finished, updateCallbackDone: updated, ready: updated };
 		},
 	});
-	vi.stubGlobal("matchMedia", () => ({ matches: false }));
+	// The provider listens to the colour-scheme query, so the fake takes
+	// listeners too.
+	vi.stubGlobal("matchMedia", () => ({
+		matches: false,
+		addEventListener: () => {},
+		removeEventListener: () => {},
+	}));
 	return seen;
 }
 

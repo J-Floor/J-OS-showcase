@@ -26,6 +26,7 @@ export const ICONS = {
 	edit: "edit",
 	lightMode: "light_mode",
 	darkMode: "dark_mode",
+	systemTheme: "brightness_auto",
 	empty: "inbox",
 	noMatches: "search_off",
 	locked: "lock",

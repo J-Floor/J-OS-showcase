@@ -46,6 +46,15 @@ const PERK_MANAGERS = { action: "manage", subject: "Perks" } as const;
 
 export const CHANGELOG: ChangeEntry[] = [
 	{
+		version: "1.7",
+		title: "Theme follows your device",
+		items: [
+			{
+				text: "Follow your device's light or dark mode: the theme button cycles System, Light and Dark.",
+			},
+		],
+	},
+	{
 		version: "1.6",
 		title: "Perk request cards",
 		items: [

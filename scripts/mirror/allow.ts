@@ -66,7 +66,7 @@ export const ALLOWED_MAC_PREFIXES: readonly string[] = [
 export const BINARIES: readonly { path: string; sha256: string }[] = [
   {
     path: "packages/design-system/src/styles/material-symbols-sharp-subset.woff2",
-    sha256: "e147da1feeccf42c735c2e4a7fe3f45f442d057be31f0159cfb7db6c1f64e9a4",
+    sha256: "5f76613accc09fb3996e8ae1ea19f5ba040c86e78e7f8f7822cca35b62efab67",
   },
   {
     path: "apps/landing-page/public/apple-touch-icon.png",

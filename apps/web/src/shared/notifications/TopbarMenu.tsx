@@ -4,6 +4,8 @@ import {
 	IconButton,
 	type IconButtonProps,
 	Menu,
+	themePreferenceIcon,
+	themeSwitchLabel,
 	useTheme,
 } from "@j-os/design-system";
 import { type JSX, Show } from "solid-js";
@@ -17,13 +19,13 @@ import { useUnreadBadge } from "./unread.ts";
 
 type TopbarActions = {
 	openNotifications: () => void;
-	toggleTheme: () => void;
+	cycleTheme: () => void;
 	signOut: () => Promise<void>;
 };
 
 export function runTopbarAction(value: string, actions: TopbarActions): void {
 	if (value === "notifications") actions.openNotifications();
-	else if (value === "theme") actions.toggleTheme();
+	else if (value === "theme") actions.cycleTheme();
 	else if (value === "signout") void actions.signOut();
 }
 
@@ -58,7 +60,7 @@ export function NotificationsBell(): JSX.Element {
  * win and anchors the menu to the page corner.
  */
 export function TopbarMenu(): JSX.Element {
-	const { theme, toggle } = useTheme();
+	const { preference, cycle } = useTheme();
 	const signOut = useConfirmedSignOut();
 	const ability = useAbility();
 	const unread = useUnreadBadge(() => ability().can("view", "Notifications"));
@@ -67,7 +69,7 @@ export function TopbarMenu(): JSX.Element {
 			onSelect={(details) => {
 				runTopbarAction(details.value, {
 					openNotifications,
-					toggleTheme: toggle,
+					cycleTheme: cycle,
 					signOut,
 				});
 			}}
@@ -96,10 +98,8 @@ export function TopbarMenu(): JSX.Element {
 					</Menu.Item>
 				</Can>
 				<Menu.Item value="theme">
-					<Icon>
-						{theme() === "dark" ? ICONS.lightMode : ICONS.darkMode}
-					</Icon>
-					{theme() === "dark" ? "Light theme" : "Dark theme"}
+					<Icon>{themePreferenceIcon(preference())}</Icon>
+					{themeSwitchLabel(preference())}
 				</Menu.Item>
 				<Menu.Separator />
 				<Menu.Item value="signout">

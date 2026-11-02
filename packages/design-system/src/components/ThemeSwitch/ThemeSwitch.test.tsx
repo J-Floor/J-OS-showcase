@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@solidjs/testing-library";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { JFloorProvider } from "../../JFloorProvider.tsx";
 
@@ -20,14 +20,30 @@ function glyph(button: HTMLElement): HTMLElement | null | undefined {
 
 describe("ThemeSwitch", () => {
 	beforeEach(() => {
-		localStorage.setItem("jf-theme", "light");
+		localStorage.clear();
+	});
+	afterEach(() => {
+		document.documentElement.removeAttribute("data-theme");
 	});
 
-	it("names the theme a press switches to", () => {
+	it("starts on System, naming what a press does next", () => {
 		const button = renderSwitch();
-		expect(button).toHaveAccessibleName("Switch to dark theme");
-		fireEvent.click(button);
+		expect(button).toHaveTextContent("brightness_auto");
 		expect(button).toHaveAccessibleName("Switch to light theme");
+	});
+
+	it("cycles System, Light, Dark, then System, glyph and label together", () => {
+		const button = renderSwitch();
+		const seen: [string | null, string | null][] = [];
+		for (let press = 0; press < 3; press++) {
+			fireEvent.click(button);
+			seen.push([button.textContent, button.getAttribute("aria-label")]);
+		}
+		expect(seen).toEqual([
+			["light_mode", "Switch to dark theme"],
+			["dark_mode", "Switch to system theme"],
+			["brightness_auto", "Switch to light theme"],
+		]);
 	});
 
 	it("does not animate the glyph on first render", () => {
@@ -35,7 +51,7 @@ describe("ThemeSwitch", () => {
 		expect(glyph(button)).not.toHaveAttribute("data-animated");
 	});
 
-	it("animates the glyph a toggle brings in", () => {
+	it("animates the glyph a press brings in", () => {
 		const button = renderSwitch();
 		fireEvent.click(button);
 		expect(glyph(button)).toHaveAttribute("data-animated");

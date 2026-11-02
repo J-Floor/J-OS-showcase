@@ -13,20 +13,27 @@ import {
 
 import styles from "./JFloorProvider.module.scss";
 import "./styles/index.scss";
+import {
+	type Theme,
+	type ThemePreference,
+	nextThemePreference,
+} from "./themePreference.ts";
 import { trackActivation } from "./utils/activation.ts";
 import { readStored, writeStored } from "./utils/storage.ts";
 
-export type Theme = "light" | "dark";
-
 type ThemeContextValue = {
+	/** The theme the page is drawn in. */
 	theme: Accessor<Theme>;
-	setTheme: (theme: Theme) => void;
-	toggle: () => void;
+	/** What the person chose; `system` follows the device. */
+	preference: Accessor<ThemePreference>;
+	setPreference: (preference: ThemePreference) => void;
+	/** Moves to the next preference: System, Light, Dark, System. */
+	cycle: () => void;
 };
 
 const ThemeContext = createContext<ThemeContextValue>();
 
-/** Read/toggle the active theme. Works only inside a {@link JFloorProvider}. */
+/** Read/change the theme preference. Works only inside a {@link JFloorProvider}. */
 export function useTheme(): ThemeContextValue {
 	const context = useContext(ThemeContext);
 	if (!context)
@@ -34,24 +41,27 @@ export function useTheme(): ThemeContextValue {
 	return context;
 }
 
-const THEME_STORAGE_KEY = "jf-theme";
+const PREFERENCE_STORAGE_KEY = "jf-theme-preference";
 
-function storedTheme(): Theme | undefined {
-	const value = readStored("local", THEME_STORAGE_KEY).unwrapOr(null);
-	return value === "light" || value === "dark" ? value : undefined;
+function storedPreference(): ThemePreference {
+	const value = readStored("local", PREFERENCE_STORAGE_KEY).unwrapOr(null);
+	return value === "light" || value === "dark" ? value : "system";
 }
 
-/** OS-level preference, used as the default when nothing is stored yet. */
-function systemTheme(): Theme {
+/** The device's dark-mode query; none without `matchMedia`. */
+function darkSchemeQuery(): MediaQueryList | undefined {
 	// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- defensive guard for SSR / environments without matchMedia
-	if (typeof window === "undefined" || !window.matchMedia) return "light";
-	return window.matchMedia("(prefers-color-scheme: dark)").matches
-		? "dark"
-		: "light";
+	return typeof window === "undefined" || !window.matchMedia
+		? undefined
+		: window.matchMedia("(prefers-color-scheme: dark)");
+}
+
+function schemeOf(query: MediaQueryList | undefined): Theme {
+	return query?.matches ? "dark" : "light";
 }
 
 export type JFloorProviderProps = ParentProps & {
-	theme?: "light" | "dark";
+	theme?: Theme;
 };
 
 /**
@@ -62,24 +72,37 @@ export type JFloorProviderProps = ParentProps & {
  * also self-hosts the design system's fonts so consumers don't have to.
  */
 export function JFloorProvider(props: JFloorProviderProps): JSX.Element {
-	// Uncontrolled theme state (seeded from a stored preference, else light).
-	// When the `theme` prop is passed it wins (controlled mode, e.g. the
-	// playground); otherwise `setTheme`/`toggle` drive it and persist.
-	const [internalTheme, setInternalTheme] = createSignal<Theme>(
-		storedTheme() ?? systemTheme()
-	);
-	// `props.theme` wins when present (controlled); otherwise the uncontrolled
-	// signal drives it. Read here so the prop stays tracked.
-	const theme = createMemo<Theme>(() => props.theme ?? internalTheme());
-
-	function setTheme(next: Theme) {
-		if (props.theme !== undefined) return; // controlled: ignore
-		setInternalTheme(next);
-		// A blocked or full store: the theme just does not persist.
-		writeStored("local", THEME_STORAGE_KEY, next);
+	// The preference starts from storage, else System. Under System the theme
+	// follows the device live. When the `theme` prop is passed it wins
+	// (controlled mode, e.g. the playground) and the preference is ignored.
+	const [preference, setPreferenceSignal] =
+		createSignal<ThemePreference>(storedPreference());
+	const query = darkSchemeQuery();
+	const [systemTheme, setSystemTheme] = createSignal<Theme>(schemeOf(query));
+	if (query) {
+		function onChange() {
+			setSystemTheme(schemeOf(query));
+		}
+		query.addEventListener("change", onChange);
+		onCleanup(() => {
+			query.removeEventListener("change", onChange);
+		});
 	}
-	function toggle() {
-		setTheme(theme() === "light" ? "dark" : "light");
+	// Read here so the prop stays tracked.
+	const theme = createMemo<Theme>(() => {
+		if (props.theme) return props.theme;
+		const chosen = preference();
+		return chosen === "system" ? systemTheme() : chosen;
+	});
+
+	function setPreference(next: ThemePreference) {
+		if (props.theme !== undefined) return; // controlled: ignore
+		setPreferenceSignal(next);
+		// A blocked or full store: the preference just does not persist.
+		writeStored("local", PREFERENCE_STORAGE_KEY, next);
+	}
+	function cycle() {
+		setPreference(nextThemePreference(preference()));
 	}
 
 	createEffect(() => {
@@ -97,7 +120,9 @@ export function JFloorProvider(props: JFloorProviderProps): JSX.Element {
 	});
 
 	return (
-		<ThemeContext.Provider value={{ theme, setTheme, toggle }}>
+		<ThemeContext.Provider
+			value={{ theme, preference, setPreference, cycle }}
+		>
 			<div class={styles.passthrough}>{props.children}</div>
 		</ThemeContext.Provider>
 	);

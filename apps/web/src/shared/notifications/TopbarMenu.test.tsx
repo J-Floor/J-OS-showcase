@@ -9,7 +9,7 @@ import {
 	within,
 } from "@solidjs/testing-library";
 import { ok } from "neverthrow";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 const { unread, disablePush, signOut, navigate } = vi.hoisted(() => ({
 	unread: { value: 0 },
@@ -62,7 +62,7 @@ afterEach(() => {
 function actions() {
 	return {
 		openNotifications: vi.fn(),
-		toggleTheme: vi.fn(),
+		cycleTheme: vi.fn(),
 		signOut: vi.fn(() => Promise.resolve()),
 	};
 }
@@ -72,7 +72,7 @@ test("each menu item runs its own action", () => {
 	runTopbarAction("notifications", mockActions);
 	expect(mockActions.openNotifications).toHaveBeenCalledOnce();
 	runTopbarAction("theme", mockActions);
-	expect(mockActions.toggleTheme).toHaveBeenCalledOnce();
+	expect(mockActions.cycleTheme).toHaveBeenCalledOnce();
 	runTopbarAction("signout", mockActions);
 	expect(mockActions.signOut).toHaveBeenCalledOnce();
 });
@@ -81,7 +81,7 @@ test("an unknown value does nothing", () => {
 	const mockActions = actions();
 	runTopbarAction("nope", mockActions);
 	expect(mockActions.openNotifications).not.toHaveBeenCalled();
-	expect(mockActions.toggleTheme).not.toHaveBeenCalled();
+	expect(mockActions.cycleTheme).not.toHaveBeenCalled();
 	expect(mockActions.signOut).not.toHaveBeenCalled();
 });
 
@@ -279,4 +279,51 @@ test("confirming Sign out from the menu signs out", async () => {
 		expect(signOut).toHaveBeenCalledOnce();
 	});
 	expect(navigate).toHaveBeenCalledWith("/signin", { replace: true });
+});
+
+beforeEach(() => {
+	localStorage.clear();
+});
+
+async function openMenu(): Promise<void> {
+	const trigger = screen.getByRole("button", { name: "More" });
+	fireEvent.pointerDown(trigger, { button: 0, pointerType: "mouse" });
+	fireEvent.click(trigger);
+	await screen.findByRole("menu");
+}
+
+async function themeItem(name: string): Promise<HTMLElement> {
+	await openMenu();
+	return screen.findByRole("menuitem", { name });
+}
+
+function choose(item: HTMLElement): void {
+	fireEvent.pointerMove(item);
+	fireEvent.pointerDown(item, { button: 0, pointerType: "mouse" });
+	fireEvent.pointerUp(item, { button: 0, pointerType: "mouse" });
+	fireEvent.click(item);
+}
+
+test("the theme item shows the current preference's icon and names the next one, and cycles", async () => {
+	render(() => (
+		<JFloorProvider>
+			<AbilityProvider role="member">
+				<TopbarMenu />
+			</AbilityProvider>
+		</JFloorProvider>
+	));
+	const steps = [
+		["Switch to light theme", "brightness_auto"],
+		["Switch to dark theme", "light_mode"],
+		["Switch to system theme", "dark_mode"],
+		["Switch to light theme", "brightness_auto"],
+	] as const;
+	for (const [name, icon] of steps) {
+		const item = await themeItem(name);
+		expect(item.querySelector("[data-icon]")).toHaveTextContent(icon);
+		choose(item);
+		await waitFor(() => {
+			expect(screen.queryByRole("menu")).toBeNull();
+		});
+	}
 });

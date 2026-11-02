@@ -35,6 +35,7 @@ import { VisitorConfirm } from "./modules/visitor/VisitorConfirm.tsx";
 import { VisitorRegister } from "./modules/visitor/VisitorRegister.tsx";
 import { LandingRedirect, PageTitleTracker } from "./routing/index.tsx";
 import { AppErrorBoundary } from "./shared/AppErrorBoundary.tsx";
+import { ThemeColorMeta } from "./shared/ThemeColorMeta.tsx";
 import { toaster } from "./shared/toaster.ts";
 import { UpdatingOverlay } from "./shared/UpdatingOverlay.tsx";
 
@@ -42,6 +43,7 @@ function Root(props: ParentProps) {
 	bindConvexAuth();
 	return (
 		<JFloorProvider>
+			<ThemeColorMeta />
 			<ConvexProvider client={convex}>
 				<PageTitleTracker />
 				<AppErrorBoundary>{props.children}</AppErrorBoundary>

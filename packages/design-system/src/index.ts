@@ -2,8 +2,14 @@ export {
 	JFloorProvider,
 	type JFloorProviderProps,
 	useTheme,
-	type Theme,
 } from "./JFloorProvider.tsx";
+export {
+	nextThemePreference,
+	themePreferenceIcon,
+	themeSwitchLabel,
+	type Theme,
+	type ThemePreference,
+} from "./themePreference.ts";
 export { ThemeSwitch } from "./components/ThemeSwitch/ThemeSwitch.tsx";
 export {
 	DatePicker,

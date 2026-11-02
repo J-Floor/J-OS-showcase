@@ -9,6 +9,7 @@ biotech
 block
 bolt
 box
+brightness_auto
 build
 calendar_month
 call
