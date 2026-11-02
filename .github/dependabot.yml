@@ -1,0 +1,44 @@
+version: 2
+updates:
+  # One root lockfile covers every workspace package, and the Bun catalog
+  # lives in the root package.json, so this job must stay at "/".
+  - package-ecosystem: "bun"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    # Skip versions younger than 7 days (matches bunfig.toml
+    # minimumReleaseAge). Security updates ignore this.
+    cooldown:
+      default-days: 7
+    # Each open PR otherwise re-runs CI on every push to main.
+    # Comment "@dependabot rebase" to rebase one by hand.
+    rebase-strategy: "disabled"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+      majors:
+        update-types:
+          - "major"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+    rebase-strategy: "disabled"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    groups:
+      actions:
+        patterns:
+          - "*"

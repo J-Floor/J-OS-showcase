@@ -1,2 +1,9 @@
 [run]
 bun = true
+
+[install]
+# Supply-chain cooldown: do not resolve npm versions published less than
+# 7 days ago (value in seconds). Matches the Dependabot cooldown. To take an
+# urgent security fix sooner, add "name@version" to minimumReleaseAgeExcludes.
+minimumReleaseAge = 604800
+minimumReleaseAgeExcludes = []
