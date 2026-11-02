@@ -29,7 +29,7 @@
 		"@j-os/config-stylelint": "workspace:*",
 		"@solidjs/testing-library": "catalog:",
 		"@testing-library/jest-dom": "catalog:",
-		"@types/node": "^25.9.1",
+		"@types/node": "^26.6.5",
 		"eslint": "catalog:",
 		"jsdom": "catalog:",
 		"sass": "catalog:",

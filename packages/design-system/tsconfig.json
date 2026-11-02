@@ -5,7 +5,7 @@
     "moduleResolution": "bundler",
     "jsx": "preserve",
     "jsxImportSource": "solid-js",
-    "types": ["vitest/globals", "@testing-library/jest-dom", "vite/client"],
+    "types": ["vitest/globals", "@testing-library/jest-dom/vitest", "vite/client"],
     "strict": true,
     "noEmit": true,
     "allowImportingTsExtensions": true,

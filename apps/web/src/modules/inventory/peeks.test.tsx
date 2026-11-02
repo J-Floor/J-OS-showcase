@@ -17,7 +17,7 @@ vi.mock("convex-solidjs", () => ({
 	useQuery: () => ({ data: () => {} }),
 }));
 
-/* eslint-disable func-style, unicorn/consistent-function-scoping -- hoisted mock factories */
+/* eslint-disable func-style -- hoisted mock factories */
 const { none, actions } = vi.hoisted(() => {
 	const none = () => ({ data: () => [] as unknown[] });
 	const actions = () => ({
@@ -27,7 +27,7 @@ const { none, actions } = vi.hoisted(() => {
 	});
 	return { none, actions };
 });
-/* eslint-enable func-style, unicorn/consistent-function-scoping -- end of hoisted mock factories */
+/* eslint-enable func-style -- end of hoisted mock factories */
 
 vi.mock("./data/inventoryData.ts", () => ({
 	useItems: none,
