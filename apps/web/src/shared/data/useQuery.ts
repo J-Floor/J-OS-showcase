@@ -45,7 +45,7 @@ export function useQuery<Q extends FunctionReference<"query">>(
 		keepPreviousData: true,
 		...resolve(options ?? {}),
 	}));
-	// eslint-disable-next-line solid/reactivity -- passed as an accessor, read inside convex-solidjs's own tracked scopes
+	// Passed as an accessor, read inside convex-solidjs's own tracked scopes.
 	const result = useConvexQuery(query, args, resolvedOptions);
 	createComputed(
 		on(

@@ -117,8 +117,7 @@ export const update = mutation({
 			"startDate" in clean ? clean.startDate : existing.startDate
 		) as number | undefined;
 		const end = ("endDate" in clean ? clean.endDate : existing.endDate) as
-			| number
-			| undefined;
+			number | undefined;
 		unwrap(checkDateOrder(start, end));
 		await context.db.patch(id, clean);
 		if (patch.leaderId !== undefined) {

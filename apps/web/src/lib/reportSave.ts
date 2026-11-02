@@ -8,8 +8,7 @@ import type { ClientError } from "./call.ts";
 /** One field's write: the mutation's Result, or nothing when there is no
  *  row to write to yet (a create form). */
 export type SaveWrite = () =>
-	| PromiseLike<Result<unknown, ClientError>>
-	| undefined;
+	PromiseLike<Result<unknown, ClientError>> | undefined;
 
 /**
  * Sends one field's write and tells its sheet's save tracker (`field`):

@@ -12,13 +12,7 @@ const DAY = 86_400_000;
 type Seed = {
 	email: string;
 	tier:
-		| "guest"
-		| "member"
-		| "core"
-		| "board"
-		| "admin"
-		| "prospect"
-		| "former";
+		"guest" | "member" | "core" | "board" | "admin" | "prospect" | "former";
 	stage?: "active" | "onboarding" | "expired" | "queued";
 	accessUntil?: number;
 };

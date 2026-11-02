@@ -313,8 +313,7 @@ export function FilterBody(props: { filter: ColumnFilterState }): JSX.Element {
 							kind={kind()}
 							value={
 								props.filter.filterValue() as
-									| RangeFilterValue<string>
-									| undefined
+									RangeFilterValue<string> | undefined
 							}
 							onChange={props.filter.setFilter}
 						/>

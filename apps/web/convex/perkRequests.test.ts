@@ -40,21 +40,38 @@ afterEach(() => {
 	vi.useRealTimers();
 });
 
+/**
+ * Seeds run on a clock an hour before T0. convex-test, like Convex, never
+ * gives a transaction a time before the last commit, so seeding at T0 would
+ * push the function under test to T0 + 1 ms.
+ */
+async function seeded<T>(work: () => Promise<T>): Promise<T> {
+	const now = Date.now();
+	vi.setSystemTime(T0 - 3_600_000);
+	try {
+		return await work();
+	} finally {
+		vi.setSystemTime(now);
+	}
+}
+
 async function seedPerson(
 	backend: Backend,
 	email: string,
 	fields: PersonFields = {}
 ): Promise<Id<"people">> {
-	return backend.run((context) =>
-		context.db.insert("people", {
-			email,
-			firstName: "Test",
-			lastName: "Person",
-			tier: "member",
-			stage: "active",
-			stageSince: T0,
-			...fields,
-		})
+	return seeded(() =>
+		backend.run((context) =>
+			context.db.insert("people", {
+				email,
+				firstName: "Test",
+				lastName: "Person",
+				tier: "member",
+				stage: "active",
+				stageSince: T0,
+				...fields,
+			})
+		)
 	);
 }
 
@@ -62,15 +79,17 @@ async function seedPerk(
 	backend: Backend,
 	fields: PerkFields = {}
 ): Promise<Id<"perks">> {
-	return backend.run((context) =>
-		context.db.insert("perks", {
-			partner: "Example Cloud",
-			title: "Cloud credits",
-			terms: "Credits for the first year.",
-			category: "cloud",
-			createdAt: T0,
-			...fields,
-		})
+	return seeded(() =>
+		backend.run((context) =>
+			context.db.insert("perks", {
+				partner: "Example Cloud",
+				title: "Cloud credits",
+				terms: "Credits for the first year.",
+				category: "cloud",
+				createdAt: T0,
+				...fields,
+			})
+		)
 	);
 }
 

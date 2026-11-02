@@ -44,8 +44,8 @@ async function seed(
 }
 
 async function stageSince(backend: Harness, id: Id<"people">): Promise<number> {
-	const person = (await backend.run(
-		async (context): Promise<unknown> => context.db.get(id)
+	const person = (await backend.run(async (context): Promise<unknown> =>
+		context.db.get(id)
 	)) as Doc<"people"> | null;
 	if (person === null) throw new Error("person vanished");
 	return person.stageSince;

@@ -41,11 +41,7 @@ export type ReapplyPayload = Infer<typeof reapplyPayload>;
 
 /** Every answer a confirm link can give; each flow narrows it to its own. */
 export type ConfirmStatus =
-	| "verified"
-	| "already"
-	| "expired"
-	| "invalid"
-	| "ended";
+	"verified" | "already" | "expired" | "invalid" | "ended";
 
 function isLive(row: Doc<"confirmTokens">, now: number): boolean {
 	return row.consumedAt === undefined && row.expiresAt > now;

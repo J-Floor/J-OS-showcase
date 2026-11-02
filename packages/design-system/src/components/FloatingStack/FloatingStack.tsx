@@ -31,8 +31,7 @@ function createSlot(): Slot {
 /** The stack's toolbar slot, when a {@link FloatingStackProvider} (or a
  *  `FloatingStack`) is above the caller. */
 export function useFloatingStackSlot():
-	| Accessor<HTMLElement | undefined>
-	| undefined {
+	Accessor<HTMLElement | undefined> | undefined {
 	return useContext(SlotContext)?.slot;
 }
 

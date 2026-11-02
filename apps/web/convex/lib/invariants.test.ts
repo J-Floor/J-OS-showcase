@@ -261,16 +261,14 @@ const ALL_FACTS: Facts[] = BOOLS.flatMap((isComplianceMet) =>
 	BOOLS.flatMap((isSelfStepsComplete) =>
 		BOOLS.flatMap((isEverActive) =>
 			BOOLS.flatMap((isWindowOpen) =>
-				ACCESS_TIERS.map(
-					(formerOf): Facts => ({
-						verified: true,
-						complianceMet: isComplianceMet,
-						selfStepsComplete: isSelfStepsComplete,
-						everActive: isEverActive,
-						windowOpen: isWindowOpen,
-						formerOf,
-					})
-				)
+				ACCESS_TIERS.map((formerOf): Facts => ({
+					verified: true,
+					complianceMet: isComplianceMet,
+					selfStepsComplete: isSelfStepsComplete,
+					everActive: isEverActive,
+					windowOpen: isWindowOpen,
+					formerOf,
+				}))
 			)
 		)
 	)

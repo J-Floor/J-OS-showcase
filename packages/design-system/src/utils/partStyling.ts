@@ -10,6 +10,7 @@ export type PartClasses<Part extends string> = {
 
 /** Mixin: adds an optional `classOverride` map for the given parts to a props type. */
 export type WithPartClasses<Part extends string> = {
+	// eslint-disable-next-line @typescript-eslint/no-generated-empty-object-type -- generic: `{}` only while `Part` is unresolved; every use names its parts
 	classOverride?: PartClasses<Part>;
 };
 

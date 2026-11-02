@@ -81,9 +81,7 @@ type NonEnumDataType = {
 };
 
 type DataTypeFor<Data> =
-	| NonEnumDataType
-	| EnumByAccessorKey<Data>
-	| EnumByAccessorFunction;
+	NonEnumDataType | EnumByAccessorKey<Data> | EnumByAccessorFunction;
 
 /**
  * The row-agnostic `dataType` surface: what a processed column carries in its

@@ -70,17 +70,15 @@ type State = {
 	headArgs: unknown[];
 };
 
-const state = vi.hoisted(
-	(): State => ({
-		head: undefined,
-		headError: undefined,
-		floor: { since: 1000 },
-		floorError: false,
-		floorGate: undefined,
-		listBefore: vi.fn(),
-		headArgs: [],
-	})
-);
+const state = vi.hoisted((): State => ({
+	head: undefined,
+	headError: undefined,
+	floor: { since: 1000 },
+	floorError: false,
+	floorGate: undefined,
+	listBefore: vi.fn(),
+	headArgs: [],
+}));
 
 /** The `onEndReached` and `columns` the tab handed the Table, so a test can
  *  fire the one and read the other. */

@@ -80,7 +80,7 @@ export function Morph(props: MorphProps): JSX.Element {
 	function childProps(
 		userProps?: JSX.IntrinsicElements["div"]
 	): TriggerProps<"div"> {
-		// eslint-disable-next-line solid/reactivity -- the merged object goes straight to the caller's spread, which tracks it
+		// The merged object goes straight to the caller's spread, which tracks it.
 		return mergeProps(userProps ?? {}, morphAttributes(props));
 	}
 	return (

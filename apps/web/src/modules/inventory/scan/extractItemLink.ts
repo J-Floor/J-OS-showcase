@@ -3,8 +3,7 @@ import { Result } from "neverthrow";
 import { parseAssetTag } from "../../../../convex/lib/assetTag.ts";
 
 export type ItemLinkResolution =
-	| { kind: "tag"; tag: string }
-	| { kind: "invalid" };
+	{ kind: "tag"; tag: string } | { kind: "invalid" };
 
 /**
  * Resolve a scanned QR payload to an asset tag. Accepts BOTH a full deep-link

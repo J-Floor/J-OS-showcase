@@ -47,9 +47,11 @@ const UNCONFIRMED: ActuationState = {
 };
 const REFUSED_STATES: ActuationState[] = (
 	["offline", "busy", "failed"] as const
-).map(
-	(phase): ActuationState => ({ phase, action: "unlock", requestedAt: T0 })
-);
+).map((phase): ActuationState => ({
+	phase,
+	action: "unlock",
+	requestedAt: T0,
+}));
 
 const EVENTS: Record<ActuationEvent["type"], ActuationEvent> = {
 	ACCEPTED: {

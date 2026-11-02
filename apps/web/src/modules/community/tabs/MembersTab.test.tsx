@@ -39,8 +39,8 @@ const {
 	markLeftMock,
 	mutateAsyncMock,
 } = vi.hoisted(() => ({
-	kickOutMock: vi.fn(
-		(): ResultAsync<undefined, ClientError> => okAsync(undefined)
+	kickOutMock: vi.fn((): ResultAsync<undefined, ClientError> =>
+		okAsync(undefined)
 	),
 	upgradeToMemberMock: vi.fn(() => okAsync(undefined)),
 	extendWindowMock: vi.fn(() => okAsync(undefined)),

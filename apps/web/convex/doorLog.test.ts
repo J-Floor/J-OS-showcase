@@ -388,6 +388,10 @@ describe("door attempts", () => {
 			internal.doorLog.recordAttempt,
 			attemptArgs(personId)
 		);
+		// A step later than the attempt: convex-test, like Convex, never runs a
+		// transaction at or before the last commit's time.
+		const readAt = T0 + 1000;
+		vi.setSystemTime(readAt);
 		await backend.mutation(internal.doorLog.applyActuationReading, {
 			id,
 			...CHAIN,
@@ -402,7 +406,7 @@ describe("door attempts", () => {
 		expect(scheduled[1]).toEqual({
 			name: "doorActions:pollActuation",
 			args: [{ id, ...CHAIN, slot: "downstairs" }],
-			scheduledTime: T0 + CONFIRM_POLL_MS,
+			scheduledTime: readAt + CONFIRM_POLL_MS,
 		});
 	});
 

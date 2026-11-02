@@ -1,6 +1,6 @@
-import { getFunctionName } from "convex/server";
+import { getFunctionName, type FunctionArgs } from "convex/server";
 import { convexTest, type TestConvex } from "convex-test";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api, internal } from "./_generated/api";
 import { FakeOccupancyProvider } from "./lib/fakeOccupancyProvider.ts";
@@ -15,6 +15,13 @@ const EVENT_BATCH = 500;
 const T0 = Date.parse("2026-10-21T08:00:00Z");
 
 type Backend = TestConvex<typeof schema>;
+
+// Start every test on a clock before any time a test sets. convex-test, like
+// Convex, never gives a transaction a time before the last commit, so setup
+// written on the real clock would drag every later step to today.
+beforeEach(() => {
+	setNow(Date.parse("2025-01-01T00:00:00Z"));
+});
 
 afterEach(() => {
 	setOccupancyProviderForTests(undefined);
@@ -96,9 +103,10 @@ function reset(backend: Backend, at: number) {
 
 function apply(
 	backend: Backend,
-	updates: (typeof internal.occupancy.applyUpdates)["_args"]["updates"],
+	updates: FunctionArgs<typeof internal.occupancy.applyUpdates>["updates"],
 	at: number
 ) {
+	setNow(at);
 	return backend.mutation(internal.occupancy.applyUpdates, { updates, at });
 }
 
@@ -418,6 +426,7 @@ it("ignores a stored offline flag once the provider has no silence limit", async
 		new FakeOccupancyProvider({ count: 5, maxSilenceMs: 15 * MINUTE })
 	);
 	await apply(backend, [{ type: "count", count: 5 }], T0);
+	setNow(T0 + MINUTE);
 	await backend.mutation(internal.occupancy.recordSilence, {
 		maxSilenceMs: 1,
 	});

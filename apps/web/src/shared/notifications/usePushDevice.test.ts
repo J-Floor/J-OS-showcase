@@ -9,16 +9,14 @@ const { push } = vi.hoisted(() => {
 		support: "default",
 		subscribed: false,
 		configured: true,
-		enable: vi.fn(
-			(): Promise<Result<string, ClientError>> =>
-				Promise.resolve(ok("granted"))
+		enable: vi.fn((): Promise<Result<string, ClientError>> =>
+			Promise.resolve(ok("granted"))
 		),
-		disable: vi.fn(
-			(): Promise<Result<void, ClientError>> => Promise.resolve(ok())
+		disable: vi.fn((): Promise<Result<void, ClientError>> =>
+			Promise.resolve(ok())
 		),
-		read: vi.fn(
-			(): Promise<Result<boolean, ClientError>> =>
-				Promise.resolve(ok(state.subscribed))
+		read: vi.fn((): Promise<Result<boolean, ClientError>> =>
+			Promise.resolve(ok(state.subscribed))
 		),
 	};
 	return { push: state };

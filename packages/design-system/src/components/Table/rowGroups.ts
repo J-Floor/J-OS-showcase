@@ -111,8 +111,7 @@ export function createRowGroups<Data extends Record<string, unknown>>(options: {
 			: undefined;
 		const labelOf = column
 			? (columnMeta(column).groupLabel as
-					| ((row: Data) => string)
-					| undefined)
+					((row: Data) => string) | undefined)
 			: undefined;
 		const first = group.rows.at(0);
 		return labelOf && first

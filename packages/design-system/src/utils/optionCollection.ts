@@ -142,15 +142,12 @@ export function createOptionPart(
 	) => JSX.Element
 ): JSX.Element {
 	const content = children(() => props.children);
-	const record = createMemo(
-		(): OptionRecord => ({
-			value: props.value,
-			label:
-				props.label ??
-				(readOptionLabel(content.toArray()) || props.value),
-			disabled: props.disabled ?? false,
-		})
-	);
+	const record = createMemo((): OptionRecord => ({
+		value: props.value,
+		label:
+			props.label ?? (readOptionLabel(content.toArray()) || props.value),
+		disabled: props.disabled ?? false,
+	}));
 	return asElement({
 		[PART]: true,
 		kind: "option",

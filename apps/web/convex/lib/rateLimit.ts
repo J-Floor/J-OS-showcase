@@ -1,8 +1,12 @@
 import {
 	RateLimiter,
 	HOUR,
-	type RunMutationCtx,
+	type ActionCtx as RateLimitActionContext,
+	type MutationCtx as RateLimitMutationContext,
 } from "@convex-dev/rate-limiter";
+
+/** What `rateLimiter.limit` accepts: a mutation or an action context. */
+type RateLimitContext = RateLimitMutationContext | RateLimitActionContext;
 
 import { components, internal } from "../_generated/api";
 import type { ActionCtx } from "../_generated/server";
@@ -66,7 +70,7 @@ export async function sendEmailLimited(
  * answers exactly as it does on the delivered path.
  */
 export async function mayPublicSubmit(
-	context: RunMutationCtx,
+	context: RateLimitContext,
 	form: "application" | "visitor"
 ): Promise<boolean> {
 	const { ok } = await rateLimiter.limit(context, "publicSubmit");
@@ -88,7 +92,7 @@ export async function mayPublicSubmit(
  * answers the same either way.
  */
 export async function magicLinkDecision(
-	context: RunMutationCtx,
+	context: RateLimitContext,
 	email: string
 ): Promise<"link" | "noAccount" | "limited"> {
 	const perAddress = await rateLimiter.limit(context, "magicLinkAddress", {

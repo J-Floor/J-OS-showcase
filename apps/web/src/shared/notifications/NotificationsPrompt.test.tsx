@@ -15,9 +15,8 @@ const { push } = vi.hoisted(() => ({
 	push: {
 		configured: true,
 		support: "default",
-		enable: vi.fn(
-			(): Promise<Result<string, ClientError>> =>
-				Promise.resolve(ok("granted"))
+		enable: vi.fn((): Promise<Result<string, ClientError>> =>
+			Promise.resolve(ok("granted"))
 		),
 	},
 }));

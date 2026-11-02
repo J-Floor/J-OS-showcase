@@ -57,8 +57,7 @@ export function HostSelect(
 						onValueChange={(details) => {
 							props.onCommit(
 								(details.value[0] as
-									| Id<"people">
-									| undefined) ?? null
+									Id<"people"> | undefined) ?? null
 							);
 						}}
 					>

@@ -79,11 +79,7 @@ export function resetInstallPromptForTest(): void {
  *   when installable, so silence means installed or not eligible.
  */
 export type InstallMethod =
-	| "prompt"
-	| "samsung"
-	| "firefox"
-	| "other-android"
-	| "none";
+	"prompt" | "samsung" | "firefox" | "other-android" | "none";
 
 /**
  * True on iOS and iPadOS, including other browsers there (CriOS, FxiOS and

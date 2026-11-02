@@ -117,8 +117,7 @@ type ReferenceLookup = { index: string; field: string };
 /** How the merge finds the documents of one table that name a person: `index`
  *  is one lookup per listed field, `scan` reads the whole table. */
 type ReferencePlan =
-	| { mode: "index"; lookups: ReferenceLookup[] }
-	| { mode: "scan" };
+	{ mode: "index"; lookups: ReferenceLookup[] } | { mode: "scan" };
 
 type PlannedTable = {
 	validator: unknown;

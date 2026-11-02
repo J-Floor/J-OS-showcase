@@ -23,17 +23,15 @@ type State = {
 	headArgs: unknown[];
 };
 
-const state = vi.hoisted(
-	(): State => ({
-		floor: { since: 100 },
-		floorFailures: 0,
-		floorCalls: 0,
-		floorGate: undefined,
-		headError: undefined,
-		listBefore: vi.fn(),
-		headArgs: [],
-	})
-);
+const state = vi.hoisted((): State => ({
+	floor: { since: 100 },
+	floorFailures: 0,
+	floorCalls: 0,
+	floorGate: undefined,
+	headError: undefined,
+	listBefore: vi.fn(),
+	headArgs: [],
+}));
 
 const [head, setHead] = createSignal<Row[] | undefined>([]);
 
