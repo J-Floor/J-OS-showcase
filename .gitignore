@@ -7,7 +7,7 @@ dist
 apps/web/.convex-tmp
 
 # Lint caches
-.eslintcache
+.eslintcache*
 .stylelintcache
 
 apps/web/agreements/*.pdf

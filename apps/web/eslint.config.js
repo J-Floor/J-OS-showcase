@@ -1,6 +1,7 @@
 import baseConfig, { INLINE_STYLE_RESTRICTIONS } from "@j-os/config-eslint";
 import solid from "eslint-plugin-solid";
 
+import { ambientInDts } from "./eslint/ambientInDts.js";
 import { HANDLE_RESULT, mustUseResult } from "./eslint/mustUseResult.js";
 import { noCollectInMutation } from "./eslint/noCollectInMutation.js";
 
@@ -8,6 +9,7 @@ const neverthrowRules = { rules: { "must-use-result": mustUseResult } };
 const convexRules = {
 	rules: { "no-collect-in-mutation": noCollectInMutation },
 };
+const typeRules = { rules: { "ambient-in-dts": ambientInDts } };
 
 const UNSAFE_UNWRAP_MESSAGE = `Handle the Result instead. ${HANDLE_RESULT}`;
 
@@ -132,6 +134,33 @@ export default [
 				},
 			],
 		},
+	},
+	{
+		// The convex lint task in turbo.json hashes no src file but its .d.ts
+		// files: convex must not import src, and src keeps its ambient
+		// declarations in .d.ts files.
+		files: ["convex/**/*.ts"],
+		rules: {
+			"no-restricted-imports": [
+				"error",
+				{
+					...baseRestrictedImports,
+					patterns: [
+						...baseRestrictedImports.patterns,
+						{
+							regex: "^(\\.\\./)+src(/|$)",
+							message:
+								"convex/ must not import src/: the backend cannot depend on the frontend.",
+						},
+					],
+				},
+			],
+		},
+	},
+	{
+		files: ["src/**/*.{ts,tsx}"],
+		plugins: { types: typeRules },
+		rules: { "types/ambient-in-dts": "error" },
 	},
 	{
 		files: ["convex/**/*.ts"],

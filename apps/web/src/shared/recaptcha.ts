@@ -1,19 +1,5 @@
 import { onCleanup, onMount } from "solid-js";
 
-// grecaptcha v3 is loaded by a <script> we inject on mount; type just what we call.
-declare global {
-	// eslint-disable-next-line @typescript-eslint/consistent-type-definitions -- global augmentation requires interface
-	interface Window {
-		grecaptcha?: {
-			ready(callback: () => void): void;
-			execute(
-				siteKey: string,
-				options: { action: string }
-			): Promise<string>;
-		};
-	}
-}
-
 export const SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY as string;
 
 /**

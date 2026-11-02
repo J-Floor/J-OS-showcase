@@ -1,0 +1,34 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "lint:logic": {
+      "dependsOn": ["lint:logic:convex", "lint:logic:app"]
+    },
+    // Every package file except src's, which convex code never sees: convex/
+    // may not import src/ (no-restricted-imports in eslint.config.js), and
+    // src's ambient declarations live in .d.ts files (types/ambient-in-dts),
+    // which stay in. The [!d] and [!.] classes drop every .ts but a .d.ts.
+    "lint:logic:convex": {
+      "outputs": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "!src/**/*.{tsx,scss,md,pdf,typ}",
+        "!src/**/*[!d].ts",
+        "!src/**/*[!.]d.ts",
+        "$TURBO_ROOT$/packages/design-system/src/**",
+        "$TURBO_ROOT$/packages/design-system/package.json",
+        "$TURBO_ROOT$/packages/config-eslint/**"
+      ]
+    },
+    "lint:logic:app": {
+      "outputs": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/design-system/src/**",
+        "$TURBO_ROOT$/packages/design-system/package.json",
+        "$TURBO_ROOT$/packages/config-eslint/**"
+      ]
+    }
+  }
+}
