@@ -65,6 +65,7 @@ export const fixImportYear = internalMutation({
 	args: {},
 	handler: async (context) => {
 		let peoplePatched = 0;
+		// eslint-disable-next-line convex/no-collect-in-mutation -- completed one-off over a few hundred people; paginate before re-running on a larger table
 		const people = await context.db.query("people").collect();
 		for (const person of people) {
 			if (person.accessFrom === WRONG) {
@@ -73,6 +74,7 @@ export const fixImportYear = internalMutation({
 			}
 		}
 		let signaturesPatched = 0;
+		// eslint-disable-next-line convex/no-collect-in-mutation -- completed one-off over a few hundred signatures; paginate before re-running on a larger table
 		const signatures = await context.db.query("signatures").collect();
 		for (const signature of signatures) {
 			if (signature.signedAt === WRONG) {
@@ -200,6 +202,7 @@ export const backfillActivatedAt = internalMutation({
 	args: {},
 	handler: async (context): Promise<{ set: number }> => {
 		let set = 0;
+		// eslint-disable-next-line convex/no-collect-in-mutation -- completed one-off over a few hundred people; paginate before re-running on a larger table
 		const people = await context.db.query("people").collect();
 		for (const person of people) {
 			if (person.activatedAt !== undefined) continue;
@@ -210,6 +213,7 @@ export const backfillActivatedAt = internalMutation({
 				person.tier === "former" ||
 				(person.tier === "guest" && person.stage === "expired")
 			) {
+				// eslint-disable-next-line convex/no-collect-in-mutation -- one person's events, in a completed one-off
 				const events = await context.db
 					.query("personEvents")
 					.withIndex("by_person", (range) =>
@@ -248,6 +252,7 @@ export const repairGuestWithoutAgreement = internalMutation({
 			person?.tier === "guest" && person.stage === "active",
 			"Not an active guest."
 		);
+		// eslint-disable-next-line convex/no-collect-in-mutation -- one person's signatures: a handful of rows
 		const sigs = await context.db
 			.query("signatures")
 			.withIndex("by_person", (range) => range.eq("personId", personId))

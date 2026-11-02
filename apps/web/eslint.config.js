@@ -2,8 +2,12 @@ import baseConfig, { INLINE_STYLE_RESTRICTIONS } from "@j-os/config-eslint";
 import solid from "eslint-plugin-solid";
 
 import { HANDLE_RESULT, mustUseResult } from "./eslint/mustUseResult.js";
+import { noCollectInMutation } from "./eslint/noCollectInMutation.js";
 
 const neverthrowRules = { rules: { "must-use-result": mustUseResult } };
+const convexRules = {
+	rules: { "no-collect-in-mutation": noCollectInMutation },
+};
 
 const UNSAFE_UNWRAP_MESSAGE = `Handle the Result instead. ${HANDLE_RESULT}`;
 
@@ -128,6 +132,12 @@ export default [
 				},
 			],
 		},
+	},
+	{
+		files: ["convex/**/*.ts"],
+		ignores: ["convex/**/*.test.ts"],
+		plugins: { convex: convexRules },
+		rules: { "convex/no-collect-in-mutation": "error" },
 	},
 	{
 		// Email clients read no stylesheet: jsx-email templates style inline.

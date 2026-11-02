@@ -98,8 +98,10 @@ export const healAndScan = internalMutation({
 	args: {},
 	handler: async (context): Promise<{ healed: number; found: Found[] }> => {
 		const now = Date.now();
+		// eslint-disable-next-line convex/no-collect-in-mutation -- the scan needs every row in one transaction; the space has a few hundred people
 		const signatures = await context.db.query("signatures").collect();
 		const healed = await healActivatable(context, signatures, now);
+		// eslint-disable-next-line convex/no-collect-in-mutation -- duplicate emails pair rows across the whole table; a few hundred people
 		const people = await context.db.query("people").collect();
 		const found = scanViolations(people, signatures, now);
 		found.sort((first, second) =>

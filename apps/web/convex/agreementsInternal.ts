@@ -123,6 +123,7 @@ export const recordSignature = internalMutation({
 		// on every re-onboarding). A native signature (has `fileId`) is never
 		// touched here — a genuine double-sign is already blocked upstream by
 		// `signingContext.alreadySigned`.
+		// eslint-disable-next-line convex/no-collect-in-mutation -- one person's signatures: a handful of rows
 		const prior = await context.db
 			.query("signatures")
 			.withIndex("by_person", (range) =>

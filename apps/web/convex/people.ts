@@ -1208,11 +1208,13 @@ export const logWifiOpen = mutation({
 	args: {},
 	handler: async (context) => {
 		const person = unwrap(await requireRole(context, ACCESS_TIERS));
-		const events = await context.db
+		const opened = await context.db
 			.query("personEvents")
-			.withIndex("by_person", (range) => range.eq("personId", person._id))
-			.collect();
-		if (events.some((event) => event.kind === "wifi")) return;
+			.withIndex("by_person_and_kind", (range) =>
+				range.eq("personId", person._id).eq("kind", "wifi")
+			)
+			.first();
+		if (opened !== null) return;
 		await context.db.insert("personEvents", {
 			personId: person._id,
 			at: Date.now(),

@@ -438,6 +438,7 @@ export default defineSchema({
 		meta: v.optional(v.any()),
 	})
 		.index("by_person", ["personId"])
+		.index("by_person_and_kind", ["personId", "kind"])
 		.index("by_kind_and_at", ["kind", "at"]),
 	/**
 	 * Per-person UI state that changes often (the last module route viewed).

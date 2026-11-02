@@ -1,8 +1,14 @@
 import { v } from "convex/values";
 import { err, ok, type Result } from "neverthrow";
 
+import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { mutation, query, type MutationCtx } from "./_generated/server";
+import {
+	internalMutation,
+	mutation,
+	query,
+	type MutationCtx,
+} from "./_generated/server";
 import { requireRole } from "./lib/authGuard.ts";
 import type { InputError } from "./lib/errors/input.ts";
 import { invariant, unwrap } from "./lib/result.ts";
@@ -15,6 +21,8 @@ import {
 } from "./lib/validate.ts";
 import { notify } from "./notify/notify.ts";
 import { projectFields } from "./schema.ts";
+
+const BATCH_SIZE = 200;
 
 function checkDateOrder(
 	start?: number,
@@ -129,17 +137,50 @@ export const update = mutation({
 
 export const remove = mutation({
 	args: { id: v.id("projects") },
-	handler: async (context, { id }) => {
+	handler: async (context, { id }): Promise<null> => {
 		unwrap(await requireRole(context, CORE_AND_BOARD));
-		// Detach tasks so no card points at a deleted project.
+		// A second click or tab finds it gone and does nothing: the first
+		// remove already queued the detach.
+		const project = await context.db.get(id);
+		if (project) {
+			// The project goes first, so it leaves the list at once. Its tasks
+			// are detached after, in bounded batches; until then a card's
+			// projectId matches no project, which the tasks UI shows as none.
+			await context.db.delete(id);
+			await context.scheduler.runAfter(
+				0,
+				internal.projects.detachProjectTasks,
+				{ projectId: id }
+			);
+		}
+		return null;
+	},
+});
+
+/**
+ * Bounded batch detach of one project's tasks over the `by_project` index.
+ * Reschedules itself while a batch comes back full. It converges because
+ * clearing `projectId` takes each task out of the range it reads.
+ */
+export const detachProjectTasks = internalMutation({
+	args: { projectId: v.id("projects") },
+	handler: async (context, { projectId }): Promise<null> => {
 		const tasks = await context.db
 			.query("tasks")
-			.withIndex("by_project", (range) => range.eq("projectId", id))
-			.collect();
+			.withIndex("by_project", (range) =>
+				range.eq("projectId", projectId)
+			)
+			.take(BATCH_SIZE);
 		for (const task of tasks) {
 			await context.db.patch(task._id, { projectId: undefined });
 		}
-		await context.db.delete(id);
+		if (tasks.length === BATCH_SIZE) {
+			await context.scheduler.runAfter(
+				0,
+				internal.projects.detachProjectTasks,
+				{ projectId }
+			);
+		}
 		return null;
 	},
 });
