@@ -17,6 +17,8 @@ import {
 	scrollRingRowIntoView,
 } from "./gridFocusDom.ts";
 import { createGridRing, type GridFocusProps } from "./gridRing.ts";
+import type { RingEvent } from "./ringMachine.ts";
+import type { RowVirtualizer } from "./virtualRows.ts";
 
 export type GridFocus<Data extends Record<string, unknown>> = {
 	/** Spread onto the `<table>`. Empty unless `focusableRows` is on. */
@@ -27,7 +29,52 @@ export type GridFocus<Data extends Record<string, unknown>> = {
 	isRowFocused: (row: TanRow<Data>) => boolean;
 	/** The row's DOM id (`<tr id>`), the target of `aria-activedescendant`. */
 	rowDomId: (row: TanRow<Data>) => string | undefined;
+	/** Keeps the ringed row on screen. Called once, by the table, with the
+	 *  rows' virtualiser, which scrolls to a row its window has not rendered
+	 *  (it is built after the focus). */
+	keepRingRowInView: (rows: Pick<RowVirtualizer, "scrollToRow">) => void;
 };
+
+// The table owns its keys only while it holds real focus, and only when the
+// keystroke is aimed at the table itself: Enter on a button in a row, or a
+// key in a row's field, bubbles here with a different target and belongs to
+// that control. Keys pressed anywhere else on the page never arrive at all.
+function createGridKeyDown<Data extends Record<string, unknown>>(options: {
+	props: GridFocusProps<Data>;
+	rows: () => TanRow<Data>[];
+	rowById: (id: string | undefined) => TanRow<Data> | undefined;
+	ringRowId: () => string | undefined;
+	ringLive: () => boolean;
+	dispatch: (event: RingEvent) => void;
+}): (event: KeyboardEvent) => void {
+	const { props, rows, rowById, ringRowId, ringLive, dispatch } = options;
+
+	function activateRingRow(event: KeyboardEvent): void {
+		const row = rowById(ringRowId());
+		if (!row) return;
+		event.preventDefault();
+		props.onRowActivate?.(row.original);
+	}
+
+	return (event) => {
+		if (
+			event.target !== event.currentTarget ||
+			hasModifier(event) ||
+			!ringLive()
+		)
+			return;
+		if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+			if (rows().length === 0) return;
+			event.preventDefault();
+			dispatch({
+				type: "arrow",
+				delta: event.key === "ArrowDown" ? 1 : -1,
+			});
+			return;
+		}
+		if (event.key === "Enter") activateRingRow(event);
+	};
+}
 
 export function createGridFocus<Data extends Record<string, unknown>>(options: {
 	props: GridFocusProps<Data>;
@@ -60,7 +107,15 @@ export function createGridFocus<Data extends Record<string, unknown>>(options: {
 		return rowId(row) === stampedRowId();
 	}
 
-	scrollRingRowIntoView(ringRowId, domIdFor);
+	function keepRingRowInView(
+		virtualRows: Pick<RowVirtualizer, "scrollToRow">
+	): void {
+		scrollRingRowIntoView({
+			ringRowId,
+			domIdFor,
+			scrollToRow: virtualRows.scrollToRow,
+		});
+	}
 
 	// `advance` moves the ring to whatever now occupies the index the focused
 	// row held. Meant to be called after an action resolves and the acted-on row
@@ -73,35 +128,14 @@ export function createGridFocus<Data extends Record<string, unknown>>(options: {
 		});
 	});
 
-	// The table owns its keys only while it holds real focus, and only when the
-	// keystroke is aimed at the table itself: Enter on a button in a row, or a
-	// key in a row's field, bubbles here with a different target and belongs to
-	// that control. Keys pressed anywhere else on the page never arrive at all.
-	function handleGridKeyDown(event: KeyboardEvent): void {
-		if (
-			event.target !== event.currentTarget ||
-			hasModifier(event) ||
-			!ringLive()
-		)
-			return;
-		if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-			if (rows().length === 0) return;
-			event.preventDefault();
-			dispatch({
-				type: "arrow",
-				delta: event.key === "ArrowDown" ? 1 : -1,
-			});
-			return;
-		}
-		if (event.key === "Enter") activateRingRow(event);
-	}
-
-	function activateRingRow(event: KeyboardEvent): void {
-		const row = rowById(ringRowId());
-		if (!row) return;
-		event.preventDefault();
-		props.onRowActivate?.(row.original);
-	}
+	const handleGridKeyDown = createGridKeyDown({
+		props,
+		rows,
+		rowById,
+		ringRowId,
+		ringLive,
+		dispatch,
+	});
 
 	/** The grid's focus and keyboard wiring, shared by both `<table>` branches.
 	 *  Spread onto the element; called inside the spread's effect, so
@@ -129,5 +163,5 @@ export function createGridFocus<Data extends Record<string, unknown>>(options: {
 		};
 	}
 
-	return { gridAttributes, isRowFocused, rowDomId };
+	return { gridAttributes, isRowFocused, rowDomId, keepRingRowInView };
 }

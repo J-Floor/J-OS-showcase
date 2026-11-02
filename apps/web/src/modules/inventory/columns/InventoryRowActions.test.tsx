@@ -1,27 +1,6 @@
 // @vitest-environment happy-dom
 import { cleanup, render, screen } from "@solidjs/testing-library";
-import type { ComponentProps } from "solid-js";
-import { afterEach, expect, test, vi } from "vitest";
-
-// The real `QrCode.DownloadTrigger` rasterises to a data URL via canvas,
-// which jsdom doesn't back — stub it the same way EntityQr.test.tsx does.
-vi.mock("@ark-ui/solid/qr-code", async (importOriginal) => {
-	const actual =
-		await importOriginal<typeof import("@ark-ui/solid/qr-code")>();
-	return {
-		...actual,
-		QrCode: {
-			...actual.QrCode,
-			DownloadTrigger: (
-				props: ComponentProps<typeof actual.QrCode.DownloadTrigger>
-			) => (
-				<div data-testid="download-trigger">
-					{props.asChild?.(() => ({}))}
-				</div>
-			),
-		},
-	};
-});
+import { afterEach, expect, test } from "vitest";
 
 afterEach(cleanup);
 

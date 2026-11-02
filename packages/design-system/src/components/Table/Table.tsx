@@ -70,8 +70,8 @@ export type TableRootProps<Data extends Record<string, unknown>> = {
 	 *
 	 * Turn it on where a row is expensive rather than where rows are merely
 	 * numerous: a table whose cells are plain text copes with hundreds of rows,
-	 * while one with a picker and three icon buttons per row does not. Requires
-	 * `groupBy` (the ungrouped branch is unvirtualised).
+	 * while one with a picker and three icon buttons per row does not. Grouped
+	 * or flat; the rows must scroll in a bounded box.
 	 */
 	virtualize?: boolean;
 	/**
@@ -88,9 +88,9 @@ export type TableRootProps<Data extends Record<string, unknown>> = {
 	 * for the next. A caller whose page failed should not retry from here, or
 	 * it loops while offline.
 	 *
-	 * Virtualised tables only (`virtualize` + `groupBy`, inside a bounded scroll
-	 * box). It reads the virtualiser's window, so an unvirtualised table, or
-	 * one with no height to window against, never calls it.
+	 * Virtualised tables only (`virtualize`, inside a bounded scroll box). It
+	 * reads the virtualiser's window, so an unvirtualised table, or one with
+	 * no height to window against, never calls it.
 	 */
 	onEndReached?: () => void;
 	onRowClick?: (row: Data, event: MouseEvent) => void;
@@ -248,7 +248,7 @@ function createTableModel<Data extends Record<string, unknown>>(
 
 	reportRows({ props, table, displayedLeafRows: groups.displayedLeafRows });
 
-	const renderItems = createRenderItems(groups);
+	const renderItems = createRenderItems(props, groups);
 
 	return { table, rowSelection, groups, focus, selection, renderItems };
 }
@@ -341,6 +341,7 @@ export function Root<Data extends Record<string, unknown>>(
 		loading,
 	});
 	const { layout } = viewport;
+	focus.keepRingRowInView(viewport.rows);
 
 	const body: BodyContext<Data> = {
 		props,

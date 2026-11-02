@@ -16,11 +16,11 @@ import {
 import type { RenderItem } from "./rowGroups.ts";
 import type { TableRootProps } from "./Table.tsx";
 
-/** Roughly one line of text plus padding. Stands in for a row the virtualiser
- * has not measured yet, and for one it could only measure at zero height (see
- * `measureElement`). Mirrors `$row-height` in Table.module.scss, which sizes
- * the skeleton rows — change both together. */
-const ESTIMATED_ROW_HEIGHT = 53;
+/** One row's height (`$row-height` in Table.module.scss):
+ *  short-component-height + 2 × spacing-near + border-width-decorative.
+ *  Stands in for a row the virtualiser has not measured yet, and for one it
+ *  could only measure at zero height (see `measureElement`). */
+export const ESTIMATED_ROW_HEIGHT = 49;
 
 const END_REACHED_THRESHOLD_ROWS = 10;
 
@@ -43,6 +43,10 @@ export type RowVirtualizer = {
 	/** Whether the rows are actually windowed. */
 	virtualizing: () => boolean;
 	virtualizer: Virtualizer<HTMLElement, Element>;
+	/** Scrolls the window to the row with this id, which it may not have
+	 *  rendered; false when the rows are not windowed or the row is not
+	 *  displayed. */
+	scrollToRow: (id: string) => boolean;
 };
 
 /**
@@ -206,8 +210,9 @@ export function createRowVirtualizer<
 	 * window exactly as it was rather than recomputing against a zero-size
 	 * viewport — see `hasEverBeenVisible`/`hidden()` and the `items` memo in
 	 * `VirtualBody`. Only a scroll parent that has NEVER been measured with a
-	 * height falls back further, to skeleton rows (see the grouped body's
-	 * `hasEverBeenVisible` guard) rather than render-all.
+	 * height falls back further, to skeleton rows (see the
+	 * `hasEverBeenVisible` guard in `Windowed`, TableBody.tsx) rather than
+	 * render-all.
 	 */
 	function virtualizing(): boolean {
 		return props.virtualize
@@ -224,9 +229,9 @@ export function createRowVirtualizer<
 		// nothing for the code being here.
 		getScrollElement: () =>
 			virtualizing() ? scroll.scrollElement() : null,
-		// Roughly one line of text plus padding. Wrong rows are re-measured on
-		// mount via `measureElement`, so this only affects the first paint's
-		// scrollbar length.
+		// One row's height. Taller rows are re-measured on mount via
+		// `measureElement`, so this only affects the first paint's scrollbar
+		// length.
 		estimateSize: () => ESTIMATED_ROW_HEIGHT,
 		// Enough that a fast flick does not show blank rows, few enough that the
 		// mounted-widget count stays a fraction of the table.
@@ -272,7 +277,17 @@ export function createRowVirtualizer<
 		},
 	});
 
-	const rows = { virtualizing, virtualizer };
+	function scrollToRow(id: string): boolean {
+		if (!virtualizing()) return false;
+		const index = renderItems().findIndex(
+			(item) => item.kind === "row" && item.row.id === id
+		);
+		if (index === -1) return false;
+		virtualizer.scrollToIndex(index);
+		return true;
+	}
+
+	const rows = { virtualizing, virtualizer, scrollToRow };
 	watchEndReached({
 		props,
 		rows,

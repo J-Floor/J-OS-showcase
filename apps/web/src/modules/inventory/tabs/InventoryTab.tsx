@@ -60,6 +60,10 @@ function Root<Row extends Record<string, unknown> & EntityRow>(props: {
 	newItemAssetTag?: () => string | undefined;
 	/** Items tab only: checkboxes + header select-all. Types/categories omit this. */
 	enableRowSelection?: boolean;
+	/** Items tab only: render just the rows near the viewport. Its rows (a
+	 *  checkbox and two icon buttons each) grow with the item count, and
+	 *  building them all at once stalled the page open. */
+	virtualize?: boolean;
 	/** `InventoryTab.Sheet`, and `Table.BatchActions` when row selection is on. */
 	children?: JSX.Element;
 }): JSX.Element {
@@ -116,6 +120,7 @@ function Root<Row extends Record<string, unknown> & EntityRow>(props: {
 				}}
 				onFocusedRowChange={prefetchRow}
 				enableRowSelection={props.enableRowSelection}
+				virtualize={props.virtualize}
 			>
 				{props.children}
 			</Table.Root>

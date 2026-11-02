@@ -250,7 +250,7 @@ export function renderRow<Data extends Record<string, unknown>>(
 			id={focus.rowDomId(row())}
 			role="row"
 			data-index={measured?.index}
-			class={clsx(props.onRowClick && styles.clickable)}
+			class={clsx(styles.dataRow, props.onRowClick && styles.clickable)}
 			data-state={row().getIsSelected() ? "selected" : undefined}
 			data-focused={focus.isRowFocused(row()) ? "true" : undefined}
 			{...{ [MORPH_OF]: context.rowId(row()) }}

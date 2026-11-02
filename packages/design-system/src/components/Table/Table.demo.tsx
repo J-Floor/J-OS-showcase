@@ -39,8 +39,9 @@ function entries(from: number): Entry[] {
 const ENDLESS_DELAY_MS = 600;
 
 /** A virtualised table that appends a chunk each time its end nears, with
- *  skeleton rows while the chunk "loads". */
-function EndlessTable(): JSX.Element {
+ *  skeleton rows while the chunk "loads". Grouped by batch, or flat rows;
+ *  arrow keys move a ring that scrolls the window to its row. */
+function EndlessTable(props: { grouped: boolean }): JSX.Element {
 	const [rows, setRows] = createSignal(entries(0));
 	const [loadingMore, setLoadingMore] = createSignal(false);
 	let timer: ReturnType<typeof setTimeout> | undefined;
@@ -53,8 +54,9 @@ function EndlessTable(): JSX.Element {
 				columns={endlessColumns}
 				getRowId={(row) => row.id}
 				data={rows()}
-				groupBy="batch"
+				groupBy={props.grouped ? "batch" : undefined}
 				virtualize
+				focusableRows
 				loadingMore={loadingMore()}
 				onEndReached={() => {
 					if (rows().length >= ENDLESS_MAX) return;
@@ -212,7 +214,14 @@ export default {
 	// those controls change so the preview reflects them (real usage passes
 	// these statically).
 	render: (p) => (
-		<Show when={!p.endless} fallback={<EndlessTable />}>
+		<Show
+			when={!p.endless}
+			fallback={
+				<Show when={String(p.grouped)} keyed>
+					<EndlessTable grouped={p.grouped} />
+				</Show>
+			}
+		>
 			<Show
 				when={`${String(p.enableRowSelection)}|${String(p.grouped)}|${String(p.headerColumn)}`}
 				keyed
@@ -261,6 +270,7 @@ export default {
 		Loading: { loading: true },
 		"No rows": { empty: true },
 		"Custom empty state": { empty: true, customEmpty: true },
-		"Load more at the end": { endless: true },
+		"Load more at the end": { endless: true, grouped: true },
+		"Windowed flat rows": { endless: true },
 	},
 } satisfies Demo;

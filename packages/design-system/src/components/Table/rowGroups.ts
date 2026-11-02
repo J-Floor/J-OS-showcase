@@ -160,7 +160,7 @@ export function createRowGroups<Data extends Record<string, unknown>>(options: {
 
 /**
  * The virtual body's list: each group's header, followed by its rows while
- * it is expanded.
+ * it is expanded. An ungrouped table's list is its rows.
  *
  * Memoised so an item's identity is stable while nothing has changed. The
  * virtual body keys off that identity to decide when to re-render a row, so
@@ -168,9 +168,14 @@ export function createRowGroups<Data extends Record<string, unknown>>(options: {
  * every tick.
  */
 export function createRenderItems<Data extends Record<string, unknown>>(
+	props: Pick<TableRootProps<Data>, "groupBy">,
 	groups: RowGroups<Data>
 ): Accessor<RenderItem<Data>[]> {
 	const renderItems = createMemo<RenderItem<Data>[]>(() => {
+		if (!props.groupBy)
+			return groups
+				.displayedLeafRows()
+				.map((row) => ({ kind: "row", row }));
 		const items: RenderItem<Data>[] = [];
 		for (const group of groups.rowGroups()) {
 			items.push({ kind: "group", group });

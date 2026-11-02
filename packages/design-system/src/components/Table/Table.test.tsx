@@ -28,6 +28,7 @@ import { fieldColumn } from "./fieldColumn.ts";
 import { Table } from "./Table.tsx";
 import { rowId, rowIndex } from "./testRowIds.ts";
 import type { JfColumnDefinition } from "./types.ts";
+import { ESTIMATED_ROW_HEIGHT } from "./virtualRows.ts";
 
 // jsdom workarounds for ark/zag (Popover/Tooltip) used by header buttons.
 if (!(Element.prototype as { scrollTo?: unknown }).scrollTo) {
@@ -1612,5 +1613,78 @@ describe("columns that change after mount", () => {
 			expect(cell).toBe(cellsBefore[index]);
 			expect(cell.firstElementChild).toBe(contentBefore[index]);
 		}
+	});
+});
+
+function tableScss(): string {
+	return readFileSync(`${import.meta.dirname}/Table.module.scss`, "utf8");
+}
+
+/** A `--jf-*` token's pixel value, read from the stylesheet that sets it. */
+function tokenPx(name: string): number {
+	for (const file of ["dimension", "spacing", "border"]) {
+		const source = readFileSync(
+			`${import.meta.dirname}/../../styles/${file}.scss`,
+			"utf8"
+		);
+		const value = new RegExp(`--${name}:\\s*([\\d.]+)px;`).exec(source);
+		if (value) return Number(value[1]);
+	}
+	throw new Error(`no px token --${name}`);
+}
+
+describe("data row height", () => {
+	test("a data row takes at least one row's height, whatever its cells hold", () => {
+		expect(tableScss()).toMatch(
+			/& tr\.dataRow\s*\{\s*min-block-size: \$row-height;/
+		);
+	});
+
+	test("the row height is a 32px control, its padding and the row border, in tokens", () => {
+		const scss = tableScss();
+		expect(scss).toContain(
+			"$row-control: var(--jf-dimension-short-component-height);"
+		);
+		expect(scss).toContain("$row-padding: var(--jf-spacing-near);");
+		expect(scss).toContain(
+			"$row-border: var(--jf-border-width-decorative);"
+		);
+		expect(scss).toContain(
+			"$row-height: calc($row-control + 2 * $row-padding + $row-border);"
+		);
+		// The border in the sum is the one every row draws.
+		expect(scss).toMatch(
+			/& tr \{[^}]*border-block-end: \$row-border solid/
+		);
+	});
+
+	test("the virtualiser's row estimate is the stylesheet's row height", () => {
+		// It cannot read CSS, so it is the same sum as a number.
+		expect(ESTIMATED_ROW_HEIGHT).toBe(
+			tokenPx("jf-dimension-short-component-height") +
+				2 * tokenPx("jf-spacing-near") +
+				tokenPx("jf-border-width-decorative")
+		);
+	});
+
+	test("every data row carries the class that floors its height", () => {
+		render(() => (
+			<Table.Root
+				columns={
+					[
+						{
+							accessorKey: "name",
+							header: "Name",
+							dataType: "string",
+						},
+					] as never
+				}
+				data={[{ slug: "ann", name: "Ann" }]}
+				getRowId={(row) => row.slug}
+			/>
+		));
+		expect(screen.getByText("Ann").closest("tr")?.className).toMatch(
+			/dataRow/
+		);
 	});
 });

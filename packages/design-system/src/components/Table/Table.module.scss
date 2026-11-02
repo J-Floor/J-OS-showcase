@@ -5,10 +5,15 @@
 @use "../../styles/typography" as typo;
 @use "../../styles/utils" as utils;
 
-/* One table row's height: skeleton rows use it so the swap to real rows does
-   not shift the page. Mirrored by ESTIMATED_ROW_HEIGHT in virtualRows.ts (the
-   virtualiser's estimate) — change both together. */
-$row-height: 53px;
+/* One table row's height: a 32px control, the cells' padding above and below
+   it, and the row's bottom border (rows are border-box). The least a data
+   row takes, and the skeleton rows' height, so the swap to real rows does
+   not shift the page. ESTIMATED_ROW_HEIGHT in virtualRows.ts is the same sum
+   as a number; Table.test.tsx pins the two together. */
+$row-control: var(--jf-dimension-short-component-height);
+$row-padding: var(--jf-spacing-near);
+$row-border: var(--jf-border-width-decorative);
+$row-height: calc($row-control + 2 * $row-padding + $row-border);
 
 /* The multi-sort badge's type: body-small, with a glyph as small as the text
    and no line box, so the badge sits flush in the button's corner. */
@@ -123,7 +128,7 @@ $track-properties: ();
 		display: grid;
 		grid-template-columns: var(--jf-table-tracks);
 		min-inline-size: max(100%, var(--jf-table-floor));
-		border-block-end: 1px solid var(--jf-border-subtle);
+		border-block-end: $row-border solid var(--jf-border-subtle);
 	}
 
 	/* A content column that widens (a wider row arrives, a font loads)
@@ -180,6 +185,14 @@ $track-properties: ();
 	}
 
 	& tbody {
+		/* Every data row is at least one row high ($row-height), whatever its
+		   cells hold: a row of plain text would otherwise be shorter than one
+		   with a control in it, tables would differ from page to page, and
+		   the skeleton rows would shrink as the data lands. */
+		& tr.dataRow {
+			min-block-size: $row-height;
+		}
+
 		& tr.clickable {
 			cursor: pointer;
 
@@ -572,7 +585,7 @@ $track-properties: ();
 	gap: var(--jf-spacing-far);
 	block-size: $row-height;
 	padding-inline: var(--jf-spacing-near);
-	border-block-end: 1px solid var(--jf-border-subtle);
+	border-block-end: $row-border solid var(--jf-border-subtle);
 }
 
 /* The title a row morph flies into a sheet. One box even when a long name

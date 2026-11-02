@@ -1,7 +1,16 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@solidjs/testing-library";
 import type { JSX } from "solid-js";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+
+import { downloadHref } from "../downloadBlob.ts";
+import { toaster } from "../toaster.ts";
 
 import { EntityQrActions, EntityQrBlock } from "./EntityQr.tsx";
 
@@ -33,10 +42,42 @@ vi.mock("@ark-ui/solid/qr-code", async (importOriginal) => {
 				</div>
 			),
 		},
+		// The row's one-shot QR rasterises through `getDataUrl`, which needs a
+		// canvas: keep the real machine (so the frame renders) and stub only
+		// the rasterise, noting whether zag's frame was in the DOM to read.
+		useQrCode: (props: Parameters<typeof actual.useQrCode>[0]) => {
+			const qr = actual.useQrCode(props);
+			return () => ({
+				...qr(),
+				getDataUrl: (type: string) => {
+					rasterised.push({
+						type,
+						hadFrame:
+							document.querySelector('svg[data-part="frame"]') !==
+							null,
+					});
+					return shouldRasteriseFail
+						? Promise.reject(new Error("no canvas"))
+						: Promise.resolve(`data:${type};base64,stub`);
+				},
+			});
+		},
 	};
 });
 
-afterEach(cleanup);
+vi.mock("../downloadBlob.ts", () => ({ downloadHref: vi.fn() }));
+vi.mock("../toaster.ts", () => ({ toaster: { create: vi.fn() } }));
+
+const rasterised: { type: string; hadFrame: boolean }[] = [];
+let shouldRasteriseFail = false;
+
+afterEach(() => {
+	cleanup();
+	rasterised.length = 0;
+	shouldRasteriseFail = false;
+	vi.mocked(downloadHref).mockClear();
+	vi.mocked(toaster.create).mockClear();
+});
 
 let writeText: ReturnType<typeof vi.fn>;
 
@@ -63,7 +104,46 @@ test("EntityQrActions copies the url and swaps to a Copied state", () => {
 	expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
 });
 
-test("EntityQrActions wires the download trigger with the given fileName", () => {
+test("EntityQrActions builds no QR until Download QR is pressed", () => {
+	const { container } = render(() => (
+		<EntityQrActions
+			url="https://jfloor.test/visit/abc"
+			fileName="abc-qr.png"
+		/>
+	));
+
+	// A QR per row is encoded at mount otherwise, on every table open.
+	expect(container.querySelector('[data-scope="qr-code"]')).toBeNull();
+	expect(
+		screen.getByRole("button", { name: "Download QR" })
+	).toBeInTheDocument();
+});
+
+test("EntityQrActions downloads the QR as a PNG named fileName on press", async () => {
+	const { container } = render(() => (
+		<EntityQrActions
+			url="https://jfloor.test/visit/abc"
+			fileName="abc-qr.png"
+		/>
+	));
+
+	fireEvent.click(screen.getByRole("button", { name: "Download QR" }));
+
+	await waitFor(() => {
+		expect(downloadHref).toHaveBeenCalledWith(
+			"data:image/png;base64,stub",
+			"abc-qr.png"
+		);
+	});
+	// zag looks the frame up in the DOM to rasterise it.
+	expect(rasterised).toEqual([{ type: "image/png", hadFrame: true }]);
+	await waitFor(() => {
+		expect(container.querySelector('[data-scope="qr-code"]')).toBeNull();
+	});
+});
+
+test("EntityQrActions toasts a failed QR download and frees the button", async () => {
+	shouldRasteriseFail = true;
 	render(() => (
 		<EntityQrActions
 			url="https://jfloor.test/visit/abc"
@@ -71,12 +151,15 @@ test("EntityQrActions wires the download trigger with the given fileName", () =>
 		/>
 	));
 
-	const trigger = screen.getByTestId("download-trigger");
-	expect(trigger.dataset.filename).toBe("abc-qr.png");
-	expect(trigger.dataset.mimetype).toBe("image/png");
-	expect(
-		screen.getByRole("button", { name: "Download QR" })
-	).toBeInTheDocument();
+	fireEvent.click(screen.getByRole("button", { name: "Download QR" }));
+
+	await waitFor(() => {
+		expect(toaster.create).toHaveBeenCalledWith(
+			expect.objectContaining({ type: "error" })
+		);
+	});
+	expect(downloadHref).not.toHaveBeenCalled();
+	expect(screen.getByRole("button", { name: "Download QR" })).toBeEnabled();
 });
 
 test("EntityQrBlock copies the url and swaps its Copy link button to Copied", () => {
@@ -107,20 +190,5 @@ test("EntityQrBlock wires the download trigger with the given fileName", () => {
 	expect(trigger.dataset.mimetype).toBe("image/png");
 	expect(
 		screen.getByRole("button", { name: /Download QR/ })
-	).toBeInTheDocument();
-});
-
-test("EntityQrActions renders the QR frame the download rasterises", () => {
-	const { container } = render(() => (
-		<EntityQrActions
-			url="https://jfloor.test/visit/abc"
-			fileName="abc-qr.png"
-		/>
-	));
-
-	// zag's download looks the frame SVG up by id; with no frame in the DOM
-	// the click silently downloads nothing.
-	expect(
-		container.querySelector('svg[data-part="frame"]')
 	).toBeInTheDocument();
 });

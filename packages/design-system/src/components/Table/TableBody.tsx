@@ -306,6 +306,53 @@ function KeyedRows<Data extends Record<string, unknown>>(body: {
 	);
 }
 
+/**
+ * The rows, windowed when the table virtualises: `children` (every row) when
+ * it does not, or cannot measure a viewport; skeleton rows while its scroll
+ * parent has never had a height; the virtual window otherwise.
+ */
+function Windowed<Data extends Record<string, unknown>>(body: {
+	context: BodyContext<Data>;
+	children: JSX.Element;
+}): JSX.Element {
+	// A virtualising table renders nothing until it has found its scroll
+	// container, which cannot happen before this element is in the document.
+	// `onMount` runs before the browser paints, so that first empty pass is
+	// skipped rather than shown — without this guard the table would render
+	// every row once and then immediately throw all but a screenful away,
+	// which is the exact cost being avoided.
+	return (
+		<Show
+			when={
+				!body.context.props.virtualize || body.context.scroll.mounted()
+			}
+		>
+			{/* A scroll parent that has NEVER been measured with a height
+			    has nothing to window against — show skeleton rows rather
+			    than render every row, which is what made a hidden tab
+			    expensive. Once it has been visible, `virtualizing()` stays
+			    true and `VirtualBody` freezes its window instead. */}
+			<Show
+				when={
+					!(
+						body.context.props.virtualize &&
+						body.context.scroll.scrollElement() !== null &&
+						!body.context.scroll.hasEverBeenVisible()
+					)
+				}
+				fallback={<LoadingRows context={body.context} />}
+			>
+				<Show
+					when={body.context.rows.virtualizing()}
+					fallback={body.children}
+				>
+					<VirtualBody context={body.context} />
+				</Show>
+			</Show>
+		</Show>
+	);
+}
+
 function FlatBody<Data extends Record<string, unknown>>(body: {
 	context: BodyContext<Data>;
 }): JSX.Element {
@@ -314,13 +361,13 @@ function FlatBody<Data extends Record<string, unknown>>(body: {
 			when={body.context.table.getRowModel().rows.length > 0}
 			fallback={<EmptyRow context={body.context} />}
 		>
-			<>
+			<Windowed context={body.context}>
 				<KeyedRows
 					context={body.context}
 					rows={() => body.context.table.getRowModel().rows}
 				/>
 				<LoadingMoreRows context={body.context} />
-			</>
+			</Windowed>
 		</Show>
 	);
 }
@@ -333,73 +380,34 @@ function GroupedBody<Data extends Record<string, unknown>>(body: {
 			when={body.context.groups.rowGroups().length > 0}
 			fallback={<EmptyRow context={body.context} />}
 		>
-			{/* A virtualising table renders nothing until it has found its
-			    scroll container, which cannot happen before this element is
-			    in the document. `onMount` runs before the browser paints, so
-			    that first empty pass is skipped rather than shown — without
-			    this guard the table would render every row once and then
-			    immediately throw all but a screenful away, which is the
-			    exact cost being avoided. */}
-			<Show
-				when={
-					!body.context.props.virtualize ||
-					body.context.scroll.mounted()
-				}
-			>
-				{/* A scroll parent that has NEVER been measured with a
-				    height has nothing to window against — show skeleton rows
-				    rather than render every row, which is what made a hidden
-				    tab expensive. Once it has been visible, `virtualizing()`
-				    stays true and `VirtualBody` freezes its window instead. */}
-				<Show
-					when={
-						!(
-							body.context.props.virtualize &&
-							body.context.scroll.scrollElement() !== null &&
-							!body.context.scroll.hasEverBeenVisible()
-						)
-					}
-					fallback={<LoadingRows context={body.context} />}
+			<Windowed context={body.context}>
+				<Key
+					each={body.context.groups.rowGroups()}
+					by={(group) => group.key}
 				>
-					<Show
-						when={body.context.rows.virtualizing()}
-						fallback={
+					{(group) => {
+						return (
 							<>
-								<Key
-									each={body.context.groups.rowGroups()}
-									by={(group) => group.key}
+								<GroupHeaderRow
+									context={body.context}
+									group={group()}
+								/>
+								<Show
+									when={body.context.groups.isGroupExpanded(
+										group().key
+									)}
 								>
-									{(group) => {
-										return (
-											<>
-												<GroupHeaderRow
-													context={body.context}
-													group={group()}
-												/>
-												<Show
-													when={body.context.groups.isGroupExpanded(
-														group().key
-													)}
-												>
-													<KeyedRows
-														context={body.context}
-														rows={() =>
-															group().rows
-														}
-													/>
-												</Show>
-											</>
-										);
-									}}
-								</Key>
-								<LoadingMoreRows context={body.context} />
+									<KeyedRows
+										context={body.context}
+										rows={() => group().rows}
+									/>
+								</Show>
 							</>
-						}
-					>
-						<VirtualBody context={body.context} />
-					</Show>
-				</Show>
-			</Show>
+						);
+					}}
+				</Key>
+				<LoadingMoreRows context={body.context} />
+			</Windowed>
 		</Show>
 	);
 }

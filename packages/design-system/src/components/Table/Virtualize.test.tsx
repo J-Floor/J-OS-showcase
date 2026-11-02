@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@solidjs/testing-library";
+import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
 import { createSignal } from "solid-js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -177,7 +177,7 @@ describe("Table virtualisation", () => {
 			</div>
 		));
 		const rendered = document.querySelectorAll("tbody tr[data-index]");
-		// A 300px viewport at ~53px a row plus overscan — the exact count is the
+		// A 300px viewport at ~49px a row plus overscan — the exact count is the
 		// virtualiser's business, but it must be far short of 200, or nothing has
 		// been saved.
 		expect(rendered.length).toBeGreaterThan(0);
@@ -272,18 +272,41 @@ describe("Table virtualisation", () => {
 		expect(value.isConnected).toBe(true);
 	});
 
-	it("leaves an ungrouped table alone", () => {
+	it("windows an ungrouped table too", () => {
+		// A flat table whose rows are expensive (a checkbox and icon buttons
+		// each) pays for every row at mount otherwise, and the inventory's
+		// grew with its item count.
 		const parent = measurableScrollParent(300);
+		const seen: Row[][] = [];
 		render(() => (
 			<div ref={parent.ref}>
 				<Table.Root
 					getRowId={rowIndex}
 					columns={columns}
-					data={rows(40)}
+					data={rows(200)}
 					virtualize
+					onDisplayedRowsChange={(displayed) => seen.push(displayed)}
 				/>
 			</div>
 		));
+		const rendered = document.querySelectorAll("tbody tr[data-index]");
+		expect(rendered.length).toBeGreaterThan(0);
+		expect(rendered.length).toBeLessThan(60);
+		expect(screen.getByText("r0")).toBeInTheDocument();
+		expect(screen.queryByText("r199")).toBeNull();
+		expect(seen.at(-1)).toHaveLength(200);
+	});
+
+	it("renders every row of an ungrouped table with no scroll container to measure", () => {
+		render(() => (
+			<Table.Root
+				getRowId={rowIndex}
+				columns={columns}
+				data={rows(40)}
+				virtualize
+			/>
+		));
+		expect(screen.getByText("r0")).toBeInTheDocument();
 		expect(screen.getByText("r39")).toBeInTheDocument();
 	});
 
@@ -628,5 +651,131 @@ describe("Table onEndReached", () => {
 		));
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		expect(onEndReached).not.toHaveBeenCalled();
+	});
+});
+
+/** Where `scrollIntoView` was called, for a test DOM that ships none. */
+function recordScrollIntoView(): HTMLElement[] {
+	const scrolled: HTMLElement[] = [];
+	vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(
+		function (this: HTMLElement) {
+			scrolled.push(this);
+		}
+	);
+	return scrolled;
+}
+
+/** The row `aria-activedescendant` names, if it is rendered. */
+function activeRow(): HTMLElement | null {
+	const id = screen.getByRole("grid").getAttribute("aria-activedescendant");
+	return id === null ? null : document.getElementById(id);
+}
+
+function pressInGrid(key: string): void {
+	const grid = screen.getByRole("grid");
+	grid.focus();
+	fireEvent.keyDown(grid, { key });
+}
+
+describe("Table ring in a windowed table", () => {
+	// jsdom has no `scrollIntoView` to spy on until one is put there.
+	if (!("scrollIntoView" in HTMLElement.prototype))
+		Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+			value: () => {},
+			configurable: true,
+			writable: true,
+		});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it.each([
+		["a flat table", undefined],
+		["a grouped table", "group" as const],
+	])(
+		"%s brings the ringed row back into the window when it moves off screen",
+		async (_name, groupBy) => {
+			const parent = measurableScrollParent(300);
+			render(() => (
+				<div
+					ref={(element) => {
+						parent.ref(element);
+						// What a browser's scroll does: move, then say so.
+						element.scrollTo = ((options: ScrollToOptions) => {
+							parent.scrollTo(options.top ?? 0);
+						}) as typeof element.scrollTo;
+					}}
+				>
+					<Table.Root
+						getRowId={rowIndex}
+						columns={columns}
+						data={rows(200)}
+						groupBy={groupBy}
+						virtualize
+						focusableRows
+					/>
+				</div>
+			));
+			for (let step = 0; step < 6; step++) pressInGrid("ArrowDown");
+			expect(activeRow()).not.toBeNull();
+
+			parent.scrollTo(8000);
+			await waitFor(() => {
+				expect(activeRow()).toBeNull();
+			});
+
+			const scrolled = recordScrollIntoView();
+			pressInGrid("ArrowDown");
+			await waitFor(() => {
+				const row = activeRow();
+				expect(row).not.toBeNull();
+				expect(scrolled).toContain(row);
+			});
+		}
+	);
+});
+
+describe("Table selection in a windowed table", () => {
+	it("select-all and a batch action cover every row, rendered or not", async () => {
+		const parent = measurableScrollParent(300);
+		const actedOn: string[][] = [];
+		function Archive() {
+			const selection = Table.useSelection<Row>();
+			return (
+				<button
+					type="button"
+					onClick={() =>
+						actedOn.push(selection.rows().map((row) => row.id))
+					}
+				>
+					Archive
+				</button>
+			);
+		}
+		render(() => (
+			<div ref={parent.ref}>
+				<Table.Root
+					getRowId={rowIndex}
+					columns={columns}
+					data={rows(200)}
+					virtualize
+					enableRowSelection
+				>
+					<Table.BatchActions>
+						<Archive />
+					</Table.BatchActions>
+				</Table.Root>
+			</div>
+		));
+		expect(
+			document.querySelectorAll("tbody tr[data-index]").length
+		).toBeLessThan(60);
+		// The header checkbox is the first one.
+		fireEvent.click(screen.getAllByRole("checkbox")[0]);
+		fireEvent.click(await screen.findByRole("button", { name: "Archive" }));
+		expect(actedOn).toHaveLength(1);
+		expect(actedOn[0]).toHaveLength(200);
+		expect(actedOn[0]).toContain("r199");
 	});
 });

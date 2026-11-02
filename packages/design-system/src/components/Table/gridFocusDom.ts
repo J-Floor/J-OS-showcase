@@ -5,7 +5,13 @@
  */
 import { makeEventListener } from "@solid-primitives/event-listener";
 import { Result } from "neverthrow";
-import { createEffect, createUniqueId, onMount, type Accessor } from "solid-js";
+import {
+	createEffect,
+	createUniqueId,
+	onMount,
+	untrack,
+	type Accessor,
+} from "solid-js";
 
 import { isUnderOpenOverlay } from "../../utils/overlayLayer.tsx";
 import { isTypingTarget } from "../../utils/typingTarget.ts";
@@ -183,19 +189,35 @@ export function routeStrayKeys(options: {
 // Looked up by its DOM id, not by the `data-focused` stamp, so it still scrolls
 // while the stamp is hidden (focus not yet in the table). The id carries this
 // table's own prefix, so one table's ring cannot scroll another's.
-export function scrollRingRowIntoView(
-	ringRowId: Accessor<string | undefined>,
-	domIdFor: (id: string) => string
-): void {
+//
+// A windowed table renders only the rows near the viewport, so the ringed row
+// can have no element at all. `scrollToRow` then scrolls the virtualiser to
+// it, and once it has rendered (the next frame) it is scrolled in like any
+// other.
+export function scrollRingRowIntoView(options: {
+	ringRowId: Accessor<string | undefined>;
+	domIdFor: (id: string) => string;
+	/** Scrolls an unrendered row into the window; false when it cannot. */
+	scrollToRow: (id: string) => boolean;
+}): void {
+	const { ringRowId, domIdFor, scrollToRow } = options;
+	function scrollRendered(id: string): boolean {
+		const row = document.getElementById(domIdFor(id));
+		// jsdom performs no layout and ships no `scrollIntoView`; a test
+		// environment must not be the thing that throws here.
+		if (row && typeof row.scrollIntoView === "function")
+			row.scrollIntoView({ block: "nearest" });
+		return row !== null;
+	}
 	createEffect(() => {
 		const id = ringRowId();
 		if (id === undefined) return;
 		queueMicrotask(() => {
-			const row = document.getElementById(domIdFor(id));
-			// jsdom performs no layout and ships no `scrollIntoView`; a test
-			// environment must not be the thing that throws here.
-			if (row && typeof row.scrollIntoView === "function")
-				row.scrollIntoView({ block: "nearest" });
+			if (scrollRendered(id) || !scrollToRow(id)) return;
+			requestAnimationFrame(() => {
+				// The ring may have moved on within the frame.
+				if (untrack(ringRowId) === id) scrollRendered(id);
+			});
 		});
 	});
 }

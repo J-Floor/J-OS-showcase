@@ -117,6 +117,7 @@ export function ItemsTab(props: {
 			selection={props.selection}
 			newItemAssetTag={props.newItemAssetTag}
 			enableRowSelection
+			virtualize
 		>
 			<InventoryTab.Sheet<Item>>
 				{(sheet: InventorySheetArgs<Item>) => (
