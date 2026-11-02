@@ -37,16 +37,17 @@ updates:
       # TS 7.1 API).
       - dependency-name: "typescript"
         versions: [">=7.0.0"]
-      # WHY: @tanstack/solid-hotkeys 0.14 made `Hotkey` a chord-or-sequence
-      # union across every API. Those types blow up tsc: the design-system
-      # typecheck went from ~10s on 0.13 to over 4 minutes, and CI cancelled
-      # the job (seen on #234). 0.14+ also binds an undefined `target` to
-      # `document`; SheetNav and PersonDetail would need `?? null`.
-      # REMOVE WHEN: a solid-hotkeys release typechecks the design system in
-      # normal time. Test: bump it, run `bun run typecheck` in
-      # packages/design-system, compare with ~10s.
+      # WHY: @tanstack/solid-hotkeys after 0.10 hangs our typecheck and
+      # ESLint. 0.14+ took the design-system typecheck from ~10s to over 4
+      # minutes (CI cancelled it on #234); 0.13 ran 39+ minutes in CI on #239.
+      # 0.14 also made `Hotkey` a chord-or-sequence union and binds an
+      # undefined `target` to `document`; SheetNav and PersonDetail would
+      # need `?? null`.
+      # REMOVE WHEN: a solid-hotkeys release typechecks in normal time.
+      # Test: bump it, run `bun run typecheck` in packages/design-system and
+      # apps/web, compare with ~25s each.
       - dependency-name: "@tanstack/solid-hotkeys"
-        versions: [">=0.14.0"]
+        versions: [">=0.11.0"]
       # WHY: @tanstack/solid-table 9 is a full API redesign: Table and Row
       # take a second (features) type parameter, and the row-model factories
       # such as getCoreRowModel are gone. The design-system Table needs a
