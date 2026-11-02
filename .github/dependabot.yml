@@ -15,12 +15,28 @@ updates:
     # Comment "@dependabot rebase" to rebase one by hand.
     rebase-strategy: "disabled"
     open-pull-requests-limit: 5
+    # Every entry says why it exists and when to delete it. Re-check these
+    # whenever a Dependabot PR bumps the blocking package.
     ignore:
-      # @convex-dev/better-auth 0.12.x peers on better-auth <1.7.0. A newer
-      # better-auth installs a second copy beside the adapter's. Remove this
-      # once an adapter release accepts 1.7.
+      # WHY: @convex-dev/better-auth 0.12.x peers on better-auth <1.7.0, and
+      # better-auth 1.7 removed the oidc-provider plugin the adapter imports.
+      # A newer better-auth installs a second copy and fails Convex bundling.
+      # The 1.7-only advisories (GHSA-965c, r4xp, q84f, 44jh) were dismissed
+      # as not applicable: no social/OAuth login, OAuth proxy, device login
+      # or Drizzle adapter.
+      # REMOVE WHEN: @convex-dev/better-auth 0.13 ships
+      # (convex/better-auth#457). Upgrade both packages together and run the
+      # adapter's schema migration.
       - dependency-name: "better-auth"
         versions: [">=1.7.0"]
+      # WHY: typescript-eslint (type-aware rules in our ESLint config) peers on
+      # typescript <6.1.0. TypeScript 7 ships without the JS compiler API it
+      # needs (typescript-eslint/typescript-eslint#12518, closed not planned).
+      # REMOVE WHEN: a typescript-eslint release accepts typescript 7
+      # (tracked in typescript-eslint/typescript-eslint#10940, waits on the
+      # TS 7.1 API).
+      - dependency-name: "typescript"
+        versions: [">=7.0.0"]
     commit-message:
       prefix: "chore"
       include: "scope"

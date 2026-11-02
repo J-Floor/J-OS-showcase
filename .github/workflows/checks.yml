@@ -97,16 +97,6 @@ jobs:
             echo "changes=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # Dependabot PRs get a read-only token, so the auto-fix commit below
-      # cannot push to them. Fail instead; run `bun run format` locally and
-      # push the result to the Dependabot branch.
-      - name: Fail on unformatted Dependabot PR
-        if: steps.check-changes.outputs.changes == 'true' && github.event.pull_request.user.login == 'dependabot[bot]'
-        run: |
-          git status --porcelain
-          echo "::error::Formatting changed files. Dependabot PRs cannot take the auto-fix commit. Run 'bun run format' and push to this branch."
-          exit 1
-
       - name: Commit formatting changes
         if: steps.check-changes.outputs.changes == 'true' && github.event.pull_request.user.login != 'dependabot[bot]'
         run: |
@@ -142,6 +132,17 @@ jobs:
       - name: Icon font covers every icon name in use
         if: steps.scope.outputs.docs-only != 'true'
         run: bunx --bun turbo run icons:check
+
+      # Dependabot PRs get a read-only token, so the auto-fix commit above
+      # cannot push to them. Fail instead; run `bun run format` locally and
+      # push the result to the Dependabot branch. Last in the job so
+      # typecheck, builds and the icon check still report on the same run.
+      - name: Fail on unformatted Dependabot PR
+        if: steps.check-changes.outputs.changes == 'true' && github.event.pull_request.user.login == 'dependabot[bot]'
+        run: |
+          git status --porcelain
+          echo "::error::Formatting changed files. Dependabot PRs cannot take the auto-fix commit. Run 'bun run format' and push to this branch."
+          exit 1
 
   # Separate job: on 2-vCPU runners type-aware ESLint and tsc contend for CPU
   # when run together, so each gets its own runner.
