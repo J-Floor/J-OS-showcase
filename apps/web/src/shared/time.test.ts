@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { dayLabel, formatAgo, formatDate, formatDistance } from "./time.ts";
+import {
+	dayLabel,
+	formatAgo,
+	formatDate,
+	formatDateIn,
+	formatDistance,
+	formatMonthIn,
+} from "./time.ts";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -58,5 +65,30 @@ describe("formatDistance", () => {
 		expect(formatDistance(now + 12 * MINUTE, now)).toBe("12m");
 		expect(formatDistance(now + 5 * HOUR + 59 * MINUTE, now)).toBe("5h");
 		expect(formatDistance(now + 3 * DAY + 23 * HOUR, now)).toBe("3d");
+	});
+});
+
+const LATE_EVENING_UTC = Date.UTC(2026, 0, 31, 23, 30); // 00:30 on 1 Feb in Zurich
+
+describe("formatDateIn", () => {
+	it("formats the day in the zone it is given, not the browser's", () => {
+		expect(formatDateIn(LATE_EVENING_UTC, "Europe/Zurich")).toBe(
+			new Intl.DateTimeFormat(undefined, {
+				dateStyle: "medium",
+				timeZone: "Europe/Zurich",
+			}).format(LATE_EVENING_UTC)
+		);
+		expect(formatDateIn(LATE_EVENING_UTC, "Europe/Zurich")).not.toBe(
+			formatDateIn(LATE_EVENING_UTC, "UTC")
+		);
+	});
+});
+
+describe("formatMonthIn", () => {
+	it("names the month in the zone it is given", () => {
+		expect(formatMonthIn(LATE_EVENING_UTC, "Europe/Zurich")).toBe(
+			"February 2026"
+		);
+		expect(formatMonthIn(LATE_EVENING_UTC, "UTC")).toBe("January 2026");
 	});
 });

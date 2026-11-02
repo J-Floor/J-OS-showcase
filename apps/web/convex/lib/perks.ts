@@ -5,17 +5,17 @@
 // `roles.ts` and `time.ts` do not reach the schema.
 import { err, ok, type Result } from "neverthrow";
 
-import type { Doc } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 
 import { entitled } from "./derive.ts";
 import type { PerksError } from "./errors/perks.ts";
+import type { Readers } from "./readOnce.ts";
 import { isBoardLevel } from "./roles.ts";
 import {
 	SITE_TIMEZONE,
 	isoToUtcMidnight,
+	todayIn,
 	utcMidnightToIso,
-	zonedDate,
-	zonedLocalFromEpoch,
 } from "./time.ts";
 
 export const PERK_CATEGORIES = [
@@ -67,17 +67,25 @@ export function isOpenRequest(status: PerkRequestStatus): boolean {
 	return OPEN_REQUEST_STATUSES.includes(status);
 }
 
+/** The statuses that answer a request: landing on one tells the
+ *  requester (`perkRequestOutcome`). */
+export const ANSWER_STATUSES = [
+	"granted",
+	"declined",
+] as const satisfies readonly PerkRequestStatus[];
+export type PerkRequestAnswer = (typeof ANSWER_STATUSES)[number];
+
+export function isAnswer(
+	status: PerkRequestStatus
+): status is PerkRequestAnswer {
+	return (ANSWER_STATUSES as readonly PerkRequestStatus[]).includes(status);
+}
+
 /** Bounds on one response, far above J floor's volume, as `events.ts` caps an
  *  attendee roster. The full list feeds the Requests tab's summary and CSV,
  *  so it gets the larger cap. */
 export const PERK_REQUEST_LIST_CAP = 2000;
 export const PERK_REQUESTS_PER_PERK_CAP = 500;
-
-/** Today at the site, `YYYY-MM-DD` in Zurich: what `validUntil` is compared
- *  with, whatever zone the server runs in. */
-export function siteToday(now: number): string {
-	return zonedDate(zonedLocalFromEpoch(now, SITE_TIMEZONE));
-}
 
 /** `validUntil` is inclusive: a perk stays valid through that whole Zurich
  *  day and is expired from the next. A perk with no end date never expires.
@@ -86,7 +94,7 @@ export function isPerkExpired(
 	validUntil: string | undefined,
 	now: number
 ): boolean {
-	return validUntil !== undefined && validUntil < siteToday(now);
+	return validUntil !== undefined && validUntil < todayIn(SITE_TIMEZONE, now);
 }
 
 /** `value` when it is a real calendar date written `YYYY-MM-DD`. Only such a
@@ -114,4 +122,17 @@ export function isActiveContact(
 	return (
 		person !== null && isBoardLevel(person.tier) && entitled(person, now)
 	);
+}
+
+/** The perk's contact while `isActiveContact` says they can act as one, else
+ *  undefined: the one rule the board's lists, the sheet and the requests
+ *  agree on. */
+export async function activeContactOf(
+	readers: Readers,
+	contactId: Id<"people"> | undefined,
+	now: number
+): Promise<Doc<"people"> | undefined> {
+	const contact =
+		contactId === undefined ? null : await readers.person(contactId);
+	return isActiveContact(contact, now) ? contact : undefined;
 }

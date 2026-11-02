@@ -11,7 +11,7 @@ import type { InputError } from "./errors/input.ts";
 
 /** The one site today. Multi-site later: supply per-site (it already lives inside each IXDTF value). */
 export const SITE_TIMEZONE = "Europe/Zurich";
-const LOCALE = "en-GB";
+export const LOCALE = "en-GB";
 export const ISO_DATE_LENGTH = 10;
 
 /** A zoned value: IXDTF source of truth + cached UTC epoch (ms). */
@@ -74,6 +74,10 @@ export function utcFromLocal(local: string): number {
  * cached epoch (e.g. a legacy row written before zoned locals existed). */
 export function zonedLocalFromEpoch(ms: number, timeZone: string): string {
 	return zonedFromEpoch(ms, timeZone).toString();
+}
+/** Today in `timeZone`, written `YYYY-MM-DD`, whatever zone the server runs in. */
+export function todayIn(timeZone: string, now: number): string {
+	return zonedDate(zonedLocalFromEpoch(now, timeZone));
 }
 export function zonedDate(local: string): string {
 	const zoned = parseLocalLoose(local);

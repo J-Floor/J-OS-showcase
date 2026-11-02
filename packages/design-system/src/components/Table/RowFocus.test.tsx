@@ -1,5 +1,7 @@
-import { render, screen, fireEvent } from "@solidjs/testing-library";
-import { createSignal } from "solid-js";
+import { render, screen, fireEvent, waitFor } from "@solidjs/testing-library";
+import { createSignal, Show } from "solid-js";
+
+import { Sheet } from "../Sheet/Sheet.tsx";
 
 import { Table } from "./Table.tsx";
 import { rowId } from "./testRowIds.ts";
@@ -612,6 +614,117 @@ test("closing the sheet (pin released) hands focus back to the table", async () 
 	await Promise.resolve();
 	expect(document.activeElement).toBe(grid());
 	expect(focused()).toBe("Grace");
+});
+
+/**
+ * A table whose own sheet drives `suppressFocus`. `drawer` adds a sheet
+ * that stays open, shown before the table's own sheet (one it was opened
+ * from); `inPeek` puts the table inside a second sheet stacked on that
+ * drawer, so the drawer is under the table rather than over it.
+ */
+function renderTableWithSheets(options: { drawer: boolean; inPeek?: boolean }) {
+	const [isOwnOpen, setOwnOpen] = createSignal(true);
+	function table() {
+		return (
+			<Table.Root
+				getRowId={rowId}
+				columns={columns}
+				data={data}
+				focusableRows
+				suppressFocus={isOwnOpen()}
+			/>
+		);
+	}
+	render(() => (
+		<>
+			<Show when={!options.inPeek}>{table()}</Show>
+			<Show when={options.drawer}>
+				<Sheet.Root open onOpenChange={() => {}}>
+					<Sheet.Header>
+						<Sheet.Title>Drawer</Sheet.Title>
+					</Sheet.Header>
+				</Sheet.Root>
+			</Show>
+			<Show when={options.inPeek}>
+				<Sheet.Root open onOpenChange={() => {}}>
+					<Sheet.Header>
+						<Sheet.Title>Peek</Sheet.Title>
+					</Sheet.Header>
+					{table()}
+				</Sheet.Root>
+			</Show>
+			<Sheet.Root open={isOwnOpen()} onOpenChange={setOwnOpen}>
+				<Sheet.Header>
+					<Sheet.Title>Row</Sheet.Title>
+				</Sheet.Header>
+			</Sheet.Root>
+		</>
+	));
+	return { closeOwn: () => setOwnOpen(false) };
+}
+
+function sheetNamed(name: string): HTMLElement {
+	return screen.getByRole("dialog", { name, hidden: true });
+}
+
+function tableGrid(): HTMLElement {
+	return screen.getByRole("grid", { hidden: true });
+}
+
+/** Every sheet rendered is shown (Ark has it open), so it is on the
+ *  overlay stack: the presence shows it a few ticks after the mount. */
+async function sheetsShown(): Promise<void> {
+	await waitFor(() => {
+		const sheets = screen.getAllByRole("dialog", { hidden: true });
+		for (const sheet of sheets)
+			expect(sheet).toHaveAttribute("data-state", "open");
+	});
+}
+
+/** Whether the table takes focus, even for an instant: a sheet's focus
+ *  trap still running pulls it straight back, and Ark reads focus that
+ *  passed under an overlay as a focus outside it. */
+function watchTableFocus(): () => boolean {
+	let didTakeFocus = false;
+	tableGrid().addEventListener("focus", () => {
+		didTakeFocus = true;
+	});
+	return () => didTakeFocus;
+}
+
+/** Closes the table's own sheet from inside it; the claim it starts runs
+ *  in a microtask. */
+async function closeOwnSheet(closeOwn: () => void): Promise<void> {
+	sheetNamed("Row").focus();
+	closeOwn();
+	await Promise.resolve();
+}
+
+test("closing the table's own sheet hands focus back to the table", async () => {
+	const { closeOwn } = renderTableWithSheets({ drawer: false });
+	await sheetsShown();
+	const didTakeFocus = watchTableFocus();
+	await closeOwnSheet(closeOwn);
+	expect(didTakeFocus()).toBe(true);
+	await waitFor(() => {
+		expect(document.activeElement).toBe(tableGrid());
+	});
+});
+
+test("closing the table's own sheet leaves focus alone while another overlay stays open over the table", async () => {
+	const { closeOwn } = renderTableWithSheets({ drawer: true });
+	await sheetsShown();
+	const didTakeFocus = watchTableFocus();
+	await closeOwnSheet(closeOwn);
+	expect(didTakeFocus()).toBe(false);
+});
+
+test("a table inside a sheet stacked on another still claims focus when its own sheet closes", async () => {
+	const { closeOwn } = renderTableWithSheets({ drawer: true, inPeek: true });
+	await sheetsShown();
+	const didTakeFocus = watchTableFocus();
+	await closeOwnSheet(closeOwn);
+	expect(didTakeFocus()).toBe(true);
 });
 
 test("ArrowDown on a focused tab steps into the live table", () => {

@@ -13,12 +13,23 @@ import { requireRole } from "./lib/authGuard.ts";
 import type { InputError } from "./lib/errors/input.ts";
 import type { PerksError } from "./lib/errors/perks.ts";
 import { displayName } from "./lib/names.ts";
-import { isActiveContact, parsePerkDate } from "./lib/perks.ts";
-import { activeContactOf, readOnce, type Readers } from "./lib/readOnce.ts";
+import {
+	activeContactOf,
+	isActiveContact,
+	isPerkExpired,
+	parsePerkDate,
+} from "./lib/perks.ts";
+import { readOnce, type Readers } from "./lib/readOnce.ts";
 import { refuse, unwrap } from "./lib/result.ts";
 import { BOARD_LEVEL, COMMUNITY_TIERS } from "./lib/roles.ts";
 import { normalizeHttpUrl } from "./lib/safeUrl.ts";
-import { checkLength, NAME_MAX, TEXT_MAX } from "./lib/validate.ts";
+import {
+	checkLength,
+	clearableText,
+	NAME_MAX,
+	TEXT_MAX,
+} from "./lib/validate.ts";
+import { notify } from "./notify/notify.ts";
 import { perkCategory } from "./schema.ts";
 
 // The perk catalog: the deals the board has negotiated with partners.
@@ -28,10 +39,6 @@ import { perkCategory } from "./schema.ts";
 // read/write limits, so deleting a perk purges it in bounded,
 // self-rescheduling batches.
 const BATCH_SIZE = 200;
-
-/** An update's optional text: a string sets it, null clears it, absent
- *  leaves it. */
-const clearableText = v.optional(v.union(v.string(), v.null()));
 
 /** A perk as the page lists it, with its contact's names joined in. Both are
  *  absent when the perk has no contact, or its contact's row is gone or
@@ -209,13 +216,24 @@ export const createPerk = mutation({
 		const person = unwrap(await requireRole(context, BOARD_LEVEL));
 		const text = unwrap(cleanPerkText(typed));
 		unwrap(await checkContact(context, contactId));
-		return context.db.insert("perks", {
+		const now = Date.now();
+		const perkId = await context.db.insert("perks", {
 			...text,
 			category,
 			contactId,
 			createdBy: person._id,
-			createdAt: Date.now(),
+			createdAt: now,
 		});
+		// A perk entered after its last day is a record, not news.
+		if (!isPerkExpired(text.validUntil, now)) {
+			await notify(context, "perkAdded", {
+				perkId,
+				partner: text.partner,
+				perkTitle: text.title,
+				addedBy: person._id,
+			});
+		}
+		return perkId;
 	},
 });
 

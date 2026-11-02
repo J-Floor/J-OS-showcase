@@ -14,12 +14,12 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import type { PerkCategory } from "../../../convex/lib/perks.ts";
 import { NAME_MAX, TEXT_MAX } from "../../../convex/lib/validate.ts";
 import { call } from "../../lib/call.ts";
+import { OptionSelect } from "../../shared/components/OptionSelect.tsx";
 import { PersonSelect } from "../../shared/components/PersonSelect.tsx";
 import { createActionError } from "../../shared/createActionError.ts";
 import { useBoardLevel } from "../../shared/data/boardLevel.tsx";
 import { InlineError } from "../../shared/InlineError.tsx";
 
-import { EnumSelect } from "./EnumSelect.tsx";
 import { perkFields } from "./fields.ts";
 import styles from "./PerkCreateForm.module.scss";
 import { PERK_CATEGORY_OPTIONS } from "./perkOptions.ts";
@@ -170,7 +170,7 @@ function PerkOfferFields(props: { form: PerkCreateFormState }): JSX.Element {
 					props.form.setTitle(event.currentTarget.value);
 				}}
 			/>
-			<EnumSelect
+			<OptionSelect
 				label={perkFields.category.label}
 				placeholder="Pick a category"
 				options={PERK_CATEGORY_OPTIONS}

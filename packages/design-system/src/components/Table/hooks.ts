@@ -54,6 +54,8 @@ import type {
 type TableColumnMeta = (DataType | NoDataType) & {
 	size?: ColumnSize;
 	customCell?: boolean;
+	/** The column's authored `groupLabel`; takes the row type it was written for. */
+	groupLabel?: (row: never) => string;
 };
 
 /** A processed column's {@link TableColumnMeta}. */
@@ -93,9 +95,9 @@ function filterFunctionFor<Data extends Record<string, unknown>>(
 
 /**
  * Give a column the `filterFn` for its `dataType`, carry `dataType`,
- * `enumOptions` and the authored size in `meta`, and take `size` off the def
- * before TanStack sees it: TanStack's `size` is a number, ours is a
- * {@link ColumnSize}. Ported from EmboUI's `useTableInstance`; TanStack's
+ * `enumOptions`, `groupLabel` and the authored size in `meta`, and take
+ * `size` off the def before TanStack sees it: TanStack's `size` is a
+ * number, ours is a {@link ColumnSize}. Ported from EmboUI's `useTableInstance`; TanStack's
  * `auto` filter does not do case-insensitive substring matching for strings,
  * so every filter is wired explicitly.
  */
@@ -123,6 +125,7 @@ function processColumn<Data extends Record<string, unknown>>(
 			...column.meta,
 			dataType: column.dataType,
 			...enumOptions,
+			...(column.groupLabel ? { groupLabel: column.groupLabel } : {}),
 			...(size === undefined ? {} : { size }),
 			customCell: column.cell !== undefined,
 		},

@@ -1,12 +1,5 @@
 @use "@j-os/design-system/typography" as typo;
 
-.empty {
-	@include typo.jf-typo-body-tech;
-
-	margin: 0;
-	color: var(--jf-fg-muted);
-}
-
 .requests {
 	display: flex;
 	flex-direction: column;
@@ -16,40 +9,21 @@
 	list-style: none;
 }
 
-// Avatar, who asked (and what they wrote), then the status picker, which
-// drops under the rest on a narrow sheet.
+// The person row, then what they wrote under it.
 .request {
 	display: flex;
-	flex-wrap: wrap;
-	gap: var(--jf-spacing-near);
-	align-items: flex-start;
-}
-
-.who {
-	display: flex;
-	flex: 1 1 12rem;
 	flex-direction: column;
-	min-inline-size: 0;
+	gap: var(--jf-spacing-near);
 }
 
-.name {
+.requested {
 	@include typo.jf-typo-body-regular;
-}
-
-.email,
-.meta {
-	@include typo.jf-typo-body-tech;
 
 	color: var(--jf-fg-muted);
-	overflow-wrap: anywhere;
 }
 
 // The member's own words: the sheet's `.note` keeps the breaks, this sets the
 // type.
 .noteText {
 	@include typo.jf-typo-body-regular;
-}
-
-.status {
-	flex: 0 1 10rem;
 }

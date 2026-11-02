@@ -1,6 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { convexTest } from "convex-test";
+import { describe, expect, it, vi } from "vitest";
 
-import { displayName, shortNames } from "./names.ts";
+import schema from "../schema.ts";
+
+import { displayName, shortNames, withActorNames } from "./names.ts";
+
+const modules = import.meta.glob("../**/*.*s");
 
 function person(id: string, firstName: string, lastName: string) {
 	return { _id: id, firstName, lastName };
@@ -70,5 +75,32 @@ describe("shortNames", () => {
 			person("2", "Alan", "Perlis"),
 		]);
 		expect(names.get("1")).toBe("Alan T.");
+	});
+});
+
+describe("withActorNames", () => {
+	it("reads an actor once however many rows name them", async () => {
+		const backend = convexTest(schema, modules);
+		const reads = await backend.run(async (context) => {
+			const actorId = await context.db.insert("people", {
+				email: "actor@example.com",
+				firstName: "Ada",
+				lastName: "Lovelace",
+				tier: "board",
+				stage: "active",
+				stageSince: Date.now(),
+			});
+			const get = vi.spyOn(context.db, "get");
+			const rows = await withActorNames(context, [
+				{ actorId },
+				{ actorId },
+			]);
+			expect(rows.map((row) => row.actorName)).toEqual([
+				"Ada Lovelace",
+				"Ada Lovelace",
+			]);
+			return get.mock.calls.length;
+		});
+		expect(reads).toBe(1);
 	});
 });

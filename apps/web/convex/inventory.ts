@@ -9,6 +9,7 @@ import { requireRole } from "./lib/authGuard.ts";
 import type { InventoryError } from "./lib/errors/inventory.ts";
 import { invariant, refuse, unwrap } from "./lib/result.ts";
 import { BOARD_LEVEL } from "./lib/roles.ts";
+import { clearableText } from "./lib/validate.ts";
 
 export type ItemTypeRow = Doc<"itemTypes"> & { categoryName: string };
 export type ItemRow = Doc<"items"> & {
@@ -16,9 +17,6 @@ export type ItemRow = Doc<"items"> & {
 	categoryId: Id<"itemCategories">;
 	categoryName: string;
 };
-
-/** An update's text field: a string sets it, null clears it, absent leaves it. */
-const editableText = v.optional(v.union(v.string(), v.null()));
 
 function requireName(raw: string): Result<string, InventoryError> {
 	const name = raw.trim();
@@ -162,7 +160,7 @@ export const updateCategory = mutation({
 	args: {
 		id: v.id("itemCategories"),
 		name: v.optional(v.string()),
-		description: editableText,
+		description: clearableText,
 	},
 	handler: async (context, args): Promise<null> => {
 		unwrap(await requireRole(context, BOARD_LEVEL));
@@ -256,7 +254,7 @@ export const updateItemType = mutation({
 		id: v.id("itemTypes"),
 		name: v.optional(v.string()),
 		categoryId: v.optional(v.id("itemCategories")),
-		description: editableText,
+		description: clearableText,
 	},
 	handler: async (context, args): Promise<null> => {
 		unwrap(await requireRole(context, BOARD_LEVEL));
@@ -373,7 +371,7 @@ export const updateItem = mutation({
 		id: v.id("items"),
 		typeId: v.optional(v.id("itemTypes")),
 		assetTag: v.optional(v.string()),
-		description: editableText,
+		description: clearableText,
 	},
 	handler: async (context, args): Promise<null> => {
 		unwrap(await requireRole(context, BOARD_LEVEL));

@@ -1,0 +1,6 @@
+// A sheet section's content, one item under the other.
+.section {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+}

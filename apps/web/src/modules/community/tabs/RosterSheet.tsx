@@ -10,6 +10,7 @@ import {
 
 import type { PersonRow } from "../../../../convex/people.ts";
 import type { SheetNavState } from "../../../lib/createSheetNav.ts";
+import { EditToggle } from "../../../shared/components/EditToggle.tsx";
 import { EntitySheetNav } from "../../../shared/entity/EntitySheetNav.tsx";
 import {
 	RosterActionError,
@@ -18,7 +19,6 @@ import {
 import type { ActionDescriptor, ShortcutScope } from "../actions/shortcuts.ts";
 import { personFields } from "../fields.ts";
 import { DecisionBar } from "../sheets/DecisionBar.tsx";
-import { EditToggle } from "../sheets/EditToggle.tsx";
 import { PersonDetail } from "../sheets/PersonDetail.tsx";
 import { PersonDetailPlaceholder } from "../sheets/PersonDetailPlaceholder.tsx";
 

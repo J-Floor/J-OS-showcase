@@ -72,3 +72,23 @@ test("the perks release offers browsing to the community and tracking to the boa
 	expect(textsFor("admin")).toEqual([browse, track]);
 	expect(textsFor("staff")).toEqual([]);
 });
+
+test("perk notifications are announced to everyone who can view Perks", () => {
+	const text =
+		"Get told when a perk is added, when your request is answered, and a week before a perk ends.";
+	const release = CHANGELOG.filter((entry) =>
+		entry.items.some((item) => item.text === text)
+	);
+	expect(release.map((entry) => entry.version)).toEqual([
+		CHANGELOG[0].version,
+	]);
+	for (const role of ["guest", "member", "core", "board", "admin"] as const) {
+		expect(
+			visibleNotes(release, null, defineAbilityFor(role)).flatMap(
+				(entry) => entry.items.map((item) => item.text)
+			),
+			role
+		).toContain(text);
+	}
+	expect(visibleNotes(release, null, defineAbilityFor("staff"))).toEqual([]);
+});

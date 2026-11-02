@@ -104,20 +104,44 @@ export const OVERLAYS_ABOVE_VAR = "--jf-overlays-above";
 /** On an overlay's content while another is shown above it. */
 export const OVERLAY_COVERED = "data-overlay-covered";
 
+/** One shown overlay in the stack. */
+type StackEntry = {
+	/** Whether its caller still asks for it open: false while it closes. */
+	isAsked: () => boolean;
+	content: () => HTMLElement | null;
+};
+
 /** Every shown overlay, in the order they were shown. */
-const [shownStack, setShownStack] = createSignal<readonly object[]>([]);
+const [shownStack, setShownStack] = createSignal<readonly StackEntry[]>([]);
 
 function withoutLayer(
-	stack: readonly object[],
-	layer: object
-): readonly object[] {
+	stack: readonly StackEntry[],
+	layer: StackEntry
+): readonly StackEntry[] {
 	return stack.filter((entry) => entry !== layer);
+}
+
+/**
+ * Whether an overlay that stays open covers `node`: one shown above the
+ * overlay holding `node` (above every one, for the page), and still asked
+ * open (one closing does not count, it is on its way out). What sits under
+ * it cannot have focus without dismissing it: Ark hears focus moved there
+ * as a focus outside. Read once, untracked.
+ */
+export function isUnderOpenOverlay(node: Node): boolean {
+	const stack = untrack(shownStack);
+	const ownIndex = stack.findLastIndex(
+		(entry) => entry.content()?.contains(node) === true
+	);
+	return stack.slice(ownIndex + 1).some((entry) => entry.isAsked());
 }
 
 /** Keeps this overlay in the stack while shown; returns how many overlays
  *  are shown above it. */
-function createStackPlace(isShown: Accessor<boolean>): Accessor<number> {
-	const layer = {};
+function createStackPlace(
+	isShown: Accessor<boolean>,
+	layer: StackEntry
+): Accessor<number> {
 	createComputed(
 		on(isShown, (isShownNow) => {
 			setShownStack((stack) =>
@@ -187,7 +211,10 @@ export function OverlayRoot(props: OverlayRootProps): JSX.Element {
 	);
 	const layer: OverlayLayer = {
 		isShown,
-		above: createStackPlace(isShown),
+		above: createStackPlace(isShown, {
+			isAsked: () => local.open,
+			content: () => contentElement,
+		}),
 		isBuilt,
 		bodyFor: createMorphHold(createShowCount(isShown), isShown, () =>
 			ownExit(contentElement)

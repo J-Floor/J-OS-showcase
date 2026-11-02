@@ -2,10 +2,11 @@ import { IconButton, isTypingTarget } from "@j-os/design-system";
 import { createHotkey } from "@tanstack/solid-hotkeys";
 import type { JSX } from "solid-js";
 
-import { ICONS } from "../../../shared/icons.ts";
+import { ICONS } from "../icons.ts";
 
 /**
- * Puts the person sheet into edit mode, and takes it out again.
+ * An entity sheet's lock/unlock toggle. Puts the sheet into edit mode, and
+ * takes it out again.
  *
  * A padlock, not a pencil-and-tick. The tick implied the edits were being held
  * and committed when you pressed it — they are not: every field saves on blur

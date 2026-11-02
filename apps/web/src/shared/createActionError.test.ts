@@ -87,6 +87,21 @@ test("with a key, changing the key drops the failure", async () => {
 	area.dispose();
 });
 
+test("with a key, a new row for the same key keeps the failure and another key clears it", async () => {
+	const dispose = createRoot((disposeRoot) => {
+		const [row, setRow] = createSignal({ _id: "a", name: "one" });
+		const area = createActionError(() => row()._id);
+		return Object.assign(disposeRoot, { area, setRow });
+	});
+	await dispose.area.trackResult(errAsync(REFUSAL));
+	expect(dispose.area.error()).toBe(REFUSAL.message);
+	dispose.setRow({ _id: "a", name: "two" });
+	expect(dispose.area.error()).toBe(REFUSAL.message);
+	dispose.setRow({ _id: "b", name: "two" });
+	expect(dispose.area.error()).toBeNull();
+	dispose();
+});
+
 test("with a key, a late answer for the previous key is dropped but still handed back", async () => {
 	const area = setup("alice");
 	const pending = deferred<null>();

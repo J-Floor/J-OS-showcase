@@ -122,7 +122,10 @@ snapshots. The stylesheet turns the sheet's own transitions off under a
 morph, so the lower sheet reaches its new place in the update and the
 browser moves it there as its own group, on the morph's duration. A card
 closing into a button on it is measured where the button will rest, so
-the morph ends without a jump.
+the morph ends without a jump. An overlay that stays open also keeps the
+page under it from taking focus: a table whose own sheet closes under it
+does not claim focus (`isUnderOpenOverlay`), since focus moved under an
+overlay is a focus outside it, which dismisses it.
 
 **Overlay content.** Never gate overlay content on the caller's `open`. It
 turns false before the browser captures the closing card, so the card would
@@ -339,6 +342,14 @@ unhovered, unpinned copy), or it is a field whose input wrapper paints.
    `aria-keyshortcuts`: inside the focused row first, else inside the
    overlay holding focus, else anywhere outside rows. `Button` and
    `IconButton` write that attribute from `shortcut` (`keyShortcutsOf`).
+   A press or key that activates nothing clears the record: a press on
+   nothing activatable (a read-only field), a key pressed outside a text
+   field that no control on screen names, and Enter or Space in a plain
+   text field. An overlay it opens then grows out of its `morphFrom`, not
+   out of the link clicked just before. A lone modifier (Control, Meta,
+   Shift, Alt), a held key's repeat and any other key typed into a text
+   field leave the record as it was, so the Control keydown of a Control+K
+   does not lose what was activated before it.
 2. **The consumer sets `open`.** `createMorphPresence`'s effect calls `show`.
    It records the opener (the focused element outside the overlay). If a
    closing overlay is offering a handoff, this overlay claims it and joins
@@ -550,7 +561,9 @@ into the sheet:
 
 1. `CommandPalette` marks the picked row `data-morph-picked`, asks to close,
    and runs the item's `onSelect` in `viewTransition`, which **joins** the
-   close (the close's session is already updating).
+   close (the close's session is already updating). The query the combobox
+   clears after a pick is ignored while the palette is closed, so the list
+   (and the picked row) stays as it was for the old snapshot.
 2. The close **offers** a handoff on its session as soon as it is asked for.
 3. `onSelect` opens the sheet; its presence finds the offer and **claims** it
    (`claimHandoff`), passing its content as the target, then opens through
@@ -596,11 +609,15 @@ page centre.
 
 **Peeks.** In the web app, a palette pick or a notification click on an
 entity opens that entity's sheet over the current page (`PeekHost` in
-`apps/web/src/shared/entity/`). It is the same handoff: the palette or the
-notifications sheet closes, and the peek's sheet claims it. To open inside
-the cap, a peek's code is loaded ahead, on the palette row's highlight and
-the notification row's hover or focus; a peek whose code is not loaded yet
-scales in instead.
+`apps/web/src/shared/entity/`). A palette pick is the same handoff: the
+palette closes, and the peek's sheet claims it. A notification click is not:
+the notifications sheet stays open, and the peek (or the page's own sheet,
+when the entity's page is on screen) opens from the clicked row and stacks
+on it (see _Stacked overlays_). Closing it comes back to the notifications
+sheet. Only a row that leads to another page closes that sheet. To open
+inside the cap, a peek's code is loaded ahead, on the palette row's highlight
+and the notification row's hover or focus; a peek whose code is not loaded
+yet scales in instead.
 
 ## Overlapping morphs
 

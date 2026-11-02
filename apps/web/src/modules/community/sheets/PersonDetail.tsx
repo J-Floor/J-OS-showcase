@@ -14,7 +14,6 @@ import { PersonTimeline } from "../status/PersonTimeline.tsx";
 import { StatusSection } from "../status/StatusSection.tsx";
 
 import { BoardNotes } from "./BoardNotes.tsx";
-import styles from "./PersonDetail.module.scss";
 import { EditableDetail } from "./PersonEditor.tsx";
 import { ReadOnlyDetail } from "./PersonReadOnly.tsx";
 
@@ -90,7 +89,7 @@ function StatusSectionItem(props: { person: PersonRow; editing?: boolean }) {
 		() => props.person._id
 	);
 	return (
-		<Accordion.Item value="status" class={styles.section}>
+		<Accordion.Item value="status">
 			{/* Plain text, not a Badge: the accordion's subtitle is a
 		    second line under the title, and a pill there wraps onto
 		    its own line and drags the header out of alignment. The
@@ -167,7 +166,7 @@ export function PersonDetail(props: {
 					person={props.person}
 					editing={props.editing}
 				/>
-				<Accordion.Item value="info" class={styles.section}>
+				<Accordion.Item value="info">
 					<Accordion.ItemTitle shortcut={SECTION_KEYS.info}>
 						Info
 					</Accordion.ItemTitle>
@@ -183,7 +182,7 @@ export function PersonDetail(props: {
 						</Show>
 					</Accordion.ItemContent>
 				</Accordion.Item>
-				<Accordion.Item value="notes" class={styles.section}>
+				<Accordion.Item value="notes">
 					{/* The board's own channel, its own section — a thread you add to
 					    without entering edit mode, open by default because it is where
 					    triage happens. */}
@@ -194,7 +193,7 @@ export function PersonDetail(props: {
 						<BoardNotes person={props.person} />
 					</Accordion.ItemContent>
 				</Accordion.Item>
-				<Accordion.Item value="history" class={styles.section}>
+				<Accordion.Item value="history">
 					<Accordion.ItemTitle shortcut={SECTION_KEYS.history}>
 						History
 					</Accordion.ItemTitle>

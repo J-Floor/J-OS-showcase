@@ -33,7 +33,7 @@ export function createEntityRemove<RemoveId>(options: {
 /** Write `fields` to the open row, handing back its Result (for the save
  *  status); with none open (create mode), do nothing. A failure is shown
  *  against the fields it touched. */
-function createEntityPatch<RowId, Patch extends object>(options: {
+function createRowPatch<RowId, Patch extends object>(options: {
 	id: () => RowId | undefined;
 	update: (args: { id: RowId } & Patch) => ResultAsync<unknown, ClientError>;
 	failure: ActionErrorState;
@@ -85,7 +85,7 @@ export function createEntityCommands<
 		onClose,
 	});
 
-	const patch = createEntityPatch<RowId, Patch>({
+	const patch = createRowPatch<RowId, Patch>({
 		id: options.id,
 		update: actions.update,
 		failure,

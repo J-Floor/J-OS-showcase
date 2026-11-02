@@ -747,7 +747,9 @@ export default defineSchema({
 		// Each person id leads an index, so merge and erasure look rows up
 		// instead of scanning the table (`lib/peopleRefs`).
 		.index("by_contactId", ["contactId"])
-		.index("by_createdBy", ["createdBy"]),
+		.index("by_createdBy", ["createdBy"])
+		// The daily expiry reminder reads one end date (`notify/perkReminders`).
+		.index("by_validUntil", ["validUntil"]),
 
 	/**
 	 * A person asking for a perk. `personId` is the requester, so erasing

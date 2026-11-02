@@ -1,27 +1,22 @@
 import { v } from "convex/values";
-import type { Result } from "neverthrow";
 
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { requireRole } from "./lib/authGuard.ts";
-import type { InputError } from "./lib/errors/input.ts";
-import { displayName } from "./lib/names.ts";
+import { displayName, nameOf } from "./lib/names.ts";
 import {
+	activeContactOf,
+	isAnswer,
 	isOpenRequest,
 	isPerkExpired,
 	PERK_REQUEST_LIST_CAP,
 	PERK_REQUESTS_PER_PERK_CAP,
 	type PerkRequestStatus,
 } from "./lib/perks.ts";
-import {
-	activeContactOf,
-	nameOf,
-	readOnce,
-	type Readers,
-} from "./lib/readOnce.ts";
+import { readOnce, type Readers } from "./lib/readOnce.ts";
 import { refuse, unwrap } from "./lib/result.ts";
 import { BOARD_LEVEL, COMMUNITY_TIERS } from "./lib/roles.ts";
-import { checkLength, TEXT_MAX } from "./lib/validate.ts";
+import { optionalCappedText, TEXT_MAX } from "./lib/validate.ts";
 import { notify } from "./notify/notify.ts";
 import { perkRequestStatus } from "./schema.ts";
 
@@ -130,16 +125,6 @@ async function openRequestFor(
 	return requests.find((request) => isOpenRequest(request.status));
 }
 
-/** The member's note as stored: trimmed, capped, and absent when blank. */
-function requestNote(
-	note: string | undefined
-): Result<string | undefined, InputError> {
-	const trimmed = note?.trim() ?? "";
-	return checkLength(trimmed, TEXT_MAX).map(() =>
-		trimmed === "" ? undefined : trimmed
-	);
-}
-
 /**
  * A member asks for a perk, and its contact hears about it through the
  * notification system. One open request per person per perk: asking again
@@ -159,7 +144,7 @@ export const requestPerk = mutation({
 		const now = Date.now();
 		if (isPerkExpired(perk.validUntil, now))
 			return refuse({ type: "PerkExpired" });
-		const storedNote = unwrap(requestNote(note));
+		const storedNote = unwrap(optionalCappedText(note, TEXT_MAX));
 		const requestId = await context.db.insert("perkRequests", {
 			perkId,
 			personId: person._id,
@@ -253,7 +238,8 @@ export const listRequestsForPerk = query({
 });
 
 /** Any board member moves a request to any status. The stamp records who
- *  moved it and when. */
+ *  moved it and when. Landing on an answer (Granted or Declined) that differs
+ *  from the request's status tells the requester; nothing else does. */
 export const setPerkRequestStatus = mutation({
 	args: { requestId: v.id("perkRequests"), status: perkRequestStatus },
 	handler: async (context, { requestId, status }): Promise<null> => {
@@ -265,6 +251,17 @@ export const setPerkRequestStatus = mutation({
 			statusAt: Date.now(),
 			statusById: caller._id,
 		});
+		const perk = await context.db.get(request.perkId);
+		if (perk && isAnswer(status) && status !== request.status) {
+			await notify(context, "perkRequestOutcome", {
+				requestId,
+				perkId: perk._id,
+				personId: request.personId,
+				partner: perk.partner,
+				perkTitle: perk.title,
+				outcome: status,
+			});
+		}
 		return null;
 	},
 });

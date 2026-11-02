@@ -21,6 +21,7 @@ import { parseAssetTag } from "../../../../convex/lib/assetTag.ts";
 import type { SheetNavState } from "../../../lib/createSheetNav.ts";
 import { createSyncedField } from "../../../lib/createSyncedField.ts";
 import type { SaveWrite } from "../../../lib/reportSave.ts";
+import { OptionSelect } from "../../../shared/components/OptionSelect.tsx";
 import { useConfirm } from "../../../shared/confirm.tsx";
 import { createEntityDraft } from "../../../shared/entity/entityCommands.ts";
 import { EntityCreateFooter } from "../../../shared/entity/EntityCreateFooter.tsx";
@@ -43,7 +44,7 @@ import { detailsFromItem } from "./copyFromItem.ts";
 import { CopyFromItemDialog } from "./CopyFromItemDialog.tsx";
 import { FieldsPlaceholder } from "./FieldsPlaceholder.tsx";
 import { createInventoryCommands } from "./inventoryCommands.ts";
-import { DescriptionValue, OptionSelect } from "./InventoryForm.tsx";
+import { DescriptionValue } from "./InventoryForm.tsx";
 
 /** The rows the skeleton stands in for: the sheet's own fields. */
 const PLACEHOLDER_FIELDS = [
@@ -264,15 +265,21 @@ function CreateFooter(props: { form: ItemForm }) {
 function ItemTypeSelect(props: { typeId: ItemForm["typeId"] }) {
 	const types = useItemTypes();
 	return (
-		<OptionSelect
-			property={itemFields.typeName}
-			placeholder="Choose a type"
-			options={(types.data() ?? []).map((itemType) => ({
-				value: itemType._id,
-				label: `${itemType.name} · ${itemType.categoryName}`,
-			}))}
-			field={props.typeId}
-		/>
+		<PropertyRow field={itemFields.typeName}>
+			<OptionSelect
+				label={itemFields.typeName.label}
+				labelHidden
+				placeholder="Choose a type"
+				options={(types.data() ?? []).map((itemType) => ({
+					value: itemType._id,
+					label: `${itemType.name} · ${itemType.categoryName}`,
+				}))}
+				value={props.typeId.value()}
+				onChange={(value) => {
+					props.typeId.set(value);
+				}}
+			/>
+		</PropertyRow>
 	);
 }
 

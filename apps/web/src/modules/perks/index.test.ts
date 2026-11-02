@@ -20,7 +20,7 @@ test("the Perks page sits at /perks, behind view Perks, under the perks icon", (
 		label: "Perks",
 		path: "/perks",
 		subject: "Perks",
-		icon: "redeem",
+		icon: "featured_seasonal_and_gifts",
 	});
 });
 

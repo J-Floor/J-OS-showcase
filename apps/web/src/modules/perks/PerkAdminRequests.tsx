@@ -1,10 +1,13 @@
-import { Accordion, Avatar, Query } from "@j-os/design-system";
+import { EmptyState, Query } from "@j-os/design-system";
 import { For, Show, createMemo, type Accessor, type JSX } from "solid-js";
 
+import { SITE_TIMEZONE } from "../../../convex/lib/time.ts";
 import type { PerkRequestRow } from "../../../convex/perkRequests.ts";
 import type { PerkRow } from "../../../convex/perks.ts";
+import { PersonListItem } from "../../shared/components/PersonListItem.tsx";
 import { useQuery } from "../../shared/data/useQuery.ts";
-import { formatDate } from "../../shared/time.ts";
+import { SheetSection } from "../../shared/entity/SheetSection.tsx";
+import { formatDateIn } from "../../shared/time.ts";
 
 import styles from "./PerkAdminRequests.module.scss";
 import { PerkRequestStatusSelect } from "./PerkRequestStatusSelect.tsx";
@@ -18,29 +21,26 @@ function RequestItem(props: {
 }): JSX.Element {
 	return (
 		<li class={styles.request}>
-			<Avatar name={props.request().requesterName} />
-			<div class={styles.who}>
-				<span class={styles.name}>{props.request().requesterName}</span>
-				<span class={styles.email}>
-					{props.request().requesterEmail}
+			<PersonListItem
+				name={props.request().requesterName}
+				detail={props.request().requesterEmail}
+			>
+				<span class={styles.requested}>
+					Requested{" "}
+					{formatDateIn(props.request().requestedAt, SITE_TIMEZONE)}
 				</span>
-				<span class={styles.meta}>
-					Requested {formatDate(props.request().requestedAt)}
-				</span>
-				<Show when={props.request().note}>
-					{(note) => (
-						<p class={`${sheetStyles.note} ${styles.noteText}`}>
-							{note()}
-						</p>
-					)}
-				</Show>
-			</div>
-			<div class={styles.status}>
 				<PerkRequestStatusSelect
 					requestId={props.request()._id}
 					status={props.request().status}
 				/>
-			</div>
+			</PersonListItem>
+			<Show when={props.request().note}>
+				{(note) => (
+					<p class={`${sheetStyles.note} ${styles.noteText}`}>
+						{note()}
+					</p>
+				)}
+			</Show>
 		</li>
 	);
 }
@@ -84,24 +84,18 @@ export function PerkAdminRequests(props: {
 	);
 	return (
 		<Query.Root data={requests.data()}>
-			<Accordion.Item value="requests">
-				<Accordion.ItemTitle>
-					Requests
-					<Accordion.ItemSubtitle>
-						<Query.Count />
-					</Accordion.ItemSubtitle>
-				</Accordion.ItemTitle>
-				<Accordion.ItemContent>
-					<div class={sheetStyles.section}>
-						<Query.Empty>
-							<p class={styles.empty}>No requests yet.</p>
-						</Query.Empty>
-						<Query.Content of={requests.data()}>
-							{(rows) => <RequestList requests={rows} />}
-						</Query.Content>
-					</div>
-				</Accordion.ItemContent>
-			</Accordion.Item>
+			<SheetSection
+				value="requests"
+				title="Requests"
+				subtitle={<Query.Count />}
+			>
+				<Query.Empty>
+					<EmptyState title="No requests yet" />
+				</Query.Empty>
+				<Query.Content of={requests.data()}>
+					{(rows) => <RequestList requests={rows} />}
+				</Query.Content>
+			</SheetSection>
 		</Query.Root>
 	);
 }

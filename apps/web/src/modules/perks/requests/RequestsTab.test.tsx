@@ -13,10 +13,8 @@ import { createSignal } from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
-import {
-	PERK_REQUEST_LIST_CAP,
-	siteToday,
-} from "../../../../convex/lib/perks.ts";
+import { PERK_REQUEST_LIST_CAP } from "../../../../convex/lib/perks.ts";
+import { SITE_TIMEZONE, todayIn } from "../../../../convex/lib/time.ts";
 import type { PerkRequestRow } from "../../../../convex/perkRequests.ts";
 import { downloadBlob } from "../../../shared/downloadBlob.ts";
 
@@ -70,6 +68,7 @@ function request(id: string, fields: Partial<PerkRequestRow>): PerkRequestRow {
 const ROWS = [
 	request("r1", {
 		perkId: "perk2" as Id<"perks">,
+		personId: "person2" as Id<"people">,
 		requesterName: "Dan Fixture",
 		requesterEmail: "dan@example.com",
 		perkTitle: "Design seats",
@@ -87,6 +86,7 @@ const ROWS = [
 	request("r3", { requestedAt: Date.UTC(2026, 9, 20, 9) }),
 	request("r4", {
 		// Typed in lower case: it still sorts under B, not after Z.
+		personId: "person3" as Id<"people">,
 		requesterName: "ben Sample",
 		requesterEmail: "ben@example.com",
 		requestedAt: Date.UTC(2026, 9, 5, 9),
@@ -94,6 +94,7 @@ const ROWS = [
 	}),
 	request("r5", {
 		perkId: "perk2" as Id<"perks">,
+		personId: "person4" as Id<"people">,
 		requesterName: "Cara Demo",
 		requesterEmail: "cara@example.com",
 		perkTitle: "Design seats",
@@ -159,6 +160,15 @@ function groupKeys(): (string | null)[] {
 	);
 }
 
+/** The groups on screen, top to bottom, by the name on each header. */
+function groupNames(): string[] {
+	return Array.from(
+		document.querySelectorAll("[data-group-key] button"),
+		(header) =>
+			(header.lastElementChild?.firstChild?.textContent ?? "").trim()
+	);
+}
+
 /** The requester cells, top to bottom. */
 function requesters(): (string | null)[] {
 	return screen
@@ -216,7 +226,7 @@ test("Perk groups alphabetically, even when a later perk has the newest request"
 	renderTab();
 	groupBy("Perk");
 	await waitFor(() => {
-		expect(groupKeys()).toEqual([
+		expect(groupNames()).toEqual([
 			"Alpha Labs · Cloud credits",
 			"Bravo Labs · Design seats",
 		]);
@@ -234,7 +244,7 @@ test("Requester groups alphabetically by name, whatever the case it was typed in
 	renderTab();
 	groupBy("Requester");
 	await waitFor(() => {
-		expect(groupKeys()).toEqual([
+		expect(groupNames()).toEqual([
 			"Ada Example",
 			"ben Sample",
 			"Cara Demo",
@@ -260,7 +270,7 @@ test("inside a group the newest request comes first, whatever order the rows arr
 	});
 	groupBy("Requester");
 	await waitFor(() => {
-		expect(groupKeys()[0]).toBe("Ada Example");
+		expect(groupNames()[0]).toBe("Ada Example");
 	});
 	expect(rowSelects()).toEqual([
 		"r2:requested",
@@ -279,12 +289,12 @@ test("every row keeps the status select for its own request, in every grouping",
 		Perk: "Alpha Labs · Cloud credits",
 		Requester: "Ada Example",
 		Month: "November 2026",
-		Status: "requested",
+		Status: "Requested",
 	};
 	for (const [label, first] of Object.entries(firstGroup)) {
 		groupBy(label);
 		await waitFor(() => {
-			expect(groupKeys()[0]).toBe(first);
+			expect(groupNames()[0]).toBe(first);
 		});
 		const selects = rowSelects();
 		expect(selects).toHaveLength(ROWS.length);
@@ -330,7 +340,9 @@ test("Download CSV saves every loaded row as today's file, whatever the grouping
 	);
 	expect(downloadBlob).toHaveBeenCalledOnce();
 	const [blob, filename] = vi.mocked(downloadBlob).mock.calls[0];
-	expect(filename).toBe(`perk-requests-${siteToday(Date.now())}.csv`);
+	expect(filename).toBe(
+		`perk-requests-${todayIn(SITE_TIMEZONE, Date.now())}.csv`
+	);
 	expect(blob.type).toBe("text/csv;charset=utf-8");
 	// Bytes, not text: a text decoder may drop the BOM the file starts with.
 	expect(new Uint8Array(await blob.arrayBuffer())).toEqual(
@@ -380,4 +392,33 @@ test("the group-by switch lays its options out in a row", async () => {
 	renderTab();
 	const group = await screen.findByRole("radiogroup", { name: "Group by" });
 	expect(group).toHaveAttribute("data-orientation", "horizontal");
+});
+
+test("two requesters who share a name stay two groups, alphabetical by name", async () => {
+	setRows([
+		request("r1", { requestedAt: Date.UTC(2026, 9, 25, 9) }),
+		request("r2", {
+			personId: "person2" as Id<"people">,
+			requestedAt: Date.UTC(2026, 9, 24, 9),
+		}),
+		request("r3", {
+			personId: "person3" as Id<"people">,
+			requesterName: "Abe Sample",
+			requestedAt: Date.UTC(2026, 9, 23, 9),
+		}),
+		request("r4", { requestedAt: Date.UTC(2026, 9, 22, 9) }),
+	]);
+	renderTab();
+	groupBy("Requester");
+	await waitFor(() => {
+		expect(groupNames()).toEqual([
+			"Abe Sample",
+			"Ada Example",
+			"Ada Example",
+		]);
+	});
+	expect(
+		screen.getAllByRole("button", { name: /^Ada Example \(\d\)$/ })
+	).toHaveLength(2);
+	setRows(ROWS);
 });

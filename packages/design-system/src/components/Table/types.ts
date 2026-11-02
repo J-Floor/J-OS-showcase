@@ -126,6 +126,13 @@ type ColumnExtras<Data> = {
 	 * data push, not on a timer. Widths still only grow.
 	 */
 	measureVolatile?: true;
+	/**
+	 * The text that heads a group when the table groups by this column. Read
+	 * from the group's first row. Omitted, an enum column shows its option
+	 * label and any other column its raw value. Lets a column group on an id
+	 * while naming the group, so two rows that share a name stay two groups.
+	 */
+	groupLabel?: (row: Data) => string;
 	/** Nested header columns are not supported. */
 	columns?: never;
 };

@@ -321,6 +321,12 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
 						}}
 						inputValue={search()}
 						onInputValueChange={(details) => {
+							// A pick closes the palette, then zag clears the query
+							// (`selectionBehavior="clear"`). Taken while closing, that
+							// would list the blank palette and unmount the picked row
+							// before the browser snapshots it: the row it morphs from.
+							// The next open blanks the search anyway.
+							if (!props.open) return;
 							setSearch(details.inputValue);
 						}}
 						// `onSelect`, NOT `onValueChange`. `selectionBehavior="clear"`

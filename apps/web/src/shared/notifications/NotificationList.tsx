@@ -179,8 +179,9 @@ function LoadMoreFooter(props: { inbox: Inbox }): JSX.Element {
 	);
 }
 
-/** What a click on a row does: closes the sheet, opens the row's entity over
- *  the current page (or navigates to its page) and marks the row read. */
+/** What a click on a row does: opens the row's entity over the sheet, which
+ *  stays open under it (closing the entity comes back to the sheet), or
+ *  closes the sheet and navigates to the row's page; and marks the row read. */
 function useOpenRow(
 	inbox: () => Inbox,
 	onClose: () => void
@@ -189,18 +190,20 @@ function useOpenRow(
 	const openEntity = useOpenEntity();
 	const ability = useAbility();
 	return (row) => {
-		onClose();
 		const link = descriptorForLink(row.url, entityDescriptors);
 		// A kind the viewer may not peek at goes to its page, as any link does.
 		if (link && canView(ability(), link.desc))
 			openEntity(link.desc, link.slug);
-		else navigate(row.url);
+		else {
+			onClose();
+			navigate(row.url);
+		}
 		inbox().markRead(row._id);
 	};
 }
 
 /** A touch screen has no hover, so the first intent is the tap itself, too
- *  late for the handoff. Warms each kind the rows link to, once, as they show. */
+ *  late for the morph. Warms each kind the rows link to, once, as they show. */
 function useWarmKinds(rows: () => Map<string, InboxRow>): void {
 	const ability = useAbility();
 	const warmed = new Set<string>();
@@ -221,8 +224,8 @@ function useWarmKinds(rows: () => Map<string, InboxRow>): void {
 
 /**
  * The sheet's notification history: rows grouped by day, unread ones
- * marked. A click closes the sheet, opens the row's entity over the current
- * page (or its page) and marks it read without waiting; older rows load a page
+ * marked. A click opens the row's entity over the sheet (or closes the sheet
+ * for the row's page) and marks it read without waiting; older rows load a page
  * at a time as the end scrolls into view.
  */
 export function NotificationList(props: {
@@ -251,7 +254,7 @@ export function NotificationList(props: {
 		}
 	);
 
-	/** The sheet must be loaded in time to take the close handoff. */
+	/** The peek must be loaded in time to morph out of the row. */
 	function warm(row: InboxRow): void {
 		const link = descriptorForLink(row.url, entityDescriptors);
 		if (link) warmPeek(link.desc);

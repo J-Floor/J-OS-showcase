@@ -7,17 +7,19 @@ import type { Demo } from "../../../demo/types.ts";
 
 import styles from "./Table.demo.module.scss";
 
-type Entry = { id: string; batch: string };
+type Entry = { id: string; batchId: string; batchName: string };
 
 const ENDLESS_CHUNK = 50;
 const ENDLESS_MAX = 500;
 
 const endlessColumns: JfColumnDefinition<Entry>[] = [
+	// Groups on the batch id and names each group from its first row.
 	{
 		id: "batch",
 		header: "Batch",
 		dataType: "string",
-		accessorFn: (r) => r.batch,
+		accessorFn: (r) => r.batchId,
+		groupLabel: (r) => r.batchName,
 	},
 	{ accessorKey: "id", header: "Entry", dataType: "string" },
 ];
@@ -25,9 +27,11 @@ const endlessColumns: JfColumnDefinition<Entry>[] = [
 function entries(from: number): Entry[] {
 	return Array.from({ length: ENDLESS_CHUNK }, (_, i) => {
 		const n = from + i;
+		const batch = String(Math.floor(n / ENDLESS_CHUNK) + 1);
 		return {
 			id: `Entry ${String(n + 1)}`,
-			batch: `Batch ${String(Math.floor(n / ENDLESS_CHUNK) + 1)}`,
+			batchId: `batch-${batch}`,
+			batchName: `Batch ${batch}`,
 		};
 	});
 }

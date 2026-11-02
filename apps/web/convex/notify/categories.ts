@@ -15,6 +15,7 @@ export const CATEGORIES = [
 	"guests",
 	"tasks",
 	"perks",
+	"perkUpdates",
 ] as const;
 export type Category = (typeof CATEGORIES)[number];
 
@@ -77,10 +78,18 @@ export const CATEGORY_INFO: Record<Category, CategoryInfo> = {
 		description: "You are assigned a task or made lead of a project.",
 		tiers: CORE_AND_BOARD,
 	},
+	// Key kept from when it was the only perk category: stored preferences
+	// use it. Relabelled so the board can tell it from `perkUpdates`.
 	perks: {
-		label: "Perks",
+		label: "Perk requests",
 		description: "Someone requests a perk you're the contact for.",
 		tiers: BOARD_LEVEL,
+	},
+	perkUpdates: {
+		label: "Perks",
+		description:
+			"A perk is added, your request is answered, or a perk ends in a week.",
+		tiers: COMMUNITY_TIERS,
 	},
 };
 

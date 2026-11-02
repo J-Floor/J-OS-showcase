@@ -1,14 +1,14 @@
 import { useMutation } from "convex-solidjs";
-import { createMemo, type JSX } from "solid-js";
+import type { JSX } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import type { PerkRequestStatus } from "../../../convex/lib/perks.ts";
 import { call } from "../../lib/call.ts";
+import { OptionSelect } from "../../shared/components/OptionSelect.tsx";
 import { createActionError } from "../../shared/createActionError.ts";
 import { InlineError } from "../../shared/InlineError.tsx";
 
-import { EnumSelect } from "./EnumSelect.tsx";
 import { PERK_REQUEST_STATUS_OPTIONS } from "./perkOptions.ts";
 
 /**
@@ -28,10 +28,7 @@ export function PerkRequestStatusSelect(props: {
 	// it was made for. The sheet mounts one picker per request, and the
 	// Requests tab's virtualised table keeps each row by its request id; a
 	// row scrolled out of its window unmounts its picker, refusal and all.
-	// A memo of the id: a live update hands the picker a new row for the
-	// same request, which must not clear its refusal.
-	const requestId = createMemo(() => props.requestId);
-	const { error, trackResult } = createActionError(() => requestId());
+	const { error, trackResult } = createActionError(() => props.requestId);
 	function commit(status: PerkRequestStatus): void {
 		void trackResult(
 			call(
@@ -45,7 +42,7 @@ export function PerkRequestStatusSelect(props: {
 	}
 	return (
 		<>
-			<EnumSelect
+			<OptionSelect
 				label="Status"
 				labelHidden
 				options={PERK_REQUEST_STATUS_OPTIONS}

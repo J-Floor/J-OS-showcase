@@ -1,4 +1,4 @@
-import { Dialog, Icon } from "@j-os/design-system";
+import { Dialog, Icon, morphPart } from "@j-os/design-system";
 import { useLocation } from "@solidjs/router";
 import { For } from "solid-js";
 
@@ -8,6 +8,11 @@ import { ICONS } from "../../icons.ts";
 import type { PhoneMore } from "./createPhoneMore.ts";
 import { NavItem } from "./NavItem.tsx";
 import styles from "./Sidebar.module.scss";
+
+/** The bar's last slot, and the Close drawn in its place on the sheet: one
+ *  key, so More turns into Close where it stands as the bar grows into the
+ *  sheet. */
+const MORE_SLOT = { key: "nav-more", label: "More" };
 
 /** The bar's last slot: opens the sheet of overflow pages. It carries the
  *  active state when the current page is one of them. */
@@ -30,6 +35,7 @@ export function MoreButton(props: {
 			aria-haspopup="dialog"
 			aria-expanded={props.more.isOpen()}
 			aria-current={isOverflowActive() ? "true" : undefined}
+			{...morphPart(MORE_SLOT)}
 			onClick={() => {
 				props.more.toggle();
 			}}
@@ -81,7 +87,10 @@ export function MoreSheet(props: {
 							/>
 						)}
 					</For>
-					<Dialog.CloseTrigger class={styles.item}>
+					<Dialog.CloseTrigger
+						class={styles.item}
+						{...morphPart(MORE_SLOT)}
+					>
 						<Icon class={styles.icon}>{ICONS.down}</Icon>
 						<span class={styles.label}>Close</span>
 					</Dialog.CloseTrigger>

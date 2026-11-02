@@ -71,8 +71,16 @@ function activeDescendant(target: Element): Element | null {
 	return id ? target.ownerDocument.getElementById(id) : null;
 }
 
+/** Records a gesture, replacing the earlier activation even when it
+ *  activates nothing: an overlay it opens must not grow out of the link
+ *  clicked just before. What clears it this way: a press on nothing
+ *  activatable (a read-only field), a key pressed outside a text field that
+ *  no control on screen names, and Enter or Space in a plain text field.
+ *  A lone modifier, a held key's repeat and any other key typed into a text
+ *  field never get here (`onKeyDown`), so the Control keydown of a
+ *  Control+K leaves the record as it was. */
 function remember(element: HTMLElement | null): void {
-	if (element) last = { element, at: Date.now() };
+	last = element ? { element, at: Date.now() } : undefined;
 }
 
 function record(event: Event): void {

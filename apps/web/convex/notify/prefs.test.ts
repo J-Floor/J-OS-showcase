@@ -38,6 +38,12 @@ describe("notification preferences", () => {
 				email: false,
 				note: "Event reminders are push only.",
 			}),
+			expect.objectContaining({
+				category: "perkUpdates",
+				label: "Perks",
+				push: true,
+				email: true,
+			}),
 		]);
 	});
 
@@ -106,7 +112,7 @@ describe("notification preferences", () => {
 		const board = backend.withIdentity({ email: "b@example.org" });
 		const rows = await board.query(api.notify.prefs.mine, {});
 		expect(rows.find((row) => row.category === "perks")).toMatchObject({
-			label: "Perks",
+			label: "Perk requests",
 			description: "Someone requests a perk you're the contact for.",
 			push: true,
 			email: true,
@@ -134,5 +140,21 @@ describe("notification preferences", () => {
 					email: false,
 				})
 		).rejects.toThrow(/Forbidden/);
+	});
+
+	it("lets a member turn perk updates off", async () => {
+		const backend = convexTest(schema, modules);
+		const id = await seed(backend, "m@example.org", "member");
+		await backend
+			.withIdentity({ email: "m@example.org" })
+			.mutation(api.notify.prefs.set, {
+				category: "perkUpdates",
+				push: false,
+				email: false,
+			});
+		const person = await backend.run((context) => context.db.get(id));
+		expect(person?.notificationPrefs).toEqual({
+			perkUpdates: { push: false, email: false },
+		});
 	});
 });

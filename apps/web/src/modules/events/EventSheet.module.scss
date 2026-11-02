@@ -6,13 +6,6 @@
 	gap: var(--jf-spacing-near);
 }
 
-// An accordion section's fields, one under the other.
-.section {
-	display: flex;
-	flex-direction: column;
-	gap: var(--jf-spacing-near);
-}
-
 // A date + its time picker side by side; wraps to a column on narrow sheets
 // rather than compressing either field.
 .fieldRow {
@@ -48,13 +41,6 @@
 	align-items: center;
 }
 
-.empty {
-	@include typo.jf-typo-body-tech;
-
-	margin: 0;
-	color: var(--jf-fg-muted);
-}
-
 .hint {
 	@include typo.jf-typo-body-tech;
 
@@ -69,28 +55,4 @@
 	margin: 0;
 	padding: 0;
 	list-style: none;
-}
-
-.attendee {
-	display: flex;
-	flex-wrap: nowrap;
-	gap: var(--jf-spacing-near);
-	align-items: center;
-}
-
-.who {
-	display: flex;
-	flex-direction: column;
-	min-inline-size: 0;
-}
-
-.attendeeName {
-	@include typo.jf-typo-body-regular;
-}
-
-.attendeeEmail {
-	@include typo.jf-typo-body-tech;
-
-	color: var(--jf-fg-muted);
-	overflow-wrap: anywhere;
 }

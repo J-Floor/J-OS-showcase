@@ -1,3 +1,4 @@
+import { v } from "convex/values";
 import { err, ok, type Result } from "neverthrow";
 
 import type { InputError } from "./errors/input.ts";
@@ -29,4 +30,19 @@ export function checkLength(
 	return value !== undefined && value.length > max
 		? err({ type: "FieldTooLong" })
 		: ok();
+}
+
+/** An optional text argument a patch can clear: a string sets it, null
+ *  clears it, and leaving it out keeps it. */
+export const clearableText = v.optional(v.union(v.string(), v.null()));
+
+/** Optional free text: trimmed, capped at `max`, and undefined when blank. */
+export function optionalCappedText(
+	raw: string | undefined,
+	max: number
+): Result<string | undefined, InputError> {
+	const trimmed = raw?.trim() ?? "";
+	return checkLength(trimmed, max).map(() =>
+		trimmed === "" ? undefined : trimmed
+	);
 }

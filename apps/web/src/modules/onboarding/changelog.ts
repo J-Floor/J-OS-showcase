@@ -46,6 +46,16 @@ const PERK_MANAGERS = { action: "manage", subject: "Perks" } as const;
 
 export const CHANGELOG: ChangeEntry[] = [
 	{
+		version: "1.5",
+		title: "Perk notifications",
+		items: [
+			{
+				text: "Get told when a perk is added, when your request is answered, and a week before a perk ends.",
+				audience: PERK_VIEWERS,
+			},
+		],
+	},
+	{
 		version: "1.4",
 		title: "Partner perks",
 		items: [

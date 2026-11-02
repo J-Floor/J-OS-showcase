@@ -3,6 +3,8 @@
  * Intl.RelativeTimeFormat plumbing).
  */
 
+import { LOCALE } from "../../convex/lib/time.ts";
+
 const mediumDate = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 
 const shortDate = new Intl.DateTimeFormat(undefined, {
@@ -57,6 +59,47 @@ export function formatAgo(ms: number, nowMs = Date.now()): string {
 /** Format an absolute timestamp (ms since epoch) as a short local date. */
 export function formatDate(ms: number): string {
 	return shortDate.format(new Date(ms));
+}
+
+/** One formatter per time zone, built on first use: a table formats a date
+ *  per row, and building a formatter costs far more than using one. */
+function perTimeZone(
+	build: (timeZone: string) => Intl.DateTimeFormat
+): (timeZone: string) => Intl.DateTimeFormat {
+	const formatters = new Map<string, Intl.DateTimeFormat>();
+	return (timeZone) => {
+		let formatter = formatters.get(timeZone);
+		if (!formatter) {
+			formatter = build(timeZone);
+			formatters.set(timeZone, formatter);
+		}
+		return formatter;
+	};
+}
+
+const mediumDateIn = perTimeZone(
+	(timeZone) =>
+		new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone })
+);
+
+const monthIn = perTimeZone(
+	(timeZone) =>
+		new Intl.DateTimeFormat(LOCALE, {
+			month: "long",
+			year: "numeric",
+			timeZone,
+		})
+);
+
+/** A medium date as it reads in `timeZone`: a site's dates read the same
+ *  from any browser (a travelling admin sees the site's date). */
+export function formatDateIn(ms: number, timeZone: string): string {
+	return mediumDateIn(timeZone).format(ms);
+}
+
+/** "February 2026" as the month reads in `timeZone`. */
+export function formatMonthIn(ms: number, timeZone: string): string {
+	return monthIn(timeZone).format(ms);
 }
 
 /**

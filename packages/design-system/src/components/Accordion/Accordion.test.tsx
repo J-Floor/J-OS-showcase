@@ -99,6 +99,12 @@ function rule(selector: string): string {
 	return styles.slice(start, styles.indexOf("\n}\n", start));
 }
 
+test("the root spaces its sections with a token gap, so no sheet adds its own", () => {
+	expect(rule(".accordions")).toMatch(/display: flex;/);
+	expect(rule(".accordions")).toMatch(/flex-direction: column;/);
+	expect(rule(".accordions")).toMatch(/gap: var\(--jf-spacing-near\);/);
+});
+
 test("the trigger's focus ring is not clipped by the item", () => {
 	// The ring is inset, inside the trigger's own box, and the item does not
 	// clip; only the content clips, for its slide animation.

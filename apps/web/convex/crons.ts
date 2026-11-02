@@ -60,6 +60,17 @@ crons.daily(
 	{}
 );
 
+// Perks ending in a week, told to the community. Daytime, not the nightly
+// window: people read it. 08:00 UTC is 09:00 Zurich in winter and 10:00 in
+// summer. The job reads the site date itself, so the hour only picks when
+// the message lands.
+crons.daily(
+	"tell the community about perks ending in a week",
+	{ hourUTC: 8, minuteUTC: 0 },
+	internal.notify.perkReminders.expiringSoon,
+	{}
+);
+
 // Lock reachability, every 10 minutes: one door-provider list call. The board hears
 // only when the set of offline locks changes (opsAlerts dedupes), not every
 // tick. No-ops on deployments without a configured door provider.

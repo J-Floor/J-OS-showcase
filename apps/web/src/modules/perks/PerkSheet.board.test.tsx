@@ -74,9 +74,10 @@ vi.mock("convex-solidjs", () => ({
 	},
 }));
 
+import { SITE_TIMEZONE } from "../../../convex/lib/time.ts";
 import { AbilityProvider, type Role } from "../../lib/ability.tsx";
 import { ConfirmProvider } from "../../shared/confirm.tsx";
-import { formatDate } from "../../shared/time.ts";
+import { formatDateIn } from "../../shared/time.ts";
 
 import { PerkSheet } from "./PerkSheet.tsx";
 
@@ -657,7 +658,7 @@ test("requests (board): counts and lists each request with its avatar and note",
 	expect(within(section).getByText("ada@example.com")).toBeInTheDocument();
 	expect(
 		within(section).getByText(
-			`Requested ${formatDate(REQUEST.requestedAt)}`
+			`Requested ${formatDateIn(REQUEST.requestedAt, SITE_TIMEZONE)}`
 		)
 	).toBeInTheDocument();
 	expect(
@@ -669,7 +670,7 @@ test("requests (board): none yet shows the empty copy", () => {
 	backend.queries.set("perkRequests:listRequestsForPerk", []);
 	renderSheet("board", { perk: perkRow() });
 	expect(
-		within(requestsSection()).getByText("No requests yet.")
+		within(requestsSection()).getByText("No requests yet")
 	).toBeInTheDocument();
 });
 

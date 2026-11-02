@@ -3,7 +3,7 @@ import type { JfColumnDefinition } from "@j-os/design-system";
 import { SITE_TIMEZONE } from "../../../../convex/lib/time.ts";
 import type { PerkRequestRow } from "../../../../convex/perkRequests.ts";
 import { SHORT_TEXT_SIZE } from "../../../shared/columnSizes.ts";
-import { formatDate } from "../../../shared/time.ts";
+import { formatDateIn, formatMonthIn } from "../../../shared/time.ts";
 import { PERK_REQUEST_STATUS_OPTIONS } from "../perkOptions.ts";
 import { PerkRequestStatusSelect } from "../PerkRequestStatusSelect.tsx";
 
@@ -27,33 +27,29 @@ export const REQUEST_GROUP_COLUMN = "group";
 
 const STATUS_COLUMN_WIDTH = 180;
 
-const monthFormat = new Intl.DateTimeFormat("en-GB", {
-	month: "long",
-	year: "numeric",
-	timeZone: SITE_TIMEZONE,
-});
-
-/** "October 2026", on the site's calendar: a request sent just after
- *  midnight on the 1st counts in the new month, wherever the board is. */
-export function requestMonth(ms: number): string {
-	return monthFormat.format(new Date(ms));
-}
-
 function perkLabel(row: PerkRequestRow): string {
 	return `${row.partner} · ${row.perkTitle}`;
 }
 
-type TextRow = { getValue: (columnId: string) => string };
+type TextRow = { original: PerkRequestRow };
 
 /** Alphabetical the way a reader means it: "acme" sits beside "Acme", not
  *  after "Zeta". */
-function byText(rowA: TextRow, rowB: TextRow, columnId: string): number {
-	return rowA.getValue(columnId).localeCompare(rowB.getValue(columnId));
+function byLabel(
+	label: (row: PerkRequestRow) => string
+): (rowA: TextRow, rowB: TextRow) => number {
+	return (rowA, rowB) =>
+		label(rowA.original).localeCompare(label(rowB.original));
+}
+
+function requesterLabel(row: PerkRequestRow): string {
+	return row.requesterName;
 }
 
 /** The hidden group column for each grouping. A status group is an enum, so
- *  it keeps the order a request moves in whatever the sort; the others
- *  group on the text their header shows. */
+ *  it keeps the order a request moves in whatever the sort. Perk and
+ *  requester groups key on the id, so two people who share a name stay two
+ *  groups, and read and sort by the name their header shows. */
 const GROUP_COLUMNS: Record<
 	RequestGrouping,
 	JfColumnDefinition<PerkRequestRow>
@@ -69,21 +65,23 @@ const GROUP_COLUMNS: Record<
 		id: REQUEST_GROUP_COLUMN,
 		header: "Perk",
 		dataType: "string",
-		accessorFn: perkLabel,
-		sortingFn: byText,
+		accessorFn: (row) => row.perkId,
+		groupLabel: perkLabel,
+		sortingFn: byLabel(perkLabel),
 	},
 	requester: {
 		id: REQUEST_GROUP_COLUMN,
 		header: "Requester",
 		dataType: "string",
-		accessorFn: (row) => row.requesterName,
-		sortingFn: byText,
+		accessorFn: (row) => row.personId,
+		groupLabel: requesterLabel,
+		sortingFn: byLabel(requesterLabel),
 	},
 	month: {
 		id: REQUEST_GROUP_COLUMN,
 		header: "Month",
 		dataType: "string",
-		accessorFn: (row) => requestMonth(row.requestedAt),
+		accessorFn: (row) => formatMonthIn(row.requestedAt, SITE_TIMEZONE),
 	},
 };
 
@@ -111,8 +109,9 @@ const VISIBLE_COLUMNS: JfColumnDefinition<PerkRequestRow>[] = [
 		header: "Requested",
 		dataType: "date",
 		size: "content",
-		cell: (info) => formatDate(info.row.original.requestedAt),
-		measureText: (row) => formatDate(row.requestedAt),
+		cell: (info) =>
+			formatDateIn(info.row.original.requestedAt, SITE_TIMEZONE),
+		measureText: (row) => formatDateIn(row.requestedAt, SITE_TIMEZONE),
 	},
 	{
 		id: "note",

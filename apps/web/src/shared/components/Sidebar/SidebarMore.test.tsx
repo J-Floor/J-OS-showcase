@@ -88,6 +88,14 @@ function tap(element: HTMLElement): void {
 	fireEvent.click(element);
 }
 
+/** The key each control in `root` pairs on in a morph: each keyed value of
+ *  the bar flies into the sheet's value with the same key, staying put. */
+function morphKeys(root: HTMLElement): (string | null)[] {
+	return [...root.querySelectorAll("a, button")].map((element) =>
+		element.getAttribute("data-morph-key")
+	);
+}
+
 async function opens(): Promise<void> {
 	tap(moreButton());
 	await screen.findByRole("dialog", { name: "More pages" });
@@ -189,6 +197,18 @@ describe("the phone bar's more item", () => {
 			(element) => element.id
 		);
 		expect(new Set(ids).size).toBe(ids.length);
+	});
+
+	test("the sheet's bottom row pairs with the bar item for item, so the bar grows into the sheet", async () => {
+		renderBar("board", sixPages);
+		const barKeys = morphKeys(screen.getByTestId("phone-bar-row"));
+		await opens();
+		const sheetKeys = morphKeys(sheet());
+		expect(barKeys).toHaveLength(5);
+		expect(barKeys).not.toContain(null);
+		// The overflow pages, then the bar's row again, More as Close.
+		expect(sheetKeys.slice(-5)).toEqual(barKeys);
+		expect(new Set(sheetKeys).size).toBe(sheetKeys.length);
 	});
 
 	test("focus moves into the dialog on open", async () => {

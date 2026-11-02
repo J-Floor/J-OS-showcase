@@ -40,8 +40,9 @@ vi.mock("convex-solidjs", () => ({
 	useMutation: () => ({ mutateAsync: vi.fn() }),
 }));
 
+import { SITE_TIMEZONE } from "../../../convex/lib/time.ts";
 import { AbilityProvider } from "../../lib/ability.tsx";
-import { formatDate } from "../../shared/time.ts";
+import { formatDateIn } from "../../shared/time.ts";
 
 import { PerksList } from "./PerksList.tsx";
 
@@ -139,7 +140,7 @@ test("a member keeps an expired perk in view while their request on it is open",
 	).toBeInTheDocument();
 	expect(
 		screen.getByRole("button", {
-			name: `Requested on ${formatDate(requestedAt)}`,
+			name: `Requested on ${formatDateIn(requestedAt, SITE_TIMEZONE)}`,
 		})
 	).toBeDisabled();
 });

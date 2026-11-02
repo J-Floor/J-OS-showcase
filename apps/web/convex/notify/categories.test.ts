@@ -36,12 +36,21 @@ describe("notification categories", () => {
 			"guests",
 			"tasks",
 			"perks",
+			"perkUpdates",
 		];
 		expect(categoriesForTier("board")).toEqual(all);
 		expect(categoriesForTier("admin")).toEqual(all);
-		expect(categoriesForTier("core")).toEqual(["events", "tasks"]);
-		expect(categoriesForTier("member")).toEqual(["events"]);
-		expect(categoriesForTier("guest")).toEqual(["events", "guests"]);
+		expect(categoriesForTier("core")).toEqual([
+			"events",
+			"tasks",
+			"perkUpdates",
+		]);
+		expect(categoriesForTier("member")).toEqual(["events", "perkUpdates"]);
+		expect(categoriesForTier("guest")).toEqual([
+			"events",
+			"guests",
+			"perkUpdates",
+		]);
 		expect(categoriesForTier("prospect")).toEqual([]);
 		expect(categoriesForTier("visitor")).toEqual([]);
 		expect(categoriesForTier("former")).toEqual([]);
@@ -65,14 +74,24 @@ describe("notification categories", () => {
 		}
 	});
 
-	it("offers perks to board and admin only", () => {
+	it("offers perk requests to board and admin only", () => {
 		expect(CATEGORY_INFO.perks).toEqual({
-			label: "Perks",
+			label: "Perk requests",
 			description: "Someone requests a perk you're the contact for.",
 			tiers: ["board", "admin"],
 		});
 		for (const tier of ["guest", "member", "core", "staff"] as const) {
 			expect(categoriesForTier(tier)).not.toContain("perks");
 		}
+	});
+
+	it("offers perk updates to everyone who can view Perks", () => {
+		expect(CATEGORY_INFO.perkUpdates).toEqual({
+			label: "Perks",
+			description:
+				"A perk is added, your request is answered, or a perk ends in a week.",
+			tiers: ["guest", "member", "core", "board", "admin"],
+		});
+		expect(categoriesForTier("staff")).not.toContain("perkUpdates");
 	});
 });

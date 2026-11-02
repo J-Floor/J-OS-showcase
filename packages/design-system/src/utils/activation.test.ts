@@ -98,6 +98,49 @@ function press(target: Element | null, init: KeyboardEventInit): void {
 	);
 }
 
+test("a press on something not activatable forgets the earlier activation", () => {
+	// A sidebar link, then the top bar's read-only search field: the palette
+	// the field opens must not grow out of the link.
+	document.body.innerHTML = `<a href="/events" id="link">Events</a><input id="field" readonly />`;
+	document
+		.getElementById("link")
+		?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+	document
+		.getElementById("field")
+		?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+	expect(recentActivation()).toBeNull();
+});
+
+test("a key that fires no control on screen forgets the earlier activation", () => {
+	document.body.innerHTML = `<a href="/events" id="link">Events</a>`;
+	document
+		.getElementById("link")
+		?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+	press(document.body, { key: "k", code: "KeyK", ctrlKey: true });
+	expect(recentActivation()).toBeNull();
+});
+
+test("a lone modifier keeps the earlier activation", () => {
+	// The Control keydown of a Control+K comes before the K.
+	document.body.innerHTML = `<a href="/events" id="link">Events</a>`;
+	document
+		.getElementById("link")
+		?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+	for (const key of ["Control", "Meta", "Shift", "Alt"]) {
+		press(document.body, { key, code: `${key}Left` });
+	}
+	expect(recentActivation()?.id).toBe("link");
+});
+
+test("Enter in a plain text field forgets the earlier activation", () => {
+	document.body.innerHTML = `<a href="/events" id="link">Events</a><input id="field" />`;
+	document
+		.getElementById("link")
+		?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+	press(document.getElementById("field"), { key: "Enter" });
+	expect(recentActivation()).toBeNull();
+});
+
 test("records a menu item picked from the keyboard", () => {
 	document.body.innerHTML = `<div role="menu" id="menu" tabindex="0" aria-activedescendant="edit"><div role="menuitem" id="edit">Edit</div></div>`;
 	press(document.getElementById("menu"), { key: "Enter" });

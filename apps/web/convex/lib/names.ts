@@ -1,6 +1,8 @@
 import type { Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 
+import { readOnce, type Readers } from "./readOnce.ts";
+
 /**
  * The single display string for a person, built from their name pair. firstName
  * and lastName are required on both `people` and `applications`, so this is
@@ -74,6 +76,17 @@ function initialKey(person: { firstName: string; lastName: string }): string {
 	return `${person.firstName.trim()} ${person.lastName.trim().charAt(0)}`;
 }
 
+/** The person's display name, or undefined when there is no id or their
+ *  row is gone. */
+export async function nameOf(
+	readers: Readers,
+	personId: Id<"people"> | undefined
+): Promise<string | undefined> {
+	const person =
+		personId === undefined ? null : await readers.person(personId);
+	return person ? displayName(person) : undefined;
+}
+
 /**
  * Each row with its actor's display name attached (`undefined` when the row has
  * no actor or the actor's row is gone). Every actor is read once, however many
@@ -83,18 +96,11 @@ export async function withActorNames<Row extends { actorId?: Id<"people"> }>(
 	context: QueryCtx,
 	rows: readonly Row[]
 ): Promise<(Row & { actorName: string | undefined })[]> {
-	const names = new Map<string, string>();
+	const readers = readOnce(context);
 	return Promise.all(
-		rows.map(async (row) => {
-			if (row.actorId === undefined)
-				return { ...row, actorName: undefined };
-			const cached = names.get(row.actorId);
-			if (cached !== undefined) return { ...row, actorName: cached };
-			const actor = await context.db.get(row.actorId);
-			if (!actor) return { ...row, actorName: undefined };
-			const actorName = displayName(actor);
-			names.set(row.actorId, actorName);
-			return { ...row, actorName };
-		})
+		rows.map(async (row) => ({
+			...row,
+			actorName: await nameOf(readers, row.actorId),
+		}))
 	);
 }

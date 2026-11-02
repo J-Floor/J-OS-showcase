@@ -163,6 +163,45 @@ export const TEMPLATES: Entry[] = [
 		},
 	},
 	{
+		name: "perkAdded",
+		file: "templates/perkAdded.tsx",
+		fields: [
+			"name",
+			"perkTitle",
+			"partner",
+			"viewUrl",
+			"manageUrl",
+			"logoUrl",
+		],
+	},
+	{
+		name: "perkRequestOutcome",
+		file: "templates/perkRequestOutcome.tsx",
+		fields: [
+			"name",
+			"headline",
+			"perkTitle",
+			"partner",
+			"outcome",
+			"viewUrl",
+			"manageUrl",
+			"logoUrl",
+		],
+	},
+	{
+		name: "perkExpiringSoon",
+		file: "templates/perkExpiringSoon.tsx",
+		fields: [
+			"name",
+			"perkTitle",
+			"partner",
+			"endDate",
+			"viewUrl",
+			"manageUrl",
+			"logoUrl",
+		],
+	},
+	{
 		name: "boardDoorAlert",
 		file: "templates/boardDoorAlert.tsx",
 		fields: [

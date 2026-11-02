@@ -315,9 +315,7 @@ export function GroupHeaderRow<Data extends Record<string, unknown>>(
 						</Icon>
 					</span>
 					<span>
-						{rowProps.context.groups.groupLabel(
-							rowProps.group.value
-						)}{" "}
+						{rowProps.context.groups.groupLabel(rowProps.group)}{" "}
 						<span class={styles.groupCount}>
 							({rowProps.group.rows.length})
 						</span>

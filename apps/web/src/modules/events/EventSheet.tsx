@@ -1,10 +1,4 @@
-import {
-	Accordion,
-	Button,
-	Sheet,
-	Icon,
-	PropertyRow,
-} from "@j-os/design-system";
+import { Accordion, Button, Sheet, PropertyRow } from "@j-os/design-system";
 import { useMutation } from "convex-solidjs";
 import { Show, createEffect, createSignal, on, type Accessor } from "solid-js";
 
@@ -12,16 +6,15 @@ import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { Can, useAbility } from "../../lib/ability.tsx";
 import { call } from "../../lib/call.ts";
-import { useConfirm } from "../../shared/confirm.tsx";
-import { createActionError } from "../../shared/createActionError.ts";
+import { EditToggle } from "../../shared/components/EditToggle.tsx";
+import type { ConfirmOptions } from "../../shared/confirm.tsx";
 import { useQuery } from "../../shared/data/useQuery.ts";
 import { createDraftGuard } from "../../shared/entity/createDraftGuard.ts";
-import { createEntityRemove } from "../../shared/entity/entityCommands.ts";
+import { EntityDeleteButton } from "../../shared/entity/EntityDeleteButton.tsx";
 import { EntitySheetHeader } from "../../shared/entity/EntitySheetHeader.tsx";
+import { SheetSection } from "../../shared/entity/SheetSection.tsx";
 import { ICONS } from "../../shared/icons.ts";
-import { InlineError } from "../../shared/InlineError.tsx";
 import type { SheetOpenProps } from "../../shared/types.ts";
-import { EditToggle } from "../community/sheets/EditToggle.tsx";
 
 import {
 	EventCreateForm,
@@ -33,7 +26,6 @@ import {
 	EventDetailsItem,
 	type Attendee,
 } from "./EventDetails.tsx";
-import styles from "./EventSheet.module.scss";
 import { eventAttendeesQuery } from "./queries.ts";
 
 /**
@@ -46,22 +38,17 @@ import { eventAttendeesQuery } from "./queries.ts";
 function EventFieldsPlaceholder() {
 	return (
 		<Accordion.Root multiple defaultValue={["details"]}>
-			<Accordion.Item value="details">
-				<Accordion.ItemTitle>Details</Accordion.ItemTitle>
-				<Accordion.ItemContent>
-					<div class={styles.section}>
-						<PropertyRow icon={ICONS.name} label="Name">
-							<span>placeholder</span>
-						</PropertyRow>
-						<PropertyRow icon={ICONS.start} label="Starts">
-							<span>placeholder</span>
-						</PropertyRow>
-						<PropertyRow icon={ICONS.end} label="Ends">
-							<span>placeholder</span>
-						</PropertyRow>
-					</div>
-				</Accordion.ItemContent>
-			</Accordion.Item>
+			<SheetSection value="details" title="Details">
+				<PropertyRow icon={ICONS.name} label="Name">
+					<span>placeholder</span>
+				</PropertyRow>
+				<PropertyRow icon={ICONS.start} label="Starts">
+					<span>placeholder</span>
+				</PropertyRow>
+				<PropertyRow icon={ICONS.end} label="Ends">
+					<span>placeholder</span>
+				</PropertyRow>
+			</SheetSection>
 		</Accordion.Root>
 	);
 }
@@ -145,6 +132,13 @@ function EventDetailAccordion(props: {
 	);
 }
 
+const DELETE_EVENT_CONFIRM: ConfirmOptions = {
+	title: "Delete event?",
+	message: "This removes the event and its attendance records.",
+	confirmLabel: "Delete",
+	tone: "danger",
+};
+
 /** The sheet's footer: Delete on an existing event (board/admin), Create
  *  on the create form. Nothing while the row is still loading. */
 function EventSheetFooter(
@@ -155,47 +149,30 @@ function EventSheetFooter(
 	}
 ) {
 	const deleteEvent = useMutation(api.events.deleteEvent);
-	const confirm = useConfirm();
-
-	const failure = createActionError();
-	const removeEvent = createEntityRemove({
-		remove: (eventId: Id<"events">) =>
-			call(
-				deleteEvent.mutateAsync({ eventId }),
-				"Could not delete the event."
-			),
-		failure,
-		onClose: () => {
-			props.onClose();
-		},
-	});
-
-	async function remove(event: Doc<"events">): Promise<void> {
-		const isOk = await confirm({
-			title: "Delete event?",
-			message: "This removes the event and its attendance records.",
-			confirmLabel: "Delete",
-			tone: "danger",
-		});
-		if (!isOk) return;
-		await removeEvent(event._id);
-	}
 
 	return (
 		<Show when={!props.loading}>
 			<Show
 				when={props.event === undefined}
 				fallback={
-					<Show when={props.canManage && props.event} keyed>
+					<Show when={props.canManage && props.event}>
 						{(event) => (
 							<Sheet.Footer>
-								<InlineError message={failure.error()} />
-								<Button
-									variant="tertiary"
-									onClick={() => remove(event)}
+								<EntityDeleteButton
+									key={event()._id}
+									confirm={DELETE_EVENT_CONFIRM}
+									remove={() =>
+										call(
+											deleteEvent.mutateAsync({
+												eventId: event()._id,
+											}),
+											"Could not delete the event."
+										)
+									}
+									onClose={props.onClose}
 								>
-									<Icon>{ICONS.delete}</Icon> Delete event
-								</Button>
+									Delete event
+								</EntityDeleteButton>
 							</Sheet.Footer>
 						)}
 					</Show>

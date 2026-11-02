@@ -26,11 +26,11 @@ function column(key: string) {
 	return perkColumns().find((candidate) => candidate.id === key);
 }
 
-test("the table groups by availability and shows partner, perk, category and end date", () => {
+test("the table groups by availability and shows perk, partner, category and end date", () => {
 	expect(perkColumns().map((candidate) => candidate.id)).toEqual([
 		"availability",
-		"partner",
 		"title",
+		"partner",
 		"category",
 		"validUntil",
 	]);

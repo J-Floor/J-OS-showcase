@@ -11,7 +11,7 @@ export const ICONS = {
 	lock: "lock",
 	door: "door_front",
 	doorStreet: "apartment",
-	task: "task_alt",
+	task: "check_circle",
 	stepDone: "check_circle",
 	project: "target",
 	venture: "rocket_launch",
@@ -58,5 +58,5 @@ export const ICONS = {
 	inventory: "inventory_2",
 	events: "event",
 	space: "factory",
-	perks: "redeem",
+	perks: "featured_seasonal_and_gifts",
 } as const;

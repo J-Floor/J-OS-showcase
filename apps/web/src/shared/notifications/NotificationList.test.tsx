@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { type JfColumnDefinition, Sheet, Table } from "@j-os/design-system";
 import {
 	cleanup,
 	fireEvent,
@@ -6,7 +7,7 @@ import {
 	screen,
 	waitFor,
 } from "@solidjs/testing-library";
-import { createSignal } from "solid-js";
+import { createSignal, Show } from "solid-js";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 const {
@@ -207,6 +208,8 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 	intersections.length = 0;
 	vi.clearAllMocks();
+	setParams.mockReset();
+	navigate.mockReset();
 	location.pathname = "/events";
 	head.data = undefined;
 	head.error = undefined;
@@ -250,7 +253,7 @@ test("an unread row announces it is unread, a read row does not", () => {
 	).toBeNull();
 });
 
-test("clicking a row closes the sheet, opens its page and marks it read", () => {
+test("clicking a row that leads to another page closes the sheet, opens its page and marks it read", () => {
 	head.data = [TASK];
 	serve({ since: null });
 	const onClose = vi.fn();
@@ -550,17 +553,171 @@ test("a refetch with a new row on top keeps the existing rows' DOM", () => {
 	expect(screen.getByRole("heading", { name: "Today" })).toBe(heading);
 });
 
-test("a row naming an entity opens it as a peek over the current page", () => {
+test("a row naming an entity opens it as a peek over the sheet, which stays open", () => {
 	head.data = [{ ...TASK, url: "/community?person=p1" }];
 	serve({ since: null });
-	renderList();
+	const onClose = vi.fn();
+	renderList({ onClose });
 	fireEvent.click(screen.getByRole("button", { name: /New task assigned/ }));
 	expect(setParams).toHaveBeenCalledWith(
 		{ open: "person:p1" },
 		{ state: pushedOpenState("open"), replace: false }
 	);
+	expect(onClose).not.toHaveBeenCalled();
 	expect(navigate).not.toHaveBeenCalled();
 	expect(markRead).toHaveBeenCalledWith({ id: "n1" });
+});
+
+test("a row naming an entity on the page on screen opens its sheet over the sheet, which stays open", () => {
+	location.pathname = "/community";
+	head.data = [{ ...TASK, url: "/community?person=p1" }];
+	serve({ since: null });
+	const onClose = vi.fn();
+	renderList({ onClose });
+	fireEvent.click(screen.getByRole("button", { name: /New task assigned/ }));
+	expect(navigate).toHaveBeenCalledWith("/community?person=p1", {
+		replace: false,
+	});
+	expect(onClose).not.toHaveBeenCalled();
+});
+
+/** The drawer and an entity sheet as the shell mounts them, both real
+ *  sheets. By default the sheet is a peek, opened by the `open` param the
+ *  row writes. With `ownPage`, it is the page's own sheet, opened by the
+ *  navigation, over the page's table, which it keeps from taking focus
+ *  while open, as a list page does. */
+function renderDrawerWithEntity(options: { ownPage?: boolean } = {}) {
+	const [isDrawerOpen, setDrawerOpen] = createSignal(true);
+	const [isEntityOpen, setEntityOpen] = createSignal(false);
+	setParams.mockImplementation((next: Record<string, unknown>) => {
+		setEntityOpen(next.open !== undefined);
+	});
+	navigate.mockImplementation(() => {
+		setEntityOpen(true);
+	});
+	function Drawer() {
+		const inbox = useInbox(isDrawerOpen);
+		return (
+			<Sheet.Root open={isDrawerOpen()} onOpenChange={setDrawerOpen}>
+				<Sheet.Header>
+					<Sheet.Title>Notifications</Sheet.Title>
+				</Sheet.Header>
+				<Sheet.Body>
+					<NotificationList
+						inbox={inbox}
+						onClose={() => {
+							setDrawerOpen(false);
+						}}
+					/>
+				</Sheet.Body>
+			</Sheet.Root>
+		);
+	}
+	render(() => (
+		<AbilityProvider role="board">
+			<Show when={options.ownPage}>
+				<Table.Root
+					columns={PAGE_COLUMNS}
+					data={[{ id: "p1", name: "Ada Example" }]}
+					getRowId={(person) => person.id}
+					focusableRows
+					suppressFocus={isEntityOpen()}
+				/>
+			</Show>
+			<Drawer />
+			<Sheet.Root open={isEntityOpen()} onOpenChange={setEntityOpen}>
+				<Sheet.Header>
+					<Sheet.Title>Ada Example</Sheet.Title>
+				</Sheet.Header>
+			</Sheet.Root>
+		</AbilityProvider>
+	));
+	return { isDrawerOpen, isEntityOpen };
+}
+
+const PAGE_COLUMNS: JfColumnDefinition<{ id: string; name: string }>[] = [
+	{ accessorKey: "name", header: "Name", dataType: "string" },
+];
+
+/** One try for `waitFor`: Ark starts listening for Escape some time after
+ *  an open, so press until `isDone`, and never once it is. */
+function pressEscapeUntil(target: HTMLElement, isDone: () => boolean): void {
+	if (!isDone()) fireEvent.keyDown(target, { key: "Escape" });
+	expect(isDone()).toBe(true);
+}
+
+function dialogNamed(name: string): HTMLElement {
+	return screen.getByRole("dialog", { name, hidden: true });
+}
+
+test("a peek opened from the drawer stacks on it: Escape closes the peek first, then the drawer", async () => {
+	head.data = [{ ...TASK, url: "/community?person=p1" }];
+	serve({ since: null });
+	const { isDrawerOpen, isEntityOpen } = renderDrawerWithEntity();
+	fireEvent.click(
+		await screen.findByRole("button", { name: /New task assigned/ })
+	);
+	await waitFor(() => {
+		expect(dialogNamed("Ada Example")).toHaveAttribute(
+			"data-state",
+			"open"
+		);
+	});
+	expect(isDrawerOpen()).toBe(true);
+	expect(dialogNamed("Notifications")).toHaveAttribute("data-state", "open");
+	// Ark puts the peek on its layer stack a moment after it opens; an
+	// Escape before that is the drawer's alone.
+	await waitFor(() => {
+		expect(
+			dialogNamed("Notifications").style.getPropertyValue(
+				"--nested-layer-count"
+			)
+		).toBe("1");
+	});
+
+	await waitFor(() => {
+		pressEscapeUntil(dialogNamed("Ada Example"), () => !isEntityOpen());
+	});
+	expect(isDrawerOpen()).toBe(true);
+	expect(dialogNamed("Notifications")).toHaveAttribute("data-state", "open");
+
+	await waitFor(() => {
+		pressEscapeUntil(dialogNamed("Notifications"), () => !isDrawerOpen());
+	});
+});
+
+test("closing the page's own sheet opened from the drawer leaves focus off the page's table and the drawer open", async () => {
+	location.pathname = "/community";
+	head.data = [{ ...TASK, url: "/community?person=p1" }];
+	serve({ since: null });
+	const { isDrawerOpen, isEntityOpen } = renderDrawerWithEntity({
+		ownPage: true,
+	});
+	fireEvent.click(
+		await screen.findByRole("button", { name: /New task assigned/ })
+	);
+	await waitFor(() => {
+		expect(
+			dialogNamed("Notifications").style.getPropertyValue(
+				"--nested-layer-count"
+			)
+		).toBe("1");
+	});
+
+	// Focus passing under the drawer, even for an instant, is a focus
+	// outside it, which dismisses it in a browser (not under happy-dom).
+	let didTableTakeFocus = false;
+	screen.getByRole("grid", { hidden: true }).addEventListener("focus", () => {
+		didTableTakeFocus = true;
+	});
+	await waitFor(() => {
+		pressEscapeUntil(dialogNamed("Ada Example"), () => !isEntityOpen());
+	});
+	// The table's focus claim runs in a microtask queued by the close.
+	await Promise.resolve();
+	expect(didTableTakeFocus).toBe(false);
+	expect(isDrawerOpen()).toBe(true);
+	expect(dialogNamed("Notifications")).toHaveAttribute("data-state", "open");
 });
 
 test("a row naming an entity the viewer may not see navigates to its page instead", () => {

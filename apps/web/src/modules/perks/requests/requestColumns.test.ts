@@ -9,7 +9,6 @@ import {
 	REQUEST_GROUP_COLUMN,
 	REQUEST_GROUPINGS,
 	requestColumns,
-	requestMonth,
 	requestSorting,
 	type RequestGrouping,
 } from "./requestColumns.tsx";
@@ -47,6 +46,12 @@ function groupValue(grouping: RequestGrouping, row: PerkRequestRow): unknown {
 	return read?.(row, 0);
 }
 
+/** The text that heads the group a row falls in. */
+function groupLabel(grouping: RequestGrouping, row: PerkRequestRow): unknown {
+	const [group] = requestColumns(grouping);
+	return group.groupLabel?.(row);
+}
+
 test("the group column leads, under the id the table groups by", () => {
 	for (const grouping of REQUEST_GROUPINGS)
 		expect(requestColumns(grouping.value)[0].id).toBe(REQUEST_GROUP_COLUMN);
@@ -64,9 +69,11 @@ test("status groups are the four statuses, in the order a request moves through 
 	expect(groupValue("status", ROW)).toBe("contacted");
 });
 
-test("perk groups read Partner · Title, requester groups the requester's name", () => {
-	expect(groupValue("perk", ROW)).toBe("Alpha Labs · Cloud credits");
-	expect(groupValue("requester", ROW)).toBe("Ada Example");
+test("perk and requester groups key on the id and read the name", () => {
+	expect(groupValue("perk", ROW)).toBe("perk1");
+	expect(groupValue("requester", ROW)).toBe("person1");
+	expect(groupLabel("perk", ROW)).toBe("Alpha Labs · Cloud credits");
+	expect(groupLabel("requester", ROW)).toBe("Ada Example");
 });
 
 test("month groups follow the Zurich calendar, not UTC", () => {
@@ -83,7 +90,6 @@ test("month groups follow the Zurich calendar, not UTC", () => {
 			requestedAt: Date.UTC(2026, 9, 31, 22, 30),
 		})
 	).toBe("October 2026");
-	expect(requestMonth(Date.UTC(2026, 9, 20, 9))).toBe("October 2026");
 });
 
 test("every grouping keeps the same visible columns, the status select included", () => {

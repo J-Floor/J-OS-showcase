@@ -5,8 +5,9 @@ import {
 } from "@j-os/design-system";
 
 import type { Doc } from "../../../convex/_generated/dataModel";
+import { SITE_TIMEZONE } from "../../../convex/lib/time.ts";
+import { formatDateIn } from "../../shared/time.ts";
 
-import { formatEventDate } from "./eventDate.ts";
 import { EventRowActions } from "./EventRowActions.tsx";
 import { eventFields } from "./fields.ts";
 
@@ -67,15 +68,17 @@ export function eventColumns(): JfColumnDefinition<Doc<"events">>[] {
 			accessorKey: "startsAt",
 			dataType: "date",
 			size: "content",
-			cell: (info) => formatEventDate(info.row.original.startsAt),
-			measureText: (row) => formatEventDate(row.startsAt),
+			cell: (info) =>
+				formatDateIn(info.row.original.startsAt, SITE_TIMEZONE),
+			measureText: (row) => formatDateIn(row.startsAt, SITE_TIMEZONE),
 		}),
 		fieldColumn(eventFields.endsAt, {
 			accessorKey: "endsAt",
 			dataType: "date",
 			size: "content",
-			cell: (info) => formatEventDate(info.row.original.endsAt),
-			measureText: (row) => formatEventDate(row.endsAt),
+			cell: (info) =>
+				formatDateIn(info.row.original.endsAt, SITE_TIMEZONE),
+			measureText: (row) => formatDateIn(row.endsAt, SITE_TIMEZONE),
 		}),
 		{
 			id: "actions",

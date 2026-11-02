@@ -10,10 +10,8 @@ import { useSearchParams } from "@solidjs/router";
 import { createSignal, For, Show, type Accessor, type JSX } from "solid-js";
 
 import { api } from "../../../../convex/_generated/api";
-import {
-	PERK_REQUEST_LIST_CAP,
-	siteToday,
-} from "../../../../convex/lib/perks.ts";
+import { PERK_REQUEST_LIST_CAP } from "../../../../convex/lib/perks.ts";
+import { LOCALE, SITE_TIMEZONE, todayIn } from "../../../../convex/lib/time.ts";
 import type { PerkRequestRow } from "../../../../convex/perkRequests.ts";
 import { useQuery } from "../../../shared/data/useQuery.ts";
 import { downloadBlob } from "../../../shared/downloadBlob.ts";
@@ -38,7 +36,7 @@ type Rows = Accessor<PerkRequestRow[] | undefined>;
 /** The line above a table the query filled to its cap: "Showing the newest
  *  2,000 requests." Older requests exist but are not shown, nor in the CSV. */
 export function capNotice(cap: number): string {
-	return `Showing the newest ${cap.toLocaleString("en-GB")} requests.`;
+	return `Showing the newest ${cap.toLocaleString(LOCALE)} requests.`;
 }
 
 /** Every loaded row, whatever the grouping, as `perk-requests-<today>.csv`. */
@@ -47,7 +45,7 @@ function DownloadCsvButton(props: { rows: Rows }): JSX.Element {
 		const csv = perkRequestsCsv(props.rows() ?? []);
 		downloadBlob(
 			new Blob([csv], { type: "text/csv;charset=utf-8" }),
-			`perk-requests-${siteToday(Date.now())}.csv`
+			`perk-requests-${todayIn(SITE_TIMEZONE, Date.now())}.csv`
 		);
 	}
 	return (

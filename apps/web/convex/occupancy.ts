@@ -30,6 +30,7 @@ import { BOARD_LEVEL, COMMUNITY_TIERS } from "./lib/roles.ts";
 import {
 	SITE_TIMEZONE,
 	formatZoned,
+	todayIn,
 	zonedDate,
 	zonedLocalFromEpoch,
 	zonedTime,
@@ -282,7 +283,7 @@ async function readAndApply(
 function lastSeen(reportedAt: number | null, now: number): string {
 	if (reportedAt === null) return "No report yet.";
 	const local = zonedLocalFromEpoch(reportedAt, SITE_TIMEZONE);
-	const today = zonedDate(zonedLocalFromEpoch(now, SITE_TIMEZONE));
+	const today = todayIn(SITE_TIMEZONE, now);
 	const when =
 		zonedDate(local) === today ? zonedTime(local) : formatZoned(local);
 	return `No report since ${when}.`;

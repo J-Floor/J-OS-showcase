@@ -3,9 +3,10 @@ import { actionsColumnSize } from "@j-os/design-system";
 import { expect, test } from "vitest";
 
 import type { Doc } from "../../../convex/_generated/dataModel";
+import { SITE_TIMEZONE } from "../../../convex/lib/time.ts";
+import { formatDateIn } from "../../shared/time.ts";
 
 import { eventColumns } from "./eventColumns.tsx";
-import { formatEventDate } from "./eventDate.ts";
 
 const STARTS = Date.UTC(2026, 9, 8, 18);
 const ENDS = Date.UTC(2026, 9, 9, 2);
@@ -27,8 +28,8 @@ test("the name shares the leftover width, and the dates fit what they show", () 
 	const ends = column("endsAt")?.measureText;
 	if (typeof starts !== "function" || typeof ends !== "function")
 		throw new Error("the date columns must measure the text they show");
-	expect(starts(event)).toBe(formatEventDate(STARTS));
-	expect(ends(event)).toBe(formatEventDate(ENDS));
+	expect(starts(event)).toBe(formatDateIn(STARTS, SITE_TIMEZONE));
+	expect(ends(event)).toBe(formatDateIn(ENDS, SITE_TIMEZONE));
 });
 
 test("the actions column is a display column with a fixed width", () => {

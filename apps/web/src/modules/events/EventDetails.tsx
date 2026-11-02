@@ -1,19 +1,18 @@
 import {
 	Accordion,
-	Avatar,
 	DatePicker,
 	EditableText,
+	EmptyState,
 	PropertyRow,
 	Query,
 	TimePicker,
-	useSaveTracker,
 } from "@j-os/design-system";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { useMutation } from "convex-solidjs";
 import { For, Show, type Accessor } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
-import type { Doc } from "../../../convex/_generated/dataModel";
+import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import {
 	SITE_TIMEZONE,
 	type ZonedValue,
@@ -23,13 +22,10 @@ import {
 	zonedTime,
 } from "../../../convex/lib/time.ts";
 import { NAME_MAX } from "../../../convex/lib/validate.ts";
-import { call } from "../../lib/call.ts";
-import { reportSave } from "../../lib/reportSave.ts";
-import {
-	createActionError,
-	scopeOfFields,
-} from "../../shared/createActionError.ts";
+import { PersonListItem } from "../../shared/components/PersonListItem.tsx";
+import { createEntityPatch } from "../../shared/entity/createEntityPatch.ts";
 import { EntityQrBlock } from "../../shared/entity/EntityQr.tsx";
+import { SheetSection } from "../../shared/entity/SheetSection.tsx";
 import { ICONS } from "../../shared/icons.ts";
 import { InlineError } from "../../shared/InlineError.tsx";
 
@@ -150,60 +146,43 @@ export function EventDetailsItem(props: {
 	isOpen: Accessor<boolean>;
 }) {
 	const updateEvent = useMutation(api.events.updateEvent);
-	const tracker = useSaveTracker();
-	const { error, trackResult } = createActionError();
-	function patch(change: EventPatch): void {
-		const eventId = props.event()._id;
-		const scope = scopeOfFields(change);
-		reportSave(
-			tracker?.track(scope),
-			() =>
-				trackResult(
-					call(
-						updateEvent.mutateAsync({ eventId, ...change }),
-						"Could not save that change."
-					),
-					scope
-				),
-			props.isOpen
-		);
-	}
+	const { patch, error } = createEntityPatch<EventPatch, Id<"events">>({
+		key: () => props.event()._id,
+		write: (eventId, change) =>
+			updateEvent.mutateAsync({ eventId, ...change }),
+		isOpen: () => props.isOpen(),
+	});
 	return (
-		<Accordion.Item value="details">
-			<Accordion.ItemTitle>Details</Accordion.ItemTitle>
-			<Accordion.ItemContent>
-				<div class={styles.section}>
-					<PropertyRow icon={ICONS.name} label="Name">
-						<Show
-							when={props.isEditing()}
-							fallback={<span>{props.event().name}</span>}
-						>
-							<EditableText
-								label="Name"
-								value={props.event().name}
-								maxLength={NAME_MAX}
-								onCommit={(value) => {
-									patch({ name: value });
-								}}
-							/>
-						</Show>
-					</PropertyRow>
-					<EventBoundaryRow
-						boundary="start"
-						event={props.event}
-						isEditing={props.isEditing}
-						onPatch={patch}
+		<SheetSection value="details" title="Details">
+			<PropertyRow icon={ICONS.name} label="Name">
+				<Show
+					when={props.isEditing()}
+					fallback={<span>{props.event().name}</span>}
+				>
+					<EditableText
+						label="Name"
+						value={props.event().name}
+						maxLength={NAME_MAX}
+						onCommit={(value) => {
+							patch({ name: value });
+						}}
 					/>
-					<EventBoundaryRow
-						boundary="end"
-						event={props.event}
-						isEditing={props.isEditing}
-						onPatch={patch}
-					/>
-					<InlineError message={error()} />
-				</div>
-			</Accordion.ItemContent>
-		</Accordion.Item>
+				</Show>
+			</PropertyRow>
+			<EventBoundaryRow
+				boundary="start"
+				event={props.event}
+				isEditing={props.isEditing}
+				onPatch={patch}
+			/>
+			<EventBoundaryRow
+				boundary="end"
+				event={props.event}
+				isEditing={props.isEditing}
+				onPatch={patch}
+			/>
+			<InlineError message={error()} />
+		</SheetSection>
 	);
 }
 
@@ -212,16 +191,11 @@ function AttendeeList(props: { attendees: Accessor<Attendee[]> }) {
 		<ul class={styles.attendees}>
 			<For each={props.attendees()}>
 				{(attendee) => (
-					<li class={styles.attendee}>
-						<Avatar name={attendee.name} />
-						<div class={styles.who}>
-							<span class={styles.attendeeName}>
-								{attendee.name}
-							</span>
-							<span class={styles.attendeeEmail}>
-								{attendee.email}
-							</span>
-						</div>
+					<li>
+						<PersonListItem
+							name={attendee.name}
+							detail={attendee.email}
+						/>
 					</li>
 				)}
 			</For>
@@ -244,26 +218,18 @@ export function EventAdminItems(props: {
 			</Accordion.Item>
 
 			<Query.Root data={props.attendees()}>
-				<Accordion.Item value="attendees">
-					<Accordion.ItemTitle>
-						Attendees
-						<Accordion.ItemSubtitle>
-							<Query.Count />
-						</Accordion.ItemSubtitle>
-					</Accordion.ItemTitle>
-					<Accordion.ItemContent>
-						<div class={styles.section}>
-							<Query.Empty>
-								<p class={styles.empty}>
-									No one has registered yet.
-								</p>
-							</Query.Empty>
-							<Query.Content of={props.attendees()}>
-								{(rows) => <AttendeeList attendees={rows} />}
-							</Query.Content>
-						</div>
-					</Accordion.ItemContent>
-				</Accordion.Item>
+				<SheetSection
+					value="attendees"
+					title="Attendees"
+					subtitle={<Query.Count />}
+				>
+					<Query.Empty>
+						<EmptyState title="No one has registered yet" />
+					</Query.Empty>
+					<Query.Content of={props.attendees()}>
+						{(rows) => <AttendeeList attendees={rows} />}
+					</Query.Content>
+				</SheetSection>
 			</Query.Root>
 		</>
 	);

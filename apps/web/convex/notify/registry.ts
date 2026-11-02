@@ -9,7 +9,10 @@ import { guestExpiringSoon } from "./kinds/guestExpiringSoon.ts";
 import { lifecycleAlert } from "./kinds/lifecycleAlert.ts";
 import { newApplication } from "./kinds/newApplication.ts";
 import { occupancyAlert } from "./kinds/occupancyAlert.ts";
+import { perkAdded } from "./kinds/perkAdded.ts";
+import { perkExpiringSoon } from "./kinds/perkExpiringSoon.ts";
 import { perkRequested } from "./kinds/perkRequested.ts";
+import { perkRequestOutcome } from "./kinds/perkRequestOutcome.ts";
 import { projectAssigned } from "./kinds/projectAssigned.ts";
 import { taskAssigned } from "./kinds/taskAssigned.ts";
 import type { AnyKindDefinition } from "./types.ts";
@@ -29,6 +32,9 @@ export const KINDS = {
 	lifecycleAlert,
 	occupancyAlert,
 	perkRequested,
+	perkAdded,
+	perkRequestOutcome,
+	perkExpiringSoon,
 };
 
 export type KindName = keyof typeof KINDS;

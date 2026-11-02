@@ -1,15 +1,8 @@
-import {
-	type FieldDefinition,
-	Input,
-	PropertyRow,
-	Select,
-	type SelectOptionProps,
-} from "@j-os/design-system";
+import { type FieldDefinition, Input } from "@j-os/design-system";
 import { type Accessor } from "solid-js";
 
 import type { SyncedField } from "../../../lib/createSyncedField.ts";
 import { DescriptionField } from "../../../shared/components/DescriptionField.tsx";
-import { LabelledOptions } from "../../../shared/components/LabelledOptions.tsx";
 
 import styles from "./InventorySheet.module.scss";
 
@@ -36,11 +29,6 @@ export function NameField(props: {
 	);
 }
 
-/** One option of an {@link OptionSelect}. */
-type SelectOption<Value extends string> = Required<
-	Pick<SelectOptionProps, "label">
-> & { value: Value };
-
 /** The entity's description, marked as its `field` so the table's
  *  description cell flies into it. */
 export function DescriptionValue(props: {
@@ -53,36 +41,5 @@ export function DescriptionValue(props: {
 			field={props.field}
 			description={props.description}
 		/>
-	);
-}
-
-/** A single-choice picker row over `options` showing `property`, bound to
- *  `field`. */
-export function OptionSelect<Value extends string>(props: {
-	property: FieldDefinition;
-	placeholder: string;
-	options: SelectOption<Value>[];
-	field: Pick<SyncedField<Value | undefined>, "value" | "set">;
-}) {
-	function selected(): string[] {
-		const id = props.field.value();
-		return id === undefined ? [] : [id];
-	}
-
-	return (
-		<PropertyRow field={props.property}>
-			<Select.Root
-				label={props.property.label}
-				labelHidden
-				value={selected()}
-				placeholder={props.placeholder}
-				positioning={{ sameWidth: true }}
-				onValueChange={(details) => {
-					props.field.set(details.value[0] as Value | undefined);
-				}}
-			>
-				<LabelledOptions options={props.options} />
-			</Select.Root>
-		</PropertyRow>
 	);
 }

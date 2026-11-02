@@ -12,6 +12,7 @@ import {
 	isoToUtcMidnight,
 	minExpiryIso,
 	recomputeZoned,
+	todayIn,
 	utcFromLocal,
 	utcMidnightToIso,
 	zonedDate,
@@ -191,5 +192,13 @@ describe("zonedTimeZoneName", () => {
 	it("is an Err for a non-IXDTF value with no bracketed zone", () => {
 		const result = zonedTimeZoneName("2026-09-20T00:01:00+02:00");
 		expect(result.isErr() && result.error.type).toBe("InvalidZonedValue");
+	});
+});
+
+describe("todayIn", () => {
+	it("gives today's date at the zone, whatever zone the server runs in", () => {
+		const lateEveningUtc = Date.UTC(2026, 0, 31, 23, 30);
+		expect(todayIn("Europe/Zurich", lateEveningUtc)).toBe("2026-02-01");
+		expect(todayIn("UTC", lateEveningUtc)).toBe("2026-01-31");
 	});
 });

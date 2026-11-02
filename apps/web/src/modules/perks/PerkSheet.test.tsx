@@ -39,6 +39,7 @@ vi.mock("convex-solidjs", () => ({
 	useMutation: () => ({ mutateAsync }),
 }));
 
+import { SITE_TIMEZONE } from "../../../convex/lib/time.ts";
 import type { PerkRow } from "../../../convex/perks.ts";
 import {
 	sheetKeys,
@@ -47,13 +48,13 @@ import {
 } from "../../../test-stubs/morphKeys.tsx";
 import { AbilityProvider, type Role } from "../../lib/ability.tsx";
 import { ConfirmProvider } from "../../shared/confirm.tsx";
-import { formatDate } from "../../shared/time.ts";
+import { formatDateIn } from "../../shared/time.ts";
 
 import { perkColumns } from "./perkColumns.tsx";
 import { formatValidUntil } from "./perkDate.ts";
 import { PerkSheet } from "./PerkSheet.tsx";
 
-const NOTE_LABEL = "Note for the J floor contact";
+const NOTE_LABEL = "Note for Mary Ann";
 
 const perk = {
 	_id: "perk1",
@@ -98,7 +99,10 @@ function renderSheet(role: Role, props: Record<string, unknown>) {
 	));
 }
 
+/** The note field, opened from "Add a note" when it is still closed. */
 function noteField(): HTMLElement {
+	const add = screen.queryByRole("button", { name: "Add a note" });
+	if (add) fireEvent.click(add);
 	return screen.getByLabelText(NOTE_LABEL);
 }
 
@@ -117,6 +121,9 @@ test("details: partner, perk, category, end date, contact and terms", () => {
 	expect(
 		screen.getByRole("heading", { name: "Hosting credits" })
 	).toBeInTheDocument();
+	// The title shows once, in the header: no Title property row.
+	expect(screen.getAllByText("Hosting credits")).toHaveLength(1);
+	expect(screen.queryByText("Title")).toBeNull();
 	expect(screen.getByText("Northwind Cloud")).toBeInTheDocument();
 	expect(screen.getByText("Cloud")).toBeInTheDocument();
 	expect(
@@ -172,8 +179,46 @@ test("Request perk sends the typed note, trimmed, and empties the field", async 
 		});
 	});
 	await waitFor(() => {
-		expect(noteField()).toHaveValue("");
+		expect(screen.queryByLabelText(NOTE_LABEL)).toBeNull();
 	});
+});
+
+test("Request with no note is one click: the field stays closed and no note is sent", async () => {
+	renderSheet("member", { perk });
+	expect(screen.queryByLabelText(NOTE_LABEL)).toBeNull();
+	fireEvent.click(requestButton());
+	await waitFor(() => {
+		expect(mutateAsync).toHaveBeenCalledWith({ perkId: "perk1" });
+	});
+});
+
+test("Add a note opens the field above the Request button, focused", async () => {
+	renderSheet("member", { perk });
+	fireEvent.click(screen.getByRole("button", { name: "Add a note" }));
+	const field = screen.getByLabelText(NOTE_LABEL);
+	await waitFor(() => {
+		expect(field).toHaveFocus();
+	});
+	expect(screen.queryByRole("button", { name: "Add a note" })).toBeNull();
+	// In the footer, before the button.
+	expect(field.closest("footer")).toContainElement(requestButton());
+	expect(
+		field.compareDocumentPosition(requestButton()) &
+			Node.DOCUMENT_POSITION_FOLLOWING
+	).toBeTruthy();
+});
+
+test("with no contact the note is for the J floor team", () => {
+	renderSheet("member", { perk: noContact });
+	fireEvent.click(screen.getByRole("button", { name: "Add a note" }));
+	expect(
+		screen.getByLabelText("Note for the J floor team")
+	).toBeInTheDocument();
+});
+
+test("the sheet has no Request accordion section", () => {
+	renderSheet("member", { perk });
+	expect(screen.queryByText("Your request")).toBeNull();
 });
 
 test("a blank note sends no note at all", async () => {
@@ -218,22 +263,33 @@ test("the board asks for a perk from the same button", async () => {
 	});
 });
 
-test("an open request: the button says when it went, and the note shows read-only", () => {
+test("an open request: the button says when it went, and the sent note shows read-only above it", () => {
 	myOpenRequests = [
 		{ perkId: "perk1", requestedAt, note: "For our launch in March." },
 	];
 	renderSheet("member", { perk });
 	const button = screen.getByRole("button", {
-		name: `Requested on ${formatDate(requestedAt)}`,
+		name: `Requested on ${formatDateIn(requestedAt, SITE_TIMEZONE)}`,
 	});
 	expect(button).toBeDisabled();
 	// The date says it all: no reason, so no tooltip.
 	expect(button).not.toHaveAttribute("aria-description");
-	// "Your request" says when it went, and shows the note as it was sent.
-	expect(screen.getByText(formatDate(requestedAt))).toBeInTheDocument();
-	expect(screen.getByText("For our launch in March.")).toBeInTheDocument();
 	expect(screen.queryByLabelText(NOTE_LABEL)).toBeNull();
+	expect(screen.queryByRole("button", { name: "Add a note" })).toBeNull();
 	expect(screen.queryByRole("button", { name: "Request perk" })).toBeNull();
+	// The note as it was sent, read-only, above the button.
+	expect(screen.getByText("Your note")).toBeInTheDocument();
+	const sent = screen.getByText("For our launch in March.");
+	expect(sent.closest("footer")).toContainElement(button);
+	expect(
+		sent.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING
+	).toBeTruthy();
+});
+
+test("an open request without a note shows no sent note", () => {
+	myOpenRequests = [{ perkId: "perk1", requestedAt }];
+	renderSheet("member", { perk });
+	expect(screen.queryByText("Your note")).toBeNull();
 });
 
 test("two open requests on the perk: the sheet shows the newer one", () => {
@@ -246,7 +302,7 @@ test("two open requests on the perk: the sheet shows the newer one", () => {
 	renderSheet("member", { perk });
 	expect(
 		screen.getByRole("button", {
-			name: `Requested on ${formatDate(later)}`,
+			name: `Requested on ${formatDateIn(later, SITE_TIMEZONE)}`,
 		})
 	).toBeDisabled();
 	expect(screen.getByText("For our second team.")).toBeInTheDocument();
@@ -267,8 +323,8 @@ test("an expired perk can't be requested, and the button says why", () => {
 		"aria-description",
 		"This perk has expired"
 	);
-	// Nothing to write a note for: no "Your request" section at all.
-	expect(screen.queryByText("Your request")).toBeNull();
+	// Nothing to write a note for.
+	expect(screen.queryByRole("button", { name: "Add a note" })).toBeNull();
 	expect(screen.queryByLabelText(NOTE_LABEL)).toBeNull();
 });
 
@@ -279,8 +335,11 @@ test("an expired perk still shows the viewer's open request", () => {
 		{ perkId: "perk1", requestedAt, note: "For our launch in March." },
 	];
 	renderSheet("member", { perk: expired });
-	expect(screen.getByText("Your request")).toBeInTheDocument();
-	expect(screen.getByText("For our launch in March.")).toBeInTheDocument();
+	expect(
+		screen.getByRole("button", {
+			name: `Requested on ${formatDateIn(requestedAt, SITE_TIMEZONE)}`,
+		})
+	).toBeDisabled();
 });
 
 test("a refused request shows the server's reason in the footer and toasts nothing", async () => {
@@ -364,6 +423,24 @@ test("a live refetch of the open perk keeps the typed note, and closing still as
 	expect(onOpenChange).not.toHaveBeenCalled();
 });
 
+test("moving to another perk closes the note field and empties it", () => {
+	const [shown, setShown] = createSignal(perk);
+	render(() => (
+		<ConfirmProvider>
+			<AbilityProvider role="member">
+				<PerkSheet open onOpenChange={() => {}} perk={shown()} />
+			</AbilityProvider>
+		</ConfirmProvider>
+	));
+	fireEvent.input(noteField(), {
+		target: { value: "For our launch in March." },
+	});
+	setShown({ ...perk, _id: "perk2" } as PerkRow);
+	expect(screen.queryByLabelText(NOTE_LABEL)).toBeNull();
+	fireEvent.click(screen.getByRole("button", { name: "Add a note" }));
+	expect(screen.getByLabelText(NOTE_LABEL)).toHaveValue("");
+});
+
 test("an empty note closes on Escape without asking", async () => {
 	const onOpenChange = vi.fn();
 	renderSheet("member", { perk, onOpenChange });
@@ -392,16 +469,15 @@ test("morph: the perk's table cells pair with the sheet's rows", () => {
 		perkColumns().filter((column) => column.id !== "availability"),
 		perk
 	);
-	// The partner is the row's title cell; it lands on the sheet's Partner
-	// row, since the sheet's title is the perk.
+	// The perk title is the row's title cell; it flies into the sheet's
+	// title, so the sheet has no Title row of its own.
 	expect(row).toEqual({
-		cells: ["title", "category", "validUntil"],
-		title: "partner",
+		cells: ["partner", "category", "validUntil"],
+		title: "title",
 	});
 	renderSheet("member", { perk });
 	expect(sheetKeys()).toEqual([
 		"partner",
-		"title",
 		"category",
 		"validUntil",
 		"link",

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { PERK_REQUEST_LIST_CAP } from "./lib/perks.ts";
+import { PERK_REQUEST_LIST_CAP, type PerkRequestStatus } from "./lib/perks.ts";
 import { TEXT_MAX } from "./lib/validate.ts";
 import schema from "./schema.ts";
 
@@ -107,6 +107,18 @@ async function dispatches(backend: Backend) {
 		context.db.system.query("_scheduled_functions").collect()
 	);
 	return jobs.filter((job) => job.name === "notify/dispatch:run");
+}
+
+/** A queued dispatch's argument: which kind, with what payload. */
+type DispatchArgs = { kind: string; payload: Record<string, unknown> };
+
+function dispatchArgs(job: { args: unknown[] }): DispatchArgs {
+	return job.args[0] as DispatchArgs;
+}
+
+async function dispatchesOf(backend: Backend, kind: string) {
+	const jobs = await dispatches(backend);
+	return jobs.filter((job) => dispatchArgs(job).kind === kind);
 }
 
 /** The dispatch payload for the setup's requester and a default-titled perk,
@@ -400,7 +412,9 @@ describe("requestPerk", () => {
 					}),
 				])
 			);
-			expect(await dispatches(backend)).toHaveLength(2);
+			expect(await dispatchesOf(backend, "perkRequested")).toHaveLength(
+				2
+			);
 		}
 	);
 
@@ -818,5 +832,80 @@ describe("setPerkRequestStatus", () => {
 				status: "granted",
 			})
 		).rejects.toThrow(/PerkRequestNotFound/);
+	});
+});
+
+function outcomeDispatches(backend: Backend) {
+	return dispatchesOf(backend, "perkRequestOutcome");
+}
+
+/** {@link setup}, with the requester's request made and a way for the
+ *  board to move it. */
+async function requested() {
+	const seeded = await setup();
+	const requestId = await seeded.asRequester.mutation(
+		api.perkRequests.requestPerk,
+		{ perkId: seeded.perkId }
+	);
+	async function move(status: PerkRequestStatus) {
+		await seeded.asBoard.mutation(api.perkRequests.setPerkRequestStatus, {
+			requestId,
+			status,
+		});
+	}
+	return { ...seeded, requestId, move };
+}
+
+describe("setPerkRequestStatus tells the requester", () => {
+	it.each(["granted", "declined"] as const)(
+		"sends the %s outcome to the requester alone",
+		async (outcome) => {
+			const { backend, perkId, requesterId, requestId, move } =
+				await requested();
+			await move(outcome);
+			expect(await outcomeDispatches(backend)).toEqual([
+				expect.objectContaining({
+					args: [
+						{
+							kind: "perkRequestOutcome",
+							payload: {
+								requestId,
+								perkId,
+								personId: requesterId,
+								partner: "Example Cloud",
+								perkTitle: "Cloud credits",
+								outcome,
+							},
+						},
+					],
+				}),
+			]);
+		}
+	);
+
+	it("sends nothing for Contacted or Requested", async () => {
+		const { backend, move } = await requested();
+		await move("contacted");
+		await move("requested");
+		expect(await outcomeDispatches(backend)).toEqual([]);
+	});
+
+	it("sends nothing when the status does not change", async () => {
+		const { backend, move } = await requested();
+		await move("granted");
+		await move("granted");
+		expect(await outcomeDispatches(backend)).toHaveLength(1);
+	});
+
+	it("sends again each time the request lands on a different answer", async () => {
+		const { backend, move } = await requested();
+		await move("granted");
+		await move("declined");
+		await move("contacted");
+		await move("declined");
+		const outcomes = await outcomeDispatches(backend);
+		expect(
+			outcomes.map((job) => dispatchArgs(job).payload.outcome)
+		).toEqual(["granted", "declined", "declined"]);
 	});
 });

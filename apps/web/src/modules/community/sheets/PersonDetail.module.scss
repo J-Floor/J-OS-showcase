@@ -1,9 +1,3 @@
-/* The gap between accordion sections is this sheet's: the accordion pads its
-   own body but leaves the space between items to whoever stacks them. */
-.section {
-	margin-block-end: var(--jf-spacing-near);
-}
-
 /* Free-text answers keep the founder's own line breaks. */
 .multiline {
 	white-space: pre-wrap;

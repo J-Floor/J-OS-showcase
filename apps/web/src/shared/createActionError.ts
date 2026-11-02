@@ -1,5 +1,5 @@
 import type { Result } from "neverthrow";
-import { createEffect, createSignal, on } from "solid-js";
+import { createEffect, createMemo, createSignal, on } from "solid-js";
 
 import type { ClientError } from "../lib/call.ts";
 
@@ -37,7 +37,9 @@ const DEFAULT_SCOPE = "";
  *
  * With a `key` (the person or item the area shows), the error belongs to that
  * key: it is cleared when the key changes, and a late answer for a previous
- * key is dropped.
+ * key is dropped. Pass the id accessor directly (`() => props.perkId`): the
+ * key is memoised here, so a new row object for the same key (a live update)
+ * never clears the error.
  *
  * The Result handed back is always the action's own, even when it was dropped
  * from the area. Act on an Ok only for that action itself (closing the form
@@ -60,7 +62,9 @@ export function createActionError(key?: () => string | undefined) {
 	function clear() {
 		setFailures([]);
 	}
-	if (key) createEffect(on(key, clear, { defer: true }));
+	// A refetch hands over a new row for the same key: only a new key clears.
+	const currentKey = createMemo(() => key?.());
+	if (key) createEffect(on(currentKey, clear, { defer: true }));
 	async function trackResult<T>(
 		action: PromiseLike<Result<T, ClientError>>,
 		scope: string = DEFAULT_SCOPE
@@ -68,12 +72,12 @@ export function createActionError(key?: () => string | undefined) {
 		clearScope(scope);
 		const attempt = (latestAttempts.get(scope) ?? 0) + 1;
 		latestAttempts.set(scope, attempt);
-		const askedFor = key?.();
+		const askedFor = currentKey();
 		const result = await action;
 		if (
 			result.isErr() &&
 			attempt === latestAttempts.get(scope) &&
-			!isLateAnswer(askedFor, key?.())
+			!isLateAnswer(askedFor, currentKey())
 		) {
 			const message = result.error.message;
 			setFailures((previous) => [...previous, { scope, message }]);

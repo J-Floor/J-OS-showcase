@@ -1,4 +1,5 @@
 import { DAY_MS, DAYS_PER_WEEK } from "../../../../convex/lib/constants.ts";
+import { LOCALE } from "../../../../convex/lib/time.ts";
 import type { Project } from "../data/tasksData.tsx";
 
 /** The zoom levels, in the order the view picker lists them. */
@@ -105,12 +106,12 @@ function isWeekend(value: number): boolean {
 	return dow === 0 || dow === SATURDAY;
 }
 
-const MONTH_FMT = new Intl.DateTimeFormat("en-GB", {
+const MONTH_FMT = new Intl.DateTimeFormat(LOCALE, {
 	month: "long",
 	year: "numeric",
 	timeZone: "UTC",
 });
-const WEEK_FMT = new Intl.DateTimeFormat("en-GB", {
+const WEEK_FMT = new Intl.DateTimeFormat(LOCALE, {
 	day: "numeric",
 	month: "short",
 	timeZone: "UTC",

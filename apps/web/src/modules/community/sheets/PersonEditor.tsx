@@ -9,15 +9,15 @@ import { useMutation } from "convex-solidjs";
 import { type Accessor, Show } from "solid-js";
 
 import { api } from "../../../../convex/_generated/api";
-import type { Doc } from "../../../../convex/_generated/dataModel";
+import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { call } from "../../../lib/call.ts";
 import { reportSave } from "../../../lib/reportSave.ts";
 import {
 	createActionError,
-	scopeOfFields,
 	type ActionErrorState,
 } from "../../../shared/createActionError.ts";
 import { useQuery } from "../../../shared/data/useQuery.ts";
+import { createEntityPatch } from "../../../shared/entity/createEntityPatch.ts";
 import { ICONS } from "../../../shared/icons.ts";
 import { InlineError } from "../../../shared/InlineError.tsx";
 import { HostSelect } from "../columns/HostSelect.tsx";
@@ -177,27 +177,16 @@ export function EditableDetail(props: {
 	isOpen: Accessor<boolean>;
 }) {
 	const update = useMutation(api.people.update);
-	const tracker = useSaveTracker();
 	function person() {
 		return props.person;
 	}
-	const saveError = createActionError(() => person()._id);
-	function patch(fields: PersonPatch): void {
-		const id = person()._id;
-		const scope = scopeOfFields(fields);
-		reportSave(
-			tracker?.track(scope),
-			() =>
-				saveError.trackResult(
-					call(
-						update.mutateAsync({ id, ...fields }),
-						"Could not save the change."
-					),
-					scope
-				),
-			props.isOpen
-		);
-	}
+	// One error area for the sheet: the host row reports into it too.
+	const saveError = createEntityPatch<PersonPatch, Id<"people">>({
+		key: () => person()._id,
+		write: (id, fields) => update.mutateAsync({ id, ...fields }),
+		isOpen: () => props.isOpen(),
+	});
+	const { patch } = saveError;
 	return (
 		<div>
 			<EmailEditor person={person()} isOpen={props.isOpen} />

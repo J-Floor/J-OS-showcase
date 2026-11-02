@@ -96,6 +96,14 @@ test("editing an existing item type shows its fields and no create button", () =
 	).not.toBeInTheDocument();
 });
 
+test("an item type's category cannot be cleared", () => {
+	render(() => (
+		<ItemTypeSheet open onOpenChange={() => {}} itemType={chairType} />
+	));
+	expect(screen.getByRole("combobox")).toHaveTextContent("Furniture");
+	expect(screen.queryByRole("button", { name: /clear/i })).toBeNull();
+});
+
 test("blurring the name field autosaves that field only", () => {
 	render(() => (
 		<ItemTypeSheet open onOpenChange={() => {}} itemType={chairType} />

@@ -2,13 +2,14 @@ import type { Accessor } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
 import type { Doc } from "../../../convex/_generated/dataModel";
+import { SITE_TIMEZONE } from "../../../convex/lib/time.ts";
 import { prefetchSpec } from "../../shared/data/queryKeeper.ts";
 import { useQuery } from "../../shared/data/useQuery.ts";
 import type { EntityDescriptor } from "../../shared/entity/entityDescriptor.ts";
 import { lazyPeek } from "../../shared/entity/lazyPeek.tsx";
 import { ICONS } from "../../shared/icons.ts";
+import { formatDateIn } from "../../shared/time.ts";
 
-import { formatEventDate } from "./eventDate.ts";
 import { eventAttendeesQuery } from "./queries.ts";
 import { visitorUrl } from "./visitorUrl.ts";
 
@@ -29,7 +30,7 @@ export const eventsEntity: EntityDescriptor<Doc<"events">> = {
 	icon: ICONS.events,
 	useRows,
 	label: (row) => row.name,
-	detail: (row) => formatEventDate(row.startsAt),
+	detail: (row) => formatDateIn(row.startsAt, SITE_TIMEZONE),
 	ability: { action: "view", subject: "Events" },
 	peek: lazyPeek(() =>
 		import("./EventPeek.tsx").then((module) => module.EventPeek)

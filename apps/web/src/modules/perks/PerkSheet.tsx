@@ -1,10 +1,4 @@
-import {
-	Accordion,
-	Button,
-	Icon,
-	PropertyRow,
-	Sheet,
-} from "@j-os/design-system";
+import { Accordion, PropertyRow, Sheet } from "@j-os/design-system";
 import { useMutation } from "convex-solidjs";
 import {
 	Show,
@@ -16,19 +10,17 @@ import {
 } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
-import type { Id } from "../../../convex/_generated/dataModel";
 import type { PerkRow } from "../../../convex/perks.ts";
 import { Can } from "../../lib/ability.tsx";
 import { call } from "../../lib/call.ts";
-import { useConfirm, type ConfirmOptions } from "../../shared/confirm.tsx";
-import { createActionError } from "../../shared/createActionError.ts";
+import { EditToggle } from "../../shared/components/EditToggle.tsx";
+import type { ConfirmOptions } from "../../shared/confirm.tsx";
 import { createDraftGuard } from "../../shared/entity/createDraftGuard.ts";
-import { createEntityRemove } from "../../shared/entity/entityCommands.ts";
+import { EntityDeleteButton } from "../../shared/entity/EntityDeleteButton.tsx";
 import { EntitySheetHeader } from "../../shared/entity/EntitySheetHeader.tsx";
-import { ICONS } from "../../shared/icons.ts";
+import { SheetSection } from "../../shared/entity/SheetSection.tsx";
 import { InlineError } from "../../shared/InlineError.tsx";
 import type { SheetOpenProps } from "../../shared/types.ts";
-import { EditToggle } from "../community/sheets/EditToggle.tsx";
 
 import { perkFields } from "./fields.ts";
 import { PerkAdminRequests } from "./PerkAdminRequests.tsx";
@@ -41,36 +33,28 @@ import {
 import { PerkDetailsItem } from "./PerkDetails.tsx";
 import {
 	PerkRequestButton,
-	PerkRequestSection,
+	PerkRequestNote,
 	createPerkRequestForm,
 	type PerkRequestForm,
-} from "./PerkRequestSection.tsx";
+} from "./PerkRequestForm.tsx";
 import styles from "./PerkSheet.module.scss";
 
 /** The sections a perk's sheet opens with. "requests" is the board's. */
-const ALL_SECTIONS = ["details", "request", "requests"];
+const ALL_SECTIONS = ["details", "requests"];
 
 /** `Sheet.Skeleton`'s placeholder while an open row loads: shaped like the
  *  Details section, with literal placeholder text. */
 function PerkFieldsPlaceholder() {
 	return (
 		<Accordion.Root multiple defaultValue={ALL_SECTIONS}>
-			<Accordion.Item value="details">
-				<Accordion.ItemTitle>Details</Accordion.ItemTitle>
-				<Accordion.ItemContent>
-					<div class={styles.section}>
-						<PropertyRow field={perkFields.partner}>
-							<span>placeholder</span>
-						</PropertyRow>
-						<PropertyRow field={perkFields.title}>
-							<span>placeholder</span>
-						</PropertyRow>
-						<PropertyRow field={perkFields.validUntil}>
-							<span>placeholder</span>
-						</PropertyRow>
-					</div>
-				</Accordion.ItemContent>
-			</Accordion.Item>
+			<SheetSection value="details" title="Details">
+				<PropertyRow field={perkFields.partner}>
+					<span>placeholder</span>
+				</PropertyRow>
+				<PropertyRow field={perkFields.validUntil}>
+					<span>placeholder</span>
+				</PropertyRow>
+			</SheetSection>
 		</Accordion.Root>
 	);
 }
@@ -112,9 +96,8 @@ function PerkSheetHeader(
 	);
 }
 
-/** A loaded perk's accordion: the details for everyone, then the viewer's
- *  own request while the perk can be asked for or one is open, then, for
- *  the board, everyone's requests. */
+/** A loaded perk's accordion: the details for everyone, then, for the
+ *  board, everyone's requests. */
 function PerkDetailAccordion(props: {
 	perk: Accessor<PerkRow>;
 	isEditing: Accessor<boolean>;
@@ -136,9 +119,6 @@ function PerkDetailAccordion(props: {
 				isEditing={props.isEditing}
 				isOpen={props.isOpen}
 			/>
-			<Show when={props.form.hasSection()}>
-				<PerkRequestSection form={props.form} />
-			</Show>
 			<Can I="manage" the="Perks">
 				<PerkAdminRequests perk={props.perk} />
 			</Can>
@@ -153,47 +133,11 @@ const DELETE_PERK_CONFIRM: ConfirmOptions = {
 	tone: "danger",
 };
 
-/** Deletes the perk once the board confirms, and closes the sheet when it
- *  is gone. A refusal shows beside the button and the sheet stays, for the
- *  perk it was made for only: the sheet steps from perk to perk. */
-function PerkDeleteButton(props: { perkId: Id<"perks">; onClose: () => void }) {
-	const deletePerk = useMutation(api.perks.deletePerk);
-	const confirm = useConfirm();
-	// A memo of the id: a refetch hands over a new row for the same perk,
-	// which must keep the refusal; only a move to another perk clears it.
-	const perkId = createMemo(() => props.perkId);
-	const failure = createActionError(() => perkId());
-	const removePerk = createEntityRemove({
-		remove: (id: Id<"perks">) =>
-			call(
-				deletePerk.mutateAsync({ perkId: id }),
-				"Could not delete the perk."
-			),
-		failure,
-		onClose: () => {
-			props.onClose();
-		},
-	});
-	async function remove(): Promise<void> {
-		const isOk = await confirm(DELETE_PERK_CONFIRM);
-		if (!isOk) return;
-		await removePerk(props.perkId);
-	}
-	return (
-		<>
-			<InlineError message={failure.error()} />
-			<Button variant="tertiary" onClick={() => void remove()}>
-				<Icon>{ICONS.delete}</Icon> Delete perk
-			</Button>
-		</>
-	);
-}
-
-/** The footer. On a loaded perk: why a request failed, Delete perk for the
- *  board, and the Request button, last as the primary action. On the
- *  create form: Create, for the board. Nothing while the row is still
- *  loading. The perk's `Show` is not keyed: a refetched row must not
- *  remount Delete and lose its refusal. */
+/** The footer. On a loaded perk: the optional note, why a request failed,
+ *  Delete perk for the board, and the Request button, last as the primary
+ *  action. On the create form: Create, for the board. Nothing while the row
+ *  is still loading. The perk's `Show` is not keyed: a refetched row must
+ *  not remount Delete and lose its refusal. */
 function PerkSheetFooter(
 	props: Pick<PerkSheetProps, "perk" | "loading"> & {
 		form: PerkRequestForm;
@@ -201,6 +145,7 @@ function PerkSheetFooter(
 		onClose: () => void;
 	}
 ) {
+	const deletePerk = useMutation(api.perks.deletePerk);
 	return (
 		<Show when={!props.loading}>
 			<Show
@@ -213,14 +158,30 @@ function PerkSheetFooter(
 			>
 				{(perk) => (
 					<Sheet.Footer>
-						<InlineError message={props.form.error()} />
-						<Can I="manage" the="Perks">
-							<PerkDeleteButton
-								perkId={perk()._id}
-								onClose={props.onClose}
-							/>
-						</Can>
-						<PerkRequestButton form={props.form} />
+						<div class={styles.footer}>
+							<PerkRequestNote form={props.form} perk={perk} />
+							<InlineError message={props.form.error()} />
+							<div class={styles.footerActions}>
+								<Can I="manage" the="Perks">
+									<EntityDeleteButton
+										key={perk()._id}
+										confirm={DELETE_PERK_CONFIRM}
+										remove={() =>
+											call(
+												deletePerk.mutateAsync({
+													perkId: perk()._id,
+												}),
+												"Could not delete the perk."
+											)
+										}
+										onClose={props.onClose}
+									>
+										Delete perk
+									</EntityDeleteButton>
+								</Can>
+								<PerkRequestButton form={props.form} />
+							</div>
+						</div>
 					</Sheet.Footer>
 				)}
 			</Show>

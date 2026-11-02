@@ -2,10 +2,8 @@ import {
 	Combobox,
 	EditableText,
 	type EditableTextProps,
-	type FieldDefinition,
 	NumberInput,
 	PropertyRow,
-	Select,
 } from "@j-os/design-system";
 import { For } from "solid-js";
 
@@ -14,7 +12,7 @@ import {
 	TEXT_MAX,
 	VENTURE_NAME_MAX,
 } from "../../../convex/lib/validate.ts";
-import { LabelledOptions } from "../../shared/components/LabelledOptions.tsx";
+import { OptionSelect } from "../../shared/components/OptionSelect.tsx";
 import { ICONS } from "../../shared/icons.ts";
 import type {
 	FundingStage,
@@ -140,42 +138,22 @@ export function VerticalField(props: {
 	);
 }
 
-/** Generic single-select stage row backing Product/Funding stage. */
-function StageSelect<T extends string>(props: {
-	field: FieldDefinition;
-	options: { value: T; label: string }[];
-	value?: T;
-	onCommit: (v: T | undefined) => void;
-}) {
-	return (
-		<PropertyRow field={props.field}>
-			<Select.Root
-				label={props.field.label}
-				labelHidden
-				placeholder="Pick one"
-				allowClearing
-				value={props.value ? [props.value] : []}
-				onValueChange={(details) => {
-					props.onCommit(details.value[0] as T | undefined);
-				}}
-			>
-				<LabelledOptions options={props.options} />
-			</Select.Root>
-		</PropertyRow>
-	);
-}
-
 export function ProductStageField(props: {
 	value?: ProductStage;
 	onCommit: (v: ProductStage | undefined) => void;
 }) {
 	return (
-		<StageSelect
-			field={personFields.productStage}
-			options={productStageOptions}
-			value={props.value}
-			onCommit={props.onCommit}
-		/>
+		<PropertyRow field={personFields.productStage}>
+			<OptionSelect
+				label={personFields.productStage.label}
+				labelHidden
+				placeholder="Pick one"
+				options={productStageOptions}
+				value={props.value}
+				clearable
+				onChange={props.onCommit}
+			/>
+		</PropertyRow>
 	);
 }
 
@@ -184,12 +162,17 @@ export function FundingStageField(props: {
 	onCommit: (v: FundingStage | undefined) => void;
 }) {
 	return (
-		<StageSelect
-			field={personFields.fundingStage}
-			options={fundingStageOptions}
-			value={props.value}
-			onCommit={props.onCommit}
-		/>
+		<PropertyRow field={personFields.fundingStage}>
+			<OptionSelect
+				label={personFields.fundingStage.label}
+				labelHidden
+				placeholder="Pick one"
+				options={fundingStageOptions}
+				value={props.value}
+				clearable
+				onChange={props.onCommit}
+			/>
+		</PropertyRow>
 	);
 }
 

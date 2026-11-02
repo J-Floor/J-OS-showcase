@@ -16,6 +16,7 @@ import type * as agreements_generated_templates from "../agreements/generated/te
 import type * as agreements_pdf from "../agreements/pdf.js";
 import type * as agreements_seal from "../agreements/seal.js";
 import type * as agreementsInternal from "../agreementsInternal.js";
+import type * as announceExistingPerks from "../announceExistingPerks.js";
 import type * as applications from "../applications.js";
 import type * as auth from "../auth.js";
 import type * as backfillStageSince from "../backfillStageSince.js";
@@ -46,6 +47,9 @@ import type * as emails_generated_magicLink from "../emails/generated/magicLink.
 import type * as emails_generated_memberUpgrade from "../emails/generated/memberUpgrade.js";
 import type * as emails_generated_noAccount from "../emails/generated/noAccount.js";
 import type * as emails_generated_notice from "../emails/generated/notice.js";
+import type * as emails_generated_perkAdded from "../emails/generated/perkAdded.js";
+import type * as emails_generated_perkExpiringSoon from "../emails/generated/perkExpiringSoon.js";
+import type * as emails_generated_perkRequestOutcome from "../emails/generated/perkRequestOutcome.js";
 import type * as emails_generated_perkRequested from "../emails/generated/perkRequested.js";
 import type * as emails_generated_projectAssigned from "../emails/generated/projectAssigned.js";
 import type * as emails_generated_reapplyAfter from "../emails/generated/reapplyAfter.js";
@@ -152,10 +156,14 @@ import type * as notify_kinds_lifecycleAlert from "../notify/kinds/lifecycleAler
 import type * as notify_kinds_newApplication from "../notify/kinds/newApplication.js";
 import type * as notify_kinds_noticeEmail from "../notify/kinds/noticeEmail.js";
 import type * as notify_kinds_occupancyAlert from "../notify/kinds/occupancyAlert.js";
+import type * as notify_kinds_perkAdded from "../notify/kinds/perkAdded.js";
+import type * as notify_kinds_perkExpiringSoon from "../notify/kinds/perkExpiringSoon.js";
+import type * as notify_kinds_perkRequestOutcome from "../notify/kinds/perkRequestOutcome.js";
 import type * as notify_kinds_perkRequested from "../notify/kinds/perkRequested.js";
 import type * as notify_kinds_projectAssigned from "../notify/kinds/projectAssigned.js";
 import type * as notify_kinds_taskAssigned from "../notify/kinds/taskAssigned.js";
 import type * as notify_notify from "../notify/notify.js";
+import type * as notify_perkReminders from "../notify/perkReminders.js";
 import type * as notify_prefs from "../notify/prefs.js";
 import type * as notify_recipients from "../notify/recipients.js";
 import type * as notify_registry from "../notify/registry.js";
@@ -191,6 +199,7 @@ declare const fullApi: ApiFromModules<{
   "agreements/pdf": typeof agreements_pdf;
   "agreements/seal": typeof agreements_seal;
   agreementsInternal: typeof agreementsInternal;
+  announceExistingPerks: typeof announceExistingPerks;
   applications: typeof applications;
   auth: typeof auth;
   backfillStageSince: typeof backfillStageSince;
@@ -221,6 +230,9 @@ declare const fullApi: ApiFromModules<{
   "emails/generated/memberUpgrade": typeof emails_generated_memberUpgrade;
   "emails/generated/noAccount": typeof emails_generated_noAccount;
   "emails/generated/notice": typeof emails_generated_notice;
+  "emails/generated/perkAdded": typeof emails_generated_perkAdded;
+  "emails/generated/perkExpiringSoon": typeof emails_generated_perkExpiringSoon;
+  "emails/generated/perkRequestOutcome": typeof emails_generated_perkRequestOutcome;
   "emails/generated/perkRequested": typeof emails_generated_perkRequested;
   "emails/generated/projectAssigned": typeof emails_generated_projectAssigned;
   "emails/generated/reapplyAfter": typeof emails_generated_reapplyAfter;
@@ -327,10 +339,14 @@ declare const fullApi: ApiFromModules<{
   "notify/kinds/newApplication": typeof notify_kinds_newApplication;
   "notify/kinds/noticeEmail": typeof notify_kinds_noticeEmail;
   "notify/kinds/occupancyAlert": typeof notify_kinds_occupancyAlert;
+  "notify/kinds/perkAdded": typeof notify_kinds_perkAdded;
+  "notify/kinds/perkExpiringSoon": typeof notify_kinds_perkExpiringSoon;
+  "notify/kinds/perkRequestOutcome": typeof notify_kinds_perkRequestOutcome;
   "notify/kinds/perkRequested": typeof notify_kinds_perkRequested;
   "notify/kinds/projectAssigned": typeof notify_kinds_projectAssigned;
   "notify/kinds/taskAssigned": typeof notify_kinds_taskAssigned;
   "notify/notify": typeof notify_notify;
+  "notify/perkReminders": typeof notify_perkReminders;
   "notify/prefs": typeof notify_prefs;
   "notify/recipients": typeof notify_recipients;
   "notify/registry": typeof notify_registry;

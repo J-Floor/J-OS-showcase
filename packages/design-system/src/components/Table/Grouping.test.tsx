@@ -42,3 +42,33 @@ test("renders a group header row per group; collapses on click", () => {
 	fireEvent.click(screen.getByText(/pending/i)); // collapse
 	expect(screen.queryByText("A")).not.toBeInTheDocument();
 });
+
+test("a column's groupLabel names groups keyed by another value", () => {
+	const rows = [
+		{ id: "1", ownerId: "a", ownerName: "Alex Example" },
+		{ id: "2", ownerId: "b", ownerName: "Alex Example" },
+		{ id: "3", ownerId: "a", ownerName: "Alex Example" },
+	];
+	const ownerColumns = [
+		{
+			id: "owner",
+			header: "Owner",
+			dataType: "string",
+			accessorFn: (row: (typeof rows)[number]) => row.ownerId,
+			groupLabel: (row: (typeof rows)[number]) => row.ownerName,
+		},
+		{ accessorKey: "id", header: "Id", dataType: "string" },
+	];
+	render(() => (
+		<Table.Root
+			getRowId={(row) => row.id}
+			columns={ownerColumns as never}
+			data={rows}
+			groupBy="owner"
+		/>
+	));
+	const headers = screen
+		.getAllByText(/Alex Example/)
+		.map((element) => element.textContent.replaceAll(/\s+/g, " ").trim());
+	expect(headers).toEqual(["Alex Example (2)", "Alex Example (1)"]);
+});

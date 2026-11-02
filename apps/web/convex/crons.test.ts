@@ -54,11 +54,25 @@ describe("crons", () => {
 		expect(job.name).toBe(getFunctionName(internal.invariants.check));
 	});
 
+	it("registers the perk expiry reminder at 08:00 UTC", () => {
+		const job =
+			crons.crons["tell the community about perks ending in a week"];
+		expect(job).toBeDefined();
+		expect(job.schedule).toEqual({
+			type: "daily",
+			hourUTC: 8,
+			minuteUTC: 0,
+		});
+		expect(job.name).toBe(
+			getFunctionName(internal.notify.perkReminders.expiringSoon)
+		);
+	});
+
 	it("registers exactly these jobs — the nightly door-key sweep is gone", () => {
 		// Each test above looks a job up by name, so a stray registration
 		// (e.g. the retired door-key sweep) would pass every one
 		// without this.
-		expect(Object.keys(crons.crons)).toHaveLength(9);
+		expect(Object.keys(crons.crons)).toHaveLength(10);
 	});
 
 	it("purges access logs older than 12 months nightly", () => {

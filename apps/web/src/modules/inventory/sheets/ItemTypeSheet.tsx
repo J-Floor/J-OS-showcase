@@ -1,4 +1,5 @@
 import {
+	PropertyRow,
 	Sheet,
 	createSaveTracker,
 	type SaveTracker,
@@ -9,6 +10,7 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import type { SheetNavState } from "../../../lib/createSheetNav.ts";
 import { createSyncedField } from "../../../lib/createSyncedField.ts";
 import type { SaveWrite } from "../../../lib/reportSave.ts";
+import { OptionSelect } from "../../../shared/components/OptionSelect.tsx";
 import { useConfirm } from "../../../shared/confirm.tsx";
 import { createEntityDraft } from "../../../shared/entity/entityCommands.ts";
 import { EntityCreateFooter } from "../../../shared/entity/EntityCreateFooter.tsx";
@@ -25,7 +27,7 @@ import { itemTypeFields } from "../fields.ts";
 
 import { FieldsPlaceholder } from "./FieldsPlaceholder.tsx";
 import { createInventoryCommands } from "./inventoryCommands.ts";
-import { DescriptionValue, NameField, OptionSelect } from "./InventoryForm.tsx";
+import { DescriptionValue, NameField } from "./InventoryForm.tsx";
 import { RelatedListSection } from "./RelatedListSection.tsx";
 
 type ItemTypeSheetProps = SheetOpenProps & {
@@ -158,6 +160,30 @@ function useOpenTypeItems(props: ItemTypeSheetProps) {
 	);
 }
 
+/** The type's category picker. */
+function CategoryRow(props: {
+	categoryId: ReturnType<typeof createItemTypeForm>["categoryId"];
+}): JSX.Element {
+	const categories = useCategories();
+	return (
+		<PropertyRow field={itemTypeFields.categoryName}>
+			<OptionSelect
+				label={itemTypeFields.categoryName.label}
+				labelHidden
+				placeholder="Choose a category"
+				options={(categories.data() ?? []).map((category) => ({
+					value: category._id,
+					label: category.name,
+				}))}
+				value={props.categoryId.value()}
+				onChange={(value) => {
+					props.categoryId.set(value);
+				}}
+			/>
+		</PropertyRow>
+	);
+}
+
 export function ItemTypeSheet(props: ItemTypeSheetProps): JSX.Element {
 	const form = createItemTypeForm(props);
 	// Controlled + onValueChange so the section actually collapses (matches
@@ -172,7 +198,6 @@ export function ItemTypeSheet(props: ItemTypeSheetProps): JSX.Element {
 	}
 
 	const itemsQuery = useOpenTypeItems(props);
-	const categories = useCategories();
 
 	let nameElement: HTMLInputElement | undefined;
 
@@ -213,15 +238,7 @@ export function ItemTypeSheet(props: ItemTypeSheetProps): JSX.Element {
 						nameElement = element;
 					}}
 				/>
-				<OptionSelect
-					property={itemTypeFields.categoryName}
-					placeholder="Choose a category"
-					options={(categories.data() ?? []).map((category) => ({
-						value: category._id,
-						label: category.name,
-					}))}
-					field={form.categoryId}
-				/>
+				<CategoryRow categoryId={form.categoryId} />
 				<DescriptionValue
 					field={itemTypeFields.description}
 					description={form.description}

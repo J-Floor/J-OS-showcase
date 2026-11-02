@@ -14,12 +14,12 @@ import {
 	PERK_CATEGORY_LABELS,
 	PERK_REQUEST_STATUS_LABELS,
 	PERK_REQUEST_STATUSES,
-	siteToday,
 } from "./perks.ts";
+import { SITE_TIMEZONE, todayIn } from "./time.ts";
 
 // Each case is written as a UTC instant so the Zurich offset is visible.
 function siteDayAt(instant: string): string {
-	return siteToday(Date.parse(instant));
+	return todayIn(SITE_TIMEZONE, Date.parse(instant));
 }
 
 function expiredAt(validUntil: string | undefined, instant: string): boolean {
@@ -74,7 +74,7 @@ describe("isOpenRequest", () => {
 	});
 });
 
-describe("siteToday", () => {
+describe("the site day", () => {
 	it("is the Zurich date, a day ahead of UTC late on a summer evening", () => {
 		// CEST (UTC+2): the 16th starts in Zurich at 22:00Z on the 15th.
 		expect(siteDayAt("2026-07-15T21:59:00Z")).toBe("2026-07-15");

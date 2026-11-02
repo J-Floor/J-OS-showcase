@@ -36,8 +36,9 @@ function validUntilInstant(row: PerkRow): number | undefined {
 export const PERKS_DEFAULT_SORT = [{ id: "partner", desc: false }];
 
 /**
- * Perks table columns: partner, perk, category and end date, plus the hidden
- * `availability` column the table groups by.
+ * Perks table columns: perk, partner, category and end date, plus the hidden
+ * `availability` column the table groups by. The perk comes first: the
+ * table flies its first text column into the sheet's title.
  */
 export function perkColumns(): JfColumnDefinition<PerkRow>[] {
 	// Captured once when the columns are built (Table reads its config once
@@ -55,12 +56,12 @@ export function perkColumns(): JfColumnDefinition<PerkRow>[] {
 			enumOptions: availabilityOptions,
 			accessorFn: (row) => perkAvailability(row, now),
 		},
-		fieldColumn(perkFields.partner, {
-			accessorKey: "partner",
-			dataType: "string",
-		}),
 		fieldColumn(perkFields.title, {
 			accessorKey: "title",
+			dataType: "string",
+		}),
+		fieldColumn(perkFields.partner, {
+			accessorKey: "partner",
 			dataType: "string",
 		}),
 		fieldColumn(perkFields.category, {

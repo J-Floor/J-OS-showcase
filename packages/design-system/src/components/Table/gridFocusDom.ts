@@ -7,6 +7,7 @@ import { makeEventListener } from "@solid-primitives/event-listener";
 import { Result } from "neverthrow";
 import { createEffect, createUniqueId, onMount, type Accessor } from "solid-js";
 
+import { isUnderOpenOverlay } from "../../utils/overlayLayer.tsx";
 import { isTypingTarget } from "../../utils/typingTarget.ts";
 
 export function hasModifier(event: KeyboardEvent): boolean {
@@ -60,6 +61,8 @@ export type GridElement = {
 	 *  the visible one may take focus. jsdom lacks `checkVisibility`; a missing
 	 *  method reads as visible. */
 	isVisible: () => boolean;
+	/** Whether an overlay that stays open covers the table. */
+	isUnderOverlay: () => boolean;
 };
 
 export function createGridElement(): GridElement {
@@ -73,6 +76,9 @@ export function createGridElement(): GridElement {
 		},
 		contains(node) {
 			return reference?.contains(node) ?? false;
+		},
+		isUnderOverlay() {
+			return reference !== undefined && isUnderOpenOverlay(reference);
 		},
 		isVisible() {
 			if (!reference?.isConnected) return false;
@@ -94,11 +100,13 @@ export function createGridElement(): GridElement {
 // mousedown), but a mouse-focused element does not match `:focus-visible`
 // until the next keydown, while one reached by an arrow does, so that is the
 // tell. Not from a typing target either: that covers someone typing, and any
-// open dialog. Deferred a microtask so the table is in the DOM on mount and
-// the state that triggered this has settled.
+// open dialog. Nor while an overlay that stays open covers the table (a
+// drawer under which the table's own sheet just closed): focus moved under
+// it would dismiss it. Deferred a microtask so the table is in the DOM on
+// mount and the state that triggered this has settled.
 export function claimGridFocus(grid: GridElement, isLive: () => boolean): void {
 	queueMicrotask(() => {
-		if (!isLive() || !grid.isVisible()) return;
+		if (!isLive() || !grid.isVisible() || grid.isUnderOverlay()) return;
 		const active = document.activeElement;
 		// A control already inside the table keeps focus: Space unchecking the
 		// last row checkbox empties the selection and makes the table live, and

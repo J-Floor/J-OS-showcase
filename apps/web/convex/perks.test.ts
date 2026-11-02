@@ -153,6 +153,18 @@ async function scheduledJobs(backend: Tester) {
 	);
 }
 
+/** The jobs a test queued, without the `perkAdded` dispatch `createPerk`
+ *  queues for the perk `setupWithPerk` makes. */
+async function purgeJobs(backend: Tester) {
+	const jobs = await scheduledJobs(backend);
+	return jobs.filter((job) => job.name === "perks:purgePerkRequests");
+}
+
+async function dispatches(backend: Tester) {
+	const jobs = await scheduledJobs(backend);
+	return jobs.filter((job) => job.name === "notify/dispatch:run");
+}
+
 describe("listPerks", () => {
 	it.each(["guest", "member", "core", "board", "admin"] as const)(
 		"lets a %s list the perks",
@@ -508,6 +520,64 @@ describe("createPerk", () => {
 	});
 });
 
+describe("createPerk tells the community", () => {
+	// 11:00 in Zurich on 2026-10-29, so "today" there is 2026-10-29. Faking
+	// Date pins that day; faking setTimeout keeps the dispatch from running,
+	// so the test sees what was queued.
+	const NOW = Date.UTC(2026, 9, 29, 10, 0);
+
+	beforeEach(() => {
+		vi.useFakeTimers({ toFake: ["setTimeout", "Date"] });
+		vi.setSystemTime(NOW);
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("sends perkAdded with the partner, title, perk and who added it", async () => {
+		const { backend, boardId, contactId, asBoard } = await setup();
+		const perkId = await asBoard.mutation(
+			api.perks.createPerk,
+			perkInput(contactId)
+		);
+		expect(await dispatches(backend)).toEqual([
+			expect.objectContaining({
+				args: [
+					{
+						kind: "perkAdded",
+						payload: {
+							perkId,
+							partner: "Example Cloud",
+							perkTitle: "Hosting credits",
+							addedBy: boardId,
+						},
+					},
+				],
+			}),
+		]);
+	});
+
+	it("sends for a perk whose last day is today", async () => {
+		const { backend, contactId, asBoard } = await setup();
+		await asBoard.mutation(api.perks.createPerk, {
+			...perkInput(contactId),
+			validUntil: "2026-10-29",
+		});
+		expect(await dispatches(backend)).toHaveLength(1);
+	});
+
+	it("sends nothing for a perk that has already ended", async () => {
+		const { backend, contactId, asBoard } = await setup();
+		await asBoard.mutation(api.perks.createPerk, {
+			...perkInput(contactId),
+			validUntil: "2026-10-28",
+		});
+		expect(await allPerks(backend)).toHaveLength(1);
+		expect(await dispatches(backend)).toEqual([]);
+	});
+});
+
 describe("updatePerk", () => {
 	it.each(NOT_BOARD)(
 		"refuses a %s and leaves the perk as it was",
@@ -708,7 +778,7 @@ describe("deletePerk", () => {
 			caller.mutation(api.perks.deletePerk, { perkId })
 		).rejects.toThrow("Forbidden");
 		expect(await readPerk(backend, perkId)).not.toBeNull();
-		expect(await scheduledJobs(backend)).toEqual([]);
+		expect(await purgeJobs(backend)).toEqual([]);
 	});
 
 	it("deletes the perk at once and schedules the purge of its requests", async () => {
@@ -719,7 +789,7 @@ describe("deletePerk", () => {
 
 		expect(await readPerk(backend, perkId)).toBeNull();
 		expect(await asBoard.query(api.perks.listPerks, {})).toEqual([]);
-		const jobs = await scheduledJobs(backend);
+		const jobs = await purgeJobs(backend);
 		expect(jobs).toHaveLength(1);
 		expect(jobs[0].name).toBe("perks:purgePerkRequests");
 		expect(jobs[0].args).toEqual([{ perkId }]);
@@ -733,7 +803,7 @@ describe("deletePerk", () => {
 		await expect(
 			asBoard.mutation(api.perks.deletePerk, { perkId })
 		).resolves.toBeNull();
-		expect(await scheduledJobs(backend)).toHaveLength(1);
+		expect(await purgeJobs(backend)).toHaveLength(1);
 	});
 });
 

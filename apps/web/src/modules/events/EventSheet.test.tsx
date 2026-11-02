@@ -8,6 +8,7 @@ import {
 	within,
 } from "@solidjs/testing-library";
 import { ConvexError } from "convex/values";
+import { createSignal } from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
 
 afterEach(cleanup);
@@ -390,13 +391,13 @@ test("detail (board): attendees still loading shows a skeleton, not the empty co
 	attendeesData = undefined;
 	renderSheet("board", { event });
 	expect(document.querySelector("[data-skeleton-list]")).toBeInTheDocument();
-	expect(screen.queryByText("No one has registered yet.")).toBeNull();
+	expect(screen.queryByText("No one has registered yet")).toBeNull();
 });
 
 test("detail (board): no attendees shows the empty copy", () => {
 	attendeesData = [];
 	renderSheet("board", { event });
-	expect(screen.getByText("No one has registered yet.")).toBeInTheDocument();
+	expect(screen.getByText("No one has registered yet")).toBeInTheDocument();
 	expect(document.querySelector("[data-skeleton-list]")).toBeNull();
 });
 
@@ -420,6 +421,33 @@ test("a refused delete shows the reason in the footer and keeps the sheet open",
 	);
 	expect(await screen.findByText("You can't do that.")).toBeInTheDocument();
 	expect(onOpenChange).not.toHaveBeenCalled();
+});
+
+test("a refused delete keeps its reason when the live row is replaced by a same-id copy", async () => {
+	mutateAsync.mockRejectedValueOnce(REFUSED);
+	const [live, setLive] = createSignal<Doc<"events">>(event);
+	render(() => (
+		<ConfirmProvider>
+			<AbilityProvider role="board">
+				<EventSheet open onOpenChange={() => {}} event={live()} />
+			</AbilityProvider>
+		</ConfirmProvider>
+	));
+	fireEvent.click(screen.getByRole("button", { name: /Delete event/ }));
+	await screen.findByText("Delete event?");
+	const footer = screen.getByRole("button", {
+		name: /Cancel/,
+		hidden: true,
+	}).parentElement!;
+	fireEvent.click(
+		within(footer).getByRole("button", { name: /Delete/, hidden: true })
+	);
+	expect(await screen.findByText("You can't do that.")).toBeInTheDocument();
+
+	setLive((previous) => ({ ...previous, name: "Open House (live)" }));
+
+	await Promise.resolve();
+	expect(screen.getByText("You can't do that.")).toBeInTheDocument();
 });
 
 test("a refused rename shows the reason under the details", async () => {

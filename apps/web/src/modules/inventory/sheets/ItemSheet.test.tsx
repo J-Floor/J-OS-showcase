@@ -178,6 +178,17 @@ test("picking a source copies type and description and leaves the asset tag", as
 	).not.toBeDisabled();
 });
 
+test("a chosen type cannot be cleared: the sheet always has one to save", async () => {
+	setData([chairType], [chair]);
+	render(() => <ItemSheet open onOpenChange={() => {}} />);
+	fireEvent.click(screen.getByRole("button", { name: /Copy from item/ }));
+	fireEvent.click(
+		await screen.findByRole("button", { name: "A00001 Chair" })
+	);
+	expect(screen.getByRole("combobox")).toHaveTextContent("Chair · Furniture");
+	expect(screen.queryByRole("button", { name: /clear/i })).toBeNull();
+});
+
 test("blurring the description field autosaves that field only", () => {
 	setData([chairType], [chair]);
 	render(() => <ItemSheet open onOpenChange={() => {}} item={chair} />);

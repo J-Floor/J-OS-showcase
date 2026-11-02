@@ -13,6 +13,7 @@ import {
 
 import {
 	fakeViewTransitions,
+	installViewTransitions,
 	mockLayoutBoxes,
 	restoreViewTransitions,
 	transitionSettled,
@@ -839,6 +840,58 @@ describe("CommandPalette morph handoff", () => {
 		fireEvent.click(await screen.findByText("Alpha"));
 		await waitFor(() => {
 			expect(calls).toEqual(["open:false", "select"]);
+		});
+	});
+
+	it("a pick keeps its query, so the picked row is still there for the old snapshot", async () => {
+		const [open, setOpen] = createSignal(true);
+		const atCapture: boolean[] = [];
+		let picked: Element | null = null;
+		// The browser takes the old snapshot after the call returns, before
+		// the update runs: the picked row must still be in the document then.
+		installViewTransitions(
+			vi.fn((update: () => unknown) => {
+				const done = Promise.resolve().then(() => {
+					atCapture.push(picked?.isConnected ?? false);
+					return update();
+				});
+				return { finished: done, updateCallbackDone: done };
+			})
+		);
+		onTestFinished(restoreViewTransitions);
+		render(() => (
+			<CommandPalette
+				open={open()}
+				onOpenChange={setOpen}
+				items={[
+					{
+						value: "page:tasks",
+						label: "Tasks",
+						group: "Pages",
+						onSelect,
+					},
+					{
+						value: "p:ada",
+						label: "Ada Lovelace",
+						group: "Records",
+						// Gone from the blank palette: a cleared query drops its row.
+						searchOnly: true,
+						onSelect,
+					},
+				]}
+			/>
+		));
+		await type("Lovelace");
+		const row = screen.getByText("Lovelace").closest('[data-part="item"]');
+		expect(row).not.toBeNull();
+		picked = row;
+		fireEvent.click(row!);
+		await transitionSettled();
+		expect(onSelect).toHaveBeenCalledTimes(1);
+		expect(atCapture).toEqual([true]);
+		// The close's cleanup clears the kinds; the next test starts clean.
+		await waitFor(() => {
+			expect(document.documentElement.dataset.vt).toBeUndefined();
 		});
 	});
 

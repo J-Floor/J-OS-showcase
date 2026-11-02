@@ -11,11 +11,11 @@ import { api } from "../../../convex/_generated/api";
 import { NAME_MAX, TEXT_MAX } from "../../../convex/lib/validate.ts";
 import type { PerkRow } from "../../../convex/perks.ts";
 import { Can } from "../../lib/ability.tsx";
+import { OptionSelect } from "../../shared/components/OptionSelect.tsx";
 import { PersonSelect } from "../../shared/components/PersonSelect.tsx";
 import { useBoardLevel } from "../../shared/data/boardLevel.tsx";
 import { ICONS } from "../../shared/icons.ts";
 
-import { EnumSelect } from "./EnumSelect.tsx";
 import { perkFields } from "./fields.ts";
 import styles from "./PerkEditor.module.scss";
 import { PERK_CATEGORY_OPTIONS } from "./perkOptions.ts";
@@ -86,7 +86,7 @@ function TextRow(
 function CategoryRow(props: RowProps): JSX.Element {
 	return (
 		<PropertyRow field={perkFields.category}>
-			<EnumSelect
+			<OptionSelect
 				label={perkFields.category.label}
 				labelHidden
 				options={PERK_CATEGORY_OPTIONS}

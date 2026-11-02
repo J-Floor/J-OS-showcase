@@ -30,7 +30,7 @@ export type RowGroups<Data extends Record<string, unknown>> = {
 	rowGroups: () => RowGroup<Data>[];
 	isGroupExpanded: (key: string) => boolean;
 	toggleGroup: (key: string) => void;
-	groupLabel: (value: unknown) => string;
+	groupLabel: (group: RowGroup<Data>) => string;
 	displayedLeafRows: () => TanRow<Data>[];
 };
 
@@ -103,8 +103,24 @@ export function createRowGroups<Data extends Record<string, unknown>>(options: {
 		return bucketRows(props, table);
 	}
 
-	function groupLabel(value: unknown): string {
-		return enumOptionLabel(groupOptions(props, table) ?? [], String(value));
+	// A column's own `groupLabel` names its groups from the first row, so a
+	// group keyed by id can still read as a name; otherwise the enum label.
+	function groupLabel(group: RowGroup<Data>): string {
+		const column = props.groupBy
+			? table.getColumn(props.groupBy)
+			: undefined;
+		const labelOf = column
+			? (columnMeta(column).groupLabel as
+					| ((row: Data) => string)
+					| undefined)
+			: undefined;
+		const first = group.rows.at(0);
+		return labelOf && first
+			? labelOf(first.original)
+			: enumOptionLabel(
+					groupOptions(props, table) ?? [],
+					String(group.value)
+				);
 	}
 
 	// Grouped rows render in ONE table (header, group-header rows and data rows
