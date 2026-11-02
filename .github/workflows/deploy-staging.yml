@@ -1,0 +1,142 @@
+name: Deploy staging
+
+# Deploys any branch, tag or SHA to https://staging.thejfloor.com, backed by the
+# Convex DEV deployment (shared with local dev and its seeded accounts).
+#   gh workflow run deploy-staging.yml -f ref=<branch>
+#   gh run watch "$(gh run list --workflow deploy-staging.yml -L 1 --json databaseId -q '.[0].databaseId')"
+run-name: Staging ← ${{ inputs.ref }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag or SHA to deploy"
+        required: true
+        default: main
+
+# One staging slot: a newer run replaces an older one.
+concurrency:
+  group: staging
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Convex dev and staging web app
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      STAGING_URL: https://staging.thejfloor.com
+    steps:
+      # Tooling (the shared actions) comes from this workflow's own commit, the
+      # app from the requested ref, so a branch cut before the actions existed
+      # still deploys.
+      - name: Checkout workflow tooling
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Checkout ${{ inputs.ref }}
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.ref }}
+          path: target
+          persist-credentials: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: "target/package.json"
+
+      - name: Cache Bun downloads
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('target/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        working-directory: target
+        run: bun install --frozen-lockfile
+
+      - name: Turborepo remote cache
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        with:
+          server-port: 0
+
+      # Public key; read from the dev deployment so it cannot drift from the
+      # private half that signs the pushes.
+      - name: Read dev VAPID public key
+        working-directory: target/apps/web
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_DEV }}
+        run: |
+          key=$(bunx --bun convex env get VAPID_PUBLIC_KEY)
+          test -n "$key"
+          echo "VITE_VAPID_PUBLIC_KEY=$key" >> "$GITHUB_ENV"
+
+      # Same as prod's deploy step, against dev. This replaces the functions on
+      # the dev deployment with the ref's. The dev site URL is the cloud URL's
+      # .convex.site twin.
+      - name: Deploy Convex dev backend and build SPA
+        working-directory: target/apps/web
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_DEV }}
+          VITE_RECAPTCHA_SITE_KEY: ${{ secrets.VITE_RECAPTCHA_SITE_KEY_DEV }}
+        run: |
+          bunx --bun convex deploy -y \
+            --cmd-url-env-var-name VITE_CONVEX_URL \
+            --cmd 'VITE_CONVEX_SITE_URL="${VITE_CONVEX_URL%.convex.cloud}.convex.site" bunx --bun turbo build --filter=@j-os/web'
+
+      # Sign-in on staging needs the ref's backend to trust STAGING_SITE_URL
+      # and its client to send an absolute callback. An older ref still
+      # deploys (useful for bisecting), but sign-in fails there.
+      - name: Warn when the ref predates staging sign-in
+        working-directory: target/apps/web
+        run: |
+          if ! grep -q STAGING_SITE_URL convex/auth.ts; then
+            echo "::warning::This ref predates staging sign-in support: the app loads, but signing in on staging will fail."
+            echo "> **Sign-in unavailable:** this ref predates staging sign-in support." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Check import map hash
+        uses: ./.github/actions/check-importmap-csp
+        with:
+          dist: target/apps/web/dist
+
+      - name: Record the deployed ref
+        id: deployed
+        env:
+          REF: ${{ inputs.ref }}
+        run: |
+          sha=$(git -C target rev-parse HEAD)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          printf '%s %s\n' "$REF" "$sha" > target/apps/web/dist/staging-ref.txt
+
+      # The staging key is locked (rrsync, write-only) to the staging dist dir;
+      # it cannot reach the prod app or the playground.
+      - name: Ship SPA build to staging
+        uses: ./.github/actions/ship-dist
+        with:
+          source: target/apps/web/dist
+          ssh-key: ${{ secrets.DEPLOY_SSH_KEY_STAGING }}
+          key-name: staging_key
+          host: ${{ secrets.DEPLOY_HOST }}
+          known-hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+
+      - name: Summary
+        env:
+          REF: ${{ inputs.ref }}
+          SHA: ${{ steps.deployed.outputs.sha }}
+        run: |
+          {
+            echo "### Staging deployed"
+            echo ""
+            echo "- URL: $STAGING_URL"
+            echo "- Ref: \`$REF\` (\`$SHA\`)"
+            echo "- Backend: Convex dev (its functions now come from this ref)"
+            echo "- Deployed ref file: $STAGING_URL/staging-ref.txt (fetch it; a navigation gets the app shell)"
+          } >> "$GITHUB_STEP_SUMMARY"

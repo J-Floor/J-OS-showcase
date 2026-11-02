@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createAuth } from "./auth.ts";
+import { createAuth, trustedSiteOrigins } from "./auth.ts";
 import { sendEmail } from "./lib/email.ts";
 import { magicLinkDecision } from "./lib/rateLimit.ts";
 
@@ -79,5 +79,35 @@ describe("sendMagicLink", () => {
 	it("sends nothing to a limited address", async () => {
 		await send("limited");
 		expect(sendEmail).not.toHaveBeenCalled();
+	});
+});
+
+describe("trusted origins", () => {
+	afterEach(() => {
+		vi.unstubAllEnvs();
+	});
+
+	it("trusts only SITE_URL when no staging site is set", () => {
+		vi.stubEnv("SITE_URL", "https://app.example.com");
+		vi.stubEnv("STAGING_SITE_URL", "");
+		expect(trustedSiteOrigins()).toEqual(["https://app.example.com"]);
+		expect(createAuth({} as never).options.trustedOrigins).toEqual([
+			"https://app.example.com",
+		]);
+	});
+
+	it("trusts the bare origin when SITE_URL carries a trailing slash", () => {
+		vi.stubEnv("SITE_URL", "https://app.example.com/");
+		vi.stubEnv("STAGING_SITE_URL", "");
+		expect(trustedSiteOrigins()).toEqual(["https://app.example.com"]);
+	});
+
+	it("also trusts the staging site on a deployment that serves one", () => {
+		vi.stubEnv("SITE_URL", "http://localhost:5173");
+		vi.stubEnv("STAGING_SITE_URL", "https://staging.example.com");
+		expect(createAuth({} as never).options.trustedOrigins).toEqual([
+			"http://localhost:5173",
+			"https://staging.example.com",
+		]);
 	});
 });

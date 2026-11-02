@@ -67,29 +67,21 @@ jobs:
       # The inline import map needs its hash in the CSP header, which Caddy reads
       # from this file. Never ship a build without it.
       - name: Check import map hash
-        run: |
-          dist=apps/web/dist
-          test "$(grep -o '<script type="importmap">' "$dist/index.html" | wc -l)" -eq 1
-          map=$(sed -n 's|.*<script type="importmap">\([^<]*\)</script>.*|\1|p' "$dist/index.html")
-          expected="'sha256-$(printf '%s' "$map" | openssl dgst -sha256 -binary | base64)'"
-          test "$(cat "$dist/.importmap-csp")" = "$expected"
+        uses: ./.github/actions/check-importmap-csp
+        with:
+          dist: apps/web/dist
 
       # Ship the built static SPA to the VPS, where Caddy serves it from
       # /srv/jfloor/apps/web/dist. The deploy key is locked (rrsync, write-only,
       # no shell) to that directory, so the rsync target "." maps to it.
       - name: Ship SPA build to VPS
-        env:
-          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-          rsync -az --delete --delay-updates \
-            -e "ssh -i $HOME/.ssh/deploy_key -o IdentitiesOnly=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts" \
-            apps/web/dist/ "jos@${DEPLOY_HOST}:."
+        uses: ./.github/actions/ship-dist
+        with:
+          source: apps/web/dist
+          ssh-key: ${{ secrets.DEPLOY_SSH_KEY }}
+          key-name: deploy_key
+          host: ${{ secrets.DEPLOY_HOST }}
+          known-hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
 
       # --- Design playground (design.thejfloor.com) ---
       # Turbo caches this build (outputs: demo/dist/**). When design-system is
@@ -102,15 +94,10 @@ jobs:
       # dist dir — it cannot touch apps/web/dist or anything else on the box.
       # rsync only transfers changed files, so an unchanged playground is a no-op.
       - name: Ship design playground to VPS
-        env:
-          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY_DEMO }}
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/demo_key
-          chmod 600 ~/.ssh/demo_key
-          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-          rsync -az --delete --delay-updates \
-            -e "ssh -i $HOME/.ssh/demo_key -o IdentitiesOnly=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts" \
-            packages/design-system/demo/dist/ "jos@${DEPLOY_HOST}:."
+        uses: ./.github/actions/ship-dist
+        with:
+          source: packages/design-system/demo/dist
+          ssh-key: ${{ secrets.DEPLOY_SSH_KEY_DEMO }}
+          key-name: demo_key
+          host: ${{ secrets.DEPLOY_HOST }}
+          known-hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}

@@ -1,0 +1,23 @@
+# The inline import map needs its hash in the CSP header, which Caddy reads
+# from dist/.importmap-csp. Never ship a build without it.
+name: "Check import map hash"
+description: "Fails unless the build's .importmap-csp holds the hash of its one inline import map."
+
+inputs:
+  dist:
+    description: "The built SPA directory."
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Check import map hash
+      shell: bash
+      env:
+        DIST: ${{ inputs.dist }}
+      run: |
+        set -euo pipefail
+        test "$(grep -o '<script type="importmap">' "$DIST/index.html" | wc -l)" -eq 1
+        map=$(sed -n 's|.*<script type="importmap">\([^<]*\)</script>.*|\1|p' "$DIST/index.html")
+        expected="'sha256-$(printf '%s' "$map" | openssl dgst -sha256 -binary | base64)'"
+        test "$(cat "$DIST/.importmap-csp")" = "$expected"

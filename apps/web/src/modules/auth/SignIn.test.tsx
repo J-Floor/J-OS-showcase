@@ -62,3 +62,19 @@ test("sending a new link clears the failed-link message for good", async () => {
 	);
 	expect(screen.queryByText(message)).toBeNull();
 });
+
+test("the sign-in link returns to the site it was requested from", async () => {
+	failed.read = () => false;
+	magicLink.mockReset();
+	magicLink.mockResolvedValue({ error: null });
+	render(() => <SignIn />);
+	fireEvent.input(screen.getByLabelText("Email"), {
+		target: { value: "ada@example.com" },
+	});
+	fireEvent.submit(screen.getByLabelText("Email").closest("form")!);
+	expect(await screen.findByText("Check your inbox")).toBeInTheDocument();
+	expect(magicLink).toHaveBeenCalledWith({
+		email: "ada@example.com",
+		callbackURL: `${window.location.origin}/`,
+	});
+});

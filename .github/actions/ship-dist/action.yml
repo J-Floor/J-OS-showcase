@@ -1,0 +1,43 @@
+# Ships a built static site to the VPS. Each deploy key is locked on the box
+# (rrsync, write-only, no shell) to one directory, so the rsync target "."
+# maps to that directory and the key can reach nothing else.
+name: "Ship static build to VPS"
+description: "rsyncs a directory to the directory its deploy key is locked to."
+
+inputs:
+  source:
+    description: "Directory to ship; its contents replace the target's."
+    required: true
+  ssh-key:
+    description: "Private deploy key."
+    required: true
+  key-name:
+    description: "File name for the key under ~/.ssh, unique per key."
+    required: true
+  host:
+    description: "VPS host name or address."
+    required: true
+  known-hosts:
+    description: "known_hosts line(s) for the VPS."
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Ship build
+      shell: bash
+      env:
+        SOURCE: ${{ inputs.source }}
+        SSH_KEY: ${{ inputs.ssh-key }}
+        KEY_NAME: ${{ inputs.key-name }}
+        DEPLOY_HOST: ${{ inputs.host }}
+        KNOWN_HOSTS: ${{ inputs.known-hosts }}
+      run: |
+        set -euo pipefail
+        mkdir -p ~/.ssh
+        printf '%s\n' "$SSH_KEY" > ~/.ssh/"$KEY_NAME"
+        chmod 600 ~/.ssh/"$KEY_NAME"
+        printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+        rsync -az --delete --delay-updates \
+          -e "ssh -i $HOME/.ssh/$KEY_NAME -o IdentitiesOnly=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts" \
+          "${SOURCE%/}/" "jos@${DEPLOY_HOST}:."
