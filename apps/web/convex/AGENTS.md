@@ -53,8 +53,8 @@ The Convex backend. Read `_generated/ai/guidelines.md` first (see
 
 ## Scheduled functions in tests
 
-- **`convex-test` never executes scheduled functions.** It records them in the
-  `_scheduled_functions` system table at enqueue time:
+- **Assert scheduled jobs in the table, not by their effects.** convex-test
+  records them in the `_scheduled_functions` system table at enqueue time:
   `ctx.db.system.query("_scheduled_functions").collect()`. Assert the job's
   **name and args** there. Asserting only that an audit row was written does not
   prove the right function was scheduled — a real bug once survived because
@@ -73,3 +73,10 @@ The Convex backend. Read `_generated/ai/guidelines.md` first (see
   each job with a real `setTimeout`, and Node fires any delay past its 32-bit
   limit almost at once, leaking emails into the next test. `test-stubs/setup.ts`
   guards this. Don't remove the guard; `farFutureSchedule.test.ts` pins it.
+- **No job outlives its test.** convex-test runs due jobs on real timers, and
+  `fetch` stubs and env vars are process-wide, so a job left behind once put
+  another test's approval emails in `captureEmails`. `test-stubs/setup.ts`
+  wraps `convexTest` and, after each test, cancels the jobs still waiting and
+  awaits the running ones. A test that needs a job's effect drives it inside
+  the test (`test-stubs/runAndCollectLogs.ts`). `scheduledJobIsolation.test.ts`
+  pins this.
