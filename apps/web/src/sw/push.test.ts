@@ -1,14 +1,10 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { runInNewContext } from "node:vm";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { APP_NAME } from "../lib/constants.ts";
+
+import { registerPushHandlers } from "./push.ts";
 
 const ORIGIN = "https://app.example";
-const SCRIPT = readFileSync(
-	resolve(import.meta.dirname, "../../public/push-sw.js"),
-	"utf8"
-);
 
 type Handler = (event: unknown) => void;
 
@@ -34,8 +30,12 @@ beforeEach(() => {
 		clients: { matchAll, openWindow },
 		location: { origin: ORIGIN },
 	};
-	// eslint-disable-next-line sonarjs/code-eval -- evaluating the worker script against a fake `self` is the point of this test
-	runInNewContext(SCRIPT, { self: fakeSelf, URL, String });
+	vi.stubGlobal("self", fakeSelf);
+	registerPushHandlers();
+});
+
+afterEach(() => {
+	vi.unstubAllGlobals();
 });
 
 function waitUntilOf(): {
@@ -59,44 +59,39 @@ async function push(data: unknown): Promise<unknown[]> {
 	return showNotification.mock.calls[0] ?? [];
 }
 
-function payload(json: () => unknown, text = () => "") {
-	return { json, text };
+function payload(text: string) {
+	return { text: () => text };
 }
 
 describe("push handler", () => {
 	test("shows a default notification for an empty payload", async () => {
 		const [title, options] = await push(null);
-		expect(title).toBe("J floor");
+		expect(title).toBe(APP_NAME);
 		expect(options).toMatchObject({ body: "", data: { url: "/" } });
 	});
 
 	test("falls back to the raw text for malformed JSON", async () => {
-		const [title, options] = await push(
-			payload(
-				() => {
-					throw new SyntaxError("bad");
-				},
-				() => "hello"
-			)
-		);
-		expect(title).toBe("J floor");
+		const [title, options] = await push(payload("hello"));
+		expect(title).toBe(APP_NAME);
 		expect(options).toMatchObject({ body: "hello" });
 	});
 
 	test("still shows a notification for a null JSON payload", async () => {
-		const [title, options] = await push(payload(() => null));
-		expect(title).toBe("J floor");
+		const [title, options] = await push(payload("null"));
+		expect(title).toBe(APP_NAME);
 		expect(options).toMatchObject({ body: "" });
 	});
 
 	test("renders a valid payload", async () => {
 		const [title, options] = await push(
-			payload(() => ({
-				title: "Hi",
-				body: "B",
-				url: "/tasks",
-				tag: "t1",
-			}))
+			payload(
+				JSON.stringify({
+					title: "Hi",
+					body: "B",
+					url: "/tasks",
+					tag: "t1",
+				})
+			)
 		);
 		expect(title).toBe("Hi");
 		expect(options).toMatchObject({

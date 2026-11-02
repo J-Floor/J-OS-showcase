@@ -5,7 +5,7 @@ import type { QueryCtx } from "../_generated/server";
 
 import type { Category, NotificationPrefs } from "./categories.ts";
 
-/** What the service worker shows (`public/push-sw.js` parses exactly this). */
+/** What the service worker shows (`src/sw/push.ts` parses exactly this). */
 export type PushMessage = {
 	title: string;
 	body: string;

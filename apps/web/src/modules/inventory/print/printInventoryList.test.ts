@@ -72,4 +72,25 @@ describe("printInventoryList", () => {
 		);
 		expect(downloadPdf).not.toHaveBeenCalled();
 	});
+
+	it("toasts when the PDF code fails to load", async () => {
+		vi.resetModules();
+		vi.doMock("./inventoryListPdf.ts", () => {
+			throw new Error("chunk failed to load");
+		});
+		const { printInventoryList: printWithBrokenImport } =
+			await import("./printInventoryList.ts");
+		const { toaster: freshToaster } =
+			await import("../../../shared/toaster.ts");
+		const { downloadPdf: freshDownload } = await import("./downloadPdf.ts");
+
+		await expect(printWithBrokenImport(ROWS)).resolves.toBeUndefined();
+
+		expect(freshToaster.create).toHaveBeenCalledWith({
+			type: "error",
+			title: "Could not print the list. Try again.",
+		});
+		expect(freshDownload).not.toHaveBeenCalled();
+		vi.doUnmock("./inventoryListPdf.ts");
+	});
 });

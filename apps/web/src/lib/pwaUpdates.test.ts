@@ -3,10 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	checkForUpdateNow,
 	isUpdating,
+	setUpdateProgressForTest,
 	setUpdatingForTest,
 	startPwaUpdateChecks,
 	startReloadOnUpdate,
 	UPDATE_OVERLAY_TIMEOUT_MS,
+	updateProgress,
 } from "./pwaUpdates.ts";
 
 /** A fake `document`: a real EventTarget (so `dispatchEvent` behaves exactly
@@ -146,7 +148,7 @@ describe("startReloadOnUpdate", () => {
 	it("reloads once when a new worker takes over a controlled page", () => {
 		const container = createFakeContainer(true);
 		const reload = vi.fn();
-		startReloadOnUpdate({ container, reload });
+		startReloadOnUpdate({ container, channel: null, reload });
 
 		container.dispatchEvent(new Event("controllerchange"));
 		container.dispatchEvent(new Event("controllerchange"));
@@ -157,7 +159,7 @@ describe("startReloadOnUpdate", () => {
 	it("does not reload on a first install", () => {
 		const container = createFakeContainer(false);
 		const reload = vi.fn();
-		startReloadOnUpdate({ container, reload });
+		startReloadOnUpdate({ container, channel: null, reload });
 
 		container.dispatchEvent(new Event("controllerchange"));
 
@@ -165,7 +167,11 @@ describe("startReloadOnUpdate", () => {
 	});
 
 	it("does nothing without service-worker support", () => {
-		const watch = startReloadOnUpdate({ container: null, reload: vi.fn() });
+		const watch = startReloadOnUpdate({
+			container: null,
+			channel: null,
+			reload: vi.fn(),
+		});
 		watch(createFakeWatchedRegistration(true));
 		expect(isUpdating()).toBe(false);
 	});
@@ -173,6 +179,7 @@ describe("startReloadOnUpdate", () => {
 	it("shows the overlay when a worker is already installing at registration", () => {
 		const watch = startReloadOnUpdate({
 			container: createFakeContainer(true),
+			channel: null,
 			reload: vi.fn(),
 		});
 
@@ -184,6 +191,7 @@ describe("startReloadOnUpdate", () => {
 	it("shows the overlay on a later updatefound", () => {
 		const watch = startReloadOnUpdate({
 			container: createFakeContainer(true),
+			channel: null,
 			reload: vi.fn(),
 		});
 		const registration = createFakeWatchedRegistration(false);
@@ -198,6 +206,7 @@ describe("startReloadOnUpdate", () => {
 	it("never shows the overlay on a first install", () => {
 		const watch = startReloadOnUpdate({
 			container: createFakeContainer(false),
+			channel: null,
 			reload: vi.fn(),
 		});
 		const registration = createFakeWatchedRegistration(true);
@@ -211,6 +220,7 @@ describe("startReloadOnUpdate", () => {
 	it("hides the overlay if no reload comes within the timeout", () => {
 		const watch = startReloadOnUpdate({
 			container: createFakeContainer(true),
+			channel: null,
 			reload: vi.fn(),
 		});
 		watch(createFakeWatchedRegistration(true));
@@ -225,6 +235,7 @@ describe("startReloadOnUpdate", () => {
 	it("ignores an undefined registration", () => {
 		const watch = startReloadOnUpdate({
 			container: createFakeContainer(true),
+			channel: null,
 			reload: vi.fn(),
 		});
 		expect(() => {
@@ -290,5 +301,113 @@ describe("checkForUpdateNow", () => {
 		await Promise.resolve();
 		expect(update).toHaveBeenCalledTimes(1);
 		stop();
+	});
+});
+
+function createFakeChannel(): EventTarget & {
+	send: (data: unknown) => void;
+} {
+	const target = new EventTarget();
+	return Object.assign(target, {
+		send: (data: unknown) =>
+			target.dispatchEvent(new MessageEvent("message", { data })),
+	});
+}
+
+describe("update progress", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+		setUpdatingForTest(false);
+		setUpdateProgressForTest(undefined);
+	});
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("exposes each progress message and shows the overlay", () => {
+		const channel = createFakeChannel();
+		startReloadOnUpdate({
+			container: createFakeContainer(true),
+			channel,
+			reload: vi.fn(),
+		});
+		channel.send({ type: "precache-progress", done: 1, total: 4 });
+		expect(updateProgress()).toEqual({ done: 1, total: 4 });
+		expect(isUpdating()).toBe(true);
+	});
+
+	it("ignores malformed messages", () => {
+		const channel = createFakeChannel();
+		startReloadOnUpdate({
+			container: createFakeContainer(true),
+			channel,
+			reload: vi.fn(),
+		});
+		channel.send({ type: "precache-progress", done: 5, total: 4 });
+		expect(updateProgress()).toBeUndefined();
+		expect(isUpdating()).toBe(false);
+	});
+
+	it("keeps the overlay while progress keeps arriving, and hides it after a stall", () => {
+		const channel = createFakeChannel();
+		startReloadOnUpdate({
+			container: createFakeContainer(true),
+			channel,
+			reload: vi.fn(),
+		});
+		channel.send({ type: "precache-progress", done: 0, total: 9 });
+		for (let done = 1; done <= 3; done++) {
+			vi.advanceTimersByTime(UPDATE_OVERLAY_TIMEOUT_MS - 1);
+			channel.send({ type: "precache-progress", done, total: 9 });
+		}
+		expect(isUpdating()).toBe(true);
+		vi.advanceTimersByTime(UPDATE_OVERLAY_TIMEOUT_MS);
+		expect(isUpdating()).toBe(false);
+		expect(updateProgress()).toBeUndefined();
+	});
+
+	it("does not listen on a first install (no controller)", () => {
+		const channel = createFakeChannel();
+		startReloadOnUpdate({
+			container: createFakeContainer(false),
+			channel,
+			reload: vi.fn(),
+		});
+		channel.send({ type: "precache-progress", done: 1, total: 4 });
+		expect(updateProgress()).toBeUndefined();
+	});
+
+	it("shows the overlay on a progress message before updatefound", () => {
+		const channel = createFakeChannel();
+		const watch = startReloadOnUpdate({
+			container: createFakeContainer(true),
+			channel,
+			reload: vi.fn(),
+		});
+		const registration = createFakeWatchedRegistration(false);
+		watch(registration);
+		expect(isUpdating()).toBe(false);
+
+		channel.send({ type: "precache-progress", done: 0, total: 3 });
+		expect(isUpdating()).toBe(true);
+	});
+
+	it("restarts the stall timer on updatefound", () => {
+		const watch = startReloadOnUpdate({
+			container: createFakeContainer(true),
+			channel: null,
+			reload: vi.fn(),
+		});
+		const registration = createFakeWatchedRegistration(false);
+		watch(registration);
+		registration.dispatchEvent(new Event("updatefound"));
+
+		vi.advanceTimersByTime(UPDATE_OVERLAY_TIMEOUT_MS - 1);
+		registration.dispatchEvent(new Event("updatefound"));
+		vi.advanceTimersByTime(UPDATE_OVERLAY_TIMEOUT_MS - 1);
+		expect(isUpdating()).toBe(true);
+
+		vi.advanceTimersByTime(1);
+		expect(isUpdating()).toBe(false);
 	});
 });

@@ -1,6 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
+/// <reference types="node" />
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import source from "../../public/reload-sw.js?raw";
+import { registerReloadOnUpdate } from "./reloadOnUpdate.ts";
+
+afterEach(() => {
+	vi.unstubAllGlobals();
+});
 
 type FakeClient = { url: string; navigate: ReturnType<typeof vi.fn> };
 
@@ -11,8 +16,8 @@ function createFakeSelf(options: { active: boolean; clients: FakeClient[] }) {
 		registration: { active: options.active ? {} : null },
 		clients: { claim, matchAll },
 	});
-	// eslint-disable-next-line sonarjs/code-eval, @typescript-eslint/no-implied-eval, @typescript-eslint/no-unsafe-call -- evaluating the worker script against a fake `self` is the point of this test
-	new Function("self", source)(self);
+	vi.stubGlobal("self", self);
+	registerReloadOnUpdate();
 	return { self, claim, matchAll };
 }
 
@@ -32,7 +37,7 @@ function fakeClient(url: string): FakeClient {
 	return { url, navigate: vi.fn().mockResolvedValue(undefined) };
 }
 
-describe("reload-sw.js", () => {
+describe("registerReloadOnUpdate", () => {
 	it("navigates every window client to its own url after claiming them on an update", async () => {
 		const first = fakeClient("https://app.test/community");
 		const second = fakeClient("https://app.test/tasks?id=1");

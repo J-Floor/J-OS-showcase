@@ -5,6 +5,7 @@ import solid from 'vite-plugin-solid'
 import devtools from 'solid-devtools/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import { APP_NAME } from './src/lib/constants.ts'
+import { importMapPlugin } from './vite/importMap.ts'
 
 export default defineConfig(({ mode }) => ({
   // Under Vitest, disable solid-refresh (HMR) injection: it breaks in the jsdom
@@ -15,6 +16,7 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     ...(mode === 'test' ? [] : [devtools({ autoname: true })]),
     solid({ hot: mode !== 'test' }),
+    importMapPlugin(),
     // PWA: only in real builds/dev, never under Vitest (edge-runtime has no
     // service-worker/DOM globals the plugin's virtual modules assume).
     ...(mode === 'test'
@@ -37,7 +39,9 @@ export default defineConfig(({ mode }) => ({
             // but that's moot: the import lives only in src/index.tsx, which no
             // test renders.
             injectRegister: false,
-            includeAssets: ['favicon.svg'],
+            // The icons and favicon are precached by `globPatterns` below;
+            // listing them again here would put them in the manifest twice.
+            includeManifestIcons: false,
             manifest: {
               name: APP_NAME,
               short_name: APP_NAME,
@@ -59,37 +63,45 @@ export default defineConfig(({ mode }) => ({
                 },
               ],
             },
-            workbox: {
-              // A new service worker takes over as soon as it installs, and
-              // claims the open tabs; `registerSW` then reloads them onto the
-              // new build. The plugin only sets these itself when it injects
-              // the registration (`injectRegister: 'auto'`) — with
-              // `injectRegister: false` above they must be explicit, or every
-              // new worker sits in "waiting" forever and a normal reload keeps
-              // serving the old precache (only a hard reload bypasses it).
-              skipWaiting: true,
-              clientsClaim: true,
-              // Push + notification-click handlers (public/push-sw.js) and the
-              // reload of open tabs onto a new build (public/reload-sw.js).
-              // Kept as plain imported scripts so the generateSW strategy
-              // (precache, skipWaiting, clientsClaim, navigation fallback)
-              // stays as is.
-              importScripts: ['push-sw.js', 'reload-sw.js'],
-              // Precache the app shell; deep links resolve to index.html (SPA).
+            // Our own worker (src/sw/sw.ts) instead of a generated one: it
+            // precaches several files at a time and reports progress to the
+            // "Updating the app…" overlay. It also holds the push handlers
+            // and the reload of open tabs onto a new build.
+            strategies: 'injectManifest',
+            srcDir: 'src/sw',
+            filename: 'sw.ts',
+            injectManifest: {
               // ttf + pdf: the inventory list's brand fonts and letterhead,
               // fetched on Print, so printing works offline and across deploys.
               globPatterns: ['**/*.{js,css,html,svg,png,woff2,ttf,pdf}'],
               // Static assets served straight from dist — never route their
               // requests through the SW app-shell fallback or precache them.
+              // Also denied for navigation in src/sw/sw.ts; add a new static directory to both.
               globIgnores: ['agreements/**', 'email/**'],
-              navigateFallback: 'index.html',
-              navigateFallbackDenylist: [/^\/agreements\//, /^\/email\//],
             },
           }),
         ]),
   ],
   resolve: {
     tsconfigPaths: true,
+  },
+  build: {
+    rolldownOptions: {
+      // Chunks import each other by stable keys, and index.html maps the keys
+      // to the hashed files, so one changed chunk no longer renames the rest.
+      experimental: {
+        chunkImportMap: { baseUrl: '/', fileName: 'importmap.json' },
+      },
+      output: {
+        codeSplitting: {
+          groups: [
+            // pdf-lib imports no app code, so its own chunk keeps the same
+            // hash across deploys and an update never downloads it again.
+            { name: 'pdf-lib', test: /node_modules[\\/](pdf-lib|@pdf-lib)[\\/]/ },
+          ],
+        },
+      },
+    },
   },
   test: {
     environment: 'edge-runtime',

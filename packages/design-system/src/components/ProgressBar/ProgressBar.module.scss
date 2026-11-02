@@ -1,0 +1,18 @@
+.root {
+	inline-size: 100%;
+}
+
+.track {
+	overflow: hidden;
+	block-size: var(--jf-spacing-close);
+	background: var(--jf-border-subtle);
+	border-radius: var(--jf-radius-full);
+}
+
+.range {
+	block-size: 100%;
+	background: var(--jf-fg-default);
+	border-radius: var(--jf-radius-full);
+	/* stylelint-disable-next-line plugin/no-low-performance-animation-properties -- Ark sets the range width from the value, so the fill can only grow by animating its size */
+	transition: inline-size var(--jf-animation-duration-default) ease-out;
+}

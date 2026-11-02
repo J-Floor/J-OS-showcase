@@ -4,10 +4,6 @@ import { toaster } from "../../../shared/toaster.ts";
 import type { Item } from "../data/inventoryData.ts";
 
 import { downloadPdf } from "./downloadPdf.ts";
-import {
-	generateInventoryListPdf,
-	inventoryListPdfFilename,
-} from "./inventoryListPdf.ts";
 import { loadInventoryPdfAssets } from "./inventoryPdfAssets.ts";
 
 const PRINT_FAILED = "Could not print the list. Try again.";
@@ -23,24 +19,35 @@ const download = Result.fromThrowable(downloadPdf);
  * toolbar Print button (prints the whole list). Rows are drawn in the order
  * given — `generateInventoryListPdf` does not sort — so the caller decides the
  * order (the toolbar passes the list in its query order).
+ *
+ * The PDF code (pdf-lib) loads on the first Print, so the inventory page does
+ * not download it up front.
  */
 export async function printInventoryList(rows: Item[]): Promise<void> {
 	const now = new Date();
 	const printed = await ResultAsync.fromPromise(
-		loadInventoryPdfAssets(),
+		Promise.all([
+			import("./inventoryListPdf.ts"),
+			loadInventoryPdfAssets(),
+		]),
 		() => PRINT_FAILED
 	)
-		.andThen((assets) => assets.mapErr(() => PRINT_FAILED))
-		.andThen((assets) =>
-			ResultAsync.fromPromise(
-				generateInventoryListPdf(rows, { now, assets }),
-				() => PRINT_FAILED
-			)
+		.andThen(([pdf, assets]) =>
+			assets
+				.mapErr(() => PRINT_FAILED)
+				.map((loaded) => ({ pdf, assets: loaded }))
 		)
-		.andThen((bytes) =>
-			download(bytes, inventoryListPdfFilename(now)).mapErr(
+		.andThen(({ pdf, assets }) =>
+			ResultAsync.fromPromise(
+				pdf.generateInventoryListPdf(rows, { now, assets }),
 				() => PRINT_FAILED
-			)
+			).map((bytes) => ({
+				bytes,
+				filename: pdf.inventoryListPdfFilename(now),
+			}))
+		)
+		.andThen(({ bytes, filename }) =>
+			download(bytes, filename).mapErr(() => PRINT_FAILED)
 		);
 	if (printed.isErr())
 		toaster.create({ type: "error", title: printed.error });

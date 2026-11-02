@@ -90,6 +90,10 @@ export {
 } from "./components/Deferred/Deferred.tsx";
 export { Spinner, type SpinnerProps } from "./components/Spinner/Spinner.tsx";
 export {
+	ProgressBar,
+	type ProgressBarProps,
+} from "./components/ProgressBar/ProgressBar.tsx";
+export {
 	ExceptionDisplay,
 	type ExceptionDisplayProps,
 } from "./components/ExceptionDisplay/ExceptionDisplay.tsx";

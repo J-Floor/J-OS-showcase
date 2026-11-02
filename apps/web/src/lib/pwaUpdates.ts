@@ -1,4 +1,10 @@
-import { createSignal } from "solid-js";
+import { createSignal, type Accessor } from "solid-js";
+
+import {
+	readPrecacheProgress,
+	UPDATE_CHANNEL,
+	type UpdateProgress,
+} from "./updateProgress.ts";
 
 /** Minimal shape of `document` this module needs: enough to listen for
  * visibility changes and read the current state. A real `EventTarget` (or
@@ -82,6 +88,7 @@ export function startPwaUpdateChecks(
 	};
 }
 
+/** How long the overlay waits without any sign of progress before hiding. */
 export const UPDATE_OVERLAY_TIMEOUT_MS = 20_000;
 
 const [updating, setUpdating] = createSignal(false);
@@ -93,6 +100,27 @@ export const isUpdating = updating;
 /** Test-only: force the signal, since it is a module-level singleton. */
 export function setUpdatingForTest(isForced: boolean): void {
 	setUpdating(isForced);
+}
+
+const [progress, setProgress] = createSignal<UpdateProgress | undefined>();
+
+/** The new worker's precache progress while the update overlay shows;
+ * `undefined` until its first message. Drives the overlay's progress bar. */
+export const updateProgress: Accessor<UpdateProgress | undefined> = progress;
+
+/** Test-only: force the progress, since it is a module-level singleton. */
+export function setUpdateProgressForTest(
+	value: UpdateProgress | undefined
+): void {
+	setProgress(value);
+}
+
+type ChannelLike = Pick<EventTarget, "addEventListener">;
+
+function defaultChannel(): ChannelLike | null {
+	return typeof BroadcastChannel === "undefined"
+		? null
+		: new BroadcastChannel(UPDATE_CHANNEL);
 }
 
 /** The slice of `navigator.serviceWorker` this module needs. */
@@ -107,6 +135,8 @@ export type ReloadOnUpdateDeps = {
 	/** `null` means no service-worker support. */
 	container?: ServiceWorkerContainerLike | null;
 	reload?: () => void;
+	/** The new worker's progress channel. `null` means none. */
+	channel?: ChannelLike | null;
 };
 
 function defaultContainer(): ServiceWorkerContainerLike | null {
@@ -126,6 +156,9 @@ function defaultContainer(): ServiceWorkerContainerLike | null {
  * app after a deploy" case. So this listens for `controllerchange` directly
  * and reloads once. A first install (no controller at load) also fires
  * `controllerchange` through `clientsClaim`, and must not reload.
+ *
+ * The new worker also reports its precache progress on a BroadcastChannel;
+ * each message shows the overlay and restarts its timeout.
  *
  * Returns a function to call with the registration once it exists: it shows
  * the overlay for a worker already installing, and for any later
@@ -155,14 +188,24 @@ export function startReloadOnUpdate(
 	});
 
 	let hideTimer: ReturnType<typeof setTimeout> | undefined;
+	/** Shows the overlay and (re)starts its timeout. */
 	function showUpdating(): void {
 		setUpdating(true);
 		clearTimeout(hideTimer);
-		hideTimer = setTimeout(
-			() => setUpdating(false),
-			UPDATE_OVERLAY_TIMEOUT_MS
-		);
+		hideTimer = setTimeout(() => {
+			setUpdating(false);
+			setProgress(undefined);
+		}, UPDATE_OVERLAY_TIMEOUT_MS);
 	}
+
+	const channel =
+		deps.channel === undefined ? defaultChannel() : deps.channel;
+	channel?.addEventListener("message", (event) => {
+		const received = readPrecacheProgress((event as MessageEvent).data);
+		if (!received) return;
+		setProgress(received);
+		showUpdating();
+	});
 
 	return function watchRegistration(registration): void {
 		if (!registration) return;

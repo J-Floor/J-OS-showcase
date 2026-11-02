@@ -99,6 +99,9 @@
         "vite-plugin-pwa": "catalog:",
         "vite-plugin-solid": "catalog:",
         "vitest": "catalog:",
+        "workbox-core": "^7.4.1",
+        "workbox-precaching": "^7.4.1",
+        "workbox-routing": "^7.4.1",
       },
     },
     "packages/config-eslint": {
