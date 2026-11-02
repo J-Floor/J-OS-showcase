@@ -18,7 +18,6 @@ import { SITE_TIMEZONE, todayIn } from "../../../../convex/lib/time.ts";
 import type { PerkRequestRow } from "../../../../convex/perkRequests.ts";
 import { downloadBlob } from "../../../shared/downloadBlob.ts";
 
-import { requestEntity } from "./requestEntity.ts";
 import { capNotice, RequestsTab } from "./RequestsTab.tsx";
 import { perkRequestsCsv } from "./toCsv.ts";
 
@@ -40,6 +39,32 @@ vi.mock("../PerkRequestStatusSelect.tsx", () => ({
 		<span data-testid="status-select">
 			{props.requestId}:{props.status}
 		</span>
+	),
+}));
+
+// A stub that shows what the tab opens its sheet on: open or not, the
+// request, and the prev/next it hands the header. RequestSheet.test.tsx
+// covers the real sheet.
+vi.mock("./RequestSheet.tsx", () => ({
+	RequestSheet: (props: {
+		open: boolean;
+		prebuild?: boolean;
+		request?: { _id: string };
+		nav?: { onPrev: () => void; onNext: () => void };
+	}) => (
+		<div
+			data-testid="request-sheet"
+			data-open={String(props.open)}
+			data-prebuild={String(props.prebuild ?? false)}
+			data-request={props.request?._id ?? ""}
+		>
+			<button type="button" onClick={() => props.nav?.onPrev()}>
+				Previous request
+			</button>
+			<button type="button" onClick={() => props.nav?.onNext()}>
+				Next request
+			</button>
+		</div>
 	),
 }));
 
@@ -317,16 +342,21 @@ test("every row keeps the status select for its own request, in every grouping",
 	}
 });
 
-test("a row opens its request's sheet as a peek, over the Requests tab", async () => {
+/** The request the tab's sheet is open on, or "" while it is closed. */
+function sheetRequest(): string {
+	const sheet = screen.getByTestId("request-sheet");
+	return sheet.dataset.open === "true" ? (sheet.dataset.request ?? "") : "";
+}
+
+test("a row opens its request's sheet on the tab, on ?request=, not a peek", async () => {
 	const history = renderTab();
 	fireEvent.click(await screen.findByText("ben Sample"));
 	await waitFor(() => {
-		expect(history.get()).toContain("open=request%3Ar4");
+		expect(sheetRequest()).toBe("r4");
+		expect(history.get()).toContain("request=r4");
 	});
 	expect(history.get()).toContain("tab=requests");
-	// Not the perk's: the request sheet is what the row morphs into.
-	expect(history.get()).not.toContain("perk%3A");
-	expect(history.get()).not.toContain("perk=");
+	expect(history.get()).not.toContain("open=");
 });
 
 test("a row morphs as its request, so the request sheet closes back into it", async () => {
@@ -336,28 +366,53 @@ test("a row morphs as its request, so the request sheet closes back into it", as
 	expect(row).toHaveAttribute(MORPH_OF, "r4");
 });
 
-test("a touch on a row loads the request's peek before the open: a touch has no hover", async () => {
-	const preload = vi
-		.spyOn(requestEntity.peek!, "preload")
-		.mockResolvedValue(undefined as never);
-	try {
-		renderTab();
-		const cell = await screen.findByText("ben Sample");
-		expect(preload).not.toHaveBeenCalled();
-		fireEvent.pointerDown(cell, { pointerType: "touch" });
-		expect(preload).toHaveBeenCalled();
-	} finally {
-		preload.mockRestore();
-	}
+test("a touch on a row builds the sheet's parts before the open: a touch has no hover", async () => {
+	renderTab();
+	const cell = await screen.findByText("ben Sample");
+	const sheet = screen.getByTestId("request-sheet");
+	expect(sheet.dataset.prebuild).toBe("false");
+	fireEvent.pointerDown(cell, { pointerType: "touch" });
+	await waitFor(() => {
+		expect(sheet.dataset.prebuild).toBe("true");
+	});
+	expect(sheet.dataset.open).toBe("false");
 });
 
-test("a request link opens the request as a peek over the tab, and drops the link's own param", async () => {
+test("a request link opens its sheet on the tab and keeps the link", async () => {
 	const history = renderTab(true, "&request=r2");
 	await waitFor(() => {
-		expect(history.get()).toContain("open=request%3Ar2");
+		expect(sheetRequest()).toBe("r2");
 	});
-	expect(history.get()).not.toContain("request=r2");
-	expect(history.get()).toContain("tab=requests");
+	expect(history.get()).toContain("request=r2");
+	expect(history.get()).not.toContain("open=");
+});
+
+test("prev and next step through the requests in the order on screen", async () => {
+	// Status groups: Requested (r2, r3), Contacted (r1), Granted (r5),
+	// Declined (r4).
+	const history = renderTab(true, "&request=r3");
+	await waitFor(() => {
+		expect(sheetRequest()).toBe("r3");
+	});
+	fireEvent.click(screen.getByRole("button", { name: "Next request" }));
+	await waitFor(() => {
+		expect(sheetRequest()).toBe("r1");
+		expect(history.get()).toContain("request=r1");
+	});
+	fireEvent.click(screen.getByRole("button", { name: "Previous request" }));
+	fireEvent.click(screen.getByRole("button", { name: "Previous request" }));
+	await waitFor(() => {
+		expect(sheetRequest()).toBe("r2");
+	});
+});
+
+test("D does nothing while a request's sheet is open over the tab", async () => {
+	renderTab(true, "&request=r2");
+	await waitFor(() => {
+		expect(sheetRequest()).toBe("r2");
+	});
+	fireEvent.keyDown(document.body, { key: "d" });
+	expect(downloadBlob).not.toHaveBeenCalled();
 });
 
 test("a click on the status select opens nothing", async () => {
@@ -369,6 +424,7 @@ test("a click on the status select opens nothing", async () => {
 		setTimeout(resolve, 0);
 	});
 	expect(history.get()).not.toContain("open=");
+	expect(history.get()).not.toContain("request=");
 });
 
 test("Download CSV saves every loaded row as today's file, whatever the grouping", async () => {

@@ -90,7 +90,7 @@ const GROUP_COLUMNS: Record<
 const VISIBLE_COLUMNS: JfColumnDefinition<PerkRequestRow>[] = [
 	{ accessorKey: "requesterName", header: "Requester", dataType: "string" },
 	{
-		id: "ventureName",
+		id: "venture",
 		header: "Venture",
 		dataType: "string",
 		size: SHORT_TEXT_SIZE,
@@ -99,7 +99,7 @@ const VISIBLE_COLUMNS: JfColumnDefinition<PerkRequestRow>[] = [
 	},
 	{ id: "perk", header: "Perk", dataType: "string", accessorFn: perkLabel },
 	{
-		id: "contactName",
+		id: "contact",
 		header: "Contact",
 		dataType: "string",
 		accessorFn: (row) => row.contactName ?? "",

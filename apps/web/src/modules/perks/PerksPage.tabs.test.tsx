@@ -16,28 +16,31 @@ import { AbilityProvider, type Role } from "../../lib/ability.tsx";
 import styles from "./PerksPage.module.scss";
 import { PerksPage } from "./PerksPage.tsx";
 
-const { perkRows, perkSheetProps, queried } = vi.hoisted(() => ({
-	perkRows: [
-		{
-			_id: "perk1",
-			_creationTime: 0,
-			partner: "Alpha Labs",
-			title: "Cloud credits",
-			terms: "Credits for a first project.",
-			category: "cloud",
-			contactId: "person1",
-			contactName: "Anna Board",
-			createdAt: 0,
-		},
-	],
-	perkSheetProps: [] as Record<string, unknown>[],
-	// Every query the page has subscribed to, by name, in order.
-	queried: [] as string[],
-}));
+const { perkRows, perkSheetProps, queried, requests, requestSheetProps } =
+	vi.hoisted(() => ({
+		perkRows: [
+			{
+				_id: "perk1",
+				_creationTime: 0,
+				partner: "Alpha Labs",
+				title: "Cloud credits",
+				terms: "Credits for a first project.",
+				category: "cloud",
+				contactId: "person1",
+				contactName: "Anna Board",
+				createdAt: 0,
+			},
+		],
+		perkSheetProps: [] as Record<string, unknown>[],
+		// Every query the page has subscribed to, by name, in order.
+		queried: [] as string[],
+		// The requests list: empty unless a test puts a request in it.
+		requests: [] as Record<string, unknown>[],
+		requestSheetProps: [] as Record<string, unknown>[],
+	}));
 
 // Routed by the query's name: `api` refs are proxies, not `===`-stable. Only
-// the perks list has rows; the requests list is empty.
-const NO_REQUESTS = { requests: [], capped: false };
+// the perks list has rows; the requests list has `requests`.
 vi.mock("convex-solidjs", () => ({
 	useQuery: (query: Parameters<typeof getFunctionName>[0]) => {
 		const name = getFunctionName(query);
@@ -46,7 +49,7 @@ vi.mock("convex-solidjs", () => ({
 			data: (): unknown => {
 				if (name === "perks:listPerks") return perkRows;
 				return name === "perkRequests:listPerkRequests"
-					? NO_REQUESTS
+					? { requests, capped: false }
 					: [];
 			},
 			error: () => {},
@@ -65,9 +68,18 @@ vi.mock("./PerkSheet.tsx", () => ({
 	},
 }));
 
+vi.mock("./requests/RequestSheet.tsx", () => ({
+	RequestSheet: (props: Record<string, unknown>) => {
+		requestSheetProps.push(props);
+		return <div>request-sheet</div>;
+	},
+}));
+
 afterEach(() => {
 	cleanup();
 	perkSheetProps.length = 0;
+	requestSheetProps.length = 0;
+	requests.length = 0;
 	queried.length = 0;
 });
 
@@ -200,5 +212,58 @@ test("picking the Requests tab by hand closes the open perk and drops ?perk=", a
 	expect(history.get()).not.toContain("perk=");
 	await waitFor(() => {
 		expect(lastSheet()?.open).toBe(false);
+	});
+});
+
+const REQUEST = {
+	_id: "request1",
+	perkId: "perk1",
+	personId: "person1",
+	requesterName: "Ada Example",
+	requesterEmail: "ada@example.com",
+	perkTitle: "Cloud credits",
+	partner: "Alpha Labs",
+	requestedAt: 0,
+	status: "requested",
+	statusAt: 0,
+};
+
+function lastRequestSheet() {
+	return requestSheetProps.at(-1);
+}
+
+test("a ?request= link on the Perks tab switches to Requests and opens the request's sheet", async () => {
+	requests.push(REQUEST);
+	const history = renderAt("/perks?request=request1", "board");
+	await waitFor(() => {
+		expect(screen.getByRole("tab", { name: "Requests" })).toHaveAttribute(
+			"aria-selected",
+			"true"
+		);
+	});
+	await waitFor(() => {
+		expect(lastRequestSheet()?.open).toBe(true);
+	});
+	expect(
+		(lastRequestSheet()?.request as { _id: string } | undefined)?._id
+	).toBe("request1");
+	expect(history.get()).toContain("tab=requests");
+	expect(history.get()).toContain("request=request1");
+	expect(history.get()).not.toContain("open=");
+});
+
+test("picking the Perks tab by hand closes the open request and drops ?request=", async () => {
+	requests.push(REQUEST);
+	const history = renderAt("/perks?tab=requests&request=request1", "board");
+	await waitFor(() => {
+		expect(lastRequestSheet()?.open).toBe(true);
+	});
+	fireEvent.click(screen.getByRole("tab", { name: "Perks" }));
+	await waitFor(() => {
+		expect(history.get()).toContain("tab=perks");
+	});
+	expect(history.get()).not.toContain("request=");
+	await waitFor(() => {
+		expect(lastRequestSheet()?.open).toBe(false);
 	});
 });

@@ -1,7 +1,8 @@
-import { Accordion, PropertyRow, Sheet } from "@j-os/design-system";
+import { Accordion, PropertyRow, Sheet, morphPart } from "@j-os/design-system";
 import { Show, createSignal, type JSX } from "solid-js";
 
 import type { PerkRequestRow } from "../../../../convex/perkRequests.ts";
+import type { SheetNavState } from "../../../lib/createSheetNav.ts";
 import { ActionBar } from "../../../shared/actions/ActionBar.tsx";
 import { ActionKeys } from "../../../shared/actions/createActionKeys.ts";
 import { EntitySheetNav } from "../../../shared/entity/EntitySheetNav.tsx";
@@ -28,6 +29,8 @@ type RequestSheetProps = SheetOpenProps & {
 	/** Open for a request whose row hasn't loaded yet. Wins over
 	 *  `request`. */
 	loading?: boolean;
+	/** The Requests tab's prev/next; a peek has none. */
+	nav?: SheetNavState;
 };
 
 /** `Sheet.Skeleton`'s placeholder while the request loads: shaped like the
@@ -39,7 +42,10 @@ function RequestFieldsPlaceholder(): JSX.Element {
 				<PropertyRow field={requestFields.requester}>
 					<span>placeholder</span>
 				</PropertyRow>
-				<PropertyRow field={requestFields.perk}>
+				<PropertyRow
+					label={requestFields.perk.label}
+					icon={requestFields.perk.icon}
+				>
 					<span>placeholder</span>
 				</PropertyRow>
 			</SheetSection>
@@ -47,10 +53,10 @@ function RequestFieldsPlaceholder(): JSX.Element {
 	);
 }
 
-/** Who asked as the title, the perk under it, and the way out: the link to
- *  the Requests tab on a peek, and close. */
+/** Who asked as the title, the perk under it, and the way out: prev/next on
+ *  the Requests tab, the link to it on a peek, and close. */
 function RequestSheetHeader(
-	props: Pick<RequestSheetProps, "request" | "loading">
+	props: Pick<RequestSheetProps, "request" | "loading" | "nav">
 ): JSX.Element {
 	return (
 		<Sheet.Header>
@@ -58,14 +64,21 @@ function RequestSheetHeader(
 				<Sheet.Title loading={props.loading}>
 					{props.request?.requesterName ?? ""}
 				</Sheet.Title>
-				<Show when={!props.loading && props.request}>
-					{(request) => (
-						<p class={styles.subtitle}>{request().perkTitle}</p>
+				{/* Always there, as the title is: a marked element swapped in
+				    mid-transition would skip the morph. Keyed as the perk,
+				    so the row's Perk cell flies into it and back; not while
+				    loading, as the title: nothing flies into an empty line. */}
+				<p
+					class={styles.subtitle}
+					{...morphPart(
+						props.loading ? undefined : requestFields.perk
 					)}
-				</Show>
+				>
+					{props.loading ? "" : (props.request?.perkTitle ?? "")}
+				</p>
 			</div>
 			<Sheet.HeaderActions>
-				<EntitySheetNav />
+				<EntitySheetNav nav={props.nav} />
 				<Sheet.Close />
 			</Sheet.HeaderActions>
 		</Sheet.Header>
@@ -105,6 +118,7 @@ export function RequestSheet(props: RequestSheetProps): JSX.Element {
 			<RequestSheetHeader
 				request={props.request}
 				loading={props.loading}
+				nav={props.nav}
 			/>
 
 			<Sheet.Skeleton>

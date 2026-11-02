@@ -1,18 +1,15 @@
 import { EmptyState, Segment, Table, Tabs } from "@j-os/design-system";
 import { useSearchParams } from "@solidjs/router";
-import {
-	createEffect,
-	createSignal,
-	For,
-	Show,
-	type Accessor,
-	type JSX,
-} from "solid-js";
+import { createSignal, For, Show, type Accessor, type JSX } from "solid-js";
 
 import { api } from "../../../../convex/_generated/api";
 import { PERK_REQUEST_LIST_CAP } from "../../../../convex/lib/perks.ts";
 import { LOCALE, SITE_TIMEZONE, todayIn } from "../../../../convex/lib/time.ts";
 import type { PerkRequestRow } from "../../../../convex/perkRequests.ts";
+import {
+	createSheetNav,
+	type SheetNavState,
+} from "../../../lib/createSheetNav.ts";
 import { ActionButton } from "../../../shared/actions/ActionButton.tsx";
 import { bindPageKeys } from "../../../shared/actions/sheetActions.tsx";
 import {
@@ -22,9 +19,11 @@ import {
 } from "../../../shared/actions/shortcuts.ts";
 import { useQuery } from "../../../shared/data/useQuery.ts";
 import { downloadBlob } from "../../../shared/downloadBlob.ts";
-import { warmPeek } from "../../../shared/entity/lazyPeek.tsx";
-import { useOpenPeek } from "../../../shared/entity/openEntity.ts";
-import { PEEK_PARAM, peekValue } from "../../../shared/entity/peekParam.ts";
+import {
+	createEntitySelection,
+	type EntitySelection,
+} from "../../../shared/entity/createEntitySelection.ts";
+import { PEEK_PARAM } from "../../../shared/entity/peekParam.ts";
 import { ICONS } from "../../../shared/icons.ts";
 
 import {
@@ -36,6 +35,7 @@ import {
 } from "./requestColumns.tsx";
 import { requestEntity } from "./requestEntity.ts";
 import { prefetchRequestSheet } from "./requestQueries.ts";
+import { RequestSheet } from "./RequestSheet.tsx";
 import styles from "./RequestsTab.module.scss";
 import { perkRequestsCsv } from "./toCsv.ts";
 
@@ -121,17 +121,16 @@ function RequestsBar(props: {
 	);
 }
 
-/** One grouping's table. A row opens its request's sheet, which morphs
- *  out of the row and back into it; the status select edits in place. */
+/** One grouping's table. A row opens its request's sheet on the tab, which
+ *  morphs out of the row and back into it; the status select edits in
+ *  place. */
 function RequestsTable(props: {
 	grouping: RequestGrouping;
 	rows: Rows;
+	selection: EntitySelection<PerkRequestRow>;
+	onDisplayedRowsChange: (rows: PerkRequestRow[]) => void;
 }): JSX.Element {
 	const [params] = useSearchParams();
-	const openPeek = useOpenPeek();
-	function openRequest(row: PerkRequestRow) {
-		openPeek(requestEntity, row._id);
-	}
 	return (
 		<Table.Root
 			columns={requestColumns(props.grouping)}
@@ -142,14 +141,17 @@ function RequestsTable(props: {
 			// them mounts. The `.table` box around gives it a bounded height.
 			virtualize
 			initialColumnSorting={requestSorting(props.grouping)}
+			onDisplayedRowsChange={props.onDisplayedRowsChange}
 			focusableRows
-			// The peek owns the keyboard while it is open.
-			suppressFocus={params[PEEK_PARAM] !== undefined}
-			onRowClick={openRequest}
-			onRowActivate={openRequest}
+			// The sheet, or a peek opened over it, owns the keyboard.
+			suppressFocus={
+				props.selection.open() || params[PEEK_PARAM] !== undefined
+			}
+			onRowClick={props.selection.openRow}
+			onRowActivate={props.selection.openRow}
 			onRowHoverIntent={(row) => {
-				warmPeek(requestEntity);
 				prefetchRequestSheet(row._id);
+				props.selection.intend();
 			}}
 		>
 			<Table.Empty>
@@ -163,41 +165,62 @@ function RequestsTable(props: {
 	);
 }
 
-/** A request's link (`?request=<id>`, from the bell or an email) opens it
- *  as a peek over the tab, in the link's place: the peek is where a request
- *  shows, and the param left behind would open it again. */
-function useRequestLink(): void {
-	const [params, setParams] = useSearchParams();
-	createEffect(() => {
-		const requestId = params[requestEntity.param];
-		if (typeof requestId !== "string" || requestId === "") return;
-		setParams(
-			{
-				[requestEntity.param]: undefined,
-				[PEEK_PARAM]: peekValue(requestEntity, requestId),
-			},
-			{ replace: true }
-		);
+/** The tab's request sheet, on `?request=<id>`: a row, the bell or an email
+ *  opens it, Back closes it. Prev/next walk the rows as the table shows
+ *  them (grouped and sorted). A link that lands on another tab asks for
+ *  this one first (`onNeedTab`). */
+function createRequestSelection(options: {
+	rows: Rows;
+	active: Accessor<boolean>;
+	onNeedTab: () => void;
+}): {
+	selection: EntitySelection<PerkRequestRow>;
+	nav: SheetNavState;
+	setDisplayed: (rows: PerkRequestRow[]) => void;
+} {
+	const selection = createEntitySelection<PerkRequestRow>({
+		rows: options.rows,
+		param: requestEntity.param,
+		active: options.active,
+		onNeedTab: options.onNeedTab,
 	});
+	const [displayed, setDisplayed] = createSignal<PerkRequestRow[]>([]);
+	const nav = createSheetNav({
+		items: displayed,
+		currentId: selection.requestedId,
+		onSelect: selection.openRow,
+	});
+	return { selection, nav, setDisplayed };
 }
 
 /**
  * Board/admin: every perk request, newest first, grouped by status (or by
  * perk, requester or month), each status editable in place. A row, or a
- * request's link, opens the request's sheet over the tab. The page mounts it
- * the first time its tab is shown, so the query starts then.
+ * request's link (`?request=<id>`), opens the request's sheet on the tab.
+ * The page mounts it the first time its tab is shown, or a request link
+ * arrives, so the query starts then.
  */
 export function RequestsTab(props: {
 	/** Whether the Requests tab is the one on screen: the tab stays mounted
-	 *  behind the others, and its `D` key must not fire from them. */
+	 *  behind the others, and its `D` key and `?request=` must not act from
+	 *  them. */
 	active: Accessor<boolean>;
+	/** A `?request=` link arrived while another tab was showing: switch to
+	 *  this one so the sheet can open. */
+	onNeedTab?: () => void;
 }): JSX.Element {
 	const [params] = useSearchParams();
 	const list = useQuery(api.perkRequests.listPerkRequests, {});
-	useRequestLink();
 	function rows(): PerkRequestRow[] | undefined {
 		return list.data()?.requests;
 	}
+	const { selection, nav, setDisplayed } = createRequestSelection({
+		rows,
+		active: () => props.active(),
+		onNeedTab: () => {
+			props.onNeedTab?.();
+		},
+	});
 	// Local to the tab: a reload starts on Status again.
 	const [grouping, setGrouping] = createSignal<RequestGrouping>("status");
 	return (
@@ -205,9 +228,11 @@ export function RequestsTab(props: {
 			<Tabs.Actions value="requests">
 				<DownloadCsvButton
 					rows={rows}
-					// A peek over the tab owns the keyboard.
+					// The sheet, or a peek over the tab, owns the keyboard.
 					active={() =>
-						props.active() && params[PEEK_PARAM] === undefined
+						props.active() &&
+						!selection.open() &&
+						params[PEEK_PARAM] === undefined
 					}
 				/>
 			</Tabs.Actions>
@@ -216,23 +241,39 @@ export function RequestsTab(props: {
 				grouping={grouping}
 				onGroupingChange={setGrouping}
 			/>
-			{/* A press on a row loads the request's peek, as resting on one
-			    does (`onRowHoverIntent`): a touch has no hover, and a peek
-			    still loading on the first open has nothing to morph into. */}
+			{/* A press on a row builds the sheet's parts, as resting on one
+			    does (`intend` on hover intent): a touch has no hover, and a
+			    first open with no parts built has no values to fly. */}
 			<div
 				class={styles.table}
 				onPointerDown={() => {
-					warmPeek(requestEntity);
+					selection.intend();
 				}}
 			>
 				{/* `Table` reads `groupBy` and its opening sort once, at
-				    setup: each grouping gets a table of its own. */}
+				    setup: each grouping gets a table of its own. The sheet
+				    stays outside, so a regroup does not remount it. */}
 				<Show when={grouping()} keyed>
 					{(current) => (
-						<RequestsTable grouping={current} rows={rows} />
+						<RequestsTable
+							grouping={current}
+							rows={rows}
+							selection={selection}
+							onDisplayedRowsChange={setDisplayed}
+						/>
 					)}
 				</Show>
 			</div>
+			<RequestSheet
+				open={selection.open()}
+				prebuild={selection.prebuild()}
+				onOpenChange={(isOpen) => {
+					if (!isOpen) selection.close();
+				}}
+				request={selection.selected()}
+				loading={selection.loading()}
+				nav={nav}
+			/>
 		</div>
 	);
 }

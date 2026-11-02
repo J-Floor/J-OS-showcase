@@ -12,6 +12,7 @@ import {
 	requestSorting,
 	type RequestGrouping,
 } from "./requestColumns.tsx";
+import { requestFields } from "./RequestDetails.tsx";
 
 const ROW: PerkRequestRow = {
 	_id: "request1" as Id<"perkRequests">,
@@ -97,15 +98,27 @@ test("every grouping keeps the same visible columns, the status select included"
 		const visible = requestColumns(grouping.value).slice(1);
 		expect(visible.map((column) => columnId(column))).toEqual([
 			"requesterName",
-			"ventureName",
+			"venture",
 			"perk",
-			"contactName",
+			"contact",
 			"requestedAt",
 			"note",
 			"status",
 		]);
 		expect(visible.at(-1)?.disableRowClick).toBe(true);
 	}
+});
+
+test("each value the request sheet shows has its column under the same key, so the cell and the sheet's value morph into each other", () => {
+	const ids = requestColumns("status").map((column) => columnId(column));
+	for (const field of [
+		requestFields.venture,
+		requestFields.perk,
+		requestFields.contact,
+		requestFields.requestedAt,
+		requestFields.note,
+	])
+		expect(ids).toContain(field.key);
 });
 
 test("the opening sort orders perk and requester groups by name, and rows newest first", () => {

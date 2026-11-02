@@ -32,11 +32,16 @@ function BoardPerks(): JSX.Element {
 		return tabKeyOf(TAB_KEYS, params.tab, "perks");
 	}
 
-	/** Whether the Requests tab has been on screen. It turns true the first
-	 *  time it is, and stays true: the tab mounts then and stays mounted, so
-	 *  a visit that never opens it never subscribes to every request. */
+	/** Whether the Requests tab has been on screen, or a request's link
+	 *  (`?request=`) asked for it. It turns true the first time, and stays
+	 *  true: the tab mounts then and stays mounted, so a visit that never
+	 *  opens it never subscribes to every request. A link that lands on the
+	 *  Perks tab mounts it, and its `onNeedTab` switches to it. */
 	const wasVisited = createMemo<boolean>(
-		(seen) => seen || activeTab() === "requests",
+		(seen) =>
+			seen ||
+			activeTab() === "requests" ||
+			typeof params.request === "string",
 		false
 	);
 
@@ -55,9 +60,14 @@ function BoardPerks(): JSX.Element {
 				set: (value) => {
 					// Only a tab picked by hand (zag emits `onValueChange` from its
 					// own events, never from a controlled change). It abandons the
-					// perk the Perks tab had open: left in the URL it would reopen
-					// on refresh, or pull the board back through `onNeedTab` below.
-					setParams({ tab: value, perk: undefined });
+					// perk or request the other tab had open: left in the URL it
+					// would reopen on refresh, or pull the board back through an
+					// `onNeedTab` below.
+					setParams({
+						tab: value,
+						perk: undefined,
+						request: undefined,
+					});
 				},
 				fallback: "perks",
 				keys: TAB_KEYS,
@@ -96,7 +106,13 @@ function BoardPerks(): JSX.Element {
 			</Tabs.Content>
 			<Tabs.Content value="requests" class={styles.panel}>
 				<Show when={wasVisited()}>
-					<RequestsTab active={() => activeTab() === "requests"} />
+					<RequestsTab
+						active={() => activeTab() === "requests"}
+						onNeedTab={() => {
+							// Keep `request`: it is the id this switch exists to open.
+							setParams({ tab: "requests" }, { replace: true });
+						}}
+					/>
 				</Show>
 			</Tabs.Content>
 		</Tabs.Root>

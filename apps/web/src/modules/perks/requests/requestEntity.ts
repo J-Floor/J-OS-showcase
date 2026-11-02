@@ -57,9 +57,9 @@ function useRows(): Accessor<PerkRequestRow[] | undefined> {
 	return rows;
 }
 
-/** Perk request entity descriptor: the board's, opened as a peek from the
- *  Requests tab, a perk's Requests section and the bell. Its link lands on
- *  the Requests tab, which opens it over the tab. */
+/** Perk request entity descriptor: the board's. Its link
+ *  (`?tab=requests&request=<id>`) opens the Requests tab's own sheet; from
+ *  any other page, and from a perk's Requests section, it opens as a peek. */
 export const requestEntity: EntityDescriptor<PerkRequestRow> = {
 	key: REQUEST_KEY,
 	route: "/perks",

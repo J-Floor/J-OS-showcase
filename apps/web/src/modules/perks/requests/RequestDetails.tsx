@@ -26,7 +26,9 @@ import styles from "./RequestSheet.module.scss";
 /** A request's fields, as its sheet lists them. */
 export const requestFields = defineFields({
 	requester: { label: "Requester", icon: ICONS.person },
-	perk: perkFields.title,
+	// The perk's title field under the key the Requests tab's Perk column
+	// has: spread whole, its own `title` key would clash with this one.
+	perk: { label: perkFields.title.label, icon: perkFields.title.icon },
 	venture: { label: "Venture", icon: ICONS.venture },
 	contact: perkFields.contact,
 	requestedAt: { label: "Requested on", icon: ICONS.date },
@@ -87,7 +89,12 @@ export function RequestDetailsSection(props: {
 					morphOf={props.request().personId}
 				/>
 			</PropertyRow>
-			<PropertyRow field={requestFields.perk}>
+			{/* Not keyed as the perk: the line under the sheet's title is,
+			    and one end has one value per key. */}
+			<PropertyRow
+				label={requestFields.perk.label}
+				icon={requestFields.perk.icon}
+			>
 				<PerkLink request={props.request} />
 			</PropertyRow>
 			<PropertyRow field={requestFields.venture}>

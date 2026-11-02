@@ -5,8 +5,8 @@ import type { PeekProps } from "../../../shared/entity/entityDescriptor.ts";
 
 import { RequestSheet } from "./RequestSheet.tsx";
 
-/** The request sheet over any page: a Requests row, a perk's Requests
- *  section, the bell's link to a request. */
+/** The request sheet over any page but its own tab: a perk's Requests
+ *  section, the bell or the palette away from the Requests tab. */
 export function RequestPeek(props: PeekProps<PerkRequestRow>): JSX.Element {
 	return (
 		<RequestSheet

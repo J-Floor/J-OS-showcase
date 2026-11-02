@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import {
 	HOVER_INTENT_MS,
+	MORPH_KEY,
 	MORPH_OF,
 	ShortcutPeekProvider,
 } from "@j-os/design-system";
@@ -154,6 +155,26 @@ test("heads with who asked, with the perk below", () => {
 	).toBeInTheDocument();
 	// Exactly the title: the perk's own row reads "Acme Cloud · Cloud credits".
 	expect(within(sheet()).getByText("Cloud credits").tagName).toBe("P");
+});
+
+test("the perk under the title is the sheet's one perk value, so the row's Perk cell flies into it and back", () => {
+	renderSheet();
+	// The column's id: the Requests tab's Perk cell carries the same key.
+	const perks = sheet().querySelectorAll(`[${MORPH_KEY}="perk"]`);
+	expect(perks).toHaveLength(1);
+	expect(perks[0].tagName).toBe("P");
+	expect(perks[0].textContent).toBe("Cloud credits");
+});
+
+test("while the request loads, the perk line is there but empty and flies nothing", () => {
+	renderSheet({ loading: true });
+	// Kept in place, not swapped in by a `Show` once the request lands: a
+	// marked element that appears mid-transition skips the whole morph.
+	const heading = within(sheet()).getByRole("heading").parentElement;
+	const line = heading?.querySelector("p");
+	expect(line).not.toBeNull();
+	expect(line?.textContent).toBe("");
+	expect(sheet().querySelector(`[${MORPH_KEY}="perk"]`)).toBeNull();
 });
 
 test("lists the request's details", () => {
