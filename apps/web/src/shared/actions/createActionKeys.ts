@@ -2,6 +2,7 @@ import { isTypingTarget, useOverlayCovered } from "@j-os/design-system";
 import { createHotkeys } from "@tanstack/solid-hotkeys";
 import { onCleanup, type JSX } from "solid-js";
 
+import { batchOf, isBatchable } from "./batchOf.ts";
 import { isRunning, runAction } from "./runAction.ts";
 import {
 	claimKeys,
@@ -104,10 +105,32 @@ export type ActionKeysOptions<Target> = {
 };
 
 /**
+ * Runs `action` over the checked `targets`, and says whether they all went
+ * through. An action with a `runBatch` runs once for all of them (`batchOf`:
+ * one confirm, as its selection-bar button); a cancel keeps the selection.
+ * Any other runs on each in turn, and stops at the first failure: the rest
+ * would fail the same way, and the selection must survive it.
+ */
+async function runOnChecked<Target>(
+	action: ActionDescriptor<Target>,
+	targets: Target[]
+): Promise<boolean> {
+	if (isBatchable(action)) {
+		const outcome = await runAction(batchOf(action), targets);
+		return outcome?.refused === false;
+	}
+	for (const target of targets) {
+		const outcome = await runAction(action, target);
+		if (outcome?.refused) return false;
+	}
+	return true;
+}
+
+/**
  * Binds one scope's action keys.
  *
  * Target resolution, in order: the scope's own target (the open sheet's row,
- * a create form, the page), then the checked rows,
+ * a create form, the page), then the checked rows (`runOnChecked`),
  * then the focused row, then nothing. Focus and a checked selection are already
  * mutually exclusive in the table, so at most one of those two can be set — the
  * order is what makes the sheet win over both.
@@ -137,7 +160,6 @@ export type ActionKeysOptions<Target> = {
  * stays open the keys stay quiet: they belong to what is on top. A sheet's
  * keys are therefore bound by a part rendered inside it (`ActionKeys`).
  */
-
 export function createActionKeys<Target>(
 	options: ActionKeysOptions<Target>
 ): void {
@@ -196,13 +218,7 @@ export function createActionKeys<Target>(
 				if (targets.length === 0) return;
 				event.preventDefault();
 				void (async () => {
-					for (const target of targets) {
-						// Stop at the first failure: the rest of the batch would
-						// fail the same way, and the selection must survive it.
-						const outcome = await runAction(action, target);
-						if (outcome?.refused) return;
-					}
-					onClearSelection();
+					if (await runOnChecked(action, targets)) onClearSelection();
 				})();
 				return;
 			}

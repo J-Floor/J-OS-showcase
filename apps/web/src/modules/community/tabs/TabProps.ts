@@ -31,3 +31,7 @@ export type TabProps = {
 	 */
 	active?: boolean;
 };
+
+/** Where a tab's row keys are bound: on the roster page, for the ringed
+ *  row, or inside a person sheet, for its person. */
+export type RowKeysPlace = "page" | "sheet";

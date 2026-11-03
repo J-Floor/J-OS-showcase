@@ -56,6 +56,13 @@ export type ActionDescriptor<Target> = {
 	 *  the page started on its own): its button shows the spinner. */
 	isBusy?: (target: Target) => boolean;
 	run: (target: Target) => Promise<ActionOutcome> | undefined;
+	/**
+	 * Runs the action over several targets at once: one confirm for all of
+	 * them, then each in turn, settling refused at the first failure. A key
+	 * pressed with rows checked runs it, as the selection bar's button does
+	 * (`batchOf`); an action without it runs `run` on each checked row.
+	 */
+	runBatch?: (targets: Target[]) => Promise<ActionOutcome> | undefined;
 };
 
 /** Which action holds each key, and how many bindings hold it, per scope. */

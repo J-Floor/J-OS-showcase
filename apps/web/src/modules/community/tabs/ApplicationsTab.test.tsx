@@ -62,6 +62,17 @@ vi.mock("../columns/applicationColumns.tsx", async () => {
 				header: "First name",
 				dataType: "string",
 			},
+			// The row's note composer, which `n` on a ringed row focuses.
+			{
+				id: "notes",
+				header: "Notes",
+				dataType: "string",
+				cell: () => (
+					<div data-note-cell>
+						<input aria-label="Row note" />
+					</div>
+				),
+			},
 		],
 		CurrentPersonContext: createContext(() => {}),
 	};
@@ -193,7 +204,13 @@ vi.mock("../actions/triage.ts", () => ({
 }));
 
 import { ApplicationsTab } from "./ApplicationsTab.tsx";
-import { openPanel, renderWithSelection } from "./testSelection.tsx";
+import {
+	checkRows,
+	chipOf,
+	openPanel,
+	peek,
+	renderWithSelection,
+} from "./testSelection.tsx";
 
 describe("ApplicationsTab", () => {
 	test("renders a group header per triage bucket", () => {
@@ -614,5 +631,93 @@ describe("ApplicationsTab", () => {
 		setLiveRows(rows.map((row) => ({ ...row })));
 		expect(keyedValue(document, "score")).toBe(box);
 		expect(box?.isConnected).toBe(true);
+	});
+
+	test("the selection bar's decisions show their keys while peeking", async () => {
+		renderWithSelection(
+			(selection) => <ApplicationsTab selection={selection} />,
+			{ peekable: true }
+		);
+		// app3 (To score) and app2 (Denied): every decision is on offer.
+		const bar = await checkRows(1, 3);
+		peek();
+		for (const [name, key] of [
+			[/Make guest/, "G"],
+			[/Make member/, "M"],
+			[/Turn down/, "X"],
+			[/Undo deny/, "U"],
+		] as const)
+			expect(chipOf(within(bar).getByRole("button", { name }))).toBe(key);
+	});
+
+	test("a selection-bar decision shows the spinner while its writes are in flight", async () => {
+		let settle: (() => void) | undefined;
+		makeMember.mockReturnValueOnce(
+			ResultAsync.fromSafePromise(
+				new Promise<undefined>((resolve) => {
+					settle = () => {
+						resolve(undefined);
+					};
+				})
+			)
+		);
+		renderWithSelection((selection) => (
+			<ApplicationsTab selection={selection} />
+		));
+		const bar = await checkRows(1);
+		const button = within(bar).getByRole("button", { name: /Make member/ });
+		fireEvent.click(button);
+		await waitFor(() => {
+			expect(button).toHaveAttribute("aria-busy", "true");
+		});
+		// Settled, so the run leaves the shared guard for the tests after;
+		// the batch then clears the selection, which takes the bar away.
+		settle?.();
+		await waitFor(() => {
+			expect(button).not.toBeInTheDocument();
+		});
+	});
+
+	test("N on a ringed row puts the cursor in its note cell", async () => {
+		renderWithSelection((selection) => (
+			<ApplicationsTab selection={selection} active />
+		));
+		const grid = screen.getByRole("grid");
+		grid.focus();
+		fireEvent.keyDown(grid, { key: "ArrowDown" });
+		fireEvent.keyDown(document.body, { key: "n" });
+		await waitFor(() => {
+			expect(document.activeElement).toHaveAttribute(
+				"aria-label",
+				"Row note"
+			);
+		});
+	});
+
+	test("N in the sheet starts a note there, once: the roster's note cell stays out of it", async () => {
+		const { container } = renderWithSelection((selection) => (
+			<ApplicationsTab selection={selection} active />
+		));
+		fireEvent.click(within(container).getAllByText("Ada")[0]);
+		const panel = await waitFor(() => {
+			const open = openPanel();
+			expect(open).not.toBeNull();
+			return open!;
+		});
+		const notes = await within(panel).findByRole("button", {
+			name: /^Notes/,
+		});
+		fireEvent.keyDown(document.body, { key: "n" });
+		await waitFor(() => {
+			expect(document.activeElement).toBe(
+				within(panel).getByRole("textbox", { name: "Add a note" })
+			);
+		});
+		expect(notes).toHaveAttribute("aria-expanded", "true");
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		expect(document.activeElement).not.toHaveAttribute(
+			"aria-label",
+			"Row note"
+		);
 	});
 });

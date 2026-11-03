@@ -16,8 +16,13 @@ import { For, createSignal, type JSX } from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
 
 import { ActionButton } from "./ActionButton.tsx";
+import { batchOf, type BatchableAction } from "./batchOf.ts";
 import { ActionKeys, createActionKeys } from "./createActionKeys.ts";
-import type { ActionDescriptor } from "./shortcuts.ts";
+import {
+	eligible,
+	type ActionDescriptor,
+	type ActionOutcome,
+} from "./shortcuts.ts";
 
 // apps/web does not run vitest in `globals` mode (every test file imports its
 // own `test`/`expect`), so `@solidjs/testing-library`'s own auto-cleanup —
@@ -611,4 +616,114 @@ test("every binding shares one capture listener, added with the first and remove
 		add.mockRestore();
 		remove.mockRestore();
 	}
+});
+
+/** A scope whose one action runs a batch, with `selected` checked rows;
+ *  records each batch and each single run. */
+function setupBatch(
+	selected: () => Person[],
+	runBatch: (targets: Person[]) => Promise<ActionOutcome> | undefined
+) {
+	const singles: string[] = [];
+	const batches: string[][] = [];
+	const cleared: number[] = [];
+	const deny: BatchableAction<Person> = {
+		id: "deny",
+		label: "Turn down",
+		icon: "close",
+		hotkey: "D",
+		can: (target) => target.deniable,
+		run: (target) => {
+			singles.push(target._id);
+		},
+		runBatch: (targets) => {
+			batches.push(targets.map((target) => target._id));
+			return runBatch(targets);
+		},
+	};
+	function Probe() {
+		createActionKeys<Person>({
+			scope: "applications",
+			actions: () => [deny],
+			selected,
+			onClearSelection: () => cleared.push(1),
+			active: () => true,
+		});
+		return (
+			<ActionButton
+				action={batchOf(deny)}
+				target={eligible(deny, selected())}
+			/>
+		);
+	}
+	render(() => <Probe />);
+	return { singles, batches, cleared };
+}
+
+test("with rows checked, an action that batches runs once over the rows it applies to, then clears", async () => {
+	const { singles, batches, cleared } = setupBatch(
+		() => [person("one"), person("no", false), person("two")],
+		() => Promise.resolve({ refused: false })
+	);
+	fireEvent.keyDown(document, { key: "d" });
+	await waitFor(() => {
+		expect(cleared).toHaveLength(1);
+	});
+	expect(batches).toEqual([["one", "two"]]);
+	expect(singles).toEqual([]);
+});
+
+test.each([
+	["cancelled", undefined],
+	["refused", { refused: true }],
+] as const)("a %s batch keeps the selection", async (_name, outcome) => {
+	const { batches, cleared } = setupBatch(
+		() => [person("one")],
+		() => Promise.resolve(outcome)
+	);
+	fireEvent.keyDown(document, { key: "d" });
+	await waitFor(() => {
+		expect(batches).toHaveLength(1);
+	});
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	expect(cleared).toEqual([]);
+});
+
+test("the key and the selection bar's button share one batch run", () => {
+	const run = inFlight<ActionOutcome>({ refused: false });
+	const { batches } = setupBatch(
+		() => [person("one"), person("two")],
+		() => run.promise
+	);
+	fireEvent.keyDown(document, { key: "d" });
+	const button = screen.getByRole("button", { name: /Turn down/ });
+	expect(button).toHaveAttribute("aria-busy", "true");
+	fireEvent.click(button);
+	expect(batches).toHaveLength(1);
+	run.settle();
+});
+
+test("a batch keeps its guard and spinner while its rows land and leave the selection", async () => {
+	const run = inFlight<ActionOutcome>({ refused: false });
+	const [selected, setSelected] = createSignal([
+		person("one"),
+		person("two"),
+	]);
+	const { batches } = setupBatch(
+		// eslint-disable-next-line solid/reactivity -- handed on as an accessor, read by the keys and the button
+		() => selected(),
+		() => run.promise
+	);
+	fireEvent.keyDown(document, { key: "d" });
+	// The first row lands and stops being one the action applies to.
+	setSelected([person("one", false), person("two")]);
+	const button = screen.getByRole("button", { name: /Turn down/ });
+	expect(button).toHaveAttribute("aria-busy", "true");
+	fireEvent.keyDown(document, { key: "d" });
+	fireEvent.click(button);
+	expect(batches).toHaveLength(1);
+	run.settle();
+	await waitFor(() => {
+		expect(button).not.toHaveAttribute("aria-busy", "true");
+	});
 });

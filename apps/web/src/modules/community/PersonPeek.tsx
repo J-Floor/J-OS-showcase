@@ -62,12 +62,13 @@ function PeekBody(props: PeekProps<PersonRow>): JSX.Element {
 		scope
 	);
 	/** The peek's keys, inside its sheet: the person's roster's actions
-	 *  and, for an applicant, the score and note keys. No table under a
+	 *  and, for an applicant, the score keys. No table under a
 	 *  peek: nothing is checked or ringed. */
 	function PeekKeys(): JSX.Element {
-		// eslint-disable-next-line solid/reactivity -- handed on as an accessor, read by the keys' own handlers
-		applications.focusedRowKeys(() =>
-			roster() === "applications" ? sheetPerson() : undefined
+		applications.focusedRowKeys(
+			// eslint-disable-next-line solid/reactivity -- handed on as an accessor, read by the keys' own handlers
+			() => (roster() === "applications" ? sheetPerson() : undefined),
+			"sheet"
 		);
 		return (
 			<ActionKeys<PersonRow>

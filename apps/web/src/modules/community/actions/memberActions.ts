@@ -1,5 +1,8 @@
 import type { PersonRow } from "../../../../convex/people.ts";
-import type { ActionDescriptor } from "../../../shared/actions/shortcuts.ts";
+import type {
+	ActionDescriptor,
+	ActionOutcome,
+} from "../../../shared/actions/shortcuts.ts";
 import { ICONS } from "../../../shared/icons.ts";
 import { useOpenAgreement } from "../openAgreement.ts";
 
@@ -21,6 +24,10 @@ import { useKickOutAction } from "./kickOutAction.ts";
  */
 export function useMemberActions(options: {
 	onChangeRole: (person: PersonRow) => void;
+	/** Change role for several people at once, settled once the dialog
+	 *  closes: not refused when they moved. Without it, rows checked get
+	 *  the one-person dialog each. */
+	onChangeRoles?: (people: PersonRow[]) => Promise<ActionOutcome>;
 	group: (person: PersonRow) => string;
 }): { actions: () => ActionDescriptor<PersonRow>[] } {
 	const agreement = useOpenAgreement();
@@ -41,6 +48,7 @@ export function useMemberActions(options: {
 			run: (person) => {
 				options.onChangeRole(person);
 			},
+			runBatch: options.onChangeRoles,
 		},
 		kickOut,
 		agreementAction(agreement),

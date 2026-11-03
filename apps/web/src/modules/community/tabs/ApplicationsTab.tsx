@@ -1,37 +1,23 @@
-import {
-	Button,
-	Icon,
-	isTypingTarget,
-	Table,
-	useOverlayCovered,
-} from "@j-os/design-system";
-import {
-	createHotkey,
-	createHotkeys,
-	type Hotkey,
-} from "@tanstack/solid-hotkeys";
+import { isTypingTarget, Table, useOverlayCovered } from "@j-os/design-system";
+import { createHotkeys, type Hotkey } from "@tanstack/solid-hotkeys";
 import { useMutation } from "convex-solidjs";
-import { type Accessor, type JSX, Show } from "solid-js";
+import { type Accessor, For, type JSX } from "solid-js";
 
 import { api } from "../../../../convex/_generated/api";
-import { legalEvents } from "../../../../convex/lib/lifecycle.ts";
-import type { EventType } from "../../../../convex/lib/lifecycleTypes.ts";
 import type { PersonRow } from "../../../../convex/people.ts";
 import { call } from "../../../lib/call.ts";
-import { type ConfirmOptions, useConfirm } from "../../../shared/confirm.tsx";
+import { BatchActionButton } from "../../../shared/actions/BatchActionButton.tsx";
+import { isBatchable } from "../../../shared/actions/batchOf.ts";
+import { createActionKeys } from "../../../shared/actions/createActionKeys.ts";
+import type { ActionDescriptor } from "../../../shared/actions/shortcuts.ts";
 import { useQuery } from "../../../shared/data/useQuery.ts";
 import { ICONS } from "../../../shared/icons.ts";
-import { useApplicationDecisions } from "../actions/applicationDecisions.ts";
 import {
-	GuestExpiryProvider,
-	useGuestExpiry,
-} from "../actions/guestExpiry.tsx";
+	type Applicant,
+	useApplicationDecisions,
+} from "../actions/applicationDecisions.ts";
+import { GuestExpiryProvider } from "../actions/guestExpiry.tsx";
 import { settleRosterAction } from "../actions/RosterActionError.tsx";
-import {
-	type Triage,
-	type TriageResult,
-	useTriage,
-} from "../actions/triage.ts";
 import {
 	applicationColumns,
 	CurrentPersonContext,
@@ -39,8 +25,8 @@ import {
 import { useApplications } from "../data/communityData.tsx";
 import { ScoreField } from "../sheets/ScoreField.tsx";
 
-import { RosterTab, useRosterBatch } from "./RosterTab.tsx";
-import type { TabProps } from "./TabProps.ts";
+import { RosterTab } from "./RosterTab.tsx";
+import type { RowKeysPlace, TabProps } from "./TabProps.ts";
 
 /** The digit keys that set a score straight from the roster. 0–9 only — one
  *  keypress, one value; the two-digit 10 and 11 stay reachable through the score
@@ -76,134 +62,23 @@ export function ApplicationsTab(props: TabProps): JSX.Element {
 	);
 }
 
-/** The selected rows an event is legal for: each batch action runs only on
- *  those (denied applications are terminal). */
-function rowsAllowing(rows: PersonRow[], event: EventType): PersonRow[] {
-	return rows.filter((row) =>
-		legalEvents(`${row.tier}.${row.stage}`).includes(event)
-	);
-}
-
-/** Runs a per-row action over `rows`, then clears the selection — after the
- *  user agrees to `prompt` when there is one. */
-function useBatchRunner() {
-	const confirm = useConfirm();
-	const runBatch = useRosterBatch();
-	const selection = Table.useSelection<PersonRow>();
-	return function runBatchAfter(
-		prompt: ConfirmOptions | undefined,
-		rows: PersonRow[],
-		action: (id: PersonRow["_id"]) => TriageResult
-	): void {
-		void (async () => {
-			if (prompt !== undefined && !(await confirm(prompt))) return;
-			await runBatch(rows, action, selection.clear);
-		})();
-	};
-}
-
-function MakeGuestButton(props: { rows: PersonRow[] }): JSX.Element {
-	const requestGuestExpiry = useGuestExpiry();
-	return (
-		<Button
-			variant="secondary"
-			onClick={() => {
-				requestGuestExpiry(props.rows.map((row) => row._id));
-			}}
-		>
-			<Icon>{ICONS.guestApplication}</Icon>Make guest
-		</Button>
-	);
-}
-
-/** A selection-bar button that runs one triage decision over `rows`, after
- *  the user agrees to `prompt` (built from the row count at click time) when
- *  there is one. Its children are the button's icon and label. */
-function BatchDecisionButton(props: {
-	rows: PersonRow[];
-	prompt?: (count: number) => ConfirmOptions;
-	decide: (triage: Triage) => (id: PersonRow["_id"]) => TriageResult;
-	children: JSX.Element;
-}): JSX.Element {
-	const triage = useTriage();
-	const runBatchAfter = useBatchRunner();
-	return (
-		<Button
-			variant="secondary"
-			onClick={() => {
-				const rows = props.rows;
-				runBatchAfter(
-					props.prompt?.(rows.length),
-					rows,
-					props.decide(triage)
-				);
-			}}
-		>
-			{props.children}
-		</Button>
-	);
-}
-
 /**
- * The selection bar's buttons. Each hides when none of the selection qualifies
- * for it.
+ * The selection bar's decisions, each over the checked rows it applies to,
+ * hidden when none do. `actions` are the tab's row decisions: a button runs
+ * the same batch as its key pressed with rows checked.
  */
-function ApplicationBatchActions(): JSX.Element {
-	const selection = Table.useSelection<PersonRow>();
-	function guestable() {
-		return rowsAllowing(selection.rows(), "APPROVE_GUEST");
-	}
-	function memberable() {
-		return rowsAllowing(selection.rows(), "APPROVE_MEMBER");
-	}
-	function deniable() {
-		return rowsAllowing(selection.rows(), "DENY");
-	}
-	function undeniable() {
-		return rowsAllowing(selection.rows(), "UNDENY");
-	}
-
+function ApplicationBatchActions(props: {
+	actions: () => ActionDescriptor<Applicant>[];
+}): JSX.Element {
 	return (
-		<>
-			<Show when={guestable().length > 0}>
-				<MakeGuestButton rows={guestable()} />
-			</Show>
-			<Show when={memberable().length > 0}>
-				<BatchDecisionButton
-					rows={memberable()}
-					prompt={(count) => ({
-						title: "Make members?",
-						message: `Approve ${String(count)} applicant(s) as members? They'll each be emailed an invite.`,
-						confirmLabel: "Make members",
-					})}
-					decide={(triage) => triage.makeMember}
-				>
-					<Icon>{ICONS.memberApplication}</Icon>Make member
-				</BatchDecisionButton>
-			</Show>
-			<Show when={deniable().length > 0}>
-				<BatchDecisionButton
-					rows={deniable()}
-					prompt={(count) => ({
-						title: "Turn down applications?",
-						message: `Deny ${String(count)} application(s)? Each applicant will be emailed a rejection.`,
-						confirmLabel: "Turn down",
-						tone: "danger",
-					})}
-					decide={(triage) => triage.deny}
-				>
-					<Icon>{ICONS.decline}</Icon>Turn down
-				</BatchDecisionButton>
-			</Show>
-			<Show when={undeniable().length > 0}>
-				<BatchDecisionButton
-					rows={undeniable()}
-					decide={(triage) => triage.undeny}
-				>
-					<Icon>{ICONS.undo}</Icon>Undo deny
-				</BatchDecisionButton>
-			</Show>
-		</>
+		<For each={props.actions().filter(isBatchable)}>
+			{(action) => (
+				<BatchActionButton<PersonRow>
+					action={action}
+					variant="secondary"
+				/>
+			)}
+		</For>
 	);
 }
 
@@ -213,20 +88,52 @@ function isRowKeyLive(event: KeyboardEvent, isCovered: () => boolean): boolean {
 	return !event.repeat && !isTypingTarget(event.target) && !isCovered();
 }
 
+/** The roster's `N`: the ringed row's note, bound on the page alone. */
+const ROW_NOTE_SCOPE = "applications-note";
+
+/**
+ * `N` on the roster page drops focus into the ringed row's note composer;
+ * only the live table has a `data-focused` row, so the document query
+ * resolves to the right one. Bound on the page only, so a sheet over it
+ * covers it: in the sheet, `N` is the Notes section's (`PersonDetail`).
+ */
+function useRowNoteKey(focused: () => PersonRow | undefined): void {
+	const note: ActionDescriptor<PersonRow> = {
+		id: "row-note",
+		label: "Add a note",
+		icon: ICONS.description,
+		hotkey: "N",
+		can: () => true,
+		run: () => {
+			document
+				.querySelector<HTMLInputElement>(
+					'tr[data-focused="true"] [data-note-cell] input'
+				)
+				?.focus();
+		},
+	};
+	createActionKeys<PersonRow>({
+		scope: ROW_NOTE_SCOPE,
+		actions: () => [note],
+		focused,
+		active: () => true,
+	});
+}
+
 /**
  * 0–9 set the ringed applicant's score outright (the score is shared, so a
  * digit overwrites it, same as the cell). Inert unless a row is ringed — no
  * sheet, no selection, this tab on screen — because `focused()` is `undefined`
- * otherwise. `n` drops focus into the ringed row's note composer; only the live
- * table has a `data-focused` row, so the document query resolves to the right
- * one. Both are ignored while typing, on a repeat, and while an overlay
- * covers where they are bound: the page, or inside the tab's sheet or a peek
- * (`isRowKeyLive`).
+ * otherwise. Ignored while typing, on a repeat, and while an overlay covers
+ * where they are bound: the page, or inside the tab's sheet or a peek
+ * (`isRowKeyLive`). On the page, `N` too (`useRowNoteKey`).
  */
 function useApplicationRowKeys(
 	focused: () => PersonRow | undefined,
-	setScore: ReturnType<typeof useMutation<typeof api.applications.setScore>>
+	setScore: ReturnType<typeof useMutation<typeof api.applications.setScore>>,
+	place: RowKeysPlace
 ): void {
+	if (place === "page") useRowNoteKey(focused);
 	const isCovered = useOverlayCovered();
 	createHotkeys(
 		() =>
@@ -250,19 +157,6 @@ function useApplicationRowKeys(
 					);
 				},
 			})),
-		() => ({ ignoreInputs: false, preventDefault: false })
-	);
-	createHotkey(
-		"N",
-		(event) => {
-			if (!isRowKeyLive(event, isCovered) || !focused()) return;
-			const input = document.querySelector<HTMLInputElement>(
-				'tr[data-focused="true"] [data-note-cell] input'
-			);
-			if (!input) return;
-			event.preventDefault();
-			input.focus();
-		},
 		() => ({ ignoreInputs: false, preventDefault: false })
 	);
 }
@@ -305,8 +199,11 @@ export function useApplicationsSheet() {
 		footerLead: (person: Accessor<PersonRow>) => (
 			<ScoreField person={person()} />
 		),
-		focusedRowKeys: (focused: () => PersonRow | undefined) => {
-			useApplicationRowKeys(focused, setScore);
+		focusedRowKeys: (
+			focused: () => PersonRow | undefined,
+			place: RowKeysPlace
+		) => {
+			useApplicationRowKeys(focused, setScore, place);
 		},
 	} as const;
 }
@@ -334,7 +231,7 @@ function ApplicationsRoster(props: TabProps): JSX.Element {
 			focusedRowKeys={sheet.focusedRowKeys}
 		>
 			<Table.BatchActions>
-				<ApplicationBatchActions />
+				<ApplicationBatchActions actions={sheet.actions} />
 			</Table.BatchActions>
 		</RosterTab.Root>
 	);

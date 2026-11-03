@@ -377,3 +377,22 @@ test("a compact button that turns disabled drops its label tooltip, leaving only
 		vi.useRealTimers();
 	}
 });
+
+test("tells its owner how a run it started ended", async () => {
+	const settled: unknown[] = [];
+	const action: ActionDescriptor<Page> = {
+		...newThing({ ran: [] }),
+		run: () => Promise.resolve({ refused: false }),
+	};
+	render(() => (
+		<ActionButton
+			action={action}
+			target="page"
+			onSettled={(outcome) => settled.push(outcome)}
+		/>
+	));
+	fireEvent.click(screen.getByRole("button", { name: /New thing/ }));
+	await waitFor(() => {
+		expect(settled).toEqual([{ refused: false }]);
+	});
+});

@@ -16,17 +16,16 @@ function hasId(item: unknown): item is { _id: unknown } {
 	return typeof item === "object" && item !== null && "_id" in item;
 }
 
+/** Every batch's identity: see `identity`. */
+const BATCH = "batch";
+
 /** A target's identity across refetches: its `_id` when it has one (a row
- *  comes back as a new object); for a batch, its rows' ids in sorted order
- *  (a selection is read as a new array each time); else itself (a sentinel
- *  such as `PAGE_TARGET`, or a batch of rows without ids). */
+ *  comes back as a new object); for a batch (an array of rows), one for all
+ *  of them, so a batch run is keyed by its action alone: its rows leave the
+ *  selection as they land, and a key read from them would drop the guard
+ *  and the spinner mid-run; else itself (a sentinel such as `PAGE_TARGET`). */
 function identity(target: unknown): unknown {
-	if (Array.isArray(target) && target.length > 0 && target.every(hasId)) {
-		const ids = target
-			.map((row) => String(row._id))
-			.sort((first, second) => first.localeCompare(second));
-		return `batch:${ids.join(",")}`;
-	}
+	if (Array.isArray(target)) return BATCH;
 	return hasId(target) ? target._id : target;
 }
 

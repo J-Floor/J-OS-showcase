@@ -12,6 +12,7 @@ import { agreementAction } from "./agreementAction.ts";
 import { useKickOutAction } from "./kickOutAction.ts";
 import { settleRosterAction } from "./RosterActionError.tsx";
 import { useTriage } from "./triage.ts";
+import { useTriageBatch } from "./triageBatch.ts";
 
 // A guest whose access already ended (expired, or already former) can't be
 // kicked out a second time.
@@ -32,6 +33,7 @@ export function useGuestActions(): {
 	const triage = useTriage();
 	const confirm = useConfirm();
 	const agreement = useOpenAgreement();
+	const batch = useTriageBatch("guests");
 
 	async function upgrade(person: PersonRow): Promise<ActionOutcome> {
 		if (
@@ -64,6 +66,12 @@ export function useGuestActions(): {
 			celebrate: true,
 			can: () => true,
 			run: (person) => upgrade(person),
+			runBatch: (people) =>
+				batch(people, triage.upgradeToMember, {
+					title: "Upgrade to member?",
+					message: `Promote ${String(people.length)} guest(s) to full members? They'll each be emailed an invite.`,
+					confirmLabel: "Upgrade",
+				}),
 		},
 		kickOut,
 		agreementAction(agreement),

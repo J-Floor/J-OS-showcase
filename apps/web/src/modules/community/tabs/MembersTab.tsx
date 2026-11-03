@@ -1,15 +1,14 @@
-import { Button, Icon, Table } from "@j-os/design-system";
+import { Table } from "@j-os/design-system";
 import { type JSX, Show, createSignal } from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { StateId } from "../../../../convex/lib/lifecycleTypes.ts";
-import { invariant } from "../../../../convex/lib/result.ts";
 import type { PersonRow } from "../../../../convex/people.ts";
-import {
-	eligible,
-	type ActionDescriptor,
+import { BatchActionButton } from "../../../shared/actions/BatchActionButton.tsx";
+import type {
+	ActionDescriptor,
+	ActionOutcome,
 } from "../../../shared/actions/shortcuts.ts";
-import { ICONS } from "../../../shared/icons.ts";
 import { ChangeRoleDialog } from "../actions/ChangeRoleDialog.tsx";
 import { useMemberActions } from "../actions/memberActions.ts";
 import { useTriage } from "../actions/triage.ts";
@@ -20,53 +19,33 @@ import {
 } from "../columns/memberColumns.tsx";
 import { useMembers } from "../data/communityData.tsx";
 
-import { BatchKickOut } from "./BatchKickOut.tsx";
 import { RosterTab } from "./RosterTab.tsx";
+import { batchableAction } from "./rowAction.ts";
 import type { TabProps } from "./TabProps.ts";
 
-/** Who a Change role dialog applies to, and what to do once they have moved. */
+/** Who a Change role dialog applies to, and who hears how it ended: moved
+ *  (not refused), or closed without a move (`undefined`). */
 type RoleTarget = {
 	ids: Id<"people">[];
 	states: StateId[];
-	onMoved?: () => void;
+	onSettled?: (outcome: ActionOutcome) => void;
 };
 
-/** The selection bar: change role for, and kick out, the checked rows. */
+/** The selection bar: change role for, and kick out, the checked rows.
+ *  `actions` are the tab's row actions: a button runs the same batch as its
+ *  key pressed with rows checked. */
 function MemberBatchActions(props: {
-	onChangeRole: (target: RoleTarget) => void;
-	kickOutAction: () => ActionDescriptor<PersonRow>;
+	actions: () => ActionDescriptor<PersonRow>[];
 }): JSX.Element {
-	const selection = Table.useSelection<PersonRow>();
-
-	// The rows Kick out applies to — the SAME rule the per-row button
-	// and the `K` key ask, via `kickOutAction().can`.
-	function targets() {
-		return eligible(props.kickOutAction(), selection.rows());
-	}
-
 	return (
 		<>
-			<Show when={selection.rows().length > 0}>
-				<Button
-					onClick={() => {
-						const rows = selection.rows();
-						props.onChangeRole({
-							ids: rows.map((row) => row._id),
-							states: rows.map<StateId>(
-								(row) => `${row.tier}.${row.stage}`
-							),
-							// Clearing the selection takes this bar away. The dialog is
-							// not in it, so it stays up to animate out.
-							onMoved: selection.clear,
-						});
-					}}
-				>
-					<Icon>{ICONS.role}</Icon>Change role
-				</Button>
-			</Show>
-			<Show when={targets().length > 0}>
-				<BatchKickOut kind="member" rows={targets()} />
-			</Show>
+			<BatchActionButton
+				action={batchableAction(props.actions(), "role")}
+			/>
+			<BatchActionButton
+				action={batchableAction(props.actions(), "kick")}
+				variant="secondary"
+			/>
 		</>
 	);
 }
@@ -75,11 +54,12 @@ function MemberBatchActions(props: {
  * The Members sheet's own setup, shared by the tab and the peek: the action
  * descriptors and the one change-role dialog both ways in feed.
  *
- * Change role has one dialog for both ways in: the selection bar's button
- * (over the checked rows) and the `R` key / sheet footer (one person, who has
- * no checkbox selection). Render `RoleDialog` BESIDE the roster, not in the
- * selection bar: the bar only exists while rows are checked, and a successful
- * move clears the selection, which would unmount the dialog mid-close.
+ * Change role has one dialog for every way in: over the checked rows (the
+ * selection bar's button, or `R` with rows checked), whose batch settles when
+ * the dialog closes, and for one person (`R` on a row, the sheet footer).
+ * Render `RoleDialog` BESIDE the roster, not in the selection bar: the bar
+ * only exists while rows are checked, and a successful move clears the
+ * selection, which would unmount the dialog mid-close.
  */
 export function useMembersSheet() {
 	const triage = useTriage();
@@ -98,28 +78,38 @@ export function useMembersSheet() {
 				states: [`${person.tier}.${person.stage}`],
 			});
 		},
+		onChangeRoles: (people) =>
+			new Promise((resolve) => {
+				openRoleDialog({
+					ids: people.map((person) => person._id),
+					states: people.map<StateId>(
+						(person) => `${person.tier}.${person.stage}`
+					),
+					onSettled: resolve,
+				});
+			}),
 		group: memberGroup,
 	});
-	function kickOutAction(): ActionDescriptor<PersonRow> {
-		const action = memberActions
-			.actions()
-			.find((candidate) => candidate.id === "kick");
-		invariant(action, "useMemberActions: no 'kick' descriptor");
-		return action;
-	}
 	function RoleDialog(): JSX.Element {
 		return (
 			<Show when={roleTarget()}>
 				{(target) => (
 					<ChangeRoleDialog
 						open={isRoleOpen()}
-						onOpenChange={setRoleOpen}
+						onOpenChange={(isOpen) => {
+							setRoleOpen(isOpen);
+							// After a move this settles nothing: it already has.
+							if (!isOpen) target().onSettled?.(undefined);
+						}}
 						count={target().ids.length}
 						states={target().states}
 						onMove={(move) =>
 							applyMove(triage, target().ids, move).then(
 								(result) => {
-									if (result.isOk()) target().onMoved?.();
+									if (result.isOk())
+										target().onSettled?.({
+											refused: false,
+										});
 									return result;
 								}
 							)
@@ -133,8 +123,6 @@ export function useMembersSheet() {
 	return {
 		scope: "members",
 		actions: memberActions.actions,
-		kickOutAction,
-		openRoleDialog,
 		RoleDialog,
 	} as const;
 }
@@ -160,10 +148,7 @@ export function MembersTab(props: TabProps): JSX.Element {
 				actions={sheet.actions}
 			>
 				<Table.BatchActions>
-					<MemberBatchActions
-						onChangeRole={sheet.openRoleDialog}
-						kickOutAction={sheet.kickOutAction}
-					/>
+					<MemberBatchActions actions={sheet.actions} />
 				</Table.BatchActions>
 			</RosterTab.Root>
 			<sheet.RoleDialog />

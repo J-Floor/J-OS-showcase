@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { Button, Table, type JfColumnDefinition } from "@j-os/design-system";
+import { Table, type JfColumnDefinition } from "@j-os/design-system";
 import {
 	cleanup,
 	fireEvent,
@@ -7,13 +7,16 @@ import {
 	waitFor,
 	within,
 } from "@solidjs/testing-library";
-import { okAsync } from "neverthrow";
+import { createSignal } from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
 
 import type { PersonRow } from "../../../../convex/people.ts";
+import { BatchActionButton } from "../../../shared/actions/BatchActionButton.tsx";
+import type { BatchableAction } from "../../../shared/actions/batchOf.ts";
+import type { ActionDescriptor } from "../../../shared/actions/shortcuts.ts";
 
-import { RosterTab, useRosterBatch } from "./RosterTab.tsx";
-import { openPanel, renderWithSelection } from "./testSelection.tsx";
+import { RosterTab } from "./RosterTab.tsx";
+import { checkRows, openPanel, renderWithSelection } from "./testSelection.tsx";
 
 afterEach(cleanup);
 
@@ -128,22 +131,20 @@ test("no footerLead: the sheet footer carries only the tab's own buttons", async
 	expect(within(openPanel()!).queryByTestId("lead")).toBeNull();
 });
 
-test("a tab's Table.BatchActions children read the shared batch runner from useRosterBatch()", async () => {
-	const action = vi.fn(() => okAsync(undefined));
-
-	function RunAll() {
-		const runBatch = useRosterBatch();
-		const selection = Table.useSelection<PersonRow>();
-		return (
-			<Button
-				onClick={() => {
-					void runBatch(selection.rows(), action, selection.clear);
-				}}
-			>
-				Run on selection
-			</Button>
-		);
-	}
+test("a key pressed with rows checked runs its action's batch once, then unchecks the rows", async () => {
+	const batches: string[][] = [];
+	const kick: ActionDescriptor<PersonRow> = {
+		id: "kick",
+		label: "Kick out",
+		icon: "block",
+		hotkey: "K",
+		can: () => true,
+		run: () => {},
+		runBatch: (people) => {
+			batches.push(people.map((row) => row._id));
+			return Promise.resolve({ refused: false });
+		},
+	};
 
 	renderWithSelection((selection) => (
 		<RosterTab.Root<PersonRow>
@@ -151,32 +152,70 @@ test("a tab's Table.BatchActions children read the shared batch runner from useR
 			data={() => rows}
 			columns={columns}
 			groupBy="group"
-			actions={() => []}
+			actions={() => [kick]}
+			scope="members"
+		>
+			<Table.BatchActions />
+		</RosterTab.Root>
+	));
+
+	await checkRows(1, 2);
+	fireEvent.keyDown(document.body, { key: "k" });
+
+	await waitFor(() => {
+		expect(
+			screen.queryByRole("button", { name: /clear selection/i })
+		).toBeNull();
+	});
+	expect(batches).toEqual([["p1", "p2"]]);
+});
+
+test("the selection bar's button keeps its spinner until its batch ends, though its rows stop qualifying as they land", async () => {
+	let settle: (() => void) | undefined;
+	const [data, setData] = createSignal(rows);
+	const kick: BatchableAction<PersonRow> = {
+		id: "kick",
+		label: "Kick out",
+		icon: "block",
+		hotkey: "K",
+		can: (row) => row.tier !== "former",
+		run: () => {},
+		runBatch: () =>
+			new Promise((resolve) => {
+				settle = () => {
+					resolve({ refused: false });
+				};
+			}),
+	};
+
+	renderWithSelection((selection) => (
+		<RosterTab.Root<PersonRow>
+			tab={{ selection, active: true }}
+			data={() => data()}
+			columns={columns}
+			groupBy="group"
+			actions={() => [kick]}
 			scope="members"
 		>
 			<Table.BatchActions>
-				<RunAll />
+				<BatchActionButton action={kick} />
 			</Table.BatchActions>
 		</RosterTab.Root>
 	));
 
-	// 0 is the select-all header checkbox; 1 and 2 are the rows.
-	const checkboxes = screen.getAllByRole("checkbox");
-	fireEvent.click(checkboxes[1]);
-	fireEvent.click(checkboxes[2]);
-	fireEvent.click(
-		await screen.findByRole("button", { name: /run on selection/i })
-	);
-
+	const bar = await checkRows(1, 2);
+	const button = within(bar).getByRole("button", { name: /kick out/i });
+	fireEvent.click(button);
+	expect(button).toHaveAttribute("aria-busy", "true");
+	// Every write has landed: the refetched rows no longer qualify.
+	setData(rows.map((row) => ({ ...row, tier: "former" })));
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	function kickButton(): HTMLElement | null {
+		return within(bar).queryByRole("button", { name: /kick out/i });
+	}
+	expect(kickButton()).toHaveAttribute("aria-busy", "true");
+	settle?.();
 	await waitFor(() => {
-		expect(action).toHaveBeenCalledTimes(2);
-	});
-	expect(action).toHaveBeenCalledWith("p1");
-	expect(action).toHaveBeenCalledWith("p2");
-	// The runner clears the selection once every row went through.
-	await waitFor(() => {
-		expect(
-			screen.queryByRole("button", { name: /run on selection/i })
-		).toBeNull();
+		expect(kickButton()).toBeNull();
 	});
 });

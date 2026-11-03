@@ -171,7 +171,13 @@ vi.mock("convex-solidjs", () => ({
 
 import { MembersTab } from "./MembersTab.tsx";
 import type { PersonSelection } from "./TabProps.ts";
-import { openPanel, renderWithSelection } from "./testSelection.tsx";
+import {
+	checkRows,
+	chipOf,
+	openPanel,
+	peek,
+	renderWithSelection,
+} from "./testSelection.tsx";
 
 test("selecting all three rows and clicking Kick out calls kickOut for both live rows, not the former one", async () => {
 	kickOutMock.mockClear();
@@ -817,5 +823,47 @@ test("a refused people.update says Couldn't save; Retry sends it again", async (
 	expect(mutateAsyncMock).toHaveBeenLastCalledWith({
 		id: "p1",
 		firstName: "Augusta",
+	});
+});
+
+test("the selection bar's Change role and Kick out show their keys while peeking", async () => {
+	renderWithSelection((selection) => <MembersTab selection={selection} />, {
+		peekable: true,
+	});
+	const bar = await checkRows(1);
+	peek();
+	expect(
+		chipOf(within(bar).getByRole("button", { name: /change role/i }))
+	).toBe("R");
+	expect(chipOf(within(bar).getByRole("button", { name: /kick out/i }))).toBe(
+		"K"
+	);
+});
+
+test("K with rows checked asks once, like the bar's Kick out, then kicks out every row it applies to and unchecks them", async () => {
+	kickOutMock.mockClear();
+	renderWithSelection((selection) => (
+		<ConfirmProvider>
+			<MembersTab selection={selection} active />
+		</ConfirmProvider>
+	));
+	await checkRows(1, 2, 3);
+	fireEvent.keyDown(document.body, { key: "k" });
+	// One question for the rows K applies to (p2 is already out), not one
+	// per person.
+	const prompt = await screen.findByText(/Revoke access for 2 person\(s\)\?/);
+	expect(screen.getAllByText(/Revoke access for/)).toHaveLength(1);
+	const dialog = await screen.findByRole("dialog", { name: /kick out/i });
+	expect(dialog).toContainElement(prompt);
+	fireEvent.click(within(dialog).getByRole("button", { name: /^kick out/i }));
+	await waitFor(() => {
+		expect(kickOutMock).toHaveBeenCalledTimes(2);
+	});
+	expect(kickOutMock).toHaveBeenCalledWith("p1");
+	expect(kickOutMock).toHaveBeenCalledWith("p3");
+	await waitFor(() => {
+		expect(
+			screen.queryByRole("button", { name: /clear selection/i })
+		).toBeNull();
 	});
 });

@@ -1,15 +1,18 @@
+import { ShortcutPeekProvider } from "@j-os/design-system";
 import {
 	MemoryRouter,
 	Route,
 	createMemoryHistory,
 	useLocation,
 } from "@solidjs/router";
-import { render } from "@solidjs/testing-library";
-import type { JSX } from "solid-js";
+import { fireEvent, render, screen } from "@solidjs/testing-library";
+import { Show, type JSX } from "solid-js";
 
+import { invariant } from "../../../../convex/lib/result.ts";
 import { AbilityProvider } from "../../../lib/ability.tsx";
 import { OPEN_DIALOG_CONTENT } from "../../../shared/dialogSelectors.ts";
 import { createEntitySelection } from "../../../shared/entity/createEntitySelection.ts";
+import { ShortcutPeekButton } from "../../../shared/ShortcutPeekButton.tsx";
 import type { Identified } from "../../../shared/types.ts";
 
 import type { PersonSelection } from "./TabProps.ts";
@@ -27,7 +30,7 @@ import type { PersonSelection } from "./TabProps.ts";
  */
 export function renderWithSelection(
 	ui: (selection: PersonSelection) => JSX.Element,
-	options?: { path?: string }
+	options?: { path?: string; peekable?: boolean }
 ) {
 	const history = createMemoryHistory();
 	history.set({
@@ -42,7 +45,14 @@ export function renderWithSelection(
 			param: "person",
 		});
 		location = useLocation();
-		return ui(selection);
+		return (
+			<Show when={options?.peekable} fallback={ui(selection)}>
+				<ShortcutPeekProvider>
+					<ShortcutPeekButton />
+					{ui(selection)}
+				</ShortcutPeekProvider>
+			</Show>
+		);
 	}
 	const result = render(() => (
 		<AbilityProvider role="board">
@@ -58,4 +68,27 @@ export function renderWithSelection(
  *  so "is the text there" is not the same question as "is the sheet open". */
 export function openPanel(): HTMLElement | null {
 	return document.querySelector<HTMLElement>(OPEN_DIALOG_CONTENT);
+}
+
+/** Checks the rows at `indexes` (0 is the header's select-all) and returns
+ *  the selection bar, found by its own "Clear selection" button. */
+export async function checkRows(...indexes: number[]): Promise<HTMLElement> {
+	const checkboxes = screen.getAllByRole("checkbox");
+	for (const index of indexes) fireEvent.click(checkboxes[index]);
+	const clear = await screen.findByRole("button", {
+		name: /clear selection/i,
+	});
+	const bar = clear.parentElement;
+	invariant(bar, "The selection bar has no parent");
+	return bar;
+}
+
+/** Latches the shortcut peek of a `peekable` render, as Alt held would. */
+export function peek(): void {
+	fireEvent.click(screen.getByRole("button", { name: /shortcut/i }));
+}
+
+/** The key chip `button` shows in its icon's place, if any. */
+export function chipOf(button: HTMLElement): string | undefined {
+	return button.querySelector("kbd")?.textContent ?? undefined;
 }

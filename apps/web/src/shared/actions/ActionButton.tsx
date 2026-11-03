@@ -3,7 +3,11 @@ import { Show, splitProps, type JSX } from "solid-js";
 
 import { ActionGlyph } from "./ActionGlyph.tsx";
 import { runAction, useRunSpinner } from "./runAction.ts";
-import { disabledReasonProps, type ActionDescriptor } from "./shortcuts.ts";
+import {
+	disabledReasonProps,
+	type ActionDescriptor,
+	type ActionOutcome,
+} from "./shortcuts.ts";
 
 /**
  * A button fed by an action descriptor: its label, its key (named, and shown
@@ -25,6 +29,9 @@ export function ActionButton<Target>(props: {
 	contentClass?: string;
 	/** Shown in the label's place; the label names the button. */
 	compactLabel?: string;
+	/** How a run the button started ended (a selection bar clears its
+	 *  rows once their batch went through). */
+	onSettled?: (outcome: ActionOutcome) => void;
 }): JSX.Element {
 	const spinner = useRunSpinner();
 	function button(triggerProps?: ButtonProps["triggerProps"]): JSX.Element {
@@ -45,7 +52,11 @@ export function ActionButton<Target>(props: {
 					spinner.isShown(props.action, props.target) ||
 					props.action.isBusy?.(props.target) === true
 				}
-				onClick={() => void runAction(props.action, props.target)}
+				onClick={() => {
+					void runAction(props.action, props.target).then(
+						props.onSettled
+					);
+				}}
 			>
 				<ActionGlyph
 					icon={props.action.icon}

@@ -1,6 +1,12 @@
 // @vitest-environment happy-dom
-import { Sheet } from "@j-os/design-system";
-import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
+import { Sheet, ShortcutPeekProvider } from "@j-os/design-system";
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@solidjs/testing-library";
 import { getFunctionName } from "convex/server";
 import { ConvexError } from "convex/values";
 import { createSignal } from "solid-js";
@@ -13,6 +19,7 @@ import {
 	keyedValue,
 	morphKeyOf,
 } from "../../../../test-stubs/morphKeys.tsx";
+import { ShortcutPeekButton } from "../../../shared/ShortcutPeekButton.tsx";
 import { factLine, headline } from "../status/copy.ts";
 
 afterEach(cleanup);
@@ -758,4 +765,106 @@ test("no keyed value is rendered inside a collapsed section", () => {
 				.closest('[data-scope="accordion"][data-part="item"]')
 				?.getAttribute("data-state")
 		).toBe("open");
+});
+
+/** The detail inside its sheet, with a second sheet the test opens over it
+ *  and the peek toggle, as the roster renders it. */
+function renderSectionKeys(options?: { editing?: boolean }) {
+	const [isOpen, setOpen] = createSignal(true);
+	const [isCovered, setCovered] = createSignal(false);
+	render(() => (
+		<ShortcutPeekProvider>
+			<ShortcutPeekButton />
+			<Sheet.Root open={isOpen()} onOpenChange={() => {}}>
+				<Sheet.Header>
+					<Sheet.Title>Person</Sheet.Title>
+				</Sheet.Header>
+				<PersonDetail
+					isOpen={isOpen}
+					person={person({ status: ACTIVE_MEMBER })}
+					editing={options?.editing}
+				/>
+			</Sheet.Root>
+			<Sheet.Root open={isCovered()} onOpenChange={() => {}}>
+				<Sheet.Header>
+					<Sheet.Title>Covering sheet</Sheet.Title>
+				</Sheet.Header>
+			</Sheet.Root>
+		</ShortcutPeekProvider>
+	));
+	return { setOpen, setCovered };
+}
+
+function statusExpanded(): string | null {
+	return screen
+		.getByRole("button", { name: /Status/, hidden: true })
+		.getAttribute("aria-expanded");
+}
+
+test("S toggles Status while the sheet is open, wherever focus is", () => {
+	renderSectionKeys();
+	fireEvent.keyDown(document.body, { key: "s" });
+	expect(statusExpanded()).toBe("false");
+	fireEvent.keyDown(document.body, { key: "s" });
+	expect(statusExpanded()).toBe("true");
+});
+
+test("a held section key toggles once", () => {
+	renderSectionKeys();
+	fireEvent.keyDown(document.body, { key: "s" });
+	fireEvent.keyDown(document.body, { key: "s", repeat: true });
+	expect(statusExpanded()).toBe("false");
+});
+
+test("typing the letter into a field does not toggle a section", () => {
+	renderSectionKeys({ editing: true });
+	const field = screen.getAllByRole("textbox", { hidden: true })[0];
+	field.focus();
+	fireEvent.keyDown(field, { key: "s" });
+	expect(statusExpanded()).toBe("true");
+});
+
+test("the section keys are quiet under an overlay, and answer again once it closes", async () => {
+	const { setCovered } = renderSectionKeys();
+	setCovered(true);
+	fireEvent.keyDown(document.body, { key: "s" });
+	expect(statusExpanded()).toBe("true");
+	setCovered(false);
+	await waitFor(() => {
+		fireEvent.keyDown(document.body, { key: "s" });
+		expect(statusExpanded()).toBe("false");
+	});
+});
+
+test("the section keys are quiet once the sheet has closed", () => {
+	const { setOpen } = renderSectionKeys();
+	setOpen(false);
+	fireEvent.keyDown(document.body, { key: "s" });
+	expect(statusExpanded()).toBe("true");
+});
+
+test("the section chips show while peeking, and hide under an overlay", async () => {
+	const { setCovered } = renderSectionKeys();
+	const status = screen.getByRole("button", { name: /Status/ });
+	expect(status.querySelector("kbd")).toBeNull();
+	fireEvent.click(screen.getByRole("button", { name: /shortcut/i }));
+	expect(status.querySelector("kbd")).not.toBeNull();
+	setCovered(true);
+	await waitFor(() => {
+		expect(status.querySelector("kbd")).toBeNull();
+	});
+});
+
+test("N opens Notes and puts the cursor in the composer; a second press keeps Notes open", async () => {
+	renderSectionKeys();
+	const notes = screen.getByRole("button", { name: /Notes/ });
+	fireEvent.keyDown(document.body, { key: "n" });
+	await waitFor(() => {
+		expect(document.activeElement).toBe(
+			screen.getByRole("textbox", { name: "Add a note" })
+		);
+	});
+	expect(notes).toHaveAttribute("aria-expanded", "true");
+	fireEvent.keyDown(document.body, { key: "n" });
+	expect(notes).toHaveAttribute("aria-expanded", "true");
 });

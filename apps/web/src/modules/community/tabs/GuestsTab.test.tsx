@@ -132,7 +132,12 @@ vi.mock("convex-solidjs", () => ({
 }));
 
 import { GuestsTab } from "./GuestsTab.tsx";
-import { renderWithSelection } from "./testSelection.tsx";
+import {
+	checkRows,
+	chipOf,
+	peek,
+	renderWithSelection,
+} from "./testSelection.tsx";
 
 test("upgrading a selected guest calls upgradeToMember with the row id", async () => {
 	renderWithSelection((selection) => <GuestsTab selection={selection} />);
@@ -406,6 +411,66 @@ test("guests loaded empty: shows the empty state", () => {
 		expect(document.querySelectorAll("[data-skeleton-row]")).toHaveLength(
 			0
 		);
+	} finally {
+		guestsData = [guestRow, guestRow2, expiredGuestRow];
+	}
+});
+
+test("the selection bar's Upgrade to member runs on every checked guest", async () => {
+	upgradeToMember.mockClear();
+	renderWithSelection((selection) => <GuestsTab selection={selection} />);
+	const bar = await checkRows(1, 2);
+	fireEvent.click(
+		within(bar).getByRole("button", { name: /upgrade to member/i })
+	);
+	await waitFor(() => {
+		expect(upgradeToMember).toHaveBeenCalledTimes(2);
+	});
+});
+
+test("the selection bar's Kick out and Upgrade to member show their keys while peeking", async () => {
+	renderWithSelection((selection) => <GuestsTab selection={selection} />, {
+		peekable: true,
+	});
+	const bar = await checkRows(1);
+	peek();
+	expect(chipOf(within(bar).getByRole("button", { name: /kick out/i }))).toBe(
+		"K"
+	);
+	expect(
+		chipOf(within(bar).getByRole("button", { name: /upgrade to member/i }))
+	).toBe("M");
+});
+
+test("the selection bar's Kick out takes current and never-onboarded guests, not expired or former ones", async () => {
+	kickOut.mockClear();
+	const neverOnboarded = {
+		...guestRow2,
+		_id: "p4" as Id<"people">,
+		firstName: "Grace",
+		stage: "onboarding",
+	} as unknown as PersonRow;
+	const former = {
+		...guestRow2,
+		_id: "p5" as Id<"people">,
+		firstName: "Edsger",
+		tier: "former",
+		formerOf: "guest",
+		formerReason: "kicked_out",
+	} as unknown as PersonRow;
+	guestsData = [guestRow, neverOnboarded, expiredGuestRow, former];
+	try {
+		renderWithSelection((selection) => <GuestsTab selection={selection} />);
+		const boxes = screen.getAllByRole("checkbox");
+		const bar = await checkRows(
+			...Array.from({ length: boxes.length - 1 }, (_, index) => index + 1)
+		);
+		fireEvent.click(within(bar).getByRole("button", { name: /kick out/i }));
+		await waitFor(() => {
+			expect(kickOut).toHaveBeenCalledTimes(2);
+		});
+		expect(kickOut).toHaveBeenCalledWith("p1");
+		expect(kickOut).toHaveBeenCalledWith("p4");
 	} finally {
 		guestsData = [guestRow, guestRow2, expiredGuestRow];
 	}

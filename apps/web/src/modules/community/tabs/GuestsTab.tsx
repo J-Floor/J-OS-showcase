@@ -1,60 +1,34 @@
-import { Button, Icon, Table } from "@j-os/design-system";
-import { type JSX, Show, createMemo } from "solid-js";
+import { Table } from "@j-os/design-system";
+import { type JSX, createMemo } from "solid-js";
 
 import type { PersonRow } from "../../../../convex/people.ts";
-import { useConfirm } from "../../../shared/confirm.tsx";
+import { BatchActionButton } from "../../../shared/actions/BatchActionButton.tsx";
+import type { ActionDescriptor } from "../../../shared/actions/shortcuts.ts";
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
-import { ICONS } from "../../../shared/icons.ts";
 import { useGuestActions } from "../actions/guestActions.ts";
-import { useTriage } from "../actions/triage.ts";
-import { guestColumns, guestStatus } from "../columns/guestColumns.tsx";
+import { guestColumns } from "../columns/guestColumns.tsx";
 import { hostOptions } from "../columns/hostOptions.ts";
 import { useGuests } from "../data/communityData.tsx";
 
-import { BatchKickOut } from "./BatchKickOut.tsx";
-import { RosterTab, useRosterBatch } from "./RosterTab.tsx";
+import { RosterTab } from "./RosterTab.tsx";
+import { batchableAction } from "./rowAction.ts";
 import type { TabProps } from "./TabProps.ts";
 
-/** The selection bar: kick out (still-active guests only) and upgrade to
- *  member, over the checked rows. */
-function GuestBatchActions(): JSX.Element {
-	const triage = useTriage();
-	const confirm = useConfirm();
-	const runBatch = useRosterBatch();
-	const selection = Table.useSelection<PersonRow>();
-
-	// Kick out only applies to still-active guests (expired ones
-	// already lost access); hide it when none qualify.
-	function stillActive() {
-		return selection.rows().filter((row) => guestStatus(row) === "active");
-	}
-
+/** The selection bar: kick out and upgrade to member, over the checked
+ *  rows each applies to. `actions` are the tab's row actions: a button runs
+ *  the same batch as its key pressed with rows checked. */
+function GuestBatchActions(props: {
+	actions: () => ActionDescriptor<PersonRow>[];
+}): JSX.Element {
 	return (
 		<>
-			<Show when={stillActive().length > 0}>
-				<BatchKickOut kind="guest" rows={stillActive()} />
-			</Show>
-			<Button
-				onClick={() => {
-					void (async () => {
-						const rows = selection.rows();
-						if (
-							await confirm({
-								title: "Upgrade to member?",
-								message: `Promote ${String(rows.length)} guest(s) to full members? They'll each be emailed an invite.`,
-								confirmLabel: "Upgrade",
-							})
-						)
-							await runBatch(
-								rows,
-								triage.upgradeToMember,
-								selection.clear
-							);
-					})();
-				}}
-			>
-				<Icon>{ICONS.upgradeToMember}</Icon>Upgrade to member
-			</Button>
+			<BatchActionButton
+				action={batchableAction(props.actions(), "kick")}
+				variant="secondary"
+			/>
+			<BatchActionButton
+				action={batchableAction(props.actions(), "member")}
+			/>
 		</>
 	);
 }
@@ -93,7 +67,7 @@ export function GuestsTab(props: TabProps): JSX.Element {
 			actions={sheet.actions}
 		>
 			<Table.BatchActions>
-				<GuestBatchActions />
+				<GuestBatchActions actions={sheet.actions} />
 			</Table.BatchActions>
 		</RosterTab.Root>
 	);
