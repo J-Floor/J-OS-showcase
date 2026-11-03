@@ -15,6 +15,14 @@ async function hoverOpen(trigger: HTMLElement): Promise<void> {
 	await vi.advanceTimersByTimeAsync(TOOLTIP_OPEN_DELAY_MS);
 }
 
+/** The boundary events a layout shift fires on an element that lands under a still pointer. */
+function landUnderStillPointer(element: HTMLElement): void {
+	fireEvent.pointerOver(element, { pointerType: "mouse" });
+	fireEvent.pointerEnter(element, { pointerType: "mouse" });
+	fireEvent.mouseOver(element);
+	fireEvent.mouseEnter(element);
+}
+
 describe("hover", () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
@@ -33,6 +41,29 @@ describe("hover", () => {
 		await vi.advanceTimersByTimeAsync(TOOLTIP_OPEN_DELAY_MS - 1);
 		expect(screen.queryByText("hi")).toBeNull();
 		await vi.advanceTimersByTimeAsync(1);
+		expect(screen.getByText("hi")).toBeInTheDocument();
+	});
+
+	test("a trigger that lands under a still pointer stays closed", async () => {
+		render(() => (
+			<Tooltip tooltipContent="hi">
+				<button>t</button>
+			</Tooltip>
+		));
+		landUnderStillPointer(screen.getByText("t"));
+		await vi.advanceTimersByTimeAsync(TOOLTIP_OPEN_DELAY_MS * 2);
+		expect(screen.queryByText("hi")).toBeNull();
+	});
+
+	test("moving the pointer once it is there opens it", async () => {
+		render(() => (
+			<Tooltip tooltipContent="hi">
+				<button>t</button>
+			</Tooltip>
+		));
+		const trigger = screen.getByText("t");
+		landUnderStillPointer(trigger);
+		await hoverOpen(trigger);
 		expect(screen.getByText("hi")).toBeInTheDocument();
 	});
 
@@ -78,6 +109,17 @@ describe("hover", () => {
 			));
 			await hoverOpen(screen.getByText("x"));
 			expect(screen.getByRole("tooltip")).toHaveTextContent("Clear");
+		});
+
+		test("a child that lands under a still pointer keeps the label closed", async () => {
+			render(() => (
+				<Tooltip.Anchor label="Collapse">
+					<button type="button">x</button>
+				</Tooltip.Anchor>
+			));
+			landUnderStillPointer(screen.getByText("x"));
+			await vi.advanceTimersByTimeAsync(TOOLTIP_OPEN_DELAY_MS * 2);
+			expect(screen.queryByText("Collapse")).toBeNull();
 		});
 
 		test("focusing the child opens the label", async () => {

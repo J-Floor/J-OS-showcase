@@ -14,6 +14,7 @@ import {
 	type WithPartClasses,
 } from "../../utils/partStyling.ts";
 
+import { ignoreHoverWithoutMove } from "./hoverIntent.ts";
 import { attachLongPress } from "./longPress.ts";
 import styles from "./Tooltip.module.scss";
 
@@ -44,8 +45,11 @@ export type TooltipProps = {
 } & Omit<TooltipRootProps, "ids" | "children"> &
 	WithPartClasses<"content" | "positioner">;
 
-/** Wires the touch long-press onto the trigger zag put its id on. Renders nothing. */
-function LongPress(props: { disabled: () => boolean }): JSX.Element {
+/**
+ * Wires the touch long press and the hover-needs-a-move guard onto the trigger
+ * zag put its id on. Renders nothing.
+ */
+function TriggerBehaviours(props: { disabled: () => boolean }): JSX.Element {
 	const tooltip = useTooltipContext();
 	onMount(() => {
 		const trigger = document.getElementById(
@@ -55,11 +59,12 @@ function LongPress(props: { disabled: () => boolean }): JSX.Element {
 			if (import.meta.env.DEV) {
 				// eslint-disable-next-line no-console -- a warning for the developer, not the user
 				console.warn(
-					"Tooltip: trigger element not found, long press is off."
+					"Tooltip: trigger element not found, long press and hover guard are off."
 				);
 			}
 			return;
 		}
+		onCleanup(ignoreHoverWithoutMove(trigger));
 		onCleanup(
 			attachLongPress(trigger, {
 				isDisabled: props.disabled,
@@ -121,7 +126,7 @@ export function Tooltip(props: TooltipProps): JSX.Element {
 			closeDelay={0}
 			ids={props.ids}
 		>
-			<LongPress disabled={isDisabled} />
+			<TriggerBehaviours disabled={isDisabled} />
 			<ArkTooltip.Trigger
 				class={clsx(styles.trigger, props.class)}
 				onClick={props.onClick}
