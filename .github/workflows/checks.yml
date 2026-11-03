@@ -44,24 +44,9 @@ jobs:
           base-sha: ${{ github.event.pull_request.base.sha }}
           head-sha: ${{ github.event.pull_request.head.sha }}
 
-      - name: Set up Bun
-        if: steps.scope.outputs.docs-only != 'true'
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: "package.json"
-
-      - name: Cache Bun downloads
-        if: steps.scope.outputs.docs-only != 'true'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
-
       - name: Install dependencies
         if: steps.scope.outputs.docs-only != 'true'
-        run: bun install --frozen-lockfile
+        uses: ./.github/actions/install
 
       # agreements:check recompiles the committed PDFs; Typst versions differ byte for byte, so pin 0.15.0.
       - name: Install Typst
@@ -99,6 +84,9 @@ jobs:
 
       - name: Commit formatting changes
         if: steps.check-changes.outputs.changes == 'true' && github.event.pull_request.user.login != 'dependabot[bot]'
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
         run: |
           git config --local user.name "GitHub Actions"
           git config --local user.email "actions@github.com"
@@ -110,8 +98,8 @@ jobs:
           # merged green and silently never reached production. If that setting
           # is ever changed back, remove this marker in the same breath.
           git commit -am "style: formatting by GitHub Actions [skip ci]"
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git push origin HEAD:${{ github.head_ref }}
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            git push origin "HEAD:$HEAD_REF"
           else
             git push origin HEAD:${{ github.ref_name }}
           fi
@@ -185,24 +173,9 @@ jobs:
       - name: Scan for secrets
         run: gitleaks dir . --config scripts/mirror/gitleaks.toml --ignore-gitleaks-allow --redact --no-banner
 
-      - name: Set up Bun
-        if: steps.scope.outputs.docs-only != 'true'
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: "package.json"
-
-      - name: Cache Bun downloads
-        if: steps.scope.outputs.docs-only != 'true'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
-
       - name: Install dependencies
         if: steps.scope.outputs.docs-only != 'true'
-        run: bun install --frozen-lockfile
+        uses: ./.github/actions/install
 
       # Ratchet: critical only until the high list is empty, then raise to high.
       # GHSA-rg76-677x-56q9, GHSA-xwcq-pm8m-c4vf: crypto-js via pdfkit (@signpdf), no fix reachable (pdfkit pins crypto-js 3.3.0).
