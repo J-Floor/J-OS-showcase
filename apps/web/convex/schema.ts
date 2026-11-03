@@ -704,7 +704,8 @@ export default defineSchema({
 	 * and email switches say (`notify/inbox.ts`). `kind` is a plain string, not
 	 * the kind union: removing a kind must not fail validation on rows that
 	 * still carry it. `url` is an in-app path, so rows outlive a SITE_URL
-	 * change.
+	 * change. It is also the row's only link to what it is about, so deleting
+	 * that thing finds its rows `by_url` (`perks.purgePerkNotifications`).
 	 */
 	notifications: defineTable({
 		personId: v.id("people"),
@@ -717,7 +718,8 @@ export default defineSchema({
 	})
 		.index("by_personId_and_createdAt", ["personId", "createdAt"])
 		.index("by_personId_and_readAt", ["personId", "readAt"])
-		.index("by_createdAt", ["createdAt"]),
+		.index("by_createdAt", ["createdAt"])
+		.index("by_url", ["url"]),
 
 	/** Board members' handwriting PNGs for countersigning, uploaded by an operator. */
 	boardSignatures: defineTable({

@@ -328,6 +328,13 @@ async function missingPerkSteps(
 	return perkStepsOf(request).filter((step) => !events.has(step.event));
 }
 
+/** Arguments of a paged migration: where the last page ended, and whether
+ *  to only report. */
+const PAGED_MIGRATION_ARGS = {
+	cursor: v.optional(v.union(v.string(), v.null())),
+	dryRun: v.optional(v.boolean()),
+};
+
 /**
  * One-off: write the `perk` history events of requests made before those
  * were logged, from what their row still records (`perkStepsOf`). Each step
@@ -346,10 +353,7 @@ async function missingPerkSteps(
  *   bunx convex run migrations:backfillPerkEvents '{"dryRun":true}' --prod  # 0 left, every page
  */
 export const backfillPerkEvents = internalMutation({
-	args: {
-		cursor: v.optional(v.union(v.string(), v.null())),
-		dryRun: v.optional(v.boolean()),
-	},
+	args: PAGED_MIGRATION_ARGS,
 	handler: async (context, { cursor, dryRun }) => {
 		const page = await context.db.query("perkRequests").paginate({
 			cursor: cursor ?? null,
@@ -376,6 +380,76 @@ export const backfillPerkEvents = internalMutation({
 		return {
 			requests,
 			events,
+			isDone: page.isDone,
+			continueCursor: page.continueCursor,
+			dryRun: dryRun === true,
+		};
+	},
+});
+
+/** The kinds whose history row links to a perk (`?perk=`) or to one of its
+ *  requests (`?request=`). */
+const PERK_KINDS = new Set([
+	"perkAdded",
+	"perkExpiringSoon",
+	"perkRequestOutcome",
+	"perkRequested",
+]);
+
+/** Whether a perk-kind history row links to a perk or request that is gone.
+ *  A row with neither parameter links to no perk, so it is kept. */
+async function isOrphanPerkRow(
+	context: QueryCtx,
+	row: Doc<"notifications">
+): Promise<boolean> {
+	if (!PERK_KINDS.has(row.kind)) return false;
+	const params = new URLSearchParams(row.url.split("?")[1] ?? "");
+	const perk = params.get("perk");
+	if (perk !== null) {
+		const id = context.db.normalizeId("perks", perk);
+		return id === null || (await context.db.get(id)) === null;
+	}
+	const request = params.get("request");
+	if (request !== null) {
+		const id = context.db.normalizeId("perkRequests", request);
+		return id === null || (await context.db.get(id)) === null;
+	}
+	return false;
+}
+
+/**
+ * One-off: delete the notification-history rows of perks deleted before
+ * `deletePerk` purged them (`perks.purgePerkNotifications`): rows linking to
+ * a perk or perk request that no longer exists. Re-running finds nothing.
+ * Paged and dry-run as `backfillPerkEvents` is:
+ *
+ *   bunx convex run migrations:removeOrphanPerkNotifications '{"dryRun":true}' --prod
+ *   bunx convex run migrations:removeOrphanPerkNotifications '{"dryRun":true,"cursor":"<continueCursor>"}' --prod  # until isDone
+ *   bunx convex run migrations:removeOrphanPerkNotifications --prod
+ *   bunx convex run migrations:removeOrphanPerkNotifications '{"dryRun":true}' --prod  # 0 orphans, every page
+ */
+export const removeOrphanPerkNotifications = internalMutation({
+	args: PAGED_MIGRATION_ARGS,
+	handler: async (context, { cursor, dryRun }) => {
+		const page = await context.db.query("notifications").paginate({
+			cursor: cursor ?? null,
+			numItems: MIGRATION_PAGE_SIZE,
+		});
+		let orphans = 0;
+		for (const row of page.page) {
+			if (!(await isOrphanPerkRow(context, row))) continue;
+			orphans++;
+			if (dryRun !== true) await context.db.delete(row._id);
+		}
+		if (dryRun !== true && !page.isDone) {
+			await context.scheduler.runAfter(
+				0,
+				internal.migrations.removeOrphanPerkNotifications,
+				{ cursor: page.continueCursor }
+			);
+		}
+		return {
+			orphans,
 			isDone: page.isDone,
 			continueCursor: page.continueCursor,
 			dryRun: dryRun === true,

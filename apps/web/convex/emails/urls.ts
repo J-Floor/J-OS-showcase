@@ -55,14 +55,25 @@ export function eventUrl(eventId: string): string {
 	return `${siteUrl()}/events?event=${encodeURIComponent(eventId)}`;
 }
 
+/** The in-app path of {@link perkUrl}: what a notification-history row
+ *  stores (`notify/inbox#appPath`), so deleting the perk finds its rows. */
+export function perkPath(perkId: string): string {
+	return `/perks?perk=${encodeURIComponent(perkId)}`;
+}
+
 export function perkUrl(perkId: string): string {
-	return `${siteUrl()}/perks?perk=${encodeURIComponent(perkId)}`;
+	return `${siteUrl()}${perkPath(perkId)}`;
+}
+
+/** The in-app path of {@link perkRequestUrl}, as {@link perkPath} is. */
+export function perkRequestPath(requestId: string): string {
+	return `/perks?tab=requests&request=${encodeURIComponent(requestId)}`;
 }
 
 /** A perk request, on the board's Requests tab, which opens it over the
  *  tab. Its one tab: a request never moves to another. */
 export function perkRequestUrl(requestId: string): string {
-	return `${siteUrl()}/perks?tab=requests&request=${encodeURIComponent(requestId)}`;
+	return `${siteUrl()}${perkRequestPath(requestId)}`;
 }
 
 /** The community roster, with no person open. */

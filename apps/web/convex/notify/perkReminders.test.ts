@@ -103,4 +103,16 @@ describe("perk expiring-soon reminders", () => {
 			},
 		]);
 	});
+
+	// The reminder is a daily cron over live perks, not a job scheduled per
+	// perk, so a deleted perk has nothing to cancel and is never reminded of.
+	it("tells nobody about a perk deleted before its reminder day", async () => {
+		const backend = convexTest(schema, modules);
+		const perkId = await seedPerk(backend, "Week left", "2026-11-09");
+		await backend.run((context) => context.db.delete(perkId));
+
+		await backend.mutation(internal.notify.perkReminders.expiringSoon, {});
+
+		expect(await dispatches(backend)).toEqual([]);
+	});
 });

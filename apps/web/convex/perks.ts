@@ -6,9 +6,11 @@ import type { Doc, Id } from "./_generated/dataModel";
 import {
 	internalMutation,
 	mutation,
+	type MutationCtx,
 	query,
 	type QueryCtx,
 } from "./_generated/server";
+import { perkPath, perkRequestPath } from "./emails/urls.ts";
 import { requireRole } from "./lib/authGuard.ts";
 import type { InputError } from "./lib/errors/input.ts";
 import type { PerksError } from "./lib/errors/perks.ts";
@@ -282,12 +284,17 @@ export const deletePerk = mutation({
 		const perk = await context.db.get(perkId);
 		if (perk) {
 			// The perk goes first, so it leaves listPerks at once and a
-			// request for it is refused. Its requests follow in bounded
-			// batches.
+			// request for it is refused. Its requests and every notification
+			// that links to it or to them follow in bounded batches.
 			await context.db.delete(perkId);
 			await context.scheduler.runAfter(
 				0,
 				internal.perks.purgePerkRequests,
+				{ perkId }
+			);
+			await context.scheduler.runAfter(
+				0,
+				internal.perks.purgePerkNotifications,
 				{ perkId }
 			);
 		}
@@ -295,10 +302,29 @@ export const deletePerk = mutation({
 	},
 });
 
+/** Delete at most `limit` notification-history rows linking to `path`;
+ *  returns how many went. */
+async function deleteNotificationsAt(
+	context: MutationCtx,
+	path: string,
+	limit: number
+): Promise<number> {
+	const rows = await context.db
+		.query("notifications")
+		.withIndex("by_url", (range) => range.eq("url", path))
+		.take(limit);
+	for (const row of rows) await context.db.delete(row._id);
+	return rows.length;
+}
+
 /**
  * Bounded batch delete of one perk's requests over the
- * `by_perkId_and_requestedAt` index. Reschedules itself while a batch comes
- * back full. It converges because deleting shrinks the range it reads, as in
+ * `by_perkId_and_requestedAt` index, each with the `perkRequested`
+ * notifications that link to it. One run deletes at most BATCH_SIZE rows of
+ * either table: a request goes only once its notifications are gone, so a
+ * request whose notifications use up the batch stays for the next run.
+ * Reschedules itself while a run uses its whole batch. It converges because
+ * every run deletes at least one row from the ranges it reads, as in
  * `purgeEventAttendance`.
  */
 export const purgePerkRequests = internalMutation({
@@ -310,11 +336,47 @@ export const purgePerkRequests = internalMutation({
 				range.eq("perkId", perkId)
 			)
 			.take(BATCH_SIZE);
-		for (const row of rows) await context.db.delete(row._id);
-		if (rows.length === BATCH_SIZE) {
+		let budget = BATCH_SIZE;
+		for (const row of rows) {
+			budget -= await deleteNotificationsAt(
+				context,
+				perkRequestPath(row._id),
+				budget
+			);
+			if (budget === 0) break;
+			await context.db.delete(row._id);
+			budget -= 1;
+			if (budget === 0) break;
+		}
+		if (budget === 0) {
 			await context.scheduler.runAfter(
 				0,
 				internal.perks.purgePerkRequests,
+				{ perkId }
+			);
+		}
+		return null;
+	},
+});
+
+/**
+ * Bounded batch delete of the notification-history rows that link to one
+ * perk (`perkAdded`, `perkExpiringSoon`, `perkRequestOutcome`), over
+ * `by_url`. Reschedules itself while a batch comes back full; deleting
+ * shrinks the range it reads, so it converges.
+ */
+export const purgePerkNotifications = internalMutation({
+	args: { perkId: v.id("perks") },
+	handler: async (context, { perkId }): Promise<null> => {
+		const deleted = await deleteNotificationsAt(
+			context,
+			perkPath(perkId),
+			BATCH_SIZE
+		);
+		if (deleted === BATCH_SIZE) {
+			await context.scheduler.runAfter(
+				0,
+				internal.perks.purgePerkNotifications,
 				{ perkId }
 			);
 		}

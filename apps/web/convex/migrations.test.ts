@@ -614,3 +614,110 @@ describe("backfillPerkEvents", () => {
 		expect(await perkEvents(backend)).toHaveLength(3 + extra);
 	});
 });
+
+/** A live perk and request, a deleted perk and request, and one history
+ *  row per case. */
+async function seedOrphans(backend: Tester) {
+	return backend.run(async (context) => {
+		const personId = await context.db.insert("people", {
+			email: "ada@example.com",
+			firstName: "Ada",
+			lastName: "Example",
+			tier: "member",
+			stage: "active",
+			stageSince: 1,
+		});
+		const perk = {
+			partner: "Example Cloud",
+			title: "Cloud credits",
+			terms: "Credits for the first year.",
+			category: "cloud",
+			createdAt: 1,
+		} as const;
+		const liveId = await context.db.insert("perks", perk);
+		const goneId = await context.db.insert("perks", perk);
+		const request = {
+			personId,
+			requestedAt: 1,
+			status: "requested",
+			statusAt: 1,
+		} as const;
+		const liveRequestId = await context.db.insert("perkRequests", {
+			...request,
+			perkId: liveId,
+		});
+		const goneRequestId = await context.db.insert("perkRequests", {
+			...request,
+			perkId: goneId,
+		});
+		await context.db.delete(goneRequestId);
+		await context.db.delete(goneId);
+		const rows: [string, string][] = [
+			["perkAdded", `/perks?perk=${liveId}`],
+			["perkAdded", `/perks?perk=${goneId}`],
+			["perkExpiringSoon", `/perks?perk=${goneId}`],
+			["perkRequestOutcome", `/perks?perk=${goneId}`],
+			["perkRequested", `/perks?tab=requests&request=${liveRequestId}`],
+			["perkRequested", `/perks?tab=requests&request=${goneRequestId}`],
+			["taskAssigned", "/tasks?task=example"],
+		];
+		for (const [kind, url] of rows) {
+			await context.db.insert("notifications", {
+				personId,
+				kind,
+				title: "Title",
+				body: "Body",
+				url,
+				createdAt: 1,
+			});
+		}
+		return { liveId, liveRequestId };
+	});
+}
+
+async function urls(backend: Tester): Promise<string[]> {
+	const rows = await backend.run((context) =>
+		context.db.query("notifications").collect()
+	);
+	return rows.map((row) => row.url);
+}
+
+describe("removeOrphanPerkNotifications", () => {
+	it("deletes rows linking to a deleted perk or request, and keeps the rest", async () => {
+		const backend = createTester();
+		const { liveId, liveRequestId } = await seedOrphans(backend);
+
+		const result = await backend.mutation(
+			internal.migrations.removeOrphanPerkNotifications,
+			{}
+		);
+
+		expect(result).toEqual(
+			expect.objectContaining({ orphans: 4, isDone: true, dryRun: false })
+		);
+		expect(await urls(backend)).toEqual([
+			`/perks?perk=${liveId}`,
+			`/perks?tab=requests&request=${liveRequestId}`,
+			"/tasks?task=example",
+		]);
+	});
+
+	it("reports the orphans on a dry run, and deletes and schedules nothing", async () => {
+		const backend = createTester();
+		await seedOrphans(backend);
+
+		const result = await backend.mutation(
+			internal.migrations.removeOrphanPerkNotifications,
+			{ dryRun: true }
+		);
+
+		expect(result).toEqual(
+			expect.objectContaining({ orphans: 4, isDone: true, dryRun: true })
+		);
+		expect(await urls(backend)).toHaveLength(7);
+		const jobs = await backend.run((context) =>
+			context.db.system.query("_scheduled_functions").collect()
+		);
+		expect(jobs).toEqual([]);
+	});
+});

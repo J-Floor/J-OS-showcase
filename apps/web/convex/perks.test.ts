@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
+import { perkPath, perkRequestPath } from "./emails/urls.ts";
 import { DAY_MS } from "./lib/constants.ts";
 import { isPerkExpired } from "./lib/perks.ts";
 import { NAME_MAX, TEXT_MAX } from "./lib/validate.ts";
@@ -856,5 +857,243 @@ describe("purgePerkRequests", () => {
 		expect(await requestCount(backend, perkId)).toBe(0);
 		expect(await scheduledJobs(backend)).toHaveLength(1);
 		expect(await requestCount(backend, otherId)).toBe(1);
+	});
+});
+
+/** History rows linking to `url`, one per recipient as `inbox.record` writes
+ *  them. `perkPath`/`perkRequestPath` are the paths dispatch stores. */
+async function insertNotifications(
+	backend: Tester,
+	{
+		personId,
+		url,
+		kind,
+		count,
+	}: { personId: Id<"people">; url: string; kind: string; count: number }
+): Promise<void> {
+	await backend.run(async (context) => {
+		for (let index = 0; index < count; index++) {
+			await context.db.insert("notifications", {
+				personId,
+				kind,
+				title: "Perk",
+				body: "Example Cloud · Credits",
+				url,
+				createdAt: Date.now(),
+			});
+		}
+	});
+}
+
+async function notificationUrls(backend: Tester): Promise<string[]> {
+	const rows = await backend.run((context) =>
+		context.db.query("notifications").collect()
+	);
+	return rows.map((row) => row.url);
+}
+
+async function requestIdsOf(
+	backend: Tester,
+	perkId: Id<"perks">
+): Promise<Id<"perkRequests">[]> {
+	const rows = await backend.run((context) =>
+		context.db
+			.query("perkRequests")
+			.withIndex("by_perkId_and_requestedAt", (range) =>
+				range.eq("perkId", perkId)
+			)
+			.collect()
+	);
+	return rows.map((row) => row._id);
+}
+
+describe("deleting a perk removes its notifications", () => {
+	// The test runs each batch itself, so a rescheduled job must not also run
+	// on its own.
+	beforeEach(() => {
+		vi.useFakeTimers({ toFake: ["setTimeout"] });
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("schedules the purge of the perk's notifications", async () => {
+		const { backend, perkId, asBoard } = await setupWithPerk();
+
+		await asBoard.mutation(api.perks.deletePerk, { perkId });
+
+		const jobs = await scheduledJobs(backend);
+		const purge = jobs.filter(
+			(job) => job.name === "perks:purgePerkNotifications"
+		);
+		expect(purge).toHaveLength(1);
+		expect(purge[0].args).toEqual([{ perkId }]);
+	});
+
+	it("purges a perk's notifications over more than one batch, and no other's", async () => {
+		const { backend, boardId, contactId } = await setup();
+		const perkId = await insertPerk(backend, {
+			partner: "Example Cloud",
+			title: "Credits",
+			contactId,
+		});
+		const otherId = await insertPerk(backend, {
+			partner: "Example Legal",
+			title: "Advice",
+			contactId,
+		});
+		// One more than a batch of 200, so the first run must hand on.
+		await insertNotifications(backend, {
+			personId: boardId,
+			url: perkPath(perkId),
+			kind: "perkAdded",
+			count: 201,
+		});
+		await insertNotifications(backend, {
+			personId: boardId,
+			url: perkPath(otherId),
+			kind: "perkAdded",
+			count: 1,
+		});
+		await insertNotifications(backend, {
+			personId: boardId,
+			url: "/tasks?task=example",
+			kind: "taskAssigned",
+			count: 1,
+		});
+
+		await backend.mutation(internal.perks.purgePerkNotifications, {
+			perkId,
+		});
+
+		expect(await notificationUrls(backend)).toHaveLength(3);
+		const handedOn = await scheduledJobs(backend);
+		expect(handedOn).toHaveLength(1);
+		expect(handedOn[0].name).toBe("perks:purgePerkNotifications");
+		expect(handedOn[0].args).toEqual([{ perkId }]);
+
+		// The rescheduled run, driven by hand: a short batch ends the chain.
+		await backend.mutation(internal.perks.purgePerkNotifications, {
+			perkId,
+		});
+
+		const left = await notificationUrls(backend);
+		expect(left).toHaveLength(2);
+		expect(left).toEqual(
+			expect.arrayContaining([perkPath(otherId), "/tasks?task=example"])
+		);
+		expect(await scheduledJobs(backend)).toHaveLength(1);
+	});
+
+	it("purges each request's notifications with the request, and no other perk's", async () => {
+		const { backend, boardId, contactId } = await setup();
+		const perkId = await insertPerk(backend, {
+			partner: "Example Cloud",
+			title: "Credits",
+			contactId,
+		});
+		const otherId = await insertPerk(backend, {
+			partner: "Example Legal",
+			title: "Advice",
+			contactId,
+		});
+		await insertRequests(backend, { perkId, personId: boardId, count: 2 });
+		await insertRequests(backend, {
+			perkId: otherId,
+			personId: boardId,
+			count: 1,
+		});
+		const requestIds = await requestIdsOf(backend, perkId);
+		for (const requestId of requestIds) {
+			await insertNotifications(backend, {
+				personId: boardId,
+				url: perkRequestPath(requestId),
+				kind: "perkRequested",
+				count: 3,
+			});
+		}
+		const [otherRequestId] = await requestIdsOf(backend, otherId);
+		await insertNotifications(backend, {
+			personId: boardId,
+			url: perkRequestPath(otherRequestId),
+			kind: "perkRequested",
+			count: 1,
+		});
+
+		await backend.mutation(internal.perks.purgePerkRequests, { perkId });
+
+		expect(await requestCount(backend, perkId)).toBe(0);
+		expect(await notificationUrls(backend)).toEqual([
+			perkRequestPath(otherRequestId),
+		]);
+		expect(await scheduledJobs(backend)).toEqual([]);
+	});
+
+	it("keeps a request whose notifications fill the batch, and finishes it next run", async () => {
+		const { backend, boardId, contactId } = await setup();
+		const perkId = await insertPerk(backend, {
+			partner: "Example Cloud",
+			title: "Credits",
+			contactId,
+		});
+		await insertRequests(backend, { perkId, personId: boardId, count: 1 });
+		const [requestId] = await requestIdsOf(backend, perkId);
+		await insertNotifications(backend, {
+			personId: boardId,
+			url: perkRequestPath(requestId),
+			kind: "perkRequested",
+			count: 201,
+		});
+
+		await backend.mutation(internal.perks.purgePerkRequests, { perkId });
+
+		expect(await notificationUrls(backend)).toHaveLength(1);
+		expect(await requestCount(backend, perkId)).toBe(1);
+		expect(await scheduledJobs(backend)).toHaveLength(1);
+
+		await backend.mutation(internal.perks.purgePerkRequests, { perkId });
+
+		expect(await notificationUrls(backend)).toEqual([]);
+		expect(await requestCount(backend, perkId)).toBe(0);
+		expect(await scheduledJobs(backend)).toHaveLength(1);
+	});
+
+	it("stops at the batch when a request delete uses its last slot", async () => {
+		const { backend, boardId, contactId } = await setup();
+		const perkId = await insertPerk(backend, {
+			partner: "Example Cloud",
+			title: "Credits",
+			contactId,
+		});
+		await insertRequests(backend, { perkId, personId: boardId, count: 2 });
+		const [firstId, secondId] = await requestIdsOf(backend, perkId);
+		// 199 rows plus the request itself fill the batch of 200 exactly.
+		await insertNotifications(backend, {
+			personId: boardId,
+			url: perkRequestPath(firstId),
+			kind: "perkRequested",
+			count: 199,
+		});
+		await insertNotifications(backend, {
+			personId: boardId,
+			url: perkRequestPath(secondId),
+			kind: "perkRequested",
+			count: 1,
+		});
+
+		await backend.mutation(internal.perks.purgePerkRequests, { perkId });
+
+		expect(await requestIdsOf(backend, perkId)).toEqual([secondId]);
+		expect(await notificationUrls(backend)).toEqual([
+			perkRequestPath(secondId),
+		]);
+		expect(await scheduledJobs(backend)).toHaveLength(1);
+
+		await backend.mutation(internal.perks.purgePerkRequests, { perkId });
+
+		expect(await requestCount(backend, perkId)).toBe(0);
+		expect(await notificationUrls(backend)).toEqual([]);
+		expect(await scheduledJobs(backend)).toHaveLength(1);
 	});
 });
