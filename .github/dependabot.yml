@@ -79,7 +79,12 @@ updates:
           - "major"
 
   - package-ecosystem: "github-actions"
-    directory: "/"
+    # "/" covers .github/workflows only. The shared composite actions in
+    # .github/actions/* pin their own actions (setup-bun, actions/cache) and
+    # need listing, or they never get updates.
+    directories:
+      - "/"
+      - "/.github/actions/*"
     schedule:
       interval: "weekly"
       day: "monday"
