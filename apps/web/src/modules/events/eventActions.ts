@@ -2,7 +2,7 @@ import { useMutation } from "convex-solidjs";
 
 import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
-import { useAbility } from "../../lib/ability.tsx";
+import { useCan } from "../../lib/ability.tsx";
 import { call } from "../../lib/call.ts";
 import {
 	bindPageKeys,
@@ -40,10 +40,10 @@ export function createEventsPageActions(options: {
 	openCreate: () => void;
 	isSheetOpen: () => boolean;
 }): ActionDescriptor<PageTarget> {
-	const ability = useAbility();
+	const can = useCan();
 	const newEvent = newAction({
 		noun: "event",
-		can: () => ability().can("create", "Events"),
+		can: () => can.I("create").the("Events"),
 		open: options.openCreate,
 	});
 	bindPageKeys(PAGE_SCOPE, [newEvent], () => !options.isSheetOpen());
@@ -60,7 +60,7 @@ export function createEventSheetActions(
 	sheet: OpenProps & { event?: Doc<"events">; loading?: boolean },
 	form: EventCreateFormState
 ) {
-	const ability = useAbility();
+	const can = useCan();
 	const deleteEvent = useMutation(api.events.deleteEvent);
 	const failure = createActionError(() => sheet.event?._id);
 	const removeEvent = createEntityRemove({
@@ -83,9 +83,9 @@ export function createEventSheetActions(
 		row: () => sheet.event,
 		remove: removeEvent,
 		error: failure.error,
-		canRemove: () => ability().can("manage", "Events"),
+		canRemove: () => can.I("manage").the("Events"),
 		create: {
-			can: () => ability().can("create", "Events") && form.canSubmit(),
+			can: () => can.I("create").the("Events") && form.canSubmit(),
 			disabledReason: () => form.disabledReason(),
 			run: () => form.submit(),
 			error: form.error,

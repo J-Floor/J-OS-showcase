@@ -121,10 +121,48 @@ export function AbilityProvider(props: {
 	);
 }
 
+/**
+ * The current ability accessor. Use `useCan()` for checks with a literal
+ * action; keep this accessor for checks whose action comes from data (for
+ * example `canView`, `visibleNotes`).
+ */
 export function useAbility(): Accessor<AppAbility> {
 	const context = useContext(AbilityContext);
 	invariant(context, "useAbility must be used within an <AbilityProvider>");
 	return context;
+}
+
+/** A permission check that reads as a question: `can.I("manage").the("Space")`. */
+export type CanSentence = {
+	I(action: Action): {
+		a(subject: Subject): boolean;
+		an(subject: Subject): boolean;
+		the(subject: Subject): boolean;
+	};
+};
+
+/**
+ * Builds the `can.I(action).the(subject)` sentence over an ability accessor.
+ * The accessor is read on each answer, so a call inside a memo, effect or JSX
+ * stays reactive to role changes. `a` / `an` / `the` are equivalent, as on
+ * `<Can>`.
+ */
+export function sentenceFor(
+	ability: Accessor<Pick<AppAbility, "can">>
+): CanSentence {
+	return {
+		I: (action) => {
+			function canDo(subject: Subject): boolean {
+				return ability().can(action, subject);
+			}
+			return { a: canDo, an: canDo, the: canDo };
+		},
+	};
+}
+
+/** The current viewer's `can.I(action).the(subject)`. */
+export function useCan(): CanSentence {
+	return sentenceFor(useAbility());
 }
 
 /**
@@ -141,10 +179,10 @@ export function Can(props: {
 	children: JSX.Element;
 	fallback?: JSX.Element;
 }): JSX.Element {
-	const ability = useAbility();
+	const can = useCan();
 	function allowed(): boolean {
 		const subject = props.a ?? props.an ?? props.the;
-		return subject !== undefined && ability().can(props.I, subject);
+		return subject !== undefined && can.I(props.I).the(subject);
 	}
 	return (
 		<Show when={allowed()} fallback={props.fallback}>

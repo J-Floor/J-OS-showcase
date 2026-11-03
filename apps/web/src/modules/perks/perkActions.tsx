@@ -5,7 +5,7 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { SITE_TIMEZONE } from "../../../convex/lib/time.ts";
 import type { PerkRow } from "../../../convex/perks.ts";
-import { useAbility } from "../../lib/ability.tsx";
+import { useCan } from "../../lib/ability.tsx";
 import { call } from "../../lib/call.ts";
 import { ActionKeys } from "../../shared/actions/createActionKeys.ts";
 import {
@@ -77,7 +77,7 @@ export function createPerkSheetActions(
 ) {
 	const deletePerk = useMutation(api.perks.deletePerk);
 	const confirm = useConfirm();
-	const ability = useAbility();
+	const can = useCan();
 	const failure = createActionError(() => sheet.perk?._id);
 
 	const request = requestAction(options.form);
@@ -100,14 +100,14 @@ export function createPerkSheetActions(
 	const create = createAction({
 		noun: "perk",
 		can: () =>
-			ability().can("create", "Perks") && options.createForm.canSubmit(),
+			can.I("create").the("Perks") && options.createForm.canSubmit(),
 		disabledReason: () => options.createForm.disabledReason(),
 		create: () => options.createForm.submit(),
 		error: options.createForm.error,
 	});
 
 	function actions(): ActionDescriptor<PerkRow>[] {
-		return ability().can("manage", "Perks") ? [request, remove] : [request];
+		return can.I("manage").the("Perks") ? [request, remove] : [request];
 	}
 	function isLive(): boolean {
 		return sheet.open && sheet.loading !== true;

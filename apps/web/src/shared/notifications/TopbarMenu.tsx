@@ -10,7 +10,7 @@ import {
 } from "@j-os/design-system";
 import { type JSX, Show } from "solid-js";
 
-import { Can, useAbility } from "../../lib/ability.tsx";
+import { Can, useCan } from "../../lib/ability.tsx";
 import { useConfirmedSignOut } from "../../modules/auth/SignOutButton.tsx";
 import { ICONS } from "../icons.ts";
 
@@ -62,8 +62,8 @@ export function NotificationsBell(): JSX.Element {
 export function TopbarMenu(): JSX.Element {
 	const { preference, cycle } = useTheme();
 	const signOut = useConfirmedSignOut();
-	const ability = useAbility();
-	const unread = useUnreadBadge(() => ability().can("view", "Notifications"));
+	const can = useCan();
+	const unread = useUnreadBadge(() => can.I("view").the("Notifications"));
 	return (
 		<Menu.Root
 			onSelect={(details) => {

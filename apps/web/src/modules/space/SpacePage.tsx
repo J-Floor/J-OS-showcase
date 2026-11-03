@@ -2,7 +2,7 @@ import { SearchInput, Tabs } from "@j-os/design-system";
 import { useSearchParams } from "@solidjs/router";
 import { createSignal, For, Show } from "solid-js";
 
-import { useAbility } from "../../lib/ability.tsx";
+import { useCan } from "../../lib/ability.tsx";
 import { HouseRules } from "../../shared/rules/HouseRules.tsx";
 import { RULES_SEARCH_LABEL } from "../../shared/rules/rulesContent.ts";
 
@@ -24,18 +24,15 @@ type TabEntry = (typeof INFO_TABS | typeof BOARD_ONLY_TABS)[number];
  *  the space info, Diagnostics for the board. */
 function createSpaceTabs() {
 	const [params, setParams] = useSearchParams();
-	const ability = useAbility();
-	function isBoard(): boolean {
-		return ability().can("manage", "Space");
-	}
+	const can = useCan();
 	function showsInfo(): boolean {
-		return ability().can("view", "SpaceInfo");
+		return can.I("view").the("SpaceInfo");
 	}
 	function infoTabs(): readonly TabEntry[] {
 		return showsInfo() ? INFO_TABS : [];
 	}
 	function boardOnlyTabs(): readonly TabEntry[] {
-		return isBoard() ? BOARD_ONLY_TABS : [];
+		return can.I("manage").the("Space") ? BOARD_ONLY_TABS : [];
 	}
 	function tabKeys(): readonly string[] {
 		return [

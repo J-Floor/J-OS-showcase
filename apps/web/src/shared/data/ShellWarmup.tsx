@@ -7,7 +7,7 @@ import {
 } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
-import { useAbility } from "../../lib/ability.tsx";
+import { useCan } from "../../lib/ability.tsx";
 import { preloadView } from "../../modules/prefetchModule.ts";
 import { modules } from "../../modules/registry.ts";
 
@@ -28,7 +28,7 @@ const WIFI_KEY = "wifi";
  */
 export function ShellWarmup(): JSX.Element {
 	useQuery(api.people.getCurrentPerson, {});
-	const ability = useAbility();
+	const can = useCan();
 	const [idle, setIdle] = createSignal(false);
 	const warmed = new Set<string>();
 
@@ -44,16 +44,15 @@ export function ShellWarmup(): JSX.Element {
 
 	createEffect(() => {
 		if (!idle()) return;
-		const current = ability();
 		// A prefetch while the keeper is off holds nothing, so it waits for
 		// the session rather than counting as done.
-		if (isKeeperActive() && current.can("view", "SpaceInfo")) {
+		if (isKeeperActive() && can.I("view").the("SpaceInfo")) {
 			once(WIFI_KEY, () => {
 				prefetch(api.wifi.get, {});
 			});
 		}
 		for (const entry of modules) {
-			if (current.can("view", entry.subject)) {
+			if (can.I("view").the(entry.subject)) {
 				once(entry.id, () => {
 					preloadView(entry);
 				});

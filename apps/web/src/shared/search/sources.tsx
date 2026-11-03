@@ -1,7 +1,7 @@
 import type { CommandPaletteItem } from "@j-os/design-system";
 import { createEffect, createSignal, For, type JSX } from "solid-js";
 
-import { useAbility } from "../../lib/ability.tsx";
+import { useCan } from "../../lib/ability.tsx";
 import { ROSTER_TABS } from "../../modules/community/communityTabs.ts";
 import { communityModule } from "../../modules/community/index.ts";
 import { inventoryModule } from "../../modules/inventory/index.ts";
@@ -25,9 +25,9 @@ import { EntitySource, type Emit } from "../entity/EntitySource.tsx";
 export function pageItems(
 	navigate: (path: string) => void
 ): CommandPaletteItem[] {
-	const ability = useAbility();
+	const can = useCan();
 	return modules
-		.filter((module) => ability().can("view", module.subject))
+		.filter((module) => can.I("view").the(module.subject))
 		.map((module) => ({
 			value: `page:${module.id}`,
 			label: module.label,
@@ -47,7 +47,7 @@ export function pageItems(
 export function tabItems(
 	navigate: (path: string) => void
 ): CommandPaletteItem[] {
-	const ability = useAbility();
+	const can = useCan();
 	const community = ROSTER_TABS.map((entry) => ({
 		value: `tab:${entry.tab}`,
 		label: entry.label,
@@ -61,7 +61,7 @@ export function tabItems(
 			prefetchModule(communityModule);
 		},
 	}));
-	if (!ability().can("view", "Inventory")) return community;
+	if (!can.I("view").the("Inventory")) return community;
 	return [
 		...community,
 		...INVENTORY_TABS.map((entry) => ({

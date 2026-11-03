@@ -3,7 +3,7 @@ import { createMemo, type Accessor } from "solid-js";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import type { PerkRow } from "../../../convex/perks.ts";
-import { useAbility } from "../../lib/ability.tsx";
+import { useCan } from "../../lib/ability.tsx";
 import { prefetchSpec } from "../../shared/data/queryKeeper.ts";
 import { useQuery } from "../../shared/data/useQuery.ts";
 import type { EntityDescriptor } from "../../shared/entity/entityDescriptor.ts";
@@ -25,7 +25,7 @@ import { visiblePerks } from "./visiblePerks.ts";
 function useRows(): Accessor<PerkRow[] | undefined> {
 	const perks = useQuery(api.perks.listPerks, {});
 	const mine = useQuery(api.perkRequests.myOpenPerkRequests, {});
-	const ability = useAbility();
+	const can = useCan();
 	const rows = createMemo(() => {
 		const loaded = perks.data();
 		const open = mine.data();
@@ -34,7 +34,7 @@ function useRows(): Accessor<PerkRow[] | undefined> {
 			open &&
 			visiblePerks(
 				loaded,
-				ability().can("manage", "Perks"),
+				can.I("manage").the("Perks"),
 				Date.now(),
 				new Set(open.map((request) => request.perkId))
 			)

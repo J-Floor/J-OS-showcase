@@ -7,7 +7,7 @@ import {
 import { A } from "@solidjs/router";
 import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
 
-import { useAbility } from "../../../lib/ability.tsx";
+import { useCan } from "../../../lib/ability.tsx";
 import { modules } from "../../../modules/registry.ts";
 
 import { BRAND_FRAME } from "./brandLanding.ts";
@@ -45,9 +45,9 @@ export function Sidebar() {
 	// Only the pages the role can "view" (declarative CASL gate; board sees
 	// all, a member sees just the directory + Space), listed so the phone bar
 	// can count them.
-	const ability = useAbility();
+	const can = useCan();
 	const pages = createMemo(() =>
-		modules.filter((module) => ability().can("view", module.subject))
+		modules.filter((module) => can.I("view").the(module.subject))
 	);
 	const split = createMemo(() => splitPhoneBar(pages()));
 	function hasOverflow(): boolean {

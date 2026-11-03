@@ -5,7 +5,7 @@ import { Show, createSignal, onMount, type Accessor } from "solid-js";
 import { api } from "../../../convex/_generated/api";
 import { SSID_MAX, WIFI_PASSWORD_MAX } from "../../../convex/lib/validate.ts";
 import type { Wifi } from "../../../convex/lib/wifi.ts";
-import { useAbility } from "../../lib/ability.tsx";
+import { useCan } from "../../lib/ability.tsx";
 import { call, ignoreFailure } from "../../lib/call.ts";
 import { ActionButton } from "../../shared/actions/ActionButton.tsx";
 import { ActionForm } from "../../shared/actions/ActionForm.tsx";
@@ -176,7 +176,7 @@ function WifiEditForm(props: {
  * tier, `manage` only to board/admin.
  */
 export function WifiCard(props: { active?: boolean }) {
-	const ability = useAbility();
+	const can = useCan();
 	const credentials = useQuery(api.wifi.get, {});
 	const logWifiOpen = useMutation(api.people.logWifiOpen);
 	const edit = createWifiEditing(credentials);
@@ -190,7 +190,7 @@ export function WifiCard(props: { active?: boolean }) {
 	});
 
 	function canEditWifi(): boolean {
-		return ability().can("manage", "Space");
+		return can.I("manage").the("Space");
 	}
 
 	const actions = createWifiActions({

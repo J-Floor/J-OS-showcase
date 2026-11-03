@@ -1,7 +1,14 @@
 // @vitest-environment happy-dom
+import { render } from "@solidjs/testing-library";
+import { createMemo, createRoot, createSignal } from "solid-js";
 import { expect, test } from "vitest";
 
-import { defineAbilityFor } from "./ability.tsx";
+import {
+	AbilityProvider,
+	defineAbilityFor,
+	sentenceFor,
+	useCan,
+} from "./ability.tsx";
 
 test("board can manage Tasks; member cannot view", () => {
 	expect(defineAbilityFor("board").can("manage", "Tasks")).toBe(true);
@@ -85,4 +92,61 @@ test("every community tier views Perks; only the board creates and manages them"
 test("staff and no role do not see Perks", () => {
 	expect(defineAbilityFor("staff").can("view", "Perks")).toBe(false);
 	expect(defineAbilityFor("none").can("view", "Perks")).toBe(false);
+});
+
+test("sentenceFor answers like the ability, whichever article is used", () => {
+	const can = sentenceFor(() => defineAbilityFor("board"));
+	expect(can.I("manage").the("Space")).toBe(true);
+	expect(can.I("manage").a("Space")).toBe(true);
+	expect(can.I("manage").an("Space")).toBe(true);
+	const member = sentenceFor(() => defineAbilityFor("member"));
+	expect(member.I("manage").the("Space")).toBe(false);
+	expect(member.I("view").the("Space")).toBe(true);
+});
+
+test("sentenceFor re-reads the ability, so a memo follows a role change", () => {
+	createRoot((dispose) => {
+		const [role, setRole] = createSignal<"member" | "board">("member");
+		const can = sentenceFor(createMemo(() => defineAbilityFor(role())));
+		const canManage = createMemo(() => can.I("manage").the("Space"));
+		// eslint-disable-next-line solid/reactivity -- untracked read to observe the memo after each signal write
+		expect(canManage()).toBe(false);
+		setRole("board");
+		// eslint-disable-next-line solid/reactivity -- untracked read to observe the memo after each signal write
+		expect(canManage()).toBe(true);
+		dispose();
+	});
+});
+
+function Probe() {
+	const can = useCan();
+	return <p>{can.I("view").the("Tasks") ? "yes" : "no"}</p>;
+}
+
+test("useCan reads the AbilityProvider role", () => {
+	const board = render(() => (
+		<AbilityProvider role="board">
+			<Probe />
+		</AbilityProvider>
+	));
+	expect(board.container.textContent).toBe("yes");
+	board.unmount();
+	const member = render(() => (
+		<AbilityProvider role="member">
+			<Probe />
+		</AbilityProvider>
+	));
+	expect(member.container.textContent).toBe("no");
+});
+
+test("useCan follows a role change after mount", () => {
+	const [role, setRole] = createSignal<"member" | "board">("member");
+	const view = render(() => (
+		<AbilityProvider role={role()}>
+			<Probe />
+		</AbilityProvider>
+	));
+	expect(view.container.textContent).toBe("no");
+	setRole("board");
+	expect(view.container.textContent).toBe("yes");
 });

@@ -25,9 +25,10 @@ function ability() {
 			(subject === "SpaceInfo" || subject === "Events"),
 	};
 }
-vi.mock("../../lib/ability.tsx", () => ({
-	useAbility: () => ability,
-}));
+vi.mock("../../lib/ability.tsx", async (orig) => {
+	const actual = await orig<typeof import("../../lib/ability.tsx")>();
+	return { ...actual, useCan: () => actual.sentenceFor(ability) };
+});
 const preloads = vi.hoisted(() => ({ events: vi.fn(), other: vi.fn() }));
 vi.mock("../../modules/registry.ts", () => ({
 	modules: [

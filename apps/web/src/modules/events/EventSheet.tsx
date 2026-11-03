@@ -2,7 +2,7 @@ import { Accordion, Sheet, PropertyRow } from "@j-os/design-system";
 import { Show, createEffect, createSignal, on, type Accessor } from "solid-js";
 
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
-import { Can, useAbility } from "../../lib/ability.tsx";
+import { Can, useCan } from "../../lib/ability.tsx";
 import { EditToggle } from "../../shared/components/EditToggle.tsx";
 import { useQuery } from "../../shared/data/useQuery.ts";
 import { createDraftGuard } from "../../shared/entity/createDraftGuard.ts";
@@ -201,9 +201,9 @@ function resetOnOpen(
  * `manage`/`Events` (board/admin) only.
  */
 export function EventSheet(props: EventSheetProps) {
-	const ability = useAbility();
+	const can = useCan();
 	function canManage(): boolean {
-		return ability().can("manage", "Events");
+		return can.I("manage").the("Events");
 	}
 
 	const form = createEventCreateForm({
