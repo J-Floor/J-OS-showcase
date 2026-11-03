@@ -47,7 +47,7 @@
 		"convex": "catalog:",
 		"convex-solidjs": "catalog:",
 		"neverthrow": "catalog:",
-		"node-forge": "^1.4.0",
+		"node-forge": "^1.4.2",
 		"pdf-lib": "^1.17.1",
 		"solid-js": "catalog:",
 		"web-push": "^3.6.7",
