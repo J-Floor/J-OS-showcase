@@ -1,0 +1,74 @@
+name: Quality sweep
+
+on:
+  workflow_dispatch:
+  pull_request:
+  schedule:
+    - cron: "0 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  sweep:
+    name: Quality sweep
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install dependencies
+        uses: ./.github/actions/install
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+
+      - name: Install crapper and dryer
+        run: bash scripts/quality/install-tools.sh crapper dryer
+
+      # The tools download their tree-sitter parsers on first run. The key follows
+      # the pins in install-tools.sh.
+      - name: Cache tree-sitter parsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/tree-sitter-language-pack
+          key: tree-sitter-language-pack-${{ runner.os }}-${{ hashFiles('scripts/quality/install-tools.sh') }}
+
+      - name: Structural duplication (dryer)
+        if: ${{ !cancelled() }}
+        run: bash scripts/quality/duplication.sh
+
+      - name: Coverage and risk scores (crapper)
+        if: ${{ !cancelled() }}
+        run: bash scripts/quality/coverage-scores.sh
+
+      - name: Restore earlier mutation results
+        if: ${{ !cancelled() }}
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/web/reports/mutation/incremental.json
+          key: mutation-incremental-${{ github.run_id }}
+          restore-keys: mutation-incremental-
+
+      - name: Mutation report (Stryker)
+        if: ${{ !cancelled() }}
+        working-directory: apps/web
+        run: bunx stryker run
+
+      - name: Save mutation results
+        if: ${{ !cancelled() }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/web/reports/mutation/incremental.json
+          key: mutation-incremental-${{ github.run_id }}
+
+      - name: Upload mutation report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mutation-report
+          path: apps/web/reports/mutation/
+          retention-days: 30

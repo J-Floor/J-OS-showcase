@@ -61,6 +61,18 @@ export function formatDate(ms: number): string {
 	return shortDate.format(new Date(ms));
 }
 
+// Calendar day (YYYY-MM-DD) of a Date read in LOCAL time. Any UI handing back a
+// local-midnight Date (e.g. `new Date()` for "today") needs its day read from
+// local Y/M/D components; `toISOString()` would convert to UTC and shift the day
+// by ±1 in non-UTC zones. Reading the local components recovers the day the user
+// actually sees, which isoToMs then stores as UTC midnight.
+export function dateToIso(date: Date): string {
+	const year = String(date.getFullYear());
+	const month = String(date.getMonth() + 1).padStart(2, "0");
+	const day = String(date.getDate()).padStart(2, "0");
+	return `${year}-${month}-${day}`;
+}
+
 /** One formatter per time zone, built on first use: a table formats a date
  *  per row, and building a formatter costs far more than using one. */
 function perTimeZone(

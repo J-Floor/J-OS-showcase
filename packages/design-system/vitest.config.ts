@@ -20,6 +20,13 @@ export default defineConfig({
     environment: "jsdom",
     maxWorkers: "100%",
     globals: true,
+    coverage: {
+      provider: "v8",
+      reporter: ["lcov"],
+      reportOnFailure: true,
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: ["**/*.test.*"],
+    },
     setupFiles: [jestDomSetup, resizeObserverSetup, domStorageSetup],
   },
 });

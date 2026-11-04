@@ -46,7 +46,7 @@ export type InventorySheetActions<Row extends { _id: string }> = ReturnType<
 /** The header actions of an existing row's sheet: the edit toggle and
  *  Delete, whose label, icon and key come from the descriptor. Nothing while
  *  no row is loaded. */
-export function SheetHeaderActions<Row extends { _id: string }>(props: {
+function SheetHeaderActions<Row extends { _id: string }>(props: {
 	actions: InventorySheetActions<Row>;
 	isOpen: boolean;
 }): JSX.Element {

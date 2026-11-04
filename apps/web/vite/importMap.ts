@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { err, ok, type Result } from "neverthrow";
 import type { Plugin, Rollup } from "vite";
 
-export const IMPORT_MAP_CSP_FILE = ".importmap-csp";
+const IMPORT_MAP_CSP_FILE = ".importmap-csp";
 
 const IMPORT_MAP_ASSET = "importmap.json";
 const HTML_ASSET = "index.html";

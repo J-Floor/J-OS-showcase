@@ -33,7 +33,7 @@ import { IconButton } from "../IconButton/IconButton.tsx";
 import styles from "./Dialog.module.scss";
 
 /** Where the card sits: centred in the page, or against the bottom edge. */
-export type DialogPlacement = "center" | "bottom";
+type DialogPlacement = "center" | "bottom";
 
 export type DialogContentProps = ArkDialog.ContentProps &
 	WithPartClasses<"backdrop" | "positioner" | "content"> & {

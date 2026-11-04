@@ -1,7 +1,7 @@
 import type { EnumOption } from "@j-os/design-system";
 import { type Accessor, createMemo } from "solid-js";
 
-export function uniqueEnum(values: readonly string[]): EnumOption[] {
+function uniqueEnum(values: readonly string[]): EnumOption[] {
 	return (
 		[...new Set(values)]
 			.filter((value) => value !== "")

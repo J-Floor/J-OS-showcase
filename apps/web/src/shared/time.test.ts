@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	dateToIso,
 	dayLabel,
 	formatAgo,
 	formatDate,
@@ -90,5 +91,12 @@ describe("formatMonthIn", () => {
 			"February 2026"
 		);
 		expect(formatMonthIn(LATE_EVENING_UTC, "UTC")).toBe("January 2026");
+	});
+});
+
+describe("dateToIso", () => {
+	it("reads the local calendar day, so midnight does not shift a day via UTC", () => {
+		const localMidnight = new Date(2026, 5, 22); // local 2026-06-22 00:00
+		expect(dateToIso(localMidnight)).toBe("2026-06-22");
 	});
 });

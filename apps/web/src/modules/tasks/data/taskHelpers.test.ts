@@ -1,11 +1,11 @@
 import { expect, test } from "vitest";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
+import { dateToIso } from "../../../shared/time.ts";
 
 import {
 	isoToMs,
 	msToIso,
-	dateToIso,
 	formatDate,
 	sortColumn,
 	personName,
@@ -53,12 +53,8 @@ test("isoToMs / msToIso round-trip a date", () => {
 	expect(msToIso(undefined)).toBeUndefined();
 });
 
-test("dateToIso reads the LOCAL calendar day (timezone-safe)", () => {
-	// A local-midnight Date must serialize to the same calendar day in any
-	// timezone, not shift a day via UTC conversion.
+test("a local date picked in the calendar reaches storage as that UTC day", () => {
 	const localMidnight = new Date(2026, 5, 22); // local 2026-06-22 00:00
-	expect(dateToIso(localMidnight)).toBe("2026-06-22");
-	// And it feeds isoToMs to the same UTC-midnight ms storage uses.
 	expect(isoToMs(dateToIso(localMidnight))).toBe(Date.parse("2026-06-22"));
 });
 

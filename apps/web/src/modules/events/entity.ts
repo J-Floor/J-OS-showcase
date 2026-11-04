@@ -15,6 +15,7 @@ import { visitorUrl } from "./visitorUrl.ts";
 
 /** `useRows` factory for the events descriptor — wraps `listEvents`. Must be
  *  called inside a component (never at module scope). */
+// dry-ignore -- descriptor row hooks for unrelated queries
 function useRows(): Accessor<Doc<"events">[] | undefined> {
 	const events = useQuery(api.events.listEvents, {});
 	return events.data;

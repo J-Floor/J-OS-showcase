@@ -14,7 +14,7 @@ export const palette = {
 	buttonText: "#ffffff", // --core-grey-0
 };
 
-export const fontStack =
+const fontStack =
 	"-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 
 /** Shared style objects so every template/layout looks identical. */

@@ -91,6 +91,7 @@ function useEntityActions<
 	};
 }
 
+// dry-ignore -- one-line hooks bound to unrelated API functions
 export function useCategoryActions() {
 	return useEntityActions({
 		create: api.inventory.createCategory,
@@ -99,6 +100,7 @@ export function useCategoryActions() {
 	});
 }
 
+// dry-ignore -- one-line hooks bound to unrelated API functions
 export function useItemTypeActions() {
 	return useEntityActions({
 		create: api.inventory.createItemType,

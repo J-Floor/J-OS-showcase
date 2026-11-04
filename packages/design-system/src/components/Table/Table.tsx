@@ -321,7 +321,7 @@ function createTableViewport<Data extends Record<string, unknown>>(options: {
  * `<table>` with `display: contents` rows. Not ported: a row with no box
  * cannot be measured, windowed or ringed.
  */
-export function Root<Data extends Record<string, unknown>>(
+function Root<Data extends Record<string, unknown>>(
 	props: TableRootProps<Data>
 ): JSX.Element {
 	function stickyHeader(): boolean {

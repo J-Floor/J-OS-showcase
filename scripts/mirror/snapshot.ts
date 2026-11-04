@@ -13,7 +13,7 @@ const EXCLUDED_PATHS: readonly string[] = [
   "scripts/agent-guard.ts",
 ];
 
-export function isSuperpowersPath(path: string): boolean {
+function isSuperpowersPath(path: string): boolean {
   return `/${path.toLowerCase()}/`.includes(`/${SUPERPOWERS_DIR}/`);
 }
 

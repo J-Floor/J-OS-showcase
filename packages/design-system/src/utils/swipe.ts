@@ -83,6 +83,7 @@ function isAlongAxis(along: number, across: number): boolean {
 	);
 }
 
+// dry-ignore -- same axis test on each axis, with different direction names
 export function swipeDirection(
 	dx: number,
 	dy: number

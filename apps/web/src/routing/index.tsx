@@ -74,7 +74,7 @@ export function ModuleRoutes() {
 	);
 }
 
-const SPLASH_MIN_MS = 900;
+export const SPLASH_MIN_MS = 900;
 
 // Routes worth remembering as a landing target. `/` and `/signin` are excluded
 // so we never redirect into a loop or away from a signed-out user.

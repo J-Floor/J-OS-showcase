@@ -150,3 +150,10 @@ test("useCan follows a role change after mount", () => {
 	setRole("board");
 	expect(view.container.textContent).toBe("yes");
 });
+
+test("core members view and manage Tasks; members do not", () => {
+	const core = defineAbilityFor("core");
+	expect(core.can("view", "Tasks")).toBe(true);
+	expect(core.can("manage", "Tasks")).toBe(true);
+	expect(defineAbilityFor("member").can("manage", "Tasks")).toBe(false);
+});

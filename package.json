@@ -12,11 +12,14 @@
 		"typecheck": "turbo typecheck",
 		"test": "turbo test && bun test scripts",
 		"leaks": "bun scripts/leaks.ts",
+		"knip": "knip",
+		"quality": "bash scripts/quality/run.sh",
 		"format": "turbo format",
 		"demo": "bun run --filter @j-os/design-system demo"
 	},
 	"devDependencies": {
 		"jscpd": "catalog:",
+		"knip": "catalog:",
 		"turbo": "^2.11.10",
 		"typescript": "catalog:",
 		"prettier": "catalog:"
@@ -32,10 +35,13 @@
 			"@solid-primitives/keyed": "1.5.3",
 			"@solid-primitives/refs": "1.1.4",
 			"@solidjs/testing-library": "^0.8.10",
+			"@stryker-mutator/core": "10.1.1",
+			"@stryker-mutator/vitest-runner": "10.1.1",
 			"@tanstack/solid-hotkeys": "^0.10.0",
 			"@tanstack/solid-table": "^8.21.3",
 			"@tanstack/solid-virtual": "^3.13.50",
 			"@testing-library/jest-dom": "^7.0.1",
+			"@vitest/coverage-v8": "5.0.5",
 			"@eslint/js": "^10.0.1",
 			"@solidjs/router": "1.0.0",
 			"clsx": "^2.1.1",
@@ -52,6 +58,7 @@
 			"eslint-plugin-unicorn": "^79.0.0",
 			"eslint-plugin-unused-imports": "^4.4.1",
 			"jscpd": "^5.4.2",
+			"knip": "6.43.0",
 			"neverthrow": "8.2.0",
 			"happy-dom": "^21.0.4",
 			"jsdom": "^29.1.1",
@@ -60,7 +67,6 @@
 			"solid-js": "1.9.17",
 			"stylelint": "17.16.0",
 			"stylelint-config-recess-order": "^7.9.0",
-			"stylelint-config-standard": "^40.0.0",
 			"stylelint-config-standard-scss": "^17.0.0",
 			"stylelint-declaration-block-no-ignored-properties": "^3.0.0",
 			"stylelint-declaration-strict-value": "^1.12.1",
@@ -74,7 +80,6 @@
 			"vite": "8.3.5",
 			"vite-plugin-pwa": "2.0.0",
 			"vite-plugin-solid": "2.11.14",
-			"vite-tsconfig-paths": "6.1.1",
 			"vitest": "5.0.5"
 		}
 	}

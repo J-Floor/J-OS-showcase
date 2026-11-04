@@ -29,6 +29,7 @@ export const OUTCOME_LABEL = {
 } as const satisfies Record<Doc<"doorLog">["outcome"], string>;
 
 /** A door audit row records the override it moved to. */
+// dry-ignore -- same if-then-ternary shape as booleanSegment in the design system Table filter, but it words a door override and that one maps a filter value
 export function doorEventLabel(override: unknown): string {
 	if (override === "force_off") return "Door access blocked by the board";
 	return override === "force_on"

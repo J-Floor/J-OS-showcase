@@ -148,6 +148,7 @@ export function lockNamesFromModel(model: DoorModel, ids: string[]): string[] {
  */
 let injectedProvider: DoorProvider | undefined;
 
+// dry-ignore -- one-line test seam for an unrelated provider
 export function setDoorProviderForTests(
 	provider: DoorProvider | undefined
 ): void {

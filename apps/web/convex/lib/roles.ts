@@ -66,6 +66,7 @@ export function isBoardLevel(
 }
 
 /** May sign in: one of {@link ACCESS_TIERS}. */
+// dry-ignore -- two tier predicates over different sets, which change independently
 export function isAccessTier(
 	tier: string | undefined
 ): tier is (typeof ACCESS_TIERS)[number] {

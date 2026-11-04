@@ -113,6 +113,13 @@ export default defineConfig(({ mode }) => ({
   },
   test: {
     environment: 'edge-runtime',
+    coverage: {
+      provider: 'v8',
+      reporter: ['lcov'],
+      reportOnFailure: true,
+      include: ['convex/**/*.ts', 'src/**/*.{ts,tsx}'],
+      exclude: ['**/_generated/**', '**/emails/generated/**', '**/*.test.*'],
+    },
     // Vitest defaults to availableParallelism - 1 workers, i.e. a single worker
     // on a 2-vCPU CI runner. Use every CPU: ~45% faster there.
     maxWorkers: '100%',

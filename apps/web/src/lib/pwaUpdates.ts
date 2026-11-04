@@ -9,7 +9,7 @@ import {
 /** Minimal shape of `document` this module needs: enough to listen for
  * visibility changes and read the current state. A real `EventTarget` (or
  * `document` itself) satisfies this without jsdom. */
-export type PwaUpdatesDocument = Pick<
+type PwaUpdatesDocument = Pick<
 	EventTarget,
 	"addEventListener" | "removeEventListener"
 > & {
@@ -124,10 +124,7 @@ function defaultChannel(): ChannelLike | null {
 }
 
 /** The slice of `navigator.serviceWorker` this module needs. */
-export type ServiceWorkerContainerLike = Pick<
-	EventTarget,
-	"addEventListener"
-> & {
+type ServiceWorkerContainerLike = Pick<EventTarget, "addEventListener"> & {
 	controller: unknown;
 };
 

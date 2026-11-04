@@ -29,6 +29,7 @@ function optionalText(raw: string | null | undefined): string | undefined {
 	return text === "" ? undefined : text;
 }
 
+// dry-ignore -- different table, index and error from assertAssetTagFree
 async function assertCategoryNameFree(
 	context: QueryCtx,
 	name: string,
@@ -74,30 +75,19 @@ async function assertAssetTagFree(
 		: ok();
 }
 
-async function requireCategory(
-	context: QueryCtx,
-	id: Id<"itemCategories">
-): Promise<Doc<"itemCategories">> {
-	const row = await context.db.get(id);
-	invariant(row, "Category not found.");
-	return row;
-}
+const NOT_FOUND = {
+	itemCategories: "Category not found.",
+	itemTypes: "Item type not found.",
+	items: "Item not found.",
+} as const;
 
-async function requireItemType(
+async function requireRow<T extends keyof typeof NOT_FOUND>(
 	context: QueryCtx,
-	id: Id<"itemTypes">
-): Promise<Doc<"itemTypes">> {
+	table: T,
+	id: Id<T>
+): Promise<Doc<T>> {
 	const row = await context.db.get(id);
-	invariant(row, "Item type not found.");
-	return row;
-}
-
-async function requireItem(
-	context: QueryCtx,
-	id: Id<"items">
-): Promise<Doc<"items">> {
-	const row = await context.db.get(id);
-	invariant(row, "Item not found.");
+	invariant(row, NOT_FOUND[table]);
 	return row;
 }
 
@@ -164,7 +154,7 @@ export const updateCategory = mutation({
 	},
 	handler: async (context, args): Promise<null> => {
 		unwrap(await requireRole(context, BOARD_LEVEL));
-		await requireCategory(context, args.id);
+		await requireRow(context, "itemCategories", args.id);
 		const patch: {
 			name?: string;
 			description?: string;
@@ -185,7 +175,7 @@ export const removeCategory = mutation({
 	args: { id: v.id("itemCategories") },
 	handler: async (context, { id }): Promise<null> => {
 		unwrap(await requireRole(context, BOARD_LEVEL));
-		await requireCategory(context, id);
+		await requireRow(context, "itemCategories", id);
 		const types = await context.db
 			.query("itemTypes")
 			.withIndex("by_category", (range) => range.eq("categoryId", id))
@@ -238,7 +228,7 @@ export const createItemType = mutation({
 	},
 	handler: async (context, args): Promise<Id<"itemTypes">> => {
 		unwrap(await requireRole(context, BOARD_LEVEL));
-		await requireCategory(context, args.categoryId);
+		await requireRow(context, "itemCategories", args.categoryId);
 		const name = unwrap(requireName(args.name));
 		unwrap(await assertTypeNameFree(context, args.categoryId, name));
 		return context.db.insert("itemTypes", {
@@ -258,10 +248,10 @@ export const updateItemType = mutation({
 	},
 	handler: async (context, args): Promise<null> => {
 		unwrap(await requireRole(context, BOARD_LEVEL));
-		const existing = await requireItemType(context, args.id);
+		const existing = await requireRow(context, "itemTypes", args.id);
 		const categoryId = args.categoryId ?? existing.categoryId;
 		if (args.categoryId !== undefined)
-			await requireCategory(context, args.categoryId);
+			await requireRow(context, "itemCategories", args.categoryId);
 		const name =
 			args.name === undefined
 				? existing.name
@@ -288,7 +278,7 @@ export const removeItemType = mutation({
 	args: { id: v.id("itemTypes") },
 	handler: async (context, { id }): Promise<null> => {
 		unwrap(await requireRole(context, BOARD_LEVEL));
-		await requireItemType(context, id);
+		await requireRow(context, "itemTypes", id);
 		const items = await context.db
 			.query("items")
 			.withIndex("by_type", (range) => range.eq("typeId", id))
@@ -355,7 +345,7 @@ export const createItem = mutation({
 	},
 	handler: async (context, args): Promise<Id<"items">> => {
 		unwrap(await requireRole(context, BOARD_LEVEL));
-		await requireItemType(context, args.typeId);
+		await requireRow(context, "itemTypes", args.typeId);
 		const assetTag = unwrap(parseAssetTag(args.assetTag));
 		unwrap(await assertAssetTagFree(context, assetTag));
 		return context.db.insert("items", {
@@ -375,9 +365,9 @@ export const updateItem = mutation({
 	},
 	handler: async (context, args): Promise<null> => {
 		unwrap(await requireRole(context, BOARD_LEVEL));
-		await requireItem(context, args.id);
+		await requireRow(context, "items", args.id);
 		if (args.typeId !== undefined)
-			await requireItemType(context, args.typeId);
+			await requireRow(context, "itemTypes", args.typeId);
 		const patch: {
 			typeId?: Id<"itemTypes">;
 			assetTag?: string;
@@ -400,7 +390,7 @@ export const removeItem = mutation({
 	args: { id: v.id("items") },
 	handler: async (context, { id }): Promise<null> => {
 		unwrap(await requireRole(context, BOARD_LEVEL));
-		await requireItem(context, id);
+		await requireRow(context, "items", id);
 		await context.db.delete(id);
 		return null;
 	},

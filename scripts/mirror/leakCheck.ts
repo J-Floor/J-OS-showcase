@@ -32,7 +32,7 @@ export type LeakCheck =
   | { status: "error"; output: string; cause: string };
 
 /** `GITLEAKS_BIN` when set, else a `gitleaks` on PATH. */
-export function gitleaksBinary(): string | undefined {
+function gitleaksBinary(): string | undefined {
   return process.env.GITLEAKS_BIN || Bun.which("gitleaks") || undefined;
 }
 

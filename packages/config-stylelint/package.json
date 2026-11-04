@@ -12,7 +12,6 @@
 	],
 	"dependencies": {
 		"stylelint-config-recess-order": "catalog:",
-		"stylelint-config-standard": "catalog:",
 		"stylelint-config-standard-scss": "catalog:",
 		"stylelint-declaration-block-no-ignored-properties": "catalog:",
 		"stylelint-declaration-strict-value": "catalog:",
@@ -23,7 +22,6 @@
 		"stylelint-use-nesting": "catalog:"
 	},
 	"devDependencies": {
-		"@j-os/config-eslint": "workspace:*",
 		"stylelint": "catalog:"
 	}
 }

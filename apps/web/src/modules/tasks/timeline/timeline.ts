@@ -48,7 +48,7 @@ export type TimelineBar = Pick<Project, "name" | "leaderId"> & {
 	endMs: number;
 };
 
-export type TimelineSegment = {
+type TimelineSegment = {
 	/** Stable key for `<For>`. */
 	key: string;
 	label: string;

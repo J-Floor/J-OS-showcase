@@ -8,7 +8,7 @@ import type { AppAbility, Permission } from "../../lib/ability.tsx";
  * person last acknowledged — so a user who skips a release still sees its notes
  * folded into the next dialog. Only features belong here, not improvements.
  */
-export type ChangeItem = {
+type ChangeItem = {
 	text: string;
 	/** The ability a viewer needs to see this item; none means everyone. */
 	audience?: Permission;

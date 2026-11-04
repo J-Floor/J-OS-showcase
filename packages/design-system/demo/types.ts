@@ -24,7 +24,7 @@ export const FIELD_STATE_CONTROLS = {
  * glue, not the component API.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- intentional loose harness boundary
-export type PropValues = Record<string, any>;
+type PropValues = Record<string, any>;
 
 /** A single component's playground entry (one per `*.demo.tsx` file). */
 export type Demo = {

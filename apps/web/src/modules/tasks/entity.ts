@@ -9,6 +9,7 @@ import { ICONS } from "../../shared/icons.ts";
 
 /** `useRows` factory for the task descriptor — wraps `tasks.list`. Must be
  *  called inside a component (never at module scope). */
+// dry-ignore -- descriptor row hooks for unrelated queries
 function useTaskRows(): Accessor<Doc<"tasks">[] | undefined> {
 	const tasks = useQuery(api.tasks.list, {});
 	return tasks.data;

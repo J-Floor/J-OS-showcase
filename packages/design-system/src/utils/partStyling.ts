@@ -4,7 +4,7 @@ import clsx from "clsx";
 type PartClassKey<Part extends string> = `${Part}Class`;
 
 /** Map of per-part class overrides, e.g. `{ contentClass?: string; positionerClass?: string }`. */
-export type PartClasses<Part extends string> = {
+type PartClasses<Part extends string> = {
 	[P in Part as PartClassKey<P>]?: string;
 };
 

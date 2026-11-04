@@ -79,6 +79,7 @@ export function zonedLocalFromEpoch(ms: number, timeZone: string): string {
 export function todayIn(timeZone: string, now: number): string {
 	return zonedDate(zonedLocalFromEpoch(now, timeZone));
 }
+// dry-ignore -- two one-line projections of a parsed local time that change independently
 export function zonedDate(local: string): string {
 	const zoned = parseLocalLoose(local);
 	return `${zoned.year}-${pad(zoned.month)}-${pad(zoned.day)}`;

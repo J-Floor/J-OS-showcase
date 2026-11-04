@@ -402,6 +402,7 @@ function request(
 }
 
 /** All Nuki account users on the team. */
+// dry-ignore -- one-line list reads of unrelated Smartlock API resources
 export function listAccountUsers(
 	deps: NukiDeps
 ): ResultAsync<AccountUser[], DoorError> {
@@ -411,6 +412,7 @@ export function listAccountUsers(
 }
 
 /** Every smartlock authorization on the team (across all locks and users). */
+// dry-ignore -- one-line list reads of unrelated Smartlock API resources
 function listSmartlockAuths(
 	deps: NukiDeps
 ): ResultAsync<SmartlockAuth[], DoorError> {

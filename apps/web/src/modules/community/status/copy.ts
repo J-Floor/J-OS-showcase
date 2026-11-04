@@ -90,7 +90,7 @@ export function headline(status: PersonStatus): string {
  * A point in time, not a duration: under the "State since" label, "Today" and
  * "3 days ago" both read as sentences, where a bare "3 days" would not.
  */
-export function sinceLabel(days: number): string {
+function sinceLabel(days: number): string {
 	if (days <= 0) return "Today";
 	return days === 1 ? "Yesterday" : `${String(days)} days ago`;
 }

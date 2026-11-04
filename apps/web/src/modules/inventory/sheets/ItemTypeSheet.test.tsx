@@ -306,3 +306,83 @@ test("item type: the header Delete and unlock buttons name their keys in a chip 
 	expect(remove.querySelector("kbd")).not.toBeNull();
 	expect(unlock.querySelector("kbd")).not.toBeNull();
 });
+
+async function fillCreateForm(description?: string): Promise<void> {
+	fireEvent.input(screen.getByLabelText("Name"), {
+		target: { value: "Desk" },
+	});
+	if (description !== undefined)
+		fireEvent.input(screen.getByLabelText("Description"), {
+			target: { value: description },
+		});
+	fireEvent.click(screen.getByRole("combobox"));
+	fireEvent.click(await screen.findByRole("option", { name: "Furniture" }));
+}
+
+test("create mode: Create sends the name, category and description, then closes the sheet", async () => {
+	mockCreate.mockResolvedValue(undefined);
+	const onOpenChange = vi.fn();
+	render(() => <ItemTypeSheet open onOpenChange={onOpenChange} />);
+	await fillCreateForm("Height adjustable");
+	const create = screen.getByRole("button", { name: /Create item type/ });
+	await waitFor(() => {
+		expect(create).not.toBeDisabled();
+	});
+	fireEvent.click(create);
+	await waitFor(() => {
+		expect(mockCreate).toHaveBeenCalledTimes(1);
+	});
+	expect(mockCreate).toHaveBeenCalledWith({
+		name: "Desk",
+		categoryId: CATEGORY_ID,
+		description: "Height adjustable",
+	});
+	await waitFor(() => {
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+	});
+});
+
+test("create mode: a blank description is left out of the new item type", async () => {
+	mockCreate.mockResolvedValue(undefined);
+	render(() => <ItemTypeSheet open onOpenChange={() => {}} />);
+	await fillCreateForm("   ");
+	const create = screen.getByRole("button", { name: /Create item type/ });
+	await waitFor(() => {
+		expect(create).not.toBeDisabled();
+	});
+	fireEvent.click(create);
+	await waitFor(() => {
+		expect(mockCreate).toHaveBeenCalledTimes(1);
+	});
+	expect(mockCreate).toHaveBeenCalledWith({
+		name: "Desk",
+		categoryId: CATEGORY_ID,
+		description: undefined,
+	});
+});
+
+test("create mode: a name and category are both needed before anything is sent", async () => {
+	render(() => <ItemTypeSheet open onOpenChange={() => {}} />);
+	fireEvent.input(screen.getByLabelText("Name"), {
+		target: { value: "Desk" },
+	});
+	const create = screen.getByRole("button", { name: /Create item type/ });
+	expect(create).toBeDisabled();
+	fireEvent.click(create);
+	await Promise.resolve();
+	expect(mockCreate).not.toHaveBeenCalled();
+});
+
+test("create mode: a refused create shows the reason and keeps the sheet open", async () => {
+	mockCreate.mockRejectedValue(new Error("refused"));
+	const onOpenChange = vi.fn();
+	render(() => <ItemTypeSheet open onOpenChange={onOpenChange} />);
+	await fillCreateForm();
+	const create = screen.getByRole("button", { name: /Create item type/ });
+	await waitFor(() => {
+		expect(create).not.toBeDisabled();
+	});
+	fireEvent.click(create);
+	expect(await screen.findByText("Could not create.")).toBeInTheDocument();
+	expect(onOpenChange).not.toHaveBeenCalledWith(false);
+});

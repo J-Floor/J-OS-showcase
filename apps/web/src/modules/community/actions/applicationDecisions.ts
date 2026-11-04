@@ -190,7 +190,7 @@ export function useApplicationDecisions(): ApplicationDecisionHandlers & {
 	return { ...decisions, actions: () => actions };
 }
 
-export type Action = "guest" | "member" | "deny" | "undeny";
+type Action = "guest" | "member" | "deny" | "undeny";
 
 /** The machine edge each decision travels, and so the one that decides whether
  *  it is on offer. */

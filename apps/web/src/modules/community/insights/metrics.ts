@@ -24,9 +24,9 @@ import type { PersonRow } from "../../../../convex/people.ts";
 const WEEK_MS = DAYS_PER_WEEK * DAY_MS;
 /** How far ahead "expiring soon" looks. Two weeks is roughly the notice a board
  *  member needs to have the conversation before the door shuts. */
-export const EXPIRY_HORIZON_DAYS = 14;
+const EXPIRY_HORIZON_DAYS = 14;
 /** Past this many days in `onboarding`, somebody is stuck rather than busy. */
-export const STALLED_ONBOARDING_DAYS = 14;
+const STALLED_ONBOARDING_DAYS = 14;
 
 /** The tiers that make up "the membership", as opposed to guests. */
 const MEMBER_TIERS = new Set(["member", "core", "board", "admin"]);

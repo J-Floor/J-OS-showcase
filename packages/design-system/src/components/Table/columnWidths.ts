@@ -89,7 +89,7 @@ function textContext(): TextContext | null {
  * `<canvas>`. `undefined` with neither, and the table then sizes content
  * columns from their headers alone.
  */
-export function canvasTextMeasurer(font: TextFont): TextMeasurer | undefined {
+function canvasTextMeasurer(font: TextFont): TextMeasurer | undefined {
 	const context = textContext();
 	if (!context) return undefined;
 	return (text) => {
@@ -131,7 +131,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * other value (string, number, bigint, `ArrayBuffer`, ...) by `Object.is`.
  * A push re-parses every nested object and array fresh.
  */
-export function sameStructure(left: unknown, right: unknown): boolean {
+function sameStructure(left: unknown, right: unknown): boolean {
 	if (Object.is(left, right)) return true;
 	if (Array.isArray(left)) {
 		return (

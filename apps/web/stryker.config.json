@@ -1,0 +1,26 @@
+{
+	"testRunner": "vitest",
+	"plugins": ["@stryker-mutator/vitest-runner"],
+	"vitest": {
+		"configFile": "vitest.stryker.config.ts"
+	},
+	"inPlace": true,
+	"concurrency": 2,
+	"coverageAnalysis": "perTest",
+	"timeoutMS": 30000,
+	"incremental": true,
+	"incrementalFile": "reports/mutation/incremental.json",
+	"reporters": ["clear-text", "html", "json", "progress-append-only"],
+	"mutate": [
+		"convex/lib/authGuard.ts",
+		"convex/lib/roles.ts",
+		"convex/lib/doorActuation.ts",
+		"convex/lib/doorLocks.ts",
+		"convex/lib/doorPresence.ts",
+		"convex/door.ts",
+		"convex/doorInternal.ts",
+		"convex/doorActions.ts",
+		"convex/auth.ts",
+		"src/lib/ability.tsx"
+	]
+}

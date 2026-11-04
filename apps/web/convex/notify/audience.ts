@@ -25,6 +25,7 @@ async function entitledInTiers(
 }
 
 /** Entitled board + admin: the audience of every board-facing kind. */
+// dry-ignore -- one-line audiences that change independently
 export function boardIds(
 	context: QueryCtx,
 	now = Date.now()

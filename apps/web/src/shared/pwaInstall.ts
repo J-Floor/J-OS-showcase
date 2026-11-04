@@ -14,6 +14,7 @@ function onBeforeInstallPrompt(event: Event): void {
 	event.preventDefault();
 	setDeferred(event as BeforeInstallPromptEvent);
 }
+// dry-ignore -- handler and test reset both clear the singleton, for different callers
 function onInstalled(): void {
 	setInstalled(true);
 	setDeferred(undefined);

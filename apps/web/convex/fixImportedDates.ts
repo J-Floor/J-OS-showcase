@@ -80,6 +80,7 @@ function repairedEventAt(
 }
 
 /** Events still sitting on the bad day, oldest batch first. */
+// dry-ignore -- same bounded read as badSignatures below, but of personEvents on at; one helper would have to be generic over table and field, which costs more than two short typed reads
 async function badEvents(
 	context: QueryCtx,
 	limit: number

@@ -26,7 +26,7 @@ const OPEN_POPUP = [
  *  in its form (Escape closes the list, Enter picks an option). The sheet
  *  opts in to keys with `data-shortcut-surface`. Read for keys that fire
  *  while typing, which skip the typing check that would otherwise catch it. */
-export function isHeldByPopup(target: EventTarget | null): boolean {
+function isHeldByPopup(target: EventTarget | null): boolean {
 	if (document.querySelector(OPEN_POPUP) !== null) return true;
 	if (!(target instanceof HTMLElement)) return false;
 	const dialog = target.closest(

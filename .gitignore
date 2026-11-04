@@ -14,3 +14,8 @@ apps/web/agreements/*.pdf
 
 # Claude Code per-user settings (may hold local secrets, e.g. CLOUDFLARE_API_TOKEN)
 .claude/settings.local.json
+
+coverage/
+.metrics/
+.stryker-tmp/
+**/reports/mutation/

@@ -62,7 +62,7 @@ type Surface = Record<keyof SurfaceProperties, string>;
  * The claimant then stands where the closer stood and closes as it would
  * have (a sheet's discard prompt closes into the sheet's row).
  */
-export type HandedOn = {
+type HandedOn = {
 	source: HTMLElement | null;
 	opener: HTMLElement | null;
 };

@@ -21,11 +21,11 @@ import { doorActionLabel, doorEventLabel } from "./doorWording.ts";
 
 /** What a history entry adds to a timeline row; `toTimelineEntry` supplies
  *  the id and time. */
-export type EntryBody = Omit<TimelineEntry, "id" | "at">;
+type EntryBody = Omit<TimelineEntry, "id" | "at">;
 
 /** The entry of one kind. Written out, not `Extract`ed: the `personEvents`
  *  members share one row type whose `kind` is the whole union. */
-export type EntryOf<Kind extends HistoryKind> = Kind extends "perk"
+type EntryOf<Kind extends HistoryKind> = Kind extends "perk"
 	? PerkEntry
 	: Kind extends "door_action"
 		? DoorActionEntry

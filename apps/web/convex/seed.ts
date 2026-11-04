@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import type { Infer } from "convex/values";
 
-import type { Doc, Id } from "./_generated/dataModel";
+import type { Doc, Id, TableNames } from "./_generated/dataModel";
 import { internalMutation, type MutationCtx } from "./_generated/server";
 import { DAY_MS } from "./lib/constants.ts";
 import { developmentAdminEmail } from "./lib/devAdmin.ts";
@@ -332,8 +332,11 @@ const SEED_ENTRIES: SeedEntry[] = [
 
 const INVENTORY_TABLES = ["items", "itemTypes", "itemCategories"] as const;
 
-async function wipeInventory(context: MutationCtx): Promise<void> {
-	for (const table of INVENTORY_TABLES) {
+async function wipeTables(
+	context: MutationCtx,
+	tables: readonly TableNames[]
+): Promise<void> {
+	for (const table of tables) {
 		const rows = await context.db.query(table).collect();
 		for (const row of rows) await context.db.delete(row._id);
 	}
@@ -428,11 +431,8 @@ const WIPED_TABLES = [
 ] as const;
 
 async function wipeSeededData(context: MutationCtx): Promise<void> {
-	await wipeInventory(context);
-	for (const table of WIPED_TABLES) {
-		const rows = await context.db.query(table).collect();
-		for (const row of rows) await context.db.delete(row._id);
-	}
+	await wipeTables(context, INVENTORY_TABLES);
+	await wipeTables(context, WIPED_TABLES);
 }
 
 export const clearAll = internalMutation({

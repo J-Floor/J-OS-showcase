@@ -80,6 +80,7 @@ export function entitled(person: LifecyclePerson, now: number): boolean {
 }
 
 /** Region C. The board override wins in both directions, by design. */
+// dry-ignore -- same override branching as doorFactState below, but it returns granted or denied for access and that one returns the four door states for display
 export function access(
 	person: LifecyclePerson,
 	now: number

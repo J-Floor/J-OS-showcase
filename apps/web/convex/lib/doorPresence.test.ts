@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/no-hardcoded-ip -- addresses here are parser fixtures, nothing connects to them */
 import { describe, expect, it } from "vitest";
 
 import {
@@ -74,9 +75,107 @@ describe("isIpInCidrs", () => {
 	it("is false for an empty CIDR set", () => {
 		expect(isIpInCidrs("192.0.2.1", [])).toBe(false);
 	});
+	it("rejects an IPv4 address with the wrong number of parts", () => {
+		expect(isIpInCidrs("192.0.2", ["0.0.0.0/0"])).toBe(false);
+		expect(isIpInCidrs("192.0.2.1.5", ["0.0.0.0/0"])).toBe(false);
+	});
+	it("rejects an IPv4 address with a non-decimal part", () => {
+		expect(isIpInCidrs("192.x.2.1", ["0.0.0.0/0"])).toBe(false);
+		expect(isIpInCidrs("192.0.2.1a", ["0.0.0.0/0"])).toBe(false);
+		expect(isIpInCidrs("192.0.2.1", ["192.0.2.a/24"])).toBe(false);
+	});
+	it("rejects an octet above 255, even where its bits would match", () => {
+		expect(isIpInCidrs("203.256.0.0", ["203.0.0.0/8"])).toBe(false);
+	});
+	it("accepts the top of the octet range", () => {
+		expect(isIpInCidrs("192.0.2.255", ["192.0.2.0/24"])).toBe(true);
+	});
+	it("trims the address and the CIDR", () => {
+		expect(isIpInCidrs(" 192.0.2.3 ", ["192.0.2.0/24"])).toBe(true);
+		expect(isIpInCidrs("192.0.2.3", [" 192.0.2.0/24 "])).toBe(true);
+	});
+	it("never matches a malformed network", () => {
+		expect(isIpInCidrs("192.0.2.1", ["not-an-ip/24"])).toBe(false);
+	});
+	it("honours the prefix limits of each family", () => {
+		expect(isIpInCidrs("192.0.2.1", ["192.0.2.1/32"])).toBe(true);
+		expect(isIpInCidrs("192.0.2.2", ["192.0.2.1/32"])).toBe(false);
+		expect(isIpInCidrs("192.0.2.1", ["192.0.2.1/33"])).toBe(false);
+		expect(isIpInCidrs("2001:db8::1", ["2001:db8::1/128"])).toBe(true);
+		expect(isIpInCidrs("2001:db8::2", ["2001:db8::1/128"])).toBe(false);
+		expect(isIpInCidrs("2001:db8::1", ["2001:db8::1/129"])).toBe(false);
+		expect(isIpInCidrs("203.0.113.9", ["192.0.2.0/0"])).toBe(true);
+	});
+	it("expands :: to the groups it stands for", () => {
+		expect(isIpInCidrs("::1", ["::1/128"])).toBe(true);
+		expect(isIpInCidrs("2001:db8::", ["2001:db8:0:0:0:0:0:0/128"])).toBe(
+			true
+		);
+		expect(isIpInCidrs("2001:db8::1", ["2001:db8:0:0:0:0:0:1/128"])).toBe(
+			true
+		);
+		expect(isIpInCidrs("1:2:3:4:5:6:7::", ["1:2:3:4:5:6:7:0/128"])).toBe(
+			true
+		);
+	});
+	it("rejects an IPv6 address of the wrong shape", () => {
+		expect(isIpInCidrs("1::2::3", ["::/0"])).toBe(false);
+		expect(isIpInCidrs("1:2:3", ["::/0"])).toBe(false);
+		expect(isIpInCidrs("1:2:3:4::5:6:7:8", ["::/0"])).toBe(false);
+		expect(isIpInCidrs("2001:zz::1", ["::/0"])).toBe(false);
+		expect(isIpInCidrs("12345::1", ["::/0"])).toBe(false);
+		expect(isIpInCidrs("x2001:db8::1", ["::/0"])).toBe(false);
+	});
+	it("reads an IPv4-mapped address only in its exact form", () => {
+		expect(isIpInCidrs("::FFFF:198.51.100.77", ["198.51.100.0/24"])).toBe(
+			true
+		);
+		expect(isIpInCidrs("1::ffff:203.0.113.5", ["203.0.113.0/24"])).toBe(
+			false
+		);
+		expect(isIpInCidrs("::ffff:203.0.113.5:1", ["203.0.113.0/24"])).toBe(
+			false
+		);
+		expect(isIpInCidrs("::ffff:256.0.0.1", ["0.0.0.0/0"])).toBe(false);
+	});
 });
 
+async function signedToken(payload: string): Promise<string> {
+	function b64url(bytes: Uint8Array): string {
+		return btoa(String.fromCharCode(...bytes))
+			.replaceAll("+", "-")
+			.replaceAll("/", "_")
+			.replaceAll("=", "");
+	}
+	const encoded = new TextEncoder().encode(payload);
+	const key = await crypto.subtle.importKey(
+		"raw",
+		new TextEncoder().encode(SECRET),
+		{ name: "HMAC", hash: "SHA-256" },
+		false,
+		["sign"]
+	);
+	const signature = await crypto.subtle.sign("HMAC", key, encoded);
+	return `${b64url(encoded)}.${b64url(new Uint8Array(signature))}`;
+}
+
 describe("presence token", () => {
+	it("accepts a token until the moment before it expires", async () => {
+		const token = await mintPresenceToken(SECRET, NOW);
+		expect(
+			await verifyPresenceToken(SECRET, token, NOW + PRESENCE_TTL_MS - 1)
+		).toBe(true);
+	});
+	it("rejects a signed token whose expiry is not a number", async () => {
+		const token = await signedToken(
+			JSON.stringify({ exp: String(NOW + 1_000) })
+		);
+		expect(await verifyPresenceToken(SECRET, token, NOW)).toBe(false);
+	});
+	it("rejects a signed token whose payload is not JSON", async () => {
+		const token = await signedToken("not json");
+		expect(await verifyPresenceToken(SECRET, token, NOW)).toBe(false);
+	});
 	it("verifies a freshly minted token", async () => {
 		const token = await mintPresenceToken(SECRET, NOW);
 		expect(await verifyPresenceToken(SECRET, token, NOW + 1_000)).toBe(
@@ -217,6 +316,16 @@ describe("presenceHttpResponse", () => {
 			NOW
 		);
 		expect(response.status).toBe(403);
+	});
+
+	it("answers an off-site request with a 403 and no token", async () => {
+		const response = await presenceHttpResponse(
+			request({ "cf-connecting-ip": "198.51.100.1" }),
+			environment,
+			NOW
+		);
+		expect(response.status).toBe(403);
+		expect(await response.json()).toEqual({ error: "off-site" });
 	});
 
 	it("sets CORS to the site URL and disables caching", async () => {

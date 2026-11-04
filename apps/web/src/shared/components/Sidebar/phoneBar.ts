@@ -1,5 +1,5 @@
 /** The phone bar slots, the last one the more item when pages overflow. */
-export const PHONE_BAR_SLOTS = 5;
+const PHONE_BAR_SLOTS = 5;
 
 /** The pages the bar shows and the ones that overflow, in priority order. */
 export function splitPhoneBar<T>(pages: readonly T[]): {

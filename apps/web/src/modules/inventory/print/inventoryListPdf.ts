@@ -8,6 +8,7 @@ import {
 	type PDFPage,
 } from "pdf-lib";
 
+import { dateToIso } from "../../../shared/time.ts";
 import type { Item } from "../data/inventoryData.ts";
 
 /** The subset of an inventory item the printed list needs. */
@@ -80,10 +81,7 @@ export function formatInventoryListDate(now: Date): string {
 }
 
 export function inventoryListPdfFilename(now: Date): string {
-	const year = String(now.getFullYear());
-	const month = String(now.getMonth() + 1).padStart(2, "0");
-	const day = String(now.getDate()).padStart(2, "0");
-	return `inventory-list-${year}-${month}-${day}.pdf`;
+	return `inventory-list-${dateToIso(now)}.pdf`;
 }
 
 export async function generateInventoryListPdf(

@@ -26,8 +26,9 @@ import { EntitySheetHeader } from "../../../shared/entity/EntitySheetHeader.tsx"
 import { SheetCreateFooter } from "../../../shared/entity/SheetCreateFooter.tsx";
 import { ICONS } from "../../../shared/icons.ts";
 import { InlineError } from "../../../shared/InlineError.tsx";
+import { dateToIso } from "../../../shared/time.ts";
 import type { SheetOpenProps } from "../../../shared/types.ts";
-import { dateToIso, isoToMs } from "../data/taskHelpers.ts";
+import { isoToMs } from "../data/taskHelpers.ts";
 import type { Person, Project, Task } from "../data/tasksData.tsx";
 import {
 	useProjectActions,

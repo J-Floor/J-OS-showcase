@@ -202,3 +202,7 @@ jobs:
       - name: Duplication (jscpd)
         if: steps.scope.outputs.docs-only != 'true'
         run: bunx jscpd
+
+      - name: Dead code (knip)
+        if: steps.scope.outputs.docs-only != 'true'
+        run: bun run knip

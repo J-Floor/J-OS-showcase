@@ -6,7 +6,7 @@ export const LONG_PRESS_SLOP_PX = 10;
 export const LONG_PRESS_CLOSE_DELAY_MS = 1500;
 
 /** How long after release a pending click still counts as the long press's. */
-export const LONG_PRESS_SWALLOW_MS = 400;
+const LONG_PRESS_SWALLOW_MS = 400;
 
 type LongPressOptions = {
 	/** Whether the tooltip is off, in which case holding does nothing. */

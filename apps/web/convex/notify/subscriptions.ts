@@ -65,6 +65,7 @@ async function trimToCap(context: MutationCtx, personId: Id<"people">) {
 	for (const row of oldest) await context.db.delete(row._id);
 }
 
+// dry-ignore -- single-row lookups on unrelated tables
 async function byEndpoint(context: MutationCtx, endpoint: string) {
 	return context.db
 		.query("pushSubscriptions")

@@ -8,16 +8,8 @@ import {
 	fieldColumn,
 	type JfColumnDefinition,
 } from "@j-os/design-system";
-import { makeEventListener } from "@solid-primitives/event-listener";
 import type { FunctionReturnType } from "convex/server";
-import {
-	type Accessor,
-	For,
-	Show,
-	createContext,
-	onMount,
-	useContext,
-} from "solid-js";
+import { type Accessor, For, Show, createContext, useContext } from "solid-js";
 
 import { api } from "../../../../convex/_generated/api";
 import type { Doc } from "../../../../convex/_generated/dataModel";
@@ -39,6 +31,7 @@ import { latestNote, noteAuthor } from "../noteAuthor.ts";
 import { useAddNote } from "../useAddNote.ts";
 
 import styles from "./applicationColumns.module.scss";
+import { usePointerEditSource } from "./usePointerEditSource.ts";
 import { useScoreDraft } from "./useScoreDraft.ts";
 import { ventureColumns } from "./ventureColumns.tsx";
 
@@ -90,35 +83,6 @@ function ApplicationActions(props: { row: PersonRow }) {
 }
 
 /**
- * How the score field is being changed, read from the pointerdown that started
- * it (capture phase, before ark's own handler): a scrubber drag, a +/- button,
- * or neither (typing). Calls `onScrubberRelease` when a scrubber drag ends.
- */
-function usePointerEditSource(onScrubberRelease: () => void) {
-	let source: "scrubber" | "button" | null = null;
-	function onDown(event: PointerEvent) {
-		const target = event.target as Element | null;
-		if (target?.closest('[data-part="scrubber"]')) source = "scrubber";
-		else if (
-			target?.closest(
-				'button[aria-label="Increment"], button[aria-label="Decrement"]'
-			)
-		)
-			source = "button";
-		else source = null;
-	}
-	function onUp() {
-		if (source === "scrubber") onScrubberRelease();
-		source = null;
-	}
-	onMount(() => {
-		makeEventListener(document, "pointerdown", onDown, true);
-		makeEventListener(document, "pointerup", onUp, true);
-	});
-	return () => source;
-}
-
-/**
  * Per-row score editor. The displayed/editable value is *this* board member's
  * own score (not the aggregate mean used for sorting). Setting it calls
  * `applications.setScore` with the current board member's id, resolved from
@@ -128,7 +92,7 @@ function usePointerEditSource(onScrubberRelease: () => void) {
  * dedupes that subscription, and these columns are static module-scope exports
  * so the hooks must live inside the cell component.
  */
-export function ScoreCell(props: { row: PersonRow }) {
+function ScoreCell(props: { row: PersonRow }) {
 	const currentPerson = useContext(CurrentPersonContext);
 	// The score is global — shared by all board members — so it's a single
 	// entry, not one per board member.
@@ -266,7 +230,7 @@ const triageGroupOptions = [
  * there regardless of score; everything else splits on whether the board has
  * entered a score yet — presence of a value, not its size (a deliberate 0
  * counts as scored). */
-export function triageGroupOf(
+function triageGroupOf(
 	row: PersonRow
 ): (typeof triageGroupOptions)[number]["value"] {
 	if (row.stage === "denied") return "denied";

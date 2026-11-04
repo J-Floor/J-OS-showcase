@@ -6,9 +6,9 @@ import type { BoardLevelPerson } from "../../../../convex/lib/personViews.ts";
 
 /** A guest whose host is a legacy name string nobody has resolved to a board
  *  member yet. One bucket, not one option per stale name. */
-export const UNRESOLVED_HOST = "__unresolved__";
+const UNRESOLVED_HOST = "__unresolved__";
 /** A guest nobody is vouching for. */
-export const NO_HOST = "__none__";
+const NO_HOST = "__none__";
 
 type HostCandidate = Pick<BoardLevelPerson, "_id" | "firstName" | "lastName">;
 
