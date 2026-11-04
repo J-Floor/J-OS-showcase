@@ -5,10 +5,15 @@ import { api } from "../../../convex/_generated/api";
 import { MAX_LINKS } from "../../../convex/lib/safeUrl.ts";
 import { call } from "../../lib/call.ts";
 import { createFieldErrors } from "../../shared/fieldErrors.ts";
+import { getCaptchaToken } from "../../shared/publicForm/captchaToken.ts";
+import type { SignUpPrefill } from "../../shared/publicForm/signUpPrefill.ts";
+import { buildLinks } from "../../shared/venture/links.ts";
+import type {
+	FundingStage,
+	ProductStage,
+	Vertical,
+} from "../../shared/venture/options.ts";
 
-import { getCaptchaToken } from "./captchaToken.ts";
-import { buildLinks } from "./links.ts";
-import type { FundingStage, ProductStage, Vertical } from "./options.ts";
 import {
 	isSignUpValid,
 	validateSignUp,
@@ -17,12 +22,6 @@ import {
 
 const SUBMIT_FAILED =
 	"Something went wrong submitting your application. Please try again.";
-
-/** Visitors converting to full applicants arrive with their name + email
- *  already known (passed as router navigation state). */
-export type SignUpPrefill = Partial<
-	Pick<SignUpValues, "firstName" | "lastName" | "email">
->;
 
 /** The ordered URL slots: the first is required, the rest reveal one at a
  *  time as the previous one gets a value. */

@@ -22,7 +22,6 @@ import { registerSW } from "virtual:pwa-register";
 
 import { App, ModuleRoutes } from "./app.tsx";
 import { APP_ROOT_ID } from "./lib/constants.ts";
-import { bindConvexAuth, convex } from "./lib/convex.ts";
 import { startPwaUpdateChecks, startReloadOnUpdate } from "./lib/pwaUpdates.ts";
 import { SignIn } from "./modules/auth/SignIn.tsx";
 import { OnboardingRoute } from "./modules/onboarding/OnboardingRoute.tsx";
@@ -35,9 +34,10 @@ import { VisitorConfirm } from "./modules/visitor/VisitorConfirm.tsx";
 import { VisitorRegister } from "./modules/visitor/VisitorRegister.tsx";
 import { LandingRedirect, PageTitleTracker } from "./routing/index.tsx";
 import { AppErrorBoundary } from "./shared/AppErrorBoundary.tsx";
-import { ThemeColorMeta } from "./shared/ThemeColorMeta.tsx";
+import { bindConvexAuth, convex } from "./shared/data/convex.ts";
 import { toaster } from "./shared/toaster.ts";
-import { UpdatingOverlay } from "./shared/UpdatingOverlay.tsx";
+import { ThemeColorMeta } from "./shell/ThemeColorMeta.tsx";
+import { UpdatingOverlay } from "./shell/UpdatingOverlay.tsx";
 
 function Root(props: ParentProps) {
 	bindConvexAuth();

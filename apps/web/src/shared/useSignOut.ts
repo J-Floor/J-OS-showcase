@@ -2,10 +2,10 @@ import { useNavigate } from "@solidjs/router";
 import { ResultAsync } from "neverthrow";
 
 import { authClient } from "../lib/auth.ts";
-import { disablePush } from "../lib/push.ts";
 
 import { endDataSession } from "./data/caches.ts";
 import { setKeeperActive } from "./data/queryKeeper.ts";
+import { disablePush } from "./push.ts";
 import { toaster } from "./toaster.ts";
 
 const SIGN_OUT_FAILED = "Could not sign out. Try again.";

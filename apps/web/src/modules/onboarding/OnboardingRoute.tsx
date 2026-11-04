@@ -2,7 +2,7 @@ import { Navigate } from "@solidjs/router";
 import { Show } from "solid-js";
 
 import { authClient } from "../../lib/auth.ts";
-import { ottPending } from "../../lib/convex.ts";
+import { ottPending } from "../../shared/data/convex.ts";
 import { LoadingScreen } from "../../shared/LoadingScreen.tsx";
 
 import styles from "./OnboardingRoute.module.scss";

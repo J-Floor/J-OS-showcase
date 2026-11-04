@@ -622,7 +622,7 @@ page centre.
 
 **Peeks.** In the web app, a palette pick or a notification click on an
 entity opens that entity's sheet over the current page (`PeekHost` in
-`apps/web/src/shared/entity/`). A palette pick is the same handoff: the
+`apps/web/src/shell/entity/`). A palette pick is the same handoff: the
 palette closes, and the peek's sheet claims it. A notification click is not:
 the notifications sheet stays open, and the peek (or the page's own sheet,
 when the entity's page is on screen) opens from the clicked row and stacks

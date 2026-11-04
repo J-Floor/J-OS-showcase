@@ -2,12 +2,12 @@ import {
 	fundingStageOptions,
 	productStageOptions,
 	verticalOptions,
-} from "../../signup/options.ts";
+} from "../../../shared/venture/options.ts";
 import type {
 	FundingStage,
 	ProductStage,
 	Vertical,
-} from "../../signup/options.ts";
+} from "../../../shared/venture/options.ts";
 
 /** The label of the option holding `value`, else the raw value. */
 function optionLabel<Value extends string>(

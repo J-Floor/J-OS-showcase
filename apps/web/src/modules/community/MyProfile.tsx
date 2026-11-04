@@ -11,7 +11,7 @@ import { createActionError } from "../../shared/createActionError.ts";
 import { useQuery } from "../../shared/data/useQuery.ts";
 import { ICONS } from "../../shared/icons.ts";
 import { InlineError } from "../../shared/InlineError.tsx";
-import { buildLinks } from "../signup/links.ts";
+import { buildLinks } from "../../shared/venture/links.ts";
 
 import styles from "./MyProfile.module.scss";
 import {

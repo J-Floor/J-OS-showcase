@@ -2,12 +2,12 @@ import { useSaveTracker } from "@j-os/design-system";
 import type { Accessor } from "solid-js";
 
 import { call } from "../../lib/call.ts";
-import { reportSave } from "../../lib/reportSave.ts";
 import {
 	type ActionErrorState,
 	createActionError,
 	scopeOfFields,
 } from "../createActionError.ts";
+import { reportSave } from "../reportSave.ts";
 
 const SAVE_FAILED = "Could not save that change.";
 

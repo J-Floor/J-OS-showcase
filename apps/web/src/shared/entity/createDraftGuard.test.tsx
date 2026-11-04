@@ -4,7 +4,7 @@ import { cleanup, render, screen } from "@solidjs/testing-library";
 import { type JSX, createSignal } from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
 
-import { LeaveGuards, createLeaveGuards } from "../../routing/leaveGuards.ts";
+import { LeaveGuards, createLeaveGuards } from "../leaveGuards.ts";
 
 import { createDraftGuard } from "./createDraftGuard.ts";
 

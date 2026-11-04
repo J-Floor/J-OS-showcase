@@ -2,8 +2,7 @@ import { Button, SheetNav } from "@j-os/design-system";
 import { useNavigate } from "@solidjs/router";
 import { Show, type JSX } from "solid-js";
 
-import type { SheetNavState } from "../../lib/createSheetNav.ts";
-
+import type { SheetNavState } from "./createSheetNav.ts";
 import { usePeek } from "./PeekContext.tsx";
 
 /** Where the router is only needed: a sheet outside a peek has no use for it. */

@@ -19,8 +19,8 @@ import {
 	keyedValue,
 	morphKeyOf,
 } from "../../../../test-stubs/morphKeys.tsx";
+import { factLine, headline } from "../../../shared/history/lifecycleCopy.ts";
 import { ShortcutPeekButton } from "../../../shared/ShortcutPeekButton.tsx";
-import { factLine, headline } from "../status/copy.ts";
 
 afterEach(cleanup);
 

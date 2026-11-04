@@ -6,7 +6,7 @@
       "dependsOn": ["lint:logic:convex", "lint:logic:app"]
     },
     // Every package file except src's, which convex code never sees: convex/
-    // may not import src/ (no-restricted-imports in eslint.config.js), and
+    // may not import src/ (boundaries/dependencies in eslint.config.js), and
     // src's ambient declarations live in .d.ts files (types/ambient-in-dts),
     // which stay in. The [!d] and [!.] classes drop every .ts but a .d.ts.
     "lint:logic:convex": {

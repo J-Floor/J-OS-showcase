@@ -1,6 +1,6 @@
 import type { Doc } from "../../../convex/_generated/dataModel";
 import type { LockSlot } from "../../../convex/lib/doorLocks.ts";
-import { slotInfo } from "../../modules/space/lockSlots.ts";
+import { slotInfo } from "../doors/lockSlots.ts";
 
 /**
  * Every word about a door in a history: the person's timeline and the board's

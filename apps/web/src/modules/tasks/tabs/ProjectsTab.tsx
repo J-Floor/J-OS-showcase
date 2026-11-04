@@ -10,9 +10,9 @@ import {
 } from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
-import { createSheetNav } from "../../../lib/createSheetNav.ts";
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
 import { createEntitySelection } from "../../../shared/entity/createEntitySelection.ts";
+import { createSheetNav } from "../../../shared/entity/createSheetNav.ts";
 import { personName } from "../data/taskHelpers.ts";
 import type { Person, Project, Task } from "../data/tasksData.tsx";
 import { useProjects, useTasks } from "../data/tasksData.tsx";

@@ -11,7 +11,6 @@ import { type Accessor, Show } from "solid-js";
 import { api } from "../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { call } from "../../../lib/call.ts";
-import { reportSave } from "../../../lib/reportSave.ts";
 import {
 	createActionError,
 	type ActionErrorState,
@@ -20,6 +19,7 @@ import { useQuery } from "../../../shared/data/useQuery.ts";
 import { createEntityPatch } from "../../../shared/entity/createEntityPatch.ts";
 import { ICONS } from "../../../shared/icons.ts";
 import { InlineError } from "../../../shared/InlineError.tsx";
+import { reportSave } from "../../../shared/reportSave.ts";
 import { HostSelect } from "../columns/HostSelect.tsx";
 import { personFields } from "../fields.ts";
 import {

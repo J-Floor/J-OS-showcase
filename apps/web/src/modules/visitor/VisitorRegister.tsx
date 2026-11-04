@@ -18,12 +18,12 @@ import { call } from "../../lib/call.ts";
 import { useQuery } from "../../shared/data/useQuery.ts";
 import { createFieldErrors } from "../../shared/fieldErrors.ts";
 import { ICONS } from "../../shared/icons.ts";
-import { emailError } from "../../shared/isValidEmail.ts";
-import { NameFields } from "../../shared/NameFields.tsx";
-import { useRecaptchaScript } from "../../shared/recaptcha.ts";
-import { SubmitErrorBanner } from "../../shared/SubmitErrorBanner.tsx";
-import { PrivacyNoticeLine } from "../privacy/PrivacyNoticeLine.tsx";
-import { getCaptchaToken } from "../signup/captchaToken.ts";
+import { getCaptchaToken } from "../../shared/publicForm/captchaToken.ts";
+import { emailError } from "../../shared/publicForm/isValidEmail.ts";
+import { NameFields } from "../../shared/publicForm/NameFields.tsx";
+import { PrivacyNoticeLine } from "../../shared/publicForm/PrivacyNoticeLine.tsx";
+import { useRecaptchaScript } from "../../shared/publicForm/recaptcha.ts";
+import { SubmitErrorBanner } from "../../shared/publicForm/SubmitErrorBanner.tsx";
 
 import styles from "./VisitorRegister.module.scss";
 

@@ -10,16 +10,16 @@ import { For, Show, type JSX } from "solid-js";
 
 import { NAME_MAX, TEXT_MAX } from "../../../../convex/lib/validate.ts";
 import { celebrate } from "../../../lib/celebrate.ts";
-import type { SheetNavState } from "../../../lib/createSheetNav.ts";
-import {
-	createSyncedField,
-	shallowArrayEquals,
-} from "../../../lib/createSyncedField.ts";
 import { RowActionButton } from "../../../shared/actions/RowActions.tsx";
 import { createSheetActions } from "../../../shared/actions/sheetActions.tsx";
 import { DescriptionField } from "../../../shared/components/DescriptionField.tsx";
 import type { ConfirmOptions } from "../../../shared/confirm.tsx";
+import {
+	createSyncedField,
+	shallowArrayEquals,
+} from "../../../shared/createSyncedField.ts";
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
+import type { SheetNavState } from "../../../shared/entity/createSheetNav.ts";
 import {
 	createEntityCommands,
 	createEntityDraft,

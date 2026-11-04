@@ -18,7 +18,7 @@ vi.mock("../../lib/auth.ts", () => ({
 		signIn: { magicLink },
 	},
 }));
-vi.mock("../../lib/convex.ts", () => ({
+vi.mock("../../shared/data/convex.ts", () => ({
 	ottPending: () => false,
 	ottFailed: () => failed.read(),
 }));

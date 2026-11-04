@@ -4,7 +4,7 @@ import { ResultAsync } from "neverthrow";
 import { createEffect, createSignal, on, Show } from "solid-js";
 
 import { authClient } from "../../lib/auth.ts";
-import { ottFailed, ottPending } from "../../lib/convex.ts";
+import { ottFailed, ottPending } from "../../shared/data/convex.ts";
 import { ICONS } from "../../shared/icons.ts";
 import { LoadingScreen } from "../../shared/LoadingScreen.tsx";
 

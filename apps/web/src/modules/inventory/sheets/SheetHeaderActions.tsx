@@ -1,10 +1,10 @@
 import { Sheet, type FieldDefinition } from "@j-os/design-system";
 import { createEffect, createSignal, on, type JSX, Show } from "solid-js";
 
-import type { SheetNavState } from "../../../lib/createSheetNav.ts";
 import { RowActionButton } from "../../../shared/actions/RowActions.tsx";
 import { createSheetActions } from "../../../shared/actions/sheetActions.tsx";
 import { EditToggle } from "../../../shared/components/EditToggle.tsx";
+import type { SheetNavState } from "../../../shared/entity/createSheetNav.ts";
 import { EntitySheetHeader } from "../../../shared/entity/EntitySheetHeader.tsx";
 
 import { FieldsPlaceholder } from "./FieldsPlaceholder.tsx";

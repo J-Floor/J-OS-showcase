@@ -1,7 +1,10 @@
 import type { JfColumnDefinition } from "@j-os/design-system";
 
 import type { PersonStatus } from "../../../../convex/lib/derive.ts";
-import { FLAG_FILTER_OPTIONS, flagFilterValue } from "../status/copy.ts";
+import {
+	FLAG_FILTER_OPTIONS,
+	flagFilterValue,
+} from "../../../shared/history/lifecycleCopy.ts";
 import { FlagsCell } from "../status/FlagsCell.tsx";
 
 const FLAGS_COLUMN_SIZE = 240;

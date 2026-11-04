@@ -4,7 +4,7 @@ import { afterEach, expect, test } from "vitest";
 
 afterEach(cleanup);
 
-import { modules } from "../registry.ts";
+import { modules } from "../../shell/registry.ts";
 
 import { TOUR_STEPS, shouldStartTour } from "./WelcomeTour.tsx";
 

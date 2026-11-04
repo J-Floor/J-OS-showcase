@@ -1,7 +1,7 @@
 import { Input } from "@j-os/design-system";
 import { type Accessor } from "solid-js";
 
-import type { SyncedField } from "../../../lib/createSyncedField.ts";
+import type { SyncedField } from "../../../shared/createSyncedField.ts";
 
 /** The required name box, saved as it is typed; invalid while the form has
  *  an error. `ref` receives the input so the sheet can focus it on open. */

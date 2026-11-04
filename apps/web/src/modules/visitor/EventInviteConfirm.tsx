@@ -1,7 +1,7 @@
 import { useAction } from "convex-solidjs";
 
 import { api } from "../../../convex/_generated/api";
-import { createLinkConfirmation } from "../../shared/linkConfirmation.ts";
+import { createLinkConfirmation } from "../../shared/publicForm/linkConfirmation.ts";
 
 import { WifiConfirmScreen } from "./ConfirmScreen.tsx";
 

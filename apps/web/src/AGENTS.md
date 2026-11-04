@@ -5,6 +5,32 @@ The SolidJS frontend. Component tests run under happy-dom (see
 `packages/design-system/AGENTS.md`: its token and typography rules apply to
 app styles too.
 
+## Layers
+
+`eslint.config.js` (`boundaries/dependencies`) is the source of these rules.
+Test files under `src` are exempt, and packages are not layered. A file under
+`src/` or `convex/` that is in none of these places fails lint ("belongs to no
+layer"), and so does an import of one: place it in a layer.
+
+| Layer  | Folder                                         | May import                                                |
+| ------ | ---------------------------------------------- | --------------------------------------------------------- |
+| app    | `src/index.tsx`, `src/app.tsx`, `src/routing/` | anything                                                  |
+| shell  | `src/shell/`                                   | shell, modules, shared, lib, convex                       |
+| module | `src/modules/<name>/`                          | itself, another module's `entity.ts`, shared, lib, convex |
+| shared | `src/shared/`                                  | shared, lib, convex                                       |
+| lib    | `src/lib/`                                     | lib, convex                                               |
+| sw     | `src/sw/`                                      | sw, lib, convex                                           |
+| convex | `convex/`                                      | nothing in `src`                                          |
+
+- Used by several modules: put it in `shared/`.
+- Used by one module: keep it in that module.
+- The app frame goes in `shell/`: code that composes modules (sidebar, command
+  palette, notifications, entity peeks) or is mounted only by the app layer
+  (splash, install and notification prompts, breadcrumbs, the updating
+  overlay).
+- A module's `entity.ts` is its public surface. It is the one file another
+  module may import.
+
 ## Solid + Ark reactivity traps
 
 Each of these rendered correctly on first paint and then quietly stopped
@@ -46,7 +72,7 @@ updating, which is the worst failure mode to debug.
   into render props, not values.
 - **Never "simplify" a read that looks unused inside a tracked scope.** In
   Solid, reading a signal or store field inside an effect, memo or `on()`
-  source is what subscribes to it. `bindConvexAuth` in `lib/convex.ts`
+  source is what subscribes to it. `bindConvexAuth` in `shared/data/convex.ts`
   depends on `session().data`, because Better Auth reconciles the session in
   place and `session()` keeps its identity. A cleanup that turned
   `void session().data` into `session()` passed every test and stopped Convex
@@ -57,7 +83,7 @@ updating, which is the worst failure mode to debug.
 
 - **Mock a store-backed hook the way the library updates it.** A mock that
   returns a new object per change exercises a path the real library never
-  takes. `lib/convex.test.ts` builds the session with `createStore` and
+  takes. `shared/data/convex.test.ts` builds the session with `createStore` and
   updates it with `reconcile`, so identity stays put and only fields change,
   as in Better Auth. Copy that pattern for any hook backed by a Solid store.
 - Test pitfalls specific to Solid and mocked Convex (proxy identity of `api`

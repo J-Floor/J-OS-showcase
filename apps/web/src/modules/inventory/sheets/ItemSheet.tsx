@@ -16,18 +16,18 @@ import {
 
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { parseAssetTag } from "../../../../convex/lib/assetTag.ts";
-import type { SheetNavState } from "../../../lib/createSheetNav.ts";
-import { createSyncedField } from "../../../lib/createSyncedField.ts";
-import type { SaveWrite } from "../../../lib/reportSave.ts";
 import { ActionButton } from "../../../shared/actions/ActionButton.tsx";
 import { CREATE_TARGET } from "../../../shared/actions/shortcuts.ts";
 import { DescriptionField } from "../../../shared/components/DescriptionField.tsx";
 import { OptionSelect } from "../../../shared/components/OptionSelect.tsx";
 import type { ConfirmOptions } from "../../../shared/confirm.tsx";
+import { createSyncedField } from "../../../shared/createSyncedField.ts";
+import type { SheetNavState } from "../../../shared/entity/createSheetNav.ts";
 import { createEntityDraft } from "../../../shared/entity/entityCommands.ts";
 import { EntityQrBlock } from "../../../shared/entity/EntityQr.tsx";
 import { SheetCreateFooter } from "../../../shared/entity/SheetCreateFooter.tsx";
 import { InlineError } from "../../../shared/InlineError.tsx";
+import type { SaveWrite } from "../../../shared/reportSave.ts";
 import type { SheetOpenProps } from "../../../shared/types.ts";
 import type { Item, ItemPatch } from "../data/inventoryData.ts";
 import {

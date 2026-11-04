@@ -2,10 +2,10 @@ import { Sheet, createSaveTracker } from "@j-os/design-system";
 import { Show, createSignal, type JSX } from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
-import type { SheetNavState } from "../../../lib/createSheetNav.ts";
-import { createSyncedField } from "../../../lib/createSyncedField.ts";
 import { DescriptionField } from "../../../shared/components/DescriptionField.tsx";
 import type { ConfirmOptions } from "../../../shared/confirm.tsx";
+import { createSyncedField } from "../../../shared/createSyncedField.ts";
+import type { SheetNavState } from "../../../shared/entity/createSheetNav.ts";
 import { createEntityDraft } from "../../../shared/entity/entityCommands.ts";
 import { SheetCreateFooter } from "../../../shared/entity/SheetCreateFooter.tsx";
 import { InlineError } from "../../../shared/InlineError.tsx";

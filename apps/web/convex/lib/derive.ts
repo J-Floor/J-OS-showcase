@@ -126,7 +126,7 @@ export function keepsBreakGlassKey(
  * exception: a fully settled person has none, and an empty cell is the signal.
  *
  * These carry no wording. What a flag SAYS is a UI decision and lives in
- * `src/modules/community/status/copy.ts`; what a flag IS is a fact about the
+ * `src/shared/history/lifecycleCopy.ts`; what a flag IS is a fact about the
  * lifecycle and lives here. Keeping the two apart means a copy change is a
  * frontend change, and means this module can be reasoned about without
  * deciding how anything reads.

@@ -7,7 +7,7 @@ import { api } from "../../../convex/_generated/api";
 import { type LockSlot } from "../../../convex/lib/doorLocks.ts";
 import { ignoreFailure } from "../../lib/call.ts";
 import { useQuery } from "../../shared/data/useQuery.ts";
-import { LOCK_SLOTS } from "../space/lockSlots.ts";
+import { LOCK_SLOTS } from "../../shared/doors/lockSlots.ts";
 
 import { doorsIntroPending } from "./doorIntroState.ts";
 import styles from "./DoorsIntro.module.scss";

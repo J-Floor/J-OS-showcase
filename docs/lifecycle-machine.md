@@ -137,7 +137,7 @@ the sheet renders it. When you add to the status, decide which of the two it is;
 adding it to both is how the table went back to restating its neighbours.
 
 Neither carries any wording. `derive.ts` returns ids and enums; every
-user-facing string lives in `src/modules/community/status/copy.ts`, so a copy
+user-facing string lives in `src/shared/history/lifecycleCopy.ts`, so a copy
 change is a frontend change and the machine's rules stay readable without
 wading through prose.
 

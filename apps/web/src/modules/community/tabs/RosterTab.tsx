@@ -6,12 +6,12 @@ import {
 import { type JSX, Show, createSignal } from "solid-js";
 
 import type { PersonRow } from "../../../../convex/people.ts";
+import { ActionKeys } from "../../../shared/actions/createActionKeys.ts";
+import type { ActionDescriptor } from "../../../shared/actions/shortcuts.ts";
 import {
 	createSheetNav,
 	type SheetNavState,
-} from "../../../lib/createSheetNav.ts";
-import { ActionKeys } from "../../../shared/actions/createActionKeys.ts";
-import type { ActionDescriptor } from "../../../shared/actions/shortcuts.ts";
+} from "../../../shared/entity/createSheetNav.ts";
 import { useRowPrefetch } from "../../../shared/entity/useRowPrefetch.ts";
 import { RosterActionError } from "../actions/RosterActionError.tsx";
 import type { ShortcutScope } from "../actions/shortcuts.ts";

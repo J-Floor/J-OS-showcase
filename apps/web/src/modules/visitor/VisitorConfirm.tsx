@@ -4,8 +4,8 @@ import { useAction } from "convex-solidjs";
 import { Show } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
-import { createLinkConfirmation } from "../../shared/linkConfirmation.ts";
-import type { SignUpPrefill } from "../signup/signUpForm.ts";
+import { createLinkConfirmation } from "../../shared/publicForm/linkConfirmation.ts";
+import type { SignUpPrefill } from "../../shared/publicForm/signUpPrefill.ts";
 
 import { WifiConfirmScreen } from "./ConfirmScreen.tsx";
 

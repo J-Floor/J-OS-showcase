@@ -8,16 +8,16 @@ import type {
 	PersonEventEntry,
 } from "../../../convex/history/types.ts";
 import { PERK_REQUEST_STATUS_LABELS } from "../../../convex/lib/perks.ts";
+import { ICONS } from "../icons.ts";
+
+import { doorActionLabel, doorEventLabel } from "./doorWording.ts";
 import {
 	emailLabel,
 	eventLabel,
 	fieldLabel,
 	stateLabel,
 	stepLabel,
-} from "../../modules/community/status/copy.ts";
-import { ICONS } from "../icons.ts";
-
-import { doorActionLabel, doorEventLabel } from "./doorWording.ts";
+} from "./lifecycleCopy.ts";
 
 /** What a history entry adds to a timeline row; `toTimelineEntry` supplies
  *  the id and time. */

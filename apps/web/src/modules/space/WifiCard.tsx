@@ -15,11 +15,11 @@ import { createActionError } from "../../shared/createActionError.ts";
 import { useQuery } from "../../shared/data/useQuery.ts";
 import { ICONS } from "../../shared/icons.ts";
 import { InlineError } from "../../shared/InlineError.tsx";
+import { WIFI_TARGET, type WifiTarget } from "../../shared/wifi/wifi.ts";
+import { WifiContent } from "../../shared/wifi/WifiContent.tsx";
 
 import { SpaceCard } from "./SpaceCard.tsx";
-import { WIFI_TARGET, type WifiTarget } from "./wifi.ts";
 import styles from "./WifiCard.module.scss";
-import { WifiContent } from "./WifiContent.tsx";
 
 /** The board's edit form for the network name and password: its drafts,
  *  and the actions that open, cancel and save it. */

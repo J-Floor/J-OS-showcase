@@ -15,13 +15,16 @@ import type {
 	StatusFact,
 } from "../../../../convex/lib/derive.ts";
 import { displayName } from "../../../../convex/lib/names.ts";
+import {
+	factLine,
+	type FactLine,
+} from "../../../shared/history/lifecycleCopy.ts";
 import { ICONS } from "../../../shared/icons.ts";
 import { personFields } from "../fields.ts";
 import { useOpenAgreement } from "../openAgreement.ts";
 import { RoleSection } from "../sheets/RoleSection.tsx";
 
 import { AccessUntilControl, canExtendWindow } from "./AccessUntilControl.tsx";
-import { factLine, type FactLine } from "./copy.ts";
 import { DoorOverrideControl } from "./DoorOverrideControl.tsx";
 import styles from "./StatusSection.module.scss";
 

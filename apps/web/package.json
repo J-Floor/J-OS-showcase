@@ -73,6 +73,8 @@
 		"concurrently": "^10.0.6",
 		"convex-test": "catalog:",
 		"eslint": "catalog:",
+		"eslint-import-resolver-typescript": "catalog:",
+		"eslint-plugin-boundaries": "catalog:",
 		"eslint-plugin-solid": "catalog:",
 		"happy-dom": "catalog:",
 		"jsx-email": "^3.2.1",

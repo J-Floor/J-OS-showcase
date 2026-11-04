@@ -1,9 +1,12 @@
 import { Result } from "neverthrow";
 
-import { emailError } from "../../shared/isValidEmail.ts";
-
-import { normalizeUrl } from "./links.ts";
-import type { FundingStage, ProductStage, Vertical } from "./options.ts";
+import { emailError } from "../../shared/publicForm/isValidEmail.ts";
+import { normalizeUrl } from "../../shared/venture/links.ts";
+import type {
+	FundingStage,
+	ProductStage,
+	Vertical,
+} from "../../shared/venture/options.ts";
 
 const MIN_PHONE_DIGITS = 7;
 const MAX_PHONE_DIGITS = 15;

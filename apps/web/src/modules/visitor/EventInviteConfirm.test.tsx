@@ -26,7 +26,7 @@ vi.mock("convex-solidjs", () => ({
 vi.mock("@solidjs/router", () => ({
 	useSearchParams: () => [searchParams.current],
 }));
-vi.mock("../space/WifiContent.tsx", () => ({
+vi.mock("../../shared/wifi/WifiContent.tsx", () => ({
 	WifiContent: (props: { ssid: string; password: string }) => (
 		<div data-testid="wifi-content">
 			{props.ssid} / {props.password}

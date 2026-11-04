@@ -4,8 +4,7 @@ import { cleanup, render, screen } from "@solidjs/testing-library";
 import type { JSX } from "solid-js";
 import { afterEach, expect, test } from "vitest";
 
-import type { SheetNavState } from "../../lib/createSheetNav.ts";
-
+import type { SheetNavState } from "./createSheetNav.ts";
 import { EntitySheetHeader } from "./EntitySheetHeader.tsx";
 
 afterEach(cleanup);

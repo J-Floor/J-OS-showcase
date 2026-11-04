@@ -7,7 +7,7 @@ import {
 	untrack,
 } from "solid-js";
 
-import { useLeaveGuard } from "../../routing/leaveGuards.ts";
+import { useLeaveGuard } from "../leaveGuards.ts";
 
 type Values = Record<string, unknown>;
 

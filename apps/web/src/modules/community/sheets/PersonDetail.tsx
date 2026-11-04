@@ -9,9 +9,9 @@ import { call } from "../../../lib/call.ts";
 import { createActionKeys } from "../../../shared/actions/createActionKeys.ts";
 import type { ActionDescriptor } from "../../../shared/actions/shortcuts.ts";
 import { createActionError } from "../../../shared/createActionError.ts";
+import { headline } from "../../../shared/history/lifecycleCopy.ts";
 import { ICONS } from "../../../shared/icons.ts";
 import { InlineError } from "../../../shared/InlineError.tsx";
-import { headline } from "../status/copy.ts";
 import { PersonTimeline } from "../status/PersonTimeline.tsx";
 import { StatusSection } from "../status/StatusSection.tsx";
 

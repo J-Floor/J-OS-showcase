@@ -11,6 +11,7 @@ import {
 } from "../../../convex/lib/doorLocks.ts";
 import { type DoorAction } from "../../../convex/lib/doorProvider.ts";
 import { call } from "../../lib/call.ts";
+import { LOCK_SLOTS, slotInfo } from "../../shared/doors/lockSlots.ts";
 
 import { createDoorAttempt, type DoorAttemptWatch } from "./doorAttempt.ts";
 import {
@@ -25,7 +26,6 @@ import {
 } from "./doorCopy.ts";
 import { type createDoorPositions } from "./doorPositions.ts";
 import { type DoorStatusHolds } from "./doorStatusHolds.ts";
-import { LOCK_SLOTS, slotInfo } from "./lockSlots.ts";
 import { fetchPresenceToken } from "./presence.ts";
 
 const STATUS_HOLD_MS = 5000;

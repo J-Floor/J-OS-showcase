@@ -1,8 +1,7 @@
 import { Sheet } from "@j-os/design-system";
 import { Show, type JSX } from "solid-js";
 
-import type { SheetNavState } from "../../lib/createSheetNav.ts";
-
+import type { SheetNavState } from "./createSheetNav.ts";
 import { EntitySheetNav } from "./EntitySheetNav.tsx";
 
 /** The title, the save status, prev/next (or, in a peek, the link to the

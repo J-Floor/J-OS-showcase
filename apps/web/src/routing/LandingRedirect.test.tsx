@@ -10,16 +10,16 @@ vi.mock("convex-solidjs", () => ({
 	useQuery: () => ({ data: () => stored.lastPath }),
 	useMutation: () => ({ mutateAsync: vi.fn() }),
 }));
-// routing/index imports these; the real lib/convex builds a ConvexClient from
+// routing/index imports these; the real shared/data/convex builds a ConvexClient from
 // VITE_CONVEX_URL at module load, which is unset under test.
-vi.mock("../lib/convex.ts", () => ({
+vi.mock("../shared/data/convex.ts", () => ({
 	convex: {},
 	ottPending: () => false,
 	bindConvexAuth: () => {},
 }));
 vi.mock("../lib/auth.ts", () => ({ authClient: {} }));
 
-import { modules } from "../modules/registry.ts";
+import { modules } from "../shell/registry.ts";
 
 import { LandingRedirect } from "./index.tsx";
 

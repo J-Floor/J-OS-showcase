@@ -23,15 +23,15 @@ import { AbilityProvider, Can } from "../lib/ability.tsx";
 import { authClient } from "../lib/auth.ts";
 import { ignoreFailure } from "../lib/call.ts";
 import { APP_NAME } from "../lib/constants.ts";
-import { ottPending } from "../lib/convex.ts";
 import { isUpdating } from "../lib/pwaUpdates.ts";
-import { modules } from "../modules/registry.ts";
 import { AppErrorBoundary } from "../shared/AppErrorBoundary.tsx";
-import { railLanding } from "../shared/components/Sidebar/brandLanding.ts";
+import { ottPending } from "../shared/data/convex.ts";
 import { useQuery } from "../shared/data/useQuery.ts";
 import { LoadingScreen } from "../shared/LoadingScreen.tsx";
-import { NoAccess } from "../shared/NoAccess.tsx";
-import { Splash } from "../shared/Splash.tsx";
+import { NoAccess } from "../shell/NoAccess.tsx";
+import { modules } from "../shell/registry.ts";
+import { railLanding } from "../shell/Sidebar/brandLanding.ts";
+import { Splash } from "../shell/Splash.tsx";
 
 import { useRole } from "./useRole.ts";
 

@@ -7,15 +7,15 @@ import {
 import { Show, createSignal, type JSX } from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
-import type { SheetNavState } from "../../../lib/createSheetNav.ts";
-import { createSyncedField } from "../../../lib/createSyncedField.ts";
-import type { SaveWrite } from "../../../lib/reportSave.ts";
 import { DescriptionField } from "../../../shared/components/DescriptionField.tsx";
 import { OptionSelect } from "../../../shared/components/OptionSelect.tsx";
 import type { ConfirmOptions } from "../../../shared/confirm.tsx";
+import { createSyncedField } from "../../../shared/createSyncedField.ts";
+import type { SheetNavState } from "../../../shared/entity/createSheetNav.ts";
 import { createEntityDraft } from "../../../shared/entity/entityCommands.ts";
 import { SheetCreateFooter } from "../../../shared/entity/SheetCreateFooter.tsx";
 import { InlineError } from "../../../shared/InlineError.tsx";
+import type { SaveWrite } from "../../../shared/reportSave.ts";
 import type { SheetOpenProps } from "../../../shared/types.ts";
 import type { ItemType, ItemTypePatch } from "../data/inventoryData.ts";
 import {

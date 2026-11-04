@@ -2,7 +2,7 @@
 import { cleanup, render } from "@solidjs/testing-library";
 import { afterEach, expect, test } from "vitest";
 
-import { modules } from "../modules/registry.ts";
+import { modules } from "../shell/registry.ts";
 
 // lazyPage() (used by every module manifest) imports PageSkeleton, which
 // imports @j-os/design-system — whose components (e.g. Chart) register DOM

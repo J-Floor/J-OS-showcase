@@ -14,11 +14,11 @@ import { type LockSlot } from "../../../convex/lib/doorLocks.ts";
 import { type DoorAction } from "../../../convex/lib/doorProvider.ts";
 import { ActionGlyph } from "../../shared/actions/ActionGlyph.tsx";
 import type { ActionDescriptor } from "../../shared/actions/shortcuts.ts";
+import { slotInfo } from "../../shared/doors/lockSlots.ts";
 
 import { type DoorsTarget } from "./doorActions.ts";
 import { ACTION_COPY, DOOR_ACTIONS } from "./doorCopy.ts";
 import { type DoorStatus, type SlotView } from "./doorView.ts";
-import { slotInfo } from "./lockSlots.ts";
 import styles from "./UnlockCard.module.scss";
 
 /** When the slot swaps content and it held keyboard focus (or focus fell to

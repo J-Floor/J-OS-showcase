@@ -2,8 +2,8 @@ import { Badge } from "@j-os/design-system";
 import { For, type JSX } from "solid-js";
 
 import type { PersonStatus } from "../../../../convex/lib/derive.ts";
+import { flagLabel, flagTone } from "../../../shared/history/lifecycleCopy.ts";
 
-import { flagLabel, flagTone } from "./copy.ts";
 import styles from "./FlagsCell.module.scss";
 
 /**

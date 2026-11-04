@@ -4,9 +4,10 @@ import { onMount, Show } from "solid-js";
 
 import { celebrate } from "../../lib/celebrate.ts";
 import { ICONS } from "../../shared/icons.ts";
-import { useRecaptchaScript } from "../../shared/recaptcha.ts";
-import { SubmitErrorBanner } from "../../shared/SubmitErrorBanner.tsx";
-import { PrivacyNoticeLine } from "../privacy/PrivacyNoticeLine.tsx";
+import { PrivacyNoticeLine } from "../../shared/publicForm/PrivacyNoticeLine.tsx";
+import { useRecaptchaScript } from "../../shared/publicForm/recaptcha.ts";
+import type { SignUpPrefill } from "../../shared/publicForm/signUpPrefill.ts";
+import { SubmitErrorBanner } from "../../shared/publicForm/SubmitErrorBanner.tsx";
 
 import styles from "./SignUp.module.scss";
 import {
@@ -18,7 +19,7 @@ import {
 	TeamFields,
 	VentureFields,
 } from "./SignUpFields.tsx";
-import { createSignUpForm, type SignUpPrefill } from "./signUpForm.ts";
+import { createSignUpForm } from "./signUpForm.ts";
 
 /** What the applicant sees once the form is sent: the application is not
  *  sent until they click the link in the email. */

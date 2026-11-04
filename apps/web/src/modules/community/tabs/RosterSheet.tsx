@@ -9,10 +9,10 @@ import {
 } from "solid-js";
 
 import type { PersonRow } from "../../../../convex/people.ts";
-import type { SheetNavState } from "../../../lib/createSheetNav.ts";
 import { ActionBar } from "../../../shared/actions/ActionBar.tsx";
 import type { ActionDescriptor } from "../../../shared/actions/shortcuts.ts";
 import { EditToggle } from "../../../shared/components/EditToggle.tsx";
+import type { SheetNavState } from "../../../shared/entity/createSheetNav.ts";
 import { EntitySheetNav } from "../../../shared/entity/EntitySheetNav.tsx";
 import { SheetFooter } from "../../../shared/entity/SheetFooter.tsx";
 import {

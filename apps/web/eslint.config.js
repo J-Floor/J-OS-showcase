@@ -1,4 +1,5 @@
 import baseConfig, { INLINE_STYLE_RESTRICTIONS } from "@j-os/config-eslint";
+import boundaries from "eslint-plugin-boundaries";
 import solid from "eslint-plugin-solid";
 
 import { ambientInDts } from "./eslint/ambientInDts.js";
@@ -37,6 +38,113 @@ const baseRestrictedProperties = baseConfig
 	.map((entry) => entry.rules?.["no-restricted-properties"])
 	.find(Boolean)
 	.slice(1);
+
+// Import layers for apps/web. src/AGENTS.md ("Layers") explains them.
+const BOUNDARY_ELEMENTS = [
+	{ type: "app", pattern: "src/routing" },
+	{ type: "shell", pattern: "src/shell" },
+	{ type: "module", pattern: "src/modules/*", capture: ["name"] },
+	{ type: "shared", pattern: "src/shared" },
+	{ type: "lib", pattern: "src/lib" },
+	{ type: "sw", pattern: "src/sw" },
+	{ type: "convex", pattern: "convex" },
+];
+// Two kinds of single file sit outside any folder element: the app entry
+// points, and a module's entity.ts, its public surface (other modules may
+// import it and nothing else of the module).
+const BOUNDARY_FILES = [
+	{ category: "appEntry", pattern: ["src/index.tsx", "src/app.tsx"] },
+	{ category: "entity", pattern: "src/modules/*/entity.ts" },
+];
+
+const elementOf = (...types) => ({ element: { type: types } });
+const APP = [elementOf("app"), { file: { categories: "appEntry" } }];
+const ENTITY = { file: { categories: "entity" } };
+// Packages are not layered. A file under src/ or convex/ that belongs to no
+// element is not allowed as a target: UNKNOWN_FILE below rejects it.
+const OUTSIDE_LAYERS = [{ module: { origin: ["external", "core"] } }];
+const UNKNOWN_FILE = {
+	module: { origin: "local" },
+	element: { isUnknown: true },
+	file: { isUnknown: true },
+};
+// Another module's files, except its entity.ts.
+const OTHER_MODULE = {
+	element: {
+		type: "module",
+		captured: { name: "!{{ from.element.captured.name }}" },
+	},
+	file: { isUnknown: true },
+};
+
+const toAnyOf = (...targets) => targets.flat().map((to) => ({ to }));
+
+// The plugin skips imports inside one element (checkInternals is off), so an
+// allow list never names its own layer. The last matching policy wins.
+const BOUNDARY_POLICIES = [
+	{
+		from: APP,
+		allow: [{ to: { module: { origin: "*" } } }],
+	},
+	{
+		from: elementOf("shell"),
+		allow: toAnyOf(
+			OUTSIDE_LAYERS,
+			elementOf("module", "shared", "lib", "convex")
+		),
+		disallow: toAnyOf(APP, elementOf("sw")),
+		message:
+			"shell/ may not import the app layer (index, app, routing) or sw/. Move what both need into shared/ or lib/.",
+	},
+	{
+		from: elementOf("module"),
+		allow: toAnyOf(
+			OUTSIDE_LAYERS,
+			ENTITY,
+			elementOf("shared", "lib", "convex")
+		),
+		disallow: toAnyOf(OTHER_MODULE, APP, elementOf("shell", "sw")),
+		message:
+			"A module may import itself, another module's entity.ts, shared/, lib/ and convex/. Code several modules use belongs in shared/; code that composes modules belongs in shell/.",
+	},
+	{
+		from: elementOf("shared"),
+		allow: toAnyOf(OUTSIDE_LAYERS, elementOf("lib", "convex")),
+		disallow: toAnyOf(APP, elementOf("shell", "module", "sw")),
+		message:
+			"shared/ may import only shared/, lib/ and convex/. Code that needs a module belongs in shell/ (it composes modules); code a module needs from another belongs in shared/.",
+	},
+	{
+		from: elementOf("lib"),
+		allow: toAnyOf(OUTSIDE_LAYERS, elementOf("convex")),
+		disallow: toAnyOf(APP, elementOf("shell", "module", "shared", "sw")),
+		message:
+			"lib/ may import only lib/ and convex/. Code that needs shared/ or a module belongs in shared/.",
+	},
+	{
+		from: elementOf("sw"),
+		allow: toAnyOf(OUTSIDE_LAYERS, elementOf("lib", "convex")),
+		disallow: toAnyOf(APP, elementOf("shell", "module", "shared")),
+		message:
+			"sw/ may import only sw/, lib/ and convex/: it runs outside the app.",
+	},
+	{
+		from: elementOf("convex"),
+		allow: toAnyOf(OUTSIDE_LAYERS),
+		disallow: toAnyOf(
+			APP,
+			elementOf("shell", "module", "shared", "lib", "sw")
+		),
+		message:
+			"convex/ must not import src/: the backend cannot depend on the frontend.",
+	},
+	{
+		from: elementOf("shell", "module", "shared", "lib", "sw", "convex"),
+		disallow: [{ to: UNKNOWN_FILE }],
+		message:
+			"This file belongs to no layer. Place it in routing/, shell/, modules/<name>/, shared/, lib/, sw/ or convex/ (see src/AGENTS.md, Layers).",
+	},
+];
 
 export default [
 	{ ignores: ["dist/**", "convex/_generated/**"] },
@@ -136,25 +244,27 @@ export default [
 		},
 	},
 	{
-		// The convex lint task in turbo.json hashes no src file but its .d.ts
-		// files: convex must not import src, and src keeps its ambient
-		// declarations in .d.ts files.
-		files: ["convex/**/*.ts"],
+		files: ["src/**/*.{ts,tsx}", "convex/**/*.ts"],
+		plugins: { boundaries },
+		settings: {
+			"import/resolver": { typescript: true },
+			"boundaries/include": ["convex/**/*", "src/**/*"],
+			"boundaries/ignore": ["src/**/*.test.{ts,tsx}"],
+			"boundaries/elements": BOUNDARY_ELEMENTS,
+			"boundaries/files": BOUNDARY_FILES,
+		},
 		rules: {
-			"no-restricted-imports": [
+			"boundaries/dependencies": [
 				"error",
 				{
-					...baseRestrictedImports,
-					patterns: [
-						...baseRestrictedImports.patterns,
-						{
-							regex: "^(\\.\\./)+src(/|$)",
-							message:
-								"convex/ must not import src/: the backend cannot depend on the frontend.",
-						},
-					],
+					default: "disallow",
+					policies: BOUNDARY_POLICIES,
+					checkUnknownLocals: true,
 				},
 			],
+			// The dependencies rule skips a file that is in no element, so a
+			// file outside every layer is reported here instead.
+			"boundaries/no-unknown-files": "error",
 		},
 	},
 	{

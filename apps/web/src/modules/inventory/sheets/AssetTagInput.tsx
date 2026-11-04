@@ -10,7 +10,7 @@ import {
 } from "solid-js";
 
 import { parseAssetTag } from "../../../../convex/lib/assetTag.ts";
-import type { SyncedField } from "../../../lib/createSyncedField.ts";
+import type { SyncedField } from "../../../shared/createSyncedField.ts";
 
 import styles from "./AssetTagInput.module.scss";
 

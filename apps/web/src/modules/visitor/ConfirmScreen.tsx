@@ -5,8 +5,8 @@ import { Match, Show, Switch, type JSX } from "solid-js";
 import type { api } from "../../../convex/_generated/api";
 import type { Wifi } from "../../../convex/lib/wifi.ts";
 import { APP_NAME } from "../../lib/constants.ts";
-import type { LinkConfirmationStatus } from "../../shared/linkConfirmation.ts";
-import { WifiContent } from "../space/WifiContent.tsx";
+import type { LinkConfirmationStatus } from "../../shared/publicForm/linkConfirmation.ts";
+import { WifiContent } from "../../shared/wifi/WifiContent.tsx";
 
 import styles from "./ConfirmScreen.module.scss";
 

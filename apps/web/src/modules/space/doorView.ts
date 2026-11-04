@@ -3,9 +3,9 @@ import {
 	type DoorAction,
 	type DoorPosition,
 } from "../../../convex/lib/doorProvider.ts";
+import { slotInfo } from "../../shared/doors/lockSlots.ts";
 
 import { ACTION_COPY, offlineText } from "./doorCopy.ts";
-import { slotInfo } from "./lockSlots.ts";
 
 /** What replaces a door's button: the line of text and how it is coloured. */
 export type DoorStatus = {

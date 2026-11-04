@@ -3,7 +3,7 @@ import { Match, Switch } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
 import { APP_NAME } from "../../lib/constants.ts";
-import { createLinkConfirmation } from "../../shared/linkConfirmation.ts";
+import { createLinkConfirmation } from "../../shared/publicForm/linkConfirmation.ts";
 
 import {
 	ConfirmDetail,

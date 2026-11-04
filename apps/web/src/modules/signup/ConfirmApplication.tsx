@@ -2,7 +2,7 @@ import { useAction } from "convex-solidjs";
 import { Match, Switch } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
-import { createLinkConfirmation } from "../../shared/linkConfirmation.ts";
+import { createLinkConfirmation } from "../../shared/publicForm/linkConfirmation.ts";
 
 export function ConfirmApplication() {
 	const confirm = useAction(api.applications.confirmApplication);

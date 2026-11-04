@@ -37,7 +37,7 @@ const {
 		}),
 	};
 });
-vi.mock("../lib/push.ts", () => ({ disablePush }));
+vi.mock("./push.ts", () => ({ disablePush }));
 vi.mock("./toaster.ts", () => ({ toaster: { create: toasterCreate } }));
 function currentSession() {
 	return {

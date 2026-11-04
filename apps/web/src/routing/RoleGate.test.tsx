@@ -18,9 +18,9 @@ const state = vi.hoisted((): State => ({
 vi.mock("../lib/auth.ts", () => ({
 	authClient: { useSession: () => () => state.session },
 }));
-// The real lib/convex builds a ConvexClient from VITE_CONVEX_URL at module
+// The real shared/data/convex builds a ConvexClient from VITE_CONVEX_URL at module
 // load, which is unset under test.
-vi.mock("../lib/convex.ts", () => ({
+vi.mock("../shared/data/convex.ts", () => ({
 	convex: {},
 	ottPending: () => false,
 	bindConvexAuth: () => {},
@@ -31,10 +31,10 @@ vi.mock("./useRole.ts", () => ({
 vi.mock("../shared/data/useQuery.ts", () => ({
 	useQuery: () => ({ data: () => state.onboarding }),
 }));
-vi.mock("../shared/NoAccess.tsx", () => ({
+vi.mock("../shell/NoAccess.tsx", () => ({
 	NoAccess: () => <p>no access</p>,
 }));
-vi.mock("../shared/Splash.tsx", () => ({
+vi.mock("../shell/Splash.tsx", () => ({
 	Splash: () => <p>splash</p>,
 }));
 

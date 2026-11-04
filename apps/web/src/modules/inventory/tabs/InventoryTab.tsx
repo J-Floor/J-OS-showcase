@@ -1,12 +1,12 @@
 import { Table, type JfColumnDefinition } from "@j-os/design-system";
 import { createContext, createSignal, type Accessor, type JSX } from "solid-js";
 
+import { useRequiredContext } from "../../../shared/compound.ts";
+import type { EntitySelection } from "../../../shared/entity/createEntitySelection.ts";
 import {
 	createSheetNav,
 	type SheetNavState,
-} from "../../../lib/createSheetNav.ts";
-import { useRequiredContext } from "../../../shared/compound.ts";
-import type { EntitySelection } from "../../../shared/entity/createEntitySelection.ts";
+} from "../../../shared/entity/createSheetNav.ts";
 import type { EntityDescriptor } from "../../../shared/entity/entityDescriptor.ts";
 import { useRowPrefetch } from "../../../shared/entity/useRowPrefetch.ts";
 import type { EntityRow } from "../../../shared/types.ts";

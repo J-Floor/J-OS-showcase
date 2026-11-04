@@ -17,24 +17,24 @@ import { DoorsIntro } from "./modules/onboarding/DoorsIntro.tsx";
 import { WelcomeTour } from "./modules/onboarding/WelcomeTour.tsx";
 import { WhatsNew } from "./modules/onboarding/WhatsNew.tsx";
 import { LastPathTracker, ModuleRoutes, RoleGate } from "./routing/index.tsx";
-import { LeaveGuards, createLeaveGuards } from "./routing/leaveGuards.ts";
 import { usePageTransitions } from "./routing/usePageTransitions.ts";
 import { AppErrorBoundary } from "./shared/AppErrorBoundary.tsx";
-import { Breadcrumbs } from "./shared/components/Breadcrumbs/Breadcrumbs.tsx";
-import { Sidebar } from "./shared/components/Sidebar/Sidebar.tsx";
 import { ConfirmProvider } from "./shared/confirm.tsx";
 import { BoardLevelProvider } from "./shared/data/boardLevel.tsx";
-import { ShellWarmup } from "./shared/data/ShellWarmup.tsx";
-import { PeekHost } from "./shared/entity/PeekHost.tsx";
-import { InstallPwaPrompt } from "./shared/InstallPwaPrompt.tsx";
-import { NotificationsHost } from "./shared/notifications/NotificationsHost.tsx";
-import { NotificationsPrompt } from "./shared/notifications/NotificationsPrompt.tsx";
+import { LeaveGuards, createLeaveGuards } from "./shared/leaveGuards.ts";
+import { ShortcutPeekButton } from "./shared/ShortcutPeekButton.tsx";
+import { Breadcrumbs } from "./shell/Breadcrumbs/Breadcrumbs.tsx";
+import { PeekHost } from "./shell/entity/PeekHost.tsx";
+import { InstallPwaPrompt } from "./shell/InstallPwaPrompt.tsx";
+import { NotificationsHost } from "./shell/notifications/NotificationsHost.tsx";
+import { NotificationsPrompt } from "./shell/notifications/NotificationsPrompt.tsx";
 import {
 	NotificationsBell,
 	TopbarMenu,
-} from "./shared/notifications/TopbarMenu.tsx";
-import { GlobalSearch } from "./shared/search/GlobalSearch.tsx";
-import { ShortcutPeekButton } from "./shared/ShortcutPeekButton.tsx";
+} from "./shell/notifications/TopbarMenu.tsx";
+import { GlobalSearch } from "./shell/search/GlobalSearch.tsx";
+import { ShellWarmup } from "./shell/ShellWarmup.tsx";
+import { Sidebar } from "./shell/Sidebar/Sidebar.tsx";
 
 /** Header + scroll region. Split out so the community-data provider can wrap
  *  the whole thing without duplicating this markup in both branches.

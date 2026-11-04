@@ -1,6 +1,6 @@
 import { ICONS } from "../../shared/icons.ts";
 import { lazyPage } from "../../shared/lazyPage.tsx";
-import type { ModuleManifest } from "../types.ts";
+import type { ModuleManifest } from "../../shared/moduleManifest.ts";
 
 export const communityModule: ModuleManifest = {
 	id: "community",

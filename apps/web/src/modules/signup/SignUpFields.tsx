@@ -8,8 +8,7 @@ import {
 import { For, Show } from "solid-js";
 
 import { ICONS } from "../../shared/icons.ts";
-import { NameFields } from "../../shared/NameFields.tsx";
-
+import { NameFields } from "../../shared/publicForm/NameFields.tsx";
 import {
 	fundingStageOptions,
 	productStageOptions,
@@ -17,7 +16,8 @@ import {
 	type FundingStage,
 	type ProductStage,
 	type Vertical,
-} from "./options.ts";
+} from "../../shared/venture/options.ts";
+
 import { EXTRA_LINK_INDEXES, type SignUpForm } from "./signUpForm.ts";
 
 type FieldsProps = { form: SignUpForm };

@@ -18,12 +18,12 @@ import type {
 	FundingStage,
 	ProductStage,
 	Vertical,
-} from "../signup/options.ts";
+} from "../../shared/venture/options.ts";
 import {
 	fundingStageOptions,
 	productStageOptions,
 	verticalOptions,
-} from "../signup/options.ts";
+} from "../../shared/venture/options.ts";
 
 import { personFields } from "./fields.ts";
 

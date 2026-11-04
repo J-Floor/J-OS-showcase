@@ -2,7 +2,7 @@ import { api } from "../../../convex/_generated/api";
 import { prefetch } from "../../shared/data/queryKeeper.ts";
 import { ICONS } from "../../shared/icons.ts";
 import { lazyPage } from "../../shared/lazyPage.tsx";
-import type { ModuleManifest } from "../types.ts";
+import type { ModuleManifest } from "../../shared/moduleManifest.ts";
 
 export const eventsModule: ModuleManifest = {
 	id: "events",

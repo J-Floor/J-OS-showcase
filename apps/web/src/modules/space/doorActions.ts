@@ -4,11 +4,11 @@ import { type LockSlot } from "../../../convex/lib/doorLocks.ts";
 import { type DoorAction } from "../../../convex/lib/doorProvider.ts";
 import { createActionKeys } from "../../shared/actions/createActionKeys.ts";
 import type { ActionDescriptor } from "../../shared/actions/shortcuts.ts";
+import { slotInfo } from "../../shared/doors/lockSlots.ts";
 import { ICONS } from "../../shared/icons.ts";
 
 import { ACTION_COPY } from "./doorCopy.ts";
 import { type SlotView } from "./doorView.ts";
-import { slotInfo } from "./lockSlots.ts";
 
 /** The Doors card's keys. */
 const DOORS_SCOPE = "space-doors";

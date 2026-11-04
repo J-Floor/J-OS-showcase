@@ -6,10 +6,6 @@ import { api } from "../../../../convex/_generated/api";
 import { PERK_REQUEST_LIST_CAP } from "../../../../convex/lib/perks.ts";
 import { LOCALE, SITE_TIMEZONE, todayIn } from "../../../../convex/lib/time.ts";
 import type { PerkRequestRow } from "../../../../convex/perkRequests.ts";
-import {
-	createSheetNav,
-	type SheetNavState,
-} from "../../../lib/createSheetNav.ts";
 import { ActionButton } from "../../../shared/actions/ActionButton.tsx";
 import { bindPageKeys } from "../../../shared/actions/sheetActions.tsx";
 import {
@@ -23,6 +19,10 @@ import {
 	createEntitySelection,
 	type EntitySelection,
 } from "../../../shared/entity/createEntitySelection.ts";
+import {
+	createSheetNav,
+	type SheetNavState,
+} from "../../../shared/entity/createSheetNav.ts";
 import { PEEK_PARAM } from "../../../shared/entity/peekParam.ts";
 import { ICONS } from "../../../shared/icons.ts";
 

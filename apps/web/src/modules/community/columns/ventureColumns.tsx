@@ -10,7 +10,7 @@ import {
 	fundingStageOptions,
 	productStageOptions,
 	verticalOptions,
-} from "../../signup/options.ts";
+} from "../../../shared/venture/options.ts";
 import { personFields } from "../fields.ts";
 import { VentureLink } from "../VentureLink.tsx";
 

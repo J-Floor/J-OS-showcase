@@ -2,9 +2,9 @@ import { Accordion, PropertyRow, Sheet, morphPart } from "@j-os/design-system";
 import { Show, createSignal, type JSX } from "solid-js";
 
 import type { PerkRequestRow } from "../../../../convex/perkRequests.ts";
-import type { SheetNavState } from "../../../lib/createSheetNav.ts";
 import { ActionBar } from "../../../shared/actions/ActionBar.tsx";
 import { ActionKeys } from "../../../shared/actions/createActionKeys.ts";
+import type { SheetNavState } from "../../../shared/entity/createSheetNav.ts";
 import { EntitySheetNav } from "../../../shared/entity/EntitySheetNav.tsx";
 import { SheetFooter } from "../../../shared/entity/SheetFooter.tsx";
 import { SheetSection } from "../../../shared/entity/SheetSection.tsx";

@@ -10,7 +10,8 @@ import {
 import { cleanup, render, screen } from "@solidjs/testing-library";
 import { afterEach, expect, test, vi } from "vitest";
 
-import { createLeaveGuards } from "./leaveGuards.ts";
+import { createLeaveGuards } from "../shared/leaveGuards.ts";
+
 import { usePageTransitions } from "./usePageTransitions.ts";
 
 afterEach(async () => {

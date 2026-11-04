@@ -3,10 +3,10 @@ import { createEffect, createSignal, on, type JSX } from "solid-js";
 
 import type { Doc } from "../../../../convex/_generated/dataModel";
 import { displayName } from "../../../../convex/lib/names.ts";
-import { createSheetNav } from "../../../lib/createSheetNav.ts";
 import { createPersistedSignal } from "../../../lib/persistedSignal.ts";
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
 import { createEntitySelection } from "../../../shared/entity/createEntitySelection.ts";
+import { createSheetNav } from "../../../shared/entity/createSheetNav.ts";
 import {
 	ASSIGNEE_FILTER_ALL,
 	ASSIGNEE_FILTER_ME,

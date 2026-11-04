@@ -5,8 +5,8 @@ import { createSignal, untrack } from "solid-js";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { call } from "../../lib/call.ts";
-import { reportSave } from "../../lib/reportSave.ts";
 import { createActionError } from "../../shared/createActionError.ts";
+import { reportSave } from "../../shared/reportSave.ts";
 
 const NOTE_FIELD = "note";
 

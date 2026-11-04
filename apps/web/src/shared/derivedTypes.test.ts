@@ -2,10 +2,10 @@ import type { ComponentProps } from "solid-js";
 import { expectTypeOf, test } from "vitest";
 
 import type { Id } from "../../convex/_generated/dataModel";
+import type { NotificationsSheet } from "../shell/notifications/NotificationsSheet.tsx";
 
 import type { StaffMember } from "./data/boardLevel.tsx";
-import type { LinkConfirmationStatus } from "./linkConfirmation.ts";
-import type { NotificationsSheet } from "./notifications/NotificationsSheet.tsx";
+import type { LinkConfirmationStatus } from "./publicForm/linkConfirmation.ts";
 import type { OpenProps } from "./types.ts";
 
 test("StaffMember is a slice of the board-level rows the query returns", () => {

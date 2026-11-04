@@ -17,8 +17,7 @@ import {
 import { type DoorPosition } from "../../../convex/lib/doorProvider.ts";
 import { call } from "../../lib/call.ts";
 import { createVisiblePoll } from "../../lib/createVisiblePoll.ts";
-
-import { LOCK_SLOTS } from "./lockSlots.ts";
+import { LOCK_SLOTS } from "../../shared/doors/lockSlots.ts";
 
 const POSITION_POLL_MS = 30_000;
 

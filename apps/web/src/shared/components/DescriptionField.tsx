@@ -1,7 +1,7 @@
 import { type FieldDefinition, TextArea, morphPart } from "@j-os/design-system";
 import type { JSX } from "solid-js";
 
-import type { SyncedField } from "../../lib/createSyncedField.ts";
+import type { SyncedField } from "../createSyncedField.ts";
 
 import styles from "./DescriptionField.module.scss";
 

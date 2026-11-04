@@ -15,8 +15,7 @@ import {
 import { Show } from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
 
-import type { SheetNavState } from "../../lib/createSheetNav.ts";
-
+import type { SheetNavState } from "./createSheetNav.ts";
 import { EntitySheetNav } from "./EntitySheetNav.tsx";
 import { PeekContext } from "./PeekContext.tsx";
 
