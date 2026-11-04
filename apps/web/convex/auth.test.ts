@@ -87,9 +87,8 @@ describe("trusted origins", () => {
 		vi.unstubAllEnvs();
 	});
 
-	it("trusts only SITE_URL when no staging site is set", () => {
+	it("trusts SITE_URL", () => {
 		vi.stubEnv("SITE_URL", "https://app.example.com");
-		vi.stubEnv("STAGING_SITE_URL", "");
 		expect(trustedSiteOrigins()).toEqual(["https://app.example.com"]);
 		expect(createAuth({} as never).options.trustedOrigins).toEqual([
 			"https://app.example.com",
@@ -98,16 +97,12 @@ describe("trusted origins", () => {
 
 	it("trusts the bare origin when SITE_URL carries a trailing slash", () => {
 		vi.stubEnv("SITE_URL", "https://app.example.com/");
-		vi.stubEnv("STAGING_SITE_URL", "");
 		expect(trustedSiteOrigins()).toEqual(["https://app.example.com"]);
 	});
 
-	it("also trusts the staging site on a deployment that serves one", () => {
-		vi.stubEnv("SITE_URL", "http://localhost:5173");
+	it("ignores a STAGING_SITE_URL left on a deployment", () => {
+		vi.stubEnv("SITE_URL", "https://app.example.com");
 		vi.stubEnv("STAGING_SITE_URL", "https://staging.example.com");
-		expect(createAuth({} as never).options.trustedOrigins).toEqual([
-			"http://localhost:5173",
-			"https://staging.example.com",
-		]);
+		expect(trustedSiteOrigins()).toEqual(["https://app.example.com"]);
 	});
 });

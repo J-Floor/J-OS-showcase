@@ -28,8 +28,8 @@ function createMagicLinkRequest(email: () => string) {
 		const response = await ResultAsync.fromPromise(
 			authClient.signIn.magicLink({
 				email: email(),
-				// Absolute: the server rewrites a relative path to SITE_URL, which
-				// is not this site when one backend serves two (dev and staging).
+				// Absolute: the server would resolve a relative path against its
+				// SITE_URL; this returns the link to the site it was asked from.
 				callbackURL: `${window.location.origin}/`,
 			}),
 			() => SEND_FAILED

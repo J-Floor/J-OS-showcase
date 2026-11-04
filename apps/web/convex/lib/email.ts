@@ -1,3 +1,5 @@
+import { normalizeEmail } from "./emailAddress.ts";
+
 export type SendEmailArgs = {
 	to: string;
 	subject: string;
@@ -6,14 +8,36 @@ export type SendEmailArgs = {
 	text?: string;
 	/** Optional file attachments (base64-encoded content), forwarded to Resend. */
 	attachments?: { filename: string; content: string }[];
-	/** Logged instead of sending when no provider is configured and EMAIL_DEV_LOG=1. */
+	/** Logged instead of sending when no provider is configured and
+	 *  EMAIL_DEV_LOG=1, or when EMAIL_ALLOWLIST leaves the recipient out. */
 	devLog: string;
 };
+
+/**
+ * `EMAIL_ALLOWLIST`'s addresses, normalized, or undefined when it is unset
+ * (prod, dev). Staging sets it so only the listed people get real email.
+ */
+export function emailAllowlist(): string[] | undefined {
+	const raw = process.env.EMAIL_ALLOWLIST;
+	return raw
+		? raw
+				.split(",")
+				.map((address) => normalizeEmail(address))
+				.filter(Boolean)
+		: undefined;
+}
+
+function isLeftOffAllowlist(to: string): boolean {
+	const allowlist = emailAllowlist();
+	return allowlist !== undefined && !allowlist.includes(normalizeEmail(to));
+}
 
 /**
  * Send a transactional email via Resend. Without RESEND_API_KEY nothing is
  * sent: a deployment with EMAIL_DEV_LOG=1 (dev only) logs `devLog`, which may
  * hold a sign-in link; any other logs the recipient and subject only. A
+ * deployment with EMAIL_ALLOWLIST (staging) sends only to the listed
+ * addresses and logs `devLog` for every other one. A
  * Resend failure logs the recipient and subject, never `devLog`. MUST run in an action /
  * httpAction context — it uses `fetch`, which mutations and queries can't.
  *
@@ -26,10 +50,11 @@ export type SendEmailArgs = {
  */
 export async function sendEmail(options: SendEmailArgs): Promise<boolean> {
 	const apiKey = process.env.RESEND_API_KEY;
-	if (!apiKey) {
-		// eslint-disable-next-line no-console -- no provider configured: surface in the Convex logs
+	const isWithheld = isLeftOffAllowlist(options.to);
+	if (!apiKey || isWithheld) {
+		// eslint-disable-next-line no-console -- not sent: surface in the Convex logs
 		console.log(
-			process.env.EMAIL_DEV_LOG === "1"
+			isWithheld || process.env.EMAIL_DEV_LOG === "1"
 				? options.devLog
 				: `[email] not sent (no RESEND_API_KEY) to ${options.to}: ${options.subject}`
 		);

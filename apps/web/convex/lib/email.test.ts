@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { sendEmail } from "./email.ts";
+import { emailAllowlist, sendEmail } from "./email.ts";
 
 describe("sendEmail", () => {
 	afterEach(() => {
@@ -111,5 +111,61 @@ describe("sendEmail", () => {
 		vi.unstubAllEnvs();
 		log.mockRestore();
 		err.mockRestore();
+	});
+});
+
+function stubResend() {
+	vi.stubEnv("RESEND_API_KEY", "re_x");
+	const fetchSpy = vi.fn(() => Promise.resolve({ ok: true }));
+	vi.stubGlobal("fetch", fetchSpy);
+	const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+	return { fetchSpy, logSpy };
+}
+
+describe("EMAIL_ALLOWLIST", () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		vi.unstubAllEnvs();
+		vi.restoreAllMocks();
+	});
+
+	const message = {
+		subject: "Your J floor sign-in link",
+		html: "<p>h</p>",
+		devLog: "[magic-link] x: https://staging.example.com/link?token=t",
+	};
+
+	it("delivers to an allowlisted address, matched case-insensitively and trimmed", async () => {
+		vi.stubEnv("EMAIL_ALLOWLIST", " Owner@Example.com , other@example.com");
+		const { fetchSpy, logSpy } = stubResend();
+		await expect(
+			sendEmail({ to: "owner@EXAMPLE.com ", ...message })
+		).resolves.toBe(true);
+		expect(fetchSpy).toHaveBeenCalledTimes(1);
+		expect(logSpy).not.toHaveBeenCalled();
+	});
+
+	it("logs the devLog, sign-in link included, for an address not on the list", async () => {
+		vi.stubEnv("EMAIL_ALLOWLIST", "owner@example.com");
+		const { fetchSpy, logSpy } = stubResend();
+		await expect(
+			sendEmail({ to: "stranger@example.com", ...message })
+		).resolves.toBe(true);
+		expect(fetchSpy).not.toHaveBeenCalled();
+		expect(logSpy.mock.calls.flat().join(" ")).toContain(message.devLog);
+	});
+
+	it("leaves sending unchanged when unset", async () => {
+		const { fetchSpy, logSpy } = stubResend();
+		await sendEmail({ to: "stranger@example.com", ...message });
+		expect(fetchSpy).toHaveBeenCalledTimes(1);
+		expect(logSpy).not.toHaveBeenCalled();
+	});
+
+	it("parses the list into normalized entries, empty meaning unset", () => {
+		vi.stubEnv("EMAIL_ALLOWLIST", " A@Example.com ,, b@example.com ");
+		expect(emailAllowlist()).toEqual(["a@example.com", "b@example.com"]);
+		vi.stubEnv("EMAIL_ALLOWLIST", "");
+		expect(emailAllowlist()).toBeUndefined();
 	});
 });

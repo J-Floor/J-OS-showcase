@@ -22,14 +22,12 @@ export const authComponent = createClient<DataModel>(components.betterAuth);
 
 /**
  * Origins the auth routes accept, for CORS and for callback URLs: the
- * deployment's own site, plus `STAGING_SITE_URL` on the dev deployment, which
- * serves both local dev and the staging site. Bare origins, because Better
- * Auth compares a callback URL's origin to each entry as a string.
+ * deployment's own site. A bare origin, because Better Auth compares a
+ * callback URL's origin to each entry as a string.
  */
 export function trustedSiteOrigins(): string[] {
-	return [process.env.SITE_URL, process.env.STAGING_SITE_URL]
-		.filter((site): site is string => Boolean(site))
-		.map((site) => new URL(site).origin);
+	const site = process.env.SITE_URL;
+	return site ? [new URL(site).origin] : [];
 }
 
 export function createAuth(context: GenericCtx<DataModel>) {

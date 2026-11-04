@@ -7,6 +7,7 @@ import { DAY_MS } from "./lib/constants.ts";
 import { developmentAdminEmail } from "./lib/devAdmin.ts";
 import { normalizeEmail, personByEmail } from "./lib/emailAddress.ts";
 import { insertSignature } from "./lib/signatures.ts";
+import type { Wifi } from "./lib/wifi.ts";
 import type { vertical } from "./schema.ts";
 
 type Vertical = Infer<typeof vertical>;
@@ -338,7 +339,7 @@ async function wipeInventory(context: MutationCtx): Promise<void> {
 	}
 }
 
-async function seedInventory(context: MutationCtx): Promise<void> {
+export async function seedInventory(context: MutationCtx): Promise<void> {
 	const furniture = await context.db.insert("itemCategories", {
 		name: "Furniture",
 		description: "Desks, chairs, and shared seating.",
@@ -393,10 +394,13 @@ const DEV_WIFI = { ssid: "J floor (dev)", password: "dev-wifi-password" };
  * board edit made against a dev deployment survives a reseed instead of being
  * clobbered back to the fixture value.
  */
-async function seedWifi(context: MutationCtx): Promise<void> {
+export async function seedWifi(
+	context: MutationCtx,
+	wifi: Wifi
+): Promise<void> {
 	const existing = await context.db.query("wifiConfig").first();
 	if (existing) return;
-	await context.db.insert("wifiConfig", DEV_WIFI);
+	await context.db.insert("wifiConfig", wifi);
 }
 
 // Dev-only fixtures. Run with `bunx convex run seed:run` against your personal
@@ -863,7 +867,7 @@ export const run = internalMutation({
 		);
 
 		await seedInventory(context);
-		await seedWifi(context);
+		await seedWifi(context, DEV_WIFI);
 
 		return {
 			board: boardIds.length,

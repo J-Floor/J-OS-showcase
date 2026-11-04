@@ -1,13 +1,13 @@
 import { v } from "convex/values";
 
 import { internalMutation } from "./_generated/server";
-import type { MutationCtx } from "./_generated/server";
-import { DAY_MS, NINETY_DAYS } from "./lib/constants.ts";
 import { developmentAdminEmail } from "./lib/devAdmin.ts";
-import { normalizeEmail, personByEmail } from "./lib/emailAddress.ts";
-import type { Tier } from "./lib/lifecycleTypes.ts";
-import { SELF_STEP_IDS } from "./lib/onboardingSteps.ts";
-import { syncSignedVariants } from "./lib/signatures.ts";
+import {
+	applyPreset,
+	BOARD_PRESET,
+	MEMBER_PRESET,
+	type Preset,
+} from "./lib/presets.ts";
 
 /**
  * Dev-only impersonation. Log in ONCE with the address in `DEV_ADMIN_EMAIL`
@@ -24,102 +24,18 @@ import { syncSignedVariants } from "./lib/signatures.ts";
  * NEVER run in prod.
  */
 
-type Preset = {
-	tier: Exclude<Tier, "former" | "visitor">;
-	stage: "onboarding" | "active" | "verified" | "denied";
-	onboarding: "clear" | "full-seen" | "full-unseen";
-	access: boolean;
-};
-
-function fullSteps(now: number) {
-	return Object.fromEntries(
-		SELF_STEP_IDS.map((id) => [id, { completedAt: now }])
-	);
-}
-
-function onboardingFor(preset: Preset, now: number) {
-	return preset.onboarding === "clear"
-		? undefined
-		: {
-				steps: fullSteps(now),
-				tourSeen: preset.onboarding === "full-seen",
-			};
-}
-
-function accessWindowFor(preset: Preset, now: number) {
-	return preset.access
-		? { accessFrom: now - DAY_MS, accessUntil: now + NINETY_DAYS }
-		: { accessFrom: undefined, accessUntil: undefined };
-}
-
-/** Drive `email`'s person to the given target state. */
-async function apply(
-	context: MutationCtx,
-	preset: Preset,
-	email: string | undefined
-) {
-	const addr = normalizeEmail(email ?? developmentAdminEmail());
-	const now = Date.now();
-
-	const existing = await personByEmail(context, addr);
-	// Display-only name pair for the impersonation account; preserved if the row
-	// already exists, else a generic default.
-	const firstName = existing?.firstName ?? "J Floor";
-	const lastName = existing?.lastName ?? "Dev";
-
-	// Re-onboarding presets clear progress; also wipe any prior signature so the
-	// document step can be re-signed (signAgreement rejects a second signing).
-	if (existing && preset.onboarding === "clear") {
-		const sigs = await context.db
-			.query("signatures")
-			.withIndex("by_person", (range) =>
-				range.eq("personId", existing._id)
-			)
-			.collect();
-		for (const sig of sigs) await context.db.delete(sig._id);
-		await syncSignedVariants(context, existing);
-	}
-
-	const fields = {
-		tier: preset.tier,
-		stage: preset.stage,
-		stageSince: now,
-		provenance: "seed" as const,
-		door: { override: "none" as const },
-		onboarding: onboardingFor(preset, now),
-		...accessWindowFor(preset, now),
-	};
-
-	if (existing) {
-		await context.db.patch(existing._id, fields);
-		return { person: existing._id };
-	}
-	const id = await context.db.insert("people", {
-		email: addr,
-		firstName,
-		lastName,
-		...fields,
-	});
-	return { person: id };
-}
-
 const emailArgument = { email: v.optional(v.string()) };
 
 /** Define a zero-arg (optional email) dev mutation for one target state. */
 function presetMutation(preset: Preset) {
 	return internalMutation({
 		args: emailArgument,
-		handler: (context, { email }) => apply(context, preset, email),
+		handler: (context, { email }) =>
+			applyPreset(context, preset, email ?? developmentAdminEmail()),
 	});
 }
 
-// Settled, full access (onboarding done, tour already seen).
-export const board = presetMutation({
-	tier: "board",
-	stage: "active",
-	onboarding: "clear",
-	access: false,
-});
+export const board = presetMutation(BOARD_PRESET);
 // Same rights as board, different label — for people who are not on the board.
 export const admin = presetMutation({
 	tier: "admin",
@@ -134,12 +50,7 @@ export const staff = presetMutation({
 	onboarding: "clear",
 	access: false,
 });
-export const member = presetMutation({
-	tier: "member",
-	stage: "active",
-	onboarding: "full-seen",
-	access: true,
-});
+export const member = presetMutation(MEMBER_PRESET);
 export const guest = presetMutation({
 	tier: "guest",
 	stage: "active",

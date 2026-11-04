@@ -61,7 +61,7 @@ const PUBLIC_BUILDER = /^(?:query|mutation|action|httpAction)$/;
 
 /** Modules only an operator runs (CLI / dashboard); never callable by a client. */
 const OPERATOR_MODULE =
-	/^(?:dev|seed|migrations|purge|backfill\w*|migrate\w*)\.ts$/;
+	/^(?:dev|seed|staging|migrations|purge|backfill\w*|migrate\w*)\.ts$/;
 
 const TOKEN_MINTER = "lib/confirmToken.ts";
 
@@ -787,6 +787,7 @@ describe("security invariants (convex/)", () => {
 			expect.arrayContaining([
 				"dev.ts",
 				"seed.ts",
+				"staging.ts",
 				"migrations.ts",
 				"purge.ts",
 			])
