@@ -42,6 +42,7 @@ const REMOVED: Record<string, string> = {
   "scripts/agent-guard.ts": "guard\n",
   "scripts/agent-guard.test.ts": "guard test\n",
   ".github/workflows/superpowers-evidence.yml": "on: push\n",
+  ".github/dependabot.yml": "version: 2\n",
 };
 
 beforeEach(() => {
@@ -63,6 +64,7 @@ describe("snapshot", () => {
     expect(removed).toEqual([
       ".claude",
       ".codex",
+      ".github/dependabot.yml",
       ".github/workflows/superpowers-evidence.yml",
       "AGENTS.md",
       "apps/web/docs/superpowers",
@@ -92,7 +94,7 @@ describe("snapshot", () => {
   test("accepts an existing empty outDir", async () => {
     mkdirSync(outDir);
     const { removed } = await snapshot({ repoDir, ref: "HEAD", outDir });
-    expect(removed).toHaveLength(10);
+    expect(removed).toHaveLength(11);
   });
 
   test("a tree without the excluded paths still snapshots", async () => {
@@ -111,6 +113,7 @@ describe("snapshot", () => {
     expect(isExcludedPath("AGENTS.md")).toBe(true);
     expect(isExcludedPath("apps/web/AGENTS.md")).toBe(false);
     expect(isExcludedPath(".claudex/a")).toBe(false);
+    expect(isExcludedPath(".github/dependabot.yml")).toBe(true);
   });
 
   test("throws on a bad ref", async () => {

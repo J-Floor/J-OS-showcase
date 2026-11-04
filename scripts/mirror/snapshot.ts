@@ -5,6 +5,7 @@ const SUPERPOWERS_DIR = "docs/superpowers";
 const EXCLUDED_PATHS: readonly string[] = [
   ".claude",
   ".codex",
+  ".github/dependabot.yml",
   ".github/workflows/superpowers-evidence.yml",
   "AGENTS.md",
   "docs/DEPLOYMENT.md",
