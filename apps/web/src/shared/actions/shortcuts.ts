@@ -37,6 +37,9 @@ export type ActionDescriptor<Target> = {
 	/** Wrap the action's button in confetti, for the one decision worth
 	 *  celebrating. */
 	celebrate?: boolean;
+	/** Make this the one primary button in an `ActionBar`, for an action that
+	 *  is the point of its sheet rather than one answer among several. */
+	primary?: boolean;
 	/** Whether the action is on offer for this target. Drives both the
 	 *  button's disabled state and the binding's `enabled`. */
 	can: (target: Target) => boolean;

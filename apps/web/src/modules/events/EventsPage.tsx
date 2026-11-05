@@ -2,7 +2,7 @@ import { EmptyState, FloatingToolbar, Table } from "@j-os/design-system";
 
 import { api } from "../../../convex/_generated/api";
 import type { Doc } from "../../../convex/_generated/dataModel";
-import { Can } from "../../lib/ability.tsx";
+import { Can, useCan } from "../../lib/ability.tsx";
 import { ActionButton } from "../../shared/actions/ActionButton.tsx";
 import { PAGE_TARGET } from "../../shared/actions/shortcuts.ts";
 import { useQuery } from "../../shared/data/useQuery.ts";
@@ -24,6 +24,7 @@ import styles from "./EventsPage.module.scss";
  * over the page on a phone.
  */
 export function EventsPage() {
+	const can = useCan();
 	const events = useQuery(api.events.listEvents, {});
 	const prefetchRow = useRowPrefetch(eventsEntity);
 
@@ -57,7 +58,9 @@ export function EventsPage() {
 			</div>
 			<div class={styles.panel}>
 				<Table.Root
-					columns={eventColumns()}
+					columns={eventColumns({
+						canManage: can.I("manage").the("Events"),
+					})}
 					data={events.data()}
 					getRowId={(row) => row._id}
 					initialColumnSorting={EVENTS_DEFAULT_SORT}

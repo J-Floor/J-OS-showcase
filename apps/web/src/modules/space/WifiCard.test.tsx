@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import {
+	PHONE_QUERY,
 	ShortcutPeekProvider,
 	setDeferredImmediate,
 } from "@j-os/design-system";
@@ -49,8 +50,13 @@ import { ShortcutPeekButton } from "../../shared/ShortcutPeekButton.tsx";
 
 import { WifiCard } from "./WifiCard.tsx";
 
-const PHONE_HINT =
-	"Viewing on phone? Use Circle to Search (long-press your home button/pill)";
+const PHONE_HINT = "Use Circle to Search (long-press your home button/pill)";
+
+function stubPhone(): void {
+	vi.stubGlobal("matchMedia", (query: string) => ({
+		matches: query === PHONE_QUERY,
+	}));
+}
 
 beforeEach(() => {
 	credentials.value = { ssid: "J floor", password: "test-wifi-password" };
@@ -58,6 +64,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	cleanup();
+	vi.unstubAllGlobals();
 	setDeferredImmediate(false);
 	logWifiOpenMutate.mockClear();
 	updateWifiMutate.mockClear();
@@ -72,6 +79,7 @@ function renderAs(role: Role) {
 }
 
 test("shows the network's QR code and the phone hint inline, with no button to open them", () => {
+	stubPhone();
 	renderAs("member");
 	expect(screen.getByText("J floor")).toBeInTheDocument();
 	expect(screen.getByText(PHONE_HINT)).toBeInTheDocument();
@@ -96,7 +104,9 @@ test("a non-board member does not see the edit control", () => {
 });
 
 test("board sees the edit control and saving calls wifi.update with the entered credentials", () => {
+	stubPhone();
 	renderAs("board");
+	expect(screen.getByText(PHONE_HINT)).toBeInTheDocument();
 	fireEvent.click(screen.getByRole("button", { name: /^Edit/ }));
 
 	// The form takes the code's place and the phone hint goes while editing.
@@ -275,4 +285,11 @@ test("Save and Cancel keys leave an open dialog's keyboard to it", () => {
 	} finally {
 		dialog.remove();
 	}
+});
+
+test("a wider screen does not show the phone hint", () => {
+	vi.stubGlobal("matchMedia", () => ({ matches: false }));
+	renderAs("member");
+	expect(screen.getByText("J floor")).toBeInTheDocument();
+	expect(screen.queryByText(PHONE_HINT)).not.toBeInTheDocument();
 });

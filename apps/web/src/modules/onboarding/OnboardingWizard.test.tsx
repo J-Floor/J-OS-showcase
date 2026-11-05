@@ -1,9 +1,14 @@
 // @vitest-environment happy-dom
+import { PHONE_QUERY } from "@j-os/design-system";
 import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
 import { err, ok } from "neverthrow";
-import { afterEach, expect, test } from "vitest";
+import { createSignal } from "solid-js";
+import { afterEach, expect, test, vi } from "vitest";
 
-afterEach(cleanup);
+afterEach(() => {
+	cleanup();
+	vi.unstubAllGlobals();
+});
 
 import type { Doc } from "../../../convex/_generated/dataModel";
 
@@ -114,4 +119,91 @@ test("an activated resume keeps the loading screen for the redirect, never Almos
 	expect(screen.getByRole("status", { name: "Loading" })).toBeInTheDocument();
 	expect(screen.queryByText("Almost there")).toBeNull();
 	expect(screen.queryByText(/All done/)).toBeNull();
+});
+
+const REST = {
+	onComplete: () => Promise.resolve(ok(undefined)),
+	onResume: () => Promise.resolve(ok({ activated: false })),
+};
+
+test("on desktop, progress sits once in the footer and the panel shows the logo", () => {
+	vi.stubGlobal("matchMedia", () => ({ matches: false }));
+	render(() => <OnboardingWizardView person={personWith({})} {...REST} />);
+	const progress = screen.getByText(/1 of 4/i);
+	expect(progress.closest("header")).toBeNull();
+	expect(screen.getByRole("img", { name: "J floor" })).toBeInTheDocument();
+});
+
+test("on a phone, progress sits once in the header and there is no logo", () => {
+	vi.stubGlobal("matchMedia", (query: string) => ({
+		matches: query === PHONE_QUERY,
+	}));
+	render(() => <OnboardingWizardView person={personWith({})} {...REST} />);
+	expect(screen.getByText(/1 of 4/i).closest("header")).not.toBeNull();
+	expect(screen.queryByRole("img", { name: "J floor" })).toBeNull();
+});
+
+test("a refusal scrolls itself into view each time, because the footer can be pressed far above it", async () => {
+	const scrolled: boolean[] = [];
+	const scrollIntoView = vi
+		.spyOn(Element.prototype, "scrollIntoView")
+		.mockImplementation(function (this: Element) {
+			scrolled.push(this.querySelector('[role="alert"]') !== null);
+		});
+	try {
+		render(() => (
+			<OnboardingWizardView
+				person={personWith({})}
+				onComplete={() =>
+					Promise.resolve(
+						err({
+							code: "Forbidden",
+							message: "You can't do that.",
+						})
+					)
+				}
+				onResume={REST.onResume}
+			/>
+		));
+		expect(scrollIntoView).not.toHaveBeenCalled();
+		fireEvent.click(screen.getByRole("button", { name: /let's go/i }));
+		await screen.findByRole("alert");
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(scrollIntoView).toHaveBeenCalledTimes(1);
+		expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+		fireEvent.click(screen.getByRole("button", { name: /let's go/i }));
+		await screen.findByRole("alert");
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(scrollIntoView).toHaveBeenCalledTimes(2);
+		expect(scrolled).toEqual([true, true]);
+	} finally {
+		scrollIntoView.mockRestore();
+	}
+});
+
+test("a refusal from one step disappears when the person moves to the next", async () => {
+	const [person, setPerson] = createSignal(personWith({}));
+	render(() => (
+		<OnboardingWizardView
+			person={person()}
+			onComplete={() =>
+				Promise.resolve(
+					err({ code: "Forbidden", message: "You can't do that." })
+				)
+			}
+			onResume={REST.onResume}
+		/>
+	));
+	fireEvent.click(screen.getByRole("button", { name: /let's go/i }));
+	expect(await screen.findByRole("alert")).toHaveTextContent(
+		"You can't do that."
+	);
+	setPerson(
+		personWith({
+			welcome: { completedAt: 1 },
+			document: { completedAt: 1 },
+		})
+	);
+	expect(screen.getByText("House rules")).toBeInTheDocument();
+	expect(screen.queryByRole("alert")).toBeNull();
 });

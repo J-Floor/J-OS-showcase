@@ -1,13 +1,20 @@
+@use "@j-os/design-system/breakpoints" as bp;
+
 .main {
 	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
 	display: flex;
 
-	/* Top-align (not centre): the wizard's steps vary in height, and a tall step
-	   (the document step) centred vertically floats mid-screen and can overflow
-	   above the fold. Start at the top with comfortable breathing room. */
-	align-items: flex-start;
+	/* `safe`: a short step sits mid-page, a tall one starts at the top rather
+	   than overflowing above it. */
+	align-items: safe center;
 	justify-content: center;
 	min-block-size: 100dvb;
 	padding-block: var(--jf-spacing-away);
 	padding-inline: var(--jf-spacing-far);
+	background-color: var(--jf-surface-bg-raised);
+
+	@include bp.phone {
+		align-items: flex-start;
+		background-color: var(--jf-surface-bg-base);
+	}
 }

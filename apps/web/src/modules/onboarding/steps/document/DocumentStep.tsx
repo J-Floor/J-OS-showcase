@@ -172,7 +172,11 @@ export function DocumentStep(props: OnboardingStepProps) {
 				/>
 			</Show>
 			<SignerDetails person={props.person} />
-			<SignaturePad label="Your signature" onChange={setSig} />
+			<SignaturePad
+				class={styles.signature}
+				label="Your signature"
+				onChange={setSig}
+			/>
 			<InlineError message={error()} />
 			<StepActions>
 				<Button

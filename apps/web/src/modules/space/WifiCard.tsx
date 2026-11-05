@@ -1,4 +1,9 @@
-import { Input, Skeleton } from "@j-os/design-system";
+import {
+	Input,
+	PHONE_QUERY,
+	Skeleton,
+	createMediaQuery,
+} from "@j-os/design-system";
 import { useMutation } from "convex-solidjs";
 import { Show, createSignal, onMount, type Accessor } from "solid-js";
 
@@ -180,6 +185,7 @@ export function WifiCard(props: { active?: boolean }) {
 	const credentials = useQuery(api.wifi.get, {});
 	const logWifiOpen = useMutation(api.people.logWifiOpen);
 	const edit = createWifiEditing(credentials);
+	const isPhone = createMediaQuery(PHONE_QUERY);
 
 	// The code is on screen as soon as the card is, so the card rendering is
 	// the "first open" the board audit records. Fire-and-forget; the server
@@ -234,10 +240,9 @@ export function WifiCard(props: { active?: boolean }) {
 				</Show>
 			</SpaceCard.Body>
 			<SpaceCard.Note>
-				<Show when={!edit.editing()}>
+				<Show when={isPhone() && !edit.editing()}>
 					<p class={styles.hint}>
-						Viewing on phone? Use Circle to Search (long-press your
-						home button/pill)
+						Use Circle to Search (long-press your home button/pill)
 					</p>
 				</Show>
 			</SpaceCard.Note>

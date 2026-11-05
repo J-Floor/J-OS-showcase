@@ -172,3 +172,28 @@ test("an action in flight shows its spinner and is disabled until it settles", a
 		expect(send).not.toHaveAttribute("aria-busy", "true");
 	});
 });
+
+test("only an action marked primary is a primary button", () => {
+	const base = {
+		icon: "check",
+		can: () => true,
+		run: (): undefined => {},
+	};
+	const actions: ActionDescriptor<Target>[] = [
+		{ ...base, id: "main", label: "Main", hotkey: "M", primary: true },
+		{ ...base, id: "other", label: "Other", hotkey: "O" },
+	];
+	render(() => (
+		<ShortcutPeekProvider>
+			<ActionBar actions={actions} target={OPEN} />
+		</ShortcutPeekProvider>
+	));
+	expect(screen.getByRole("button", { name: /Main/ })).toHaveAttribute(
+		"data-variant",
+		"primary"
+	);
+	expect(screen.getByRole("button", { name: /Other/ })).toHaveAttribute(
+		"data-variant",
+		"secondary"
+	);
+});

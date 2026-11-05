@@ -71,13 +71,15 @@ afterEach(() => {
 });
 
 // MemoryRouter: EventsPage uses useSearchParams to deep-link the open event.
-function renderAs(role: Role) {
+function renderAs(role: Role | (() => Role)) {
 	return render(() => (
 		<MemoryRouter>
 			<Route
 				path="*"
 				component={() => (
-					<AbilityProvider role={role}>
+					<AbilityProvider
+						role={typeof role === "function" ? role() : role}
+					>
 						<EventsPage />
 					</AbilityProvider>
 				)}
@@ -387,4 +389,35 @@ test("the New event button names its key in a chip while peeking", () => {
 	expect(add.querySelector("kbd")).toBeNull();
 	fireEvent.click(screen.getByRole("button", { name: /shortcut/i }));
 	expect(add.querySelector("kbd")).not.toBeNull();
+});
+
+test("a member sees no row action in the table", () => {
+	renderAs("member");
+	expect(screen.getByText("Open House")).toBeInTheDocument();
+	expect(screen.queryByRole("button", { name: "Copy link" })).toBeNull();
+	expect(screen.queryByRole("button", { name: "Download QR" })).toBeNull();
+});
+
+test("a board member sees the row actions in the table", () => {
+	renderAs("board");
+	expect(
+		screen.getByRole("button", { name: "Copy link" })
+	).toBeInTheDocument();
+	expect(
+		screen.getByRole("button", { name: "Download QR" })
+	).toBeInTheDocument();
+});
+
+test("a mounted page loses the row actions when the role drops from board to member", async () => {
+	const [role, setRole] = createSignal<Role>("board");
+	// eslint-disable-next-line solid/reactivity -- renderAs reads the accessor inside the provider's JSX
+	renderAs(role);
+	expect(
+		screen.getByRole("button", { name: "Copy link" })
+	).toBeInTheDocument();
+	setRole("member");
+	await waitFor(() => {
+		expect(screen.queryByRole("button", { name: "Copy link" })).toBeNull();
+	});
+	expect(screen.getByText("Open House")).toBeInTheDocument();
 });

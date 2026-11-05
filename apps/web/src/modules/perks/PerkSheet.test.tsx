@@ -521,3 +521,8 @@ test("a member has no Delete key", () => {
 	expect(mutateAsync).not.toHaveBeenCalled();
 	expect(screen.queryByText("Delete perk?")).toBeNull();
 });
+
+test("Request perk is the sheet's primary button", () => {
+	renderSheet("member", { perk });
+	expect(requestButton()).toHaveAttribute("data-variant", "primary");
+});

@@ -569,6 +569,13 @@ test("detail (board): the footer keeps Request perk and adds Delete perk", () =>
 	expect(
 		screen.getByRole("button", { name: /Delete perk/ })
 	).toBeInTheDocument();
+	expect(
+		screen.getByRole("button", { name: /Request perk/ })
+	).toHaveAttribute("data-variant", "primary");
+	expect(screen.getByRole("button", { name: /Delete perk/ })).toHaveAttribute(
+		"data-variant",
+		"secondary"
+	);
 });
 
 test("Delete waits for confirmation, then calls deletePerk and closes", async () => {

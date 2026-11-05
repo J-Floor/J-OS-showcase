@@ -45,7 +45,7 @@ function QrDownload(props: EntityQrLink & { onDone: () => void }): JSX.Element {
 
 /**
  * Row-action pair: copy link (`SwapIconButton`) + download QR. No ability
- * gate inside — callers wrap in `<Can>`. Ported from `EventRowActions`.
+ * gate inside — callers gate it.
  *
  * The QR is built only when Download QR is pressed. A table renders this in
  * every row, and encoding a QR per row at mount made opening the page stall
@@ -85,7 +85,7 @@ export function EntityQrActions(props: EntityQrLink): JSX.Element {
 
 /**
  * Sheet block: rendered QR + Copy link Button + Download button. No ability
- * gate inside — callers wrap in `<Can>`. Ported from the events "QR & link"
+ * gate inside — callers gate it. Ported from the events "QR & link"
  * accordion body.
  */
 export function EntityQrBlock(props: EntityQrLink): JSX.Element {

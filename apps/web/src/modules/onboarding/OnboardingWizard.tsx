@@ -1,17 +1,16 @@
+import { Logo, PHONE_QUERY, createMediaQuery } from "@j-os/design-system";
 import { Navigate } from "@solidjs/router";
 import type { FunctionReturnType } from "convex/server";
 import { useMutation } from "convex-solidjs";
 import { ok, type Result } from "neverthrow";
-import { Show } from "solid-js";
+import { Show, createEffect } from "solid-js";
 import { Dynamic } from "solid-js/web";
 
 import { api } from "../../../convex/_generated/api";
 import type { Doc } from "../../../convex/_generated/dataModel";
-import {
-	firstIncompleteSelfStepId,
-	requiredSelfStepIds,
-} from "../../../convex/lib/onboardingSteps.ts";
+import { firstIncompleteSelfStepId } from "../../../convex/lib/onboardingSteps.ts";
 import { call, type ClientError } from "../../lib/call.ts";
+import { APP_NAME } from "../../lib/constants.ts";
 import { AppErrorBoundary } from "../../shared/AppErrorBoundary.tsx";
 import { createActionError } from "../../shared/createActionError.ts";
 import { useQuery } from "../../shared/data/useQuery.ts";
@@ -21,6 +20,25 @@ import { LoadingScreen } from "../../shared/LoadingScreen.tsx";
 import { FinishOnboarding } from "./FinishOnboarding.tsx";
 import styles from "./OnboardingWizard.module.scss";
 import { ONBOARDING_VIEWS } from "./registry.ts";
+import { StepProgressContext, createStepProgress } from "./stepProgress.ts";
+
+/**
+ * The footer sticks, so a refusal can land far below the button that caused
+ * it. Each attempt clears the message before it can set one again, so a repeat
+ * refusal passes through null and scrolls again. Call it inside the keyed
+ * block, so the effect lives and dies with the step.
+ */
+function scrollRefusalIntoView(message: () => string | null) {
+	let element: HTMLDivElement | undefined;
+	createEffect(() => {
+		if (message()) {
+			element?.scrollIntoView({ block: "nearest" });
+		}
+	});
+	return (node: HTMLDivElement) => {
+		element = node;
+	};
+}
 
 /** Presentational wizard: renders the current step for a given person. */
 export function OnboardingWizardView(props: {
@@ -30,26 +48,20 @@ export function OnboardingWizardView(props: {
 		Result<FunctionReturnType<typeof api.onboarding.resume>, ClientError>
 	>;
 }) {
-	const { error: completeError, trackResult } = createActionError();
+	const { currentId, label: progress } = createStepProgress(
+		() => props.person
+	);
+	// Keyed to the step, so a refusal never carries over to the next one.
+	const { error: completeError, trackResult } = createActionError(
+		() => currentId() ?? undefined
+	);
 	/** What each step's button calls; a refusal shows under the step. */
 	async function complete(): Promise<void> {
 		await trackResult(props.onComplete());
 	}
-	function tier() {
-		return props.person.tier;
-	}
-	function currentId() {
-		return firstIncompleteSelfStepId(
-			tier(),
-			props.person.onboarding?.steps ?? {}
-		);
-	}
-	function total() {
-		return requiredSelfStepIds(tier()).length;
-	}
-	function position() {
-		const id = currentId();
-		return id ? requiredSelfStepIds(tier()).indexOf(id) + 1 : total();
+	const isPhone = createMediaQuery(PHONE_QUERY);
+	function footerProgress() {
+		return isPhone() ? undefined : progress();
 	}
 	return (
 		<Show
@@ -63,22 +75,38 @@ export function OnboardingWizardView(props: {
 				// when a step completes. A non-keyed Show keeps the stale block
 				// while `when` stays truthy, so it only updated on a full reload.
 				const view = ONBOARDING_VIEWS[id];
+				const errorReference = scrollRefusalIntoView(completeError);
 				return (
-					<section class={styles.card}>
+					<section class={`${styles.card} ${styles.stepCard}`}>
 						<header class={styles.head}>
-							<p class={styles.progress}>
-								Step {position()} of {total()}
-							</p>
+							<Show
+								when={isPhone()}
+								fallback={
+									<Logo
+										class={styles.logo}
+										variant="monogram"
+										title={APP_NAME}
+									/>
+								}
+							>
+								<p class={styles.progress}>{progress()}</p>
+							</Show>
 							<h1 class={styles.title}>{view.title}</h1>
 						</header>
-						<AppErrorBoundary>
-							<Dynamic
-								component={view.component}
-								person={props.person}
-								onComplete={complete}
-							/>
-						</AppErrorBoundary>
-						<InlineError message={completeError()} />
+						<StepProgressContext.Provider value={footerProgress}>
+							<AppErrorBoundary>
+								<Dynamic
+									component={view.component}
+									person={props.person}
+									onComplete={complete}
+								/>
+							</AppErrorBoundary>
+						</StepProgressContext.Provider>
+						<Show when={completeError()}>
+							<div ref={errorReference}>
+								<InlineError message={completeError()} />
+							</div>
+						</Show>
 					</section>
 				);
 			}}

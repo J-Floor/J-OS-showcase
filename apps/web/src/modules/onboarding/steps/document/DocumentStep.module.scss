@@ -1,3 +1,7 @@
+@use "@j-os/design-system/breakpoints" as bp;
+
+$signature-phone-width: 20rem;
+
 .wrap {
 	display: flex;
 	flex-direction: column;
@@ -23,4 +27,13 @@
 	/* row gap / column gap — wider columns so a long value (company name) never
 	   butts up against its label. */
 	gap: var(--jf-spacing-near) var(--jf-spacing-away);
+}
+
+/* Beats the pad's own 20rem whichever stylesheet loads last. */
+.wrap .signature {
+	inline-size: 100%;
+
+	@include bp.phone {
+		inline-size: $signature-phone-width;
+	}
 }

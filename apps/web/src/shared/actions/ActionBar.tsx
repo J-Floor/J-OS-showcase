@@ -24,10 +24,11 @@ export type ActionBarProps<Target> = {
  * A sheet footer's actions, written out as full-width buttons in equal
  * columns: as many across as fit, one per row on a phone.
  *
- * Every button is `secondary`: one primary among them would read as the
- * recommended answer. The `Kbd` chip shows only while peeking, in the icon's
- * place. An action marked `celebrate` is wrapped in `Confetti`. A run in
- * flight shows its spinner (`ActionButton`).
+ * Buttons are `secondary` unless an action is marked `primary`: among peers, a
+ * primary would read as the recommended answer, so only mark an action that is
+ * the point of its sheet rather than one answer among several. The `Kbd` chip
+ * shows only while peeking, in the icon's place. An action marked `celebrate`
+ * is wrapped in `Confetti`. A run in flight shows its spinner (`ActionButton`).
  */
 export function ActionBar<Target>(props: ActionBarProps<Target>): JSX.Element {
 	return (
@@ -44,7 +45,7 @@ export function ActionBar<Target>(props: ActionBarProps<Target>): JSX.Element {
 						<ActionButton
 							action={action}
 							target={props.target}
-							variant="secondary"
+							variant={action.primary ? "primary" : "secondary"}
 							contentClass={styles.tight}
 						/>
 					);

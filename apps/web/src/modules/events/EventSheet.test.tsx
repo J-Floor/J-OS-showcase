@@ -502,7 +502,9 @@ test("a refused rename shows the reason under the details", async () => {
 test("morph: the event's date columns pair with the sheet's date rows", () => {
 	// The phase column is hidden (the table groups by it).
 	const row = tableRowKeys(
-		eventColumns().filter((column) => column.id !== "phase"),
+		eventColumns({ canManage: true }).filter(
+			(column) => column.id !== "phase"
+		),
 		event as Doc<"events">
 	);
 	expect(row.title).toBe("name");

@@ -1,4 +1,7 @@
 .wrap {
+	/* The capped track would fit only one column in the wizard's panel. */
+	--card-grid-track-max: 1fr;
+
 	display: flex;
 	flex-direction: column;
 	gap: var(--jf-spacing-far);

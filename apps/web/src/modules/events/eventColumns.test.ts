@@ -13,7 +13,7 @@ const ENDS = Date.UTC(2026, 9, 9, 2);
 const event = { startsAt: STARTS, endsAt: ENDS } as Doc<"events">;
 
 function column(key: string) {
-	return eventColumns().find(
+	return eventColumns({ canManage: true }).find(
 		(candidate) =>
 			(candidate.id ??
 				(candidate as { accessorKey?: string }).accessorKey) === key
@@ -38,4 +38,11 @@ test("the actions column is a display column with a fixed width", () => {
 	expect(actions).not.toHaveProperty("dataType");
 	expect(actions).not.toHaveProperty("enableSorting");
 	expect(actions).not.toHaveProperty("enableColumnFilter");
+});
+
+test("whoever cannot manage events gets no actions column", () => {
+	const ids = eventColumns({ canManage: false }).map(
+		(candidate) => candidate.id
+	);
+	expect(ids).not.toContain("actions");
 });

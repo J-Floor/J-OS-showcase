@@ -1,5 +1,4 @@
 import type { Doc } from "../../../convex/_generated/dataModel";
-import { Can } from "../../lib/ability.tsx";
 import { RowActions } from "../../shared/actions/RowActions.tsx";
 import { EntityQrActions } from "../../shared/entity/EntityQr.tsx";
 
@@ -8,16 +7,14 @@ import { eventsEntity } from "./entity.ts";
 /**
  * Trailing per-row actions for the events table: copy the visitor link and
  * download the visitor QR — the same quick affordances the community roster
- * gives its rows. Board/admin only (`manage`/`Events`); a plain member's row
- * shows no actions. The column sets `disableRowClick`, so these never open the
+ * gives its rows. The column is added only for board/admin
+ * (`manage`/`Events`). It sets `disableRowClick`, so these never open the
  * detail sheet.
  */
 export function EventRowActions(props: { row: Doc<"events"> }) {
 	return (
-		<Can I="manage" the="Events">
-			<RowActions>
-				<EntityQrActions {...eventsEntity.qr!(props.row)} />
-			</RowActions>
-		</Can>
+		<RowActions>
+			<EntityQrActions {...eventsEntity.qr!(props.row)} />
+		</RowActions>
 	);
 }

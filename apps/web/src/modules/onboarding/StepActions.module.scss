@@ -1,23 +1,38 @@
 @use "@j-os/design-system/breakpoints" as bp;
 
 .actions {
+	position: sticky;
+	inset-block-end: 0;
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--jf-spacing-near);
+	align-items: center;
 	justify-content: flex-end;
+	padding: var(--jf-spacing-far) var(--onboarding-panel-padding);
 	margin-block-start: var(--jf-spacing-away);
 
+	/* Reaches the panel's edges, so the border divides the whole panel. */
+	margin-inline: calc(-1 * var(--onboarding-panel-padding));
+	background: var(--jf-surface-bg-base);
+	border-block-start: var(--jf-border-width-decorative) solid
+		var(--jf-border-subtle);
+
 	@include bp.phone {
-		position: sticky;
-		inset-block-end: 0;
 		flex-direction: column;
 		align-items: stretch;
-		padding-block: var(--jf-spacing-far);
-		background: var(--jf-surface-bg-base);
+		padding-inline: 0;
+		margin-inline: 0;
+		border-block-start: 0;
 
 		/* DS buttons hug their label by default; stretch them full-width. */
 		button {
 			inline-size: 100%;
 		}
 	}
+}
+
+.progress {
+	margin: 0;
+	margin-inline-end: auto;
+	color: var(--jf-fg-muted);
 }

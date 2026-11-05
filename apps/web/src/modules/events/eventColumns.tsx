@@ -39,12 +39,15 @@ export const EVENTS_DEFAULT_SORT = [{ id: "startsAt", desc: true }];
 /**
  * Events table columns: name, start/end dates, and a trailing actions column
  * (copy link / download QR) mirroring the community roster's actions column —
- * `disableRowClick` so those buttons don't also open the sheet.
+ * `disableRowClick` so those buttons don't also open the sheet. The actions
+ * column is present only for whoever can manage events.
  */
-export function eventColumns(): JfColumnDefinition<Doc<"events">>[] {
-	// Captured once when the columns are built (Table reads config once at
-	// setup). An event silently crossing future→current→past won't re-bucket
-	// until the page reloads — fine for a board tool that refetches often, and
+export function eventColumns(options: {
+	canManage: boolean;
+}): JfColumnDefinition<Doc<"events">>[] {
+	// `now` is captured per build, and the columns rebuild only when what they
+	// read changes. An event silently crossing future→current→past won't
+	// re-bucket until then — fine for a board tool that refetches often, and
 	// phase boundaries fall on the event's own start/end, not every tick.
 	const now = Date.now();
 	return [
@@ -80,12 +83,18 @@ export function eventColumns(): JfColumnDefinition<Doc<"events">>[] {
 				formatDateIn(info.row.original.endsAt, SITE_TIMEZONE),
 			measureText: (row) => formatDateIn(row.endsAt, SITE_TIMEZONE),
 		}),
-		{
-			id: "actions",
-			header: "",
-			disableRowClick: true,
-			size: actionsColumnSize(EVENT_ACTION_COUNT),
-			cell: (info) => <EventRowActions row={info.row.original} />,
-		},
+		...(options.canManage
+			? [
+					{
+						id: "actions",
+						header: "",
+						disableRowClick: true,
+						size: actionsColumnSize(EVENT_ACTION_COUNT),
+						cell: (info) => (
+							<EventRowActions row={info.row.original} />
+						),
+					} satisfies JfColumnDefinition<Doc<"events">>,
+				]
+			: []),
 	];
 }

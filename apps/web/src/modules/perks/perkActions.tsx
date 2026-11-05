@@ -46,6 +46,7 @@ const DELETE_PERK_CONFIRM: ConfirmOptions = {
 function requestAction(form: PerkRequestForm): ActionDescriptor<PerkRow> {
 	return {
 		id: "request",
+		primary: true,
 		get label() {
 			const request = form.openRequest();
 			return request

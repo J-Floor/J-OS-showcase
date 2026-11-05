@@ -4,10 +4,15 @@
    house-rule cards — collapses to one column on narrow viewports with no
    media queries. The column track is capped (not 1fr) so cards stay a
    sensible width and don't stretch apart on wide screens. Rows keep the
-   default `align-items: stretch`, so cards side by side share one height. */
+   default `align-items: stretch`, so cards side by side share one height.
+   Set --card-grid-track-max to 1fr to fill a container narrower than two
+   capped tracks. */
 @mixin card-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(16rem, 24rem));
+	grid-template-columns: repeat(
+		auto-fit,
+		minmax(16rem, var(--card-grid-track-max, 24rem))
+	);
 	gap: var(--jf-spacing-far);
 
 	/* On a phone there is only ever one column, so the 24rem cap just leaves a

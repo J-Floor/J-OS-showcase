@@ -1,10 +1,41 @@
+@use "@j-os/design-system/breakpoints" as bp;
+
+$panel-width: 45rem;
+
 .card {
+	--onboarding-panel-padding: var(--jf-spacing-away);
+
 	display: flex;
 	flex-direction: column;
 	gap: var(--jf-spacing-far);
-	inline-size: min(640px, 100%);
-	padding: var(--jf-spacing-far);
+	inline-size: min($panel-width, 100%);
+	padding: var(--onboarding-panel-padding);
 	margin-inline: auto;
+	background-color: var(--jf-surface-bg-base);
+	border: var(--jf-border-width-decorative) solid var(--jf-border-subtle);
+	border-radius: var(--jf-radius-container);
+
+	@include bp.phone {
+		--onboarding-panel-padding: var(--jf-spacing-far);
+
+		background-color: transparent;
+		border: 0;
+		border-radius: 0;
+	}
+}
+
+/* The footer brings its own padding; the panel adds only a little under it. */
+.stepCard {
+	padding-block-end: var(--jf-spacing-near);
+
+	@include bp.phone {
+		padding-block-end: var(--onboarding-panel-padding);
+	}
+}
+
+.logo {
+	align-self: flex-start;
+	margin-block-end: var(--jf-spacing-near);
 }
 
 .head {
