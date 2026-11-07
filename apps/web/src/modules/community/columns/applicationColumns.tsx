@@ -4,7 +4,6 @@ import {
 	Kbd,
 	NumberInput,
 	Skeleton,
-	actionsColumnSize,
 	fieldColumn,
 	type JfColumnDefinition,
 } from "@j-os/design-system";
@@ -14,6 +13,7 @@ import { type Accessor, For, Show, createContext, useContext } from "solid-js";
 import { api } from "../../../../convex/_generated/api";
 import type { Doc } from "../../../../convex/_generated/dataModel";
 import type { PersonRow } from "../../../../convex/people.ts";
+import { actionsColumn } from "../../../shared/actions/actionsColumn.ts";
 import {
 	RowActionButton,
 	RowActions,
@@ -302,13 +302,10 @@ export function applicationColumns(): JfColumnDefinition<PersonRow>[] {
 			cell: (info) => <NotesCell row={info.row.original} />,
 		}),
 		...ventureColumns<PersonRow>(),
-		{
-			id: "actions",
-			header: "",
-			disableRowClick: true,
-			// Make guest, make member, turn down, undo deny.
-			size: actionsColumnSize(APPLICATION_ACTION_COUNT),
+		// Make guest, make member, turn down, undo deny.
+		...actionsColumn<PersonRow>({
+			count: APPLICATION_ACTION_COUNT,
 			cell: (info) => <ApplicationActions row={info.row.original} />,
-		},
+		}),
 	];
 }

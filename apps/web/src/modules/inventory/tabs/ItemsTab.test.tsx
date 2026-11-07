@@ -19,7 +19,7 @@ import { createSignal } from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
-import { AbilityProvider } from "../../../lib/ability.tsx";
+import { AbilityProvider, type Role } from "../../../lib/ability.tsx";
 import { ConfirmProvider } from "../../../shared/confirm.tsx";
 import { createEntitySelection } from "../../../shared/entity/createEntitySelection.ts";
 import { ShortcutPeekButton } from "../../../shared/ShortcutPeekButton.tsx";
@@ -73,14 +73,19 @@ vi.mock("../data/inventoryData.ts", () => ({
 	}),
 }));
 
-const { mockColumns } = vi.hoisted(() => ({
-	mockColumns: vi.fn(() => [
+const { mockCreateColumns } = vi.hoisted(() => {
+	const columns = vi.fn(() => [
 		{ accessorKey: "assetTag", header: "Asset tag", dataType: "string" },
-	]),
-}));
+	]);
+	return {
+		mockCreateColumns: vi.fn<
+			(rows: unknown, canManage: () => boolean) => typeof columns
+		>(() => columns),
+	};
+});
 
 vi.mock("../columns/itemColumns.tsx", () => ({
-	createItemColumns: () => mockColumns,
+	createItemColumns: mockCreateColumns,
 }));
 
 vi.mock("../sheets/ItemSheet.tsx", () => ({
@@ -123,9 +128,9 @@ function Harness() {
 	);
 }
 
-function renderTab(): void {
+function renderTab(role: Role = "board"): void {
 	render(() => (
-		<AbilityProvider role="board">
+		<AbilityProvider role={role}>
 			<MemoryRouter>
 				<Route path="*" component={Harness} />
 			</MemoryRouter>
@@ -436,4 +441,14 @@ test("with rows checked and the scanner open, no key fires; once it closes, P pr
 	expect(mockGenerate).toHaveBeenCalledTimes(1);
 	const printed = mockGenerate.mock.calls[0] as unknown as [Item[]];
 	expect(printed[0].map((row) => row.assetTag)).toEqual(["A00001", "A00002"]);
+});
+
+test.each([
+	["board", true],
+	["member", false],
+] as const)("a %s viewer's manage accessor reads %s", (role, expected) => {
+	mockCreateColumns.mockClear();
+	renderTab(role);
+	const canManage = mockCreateColumns.mock.calls.at(-1)?.[1];
+	expect(canManage?.()).toBe(expected);
 });

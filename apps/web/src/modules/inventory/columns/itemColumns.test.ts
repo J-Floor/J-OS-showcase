@@ -46,7 +46,10 @@ type TypeRows = Parameters<
 
 test("item columns expose type and category as enum filters", () => {
 	const columns = createRoot((dispose) => {
-		const built = createItemColumns(() => rows as unknown as ItemRows)();
+		const built = createItemColumns(
+			() => rows as unknown as ItemRows,
+			() => true
+		)();
 		dispose();
 		return built;
 	});
@@ -69,7 +72,7 @@ test("item columns expose type and category as enum filters", () => {
 });
 
 test("free-text descriptions share the leftover width instead of growing to fit", () => {
-	const items = itemColumns(NO_OPTIONS);
+	const items = itemColumns({ ...NO_OPTIONS, canManage: true });
 	const types = itemTypeColumns(NO_OPTIONS);
 	const categories = categoryColumns();
 	for (const columns of [items, types, categories]) {
@@ -95,7 +98,7 @@ function enumOptionsOf<Row extends Record<string, unknown>>(
 test("item columns change only when their options do: a push with the same types and categories keeps them", () => {
 	createRoot((dispose) => {
 		const [items, setItems] = createSignal(rows as unknown as ItemRows);
-		const columns = createItemColumns(items);
+		const columns = createItemColumns(items, () => true);
 		const first = columns();
 		setItems(
 			rows.map((row) => ({
@@ -139,11 +142,32 @@ test("item type columns change only when their category options do", () => {
 });
 
 test("the item actions column is a display column with a fixed width", () => {
-	const actions = itemColumns(NO_OPTIONS).find(
+	const actions = itemColumns({ ...NO_OPTIONS, canManage: true }).find(
 		(column) => column.id === "actions"
 	);
 	expect(actions?.size).toBe(actionsColumnSize(2));
 	expect(actions).not.toHaveProperty("dataType");
 	expect(actions).not.toHaveProperty("enableSorting");
 	expect(actions).not.toHaveProperty("enableColumnFilter");
+});
+
+test("whoever cannot manage inventory gets no actions column", () => {
+	const ids = itemColumns({ ...NO_OPTIONS, canManage: false }).map(
+		(column) => column.id
+	);
+	expect(ids).not.toContain("actions");
+});
+
+test("the actions column follows whether the viewer can manage inventory", () => {
+	createRoot((dispose) => {
+		const [canManage, setCanManage] = createSignal(true);
+		const columns = createItemColumns(
+			() => rows as unknown as ItemRows,
+			canManage
+		);
+		expect(columns().map((column) => column.id)).toContain("actions");
+		setCanManage(false);
+		expect(columns().map((column) => column.id)).not.toContain("actions");
+		dispose();
+	});
 });

@@ -1,6 +1,7 @@
 import { Table } from "@j-os/design-system";
 import { createEffect, on, onCleanup, type JSX } from "solid-js";
 
+import { useCan } from "../../../lib/ability.tsx";
 import { call } from "../../../lib/call.ts";
 import { ActionButton } from "../../../shared/actions/ActionButton.tsx";
 import type { ActionOutcome } from "../../../shared/actions/shortcuts.ts";
@@ -108,7 +109,11 @@ export function ItemsTab(props: {
 	onSelectedCountChange?: (count: number) => void;
 }): JSX.Element {
 	const items = useItems();
-	const columns = createItemColumns(() => items.data() ?? []);
+	const can = useCan();
+	const columns = createItemColumns(
+		() => items.data() ?? [],
+		() => can.I("manage").the("Inventory")
+	);
 
 	return (
 		<InventoryTab.Root

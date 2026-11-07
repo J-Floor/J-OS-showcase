@@ -79,6 +79,13 @@ updating, which is the worst failure mode to debug.
   from re-authenticating after sign-in. Make such a dependency explicit with
   `on(() => …)`, and pin it with a test.
 
+## Table row actions
+
+A table's action column goes through `actionsColumn`
+(`shared/actions/actionsColumn.ts`), never a literal `id: "actions"`. Give it
+the number of actions this viewer can have, 0 when they have none, so there is
+no empty column. Gate the column, not its cell.
+
 ## Testing reactive hooks
 
 - **Mock a store-backed hook the way the library updates it.** A mock that

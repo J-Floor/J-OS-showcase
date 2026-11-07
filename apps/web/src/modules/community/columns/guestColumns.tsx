@@ -1,5 +1,4 @@
 import {
-	actionsColumnSize,
 	type EnumOption,
 	fieldColumn,
 	type JfColumnDefinition,
@@ -7,6 +6,7 @@ import {
 import { For } from "solid-js";
 
 import type { PersonRow } from "../../../../convex/people.ts";
+import { actionsColumn } from "../../../shared/actions/actionsColumn.ts";
 import {
 	RowActionButton,
 	RowActions,
@@ -153,13 +153,10 @@ export function guestColumns(
 			),
 		}),
 		joinedColumn<PersonRow>(),
-		{
-			id: "actions",
-			header: "",
-			disableRowClick: true,
-			// The agreement, upgrade to member, and kick out.
-			size: actionsColumnSize(GUEST_ACTION_COUNT),
+		// The agreement, upgrade to member, and kick out.
+		...actionsColumn<PersonRow>({
+			count: GUEST_ACTION_COUNT,
 			cell: (info) => <GuestActions row={info.row.original} />,
-		},
+		}),
 	];
 }

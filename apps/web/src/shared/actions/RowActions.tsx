@@ -7,8 +7,8 @@ import { runAction, useRunSpinner } from "./runAction.ts";
 import { disabledReasonProps, type ActionDescriptor } from "./shortcuts.ts";
 
 /** Trailing flex container for a row's icon-button triage actions. Pairs with
- * the Table's sticky `id: "actions"` column so the buttons stay pinned; size
- * that column with the design system's `actionsColumnSize`. */
+ * the Table's sticky `id: "actions"` column so the buttons stay pinned;
+ * `actionsColumn` builds that column. */
 export function RowActions(props: { children: JSX.Element }): JSX.Element {
 	return <div class={styles.actions}>{props.children}</div>;
 }

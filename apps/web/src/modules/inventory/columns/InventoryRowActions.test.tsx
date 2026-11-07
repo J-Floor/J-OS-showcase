@@ -4,7 +4,6 @@ import { afterEach, expect, test } from "vitest";
 
 afterEach(cleanup);
 
-import { AbilityProvider, type Role } from "../../../lib/ability.tsx";
 import type { Item } from "../data/inventoryData.ts";
 
 import { InventoryRowActions } from "./InventoryRowActions.tsx";
@@ -19,30 +18,12 @@ const item = {
 	categoryName: "Furniture",
 } as unknown as Item;
 
-function renderAs(role: Role) {
-	return render(() => (
-		<AbilityProvider role={role}>
-			<InventoryRowActions row={item} />
-		</AbilityProvider>
-	));
-}
-
-test("board sees copy link and download QR on an item row", () => {
-	renderAs("board");
+test("an item row offers copy link and download QR", () => {
+	render(() => <InventoryRowActions row={item} />);
 	expect(
 		screen.getByRole("button", { name: "Copy link" })
 	).toBeInTheDocument();
 	expect(
 		screen.getByRole("button", { name: "Download QR" })
 	).toBeInTheDocument();
-});
-
-test("a non-manage role sees no row actions", () => {
-	renderAs("member");
-	expect(
-		screen.queryByRole("button", { name: "Copy link" })
-	).not.toBeInTheDocument();
-	expect(
-		screen.queryByRole("button", { name: "Download QR" })
-	).not.toBeInTheDocument();
 });

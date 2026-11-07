@@ -1,14 +1,11 @@
-import {
-	actionsColumnSize,
-	fieldColumn,
-	type JfColumnDefinition,
-} from "@j-os/design-system";
+import { fieldColumn, type JfColumnDefinition } from "@j-os/design-system";
 import { ok } from "neverthrow";
 import { For, createSignal } from "solid-js";
 
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { invariant } from "../../../../convex/lib/result.ts";
 import type { PersonRow } from "../../../../convex/people.ts";
+import { actionsColumn } from "../../../shared/actions/actionsColumn.ts";
 import {
 	RowActionButton,
 	RowActions,
@@ -203,13 +200,10 @@ export function memberColumns(): JfColumnDefinition<PersonRow>[] {
 		}),
 		...ventureColumns<PersonRow>(),
 		joinedColumn<PersonRow>(),
-		{
-			id: "actions",
-			header: "",
-			disableRowClick: true,
-			// The agreement, change role, and kick out.
-			size: actionsColumnSize(MEMBER_ACTION_COUNT),
+		// The agreement, change role, and kick out.
+		...actionsColumn<PersonRow>({
+			count: MEMBER_ACTION_COUNT,
 			cell: (info) => <MemberActions row={info.row.original} />,
-		},
+		}),
 	];
 }

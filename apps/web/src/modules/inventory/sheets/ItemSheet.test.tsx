@@ -335,7 +335,10 @@ test("an empty asset tag shows the hint, not an error, after leaving the group",
 });
 
 test("morph: the item's columns pair with the sheet values showing the same field", () => {
-	const row = tableRowKeys(itemColumns({ types: [], categories: [] }), chair);
+	const row = tableRowKeys(
+		itemColumns({ types: [], categories: [], canManage: true }),
+		chair
+	);
 	expect(row.title).toBe("assetTag");
 	expect(row.cells).toEqual(["typeName", "categoryName", "description"]);
 

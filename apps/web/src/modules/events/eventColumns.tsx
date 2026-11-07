@@ -1,11 +1,8 @@
-import {
-	actionsColumnSize,
-	fieldColumn,
-	type JfColumnDefinition,
-} from "@j-os/design-system";
+import { fieldColumn, type JfColumnDefinition } from "@j-os/design-system";
 
 import type { Doc } from "../../../convex/_generated/dataModel";
 import { SITE_TIMEZONE } from "../../../convex/lib/time.ts";
+import { actionsColumn } from "../../shared/actions/actionsColumn.ts";
 import { formatDateIn } from "../../shared/time.ts";
 
 import { EventRowActions } from "./EventRowActions.tsx";
@@ -83,18 +80,9 @@ export function eventColumns(options: {
 				formatDateIn(info.row.original.endsAt, SITE_TIMEZONE),
 			measureText: (row) => formatDateIn(row.endsAt, SITE_TIMEZONE),
 		}),
-		...(options.canManage
-			? [
-					{
-						id: "actions",
-						header: "",
-						disableRowClick: true,
-						size: actionsColumnSize(EVENT_ACTION_COUNT),
-						cell: (info) => (
-							<EventRowActions row={info.row.original} />
-						),
-					} satisfies JfColumnDefinition<Doc<"events">>,
-				]
-			: []),
+		...actionsColumn<Doc<"events">>({
+			count: options.canManage ? EVENT_ACTION_COUNT : 0,
+			cell: (info) => <EventRowActions row={info.row.original} />,
+		}),
 	];
 }
