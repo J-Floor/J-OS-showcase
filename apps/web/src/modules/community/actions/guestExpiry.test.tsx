@@ -134,8 +134,10 @@ describe("the make-guest dialog", () => {
 			return button;
 		});
 		fireEvent.click(grant);
-		expect(await screen.findByRole("alert")).toHaveTextContent(
-			"You can't do that."
+		// Ark's live announcer adds empty role="alert" regions of its own.
+		expect(await screen.findByText("You can't do that.")).toHaveAttribute(
+			"role",
+			"alert"
 		);
 		expect(screen.getByRole("dialog")).toBeInTheDocument();
 	});
@@ -156,7 +158,7 @@ describe("the make-guest dialog", () => {
 			return button;
 		});
 		fireEvent.click(grant);
-		await screen.findByRole("alert");
+		await screen.findByText("You can't do that.");
 		approveAsGuest.mockClear();
 
 		fireEvent.click(

@@ -152,7 +152,18 @@ export default defineConfig(({ mode }) => ({
       ),
       fileURLToPath(new URL('./test-stubs/setup.ts', import.meta.url)),
     ],
-    server: { deps: { inline: ['convex-test'] } },
+    // vite-plugin-solid inlines solid-js and the Solid libraries it finds in
+    // this package.json. Libraries pulled in further down (through the design
+    // system, or as a dependency of a dependency) stay external and load
+    // Solid's server build, where listeners and effects do nothing.
+    server: {
+      deps: {
+        inline: [
+          'convex-test',
+          /[\\/]node_modules[\\/](@solid-primitives|@tanstack[\\/]solid-)/,
+        ],
+      },
+    },
     // Alias canvas-confetti to a no-op stub for every test (app + the design
     // system's transitive import) — jsdom/edge-runtime has no 2D canvas context,
     // so the real animation loop throws. An alias is bulletproof where a

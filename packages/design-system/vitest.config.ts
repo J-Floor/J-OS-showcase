@@ -28,5 +28,14 @@ export default defineConfig({
       exclude: ["**/*.test.*"],
     },
     setupFiles: [jestDomSetup, resizeObserverSetup, domStorageSetup],
+    // vite-plugin-solid inlines solid-js and the Solid libraries it finds in
+    // this package.json. Their own Solid dependencies (such as
+    // @solid-primitives/utils or @tanstack/solid-store) stay external and load
+    // Solid's server build, where listeners and effects do nothing.
+    server: {
+      deps: {
+        inline: [/[\\/]node_modules[\\/](@solid-primitives|@tanstack[\\/]solid-)/],
+      },
+    },
   },
 });

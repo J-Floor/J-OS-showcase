@@ -24,13 +24,16 @@
 		"typescript": "catalog:",
 		"prettier": "catalog:"
 	},
+	"overrides": {
+		"convex": "catalog:"
+	},
 	"workspaces": {
 		"packages": [
 			"apps/*",
 			"packages/*"
 		],
 		"catalog": {
-			"@ark-ui/solid": "5.39.3",
+			"@ark-ui/solid": "5.40.0",
 			"@solid-primitives/event-listener": "2.4.6",
 			"@solid-primitives/keyed": "1.5.3",
 			"@solid-primitives/refs": "1.1.4",
@@ -39,35 +42,35 @@
 			"@stryker-mutator/vitest-runner": "10.1.1",
 			"@tanstack/solid-hotkeys": "^0.10.0",
 			"@tanstack/solid-table": "^8.21.3",
-			"@tanstack/solid-virtual": "^3.13.50",
+			"@tanstack/solid-virtual": "^3.13.52",
 			"@testing-library/jest-dom": "^7.0.1",
-			"@vitest/coverage-v8": "5.0.5",
+			"@vitest/coverage-v8": "5.1.0",
 			"@eslint/js": "^10.0.1",
-			"@solidjs/router": "1.0.0",
+			"@solidjs/router": "1.0.1",
 			"clsx": "^2.1.1",
-			"convex": "1.48.0",
+			"convex": "1.49.0",
 			"convex-solidjs": "0.0.3",
-			"convex-test": "0.0.65",
+			"convex-test": "0.0.66",
 			"@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
-			"eslint": "10.13.0",
+			"eslint": "10.14.0",
 			"eslint-config-prettier": "^10.1.8",
 			"eslint-import-resolver-typescript": "^4.4.5",
-			"eslint-plugin-boundaries": "7.4.0",
+			"eslint-plugin-boundaries": "7.4.1",
 			"eslint-plugin-import-x": "^4.17.1",
 			"eslint-plugin-solid": "^0.18.1",
 			"eslint-plugin-sonarjs": "^4.2.2",
 			"eslint-plugin-unicorn": "^79.0.0",
 			"eslint-plugin-unused-imports": "^4.4.1",
 			"jscpd": "^5.4.2",
-			"knip": "6.43.0",
+			"knip": "6.44.1",
 			"neverthrow": "8.2.0",
 			"happy-dom": "^21.0.4",
 			"jsdom": "^29.1.1",
 			"prettier": "3.9.10",
-			"sass": "^1.106.1",
-			"solid-js": "1.9.17",
+			"sass": "^1.107.1",
+			"solid-js": "1.9.18",
 			"stylelint": "17.16.0",
-			"stylelint-config-recess-order": "^7.9.0",
+			"stylelint-config-recess-order": "^7.10.0",
 			"stylelint-config-standard-scss": "^17.0.0",
 			"stylelint-declaration-block-no-ignored-properties": "^3.0.0",
 			"stylelint-declaration-strict-value": "^1.12.1",
@@ -80,8 +83,8 @@
 			"typescript-eslint": "^8.72.1",
 			"vite": "8.3.5",
 			"vite-plugin-pwa": "2.0.0",
-			"vite-plugin-solid": "2.11.14",
-			"vitest": "5.0.5"
+			"vite-plugin-solid": "2.11.15",
+			"vitest": "5.1.0"
 		}
 	}
 }
