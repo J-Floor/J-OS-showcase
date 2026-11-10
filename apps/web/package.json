@@ -86,7 +86,7 @@
 		"stylelint": "catalog:",
 		"typescript": "catalog:",
 		"typescript-eslint": "catalog:",
-		"unpdf": "^1.9.1",
+		"unpdf": "^2.1.0",
 		"vite": "catalog:",
 		"vite-plugin-pwa": "catalog:",
 		"vite-plugin-solid": "catalog:",
