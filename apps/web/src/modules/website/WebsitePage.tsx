@@ -125,6 +125,15 @@ function createAutoRefresh(
 	});
 }
 
+/** A name in a figure tile: its own type, one line, the full name on hover. */
+function CountryValue(props: { name: string }): JSX.Element {
+	return (
+		<span class={styles.textValue} title={props.name}>
+			{props.name}
+		</span>
+	);
+}
+
 function Tiles(props: { summary?: WebAnalyticsSummary }): JSX.Element {
 	function isLoading(): boolean {
 		return props.summary === undefined;
@@ -149,8 +158,13 @@ function Tiles(props: { summary?: WebAnalyticsSummary }): JSX.Element {
 			<MetricTile
 				label="Top country"
 				value={
-					props.summary &&
-					countryName(topLabel(props.summary.countries))
+					props.summary && (
+						<CountryValue
+							name={countryName(
+								topLabel(props.summary.countries)
+							)}
+						/>
+					)
 				}
 				loading={isLoading()}
 			/>

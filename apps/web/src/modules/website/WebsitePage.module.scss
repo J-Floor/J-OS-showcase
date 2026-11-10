@@ -2,8 +2,25 @@
 @use "@j-os/design-system/typography" as typo;
 @use "../../shared/insights/layout" as insights;
 
+/* The Insights tab gets its height from a flex panel; this page sits straight
+   in the shell's block content area, where `flex: 1` bounds nothing. Without
+   a bound it grows to its content and, being a `contain` scroll container
+   with no range, swallows the wheel. */
 .page {
 	@include insights.insights-scroller;
+
+	block-size: 100%;
+}
+
+/* A word in a tile built for figures: sans heading type on one line, so a long
+   country name fits the column instead of running out of it. */
+.textValue {
+	@include typo.jf-typo-h3;
+
+	display: block;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
 }
 
 .bar {

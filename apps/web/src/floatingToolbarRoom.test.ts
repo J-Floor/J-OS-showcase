@@ -36,3 +36,9 @@ test("the insights and website pages use that scroller", () => {
 		/@include [\w.]*insights-scroller;/
 	);
 });
+
+test("the website page, straight under the block content area, is bounded so it scrolls itself", () => {
+	expect(source("modules/website/WebsitePage.module.scss")).toMatch(
+		/\.page \{[^}]*block-size: 100%;/
+	);
+});
