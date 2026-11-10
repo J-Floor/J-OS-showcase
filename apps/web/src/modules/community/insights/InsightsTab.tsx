@@ -3,6 +3,8 @@ import { For, Show, createMemo, type JSX } from "solid-js";
 
 import type { PersonRow } from "../../../../convex/people.ts";
 import { useBoardLevel } from "../../../shared/data/boardLevel.tsx";
+import { ChartCard } from "../../../shared/insights/ChartCard.tsx";
+import { MetricTile } from "../../../shared/insights/MetricTile.tsx";
 import {
 	useApplications,
 	useGuests,
@@ -10,7 +12,6 @@ import {
 } from "../data/communityData.tsx";
 
 import { AttendanceSection } from "./AttendanceSection.tsx";
-import { ChartCard } from "./ChartCard.tsx";
 import styles from "./InsightsTab.module.scss";
 import {
 	applicationsPerMonth,
@@ -20,7 +21,6 @@ import {
 	joinsPerMonth,
 	verticalMix,
 } from "./metrics.ts";
-import { MetricTile } from "./MetricTile.tsx";
 
 /** Every figure the dashboard shows, derived from the three rosters. */
 function useInsightMetrics() {

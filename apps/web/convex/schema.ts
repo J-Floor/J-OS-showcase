@@ -3,6 +3,11 @@ import { v } from "convex/values";
 
 import { PERK_CATEGORIES, PERK_REQUEST_STATUSES } from "./lib/perks.ts";
 import { ACCESS_TIERS } from "./lib/roles.ts";
+import {
+	webAnalyticsFailureValidator,
+	webAnalyticsRangeValidator,
+	webAnalyticsSummaryValidator,
+} from "./lib/webAnalytics.ts";
 import { notificationPrefsValidator } from "./notify/categories.ts";
 
 export const taskStatus = v.union(
@@ -573,6 +578,21 @@ export default defineSchema({
 		),
 		checkedAt: v.number(),
 	}).index("by_key", ["key"]),
+
+	/**
+	 * One cached web-analytics summary per range, shared by every board
+	 * member. `summary` and `fetchedAt` are absent only while the first fetch
+	 * for that range is in flight or every fetch for it has failed; `lastError`
+	 * is cleared by the next success. `attemptedAt` is when a refresh last
+	 * claimed the range, the clock of `REFRESH_GUARD_MS`.
+	 */
+	websiteAnalyticsSnapshots: defineTable({
+		days: webAnalyticsRangeValidator,
+		fetchedAt: v.optional(v.number()),
+		summary: v.optional(webAnalyticsSummaryValidator),
+		lastError: v.optional(webAnalyticsFailureValidator),
+		attemptedAt: v.optional(v.number()),
+	}).index("by_days", ["days"]),
 
 	/**
 	 * Append-only log of what the app actually did on the lock account: key grants and

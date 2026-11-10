@@ -22,6 +22,17 @@
 	}
 }
 
+/* A raised card laid out as a padded column: the chart and breakdown cards. */
+@mixin card-panel {
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-near);
+	margin: 0;
+	padding: var(--jf-spacing-far);
+
+	@include card-surface;
+}
+
 /* Raised card surface shared by the Space, rules and insights cards. */
 @mixin card-surface($bordered: false) {
 	background-color: var(--jf-surface-bg-raised);

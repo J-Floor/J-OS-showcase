@@ -70,6 +70,7 @@ import type * as lib_attendance from "../lib/attendance.js";
 import type * as lib_authGuard from "../lib/authGuard.js";
 import type * as lib_authRecords from "../lib/authRecords.js";
 import type * as lib_boardSignatories from "../lib/boardSignatories.js";
+import type * as lib_cloudflareWebAnalytics from "../lib/cloudflareWebAnalytics.js";
 import type * as lib_confirmToken from "../lib/confirmToken.js";
 import type * as lib_constants from "../lib/constants.js";
 import type * as lib_csv from "../lib/csv.js";
@@ -100,6 +101,7 @@ import type * as lib_errors_perks from "../lib/errors/perks.js";
 import type * as lib_errors_wifi from "../lib/errors/wifi.js";
 import type * as lib_fakeDoorProvider from "../lib/fakeDoorProvider.js";
 import type * as lib_fakeOccupancyProvider from "../lib/fakeOccupancyProvider.js";
+import type * as lib_fakeWebAnalyticsProvider from "../lib/fakeWebAnalyticsProvider.js";
 import type * as lib_invariants from "../lib/invariants.js";
 import type * as lib_lifecycle from "../lib/lifecycle.js";
 import type * as lib_lifecycleDiagram from "../lib/lifecycleDiagram.js";
@@ -130,6 +132,8 @@ import type * as lib_safeUrl from "../lib/safeUrl.js";
 import type * as lib_signatures from "../lib/signatures.js";
 import type * as lib_time from "../lib/time.js";
 import type * as lib_validate from "../lib/validate.js";
+import type * as lib_webAnalytics from "../lib/webAnalytics.js";
+import type * as lib_webAnalyticsEnv from "../lib/webAnalyticsEnv.js";
 import type * as lib_wifi from "../lib/wifi.js";
 import type * as lifecycle from "../lifecycle.js";
 import type * as linkSafety from "../linkSafety.js";
@@ -188,6 +192,7 @@ import type * as seed from "../seed.js";
 import type * as staging from "../staging.js";
 import type * as tasks from "../tasks.js";
 import type * as visitors from "../visitors.js";
+import type * as websiteAnalytics from "../websiteAnalytics.js";
 import type * as wifi from "../wifi.js";
 
 import type {
@@ -259,6 +264,7 @@ declare const fullApi: ApiFromModules<{
   "lib/authGuard": typeof lib_authGuard;
   "lib/authRecords": typeof lib_authRecords;
   "lib/boardSignatories": typeof lib_boardSignatories;
+  "lib/cloudflareWebAnalytics": typeof lib_cloudflareWebAnalytics;
   "lib/confirmToken": typeof lib_confirmToken;
   "lib/constants": typeof lib_constants;
   "lib/csv": typeof lib_csv;
@@ -289,6 +295,7 @@ declare const fullApi: ApiFromModules<{
   "lib/errors/wifi": typeof lib_errors_wifi;
   "lib/fakeDoorProvider": typeof lib_fakeDoorProvider;
   "lib/fakeOccupancyProvider": typeof lib_fakeOccupancyProvider;
+  "lib/fakeWebAnalyticsProvider": typeof lib_fakeWebAnalyticsProvider;
   "lib/invariants": typeof lib_invariants;
   "lib/lifecycle": typeof lib_lifecycle;
   "lib/lifecycleDiagram": typeof lib_lifecycleDiagram;
@@ -319,6 +326,8 @@ declare const fullApi: ApiFromModules<{
   "lib/signatures": typeof lib_signatures;
   "lib/time": typeof lib_time;
   "lib/validate": typeof lib_validate;
+  "lib/webAnalytics": typeof lib_webAnalytics;
+  "lib/webAnalyticsEnv": typeof lib_webAnalyticsEnv;
   "lib/wifi": typeof lib_wifi;
   lifecycle: typeof lifecycle;
   linkSafety: typeof linkSafety;
@@ -377,6 +386,7 @@ declare const fullApi: ApiFromModules<{
   staging: typeof staging;
   tasks: typeof tasks;
   visitors: typeof visitors;
+  websiteAnalytics: typeof websiteAnalytics;
   wifi: typeof wifi;
 }>;
 

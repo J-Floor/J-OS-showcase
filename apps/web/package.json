@@ -25,7 +25,8 @@
 		"agreements:build": "bun agreements/build.ts",
 		"agreements:check": "bun agreements/build.ts --check",
 		"agreements:test-sign": "bun agreements/test-sign.ts",
-		"lifecycle:diagram": "bun scripts/lifecycleDiagram.ts"
+		"lifecycle:diagram": "bun scripts/lifecycleDiagram.ts",
+		"env:set": "bun scripts/env-set.ts"
 	},
 	"prettier": "@j-os/config-prettier",
 	"dependencies": {

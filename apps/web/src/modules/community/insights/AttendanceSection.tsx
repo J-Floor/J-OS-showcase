@@ -13,6 +13,8 @@ import type {
 	AttendanceDay,
 } from "../../../../convex/occupancy.ts";
 import { useQuery } from "../../../shared/data/useQuery.ts";
+import { ChartCard } from "../../../shared/insights/ChartCard.tsx";
+import { MetricTile } from "../../../shared/insights/MetricTile.tsx";
 
 import {
 	ACTIVE_DAY_MIN_PEOPLE,
@@ -23,9 +25,7 @@ import {
 	type AttendanceRange,
 } from "./attendance.ts";
 import styles from "./AttendanceSection.module.scss";
-import { ChartCard } from "./ChartCard.tsx";
 import insights from "./InsightsTab.module.scss";
-import { MetricTile } from "./MetricTile.tsx";
 
 const PERCENT = 100;
 

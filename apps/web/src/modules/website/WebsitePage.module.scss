@@ -1,0 +1,42 @@
+@use "@j-os/design-system/breakpoints" as bp;
+@use "@j-os/design-system/typography" as typo;
+@use "../../shared/insights/layout" as insights;
+
+.page {
+	@include insights.insights-scroller;
+}
+
+.bar {
+	display: flex;
+	flex-flow: row wrap;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+	justify-content: space-between;
+}
+
+.freshness {
+	display: flex;
+	flex-flow: row wrap;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+}
+
+.refreshed {
+	@include typo.jf-typo-body-small;
+
+	color: var(--jf-fg-muted);
+}
+
+.tiles {
+	@include insights.metric-tiles;
+}
+
+.breakdowns {
+	display: grid;
+	gap: var(--jf-spacing-far);
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+
+	@include bp.phone {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}

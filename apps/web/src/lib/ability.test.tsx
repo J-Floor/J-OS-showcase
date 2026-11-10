@@ -52,6 +52,13 @@ test("board can view Inventory; member, guest, and core cannot", () => {
 	expect(defineAbilityFor("core").can("view", "Inventory")).toBe(false);
 });
 
+test("lets only board level view Website", () => {
+	expect(defineAbilityFor("board").can("view", "Website")).toBe(true);
+	expect(defineAbilityFor("admin").can("view", "Website")).toBe(true);
+	for (const role of ["member", "core", "staff", "guest"] as const)
+		expect(defineAbilityFor(role).can("view", "Website")).toBe(false);
+});
+
 test("staff sees Space and Community, nothing else", () => {
 	const ability = defineAbilityFor("staff");
 	expect(ability.can("view", "Space")).toBe(true);

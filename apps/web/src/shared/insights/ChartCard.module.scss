@@ -1,0 +1,29 @@
+@use "../cards" as cards;
+@use "@j-os/design-system/typography" as typo;
+
+.card {
+	@include cards.card-panel;
+}
+
+.cardTitle {
+	@include typo.jf-typo-body-bold;
+
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-close);
+	color: var(--jf-fg-strong);
+}
+
+/* The sentence that stops a chart being misread. Every one of these earns its
+   place: a hint such as "arrivals, not net growth" is the difference between a
+   true reading and a false one. */
+.cardHint {
+	@include typo.jf-typo-body-small;
+
+	color: var(--jf-fg-muted);
+}
+
+.card .chartSkeleton {
+	inline-size: 100%;
+	block-size: var(--jf-dimension-chart-height);
+}

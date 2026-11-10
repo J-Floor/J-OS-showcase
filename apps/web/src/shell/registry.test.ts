@@ -7,8 +7,8 @@ import { modules } from "./registry.ts";
 
 // The phone bar overflows from the end, so the page that matters least goes
 // last.
-test("tasks is the last module", () => {
-	expect(modules.at(-1)?.id).toBe("tasks");
+test("website is the last module", () => {
+	expect(modules.at(-1)?.id).toBe("website");
 });
 
 // The server validates `lastPath` against its own MODULE_PATHS copy (it can't
@@ -33,5 +33,6 @@ test("the modules run in phone priority order", () => {
 		"inventory",
 		"perks",
 		"tasks",
+		"website",
 	]);
 });

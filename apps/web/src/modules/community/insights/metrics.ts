@@ -5,6 +5,7 @@ import { DAY_MS, DAYS_PER_WEEK } from "../../../../convex/lib/constants.ts";
 import { doorOpensFor } from "../../../../convex/lib/derive.ts";
 import { shortNames } from "../../../../convex/lib/names.ts";
 import type { PersonRow } from "../../../../convex/people.ts";
+import type { MetricTone } from "../../../shared/insights/MetricTile.tsx";
 
 /**
  * Everything the board dashboard counts, derived from the three rosters the
@@ -52,7 +53,7 @@ export type Headline = {
 	value: number;
 	/** The second line: what the number means or what to do about it. */
 	detail?: string;
-	tone?: "neutral" | "warning" | "error";
+	tone?: MetricTone;
 };
 
 function headlineGroups(

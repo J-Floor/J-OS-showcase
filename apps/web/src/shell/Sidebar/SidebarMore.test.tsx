@@ -313,7 +313,7 @@ describe("the phone bar's more item", () => {
 		expect(moreButton().hasAttribute("aria-current")).toBe(false);
 	});
 
-	test("the desktop rail lists each of the board's six pages once, in registry order", () => {
+	test("the desktop rail lists each of the board's seven pages once, in registry order", () => {
 		renderBar("board", undefined, "/", false);
 		// The brand link, then every page: the rail has room for them all.
 		expect(
@@ -328,6 +328,7 @@ describe("the phone bar's more item", () => {
 			"/inventory",
 			"/perks",
 			"/tasks",
+			"/website",
 		]);
 	});
 

@@ -22,8 +22,17 @@ test("a bounded panel leaves the room to the table scrolling inside it", () => {
 	);
 });
 
-test("the insights tab, its own scroller, leaves room at its end", () => {
+test("the insights scroller leaves room at its end", () => {
+	expect(source("shared/insights/layout.scss")).toMatch(
+		/@mixin insights-scroller \{[^}]*var\(--jf-floating-stack-block-size\)/
+	);
+});
+
+test("the insights and website pages use that scroller", () => {
 	expect(
 		source("modules/community/insights/InsightsTab.module.scss")
-	).toMatch(/\.tab \{[^}]*var\(--jf-floating-stack-block-size\)/);
+	).toMatch(/\.tab \{[^}]*@include insights\.insights-scroller;/);
+	expect(source("modules/website/WebsitePage.module.scss")).toMatch(
+		/@include [\w.]*insights-scroller;/
+	);
 });

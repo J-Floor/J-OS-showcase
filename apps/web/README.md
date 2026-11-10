@@ -271,6 +271,12 @@ List deployment env vars (Nuki token, `NUKI_SMARTLOCK_IDS`, …):
 bunx convex env list
 ```
 
+Set one var on dev, prod and staging at once (asks for the value, hidden; `--only dev,prod,staging` narrows it):
+
+```bash
+bun run env:set NAME
+```
+
 Read one env var:
 
 ```bash

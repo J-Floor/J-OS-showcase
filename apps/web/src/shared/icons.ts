@@ -59,4 +59,5 @@ export const ICONS = {
 	events: "event",
 	space: "factory",
 	perks: "featured_seasonal_and_gifts",
+	website: "language",
 } as const;

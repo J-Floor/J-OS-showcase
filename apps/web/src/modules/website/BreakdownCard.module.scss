@@ -1,0 +1,58 @@
+@use "../../shared/cards" as cards;
+@use "@j-os/design-system/typography" as typo;
+
+.card {
+	@include cards.card-panel;
+}
+
+.title {
+	@include typo.jf-typo-body-bold;
+
+	margin: 0;
+	color: var(--jf-fg-strong);
+}
+
+.empty {
+	@include typo.jf-typo-body-small;
+
+	margin: 0;
+	color: var(--jf-fg-muted);
+}
+
+.list {
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-near);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+/* The bar sits under the label and count, across both columns. */
+.row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: var(--jf-spacing-close) var(--jf-spacing-near);
+	align-items: baseline;
+}
+
+.label {
+	@include typo.jf-typo-body-small;
+
+	overflow: hidden;
+	color: var(--jf-fg-strong);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.count {
+	@include typo.jf-typo-body-small;
+
+	color: var(--jf-fg-muted);
+	font-family: var(--jf-typography-mono);
+	font-variant-numeric: tabular-nums;
+}
+
+.bar {
+	grid-column: 1 / -1;
+}

@@ -41,6 +41,7 @@ dark_mode
 delete
 description
 details
+devices
 dishwasher
 done
 door_front
@@ -92,6 +93,7 @@ keyboard
 keyboard_off
 kitchen
 label
+language
 light
 light_mode
 link
@@ -116,6 +118,7 @@ note
 notes
 notifications
 overview
+pages
 password
 payments
 pending

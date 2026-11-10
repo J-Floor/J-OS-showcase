@@ -1,0 +1,31 @@
+/* The page owns the scrolling, not the shell: panels that sit beside it are
+   tables that scroll internally, so the area they share is a fixed-height flex
+   item with no scroll range of its own. */
+@mixin insights-scroller {
+	display: flex;
+	flex-flow: column nowrap;
+	gap: var(--jf-spacing-away);
+	flex: 1;
+	min-block-size: 0;
+	padding-block: var(--jf-spacing-far);
+
+	/* Its own scroller, so its own end room for the floating pills (0
+	   without any). */
+	padding-block-end: calc(
+		var(--jf-spacing-far) + var(--jf-floating-stack-block-size)
+	);
+
+	/* stylelint-disable-next-line defensive-css/require-scrollbar-gutter -- the shell's own gutter applies; a second one double-insets the grid */
+	overflow-block: auto;
+	overscroll-behavior-block: contain;
+}
+
+@mixin metric-tiles {
+	display: grid;
+	gap: var(--jf-spacing-near);
+
+	/* Tiles pack themselves: one column on a phone, as many as fit after that.
+	   No breakpoint list to keep in step with a tile count that changes every
+	   time a metric is added. */
+	grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+}
