@@ -1,6 +1,7 @@
 import { err, ok, type Result } from "neverthrow";
 
-import { sendEmail } from "../../lib/email.ts";
+import { sendEmail, type EmailContext } from "../../lib/email.ts";
+import type { EmailPriority } from "../../lib/emailProvider.ts";
 import type { NotifyError } from "../../lib/errors/notify.ts";
 import type { EmailMessage } from "../types.ts";
 
@@ -13,15 +14,25 @@ import type { EmailMessage } from "../types.ts";
  * failed delivery.
  */
 export async function sendNotificationEmail(
-	to: string,
-	kind: string,
-	message: EmailMessage
+	context: EmailContext,
+	{
+		to,
+		kind,
+		message,
+		priority,
+	}: {
+		to: string;
+		kind: string;
+		message: EmailMessage;
+		priority: EmailPriority;
+	}
 ): Promise<Result<void, NotifyError>> {
-	const isSent = await sendEmail({
+	const isSent = await sendEmail(context, {
 		to,
 		subject: message.subject,
 		html: message.html,
 		text: message.text,
+		priority,
 		devLog: `[notify:${kind}] ${to}: ${message.subject}`,
 	});
 	return isSent ? ok() : err({ type: "EmailRejected" });

@@ -5,13 +5,11 @@ import { alreadyActive } from "./generated/alreadyActive.ts";
 import { alreadyUnderReview } from "./generated/alreadyUnderReview.ts";
 import { applicationReceived } from "./generated/applicationReceived.ts";
 import { approvalGuest } from "./generated/approvalGuest.ts";
-import { boardNewApplication } from "./generated/boardNewApplication.ts";
 import { eventInvite } from "./generated/eventInvite.ts";
 import { magicLink } from "./generated/magicLink.ts";
 import { noAccount } from "./generated/noAccount.ts";
 import { notice } from "./generated/notice.ts";
 import { reapplyAfter } from "./generated/reapplyAfter.ts";
-import { taskAssigned } from "./generated/taskAssigned.ts";
 import { verifyApplication } from "./generated/verifyApplication.ts";
 import { verifyVisitor } from "./generated/verifyVisitor.ts";
 
@@ -82,22 +80,6 @@ describe("more generated joiners", () => {
 		expect(html).not.toContain("You applied as");
 	});
 
-	it("injects applicantName, venture, and reviewUrl into the board-new-application email", () => {
-		const { html, text } = boardNewApplication({
-			applicantName: "Jane Doe",
-			venture: "Acme Corp",
-			reviewUrl: "https://app.example.com/admin",
-			manageUrl: "https://app.example.com/?notifications=open",
-			logoUrl: "https://app.example.com/email/logo.png",
-		});
-		expect(html).toContain("Jane Doe");
-		expect(html).toContain("Acme Corp");
-		expect(html).toContain("https://app.example.com/admin");
-		expect(text).toContain("Jane Doe");
-		expect(text).toContain("Acme Corp");
-		expect(text).toContain("https://app.example.com/admin");
-	});
-
 	it("injects the confirm URL into the verify-visitor email", () => {
 		const { html, text } = verifyVisitor({
 			confirmUrl: "https://app.example.com/visitor/confirm?token=abc",
@@ -128,18 +110,6 @@ describe("notification emails", () => {
 		expect(html).toContain("Manage notifications");
 		expect(html).toContain("https://x.co/?notifications=open");
 		expect(text).toContain("https://x.co/?notifications=open");
-	});
-
-	it("puts the manage link on the task-assigned email", () => {
-		const { html } = taskAssigned({
-			name: "Ada",
-			taskTitle: "Wire it",
-			viewUrl: "https://x.co/tasks?task=t1",
-			manageUrl: "https://x.co/?notifications=open",
-			logoUrl: "https://x.co/email/logo.png",
-		});
-		expect(html).toContain("Manage notifications");
-		expect(html).toContain("https://x.co/?notifications=open");
 	});
 });
 

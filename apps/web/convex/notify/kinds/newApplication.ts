@@ -1,16 +1,12 @@
 import { v } from "convex/values";
 
-import { boardNewApplication } from "../../emails/generated/boardNewApplication.ts";
-import {
-	emailUrls,
-	manageNotificationsUrl,
-	personUrl,
-} from "../../emails/urls.ts";
+import { personUrl } from "../../emails/urls.ts";
 import { boardIds } from "../audience.ts";
 import { defineKind } from "../types.ts";
 
 export const newApplication = defineKind({
 	category: "applications",
+	delivery: "digest",
 	payload: v.object({
 		personId: v.id("people"),
 		applicantName: v.string(),
@@ -23,15 +19,4 @@ export const newApplication = defineKind({
 		url: personUrl(personId),
 		tag: `application-${personId}`,
 	}),
-	email: ({ personId, applicantName, venture }) => {
-		const { html, text } = boardNewApplication({
-			applicantName,
-			venture,
-			// Straight to the applicant's sheet, not the Applications roster.
-			reviewUrl: personUrl(personId),
-			manageUrl: manageNotificationsUrl(),
-			logoUrl: emailUrls().logoUrl,
-		});
-		return { subject: "New J floor application to review", html, text };
-	},
 });

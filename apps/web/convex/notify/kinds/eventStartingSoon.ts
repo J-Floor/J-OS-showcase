@@ -8,6 +8,7 @@ import { defineKind } from "../types.ts";
 /** Push only: the email provider's daily send cap cannot absorb event mail. */
 export const eventStartingSoon = defineKind({
 	category: "events",
+	delivery: "instant",
 	payload: v.object({
 		eventId: v.id("events"),
 		name: v.string(),

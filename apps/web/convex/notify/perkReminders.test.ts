@@ -60,7 +60,6 @@ describe("perk expiring-soon reminders", () => {
 						kind: "perkExpiringSoon",
 						payload: {
 							perkId,
-							partner: "Example Cloud",
 							perkTitle: "Week left",
 							validUntil: "2026-11-09",
 						},
@@ -96,7 +95,6 @@ describe("perk expiring-soon reminders", () => {
 				kind: "perkExpiringSoon",
 				payload: {
 					perkId,
-					partner: "Example Cloud",
 					perkTitle: "Week left",
 					validUntil: "2026-11-09",
 				},

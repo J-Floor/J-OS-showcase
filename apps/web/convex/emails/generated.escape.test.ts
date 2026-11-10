@@ -53,11 +53,9 @@ describe("every generated email template escapes hostile values", () => {
 	});
 
 	it("feeds each template the list fields its own entry declares", () => {
-		// `note` is perkRequested's list field: another template's `note`
+		// `items` is dailyDigest's list field: another template's `items`
 		// would be a plain string, and is fed one.
-		expect(hostileProps(listFieldsOf("perkRequested")).note).toHaveLength(
-			2
-		);
+		expect(hostileProps(listFieldsOf("dailyDigest")).items).toHaveLength(2);
 		expect(hostileProps(listFieldsOf("notice")).note).toBe(HOSTILE);
 		expect(hostileProps(listFieldsOf("boardLifecycleAlert")).note).toBe(
 			HOSTILE

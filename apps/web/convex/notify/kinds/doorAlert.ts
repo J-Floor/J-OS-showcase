@@ -17,6 +17,7 @@ import { defineKind } from "../types.ts";
  */
 export const doorAlert = defineKind({
 	category: "doors",
+	delivery: "urgent",
 	payload: v.object({
 		headline: v.string(),
 		detail: v.string(),

@@ -5,7 +5,7 @@ import { expect, test } from "vitest";
 import { runAndCollectLogs } from "../test-stubs/runAndCollectLogs.ts";
 
 import { api } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import schema from "./schema.ts";
 
 const modules = import.meta.glob("./**/*.*s");
@@ -78,54 +78,56 @@ test("non-board is forbidden", async () => {
 	await expect(member.query(api.tasks.list, {})).rejects.toThrow(/Forbidden/);
 });
 
-test("create emails a newly-assigned person", async () => {
+async function taskAssignedRows(
+	backend: ReturnType<typeof convexTest>
+): Promise<Doc<"notifications">[]> {
+	const rows = (await backend.run((context) =>
+		context.db.query("notifications").take(10)
+	)) as Doc<"notifications">[];
+	return rows.filter((row) => row.kind === "taskAssigned");
+}
+
+test("create notifies a newly-assigned person", async () => {
 	const backend = convexTest(schema, modules);
 	const { board } = await seedBoard(backend);
 	const assigneeId = await seedAssignee(backend);
-	const logs = await runAndCollectLogs(backend, () =>
+	await runAndCollectLogs(backend, () =>
 		board.mutation(api.tasks.create, {
 			title: "Wire it",
 			assigneeIds: [assigneeId],
 		})
 	);
-	expect(
-		logs.some(
-			(message) =>
-				message.includes("[notify:taskAssigned]") &&
-				message.includes("a@example.org") &&
-				message.includes("Wire it")
-		)
-	).toBe(true);
+	expect(await taskAssignedRows(backend)).toEqual([
+		expect.objectContaining({ personId: assigneeId, body: "Wire it" }),
+	]);
 });
 
-test("update emails only the newly-added assignee", async () => {
+test("update notifies only the newly-added assignee", async () => {
 	const backend = convexTest(schema, modules);
 	const { board } = await seedBoard(backend);
 	const assigneeId = await seedAssignee(backend);
 	const id = await board.mutation(api.tasks.create, { title: "Grow it" });
-	const logs = await runAndCollectLogs(backend, () =>
+	await runAndCollectLogs(backend, () =>
 		board.mutation(api.tasks.update, { id, assigneeIds: [assigneeId] })
 	);
-	expect(
-		logs.some((message) => message.includes("[notify:taskAssigned]"))
-	).toBe(true);
+	expect(await taskAssignedRows(backend)).toEqual([
+		expect.objectContaining({ personId: assigneeId, body: "Grow it" }),
+	]);
 });
 
-test("does not email the actor for a self-assignment", async () => {
+test("does not notify the actor for a self-assignment", async () => {
 	const backend = convexTest(schema, modules);
 	const { board, boardId } = await seedBoard(backend);
-	const logs = await runAndCollectLogs(backend, () =>
+	await runAndCollectLogs(backend, () =>
 		board.mutation(api.tasks.create, {
 			title: "Mine",
 			assigneeIds: [boardId],
 		})
 	);
-	expect(
-		logs.some((message) => message.includes("[notify:taskAssigned]"))
-	).toBe(false);
+	expect(await taskAssignedRows(backend)).toEqual([]);
 });
 
-test("the assignment email deep-links to the task, not the board", async () => {
+test("the assignment notification deep-links to the task, not the board", async () => {
 	const backend = convexTest(schema, modules);
 	const { board } = await seedBoard(backend);
 	const assigneeId = await seedAssignee(backend);

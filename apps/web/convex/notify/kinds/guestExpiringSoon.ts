@@ -3,7 +3,7 @@ import { v, type Infer } from "convex/values";
 import { personUrl, spaceUrl } from "../../emails/urls.ts";
 import { defineKind, type Recipient } from "../types.ts";
 
-import { guestAudience } from "./guestAudience.ts";
+import { guestKindBase } from "./guestAudience.ts";
 import { noticeEmail } from "./noticeEmail.ts";
 
 const payload = v.object({
@@ -31,10 +31,8 @@ function copy(
 }
 
 export const guestExpiringSoon = defineKind({
-	category: "guests",
+	...guestKindBase("entitled"),
 	payload,
-	audience: (context, { guestId }) =>
-		guestAudience(context, guestId, { guest: "entitled" }),
 	push: (details, recipient) => ({
 		...copy(details, recipient),
 		tag: `guest-${details.guestId}-expiring`,

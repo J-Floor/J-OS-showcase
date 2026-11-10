@@ -31,17 +31,28 @@ export type ResolvedRecipient = Recipient & { subscriptions: PushKeys[] };
 /**
  * One notification kind: who gets it and how it reads on each channel.
  * Every kind has `push`: its message is also the row kept in each recipient's
- * notification history (`notify/inbox.ts`). `email` absent = push-only.
- * `email` may return null to skip one recipient's email (e.g. a person who
- * already gets a transactional email for the same event).
+ * notification history (`notify/inbox.ts`). `urgent` (email at once, quota
+ * class critical) and `instant` (email at once, class notification) kinds may
+ * have `email`; absent = push-only. `email` may return null to skip one
+ * recipient's email (e.g. a person who already gets a transactional email
+ * for the same event). A `digest` kind has no instant email: the daily
+ * digest (`notify/digest.ts`) carries its history rows.
  */
 export type KindDefinition<V extends GenericValidator> = {
 	category: Category;
 	payload: V;
 	audience: (context: QueryCtx, payload: Infer<V>) => Promise<Id<"people">[]>;
 	push: (payload: Infer<V>, recipient: Recipient) => PushMessage;
-	email?: (payload: Infer<V>, recipient: Recipient) => EmailMessage | null;
-};
+} & (
+	| {
+			delivery: "urgent" | "instant";
+			email?: (
+				payload: Infer<V>,
+				recipient: Recipient
+			) => EmailMessage | null;
+	  }
+	| { delivery: "digest"; email?: never }
+);
 
 export type AnyKindDefinition = KindDefinition<GenericValidator>;
 

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import schema from "../schema.ts";
 
-import { KINDS, kindValidator } from "./registry.ts";
+import { DIGEST_KINDS, KINDS, kindValidator } from "./registry.ts";
 import type { Recipient } from "./types.ts";
 
 const modules = import.meta.glob("../**/*.*s");
@@ -66,10 +66,11 @@ describe("registry", () => {
 		).toEqual(sorted(Object.keys(KINDS)));
 	});
 
-	it("gives every kind an email except the push-only ones", () => {
+	it("gives every urgent and instant kind an email except the push-only ones, and no digest kind", () => {
 		for (const [name, definition] of Object.entries(KINDS)) {
 			expect(definition.push, name).toBeTypeOf("function");
-			if (PUSH_ONLY.has(name)) expect(definition.email).toBeUndefined();
+			if (PUSH_ONLY.has(name) || definition.delivery === "digest")
+				expect(definition.email, name).toBeUndefined();
 			else expect(definition.email, name).toBeTypeOf("function");
 		}
 	});
@@ -307,7 +308,7 @@ describe("audiences", () => {
 });
 
 describe("rendering", () => {
-	it("task assigned: deep link, subject and the manage footer", () => {
+	it("task assigned: deep link and tag", () => {
 		const payload = {
 			assigneeId: "p1" as Id<"people">,
 			taskId: "t1" as Id<"tasks">,
@@ -319,9 +320,6 @@ describe("rendering", () => {
 			url: "https://j.floor/tasks?task=t1",
 			tag: "task-t1",
 		});
-		const email = KINDS.taskAssigned.email?.(payload, recipient("p1"));
-		expect(email?.subject).toBe("You've been assigned a task: Wire it");
-		expect(email?.html).toContain("https://j.floor/?notifications=open");
 	});
 
 	it("event starting soon names the start time from the zoned value", () => {
@@ -451,5 +449,28 @@ describe("rendering", () => {
 			"https://j.floor/"
 		);
 		expect(KINDS.guestExpired.push(base, host).url).toBe(guestSheet);
+	});
+});
+
+function byDelivery(delivery: string): string[] {
+	return sorted(
+		Object.entries(KINDS)
+			.filter(([, kind]) => kind.delivery === delivery)
+			.map(([name]) => name)
+	);
+}
+
+describe("delivery", () => {
+	it("delivers exactly the agreed kinds by digest and as urgent", () => {
+		expect(byDelivery("digest")).toEqual([
+			"newApplication",
+			"perkAdded",
+			"perkExpiringSoon",
+			"perkRequested",
+			"projectAssigned",
+			"taskAssigned",
+		]);
+		expect(byDelivery("urgent")).toEqual(["doorAlert", "occupancyAlert"]);
+		expect(sorted(DIGEST_KINDS)).toEqual(byDelivery("digest"));
 	});
 });

@@ -60,21 +60,23 @@ export function createAuth(context: GenericCtx<DataModel>) {
 							logoUrl,
 							privacyUrl,
 						});
-						await sendEmail({
+						await sendEmail(context, {
 							to: email,
 							subject: "No J floor account for this email",
 							html,
 							text,
+							priority: "anonymous",
 							devLog: `[no-account] ${email}`,
 						});
 						return;
 					}
 					const { html, text } = magicLinkEmail({ url, logoUrl });
-					await sendEmail({
+					await sendEmail(context, {
 						to: email,
 						subject: "Your J floor sign-in link",
 						html,
 						text,
+						priority: "critical",
 						devLog: `[magic-link] ${email}: ${url}`,
 					});
 				},

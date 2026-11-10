@@ -60,20 +60,22 @@ describe("sendMagicLink", () => {
 	it("sends a known person the sign-in link", async () => {
 		await send("link");
 		expect(sendEmail).toHaveBeenCalledTimes(1);
-		const sent = vi.mocked(sendEmail).mock.calls[0][0];
+		const sent = vi.mocked(sendEmail).mock.calls[0][1];
 		expect(sent.to).toBe("a@example.com");
 		expect(sent.subject).toBe("Your J floor sign-in link");
 		expect(sent.html).toContain("secret-token");
+		expect(sent.priority).toBe("critical");
 	});
 
 	it("sends an unknown address the no-account email, without the link", async () => {
 		await send("noAccount");
 		expect(sendEmail).toHaveBeenCalledTimes(1);
-		const sent = vi.mocked(sendEmail).mock.calls[0][0];
+		const sent = vi.mocked(sendEmail).mock.calls[0][1];
 		expect(sent.subject).toBe("No J floor account for this email");
 		expect(sent.html).not.toContain("secret-token");
 		expect(sent.text).not.toContain("secret-token");
 		expect(sent.devLog).toBe("[no-account] a@example.com");
+		expect(sent.priority).toBe("anonymous");
 	});
 
 	it("sends nothing to a limited address", async () => {

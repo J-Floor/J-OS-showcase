@@ -48,6 +48,16 @@ export const kindValidator = v.union(
 	...KIND_NAMES.map((kind) => v.literal(kind))
 );
 
+/** The kinds the daily digest emails. */
+export const DIGEST_KINDS: KindName[] = KIND_NAMES.filter(
+	(kind) => KINDS[kind].delivery === "digest"
+);
+
+/** Whether `kind` is a registered kind the daily digest emails. */
+export function isDigestKind(kind: string): kind is KindName {
+	return DIGEST_KINDS.some((name) => name === kind);
+}
+
 /** The definition behind a kind name, with its payload widened. Callers are
  *  typed at `notify`, so dispatch can treat every kind alike. */
 export function kindDefinition(kind: KindName): AnyKindDefinition {

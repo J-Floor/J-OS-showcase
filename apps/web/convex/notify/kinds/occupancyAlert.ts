@@ -17,6 +17,7 @@ import { defineKind } from "../types.ts";
  */
 export const occupancyAlert = defineKind({
 	category: "doors",
+	delivery: "urgent",
 	payload: v.object({ title: v.string(), body: v.string(), tag: v.string() }),
 	audience: (context) => boardIds(context),
 	push: ({ title, body, tag }) => ({ title, body, url: insightsUrl(), tag }),

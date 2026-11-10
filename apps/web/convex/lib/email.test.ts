@@ -1,6 +1,20 @@
+import { convexTest } from "convex-test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { emailAllowlist, sendEmail } from "./email.ts";
+import schema from "../schema.ts";
+
+import { emailAllowlist, sendEmail, type EmailContext } from "./email.ts";
+import {
+	setEmailProviderForTests,
+	type EmailProvider,
+	type SendOutcome,
+} from "./emailProvider.ts";
+
+const modules = import.meta.glob("/convex/**/*.*s");
+
+const CONTEXT = {
+	runMutation: vi.fn(() => Promise.resolve(true)),
+} as unknown as EmailContext;
 
 describe("sendEmail", () => {
 	afterEach(() => {
@@ -14,11 +28,12 @@ describe("sendEmail", () => {
 		const fetchSpy = vi.fn();
 		vi.stubGlobal("fetch", fetchSpy);
 		const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-		await sendEmail({
+		await sendEmail(CONTEXT, {
 			to: "a@example.com",
 			subject: "s",
 			html: "<p>h</p>",
 			text: "h",
+			priority: "critical",
 			devLog: "[test] hello",
 		});
 		expect(fetchSpy).not.toHaveBeenCalled();
@@ -33,10 +48,11 @@ describe("sendEmail", () => {
 		const fetchSpy = vi.fn();
 		vi.stubGlobal("fetch", fetchSpy);
 		const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-		await sendEmail({
+		await sendEmail(CONTEXT, {
 			to: "a@example.com",
 			subject: "Your link",
 			html: "<p>h</p>",
+			priority: "critical",
 			devLog: "SECRET-URL",
 		});
 		const logged = logSpy.mock.calls.flat().join(" ");
@@ -48,47 +64,6 @@ describe("sendEmail", () => {
 		vi.unstubAllEnvs();
 	});
 
-	it("forwards the text field to Resend when an API key is set", async () => {
-		process.env.RESEND_API_KEY = "re_x";
-		const fetchSpy = vi.fn<
-			(url: string, init: { body: string }) => Promise<{ ok: boolean }>
-		>(() => Promise.resolve({ ok: true }));
-		vi.stubGlobal("fetch", fetchSpy);
-		await sendEmail({
-			to: "a@example.com",
-			subject: "s",
-			html: "<p>h</p>",
-			text: "h",
-			devLog: "[test]",
-		});
-		const body = JSON.parse(fetchSpy.mock.calls[0][1].body) as {
-			text?: string;
-			html?: string;
-		};
-		expect(body.text).toBe("h");
-		expect(body.html).toBe("<p>h</p>");
-	});
-
-	it("forwards attachments to Resend when present", async () => {
-		process.env.RESEND_API_KEY = "re_x";
-		const fetchSpy = vi.fn<
-			(url: string, init: { body: string }) => Promise<{ ok: boolean }>
-		>(() => Promise.resolve({ ok: true }));
-		vi.stubGlobal("fetch", fetchSpy);
-		await sendEmail({
-			to: "a@example.com",
-			subject: "s",
-			html: "<p>h</p>",
-			attachments: [{ filename: "x.pdf", content: "QkFTRTY0" }],
-			devLog: "[t]",
-		});
-		const body = JSON.parse(fetchSpy.mock.calls[0][1].body) as {
-			attachments?: { filename: string; content: string }[];
-		};
-		expect(body.attachments?.[0].filename).toBe("x.pdf");
-		expect(body.attachments?.[0].content).toBe("QkFTRTY0");
-	});
-
 	it("on a provider failure logs recipient and subject, never the devLog", async () => {
 		vi.stubEnv("RESEND_API_KEY", "k");
 		vi.stubGlobal(
@@ -98,10 +73,11 @@ describe("sendEmail", () => {
 		const log = vi.spyOn(console, "log").mockImplementation(() => {});
 		const err = vi.spyOn(console, "error").mockImplementation(() => {});
 		expect(
-			await sendEmail({
+			await sendEmail(CONTEXT, {
 				to: "a@example.com",
 				subject: "Hi",
 				html: "<p/>",
+				priority: "critical",
 				devLog: "SECRET-URL",
 			})
 		).toBe(false);
@@ -132,6 +108,7 @@ describe("EMAIL_ALLOWLIST", () => {
 	const message = {
 		subject: "Your J floor sign-in link",
 		html: "<p>h</p>",
+		priority: "critical" as const,
 		devLog: "[magic-link] x: https://staging.example.com/link?token=t",
 	};
 
@@ -139,7 +116,7 @@ describe("EMAIL_ALLOWLIST", () => {
 		vi.stubEnv("EMAIL_ALLOWLIST", " Owner@Example.com , other@example.com");
 		const { fetchSpy, logSpy } = stubResend();
 		await expect(
-			sendEmail({ to: "owner@EXAMPLE.com ", ...message })
+			sendEmail(CONTEXT, { to: "owner@EXAMPLE.com ", ...message })
 		).resolves.toBe(true);
 		expect(fetchSpy).toHaveBeenCalledTimes(1);
 		expect(logSpy).not.toHaveBeenCalled();
@@ -149,7 +126,7 @@ describe("EMAIL_ALLOWLIST", () => {
 		vi.stubEnv("EMAIL_ALLOWLIST", "owner@example.com");
 		const { fetchSpy, logSpy } = stubResend();
 		await expect(
-			sendEmail({ to: "stranger@example.com", ...message })
+			sendEmail(CONTEXT, { to: "stranger@example.com", ...message })
 		).resolves.toBe(true);
 		expect(fetchSpy).not.toHaveBeenCalled();
 		expect(logSpy.mock.calls.flat().join(" ")).toContain(message.devLog);
@@ -157,7 +134,7 @@ describe("EMAIL_ALLOWLIST", () => {
 
 	it("leaves sending unchanged when unset", async () => {
 		const { fetchSpy, logSpy } = stubResend();
-		await sendEmail({ to: "stranger@example.com", ...message });
+		await sendEmail(CONTEXT, { to: "stranger@example.com", ...message });
 		expect(fetchSpy).toHaveBeenCalledTimes(1);
 		expect(logSpy).not.toHaveBeenCalled();
 	});
@@ -167,5 +144,146 @@ describe("EMAIL_ALLOWLIST", () => {
 		expect(emailAllowlist()).toEqual(["a@example.com", "b@example.com"]);
 		vi.stubEnv("EMAIL_ALLOWLIST", "");
 		expect(emailAllowlist()).toBeUndefined();
+	});
+});
+
+function contextFor(backend: ReturnType<typeof convexTest>): EmailContext {
+	return {
+		runMutation: backend.mutation.bind(backend),
+	} as unknown as EmailContext;
+}
+
+function setup(
+	limits: EmailProvider["limits"],
+	outcome: SendOutcome = { kind: "sent" }
+) {
+	const backend = convexTest(schema, modules);
+	const context = contextFor(backend);
+	const send = vi.fn(() => Promise.resolve(outcome));
+	setEmailProviderForTests({ limits, billing: "perRecipient", send });
+	return { backend, context, send };
+}
+
+describe("sendEmail quota sync", () => {
+	afterEach(() => {
+		setEmailProviderForTests(undefined);
+		vi.restoreAllMocks();
+	});
+
+	it("still resolves true when the post-send quota sync throws", async () => {
+		const send = vi.fn(() =>
+			Promise.resolve<SendOutcome>({
+				kind: "sent",
+				usage: { dailyUsed: 3 },
+			})
+		);
+		setEmailProviderForTests({
+			limits: { daily: 10, monthly: null },
+			billing: "perRecipient",
+			send,
+		});
+		// The reserve call before the send works; the sync after it throws.
+		const runMutation = vi
+			.fn()
+			.mockResolvedValueOnce(true)
+			.mockRejectedValueOnce(new Error("db down"));
+		const err = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		const isSent = await sendEmail(
+			{ runMutation },
+			{
+				to: "a@example.com",
+				subject: "Hi",
+				html: "<p>HTML-BODY</p>",
+				priority: "critical",
+				devLog: "SECRET-URL",
+			}
+		);
+
+		expect(isSent).toBe(true);
+		expect(runMutation).toHaveBeenCalledTimes(2);
+		expect(err).toHaveBeenCalledWith("[email] quota sync failed");
+		expect(err.mock.calls.flat().join(" ")).not.toContain("a@example.com");
+	});
+});
+
+describe("sendEmail quota guard", () => {
+	afterEach(() => {
+		setEmailProviderForTests(undefined);
+		vi.unstubAllEnvs();
+		vi.restoreAllMocks();
+	});
+
+	const message = {
+		to: "a@example.com",
+		subject: "Hi",
+		html: "<p>HTML-BODY</p>",
+		devLog: "SECRET-URL",
+	};
+
+	it("refuses a send past its class ceiling, logging the class and no address", async () => {
+		const { context, send } = setup({ daily: 2, monthly: null });
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const isFirstSent = await sendEmail(context, {
+			...message,
+			priority: "notification",
+		});
+		const isSecondSent = await sendEmail(context, {
+			...message,
+			priority: "notification",
+		});
+		expect([isFirstSent, isSecondSent]).toEqual([true, false]);
+		expect(send).toHaveBeenCalledTimes(1);
+		const logged = warn.mock.calls.flat().join(" ");
+		expect(logged).toContain("[email] quota: notification refused");
+		expect(logged).not.toContain("a@example.com");
+	});
+
+	it("raises the counter to the usage the provider reports", async () => {
+		const { context, send } = setup(
+			{ daily: 2, monthly: null },
+			{ kind: "sent", usage: { dailyUsed: 2 } }
+		);
+		expect(
+			await sendEmail(context, { ...message, priority: "critical" })
+		).toBe(true);
+		expect(
+			await sendEmail(context, { ...message, priority: "critical" })
+		).toBe(false);
+		expect(send).toHaveBeenCalledTimes(1);
+	});
+
+	it("fills the window on a quotaExceeded outcome and logs neither devLog nor html", async () => {
+		const { context, send } = setup(
+			{ daily: 5, monthly: null },
+			{ kind: "quotaExceeded", window: "daily" }
+		);
+		const err = vi.spyOn(console, "error").mockImplementation(() => {});
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		expect(
+			await sendEmail(context, { ...message, priority: "critical" })
+		).toBe(false);
+		expect(
+			await sendEmail(context, { ...message, priority: "critical" })
+		).toBe(false);
+		expect(send).toHaveBeenCalledTimes(1);
+		const logged = err.mock.calls.flat().join(" ");
+		expect(logged).toContain("quota exceeded");
+		expect(logged).not.toContain("SECRET-URL");
+		expect(logged).not.toContain("HTML-BODY");
+	});
+
+	it("reserves nothing when no provider is configured", async () => {
+		const backend = convexTest(schema, modules);
+		const context = contextFor(backend);
+		vi.stubEnv("RESEND_API_KEY", "");
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		expect(
+			await sendEmail(context, { ...message, priority: "critical" })
+		).toBe(true);
+		const rows = await backend.run((context_) =>
+			context_.db.query("emailQuota").take(10)
+		);
+		expect(rows).toHaveLength(0);
 	});
 });

@@ -194,9 +194,6 @@ export const requestPerk = mutation({
 			perkTitle: perk.title,
 			partner: perk.partner,
 			requesterName: displayName(person),
-			requesterEmail: person.email,
-			ventureName: person.venture?.name,
-			note: storedNote,
 		});
 		return requestId;
 	},

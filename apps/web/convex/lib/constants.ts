@@ -11,6 +11,8 @@ export const DAYS_PER_WEEK = 7;
 
 export const NINETY_DAYS = 7_776_000_000;
 
+export const SIXTY_TWO_DAYS = 5_356_800_000;
+
 export const HEX_RADIX = 16;
 
 /** A denied applicant may re-apply only after this window elapses (6 months). */

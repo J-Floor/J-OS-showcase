@@ -1,4 +1,15 @@
+import { internal } from "../_generated/api";
+import type { ActionCtx } from "../_generated/server";
+
 import { normalizeEmail } from "./emailAddress.ts";
+import type {
+	EmailPriority,
+	ProviderLimits,
+	SendOutcome,
+} from "./emailProvider.ts";
+import { emailProvider } from "./emailProviderEnv.ts";
+
+export type EmailContext = { runMutation: ActionCtx["runMutation"] };
 
 export type SendEmailArgs = {
 	to: string;
@@ -6,8 +17,10 @@ export type SendEmailArgs = {
 	html: string;
 	/** Optional plain-text alternative (improves deliverability). */
 	text?: string;
-	/** Optional file attachments (base64-encoded content), forwarded to Resend. */
+	/** Optional file attachments (base64-encoded content). */
 	attachments?: { filename: string; content: string }[];
+	/** How much of the provider quota this email may use. */
+	priority: EmailPriority;
 	/** Logged instead of sending when no provider is configured and
 	 *  EMAIL_DEV_LOG=1, or when EMAIL_ALLOWLIST leaves the recipient out. */
 	devLog: string;
@@ -32,58 +45,89 @@ function isLeftOffAllowlist(to: string): boolean {
 	return allowlist !== undefined && !allowlist.includes(normalizeEmail(to));
 }
 
+/** Align the quota counters with what the provider just told us. */
+async function recordOutcome(
+	context: EmailContext,
+	limits: ProviderLimits,
+	outcome: SendOutcome
+): Promise<void> {
+	if (outcome.kind === "quotaExceeded") {
+		await context.runMutation(internal.emailQuota.sync, {
+			limits,
+			exhausted: outcome.window,
+		});
+	} else if (
+		outcome.kind === "sent" &&
+		(outcome.usage?.dailyUsed !== undefined ||
+			outcome.usage?.monthlyUsed !== undefined)
+	) {
+		await context.runMutation(internal.emailQuota.sync, {
+			limits,
+			...outcome.usage,
+		});
+	}
+}
+
 /**
- * Send a transactional email via Resend. Without RESEND_API_KEY nothing is
- * sent: a deployment with EMAIL_DEV_LOG=1 (dev only) logs `devLog`, which may
- * hold a sign-in link; any other logs the recipient and subject only. A
- * deployment with EMAIL_ALLOWLIST (staging) sends only to the listed
- * addresses and logs `devLog` for every other one. A
- * Resend failure logs the recipient and subject, never `devLog`. MUST run in an action /
- * httpAction context — it uses `fetch`, which mutations and queries can't.
+ * Send one transactional email through the configured provider. Without a
+ * provider nothing is sent: EMAIL_DEV_LOG=1 (dev only) logs `devLog`, which
+ * may hold a sign-in link; otherwise only the recipient and subject are
+ * logged. EMAIL_ALLOWLIST (staging) sends only to listed addresses and logs
+ * `devLog` for the rest. A provider failure logs recipient and subject, never
+ * `devLog`. Needs an action context (`fetch`).
  *
- * The default sender (`onboarding@resend.dev`) only delivers to the Resend
- * account owner's own address; set EMAIL_FROM to a verified-domain sender to
- * email anyone.
- *
- * Resolves `true` when the email was sent or only logged (no provider), and
- * `false` when the provider rejected it. Callers that don't care may ignore it.
+ * Resolves `true` when sent or only logged, `false` when the quota guard
+ * refused it or the provider rejected it.
  */
-export async function sendEmail(options: SendEmailArgs): Promise<boolean> {
-	const apiKey = process.env.RESEND_API_KEY;
+export async function sendEmail(
+	context: EmailContext,
+	options: SendEmailArgs
+): Promise<boolean> {
+	const provider = emailProvider();
 	const isWithheld = isLeftOffAllowlist(options.to);
-	if (!apiKey || isWithheld) {
+	if (!provider || isWithheld) {
 		// eslint-disable-next-line no-console -- not sent: surface in the Convex logs
 		console.log(
 			isWithheld || process.env.EMAIL_DEV_LOG === "1"
 				? options.devLog
-				: `[email] not sent (no RESEND_API_KEY) to ${options.to}: ${options.subject}`
+				: `[email] not sent (no email provider) to ${options.to}: ${options.subject}`
 		);
 		return true;
 	}
-	const from = process.env.EMAIL_FROM ?? "J floor <onboarding@resend.dev>";
-	const response = await fetch("https://api.resend.com/emails", {
-		method: "POST",
-		headers: {
-			Authorization: `Bearer ${apiKey}`,
-			"Content-Type": "application/json",
-		},
-		body: JSON.stringify({
-			from,
-			to: options.to,
-			subject: options.subject,
-			html: options.html,
-			...(options.text ? { text: options.text } : {}),
-			...(options.attachments?.length
-				? { attachments: options.attachments }
-				: {}),
-		}),
+	const limits = provider.limits;
+	const isReserved = await context.runMutation(internal.emailQuota.reserve, {
+		priority: options.priority,
+		// Every send here has one recipient, so it costs one unit under either billing.
+		cost: 1,
+		limits,
 	});
-	if (!response.ok) {
-		// eslint-disable-next-line no-console -- surface delivery failures in the Convex logs
-		console.error(
-			`[email] Resend failed (${String(response.status)}) to ${options.to}: ${options.subject}`
-		);
+	if (!isReserved) {
+		// eslint-disable-next-line no-console -- surface a quota refusal in the Convex logs
+		console.warn(`[email] quota: ${options.priority} refused`);
 		return false;
 	}
-	return true;
+	const outcome = await provider.send({
+		to: options.to,
+		subject: options.subject,
+		html: options.html,
+		text: options.text,
+		attachments: options.attachments,
+	});
+	try {
+		await recordOutcome(context, limits, outcome);
+	} catch {
+		// eslint-disable-next-line no-console -- surface a failed quota sync in the Convex logs
+		console.error("[email] quota sync failed");
+		// A counter that lags must not turn a delivered email into a failure.
+	}
+	if (outcome.kind === "sent") return true;
+	const reason =
+		outcome.kind === "rejected"
+			? `rejected (${String(outcome.status)})`
+			: "quota exceeded";
+	// eslint-disable-next-line no-console -- surface delivery failures in the Convex logs
+	console.error(
+		`[email] provider ${reason} to ${options.to}: ${options.subject}`
+	);
+	return false;
 }

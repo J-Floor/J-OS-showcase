@@ -8,6 +8,7 @@ import { defineKind } from "../types.ts";
 /** Push only, so each event sends at most one email per person. */
 export const eventEndingSoon = defineKind({
 	category: "events",
+	delivery: "instant",
 	payload: v.object({
 		eventId: v.id("events"),
 		name: v.string(),

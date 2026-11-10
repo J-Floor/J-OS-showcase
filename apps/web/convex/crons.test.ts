@@ -68,11 +68,22 @@ describe("crons", () => {
 		);
 	});
 
+	it("registers the daily notification digest at 08:15 UTC", () => {
+		const job = crons.crons["send the daily notification digest"];
+		expect(job).toBeDefined();
+		expect(job.schedule).toEqual({
+			type: "daily",
+			hourUTC: 8,
+			minuteUTC: 15,
+		});
+		expect(job.name).toBe(getFunctionName(internal.notify.digest.send));
+	});
+
 	it("registers exactly these jobs — the nightly door-key sweep is gone", () => {
 		// Each test above looks a job up by name, so a stray registration
 		// (e.g. the retired door-key sweep) would pass every one
 		// without this.
-		expect(Object.keys(crons.crons)).toHaveLength(10);
+		expect(Object.keys(crons.crons)).toHaveLength(12);
 	});
 
 	it("purges access logs older than 12 months nightly", () => {
@@ -95,6 +106,16 @@ describe("crons", () => {
 		expect(wifi.name).toBe(
 			getFunctionName(internal.accessLogRetention.purgeWifiEvents)
 		);
+	});
+
+	it("purges old email quota counters at 02:45 UTC", () => {
+		const job = crons.crons["purge old email quota counters"];
+		expect(job.schedule).toEqual({
+			type: "daily",
+			hourUTC: 2,
+			minuteUTC: 45,
+		});
+		expect(job.name).toBe(getFunctionName(internal.emailQuota.purgeOld));
 	});
 
 	it("polls door lock status every 10 minutes", () => {

@@ -18,6 +18,7 @@ import { defineKind } from "../types.ts";
 export const lifecycleAlert = defineKind({
 	// Board-only operational alert about people, so it shares the applications switch.
 	category: "applications",
+	delivery: "instant",
 	payload: v.object({
 		headline: v.string(),
 		items: v.array(

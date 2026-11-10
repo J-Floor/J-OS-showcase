@@ -60,6 +60,14 @@ crons.daily(
 	{}
 );
 
+// Email quota counters are only read for the current day and month.
+crons.daily(
+	"purge old email quota counters",
+	{ hourUTC: 2, minuteUTC: 45 },
+	internal.emailQuota.purgeOld,
+	{}
+);
+
 // Perks ending in a week, told to the community. Daytime, not the nightly
 // window: people read it. 08:00 UTC is 09:00 Zurich in winter and 10:00 in
 // summer. The job reads the site date itself, so the hour only picks when
@@ -68,6 +76,15 @@ crons.daily(
 	"tell the community about perks ending in a week",
 	{ hourUTC: 8, minuteUTC: 0 },
 	internal.notify.perkReminders.expiringSoon,
+	{}
+);
+
+// One email per person a day for the non-urgent notification kinds. After
+// the 08:00 perk-expiry job, so its news is in the same digest.
+crons.daily(
+	"send the daily notification digest",
+	{ hourUTC: 8, minuteUTC: 15 },
+	internal.notify.digest.send,
 	{}
 );
 

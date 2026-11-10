@@ -516,6 +516,7 @@ export const submitApplication = action({
 				subject,
 				html,
 				text,
+				priority: "anonymous",
 				devLog,
 			});
 			return { status: "pending" };
@@ -541,11 +542,12 @@ export const submitApplication = action({
 			logoUrl: urls.logoUrl,
 			privacyUrl: urls.privacyUrl,
 		});
-		await sendEmail({
+		await sendEmail(context, {
 			to: fields.email,
 			subject: "Confirm your J floor application",
 			html,
 			text,
+			priority: "anonymous",
 			devLog: `[verify-application] ${fields.email}`,
 		});
 		return { status: "pending" };

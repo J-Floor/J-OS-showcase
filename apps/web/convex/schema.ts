@@ -355,6 +355,9 @@ export default defineSchema({
 		// Per-category push/email switches from the Notifications sheet. A
 		// missing category (or a missing object) means the default: both on.
 		notificationPrefs: v.optional(notificationPrefsValidator),
+		/** Newest notification-history `createdAt` the daily digest has
+		 *  handled. Missing = start from 24h before the run. */
+		digestCursor: v.optional(v.number()),
 		// --- lifecycle machine state (see docs/lifecycle.md) ---
 		tier: tier,
 		stage: stage,
@@ -781,4 +784,14 @@ export default defineSchema({
 		.index("by_perkId_and_requestedAt", ["perkId", "requestedAt"])
 		.index("by_requestedAt", ["requestedAt"])
 		.index("by_statusById", ["statusById"]),
+
+	/** Emails sent per provider quota window (`day:YYYY-MM-DD`,
+	 *  `month:YYYY-MM`, UTC). Written only by `emailQuota.ts`. */
+	emailQuota: defineTable({
+		window: v.string(),
+		startsAt: v.number(),
+		used: v.number(),
+	})
+		.index("by_window", ["window"])
+		.index("by_startsAt", ["startsAt"]),
 });

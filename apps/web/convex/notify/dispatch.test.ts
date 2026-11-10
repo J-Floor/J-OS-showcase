@@ -2,9 +2,11 @@ import { v } from "convex/values";
 import { convexTest } from "convex-test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { installFakeEmailProvider } from "../../test-stubs/fakeEmailProvider.ts";
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import { internalMutation } from "../_generated/server";
+import { setEmailProviderForTests } from "../lib/emailProvider.ts";
 import { SITE_TIMEZONE, zonedLocalFromEpoch } from "../lib/time.ts";
 import schema from "../schema.ts";
 
@@ -47,7 +49,9 @@ async function seedPerson(
 	backend: T,
 	email: string,
 	tier: "member" | "board" = "member",
-	notificationPrefs?: { tasks?: { push: boolean; email: boolean } }
+	notificationPrefs?: Partial<
+		Record<"tasks" | "perkUpdates", { push: boolean; email: boolean }>
+	>
 ): Promise<Id<"people">> {
 	return backend.run((context) =>
 		context.db.insert("people", {
@@ -93,6 +97,33 @@ async function seedTask(
 	);
 }
 
+async function outcomePayload(backend: T, personId: Id<"people">) {
+	return backend.run(async (context) => {
+		const perkId = await context.db.insert("perks", {
+			partner: "Acme",
+			title: "Desk",
+			terms: "One desk",
+			category: "cloud",
+			createdAt: Date.now(),
+		});
+		const requestId = await context.db.insert("perkRequests", {
+			perkId,
+			personId,
+			requestedAt: Date.now(),
+			status: "requested",
+			statusAt: Date.now(),
+		});
+		return {
+			requestId,
+			perkId,
+			personId,
+			partner: "Acme",
+			perkTitle: "Desk",
+			outcome: "granted" as const,
+		};
+	});
+}
+
 function stubVapid(): void {
 	vi.stubEnv("VAPID_PUBLIC_KEY", "pub");
 	vi.stubEnv("VAPID_PRIVATE_KEY", "priv");
@@ -110,6 +141,7 @@ function captureLogs() {
 afterEach(() => {
 	pushBuilder.failFor = undefined;
 	setPushSenderForTests(undefined);
+	setEmailProviderForTests(undefined);
 	vi.unstubAllEnvs();
 	vi.unstubAllGlobals();
 	vi.restoreAllMocks();
@@ -120,54 +152,52 @@ describe("dispatch", () => {
 		const backend = convexTest(schema, modules);
 		const ada = await seedPerson(backend, "ada@example.org");
 		await seedSubscription(backend, ada, "https://push/ada");
-		const taskId = await seedTask(backend, ada);
 		const sender = vi.fn<PushSender>(() => Promise.resolve());
 		setPushSenderForTests(sender);
 		stubVapid();
 		const emails = captureLogs();
 
 		const result = await backend.action(internal.notify.dispatch.run, {
-			kind: "taskAssigned",
-			payload: { assigneeId: ada, taskId, taskTitle: "Wire it" },
+			kind: "perkRequestOutcome",
+			payload: await outcomePayload(backend, ada),
 		});
 
 		expect(result).toEqual({ recipients: 1, delivered: 2, failed: 0 });
 		expect(sender).toHaveBeenCalledOnce();
 		expect(emails()).toEqual([
-			"[notify:taskAssigned] ada@example.org: You've been assigned a task: Wire it",
+			"[notify:perkRequestOutcome] ada@example.org: Your request for Desk was granted",
 		]);
 	});
 
 	it("respects a person's switches per channel", async () => {
 		const backend = convexTest(schema, modules);
 		const ada = await seedPerson(backend, "ada@example.org", "member", {
-			tasks: { push: false, email: true },
+			perkUpdates: { push: false, email: true },
 		});
 		const bob = await seedPerson(backend, "bob@example.org", "member", {
-			tasks: { push: true, email: false },
+			perkUpdates: { push: true, email: false },
 		});
 		await seedSubscription(backend, ada, "https://push/ada");
 		await seedSubscription(backend, bob, "https://push/bob");
-		const taskId = await seedTask(backend, ada);
 		const sender = vi.fn<PushSender>(() => Promise.resolve());
 		setPushSenderForTests(sender);
 		stubVapid();
 		const emails = captureLogs();
 
 		await backend.action(internal.notify.dispatch.run, {
-			kind: "taskAssigned",
-			payload: { assigneeId: ada, taskId, taskTitle: "Wire it" },
+			kind: "perkRequestOutcome",
+			payload: await outcomePayload(backend, ada),
 		});
 		await backend.action(internal.notify.dispatch.run, {
-			kind: "taskAssigned",
-			payload: { assigneeId: bob, taskId, taskTitle: "Wire it" },
+			kind: "perkRequestOutcome",
+			payload: await outcomePayload(backend, bob),
 		});
 
 		expect(sender.mock.calls.map((call) => call[0].endpoint)).toEqual([
 			"https://push/bob",
 		]);
 		expect(emails()).toEqual([
-			"[notify:taskAssigned] ada@example.org: You've been assigned a task: Wire it",
+			"[notify:perkRequestOutcome] ada@example.org: Your request for Desk was granted",
 		]);
 	});
 
@@ -210,7 +240,6 @@ describe("dispatch", () => {
 		const backend = convexTest(schema, modules);
 		const ada = await seedPerson(backend, "ada@example.org");
 		await seedSubscription(backend, ada, "https://push/ada");
-		const taskId = await seedTask(backend, ada);
 		const sender = vi.fn<PushSender>(() => Promise.resolve());
 		setPushSenderForTests(sender);
 		stubVapid();
@@ -222,8 +251,8 @@ describe("dispatch", () => {
 		vi.spyOn(console, "error").mockImplementation(() => {});
 
 		const result = await backend.action(internal.notify.dispatch.run, {
-			kind: "taskAssigned",
-			payload: { assigneeId: ada, taskId, taskTitle: "Wire it" },
+			kind: "perkRequestOutcome",
+			payload: await outcomePayload(backend, ada),
 		});
 
 		expect(sender).toHaveBeenCalledOnce();
@@ -313,7 +342,6 @@ describe("dispatch", () => {
 	it("an email the provider rejects counts as failed, not delivered", async () => {
 		const backend = convexTest(schema, modules);
 		const ada = await seedPerson(backend, "ada@example.org");
-		const taskId = await seedTask(backend, ada);
 		vi.stubEnv("RESEND_API_KEY", "re_test");
 		vi.stubGlobal(
 			"fetch",
@@ -327,8 +355,8 @@ describe("dispatch", () => {
 		vi.spyOn(console, "log").mockImplementation(() => {});
 
 		const result = await backend.action(internal.notify.dispatch.run, {
-			kind: "taskAssigned",
-			payload: { assigneeId: ada, taskId, taskTitle: "Wire it" },
+			kind: "perkRequestOutcome",
+			payload: await outcomePayload(backend, ada),
 		});
 
 		expect(result).toEqual({ recipients: 1, delivered: 0, failed: 1 });
@@ -338,7 +366,6 @@ describe("dispatch", () => {
 		const backend = convexTest(schema, modules);
 		const ada = await seedPerson(backend, "ada@example.org");
 		await seedSubscription(backend, ada, "https://push/ada");
-		const taskId = await seedTask(backend, ada);
 		setPushSenderForTests(() => Promise.reject(new Error("push down")));
 		stubVapid();
 		vi.stubEnv("RESEND_API_KEY", "re_test");
@@ -349,8 +376,8 @@ describe("dispatch", () => {
 		vi.spyOn(console, "error").mockImplementation(() => {});
 
 		const result = await backend.action(internal.notify.dispatch.run, {
-			kind: "taskAssigned",
-			payload: { assigneeId: ada, taskId, taskTitle: "Wire it" },
+			kind: "perkRequestOutcome",
+			payload: await outcomePayload(backend, ada),
 		});
 
 		expect(result.delivered).toBe(0);
@@ -508,7 +535,6 @@ describe("history", () => {
 		});
 		const ada = await seedPerson(backend, "ada@jfloor.test");
 		await seedSubscription(backend, ada, "https://push/ada");
-		const taskId = await seedTask(backend, ada);
 		const sender = vi.fn<PushSender>(() => Promise.resolve());
 		setPushSenderForTests(sender);
 		stubVapid();
@@ -516,17 +542,17 @@ describe("history", () => {
 		const errors = vi.spyOn(console, "error").mockImplementation(() => {});
 
 		const result = await backend.action(internal.notify.dispatch.run, {
-			kind: "taskAssigned",
-			payload: { assigneeId: ada, taskId, taskTitle: "Wire it" },
+			kind: "perkRequestOutcome",
+			payload: await outcomePayload(backend, ada),
 		});
 
 		expect(result).toEqual({ recipients: 1, delivered: 2, failed: 0 });
 		expect(sender).toHaveBeenCalledOnce();
 		expect(emails()).toEqual([
-			"[notify:taskAssigned] ada@jfloor.test: You've been assigned a task: Wire it",
+			"[notify:perkRequestOutcome] ada@jfloor.test: Your request for Desk was granted",
 		]);
 		expect(errors).toHaveBeenCalledWith(
-			"[notify:taskAssigned] history write failed",
+			"[notify:perkRequestOutcome] history write failed",
 			new Error("inbox down")
 		);
 		expect(
@@ -575,5 +601,97 @@ describe("history", () => {
 			context.db.query("notifications").collect()
 		);
 		expect(rows.map((row) => row.personId)).toEqual([b2]);
+	});
+});
+
+async function fillQuotaTo60(backend: T) {
+	await backend.mutation(internal.emailQuota.sync, {
+		limits: { daily: 100, monthly: null },
+		dailyUsed: 60,
+	});
+}
+
+describe("delivery", () => {
+	it("a digest kind sends push and history but no instant email", async () => {
+		const backend = convexTest(schema, modules);
+		const ada = await seedPerson(backend, "ada@example.org");
+		await seedSubscription(backend, ada, "https://push/ada");
+		const taskId = await seedTask(backend, ada);
+		const sender = vi.fn<PushSender>(() => Promise.resolve());
+		setPushSenderForTests(sender);
+		stubVapid();
+		const { sent } = installFakeEmailProvider({
+			daily: 100,
+			monthly: null,
+		});
+		const emails = captureLogs();
+
+		const result = await backend.action(internal.notify.dispatch.run, {
+			kind: "taskAssigned",
+			payload: { assigneeId: ada, taskId, taskTitle: "Wire it" },
+		});
+
+		expect(result).toEqual({ recipients: 1, delivered: 1, failed: 0 });
+		expect(sender).toHaveBeenCalledOnce();
+		expect(sent).toEqual([]);
+		expect(emails()).toEqual([]);
+		const rows = await backend.run((context) =>
+			context.db.query("notifications").collect()
+		);
+		expect(rows).toHaveLength(1);
+	});
+
+	it("an urgent kind emails, and still does at 60% of the quota", async () => {
+		const backend = convexTest(schema, modules);
+		await seedPerson(backend, "b1@example.org", "board");
+		const { sent } = installFakeEmailProvider({
+			daily: 100,
+			monthly: null,
+		});
+		const payload = {
+			headline: "h",
+			detail: "d",
+			consequence: "c",
+			tag: "door",
+		};
+
+		await backend.action(internal.notify.dispatch.run, {
+			kind: "doorAlert",
+			payload,
+		});
+		expect(sent).toHaveLength(1);
+
+		await fillQuotaTo60(backend);
+		const result = await backend.action(internal.notify.dispatch.run, {
+			kind: "doorAlert",
+			payload,
+		});
+
+		expect(sent).toHaveLength(2);
+		expect(result).toEqual({ recipients: 1, delivered: 1, failed: 0 });
+	});
+
+	it("an instant kind is refused by the provider guard at 60% while push still goes out", async () => {
+		const backend = convexTest(schema, modules);
+		const ada = await seedPerson(backend, "ada@example.org");
+		await seedSubscription(backend, ada, "https://push/ada");
+		const sender = vi.fn<PushSender>(() => Promise.resolve());
+		setPushSenderForTests(sender);
+		stubVapid();
+		const { sent } = installFakeEmailProvider({
+			daily: 100,
+			monthly: null,
+		});
+		await fillQuotaTo60(backend);
+		vi.spyOn(console, "error").mockImplementation(() => {});
+
+		const result = await backend.action(internal.notify.dispatch.run, {
+			kind: "guestExpired",
+			payload: { guestId: ada, guestName: "Ada X" },
+		});
+
+		expect(sender).toHaveBeenCalledOnce();
+		expect(sent).toEqual([]);
+		expect(result).toEqual({ recipients: 1, delivered: 1, failed: 1 });
 	});
 });

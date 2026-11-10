@@ -141,7 +141,7 @@ async function dispatchesOf(backend: Backend, kind: string) {
 }
 
 /** The dispatch payload for the setup's requester and a default-titled perk,
- *  note aside. No `contactId` key when the perk has no contact. */
+ *  no contact details and no note. No `contactId` key when the perk has no contact. */
 function payloadFor(ids: {
 	requestId: Id<"perkRequests">;
 	perkId: Id<"perks">;
@@ -152,8 +152,6 @@ function payloadFor(ids: {
 		perkTitle: "Cloud credits",
 		partner: "Example Cloud",
 		requesterName: "Ada Lovelace",
-		requesterEmail: REQUESTER,
-		ventureName: "Acme",
 	};
 }
 
@@ -335,10 +333,7 @@ describe("requestPerk", () => {
 				args: [
 					{
 						kind: "perkRequested",
-						payload: {
-							...payloadFor({ requestId, perkId, contactId }),
-							note: NOTE,
-						},
+						payload: payloadFor({ requestId, perkId, contactId }),
 					},
 				],
 			}),

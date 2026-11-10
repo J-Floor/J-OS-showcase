@@ -513,11 +513,12 @@ export const sendEmailChangeLink = internalAction({
 			confirmUrl: confirmUrl("emailChange", token),
 			logoUrl: emailUrls().logoUrl,
 		});
-		await sendEmail({
+		await sendEmail(context, {
 			to: newEmail,
 			subject: "Confirm your new J floor sign-in address",
 			html,
 			text,
+			priority: "critical",
 			devLog: `[email-change] ${newEmail} ${confirmUrl("emailChange", token)}`,
 		});
 	},
@@ -627,16 +628,17 @@ export const confirmEmailChange = mutation({
 /** Tells the old address that the sign-in address moved. */
 export const sendEmailChangedNotice = internalAction({
 	args: { oldEmail: v.string(), newEmail: v.string() },
-	handler: async (_context, { oldEmail, newEmail }) => {
+	handler: async (context, { oldEmail, newEmail }) => {
 		const { html, text } = emailChanged({
 			newEmail,
 			logoUrl: emailUrls().logoUrl,
 		});
-		await sendEmail({
+		await sendEmail(context, {
 			to: oldEmail,
 			subject: "Your J floor sign-in address was changed",
 			html,
 			text,
+			priority: "critical",
 			devLog: `[email-changed] ${oldEmail} -> ${newEmail}`,
 		});
 	},

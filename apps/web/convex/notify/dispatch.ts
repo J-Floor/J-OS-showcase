@@ -131,6 +131,7 @@ async function deliverPush(
 }
 
 async function deliverEmail(
+	context: ActionCtx,
 	{ kind, definition, payload }: DeliveryTarget,
 	recipient: ResolvedRecipient
 ): Promise<Tally> {
@@ -138,11 +139,15 @@ async function deliverEmail(
 	try {
 		const email = definition.email?.(payload, recipient);
 		if (email) {
-			const sent = await sendNotificationEmail(
-				recipient.email,
+			const sent = await sendNotificationEmail(context, {
+				to: recipient.email,
 				kind,
-				email
-			);
+				message: email,
+				priority:
+					definition.delivery === "urgent"
+						? "critical"
+						: "notification",
+			});
 			if (sent.isErr()) {
 				tally.failed += 1;
 				// eslint-disable-next-line no-console -- surface the isolated email failure in the Convex logs
@@ -174,10 +179,10 @@ async function deliver(
 	const pushTally: Tally = isPushWanted
 		? await deliverPush(context, target.kind, outgoing)
 		: { delivered: 0, failed: 0 };
-	const emailTally: Tally =
-		target.definition.email && pref.email
-			? await deliverEmail(target, recipient)
-			: { delivered: 0, failed: 0 };
+	const isEmailNow = target.definition.email !== undefined && pref.email;
+	const emailTally: Tally = isEmailNow
+		? await deliverEmail(context, target, recipient)
+		: { delivered: 0, failed: 0 };
 	return {
 		delivered: pushTally.delivered + emailTally.delivered,
 		failed: pushTally.failed + emailTally.failed,
@@ -191,7 +196,8 @@ async function deliver(
  * alert still reaches the board. Then push and email go out per recipient,
  * gated by prefs. Failures are isolated per recipient and per channel: a push
  * failure never blocks the email, and one recipient never blocks the rest
- * (recipients run concurrently, a few at a time). The result counts push and
+ * (recipients run concurrently, a few at a time). Digest kinds send no
+ * email here: the daily digest carries them. The result counts push and
  * email deliveries and failures only, so an action caller (the door alerts)
  * can tell "nothing went out".
  */

@@ -60,7 +60,7 @@ export async function sendEmailLimited(
 	const { ok } = await rateLimiter.limit(context, "sendEmail", {
 		key: normalizeEmail(options.to),
 	});
-	if (ok) await sendEmail(options);
+	if (ok) await sendEmail(context, options);
 	return ok;
 }
 

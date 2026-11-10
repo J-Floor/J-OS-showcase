@@ -21,3 +21,16 @@ export async function guestAudience(
 	const host = await entitledIds(context, [guest.hostedById]);
 	return uniqueIds([...self, ...host]);
 }
+
+/**
+ * What every guest kind shares: the Guests category, sent at once, to the
+ * guest (per `guest`) and their entitled host.
+ */
+export function guestKindBase(guest: "entitled" | "always") {
+	return {
+		category: "guests" as const,
+		delivery: "instant" as const,
+		audience: (context: QueryCtx, { guestId }: { guestId: Id<"people"> }) =>
+			guestAudience(context, guestId, { guest }),
+	};
+}

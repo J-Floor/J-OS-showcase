@@ -1,11 +1,6 @@
 import { v } from "convex/values";
 
-import { perkExpiringSoon as perkExpiringSoonEmail } from "../../emails/generated/perkExpiringSoon.ts";
-import {
-	emailUrls,
-	manageNotificationsUrl,
-	perkUrl,
-} from "../../emails/urls.ts";
+import { perkUrl } from "../../emails/urls.ts";
 import { formatDateOnlyLong, isoToUtcMidnight } from "../../lib/time.ts";
 import { communityIds } from "../audience.ts";
 import { defineKind } from "../types.ts";
@@ -19,9 +14,9 @@ function endDate(validUntil: string): string {
  *  who can view Perks hears about it. */
 export const perkExpiringSoon = defineKind({
 	category: "perkUpdates",
+	delivery: "digest",
 	payload: v.object({
 		perkId: v.id("perks"),
-		partner: v.string(),
 		perkTitle: v.string(),
 		/** The perk's last valid day, `YYYY-MM-DD` (inclusive). */
 		validUntil: v.string(),
@@ -33,20 +28,4 @@ export const perkExpiringSoon = defineKind({
 		url: perkUrl(perkId),
 		tag: `perk-${perkId}-expiring`,
 	}),
-	email: ({ perkId, partner, perkTitle, validUntil }, recipient) => {
-		const { html, text } = perkExpiringSoonEmail({
-			name: recipient.firstName,
-			perkTitle,
-			partner,
-			endDate: endDate(validUntil),
-			viewUrl: perkUrl(perkId),
-			manageUrl: manageNotificationsUrl(),
-			logoUrl: emailUrls().logoUrl,
-		});
-		return {
-			subject: `${perkTitle} ends on ${endDate(validUntil)}`,
-			html,
-			text,
-		};
-	},
 });

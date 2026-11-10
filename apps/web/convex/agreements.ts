@@ -155,7 +155,7 @@ export const signAgreement = action({
 			name,
 			logoUrl: emailUrls().logoUrl,
 		});
-		await sendEmail({
+		await sendEmail(context, {
 			to: email,
 			subject: "Your signed J floor agreement",
 			html,
@@ -163,6 +163,7 @@ export const signAgreement = action({
 			attachments: [
 				{ filename: "J floor agreement.pdf", content: base64 },
 			],
+			priority: "critical",
 			devLog: `[signed-agreement] ${email}`,
 		});
 		return null;

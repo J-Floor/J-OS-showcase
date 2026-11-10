@@ -42,7 +42,6 @@ export const expiringSoon = internalMutation({
 		for (const perk of perks) {
 			await notify(context, "perkExpiringSoon", {
 				perkId: perk._id,
-				partner: perk.partner,
 				perkTitle: perk.title,
 				validUntil: target,
 			});

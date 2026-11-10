@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { runAndCollectLogs } from "../test-stubs/runAndCollectLogs.ts";
 
 import { api, internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import schema from "./schema.ts";
 
 const modules = import.meta.glob("./**/*.*s");
@@ -124,34 +124,38 @@ test("rejects start date after end date on create and update", async () => {
 	).rejects.toThrow(/ProjectDatesOutOfOrder/);
 });
 
-test("emails a leader assigned on create", async () => {
+async function projectAssignedRows(
+	backend: ReturnType<typeof convexTest>
+): Promise<Doc<"notifications">[]> {
+	const rows = (await backend.run((context) =>
+		context.db.query("notifications").take(10)
+	)) as Doc<"notifications">[];
+	return rows.filter((row) => row.kind === "projectAssigned");
+}
+
+test("notifies a leader assigned on create", async () => {
 	const backend = convexTest(schema, modules);
 	const asBoard = await board(backend);
 	const leaderId = await seedLeader(backend);
-	const logs = await runAndCollectLogs(backend, () =>
+	await runAndCollectLogs(backend, () =>
 		asBoard.mutation(api.projects.create, { name: "Apollo", leaderId })
 	);
-	expect(
-		logs.some(
-			(message) =>
-				message.includes("[notify:projectAssigned]") &&
-				message.includes("lead@example.org") &&
-				message.includes("Apollo")
-		)
-	).toBe(true);
+	expect(await projectAssignedRows(backend)).toEqual([
+		expect.objectContaining({ personId: leaderId, body: "Apollo" }),
+	]);
 });
 
-test("emails a leader newly set on update", async () => {
+test("notifies a leader newly set on update", async () => {
 	const backend = convexTest(schema, modules);
 	const asBoard = await board(backend);
 	const leaderId = await seedLeader(backend);
 	const id = await asBoard.mutation(api.projects.create, { name: "Gemini" });
-	const logs = await runAndCollectLogs(backend, () =>
+	await runAndCollectLogs(backend, () =>
 		asBoard.mutation(api.projects.update, { id, leaderId })
 	);
-	expect(
-		logs.some((message) => message.includes("[notify:projectAssigned]"))
-	).toBe(true);
+	expect(await projectAssignedRows(backend)).toEqual([
+		expect.objectContaining({ personId: leaderId, body: "Gemini" }),
+	]);
 });
 
 describe("remove", () => {

@@ -60,6 +60,7 @@ export const CATEGORY_INFO: Record<Category, CategoryInfo> = {
 		label: "Applications",
 		description: "A new application is waiting for review.",
 		tiers: BOARD_LEVEL,
+		note: "New applications are emailed as one daily summary.",
 	},
 	doors: {
 		label: "Doors",
@@ -77,6 +78,7 @@ export const CATEGORY_INFO: Record<Category, CategoryInfo> = {
 		label: "Tasks",
 		description: "You are assigned a task or made lead of a project.",
 		tiers: CORE_AND_BOARD,
+		note: "Emails come as one daily summary.",
 	},
 	// Key kept from when it was the only perk category: stored preferences
 	// use it. Relabelled so the board can tell it from `perkUpdates`.
@@ -84,12 +86,14 @@ export const CATEGORY_INFO: Record<Category, CategoryInfo> = {
 		label: "Perk requests",
 		description: "Someone requests a perk you're the contact for.",
 		tiers: BOARD_LEVEL,
+		note: "Requests are emailed as one daily summary.",
 	},
 	perkUpdates: {
 		label: "Perks",
 		description:
 			"A perk is added, your request is answered, or a perk ends in a week.",
 		tiers: COMMUNITY_TIERS,
+		note: "New and ending perks are emailed as one daily summary.",
 	},
 };
 

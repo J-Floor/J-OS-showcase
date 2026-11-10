@@ -77,14 +77,6 @@ function sorted(ids: string[]): string[] {
 	return [...ids].sort((a, b) => a.localeCompare(b));
 }
 
-function captureLogs(): () => string[] {
-	const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-	return () =>
-		spy.mock.calls
-			.map((call) => String(call[0]))
-			.filter((line) => line.startsWith("[notify:"));
-}
-
 const PERK = "perk1" as Id<"perks">;
 const HOSTILE = { partner: "<b>Nimbus</b>", perkTitle: "<script>x</script>" };
 
@@ -106,7 +98,6 @@ const OUTCOME = {
 
 const EXPIRING = {
 	perkId: PERK,
-	partner: "Nimbus",
 	perkTitle: "Cloud credits",
 	validUntil: "2026-11-09",
 } satisfies PayloadOf<"perkExpiringSoon">;
@@ -174,27 +165,6 @@ describe("perkAdded", () => {
 			url: `${SITE}/perks?perk=perk1`,
 			tag: "perk-perk1-added",
 		});
-	});
-
-	it("emails the new perk with a button to it", () => {
-		const email = KINDS.perkAdded.email?.(ADDED, recipient("mo1"));
-		expect(email?.subject).toBe("New perk: Nimbus · Cloud credits");
-		expect(email?.text.replaceAll(/\s+/g, " ")).toContain(
-			"Hi Anna, there's a new perk on J floor: Cloud credits from Nimbus."
-		);
-		expect(email?.html).toContain(`href="${SITE}/perks?perk=perk1"`);
-		expect(email?.html).toContain(`${SITE}/?notifications=open`);
-	});
-
-	it("escapes markup in the partner and title", () => {
-		const email = KINDS.perkAdded.email?.(
-			{ ...ADDED, ...HOSTILE },
-			recipient("mo1")
-		);
-		expect(email?.html).not.toContain("<script>");
-		expect(email?.html).not.toContain("<b>Nimbus");
-		expect(email?.html).toContain("&lt;script&gt;x&lt;/script&gt;");
-		expect(email?.html).toContain("&lt;b&gt;Nimbus&lt;/b&gt;");
 	});
 });
 
@@ -303,32 +273,10 @@ describe("perkExpiringSoon", () => {
 			}
 		);
 	});
-
-	it("emails the perk and its last day", () => {
-		const email = KINDS.perkExpiringSoon.email?.(
-			EXPIRING,
-			recipient("mo1")
-		);
-		expect(email?.subject).toBe("Cloud credits ends on 9 November 2026");
-		expect(email?.text.replaceAll(/\s+/g, " ")).toContain(
-			"Hi Anna, Cloud credits from Nimbus ends on 9 November 2026."
-		);
-		expect(email?.html).toContain(`href="${SITE}/perks?perk=perk1"`);
-	});
-
-	it("escapes markup in the partner and title", () => {
-		const email = KINDS.perkExpiringSoon.email?.(
-			{ ...EXPIRING, ...HOSTILE },
-			recipient("mo1")
-		);
-		expect(email?.html).not.toContain("<script>");
-		expect(email?.html).not.toContain("<b>Nimbus");
-		expect(email?.html).toContain("&lt;b&gt;Nimbus&lt;/b&gt;");
-	});
 });
 
 describe("perk community dispatch", () => {
-	it("emails and keeps a bell row for a member, and respects their perk switch", async () => {
+	it("keeps a bell row for every member, whatever their email switch", async () => {
 		const backend = convexTest(schema, modules);
 		const member = await seed(backend, {
 			email: "mo@example.com",
@@ -339,16 +287,11 @@ describe("perk community dispatch", () => {
 			tier: "member",
 			notificationPrefs: { perkUpdates: { push: true, email: false } },
 		});
-		const emails = captureLogs();
-
 		await backend.action(internal.notify.dispatch.run, {
 			kind: "perkAdded",
 			payload: ADDED,
 		});
 
-		expect(emails()).toEqual([
-			"[notify:perkAdded] mo@example.com: New perk: Nimbus · Cloud credits",
-		]);
 		const rows = await backend.run((context) =>
 			context.db.query("notifications").collect()
 		);

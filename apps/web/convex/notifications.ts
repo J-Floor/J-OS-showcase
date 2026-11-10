@@ -29,18 +29,19 @@ async function personFor(
 /** Polite, no-reason rejection with a reapply hint. Scheduled from `transition`. */
 export const sendRejectionEmail = internalAction({
 	args: { email: v.string(), name: v.string(), venture: v.string() },
-	handler: async (_context, { email, name, venture }) => {
+	handler: async (context, { email, name, venture }) => {
 		const urls = emailUrls();
 		const { html, text } = rejection({
 			name,
 			venture,
 			logoUrl: urls.logoUrl,
 		});
-		await sendEmail({
+		await sendEmail(context, {
 			to: email,
 			subject: "Update on your J floor application",
 			html,
 			text,
+			priority: "critical",
 			devLog: `[rejection] ${name} <${email}>`,
 		});
 	},
@@ -68,11 +69,12 @@ export const sendApprovalEmail = internalAction({
 					signinUrl: urls.signinUrl,
 					logoUrl: urls.logoUrl,
 				});
-				await sendEmail({
+				await sendEmail(context, {
 					to: email,
 					subject: "Welcome to J floor - Guest access",
 					html,
 					text,
+					priority: "critical",
 					devLog: `[approval-guest] ${name} <${email}>`,
 				});
 			} else {
@@ -87,11 +89,12 @@ export const sendApprovalEmail = internalAction({
 					signinUrl: urls.signinUrl,
 					logoUrl: urls.logoUrl,
 				});
-				await sendEmail({
+				await sendEmail(context, {
 					to: email,
 					subject: "Welcome to J floor - Guest access",
 					html,
 					text,
+					priority: "critical",
 					devLog: `[approval-guest] ${name} <${email}>`,
 				});
 			}
@@ -104,11 +107,12 @@ export const sendApprovalEmail = internalAction({
 			signinUrl: urls.signinUrl,
 			logoUrl: urls.logoUrl,
 		});
-		await sendEmail({
+		await sendEmail(context, {
 			to: email,
 			subject: "Welcome to J floor - Membership access",
 			html,
 			text,
+			priority: "critical",
 			devLog: `[approval-member] ${name} <${email}>`,
 		});
 	},
@@ -131,11 +135,12 @@ export const sendMemberUpgradeEmail = internalAction({
 			signinUrl: urls.signinUrl,
 			logoUrl: urls.logoUrl,
 		});
-		await sendEmail({
+		await sendEmail(context, {
 			to: email,
 			subject: "You're now a J floor member",
 			html,
 			text,
+			priority: "critical",
 			devLog: `[member-upgrade] ${person.firstName} <${email}>`,
 		});
 	},
@@ -156,11 +161,12 @@ export const sendApplicationReceivedEmail = internalAction({
 			logoUrl: urls.logoUrl,
 			privacyUrl: urls.privacyUrl,
 		});
-		await sendEmail({
+		await sendEmail(context, {
 			to: email,
 			subject: "We've received your J floor application",
 			html,
 			text,
+			priority: "critical",
 			devLog: `[application-received] ${email}`,
 		});
 	},

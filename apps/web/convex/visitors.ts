@@ -121,11 +121,12 @@ export const registerVisitor = action({
 				logoUrl: urls.logoUrl,
 				privacyUrl: urls.privacyUrl,
 			});
-			await sendEmail({
+			await sendEmail(context, {
 				to: args.email,
 				subject: "Confirm your email for J floor Wi-Fi",
 				html,
 				text,
+				priority: "anonymous",
 				devLog: `[verify-visitor] ${args.email}`,
 			});
 		} else {
@@ -135,11 +136,12 @@ export const registerVisitor = action({
 				logoUrl: urls.logoUrl,
 				privacyUrl: urls.privacyUrl,
 			});
-			await sendEmail({
+			await sendEmail(context, {
 				to: args.email,
 				subject: "You're set for the J floor event",
 				html,
 				text,
+				priority: "anonymous",
 				devLog: `[event-invite] ${args.email}`,
 			});
 		}

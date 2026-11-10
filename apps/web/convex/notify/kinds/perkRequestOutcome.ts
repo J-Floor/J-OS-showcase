@@ -20,6 +20,7 @@ const HEADLINES: Record<PerkRequestAnswer, string> = {
  *  requester hears, and nothing from their note goes anywhere. */
 export const perkRequestOutcome = defineKind({
 	category: "perkUpdates",
+	delivery: "instant",
 	payload: v.object({
 		requestId: v.id("perkRequests"),
 		perkId: v.id("perks"),

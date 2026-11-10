@@ -79,6 +79,7 @@ describe("notification categories", () => {
 			label: "Perk requests",
 			description: "Someone requests a perk you're the contact for.",
 			tiers: ["board", "admin"],
+			note: "Requests are emailed as one daily summary.",
 		});
 		for (const tier of ["guest", "member", "core", "staff"] as const) {
 			expect(categoriesForTier(tier)).not.toContain("perks");
@@ -91,6 +92,7 @@ describe("notification categories", () => {
 			description:
 				"A perk is added, your request is answered, or a perk ends in a week.",
 			tiers: ["guest", "member", "core", "board", "admin"],
+			note: "New and ending perks are emailed as one daily summary.",
 		});
 		expect(categoriesForTier("staff")).not.toContain("perkUpdates");
 	});
