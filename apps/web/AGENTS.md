@@ -30,8 +30,11 @@ typecheck` and fails at deploy. Always run both:
 
 ```bash
 bun run typecheck
-bunx tsc -p convex/tsconfig.json --noEmit
+bun run typecheck:convex
 ```
+
+`typescript` is TS 6 on purpose (ESLint's type-aware rules, the editor, the
+Convex CLI); the typecheck and build scripts run TS 7 from `typescript7`.
 
 `convex/tsconfig.json` excludes `*.test.ts`, so test files are covered by the
 first command only.

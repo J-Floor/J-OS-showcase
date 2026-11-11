@@ -28,15 +28,15 @@ in the repo README (`bunx convex login` on first create, then `bun run dev` from
 | Command             | What                                   |
 | ------------------- | -------------------------------------- |
 | `bun run dev`       | Vite UI + `convex dev`, together       |
-| `bun run build`     | `tsc -b && vite build` → `dist/`       |
+| `bun run build`     | TS 7 `tsc -b && vite build` → `dist/`  |
 | `bun run preview`   | Serve the production build locally     |
-| `bun run typecheck` | `tsc -b --noEmit` (see caveat below)   |
+| `bun run typecheck` | TS 7 `tsc -b --noEmit` (caveat below)  |
 | `bun run test`      | Vitest                                 |
 | `bun run lint`      | ESLint + Stylelint, `--max-warnings 0` |
 | `bun run format`    | Prettier write                         |
 
 > `bun run typecheck` does **not** check `convex/` the way `convex deploy` does —
-> run `bunx tsc -p convex/tsconfig.json --noEmit` as well. More gotchas in
+> run `bun run typecheck:convex` (from `apps/web`) as well. More gotchas in
 > [`AGENTS.md`](AGENTS.md).
 
 ## Seeding dev data

@@ -5,9 +5,9 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
-		"build": "tsc -b && vite build && vite build --ssr src/entry-server.tsx --outDir dist-ssr && bun scripts/prerender.mjs",
+		"build": "node node_modules/typescript7/bin/tsc -b && vite build && vite build --ssr src/entry-server.tsx --outDir dist-ssr && bun scripts/prerender.mjs",
 		"preview": "vite preview",
-		"typecheck": "tsc -b --noEmit",
+		"typecheck": "node node_modules/typescript7/bin/tsc -b --noEmit",
 		"test": "vitest run",
 		"lint": "bun run lint:logic && bun run lint:style",
 		"lint:logic": "eslint \"src/**/*.{ts,tsx}\" --cache --max-warnings 0",
@@ -36,6 +36,7 @@
 		"sharp": "^0.35.1",
 		"stylelint": "catalog:",
 		"typescript": "catalog:",
+		"typescript7": "catalog:",
 		"vite": "catalog:",
 		"vite-plugin-solid": "catalog:",
 		"vitest": "catalog:"
