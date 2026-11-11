@@ -3,7 +3,7 @@ import type { FunctionArgs } from "convex/server";
 import { components } from "../_generated/api";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 
-import { normalizeEmail } from "./emailAddress.ts";
+import { normalizeEmail, peopleByEmail } from "./emailAddress.ts";
 import { rateLimiter } from "./rateLimit.ts";
 
 /** A person's sessions and accounts are a handful of rows. */
@@ -13,7 +13,7 @@ type DeleteInput = FunctionArgs<
 	typeof components.betterAuth.adapter.deleteMany
 >["input"];
 
-type AuthUser = { _id: string; email: string } & Record<string, unknown>;
+export type AuthUser = { _id: string; email: string } & Record<string, unknown>;
 type AuthRow = Record<string, unknown>;
 
 /** Secrets an access export must not print: they would sign the reader in. */
@@ -31,14 +31,76 @@ function redact(row: AuthRow): AuthRow {
 	);
 }
 
+async function findAuthUser(
+	context: QueryCtx | MutationCtx,
+	field: "email" | "_id",
+	value: string
+): Promise<AuthUser | null> {
+	return (await context.runQuery(components.betterAuth.adapter.findOne, {
+		model: "user",
+		where: [{ field, value }],
+	})) as AuthUser | null;
+}
+
 async function authUser(
 	context: QueryCtx | MutationCtx,
 	email: string
 ): Promise<AuthUser | null> {
-	return (await context.runQuery(components.betterAuth.adapter.findOne, {
+	return findAuthUser(context, "email", normalizeEmail(email));
+}
+
+/** The login with id `userId`, or null. */
+export async function authUserById(
+	context: QueryCtx | MutationCtx,
+	userId: string
+): Promise<AuthUser | null> {
+	return findAuthUser(context, "_id", userId);
+}
+
+/** One page of logins, for a migration to walk. */
+export async function authUsersPage(
+	context: QueryCtx | MutationCtx,
+	cursor: string | null,
+	numberItems: number
+): Promise<{ page: AuthUser[]; isDone: boolean; continueCursor: string }> {
+	return (await context.runQuery(components.betterAuth.adapter.findMany, {
 		model: "user",
-		where: [{ field: "email", value: normalizeEmail(email) }],
-	})) as AuthUser | null;
+		paginationOpts: { cursor, numItems: numberItems },
+	})) as { page: AuthUser[]; isDone: boolean; continueCursor: string };
+}
+
+export type LinkOutcome = "linked" | "unchanged" | "noPerson" | "ambiguous";
+
+const HOLDERS_TO_READ = 2;
+
+/**
+ * Link `user` to the person who holds its email. Runs when someone signs in,
+ * which proves they own the address, so matching on email is the claim step.
+ * Any other person still carrying this login loses it first, so one login
+ * names one person. Several people on one address are left unlinked: the
+ * board resolves those with a merge.
+ */
+export async function linkLogin(
+	context: MutationCtx,
+	user: AuthUser,
+	options: { dryRun?: boolean } = {}
+): Promise<LinkOutcome> {
+	const holders = await peopleByEmail(context, user.email).take(
+		HOLDERS_TO_READ
+	);
+	if (holders.length === 0) return "noPerson";
+	if (holders.length > 1) return "ambiguous";
+	const [person] = holders;
+	if (person.authUserId === user._id) return "unchanged";
+	if (options.dryRun === true) return "linked";
+	const others = await context.db
+		.query("people")
+		.withIndex("by_authUserId", (range) => range.eq("authUserId", user._id))
+		.take(HOLDERS_TO_READ);
+	for (const other of others)
+		await context.db.patch(other._id, { authUserId: undefined });
+	await context.db.patch(person._id, { authUserId: user._id });
+	return "linked";
 }
 
 async function rowsOf(

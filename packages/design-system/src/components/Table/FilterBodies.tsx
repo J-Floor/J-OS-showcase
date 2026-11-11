@@ -53,6 +53,7 @@ function ModeToggle(props: {
  *  `undefined` when empty. */
 type BoundInputProps = {
 	label: string;
+	// fallow-ignore-next-line unused-component-prop -- every bound input gets this contract; the date and time pickers have no placeholder
 	placeholder: string;
 	value: string | undefined;
 	onChange: (value: string | undefined) => void;

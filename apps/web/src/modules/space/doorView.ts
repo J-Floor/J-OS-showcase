@@ -1,11 +1,9 @@
 import { type LockSlot } from "../../../convex/lib/doorLocks.ts";
-import {
-	type DoorAction,
-	type DoorPosition,
-} from "../../../convex/lib/doorProvider.ts";
+import { type DoorAction } from "../../../convex/lib/doorProvider.ts";
 import { slotInfo } from "../../shared/doors/lockSlots.ts";
 
-import { ACTION_COPY, offlineText } from "./doorCopy.ts";
+import { ACTION_COPY, NOT_CONFIGURED_TEXT, offlineText } from "./doorCopy.ts";
+import type { DoorReading } from "./doorPositions.ts";
 
 /** What replaces a door's button: the line of text and how it is coloured. */
 export type DoorStatus = {
@@ -25,7 +23,7 @@ export type SlotView =
 /** What a door that can lock shows for its bolt's last reading. */
 export function viewForReading(
 	slot: LockSlot,
-	reading: DoorPosition | undefined
+	reading: DoorReading | undefined
 ): SlotView {
 	switch (reading) {
 		case undefined:
@@ -52,6 +50,11 @@ export function viewForReading(
 					tone: "warning",
 					text: offlineText(slotInfo(slot).label),
 				},
+			};
+		case "no-provider":
+			return {
+				kind: "text",
+				status: { tone: "warning", text: NOT_CONFIGURED_TEXT },
 			};
 		case "unknown":
 			return { kind: "both" };

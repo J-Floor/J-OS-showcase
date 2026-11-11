@@ -1,0 +1,60 @@
+{
+	"$schema": "./node_modules/fallow/schema.json",
+	"entry": [
+		"apps/web/emails/templates/*.tsx",
+		"apps/web/eslint/fixtures/*.{ts,tsx}",
+		"apps/web/vitest.stryker.config.ts",
+		"apps/landing-page/src/entry-server.tsx",
+		// The playground loads every *.demo.tsx through import.meta.glob.
+		"packages/design-system/demo/main.tsx",
+		// Run by `bun test scripts` and `bun scripts/...`.
+		"scripts/**/*.ts",
+		// Built by the service worker plugin, not imported.
+		"apps/web/src/sw/sw.ts",
+		// vitest type tests.
+		"**/*.test-d.ts"
+	],
+	// providerAgnostic.test.ts reads every source file through
+	// import.meta.glob(?raw); fallow counts that as a namespace import of
+	// each one, which hides all unused exports and files in apps/web.
+	"ignorePatterns": ["apps/web/src/providerAgnostic.test.ts"],
+	"ignoreFindings": ["packages/design-system/scripts/morph-probe.js"],
+	"ignoreDependencies": [
+		"@csstools/stylelint-formatter-github",
+		// fallow does not read the package.json "prettier" field of a
+		// workspace package (only the root one).
+		"@j-os/config-prettier",
+		// fallow's stylelint plugin does not read string entries in
+		// `extends` and `plugins` of stylelint.config.js.
+		"@j-os/config-stylelint",
+		"stylelint-config-recess-order",
+		"stylelint-config-standard-scss",
+		"stylelint-declaration-block-no-ignored-properties",
+		"stylelint-declaration-strict-value",
+		"stylelint-high-performance-animation",
+		"stylelint-plugin-defensive-css",
+		"stylelint-plugin-logical-css",
+		"stylelint-use-nesting",
+		// Loaded through url() in packages/design-system/src/styles/fonts.scss,
+		// which fallow does not read.
+		"@fontsource-variable/azeret-mono",
+		"@fontsource-variable/inter",
+		"@fontsource-variable/manrope",
+		"@fontsource-variable/material-symbols-sharp"
+	],
+	// Lazy edges (import() inside a function, lazy import.meta.glob) cannot
+	// cause initialisation-order bugs. Static cycles stay detected.
+	"circularDependencies": { "ignoreLazyImports": true },
+	// No boundaries or rule packs are configured; ESLint boundaries owns layering.
+	"rules": { "boundary-violation": "off", "policy-violation": "off" },
+	"duplicates": {
+		"minTokens": 60,
+		"ignore": [
+			"**/*.test.*",
+			"**/_generated/**",
+			"**/emails/generated/**",
+			"**/dist/**",
+			"**/node_modules/**"
+		]
+	}
+}

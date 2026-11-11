@@ -4,7 +4,8 @@
 
 	 @use "../MakeField/field.mixins" as field;
 
-   The shared shell of the field controls (Input, Select, Combobox, ...).
+   The shared shell of the field controls (Input, Select, Combobox, ...) and
+   the list popup that Select and Combobox open.
    Only the declarations that are identical across those fields live here;
    per-field differences (cursor, overflow, gap, inline sizing, the
    descendant colour rules) stay in the component's own module.
@@ -15,6 +16,7 @@
    becomes --jf-radius-*, --embo-border-width-* becomes --jf-border-width-*
    (same suffix). */
 
+@use "../../styles/animation" as anim;
 @use "../../styles/typography" as typo;
 
 /* The visible box of a field: the element that paints the background and the
@@ -138,5 +140,91 @@
 		border: var(--jf-border-width-decorative) solid currentcolor;
 		border-radius: var(--jf-radius-full);
 		user-select: none;
+	}
+}
+
+// The floating list of a field that picks from options (Select, Combobox).
+// Emits `.positioner` and `.content` at the root of the including module.
+@mixin listbox-popup {
+	.positioner {
+		inline-size: min-content;
+		pointer-events: none;
+	}
+
+	.content {
+		position: relative;
+
+		// Layer via zag's `--layer-index` so the list ranks above whatever overlay
+		// opened it. zag's layer stack writes `--layer-index` on THIS element (the
+		// dismissable layer node), and popper then mirrors this element's computed
+		// z-index onto the Positioner as `--z-index` — so content is the single
+		// source of truth for the ordering of the whole floating pair.
+
+		// A flat base is not enough. A list opened from a table sits one layer
+		// above a layer-0 dialog and a tie is broken by DOM order, so it happened
+		// to paint on top; the same list opened from inside a sheet is layer 2
+		// under a layer-1 dialog, lost the tie, and rendered BEHIND the dialog.
+		z-index: calc(var(--jf-z-index-overlay-base) + var(--layer-index, 0));
+		display: flex;
+		flex-direction: column;
+		gap: var(--jf-spacing-near);
+		min-inline-size: var(--reference-width);
+		max-block-size: var(--available-height, 300px);
+		// stylelint-disable-next-line defensive-css/require-scrollbar-gutter -- intentional; gutter not needed here
+		overflow-block: auto;
+		overscroll-behavior-block: contain;
+		pointer-events: auto;
+		outline: none;
+		background-color: transparent;
+		box-shadow: var(--jf-shadow-surface-elevation);
+
+		@include anim.popover-animation;
+	}
+}
+
+// An option of that list and its selected-mark. Emits `.item` and
+// `.itemIndicator` at the root of the including module.
+@mixin listbox-options {
+	.item {
+		inline-size: 100%;
+		cursor: pointer;
+
+		&[data-highlighted] {
+			background-color: var(--jf-surface-bg-overlay);
+		}
+
+		&[data-disabled] {
+			cursor: not-allowed;
+			opacity: var(--jf-opacity-disabled);
+		}
+
+		& > * {
+			outline: none;
+		}
+	}
+
+	.itemIndicator {
+		margin-inline-start: auto;
+		color: var(--jf-fg-strong);
+	}
+}
+
+// The text input inside a field's shell (Input, NumberInput): fills the line,
+// paints nothing of its own and shows no focus ring (the shell shows it).
+@mixin shell-input {
+	& input {
+		inline-size: 100%;
+		min-block-size: var(--jf-dimension-short-component-height);
+		color: inherit;
+		background-color: transparent;
+		border: none;
+
+		&:focus {
+			outline: none;
+		}
+
+		&::placeholder {
+			color: var(--jf-fg-muted);
+		}
 	}
 }

@@ -29,7 +29,6 @@ vi.mock("convex-solidjs", () => ({
 	useMutation: () => ({ mutate }),
 	useQuery: () => ({ data: () => {} }),
 }));
-vi.mock("../../../../../convex/_generated/api", () => ({ api: {} }));
 vi.mock("../../../shared/data/boardLevel.tsx", () => ({
 	useBoardLevel: () => ({ data: () => [] }),
 }));

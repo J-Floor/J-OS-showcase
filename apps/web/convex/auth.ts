@@ -1,15 +1,20 @@
-import { createClient, type GenericCtx } from "@convex-dev/better-auth";
+import {
+	type AuthFunctions,
+	createClient,
+	type GenericCtx,
+} from "@convex-dev/better-auth";
 import { convex, crossDomain } from "@convex-dev/better-auth/plugins";
 import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 
-import { components } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 import authConfig from "./auth.config.ts";
 import { magicLink as magicLinkEmail } from "./emails/generated/magicLink.ts";
 import { noAccount } from "./emails/generated/noAccount.ts";
 import { emailUrls } from "./emails/urls.ts";
+import { authUserById, linkLogin } from "./lib/authRecords.ts";
 import { sendEmail } from "./lib/email.ts";
 import { magicLinkDecision } from "./lib/rateLimit.ts";
 import { invariant } from "./lib/result.ts";
@@ -18,7 +23,25 @@ const siteUrl = process.env.SITE_URL!;
 
 const THIRTY_DAYS = 2_592_000;
 
-export const authComponent = createClient<DataModel>(components.betterAuth);
+const authFunctions: AuthFunctions = internal.auth;
+
+/**
+ * Each new session links its user to their person (`linkLogin`), so a person
+ * is found by the login they signed in with.
+ */
+export const authComponent = createClient<DataModel>(components.betterAuth, {
+	authFunctions,
+	triggers: {
+		session: {
+			onCreate: async (context, session) => {
+				const user = await authUserById(context, session.userId);
+				if (user) await linkLogin(context, user);
+			},
+		},
+	},
+});
+
+export const { onCreate } = authComponent.triggersApi();
 
 /**
  * Origins the auth routes accept, for CORS and for callback URLs: the

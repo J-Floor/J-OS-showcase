@@ -19,7 +19,13 @@ import { call } from "../../lib/call.ts";
 import { createVisiblePoll } from "../../lib/createVisiblePoll.ts";
 import { LOCK_SLOTS } from "../../shared/doors/lockSlots.ts";
 
+import { PROVIDER_NOT_CONFIGURED_CODE } from "./doorCopy.ts";
+
 const POSITION_POLL_MS = 30_000;
+
+/** A bolt's last reading: its position, or that this backend has no door
+ *  provider. */
+export type DoorReading = DoorPosition | "no-provider";
 
 /** The doors whose bolt can be read: the ones that can lock. */
 export const LOCKABLE_SLOTS = LOCK_SLOTS.filter(({ slot }) =>
@@ -88,7 +94,8 @@ function createReadNumbers() {
 	};
 }
 
-/** One server read of a door's bolt; a failed read is `unknown`. */
+/** One server read of a door's bolt; a backend with no door provider reads
+ *  `no-provider`, any other failed read `unknown`. */
 async function fetchPosition(
 	read: {
 		mutateAsync: (args: {
@@ -98,14 +105,18 @@ async function fetchPosition(
 	},
 	slot: LockSlot,
 	isFresh: boolean
-): Promise<DoorPosition> {
+): Promise<DoorReading> {
 	const result = await call(
 		read.mutateAsync(
 			isFresh ? { lock: slot, fresh: isFresh } : { lock: slot }
 		),
 		"Could not read the door."
 	);
-	return result.unwrapOr("unknown");
+	if (result.isErr())
+		return result.error.code === PROVIDER_NOT_CONFIGURED_CODE
+			? "no-provider"
+			: "unknown";
+	return result.value;
 }
 
 /** Reads every lockable door once when `enabled` turns true, then every
@@ -159,9 +170,10 @@ export function createDoorPositions(options: {
 }) {
 	const read = useAction(api.doorActions.doorPosition);
 	/** Where each lockable door's bolt last read; absent = not read yet, or
-	 *  cleared by `reset`. A failed read stores `unknown`. */
+	 *  cleared by `reset`. A backend with no door provider stores
+	 *  `no-provider`; any other failed read stores `unknown`. */
 	const [positions, setPositions] = createSignal<
-		Partial<Record<LockSlot, DoorPosition>>
+		Partial<Record<LockSlot, DoorReading>>
 	>({});
 	const checking = createCheckingSet();
 	const reads = createReadNumbers();
@@ -178,7 +190,7 @@ export function createDoorPositions(options: {
 		isDisposed = true;
 	});
 
-	function setPosition(slot: LockSlot, value: DoorPosition | undefined) {
+	function setPosition(slot: LockSlot, value: DoorReading | undefined) {
 		setPositions((current) => ({ ...current, [slot]: value }));
 	}
 
@@ -246,7 +258,7 @@ export function createDoorPositions(options: {
 
 	return {
 		/** The bolt's last reading; `undefined` until one lands. */
-		position: (slot: LockSlot): DoorPosition | undefined =>
+		position: (slot: LockSlot): DoorReading | undefined =>
 			positions()[slot],
 		/** Whether a re-check of the door is in flight or waiting. */
 		isChecking: (slot: LockSlot): boolean => checking.has(slot),

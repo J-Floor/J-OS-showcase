@@ -6,7 +6,6 @@ import { dateToIso } from "../../../shared/time.ts";
 import {
 	isoToMs,
 	msToIso,
-	formatDate,
 	sortColumn,
 	personName,
 	assigneeNames,
@@ -56,11 +55,6 @@ test("isoToMs / msToIso round-trip a date", () => {
 test("a local date picked in the calendar reaches storage as that UTC day", () => {
 	const localMidnight = new Date(2026, 5, 22); // local 2026-06-22 00:00
 	expect(isoToMs(dateToIso(localMidnight))).toBe(Date.parse("2026-06-22"));
-});
-
-test("formatDate renders the stored UTC day (no off-by-one in any zone)", () => {
-	expect(formatDate(isoToMs("2026-06-22"))).toBe("22 Jun 2026");
-	expect(formatDate(undefined)).toBe("");
 });
 
 test("sortColumn: due dates ascending, undated last, then creation", () => {

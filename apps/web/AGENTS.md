@@ -64,7 +64,7 @@ Everything runs at `--max-warnings 0`; the lint output names the rule. What
 the output can't tell you is how to respond:
 
 - Lint exceptions and `max-lines`: see the root `AGENTS.md`.
-- **A `jscpd` failure means extract the shared part.** Don't reshuffle lines
+- **A `fallow dupes` failure means extract the shared part.** Don't reshuffle lines
   until the detector stops matching.
 - **`no-unnecessary-condition` on a `??` or a guard means the type is right
   and the fallback is dead.** Delete it. Making a schema field required

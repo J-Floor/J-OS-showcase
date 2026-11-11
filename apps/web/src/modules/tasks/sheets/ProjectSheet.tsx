@@ -1,4 +1,3 @@
-// jscpd:ignore-start -- an import block: import-x/order fixes its shape, and TaskSheet needs the same dependencies
 import {
 	Sheet,
 	Input,
@@ -40,7 +39,6 @@ import { TaskCard } from "../kanban/TaskCard.tsx";
 
 import { DateField } from "./fields/DateField.tsx";
 import styles from "./ProjectSheet.module.scss";
-// jscpd:ignore-end
 
 const DELETE_PROJECT_CONFIRM: ConfirmOptions = {
 	title: "Delete project?",

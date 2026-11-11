@@ -1,81 +1,46 @@
-/* stylelint-disable scale-unlimited/declaration-strict-value -- @font-face descriptors are literal font facts, not design tokens */
-@font-face {
-	font-family: Manrope;
-	font-style: normal;
-	font-display: swap;
-	font-weight: 200 800;
-	src: url("@fontsource-variable/manrope/files/manrope-latin-ext-wght-normal.woff2")
-		format("woff2-variations");
-	unicode-range:
-		U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
-		U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
-		U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+/* stylelint-disable scale-unlimited/declaration-strict-value, scss/operator-no-unspaced -- @font-face descriptors and unicode ranges are literal font facts, not design tokens */
+$latin-ext-range:
+	U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+	U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+	U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+$latin-range:
+	U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+	U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+	U+2215, U+FEFF, U+FFFD;
+
+// One variable font face per subset. The URLs stay literal at each call so
+// the font packages they load can be traced.
+@mixin variable-face($family, $weights, $latin-ext, $latin) {
+	@each $src, $range in ($latin-ext $latin-ext-range, $latin $latin-range) {
+		@font-face {
+			font-family: $family;
+			font-style: normal;
+			font-display: swap;
+			font-weight: $weights;
+			src: $src format("woff2-variations");
+			unicode-range: $range;
+		}
+	}
 }
 
-@font-face {
-	font-family: Manrope;
-	font-style: normal;
-	font-display: swap;
-	font-weight: 200 800;
-	src: url("@fontsource-variable/manrope/files/manrope-latin-wght-normal.woff2")
-		format("woff2-variations");
-	unicode-range:
-		U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-		U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
-		U+2212, U+2215, U+FEFF, U+FFFD;
-}
-
-@font-face {
-	font-family: "Azeret Mono";
-	font-style: normal;
-	font-display: swap;
-	font-weight: 100 900;
-	src: url("@fontsource-variable/azeret-mono/files/azeret-mono-latin-ext-wght-normal.woff2")
-		format("woff2-variations");
-	unicode-range:
-		U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
-		U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
-		U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
-}
-
-@font-face {
-	font-family: "Azeret Mono";
-	font-style: normal;
-	font-display: swap;
-	font-weight: 100 900;
-	src: url("@fontsource-variable/azeret-mono/files/azeret-mono-latin-wght-normal.woff2")
-		format("woff2-variations");
-	unicode-range:
-		U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-		U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
-		U+2212, U+2215, U+FEFF, U+FFFD;
-}
-
-@font-face {
-	font-family: Inter;
-	font-style: normal;
-	font-display: swap;
-	font-weight: 100 900;
-	src: url("@fontsource-variable/inter/files/inter-latin-ext-wght-normal.woff2")
-		format("woff2-variations");
-	unicode-range:
-		U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
-		U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
-		U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
-}
-
-@font-face {
-	font-family: Inter;
-	font-style: normal;
-	font-display: swap;
-	font-weight: 100 900;
-	src: url("@fontsource-variable/inter/files/inter-latin-wght-normal.woff2")
-		format("woff2-variations");
-	unicode-range:
-		U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-		U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
-		U+2212, U+2215, U+FEFF, U+FFFD;
-}
+@include variable-face(
+	"Manrope",
+	200 800,
+	url("@fontsource-variable/manrope/files/manrope-latin-ext-wght-normal.woff2"),
+	url("@fontsource-variable/manrope/files/manrope-latin-wght-normal.woff2")
+);
+@include variable-face(
+	"Azeret Mono",
+	100 900,
+	url("@fontsource-variable/azeret-mono/files/azeret-mono-latin-ext-wght-normal.woff2"),
+	url("@fontsource-variable/azeret-mono/files/azeret-mono-latin-wght-normal.woff2")
+);
+@include variable-face(
+	"Inter",
+	100 900,
+	url("@fontsource-variable/inter/files/inter-latin-ext-wght-normal.woff2"),
+	url("@fontsource-variable/inter/files/inter-latin-wght-normal.woff2")
+);
 
 @font-face {
 	font-family: "Material Symbols Sharp";

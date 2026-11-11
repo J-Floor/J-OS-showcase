@@ -1,0 +1,65 @@
+// Page shell and form layout shared by the public screens (sign-in, sign-up,
+// visitor register, visitor confirm). Each *.module.scss `@use`s this and `@include`s
+// the mixins into its own selectors, keeping the rules that differ.
+
+@mixin screen($place: start center) {
+	display: grid;
+	place-items: $place;
+	min-block-size: 100dvb;
+	padding: var(--jf-spacing-far);
+	background-color: var(--jf-surface-bg-base);
+}
+
+@mixin card($max-width: 32rem) {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-detached);
+	align-items: stretch;
+	inline-size: 100%;
+	max-inline-size: $max-width;
+}
+
+@mixin logo {
+	align-self: center;
+	font-size: var(--jf-dimension-logo-md);
+}
+
+// The heading sits between the centred logo and intro, so it centres too.
+@mixin heading {
+	margin: 0;
+	text-align: center;
+}
+
+@mixin submit {
+	inline-size: 100%;
+}
+
+@mixin intro {
+	margin: 0;
+	color: var(--jf-fg-muted);
+	text-align: center;
+}
+
+@mixin form {
+	display: flex;
+	flex-direction: column;
+
+	// Between `close` and `detached`: roomier than close, less than the section
+	// gaps.
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
+	gap: calc((var(--jf-spacing-close) + var(--jf-spacing-detached)) / 2);
+}
+
+// A centred column of text, such as the thank-you panel or a title block.
+@mixin centred($gap: var(--jf-spacing-detached)) {
+	display: flex;
+	flex-direction: column;
+	gap: $gap;
+	align-items: center;
+	text-align: center;
+}
+
+@mixin celebration {
+	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
+	font-size: 3rem;
+}

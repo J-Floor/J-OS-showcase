@@ -121,6 +121,9 @@ its own code block so the copy button grabs exactly one.
 > unless set to exactly `off`; with it off, the presence token no longer proves
 > the building network. The presence token, access gate, debounce and Door log
 > apply either way.
+>
+> Without `DOOR_PRESENCE_SECRET` the presence check answers 503 and the Doors
+> card says door control isn't set up.
 
 Nobody is granted a door key any more — the app opens the doors for everyone
 whose access is granted. The only door keys left are the break-glass keys of

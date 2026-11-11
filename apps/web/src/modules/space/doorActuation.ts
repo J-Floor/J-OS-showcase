@@ -16,6 +16,7 @@ import { LOCK_SLOTS, slotInfo } from "../../shared/doors/lockSlots.ts";
 import { createDoorAttempt, type DoorAttemptWatch } from "./doorAttempt.ts";
 import {
 	ACTION_COPY,
+	NOT_CONFIGURED_CODE,
 	SENDING_TEXT,
 	WAKING_TEXT,
 	type RefusalStatus,
@@ -165,7 +166,11 @@ export function createDoorActuation(options: {
 		const { errorFallback } = ACTION_COPY[action];
 		const presence = await fetchPresenceToken(errorFallback);
 		if (presence.isErr()) {
-			holdError(holds, slot, presence.error.message);
+			const hold =
+				presence.error.code === NOT_CONFIGURED_CODE
+					? holdWarning
+					: holdError;
+			hold(holds, slot, presence.error.message);
 			return;
 		}
 		if (presence.value === null) {

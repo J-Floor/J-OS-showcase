@@ -1,37 +1,23 @@
+@use "../../shared/publicForm/publicPage" as page;
+
 .screen {
-	display: grid;
-	place-items: start center;
-	min-block-size: 100dvb;
-	padding: var(--jf-spacing-far);
-	background-color: var(--jf-surface-bg-base);
+	@include page.screen;
 }
 
 .card {
-	display: flex;
-	flex-direction: column;
-	gap: var(--jf-spacing-detached);
-	align-items: stretch;
-	inline-size: 100%;
-	max-inline-size: 32rem;
+	@include page.card;
 }
 
 .logo {
-	align-self: center;
-	font-size: var(--jf-dimension-logo-md);
+	@include page.logo;
 }
 
 .intro {
-	margin: 0;
-	color: var(--jf-fg-muted);
-	text-align: center;
+	@include page.intro;
 }
 
 .thanks {
-	display: flex;
-	flex-direction: column;
-	gap: var(--jf-spacing-detached);
-	align-items: center;
-	text-align: center;
+	@include page.centred;
 
 	> h1 {
 		margin: 0;

@@ -1,20 +1,13 @@
-// jscpd:ignore-start -- an import block: the module system and import-x/order fix its shape, and projects.ts needs the same dependencies
 import { v } from "convex/values";
 
 import type { Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx } from "./_generated/server";
-import { requireRole } from "./lib/authGuard.ts";
+import { authorizeEdit, requireRole } from "./lib/authGuard.ts";
 import { unwrap } from "./lib/result.ts";
 import { CORE_AND_BOARD } from "./lib/roles.ts";
-import {
-	checkLength,
-	NAME_MAX,
-	TEXT_MAX,
-	withNullsCleared,
-} from "./lib/validate.ts";
+import { checkLength, NAME_MAX, TEXT_MAX } from "./lib/validate.ts";
 import { notify } from "./notify/notify.ts";
 import { taskStatus } from "./schema.ts";
-// jscpd:ignore-end
 
 // Notify everyone newly added to a task's assignees (skipping the actor, who
 // doesn't need to be told about their own action).
@@ -100,10 +93,7 @@ export const update = mutation({
 		dueDate: v.optional(v.union(v.number(), v.null())),
 	},
 	handler: async (context, { id, ...patch }) => {
-		const person = unwrap(await requireRole(context, CORE_AND_BOARD));
-		unwrap(checkLength(patch.title, NAME_MAX));
-		unwrap(checkLength(patch.description, TEXT_MAX));
-		const clean = withNullsCleared(patch);
+		const { person, clean } = await authorizeEdit(context, patch, "title");
 		// Capture the prior assignees BEFORE patching so we can email only the
 		// people newly added in this update.
 		const prior =

@@ -32,8 +32,10 @@ import styles from "./UnlockCard.module.scss";
  * One panel, no tabs: each door shows the action its bolt calls for — Unlock
  * when locked, Lock when unlocked, both side by side when the position is
  * unknown — and a door that cannot lock (`LOCK_CAPABILITIES`) always shows
- * Unlock. An offline lock shows a note instead of buttons. The header's
- * refresh button re-reads the bolt.
+ * Unlock. An offline lock shows a note instead of buttons, and so does a
+ * backend with no door provider (`NOT_CONFIGURED_TEXT`, the server's
+ * `DoorNotConfigured` sentence). The header's refresh button re-reads the
+ * bolt.
  *
  * Each tap fetches a fresh presence token (proof this device is on the J floor
  * network) and hands it to the unlock or lock action. Once the server accepts

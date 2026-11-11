@@ -18,11 +18,3 @@
 		color: var(--jf-error-fg);
 	}
 }
-
-.actions {
-	/* stylelint-disable-next-line defensive-css/require-flex-wrap -- single-row flex; wrapping not intended */
-	display: flex;
-	gap: var(--jf-spacing-near);
-	align-items: center;
-	justify-content: flex-end;
-}

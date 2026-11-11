@@ -2,6 +2,10 @@ import type { FunctionReturnType } from "convex/server";
 
 import type { api } from "../../../convex/_generated/api";
 import { type DoorAction } from "../../../convex/lib/doorProvider.ts";
+import {
+	type DoorError,
+	doorMessages,
+} from "../../../convex/lib/errors/door.ts";
 import { ICONS } from "../../shared/icons.ts";
 import { MS_PER_SECOND } from "../../shared/time.ts";
 
@@ -13,6 +17,11 @@ export type RefusalStatus = Exclude<
 
 export const SENDING_TEXT = "Sending…";
 export const WAKING_TEXT = "Waking the door…";
+export const NOT_CONFIGURED_TEXT = doorMessages.DoorNotConfigured;
+export const NOT_CONFIGURED_CODE =
+	"DoorNotConfigured" satisfies DoorError["type"];
+export const PROVIDER_NOT_CONFIGURED_CODE =
+	"DoorProviderNotConfigured" satisfies DoorError["type"];
 /** The copy and icon of each action, so nothing else branches on which. */
 export const ACTION_COPY: Record<
 	DoorAction,

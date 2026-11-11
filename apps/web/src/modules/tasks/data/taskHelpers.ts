@@ -1,7 +1,6 @@
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { displayName } from "../../../../convex/lib/names.ts";
 import {
-	formatDateOnly,
 	isoToUtcMidnight,
 	utcMidnightToIso,
 } from "../../../../convex/lib/time.ts";
@@ -43,10 +42,6 @@ export function isoToMs(iso: string | null): number | undefined {
 
 export function msToIso(ms: number | undefined): string | undefined {
 	return utcMidnightToIso(ms);
-}
-
-export function formatDate(ms: number | undefined): string {
-	return formatDateOnly(ms);
 }
 
 // Due date ascending; undated tasks sink to the bottom; ties broken by creation.

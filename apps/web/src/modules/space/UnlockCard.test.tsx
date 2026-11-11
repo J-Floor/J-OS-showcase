@@ -106,6 +106,7 @@ import { FRESH_MIN_AGE_MS } from "../../../convex/lib/doorLocks.ts";
 import { type DoorPosition } from "../../../convex/lib/doorProvider.ts";
 import { ShortcutPeekButton } from "../../shared/ShortcutPeekButton.tsx";
 
+import { NOT_CONFIGURED_TEXT } from "./doorCopy.ts";
 import { UnlockCard } from "./UnlockCard.tsx";
 
 type AttemptRow = {
@@ -1109,6 +1110,39 @@ test("downstairs never offers Lock and shows no lock note", async () => {
 	expect(
 		screen.queryByText("The street door locks by itself.")
 	).not.toBeInTheDocument();
+});
+
+test("a backend with no door provider says door control isn't set up, with no buttons", async () => {
+	positionAsync.mockRejectedValue(
+		new ConvexError({
+			code: "DoorProviderNotConfigured",
+			message: "The door provider is not configured.",
+		})
+	);
+	renderCard();
+	expect(await screen.findAllByText(NOT_CONFIGURED_TEXT)).not.toHaveLength(0);
+	expect(
+		screen.queryByRole("button", { name: /Upstairs/ })
+	).not.toBeInTheDocument();
+});
+
+test("an unlock on a backend with no presence secret says door control isn't set up, not the Wi-Fi", async () => {
+	fetchPresenceToken.mockResolvedValue(
+		err({
+			code: "DoorNotConfigured",
+			message: NOT_CONFIGURED_TEXT,
+		})
+	);
+	renderCard();
+	fireEvent.click(screen.getByRole("button", { name: "Unlock Downstairs" }));
+	const line = await screen.findByText(NOT_CONFIGURED_TEXT);
+	expect(line).toBeInTheDocument();
+	expect(line).toHaveRole("status");
+	expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+	expect(
+		screen.queryByText(/Join the J floor Wi-Fi/)
+	).not.toBeInTheDocument();
+	expect(mutateAsync).not.toHaveBeenCalled();
 });
 
 test.each([

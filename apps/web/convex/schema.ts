@@ -303,8 +303,11 @@ export const perkRequestStatus = v.union(
 
 export default defineSchema({
 	people: defineTable({
-		// email is the unique identity; the name pair is display-only.
+		// email is unique: sign-in mails a link to it. The name pair is display-only.
 		email: v.string(),
+		// The Better Auth user this person signs in as. Set when they sign in
+		// (`lib/authRecords#linkLogin`); absent until their first sign-in.
+		authUserId: v.optional(v.string()),
 		firstName: v.string(),
 		lastName: v.string(),
 		// Contact number. Shown to members in the board contacts directory and
@@ -430,6 +433,7 @@ export default defineSchema({
 		deniedAt: v.optional(v.number()),
 	})
 		.index("by_email", ["email"])
+		.index("by_authUserId", ["authUserId"])
 		// `tier` alone is the prefix. The second field lets the rosters read
 		// only their own former people and only verified prospects, so a write
 		// to any other row does not re-run them.

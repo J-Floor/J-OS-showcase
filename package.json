@@ -12,14 +12,13 @@
 		"typecheck": "turbo typecheck",
 		"test": "turbo test && bun test scripts",
 		"leaks": "bun scripts/leaks.ts",
-		"knip": "knip",
+		"fallow": "fallow dead-code && fallow dupes --fail-on-issues",
 		"quality": "bash scripts/quality/run.sh",
 		"format": "turbo format",
 		"demo": "bun run --filter @j-os/design-system demo"
 	},
 	"devDependencies": {
-		"jscpd": "catalog:",
-		"knip": "catalog:",
+		"fallow": "catalog:",
 		"turbo": "^2.11.10",
 		"typescript": "catalog:",
 		"prettier": "catalog:"
@@ -61,8 +60,7 @@
 			"eslint-plugin-sonarjs": "^4.2.2",
 			"eslint-plugin-unicorn": "^79.0.0",
 			"eslint-plugin-unused-imports": "^4.4.1",
-			"jscpd": "^5.4.2",
-			"knip": "6.44.1",
+			"fallow": "3.38.1",
 			"neverthrow": "8.2.0",
 			"happy-dom": "^21.0.4",
 			"jsdom": "^29.1.1",

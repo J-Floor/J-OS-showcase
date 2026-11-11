@@ -262,7 +262,7 @@ describe("presenceResponse", () => {
 				ipCheck: true,
 				nowMs: NOW,
 			})
-		).toEqual({ status: 403 });
+		).toEqual({ status: 503 });
 	});
 	it("fails closed with no building network configured", async () => {
 		expect(
@@ -295,6 +295,16 @@ describe("presenceHttpResponse", () => {
 		expect(response.status).toBe(200);
 		const body = (await response.json()) as { token: string };
 		expect(await verifyPresenceToken(SECRET, body.token, NOW)).toBe(true);
+	});
+
+	it("answers 503 not-configured, with no token, when the secret is missing", async () => {
+		const response = await presenceHttpResponse(
+			request({ "cf-connecting-ip": "203.0.113.7" }),
+			{ ...environment, secret: undefined },
+			NOW
+		);
+		expect(response.status).toBe(503);
+		expect(await response.json()).toEqual({ error: "not-configured" });
 	});
 
 	it("403s an on-site x-forwarded-for when cf-connecting-ip is off-site — only cf-connecting-ip is trusted", async () => {
@@ -380,7 +390,7 @@ describe("building-IP check turned off", () => {
 				ipCheck: false,
 				nowMs: NOW,
 			})
-		).toEqual({ status: 403 });
+		).toEqual({ status: 503 });
 	});
 
 	it("the route honours DOOR_PRESENCE_IP_CHECK=off", async () => {

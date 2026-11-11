@@ -199,10 +199,6 @@ jobs:
         if: steps.scope.outputs.docs-only != 'true'
         run: bunx --bun turbo run lint:logic${{ github.event_name == 'pull_request' && ' --affected' || '' }} --continue
 
-      - name: Duplication (jscpd)
+      - name: Dead code + duplication (fallow)
         if: steps.scope.outputs.docs-only != 'true'
-        run: bunx jscpd
-
-      - name: Dead code (knip)
-        if: steps.scope.outputs.docs-only != 'true'
-        run: bun run knip
+        run: bun run fallow

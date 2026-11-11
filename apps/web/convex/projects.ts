@@ -9,16 +9,11 @@ import {
 	query,
 	type MutationCtx,
 } from "./_generated/server";
-import { requireRole } from "./lib/authGuard.ts";
+import { authorizeEdit, requireRole } from "./lib/authGuard.ts";
 import type { InputError } from "./lib/errors/input.ts";
 import { invariant, unwrap } from "./lib/result.ts";
 import { CORE_AND_BOARD } from "./lib/roles.ts";
-import {
-	checkLength,
-	NAME_MAX,
-	TEXT_MAX,
-	withNullsCleared,
-} from "./lib/validate.ts";
+import { checkLength, NAME_MAX, TEXT_MAX } from "./lib/validate.ts";
 import { notify } from "./notify/notify.ts";
 import { projectFields } from "./schema.ts";
 
@@ -106,10 +101,7 @@ export const update = mutation({
 		endDate: v.optional(v.union(v.number(), v.null())),
 	},
 	handler: async (context, { id, ...patch }) => {
-		const person = unwrap(await requireRole(context, CORE_AND_BOARD));
-		unwrap(checkLength(patch.name, NAME_MAX));
-		unwrap(checkLength(patch.description, TEXT_MAX));
-		const clean = withNullsCleared(patch);
+		const { person, clean } = await authorizeEdit(context, patch, "name");
 		// Validate the resulting start/end ordering (a patch may set only one).
 		const existing = await context.db.get(id);
 		invariant(existing, "Project not found");

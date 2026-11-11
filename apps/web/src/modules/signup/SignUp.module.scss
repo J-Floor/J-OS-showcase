@@ -1,60 +1,37 @@
+@use "../../shared/publicForm/publicPage" as page;
+
 .screen {
-	display: grid;
-	place-items: start center;
-	min-block-size: 100dvb;
-	padding: var(--jf-spacing-far);
-	background-color: var(--jf-surface-bg-base);
+	@include page.screen;
 }
 
 .card {
-	display: flex;
-	flex-direction: column;
-	gap: var(--jf-spacing-detached);
-	align-items: stretch;
-	inline-size: 100%;
-	max-inline-size: 32rem;
+	@include page.card;
 }
 
 .logo {
-	align-self: center;
-	font-size: var(--jf-dimension-logo-md);
+	@include page.logo;
 }
 
-/* Heading sits between the centred logo and intro, so centre it too. */
 .card > h1 {
-	margin: 0;
-	text-align: center;
+	@include page.heading;
 }
 
 .intro {
-	margin: 0;
-	color: var(--jf-fg-muted);
-	text-align: center;
+	@include page.intro;
 }
 
 .form {
-	display: flex;
-	flex-direction: column;
-
-	/* Between `close` and `detached`: roomier than close, less than the section
-	   gaps. */
-	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
-	gap: calc((var(--jf-spacing-close) + var(--jf-spacing-detached)) / 2);
+	@include page.form;
 }
 
 .submit {
-	inline-size: 100%;
+	@include page.submit;
 }
 
 .thanks {
-	display: flex;
-	flex-direction: column;
-	gap: var(--jf-spacing-detached);
-	align-items: center;
-	text-align: center;
+	@include page.centred;
 }
 
 .celebration[data-icon] {
-	/* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- intentional literal; no design token for this value */
-	font-size: 3rem;
+	@include page.celebration;
 }

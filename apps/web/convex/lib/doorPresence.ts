@@ -31,6 +31,9 @@ const IPV6_GROUP_BITS = 16n;
 const IPV6_BITS = 128;
 const HTTP_OK = 200;
 export const HTTP_FORBIDDEN = 403;
+export const HTTP_SERVICE_UNAVAILABLE = 503;
+/** The 503 body's `error`: this server has no presence secret. */
+export const PRESENCE_NOT_CONFIGURED = "not-configured";
 const BIGINT_ZERO = 0n;
 const DECIMAL_PART = /^\d{1,3}$/;
 const HEX_GROUP = /^[0-9a-f]{1,4}$/i;
@@ -216,15 +219,18 @@ export async function verifyPresenceToken(
  * On unless the value is exactly `"off"` — a typo or an unset variable keeps
  * the guard up. With it off the token no longer proves the building network,
  * the request may come from outside the building (the token, access gate,
- * debounce and audit log still apply).
+ * debounce and audit log still apply). The secret is still required: without
+ * it the oracle answers 503 `not-configured` and mints no token, while an
+ * off-site IP (check on) answers 403.
  */
 export function isIpCheckEnabled(raw: string | undefined): boolean {
 	return raw !== "off";
 }
 
 /**
- * The oracle's decision. Fails closed: no secret, no client IP, or an IP
- * outside the building network → 403 and no token. With `ipCheck` false only
+ * The oracle's decision. Fails closed: no secret → 503 (`not-configured`, the
+ * feature is not set up) and no token; no client IP, or an IP outside the
+ * building network → 403 (`off-site`) and no token. With `ipCheck` false only
  * the IP match is skipped; a missing secret still refuses.
  */
 export async function presenceResponse(args: {
@@ -236,8 +242,9 @@ export async function presenceResponse(args: {
 }): Promise<
 	| { status: typeof HTTP_OK; token: string }
 	| { status: typeof HTTP_FORBIDDEN }
+	| { status: typeof HTTP_SERVICE_UNAVAILABLE }
 > {
-	if (!args.secret) return { status: HTTP_FORBIDDEN };
+	if (!args.secret) return { status: HTTP_SERVICE_UNAVAILABLE };
 	if (
 		args.ipCheck &&
 		(args.clientIp === null ||
@@ -248,6 +255,15 @@ export async function presenceResponse(args: {
 		status: HTTP_OK,
 		token: await mintPresenceToken(args.secret, args.nowMs),
 	};
+}
+
+function presenceBody(
+	result: Awaited<ReturnType<typeof presenceResponse>>
+): { token: string } | { error: "off-site" | typeof PRESENCE_NOT_CONFIGURED } {
+	if (result.status === HTTP_OK) return { token: result.token };
+	return result.status === HTTP_FORBIDDEN
+		? { error: "off-site" }
+		: { error: PRESENCE_NOT_CONFIGURED };
 }
 
 /**
@@ -277,20 +293,13 @@ export async function presenceHttpResponse(
 		ipCheck: isIpCheckEnabled(environment.ipCheck),
 		nowMs,
 	});
-	return new Response(
-		JSON.stringify(
-			result.status === HTTP_OK
-				? { token: result.token }
-				: { error: "off-site" }
-		),
-		{
-			status: result.status,
-			headers: {
-				"Content-Type": "application/json",
-				"Cache-Control": "no-store",
-				"Access-Control-Allow-Origin": environment.siteUrl ?? "",
-				Vary: "Origin",
-			},
-		}
-	);
+	return new Response(JSON.stringify(presenceBody(result)), {
+		status: result.status,
+		headers: {
+			"Content-Type": "application/json",
+			"Cache-Control": "no-store",
+			"Access-Control-Allow-Origin": environment.siteUrl ?? "",
+			Vary: "Origin",
+		},
+	});
 }

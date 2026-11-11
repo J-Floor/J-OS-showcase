@@ -7,26 +7,7 @@ $closed-scale: 0.96;
 $stack-step: 0.04;
 
 .backdrop {
-	position: fixed;
-	inset: 0;
-
-	/* Ark mirrors the Content's stack index onto the Backdrop as `--layer-index`.
-	   Without that term every overlay resolves to the same 999 and the LAST one
-	   opened is not necessarily on top: a Dialog opened from inside a Sheet had
-	   its backdrop painted behind the Sheet, dimming the page but not the thing
-	   it was covering. Ported from EmboUI, which hit exactly this.
-
-	   `* 2` is the stride, and it is load-bearing. Backdrop-base (999) sits ONE
-	   below overlay-base (1000), so with a stride of 1 a layer's backdrop
-	   (999 + N+1) exactly tied the layer below it's content (1000 + N) and DOM
-	   order decided — the sheet, opened first, won and the dialog's backdrop
-	   fell behind it. A stride of 2 gives each layer its own 2-wide band, so a
-	   higher backdrop always clears the lower content. */
-	z-index: calc(
-		var(--jf-z-index-overlay-backdrop-base) + var(--layer-index, 0) * 2
-	);
-	background-color: var(--jf-surface-bg-scrim);
-	transition: opacity var(--jf-animation-duration-default) ease-in-out;
+	@include overlay.backdrop;
 
 	/* A morph fades the scrim (`jf-morph-scrim`): its own fade would play
 	   inside that one, so it would fade twice over. */

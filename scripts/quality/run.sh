@@ -3,6 +3,6 @@
 # The sweep workflow runs the same checks, plus the mutation report.
 set -euo pipefail
 
-bun run knip
+bun run fallow
 bash scripts/quality/duplication.sh
 bash scripts/quality/coverage-scores.sh

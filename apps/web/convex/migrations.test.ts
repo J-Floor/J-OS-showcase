@@ -1,9 +1,11 @@
+import betterAuthTest from "@convex-dev/better-auth/test";
+import rateLimiterTest from "@convex-dev/rate-limiter/test";
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 
 import { runAndCollectLogs } from "../test-stubs/runAndCollectLogs.ts";
 
-import { internal } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { normalizeEmail } from "./lib/emailAddress.ts";
 import schema from "./schema.ts";
@@ -719,5 +721,206 @@ describe("removeOrphanPerkNotifications", () => {
 			context.db.system.query("_scheduled_functions").collect()
 		);
 		expect(jobs).toEqual([]);
+	});
+});
+
+function setupWithAuth() {
+	const backend = createTester();
+	betterAuthTest.register(backend);
+	rateLimiterTest.register(backend);
+	return backend;
+}
+
+async function seedLogin(backend: Tester, email: string) {
+	return (await backend.mutation(components.betterAuth.adapter.create, {
+		input: {
+			model: "user",
+			data: {
+				email,
+				name: "",
+				emailVerified: true,
+				createdAt: 1,
+				updatedAt: 1,
+			},
+		},
+	})) as { _id: string };
+}
+
+function scheduledJobs(backend: Tester) {
+	return backend.run((context) =>
+		context.db.system.query("_scheduled_functions").collect()
+	);
+}
+
+const OVER_ONE_PAGE = 101;
+
+describe("linkAuthUsers", () => {
+	it("walks every page by scheduling itself, and a dry run schedules nothing", async () => {
+		const backend = setupWithAuth();
+		for (let index = 0; index < OVER_ONE_PAGE; index++) {
+			const email = `login${String(index)}@example.com`;
+			await seedPerson(backend, email);
+			await seedLogin(backend, email);
+		}
+
+		const dry = await backend.mutation(internal.migrations.linkAuthUsers, {
+			dryRun: true,
+		});
+		expect(dry).toMatchObject({ linked: 100, isDone: false });
+		expect(await scheduledJobs(backend)).toEqual([]);
+
+		await runAndCollectLogs(backend, async () => {
+			const first = await backend.mutation(
+				internal.migrations.linkAuthUsers,
+				{}
+			);
+			const jobs = await scheduledJobs(backend);
+			expect(jobs).toHaveLength(1);
+			expect(jobs[0]?.name).toBe("migrations:linkAuthUsers");
+			expect(jobs[0]?.args).toEqual([{ cursor: first.continueCursor }]);
+		});
+
+		const people = await backend.run((context) =>
+			context.db.query("people").collect()
+		);
+		expect(people).toHaveLength(OVER_ONE_PAGE);
+		expect(
+			people.filter((person) => person.authUserId === undefined)
+		).toEqual([]);
+	});
+
+	it("links every login to its person, reports the rest, and re-runs as a no-op", async () => {
+		const backend = setupWithAuth();
+		const personId = await seedPerson(backend, "ada@example.com");
+		const user = await seedLogin(backend, "ada@example.com");
+		await seedLogin(backend, "gone@example.com");
+		async function linkedId() {
+			const person = await backend.run((context) =>
+				context.db.get(personId)
+			);
+			return person?.authUserId ?? null;
+		}
+
+		const dry = await backend.mutation(internal.migrations.linkAuthUsers, {
+			dryRun: true,
+		});
+		expect(dry).toMatchObject({
+			linked: 1,
+			noPerson: 1,
+			dryRun: true,
+			isDone: true,
+		});
+		expect(await linkedId()).toBeNull();
+
+		const real = await backend.mutation(
+			internal.migrations.linkAuthUsers,
+			{}
+		);
+		expect(real).toMatchObject({ linked: 1, noPerson: 1, isDone: true });
+		expect(await linkedId()).toBe(user._id);
+
+		const again = await backend.mutation(
+			internal.migrations.linkAuthUsers,
+			{
+				dryRun: true,
+			}
+		);
+		expect(again).toMatchObject({ linked: 0, unchanged: 1 });
+	});
+});
+
+describe("removeEmailChangeTokens", () => {
+	it("walks every page by scheduling itself, and a dry run schedules nothing", async () => {
+		const backend = createTester();
+		await backend.run(async (context) => {
+			const personId = await context.db.insert("people", {
+				email: "ada@example.com",
+				firstName: "Ada",
+				lastName: "Person",
+				tier: "member",
+				stage: "active",
+				stageSince: 1,
+			});
+			for (let index = 0; index < OVER_ONE_PAGE; index++) {
+				await context.db.insert("confirmTokens", {
+					tokenHash: `t${String(index)}`,
+					purpose: "emailChange",
+					personId,
+					expiresAt: 10,
+					newEmail: "new@example.com",
+				});
+			}
+		});
+
+		const dry = await backend.mutation(
+			internal.migrations.removeEmailChangeTokens,
+			{ dryRun: true }
+		);
+		expect(dry).toMatchObject({ removed: 100, isDone: false });
+		expect(await scheduledJobs(backend)).toEqual([]);
+
+		await runAndCollectLogs(backend, async () => {
+			const first = (await backend.mutation(
+				internal.migrations.removeEmailChangeTokens,
+				{}
+			)) as { continueCursor: string };
+			const jobs = await scheduledJobs(backend);
+			expect(jobs).toHaveLength(1);
+			expect(jobs[0]?.name).toBe("migrations:removeEmailChangeTokens");
+			expect(jobs[0]?.args).toEqual([{ cursor: first.continueCursor }]);
+		});
+
+		expect(
+			await backend.run((context) =>
+				context.db.query("confirmTokens").collect()
+			)
+		).toEqual([]);
+	});
+
+	it("deletes emailChange tokens only", async () => {
+		const backend = createTester();
+		const ids = await backend.run(async (context) => {
+			const personId = await context.db.insert("people", {
+				email: "ada@example.com",
+				firstName: "Ada",
+				lastName: "Person",
+				tier: "member",
+				stage: "active",
+				stageSince: 1,
+			});
+			const change = await context.db.insert("confirmTokens", {
+				tokenHash: "a",
+				purpose: "emailChange",
+				personId,
+				expiresAt: 10,
+				newEmail: "new@example.com",
+			});
+			const other = await context.db.insert("confirmTokens", {
+				tokenHash: "b",
+				purpose: "application",
+				personId,
+				expiresAt: 10,
+			});
+			return { change, other };
+		});
+		const dry = await backend.mutation(
+			internal.migrations.removeEmailChangeTokens,
+			{ dryRun: true }
+		);
+		expect(dry).toMatchObject({ removed: 1, dryRun: true });
+		expect(
+			await backend.run((context) => context.db.get(ids.change))
+		).not.toBeNull();
+		const real = await backend.mutation(
+			internal.migrations.removeEmailChangeTokens,
+			{}
+		);
+		expect(real).toMatchObject({ removed: 1 });
+		expect(
+			await backend.run((context) => context.db.get(ids.change))
+		).toBeNull();
+		expect(
+			await backend.run((context) => context.db.get(ids.other))
+		).not.toBeNull();
 	});
 });

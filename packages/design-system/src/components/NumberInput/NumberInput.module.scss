@@ -37,21 +37,7 @@
 		cursor: ew-resize;
 	}
 
-	& input {
-		inline-size: 100%;
-		min-block-size: var(--jf-dimension-short-component-height);
-		color: inherit;
-		background-color: transparent;
-		border: none;
-
-		&:focus {
-			outline: none;
-		}
-
-		&::placeholder {
-			color: var(--jf-fg-muted);
-		}
-	}
+	@include field.shell-input;
 }
 
 /* The shell's gap plus this keeps the icon a near-step from the text. */

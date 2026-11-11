@@ -1,10 +1,25 @@
+import type { FunctionReference } from "convex/server";
+
 import { internal } from "./_generated/api";
-import { internalMutation } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+import { internalMutation, type MutationCtx } from "./_generated/server";
 import { DAY_MS } from "./lib/constants.ts";
 
 const DAYS_PER_YEAR = 365;
 export const TWELVE_MONTHS = DAYS_PER_YEAR * DAY_MS;
 export const RETENTION_BATCH = 500;
+
+/** Delete a fetched batch, then run `again` right away when it was full. */
+async function deleteBatch(
+	context: MutationCtx,
+	rows: { _id: Id<"doorLog"> | Id<"personEvents"> }[],
+	again: FunctionReference<"mutation", "internal">
+): Promise<{ deleted: number }> {
+	for (const row of rows) await context.db.delete(row._id);
+	if (rows.length === RETENTION_BATCH)
+		await context.scheduler.runAfter(0, again, {});
+	return { deleted: rows.length };
+}
 
 /**
  * Delete door log rows older than 12 months, RETENTION_BATCH per run,
@@ -19,14 +34,11 @@ export const purgeDoorLog = internalMutation({
 			.query("doorLog")
 			.withIndex("by_at", (range) => range.lt("at", cutoff))
 			.take(RETENTION_BATCH);
-		for (const row of rows) await context.db.delete(row._id);
-		if (rows.length === RETENTION_BATCH)
-			await context.scheduler.runAfter(
-				0,
-				internal.accessLogRetention.purgeDoorLog,
-				{}
-			);
-		return { deleted: rows.length };
+		return deleteBatch(
+			context,
+			rows,
+			internal.accessLogRetention.purgeDoorLog
+		);
 	},
 });
 
@@ -41,13 +53,10 @@ export const purgeWifiEvents = internalMutation({
 				range.eq("kind", "wifi").lt("at", cutoff)
 			)
 			.take(RETENTION_BATCH);
-		for (const row of rows) await context.db.delete(row._id);
-		if (rows.length === RETENTION_BATCH)
-			await context.scheduler.runAfter(
-				0,
-				internal.accessLogRetention.purgeWifiEvents,
-				{}
-			);
-		return { deleted: rows.length };
+		return deleteBatch(
+			context,
+			rows,
+			internal.accessLogRetention.purgeWifiEvents
+		);
 	},
 });

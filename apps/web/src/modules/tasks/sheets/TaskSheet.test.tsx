@@ -13,8 +13,6 @@ vi.mock("convex-solidjs", () => ({
 	useQuery: () => ({ data: () => {} }),
 }));
 
-// Mock the Convex API barrel (not a real module in test context).
-vi.mock("../../../../../convex/_generated/api", () => ({ api: {} }));
 vi.mock("../../../shared/data/boardLevel.tsx", () => ({
 	useBoardLevel: () => ({ data: () => [] }),
 }));

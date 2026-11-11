@@ -1,8 +1,9 @@
 import { Card, Icon, morphPart } from "@j-os/design-system";
 import { For, Show, type JSX } from "solid-js";
 
+import { formatDateOnly } from "../../../../convex/lib/time.ts";
 import { ICONS } from "../../../shared/icons.ts";
-import { assigneeNames, formatDate, projectName } from "../data/taskHelpers.ts";
+import { assigneeNames, projectName } from "../data/taskHelpers.ts";
 import type { Person, Project, Task } from "../data/tasksData.tsx";
 import { taskFields } from "../fields.ts";
 
@@ -71,7 +72,7 @@ export function TaskCard(props: {
 		return projectName(props.task.projectId, props.projects);
 	}
 	function due() {
-		return formatDate(props.task.dueDate);
+		return formatDateOnly(props.task.dueDate);
 	}
 
 	const guard = createClickGuard(() => {
