@@ -15,8 +15,7 @@ export function ownedBy(doc: object, personId: string): boolean {
 /**
  * Every address `person` has used, read from what the walk found before
  * anything is deleted: the current one, both sides of each email change in
- * their own history, and the address each confirmed email-change token moved
- * them to.
+ * their own history.
  */
 export function addressesOf(
 	person: Doc<"people">,
@@ -32,14 +31,6 @@ export function addressesOf(
 				personEvent.field === "email"
 			)
 				found.push(personEvent.before, personEvent.after);
-		}
-		if (table === "confirmTokens") {
-			const token = doc as unknown as Doc<"confirmTokens">;
-			if (
-				token.purpose === "emailChange" &&
-				token.consumedAt !== undefined
-			)
-				found.push(token.newEmail);
 		}
 	}
 	return [

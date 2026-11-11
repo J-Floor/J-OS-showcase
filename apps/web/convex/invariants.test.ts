@@ -1,5 +1,9 @@
+import betterAuthTest from "@convex-dev/better-auth/test";
+import rateLimiterTest from "@convex-dev/rate-limiter/test";
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { seedLogin } from "../test-stubs/logins.ts";
 
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -13,13 +17,17 @@ import type { Recipient } from "./notify/types.ts";
 import { LIFECYCLE_ALERT_KEY } from "./opsAlerts.ts";
 import schema from "./schema.ts";
 
-const dispatchFailure = vi.hoisted(() => ({ failNext: false }));
+const dispatchFailure = vi.hoisted(() => ({
+	failNext: false,
+	sent: [] as unknown[],
+}));
 
 vi.mock("./notify/notify.ts", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("./notify/notify.ts")>();
 	return {
 		...actual,
 		notifyNow: ((...args: Parameters<typeof actual.notifyNow>) => {
+			dispatchFailure.sent.push(args[2]);
 			if (dispatchFailure.failNext) {
 				dispatchFailure.failNext = false;
 				return Promise.reject(new Error("dispatch down"));
@@ -42,6 +50,7 @@ beforeEach(() => {
 });
 afterEach(() => {
 	dispatchFailure.failNext = false;
+	dispatchFailure.sent.length = 0;
 	setPushSenderForTests(undefined);
 	vi.unstubAllEnvs();
 	vi.restoreAllMocks();
@@ -185,6 +194,7 @@ async function boardWithPush() {
 	vi.stubEnv("VAPID_PRIVATE_KEY", "priv");
 	vi.stubEnv("VAPID_SUBJECT", "mailto:board@example.com");
 	const backend = convexTest(schema, modules);
+	betterAuthTest.register(backend);
 	const personId = await backend.run((context) =>
 		context.db.insert("people", {
 			email: "b@example.org",
@@ -423,5 +433,84 @@ describe("lifecycleAlert email", () => {
 			BOARD
 		);
 		expect(push.body).not.toContain("list of people");
+	});
+});
+
+function setup() {
+	const backend = convexTest(schema, modules);
+	betterAuthTest.register(backend);
+	rateLimiterTest.register(backend);
+	return backend;
+}
+
+async function seedMember(
+	backend: ReturnType<typeof setup>,
+	email: string,
+	authUserId?: string
+) {
+	const now = Date.now();
+	await backend.run((context) =>
+		context.db.insert("people", {
+			email,
+			firstName: "L",
+			lastName: "Linked",
+			tier: "member",
+			stage: "active",
+			stageSince: now,
+			activatedAt: now,
+			...(authUserId === undefined ? {} : { authUserId }),
+		})
+	);
+}
+
+type Alert = { items: { code: string; detail: string }[] };
+
+async function mismatches(backend: ReturnType<typeof setup>) {
+	dispatchFailure.sent.length = 0;
+	await backend.action(internal.invariants.check, {});
+	const alert = dispatchFailure.sent.at(-1) as Alert | undefined;
+	if (!alert) throw new Error("the check sent no alert");
+	return alert.items.filter((item) => item.code === "login-email-mismatch");
+}
+
+describe("invariants.check login links", () => {
+	it("finds a person whose login carries another email, without naming addresses", async () => {
+		const backend = setup();
+		const login = await seedLogin(backend, "old@example.com");
+		await seedMember(backend, "new@example.com", login);
+		const found = await mismatches(backend);
+		expect(found).toHaveLength(1);
+		expect(found[0]?.detail).toBe("login email differs");
+		expect(JSON.stringify(dispatchFailure.sent)).not.toContain(
+			"example.com"
+		);
+	});
+
+	it("finds a person linked to a login that is gone", async () => {
+		const backend = setup();
+		await seedMember(backend, "gone@example.com", "no-such-login");
+		const found = await mismatches(backend);
+		expect(found).toHaveLength(1);
+		expect(found[0]?.detail).toBe("login missing");
+	});
+
+	it("does not find a matching link, whatever the case, or an unlinked person", async () => {
+		const backend = setup();
+		const login = await seedLogin(backend, "Match@Example.com");
+		await seedMember(backend, "match@example.com", login);
+		await seedMember(backend, "free@example.com");
+		expect(await mismatches(backend)).toEqual([]);
+	});
+
+	it("reads every page of logins and people", async () => {
+		const backend = setup();
+		const OVER_ONE_PAGE = 101;
+		for (let index = 0; index < OVER_ONE_PAGE; index++) {
+			const email = `p${String(index)}@example.com`;
+			await seedMember(backend, email, await seedLogin(backend, email));
+		}
+		await seedMember(backend, "late@example.com", "no-such-login");
+		const found = await mismatches(backend);
+		expect(found.map((item) => item.detail)).toEqual(["login missing"]);
 	});
 });

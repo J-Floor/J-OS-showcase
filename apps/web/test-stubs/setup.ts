@@ -2,6 +2,8 @@ import type { convexTest } from "convex-test";
 import { afterEach, vi } from "vitest";
 
 import type { Id } from "../convex/_generated/dataModel";
+import { linkLogin } from "../convex/lib/authRecords.ts";
+import { normalizeEmail } from "../convex/lib/emailAddress.ts";
 
 // convex-test arms each scheduled job with `setTimeout(scheduledTime - now)`.
 // Node fires any delay past its 32-bit limit (~24.8 days) after 1 ms, so a
@@ -32,11 +34,49 @@ type Backend = ReturnType<typeof convexTest>;
 const { openBackends } = vi.hoisted(() => ({
 	openBackends: new Set<Backend>(),
 }));
+// A real sign-in links the person holding the address to the login
+// (`lib/authRecords#linkLogin`). Tests sign in by email, so the harness does
+// the same before each call: a login per address, linked to its holder. Each
+// link is a transaction of its own, so it runs once per address and backend.
+function signedInByEmail(backend: Backend) {
+	const withIdentity = backend.withIdentity.bind(backend);
+	const linked = new Set<string>();
+	return (identity: Parameters<Backend["withIdentity"]>[0]) => {
+		if (identity.subject !== undefined || identity.email === undefined)
+			return withIdentity(identity);
+		const email = normalizeEmail(identity.email);
+		const subject = `test-login:${email}`;
+		const accessor = withIdentity({ ...identity, subject });
+		async function link() {
+			if (linked.has(email)) return;
+			await backend.run(async (context) => {
+				// The harness backend has no schema type; the rule is typed here.
+				const outcome = await linkLogin(context, {
+					_id: subject,
+					email,
+				});
+				if (outcome === "linked" || outcome === "unchanged")
+					linked.add(email);
+			});
+		}
+		return {
+			...accessor,
+			query: async (...args) => (await link(), accessor.query(...args)),
+			mutation: async (...args) => (
+				await link(),
+				accessor.mutation(...args)
+			),
+			action: async (...args) => (await link(), accessor.action(...args)),
+		} as typeof accessor;
+	};
+}
+
 vi.mock("convex-test", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("convex-test")>();
 	function trackedConvexTest(...args: Parameters<typeof convexTest>) {
 		const backend = actual.convexTest(...args);
 		openBackends.add(backend);
+		backend.withIdentity = signedInByEmail(backend);
 		return backend;
 	}
 	return { ...actual, convexTest: trackedConvexTest };

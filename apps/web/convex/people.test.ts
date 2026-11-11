@@ -634,6 +634,8 @@ describe("setLastPath", () => {
 	it("stores a valid module path in personState, not on people", async () => {
 		const backend = convexTest(schema, modules);
 		const id = await seedBoardId(backend);
+		// Sign in first: the harness links the person to a login on first use.
+		await asBoard(backend).query(api.people.getCurrentRole, {});
 		const before = await backend.run((context) => context.db.get(id));
 		await asBoard(backend).mutation(api.people.setLastPath, {
 			path: "/tasks",
@@ -1657,23 +1659,34 @@ describe("requireRole(ACCESS_TIERS): every sign-in tier is admitted, an expired 
 		});
 	}
 
-	it("finds the signed-in person whatever the case of the identity's email", async () => {
+	it("finds the signed-in person by their login, not their email", async () => {
 		const backend = convexTest(schema, modules);
-		const personId = await backend.run((context) =>
+		await backend.run((context) =>
 			context.db.insert("people", {
 				email: "ada@example.com",
 				firstName: "Ada",
-				lastName: "Lovelace",
+				lastName: "Person",
 				tier: "member",
 				stage: "active",
 				stageSince: Date.now(),
+				authUserId: "login-ada",
 			})
 		);
-
-		const asAda = backend.withIdentity({ email: "Ada@Example.COM" });
-		expect(await asAda.query(api.people.getCurrentRole, {})).toBe("member");
-		const person = await asAda.query(api.people.getCurrentPerson, {});
-		expect(person._id).toBe(personId);
+		// The session's email is stale: the board changed the address after sign-in.
+		const signedIn = backend.withIdentity({
+			subject: "login-ada",
+			email: "old@example.com",
+		});
+		expect(await signedIn.query(api.people.getCurrentRole, {})).toBe(
+			"member"
+		);
+		const stranger = backend.withIdentity({
+			subject: "login-other",
+			email: "ada@example.com",
+		});
+		expect(await stranger.query(api.people.getCurrentRole, {})).toBe(
+			"none"
+		);
 	});
 
 	it("refuses a correctly-tiered guest whose access window has expired", async () => {

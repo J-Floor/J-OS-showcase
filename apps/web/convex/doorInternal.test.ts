@@ -444,8 +444,8 @@ describe("doorInternal door position cache", () => {
 	});
 });
 
-describe("doorInternal email lookup", () => {
-	it("finds the caller whatever the case of the identity's email", async () => {
+describe("doorInternal login lookup", () => {
+	it("finds the caller by their login, not their email", async () => {
 		const backend = convexTest(schema, modules);
 		await backend.run((context) =>
 			context.db.insert("people", {
@@ -455,9 +455,13 @@ describe("doorInternal email lookup", () => {
 				tier: "board",
 				stage: "active",
 				stageSince: Date.now(),
+				authUserId: "login-board",
 			})
 		);
-		const asCaller = backend.withIdentity({ email: "Board@Example.COM" });
+		const asCaller = backend.withIdentity({
+			subject: "login-board",
+			email: "old@example.com",
+		});
 		expect(
 			await asCaller.query(internal.doorInternal.canSeeDoorPosition, {})
 		).toBe(true);
@@ -467,5 +471,12 @@ describe("doorInternal email lookup", () => {
 				action: "unlock",
 			})
 		).toMatchObject({ email: "board@example.com" });
+		const stranger = backend.withIdentity({
+			subject: "login-other",
+			email: "board@example.com",
+		});
+		expect(
+			await stranger.query(internal.doorInternal.canSeeDoorPosition, {})
+		).toBe(false);
 	});
 });

@@ -1,5 +1,9 @@
+import betterAuthTest from "@convex-dev/better-auth/test";
+import rateLimiterTest from "@convex-dev/rate-limiter/test";
 import { convexTest } from "convex-test";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { loginEmail, seedLogin } from "../test-stubs/logins.ts";
 
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -957,5 +961,131 @@ describe("merge perks", () => {
 				["requested", undefined],
 			]);
 		});
+	});
+});
+
+function setupWithAuth() {
+	const backend = convexTest(schema, modules);
+	betterAuthTest.register(backend);
+	rateLimiterTest.register(backend);
+	return backend;
+}
+
+async function seedPair(backend: T, logins: { keep?: string; drop?: string }) {
+	return backend.run(async (context) => {
+		const base = {
+			firstName: "L",
+			lastName: "Link",
+			tier: "member" as const,
+			stage: "active" as const,
+			stageSince: 1,
+			activatedAt: 1,
+		};
+		const keep = await context.db.insert("people", {
+			...base,
+			email: "keep@example.com",
+			...(logins.keep === undefined ? {} : { authUserId: logins.keep }),
+		});
+		const drop = await context.db.insert("people", {
+			...base,
+			email: "drop@example.com",
+			...(logins.drop === undefined ? {} : { authUserId: logins.drop }),
+		});
+		for (const personId of [keep, drop])
+			await context.db.insert("signatures", {
+				personId,
+				email: "sig@example.com",
+				variant: "member",
+				signedName: "L Link",
+				agreementVersion: "t",
+				agreementHash: "",
+				signedAt: 1,
+			});
+		return { keep, drop };
+	});
+}
+
+describe("merge login link", () => {
+	it("the kept person takes the dropped person's login when it has none, and the login carries the kept email", async () => {
+		const backend = setupWithAuth();
+		const login = await seedLogin(backend, "drop@example.com");
+		const { keep, drop } = await seedPair(backend, { drop: login });
+		await backend.mutation(internal.merge.apply, {
+			keepId: keep,
+			dropId: drop,
+			patch: {},
+		});
+		const person = await backend.run((context) => context.db.get(keep));
+		expect(person?.authUserId).toBe(login);
+		expect(await loginEmail(backend, login)).toBe("keep@example.com");
+	});
+
+	it("the kept person's own login wins", async () => {
+		const backend = setupWithAuth();
+		const keepLogin = await seedLogin(backend, "keep@example.com");
+		const dropLogin = await seedLogin(backend, "drop@example.com");
+		const { keep, drop } = await seedPair(backend, {
+			keep: keepLogin,
+			drop: dropLogin,
+		});
+		await backend.mutation(internal.merge.apply, {
+			keepId: keep,
+			dropId: drop,
+			patch: { email: "new@example.com" },
+		});
+		const person = await backend.run((context) => context.db.get(keep));
+		expect(person?.authUserId).toBe(keepLogin);
+		expect(await loginEmail(backend, keepLogin)).toBe("new@example.com");
+	});
+
+	it("erases the dropped login when the kept person's own login wins", async () => {
+		const backend = setupWithAuth();
+		const keepLogin = await seedLogin(backend, "keep@example.com");
+		const dropLogin = await seedLogin(backend, "drop@example.com");
+		const { keep, drop } = await seedPair(backend, {
+			keep: keepLogin,
+			drop: dropLogin,
+		});
+		await backend.mutation(internal.merge.apply, {
+			keepId: keep,
+			dropId: drop,
+			patch: {},
+		});
+		expect(await loginEmail(backend, dropLogin)).toBeNull();
+		expect(await loginEmail(backend, keepLogin)).toBe("keep@example.com");
+	});
+
+	it("a dry run leaves both logins in place", async () => {
+		const backend = setupWithAuth();
+		const keepLogin = await seedLogin(backend, "keep@example.com");
+		const dropLogin = await seedLogin(backend, "drop@example.com");
+		const { keep, drop } = await seedPair(backend, {
+			keep: keepLogin,
+			drop: dropLogin,
+		});
+		const rollback: unknown = await backend
+			.mutation(internal.merge.apply, {
+				keepId: keep,
+				dropId: drop,
+				patch: { email: "new@example.com" },
+				dryRun: true,
+			})
+			.catch((caught: unknown) => caught);
+		expect(isDryRunRollback(rollback)).toBe(true);
+		expect(await loginEmail(backend, dropLogin)).toBe("drop@example.com");
+		expect(await loginEmail(backend, keepLogin)).toBe("keep@example.com");
+	});
+
+	it("ignores an authUserId in the patch", async () => {
+		const backend = setupWithAuth();
+		const keepLogin = await seedLogin(backend, "keep@example.com");
+		const { keep, drop } = await seedPair(backend, { keep: keepLogin });
+		await backend.mutation(internal.merge.apply, {
+			keepId: keep,
+			dropId: drop,
+			patch: { authUserId: "someone-elses-login" },
+		});
+		const person = await backend.run((context) => context.db.get(keep));
+		expect(person?.authUserId).toBe(keepLogin);
 	});
 });

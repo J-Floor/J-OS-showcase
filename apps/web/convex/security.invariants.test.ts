@@ -39,8 +39,6 @@ const PUBLIC_ON_PURPOSE: Record<string, string> = {
 		"the emailed visitor confirm link; authorised by the single-use hashed token, and returns the Wi-Fi credentials to whoever holds it",
 	"eventCheckIn.ts:confirmEventInvite":
 		"the emailed event invite link; authorised by the single-use hashed token, and returns the Wi-Fi credentials to whoever holds it",
-	"people.ts:confirmEmailChange":
-		"the emailed address-change link; authorised by the single-use hashed token",
 	"events.ts:getEventPublic":
 		"the public event page: name and times only, no attendees",
 	"http.ts:route PRESENCE_PATH":

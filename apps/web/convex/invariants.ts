@@ -1,10 +1,15 @@
+import { v } from "convex/values";
+
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import {
 	internalAction,
 	internalMutation,
+	internalQuery,
 	type MutationCtx,
 } from "./_generated/server";
+import { authUsersPage } from "./lib/authRecords.ts";
+import { normalizeEmail } from "./lib/emailAddress.ts";
 import {
 	duplicateEmails,
 	violations,
@@ -111,6 +116,91 @@ export const healAndScan = internalMutation({
 	},
 });
 
+const LOGIN_PAGE = 100;
+
+type LinkedPerson = {
+	personId: Id<"people">;
+	name: string;
+	authUserId: string;
+	email: string;
+};
+
+type Paging = { isDone: boolean; continueCursor: string };
+type LoginsPage = Paging & { logins: { _id: string; email: string }[] };
+type LinkedPage = Paging & { linked: LinkedPerson[] };
+
+/** One page of logins, for the nightly login check. */
+export const loginsPage = internalQuery({
+	args: { cursor: v.union(v.string(), v.null()) },
+	handler: async (context, { cursor }): Promise<LoginsPage> => {
+		const { page, isDone, continueCursor } = await authUsersPage(
+			context,
+			cursor,
+			LOGIN_PAGE
+		);
+		return {
+			logins: page.map((login) => ({
+				_id: login._id,
+				email: login.email,
+			})),
+			isDone,
+			continueCursor,
+		};
+	},
+});
+
+/** One page of the people linked to a login, for the nightly login check. */
+export const linkedPeoplePage = internalQuery({
+	args: { cursor: v.union(v.string(), v.null()) },
+	handler: async (context, { cursor }): Promise<LinkedPage> => {
+		const { page, isDone, continueCursor } = await context.db
+			.query("people")
+			.paginate({ cursor, numItems: LOGIN_PAGE });
+		return {
+			linked: page.flatMap((person) =>
+				person.authUserId === undefined
+					? []
+					: [
+							{
+								personId: person._id,
+								name: displayName(person),
+								authUserId: person.authUserId,
+								email: person.email,
+							},
+						]
+			),
+			isDone,
+			continueCursor,
+		};
+	},
+});
+
+/** The alert detail names no address: it goes to the board's channel. */
+function loginMismatches(
+	linked: LinkedPerson[],
+	logins: Map<string, string>
+): Found[] {
+	const found: Found[] = [];
+	for (const person of linked) {
+		const loginEmail = logins.get(person.authUserId);
+		if (
+			loginEmail !== undefined &&
+			normalizeEmail(loginEmail) === normalizeEmail(person.email)
+		)
+			continue;
+		found.push({
+			personId: person.personId,
+			name: person.name,
+			code: "login-email-mismatch",
+			detail:
+				loginEmail === undefined
+					? "login missing"
+					: "login email differs",
+		});
+	}
+	return found;
+}
+
 function alertHeadline(outcome: string, count: number): string {
 	if (outcome === "resolved")
 		return "Every person's status is consistent again";
@@ -127,9 +217,35 @@ export const check = internalAction({
 		violations: number;
 		decision: AlertDecision;
 	}> => {
-		const { healed, found } = await context.runMutation(
+		const scan = await context.runMutation(
 			internal.invariants.healAndScan,
 			{}
+		);
+		const { healed } = scan;
+		const logins = new Map<string, string>();
+		let loginCursor: string | null = null;
+		for (;;) {
+			const page: LoginsPage = await context.runQuery(
+				internal.invariants.loginsPage,
+				{ cursor: loginCursor }
+			);
+			for (const login of page.logins) logins.set(login._id, login.email);
+			if (page.isDone) break;
+			loginCursor = page.continueCursor;
+		}
+		const linked: LinkedPerson[] = [];
+		let peopleCursor: string | null = null;
+		for (;;) {
+			const page: LinkedPage = await context.runQuery(
+				internal.invariants.linkedPeoplePage,
+				{ cursor: peopleCursor }
+			);
+			linked.push(...page.linked);
+			if (page.isDone) break;
+			peopleCursor = page.continueCursor;
+		}
+		const found = [...scan.found, ...loginMismatches(linked, logins)].sort(
+			(first, second) => keyOf(first).localeCompare(keyOf(second))
 		);
 		const decision = await alertOnChange(context, {
 			key: LIFECYCLE_ALERT_KEY,

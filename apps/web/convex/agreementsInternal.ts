@@ -6,8 +6,8 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { requireRole } from "./lib/authGuard.ts";
+import { personForCurrentUser } from "./lib/currentPerson.ts";
 import { agreementVariantFor, entitled } from "./lib/derive.ts";
-import { personByEmail } from "./lib/emailAddress.ts";
 import { displayName } from "./lib/names.ts";
 import { unwrap } from "./lib/result.ts";
 import { BOARD_LEVEL } from "./lib/roles.ts";
@@ -45,11 +45,7 @@ export const signingContext = internalQuery({
 		variant: "member" | "guest";
 		alreadySigned: boolean;
 	} | null> => {
-		const identity = await context.auth.getUserIdentity();
-		const email = identity?.email;
-		if (!email) return null;
-
-		const person = await personByEmail(context, email);
+		const person = await personForCurrentUser(context);
 		if (person?.stage !== "onboarding") return null;
 		const variant = agreementVariantFor(person.tier);
 		if (variant === null || !entitled(person, Date.now())) return null;

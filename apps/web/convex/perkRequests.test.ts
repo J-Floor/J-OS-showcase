@@ -107,14 +107,16 @@ async function setup() {
 		venture: { name: "Acme" },
 	});
 	const perkId = await seedPerk(backend, { contactId });
-	return {
-		backend,
-		contactId,
-		requesterId,
-		perkId,
-		asBoard: backend.withIdentity({ email: CONTACT }),
-		asRequester: backend.withIdentity({ email: REQUESTER }),
-	};
+	const asBoard = backend.withIdentity({ email: CONTACT });
+	const asRequester = backend.withIdentity({ email: REQUESTER });
+	// The harness links each person to a login on first sign-in, a commit of
+	// its own: do it on the seeds' clock so no call under test is pushed a
+	// millisecond past T0.
+	await seeded(async () => {
+		await asBoard.query(api.people.getCurrentRole, {});
+		await asRequester.query(api.people.getCurrentRole, {});
+	});
+	return { backend, contactId, requesterId, perkId, asBoard, asRequester };
 }
 
 async function requestRows(backend: Backend) {
