@@ -181,10 +181,9 @@ jobs:
       # GHSA-rg76-677x-56q9, GHSA-xwcq-pm8m-c4vf: crypto-js via pdfkit (@signpdf), no fix reachable (pdfkit pins crypto-js 3.3.0).
       # GHSA-p6vx-979v-rg4c: seroval via solid-js (latest 1.9.15 still pins seroval ~1.5.4).
       # GHSA-w7jw-789q-3m8p: shell-quote via concurrently (dev dep; concurrently 10 only moves to another shell-quote critical).
-      # GHSA-965c-763c-88jm: better-auth OAuth state as magic-link token; needs a social or Generic OAuth provider (none enabled). Fix is 1.7.7, @convex-dev/better-auth 0.12.6 pins <1.7.0.
       - name: Dependency audit
         if: steps.scope.outputs.docs-only != 'true'
-        run: bun audit --audit-level=critical --ignore GHSA-rg76-677x-56q9 --ignore GHSA-xwcq-pm8m-c4vf --ignore GHSA-p6vx-979v-rg4c --ignore GHSA-w7jw-789q-3m8p --ignore GHSA-965c-763c-88jm
+        run: bun audit --audit-level=critical --ignore GHSA-rg76-677x-56q9 --ignore GHSA-xwcq-pm8m-c4vf --ignore GHSA-p6vx-979v-rg4c --ignore GHSA-w7jw-789q-3m8p
 
       # Turborepo remote cache backed by the GitHub Actions cache: one cache
       # shared by every job, workflow and branch, keyed by turbo's task hash.
