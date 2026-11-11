@@ -3,8 +3,8 @@ import { type Result, err, ok } from "neverthrow";
 import type { Doc } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 
+import { personForLogin } from "./currentPerson.ts";
 import { entitled } from "./derive.ts";
-import { personByEmail } from "./emailAddress.ts";
 import type { AuthError } from "./errors/auth.ts";
 import type { Tier } from "./lifecycleTypes.ts";
 import { unwrap } from "./result.ts";
@@ -35,9 +35,8 @@ export async function requireRole(
 	tiers: readonly Tier[]
 ): Promise<Result<Doc<"people">, AuthError>> {
 	const identity = await context.auth.getUserIdentity();
-	const email = identity?.email;
-	if (!email) return err({ type: "NotAuthenticated" });
-	const person = await personByEmail(context, email);
+	if (!identity) return err({ type: "NotAuthenticated" });
+	const person = await personForLogin(context, identity.subject);
 	if (!person || !tiers.includes(person.tier)) {
 		return err({ type: "Forbidden" });
 	}

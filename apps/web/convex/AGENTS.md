@@ -80,3 +80,9 @@ The Convex backend. Read `_generated/ai/guidelines.md` first (see
   awaits the running ones. A test that needs a job's effect drives it inside
   the test (`test-stubs/runAndCollectLogs.ts`). `scheduledJobIsolation.test.ts`
   pins this.
+
+## Signed-in identity in tests
+
+`withIdentity({ email })` links the person holding that email to a login before
+each call, so it writes `people.authUserId`. Pass `subject` to sign in as a
+given login instead (it is used as given, with no linking).

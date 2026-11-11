@@ -114,7 +114,6 @@ const CONFIRM_PATHS: Record<Purpose, string> = {
 	application: "/apply/confirm",
 	visitor: "/visitor/confirm",
 	eventInvite: "/event/confirm",
-	emailChange: "/email/confirm",
 };
 
 /** The link a confirm email carries for a freshly issued token. */

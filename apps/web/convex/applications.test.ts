@@ -1,13 +1,14 @@
+import betterAuthTest from "@convex-dev/better-auth/test";
 import { register as registerRateLimiter } from "@convex-dev/rate-limiter/test";
 import { ConvexError } from "convex/values";
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
+import { loginEmail, seedLogin } from "../test-stubs/logins.ts";
 import { runAndCollectLogs } from "../test-stubs/runAndCollectLogs.ts";
 import { stubRecaptcha } from "../test-stubs/stubRecaptcha.ts";
 
-import { api, internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import { api, components, internal } from "./_generated/api";
 import { validateApplicationInput } from "./applications.ts";
 import { hashConfirmToken, issueToken } from "./lib/confirmToken.ts";
 import {
@@ -2327,13 +2328,6 @@ async function fieldEdits(backend: TestConvex<typeof schema>, id: string) {
 	return rows.filter((row) => row.kind === "field_edit");
 }
 
-async function emailChangeTokens(backend: TestConvex<typeof schema>) {
-	return backend.run(async (context) => {
-		const tokens = await context.db.query("confirmTokens").collect();
-		return tokens.filter((row) => row.purpose === "emailChange");
-	});
-}
-
 // Pins Task 16's `people.update` — the single board field editor that replaced
 // `applications.update` (venture/notes fields) alongside the profile fields.
 describe("people.update", () => {
@@ -2531,58 +2525,169 @@ describe("people.update", () => {
 		expect(person?.firstName).toBe("Augusta");
 	});
 
-	it("an email edit is not applied: it mails a confirm link to the new address, lowercased", async () => {
+	it("an email edit applies at once, lowercased, logs it, and tells the old address", async () => {
 		const backend = convexTest(schema, modules);
 		const { asBoard, boardId } = await seedBoard(backend);
 		const id = await seedProspect(backend);
 
 		let result: unknown;
-		const logs = await runAndCollectLogs(backend, async () => {
+		await runAndCollectLogs(backend, async () => {
 			result = await asBoard.mutation(api.people.update, {
 				id,
-				email: " Ada@Example.ORG ",
+				email: "Ada.New@Example.com",
 			});
 		});
 
-		expect(result).toEqual({ emailChange: "pending" });
+		expect(result).toBeNull();
 		const person = await backend.run(async (context) => context.db.get(id));
-		expect(person?.email).toBe("ada@example.com");
-		expect(await fieldEdits(backend, id)).toHaveLength(0);
-
+		expect(person?.email).toBe("ada.new@example.com");
+		expect(await fieldEdits(backend, id)).toMatchObject([
+			{
+				field: "email",
+				before: "ada@example.com",
+				after: "ada.new@example.com",
+				actorId: boardId,
+			},
+		]);
 		const jobs = await backend.run((context) =>
 			context.db.system.query("_scheduled_functions").collect()
 		);
 		expect(jobs).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
-					name: "people:sendEmailChangeLink",
+					name: "people:sendEmailChangedNotice",
 					args: [
 						{
-							personId: id,
-							newEmail: "ada@example.org",
-							actorId: boardId,
+							oldEmail: "ada@example.com",
+							newEmail: "ada.new@example.com",
 						},
 					],
 				}),
 			])
 		);
-		const tokens = await emailChangeTokens(backend);
-		expect(tokens).toHaveLength(1);
-		expect(tokens[0]).toMatchObject({
-			personId: id,
-			newEmail: "ada@example.org",
-			actorId: boardId,
-		});
-		// The link mailed to the new address carries the raw token of that row.
-		const linked = logs
-			.map((line) =>
-				/^\[email-change\] ada@example\.org \S*\/email\/confirm\?token=([0-9a-f]{64})$/.exec(
-					line
-				)
+		expect(
+			await backend.run((context) =>
+				context.db.query("confirmTokens").collect()
 			)
-			.find((match) => match)?.[1];
-		expect(linked).toBeDefined();
-		expect(tokens[0].tokenHash).toBe(await hashConfirmToken(linked ?? ""));
+		).toEqual([]);
+	});
+
+	it("an email edit renames the person's login", async () => {
+		const backend = convexTest(schema, modules);
+		betterAuthTest.register(backend);
+		registerRateLimiter(backend);
+		const { asBoard } = await seedBoard(backend);
+		const id = await seedProspect(backend);
+		const userId = await seedLogin(backend, "ada@example.com");
+		await backend.run((context) =>
+			context.db.patch(id, { authUserId: userId })
+		);
+
+		await runAndCollectLogs(backend, () =>
+			asBoard.mutation(api.people.update, {
+				id,
+				email: "ada.new@example.com",
+			})
+		);
+
+		expect(await loginEmail(backend, userId)).toBe("ada.new@example.com");
+	});
+
+	it("an email edit removes a stray login on the new address", async () => {
+		const backend = convexTest(schema, modules);
+		betterAuthTest.register(backend);
+		registerRateLimiter(backend);
+		const { asBoard } = await seedBoard(backend);
+		const id = await seedProspect(backend);
+		const userId = await seedLogin(backend, "ada@example.com");
+		const strayId = await seedLogin(backend, "ada.new@example.com");
+		await backend.run((context) =>
+			context.db.patch(id, { authUserId: userId })
+		);
+
+		await runAndCollectLogs(backend, () =>
+			asBoard.mutation(api.people.update, {
+				id,
+				email: "ada.new@example.com",
+			})
+		);
+
+		expect(await loginEmail(backend, strayId)).toBeNull();
+		expect(await loginEmail(backend, userId)).toBe("ada.new@example.com");
+	});
+
+	it("an email edit clears a login link whose login no longer exists", async () => {
+		const backend = convexTest(schema, modules);
+		betterAuthTest.register(backend);
+		registerRateLimiter(backend);
+		const { asBoard } = await seedBoard(backend);
+		const id = await seedProspect(backend);
+		const goneId = await seedLogin(backend, "ada@example.com");
+		await backend.run((context) =>
+			context.db.patch(id, { authUserId: goneId })
+		);
+		await backend.mutation(components.betterAuth.adapter.deleteOne, {
+			input: { model: "user", where: [{ field: "_id", value: goneId }] },
+		});
+
+		await runAndCollectLogs(backend, () =>
+			asBoard.mutation(api.people.update, {
+				id,
+				email: "ada.new@example.com",
+			})
+		);
+
+		const person = await backend.run((context) => context.db.get(id));
+		expect(person?.email).toBe("ada.new@example.com");
+		expect(person?.authUserId).toBeUndefined();
+	});
+
+	it("an unlinked person's email edit touches no login", async () => {
+		const backend = convexTest(schema, modules);
+		betterAuthTest.register(backend);
+		registerRateLimiter(backend);
+		const { asBoard } = await seedBoard(backend);
+		const id = await seedProspect(backend);
+		const otherId = await seedLogin(backend, "ada@example.com");
+
+		await runAndCollectLogs(backend, () =>
+			asBoard.mutation(api.people.update, {
+				id,
+				email: "ada.new@example.com",
+			})
+		);
+
+		expect(await loginEmail(backend, otherId)).toBe("ada@example.com");
+	});
+
+	it("refuses a non-board email change: nothing changes, no mail", async () => {
+		const backend = convexTest(schema, modules);
+		await backend.run((context) =>
+			context.db.insert("people", {
+				email: "mia@example.com",
+				firstName: "Mia",
+				lastName: "",
+				tier: "member",
+				stage: "active",
+				stageSince: Date.now(),
+			})
+		);
+		const asMember = backend.withIdentity({ email: "mia@example.com" });
+		const id = await seedProspect(backend);
+
+		await expect(
+			asMember.mutation(api.people.update, {
+				id,
+				email: "ada.new@example.com",
+			})
+		).rejects.toThrow("Forbidden");
+
+		const jobs = await backend.run((context) =>
+			context.db.system.query("_scheduled_functions").collect()
+		);
+		expect(jobs).toHaveLength(0);
+		const person = await backend.run(async (context) => context.db.get(id));
+		expect(person?.email).toBe("ada@example.com");
 	});
 
 	it("applies the other fields of an update that also changes the email", async () => {
@@ -2600,7 +2705,7 @@ describe("people.update", () => {
 
 		const person = await backend.run(async (context) => context.db.get(id));
 		expect(person?.firstName).toBe("Augusta");
-		expect(person?.email).toBe("ada@example.com");
+		expect(person?.email).toBe("augusta@example.com");
 	});
 
 	it("returns null when the email is not changed", async () => {
@@ -2615,408 +2720,8 @@ describe("people.update", () => {
 		});
 
 		expect(result).toBeNull();
-		expect(await emailChangeTokens(backend)).toHaveLength(0);
-	});
-
-	it("the emailed link moves the person to the new address", async () => {
-		const backend = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(backend);
-		const id = await seedProspect(backend);
-
-		const logs = await runAndCollectLogs(backend, () =>
-			asBoard.mutation(api.people.update, {
-				id,
-				email: "ada@example.org",
-			})
-		);
-		const token = logs
-			.map((line) => /\/email\/confirm\?token=([0-9a-f]{64})/.exec(line))
-			.find((match) => match)?.[1];
-		expect(token).toBeDefined();
-
-		const result = await backend.mutation(api.people.confirmEmailChange, {
-			token: token ?? "",
-		});
-
-		expect(result).toEqual({ status: "verified" });
-		const person = await backend.run(async (context) => context.db.get(id));
-		expect(person?.email).toBe("ada@example.org");
-	});
-});
-
-describe("people.confirmEmailChange", () => {
-	const RAW = "e".repeat(64);
-	const ONE_HOUR = 60 * 60 * 1000;
-
-	async function seedPending(
-		backend: ReturnType<typeof convexTest>,
-		ttlMs = ONE_HOUR,
-		actorId?: Id<"people">
-	) {
-		const id = await backend.run(async (context) =>
-			context.db.insert("people", {
-				email: "ada@example.com",
-				firstName: "Ada",
-				lastName: "Lovelace",
-				tier: "member",
-				stage: "active",
-				stageSince: Date.now(),
-			})
-		);
-		await backend.run((context) =>
-			issueToken(context, {
-				token: RAW,
-				purpose: "emailChange",
-				personId: id,
-				ttlMs,
-				newEmail: "ada@example.org",
-				actorId,
-			})
-		);
-		return id;
-	}
-
-	it("patches the email, logs it with the requesting board member, and tells the old address", async () => {
-		const backend = convexTest(schema, modules);
-		const { boardId } = await seedBoard(backend);
-		const id = await seedPending(backend, ONE_HOUR, boardId);
-
-		let result: unknown;
-		const logs = await runAndCollectLogs(backend, async () => {
-			result = await backend.mutation(api.people.confirmEmailChange, {
-				token: RAW,
-			});
-		});
-
-		expect(result).toEqual({ status: "verified" });
-		const person = await backend.run(async (context) => context.db.get(id));
-		expect(person?.email).toBe("ada@example.org");
-		const jobs = await backend.run((context) =>
-			context.db.system.query("_scheduled_functions").collect()
-		);
-		expect(jobs).toEqual([
-			expect.objectContaining({
-				name: "people:sendEmailChangedNotice",
-				args: [
-					{
-						oldEmail: "ada@example.com",
-						newEmail: "ada@example.org",
-					},
-				],
-			}),
+		expect(await fieldEdits(backend, id)).toMatchObject([
+			{ field: "firstName" },
 		]);
-		expect(logs).toContain(
-			"[email-changed] ada@example.com -> ada@example.org"
-		);
-		const edits = await backend.run(async (context) =>
-			context.db
-				.query("personEvents")
-				.withIndex("by_personId_and_at", (range) =>
-					range.eq("personId", id)
-				)
-				.collect()
-		);
-		expect(edits).toEqual([
-			expect.objectContaining({
-				kind: "field_edit",
-				field: "email",
-				before: "ada@example.com",
-				after: "ada@example.org",
-				actorId: boardId,
-			}),
-		]);
-	});
-
-	it("answers taken and leaves the email when someone took the address since", async () => {
-		const backend = convexTest(schema, modules);
-		const id = await seedPending(backend);
-		await backend.run(async (context) =>
-			context.db.insert("people", {
-				email: "ada@example.org",
-				firstName: "Other",
-				lastName: "",
-				tier: "prospect",
-				stage: "unverified",
-				stageSince: Date.now(),
-			})
-		);
-
-		const result = await backend.mutation(api.people.confirmEmailChange, {
-			token: RAW,
-		});
-
-		expect(result).toEqual({ status: "taken" });
-		const person = await backend.run(async (context) => context.db.get(id));
-		expect(person?.email).toBe("ada@example.com");
-		const jobs = await backend.run((context) =>
-			context.db.system.query("_scheduled_functions").collect()
-		);
-		expect(jobs).toHaveLength(0);
-	});
-
-	it("answers expired and leaves the email for a dead link", async () => {
-		const backend = convexTest(schema, modules);
-		const id = await seedPending(backend, -1);
-
-		const result = await backend.mutation(api.people.confirmEmailChange, {
-			token: RAW,
-		});
-
-		expect(result).toEqual({ status: "expired" });
-		const person = await backend.run(async (context) => context.db.get(id));
-		expect(person?.email).toBe("ada@example.com");
-	});
-
-	it("answers invalid for an unknown token or another purpose's token", async () => {
-		const backend = convexTest(schema, modules);
-		const id = await seedPending(backend);
-		await backend.run((context) =>
-			issueToken(context, {
-				token: "f".repeat(64),
-				purpose: "application",
-				personId: id,
-				ttlMs: ONE_HOUR,
-			})
-		);
-
-		for (const token of ["nope", "f".repeat(64)]) {
-			expect(
-				await backend.mutation(api.people.confirmEmailChange, { token })
-			).toEqual({ status: "invalid" });
-		}
-		const person = await backend.run(async (context) => context.db.get(id));
-		expect(person?.email).toBe("ada@example.com");
-	});
-
-	it("a repeat click on a used link answers verified without mailing again", async () => {
-		const backend = convexTest(schema, modules);
-		await seedPending(backend);
-		await runAndCollectLogs(backend, () =>
-			backend.mutation(api.people.confirmEmailChange, { token: RAW })
-		);
-
-		const result = await backend.mutation(api.people.confirmEmailChange, {
-			token: RAW,
-		});
-
-		expect(result).toEqual({ status: "verified" });
-		const jobs = await backend.run((context) =>
-			context.db.system.query("_scheduled_functions").collect()
-		);
-		expect(jobs).toHaveLength(1);
-	});
-});
-
-async function seedEmailChangePerson(backend: ReturnType<typeof convexTest>) {
-	return backend.run(async (context) =>
-		context.db.insert("people", {
-			email: "ada@example.com",
-			firstName: "Ada",
-			lastName: "Lovelace",
-			tier: "member",
-			stage: "active",
-			stageSince: Date.now(),
-		})
-	);
-}
-
-function linkIn(logs: string[], address: string): string {
-	const token = logs
-		.filter((line) => line.startsWith(`[email-change] ${address} `))
-		.map((line) => /\/email\/confirm\?token=([0-9a-f]{64})/.exec(line))
-		.find((match) => match)?.[1];
-	if (!token) throw new Error(`no confirm link mailed to ${address}`);
-	return token;
-}
-
-async function storedEmail(
-	backend: TestConvex<typeof schema>,
-	id: Id<"people">
-): Promise<string | undefined> {
-	const person = await backend.run(async (context) => context.db.get(id));
-	return person?.email;
-}
-
-async function requestChange(
-	backend: ReturnType<typeof convexTest>,
-	asBoard: ReturnType<ReturnType<typeof convexTest>["withIdentity"]>,
-	id: Id<"people">,
-	email: string
-) {
-	const logs = await runAndCollectLogs(backend, () =>
-		asBoard.mutation(api.people.update, { id, email })
-	);
-	return linkIn(logs, email);
-}
-
-describe("pending email changes", () => {
-	const MEMBER_EMAIL = "mia@example.com";
-
-	async function seedMember(backend: ReturnType<typeof convexTest>) {
-		await backend.run(async (context) =>
-			context.db.insert("people", {
-				email: MEMBER_EMAIL,
-				firstName: "Mia",
-				lastName: "",
-				tier: "member",
-				stage: "active",
-				stageSince: Date.now(),
-			})
-		);
-		return backend.withIdentity({ email: MEMBER_EMAIL });
-	}
-
-	it("shows the board the address a change waits on, and nothing once there is none", async () => {
-		const backend = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(backend);
-		const id = await seedEmailChangePerson(backend);
-
-		expect(
-			await asBoard.query(api.people.pendingEmailChange, { personId: id })
-		).toBeNull();
-		await requestChange(backend, asBoard, id, "ada@example.org");
-		expect(
-			await asBoard.query(api.people.pendingEmailChange, { personId: id })
-		).toEqual({ newEmail: "ada@example.org" });
-	});
-
-	it("hides a pending change from a non-board caller", async () => {
-		const backend = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(backend);
-		const asMember = await seedMember(backend);
-		const id = await seedEmailChangePerson(backend);
-		await requestChange(backend, asBoard, id, "ada@example.org");
-
-		await expect(
-			asMember.query(api.people.pendingEmailChange, { personId: id })
-		).rejects.toThrow("Forbidden");
-	});
-
-	it("cancel kills the mailed link: it answers invalid and the email stays", async () => {
-		const backend = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(backend);
-		const id = await seedEmailChangePerson(backend);
-		const token = await requestChange(
-			backend,
-			asBoard,
-			id,
-			"ada@example.org"
-		);
-
-		await asBoard.mutation(api.people.cancelEmailChange, { personId: id });
-
-		expect(
-			await asBoard.query(api.people.pendingEmailChange, { personId: id })
-		).toBeNull();
-		expect(
-			await backend.mutation(api.people.confirmEmailChange, { token })
-		).toEqual({ status: "invalid" });
-		expect(await storedEmail(backend, id)).toBe("ada@example.com");
-	});
-
-	it("refuses cancel to a non-board caller and leaves the link live", async () => {
-		const backend = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(backend);
-		const asMember = await seedMember(backend);
-		const id = await seedEmailChangePerson(backend);
-		const token = await requestChange(
-			backend,
-			asBoard,
-			id,
-			"ada@example.org"
-		);
-
-		await expect(
-			asMember.mutation(api.people.cancelEmailChange, { personId: id })
-		).rejects.toThrow("Forbidden");
-
-		expect(
-			await backend.mutation(api.people.confirmEmailChange, { token })
-		).toEqual({ status: "verified" });
-	});
-
-	it("a new email change revokes the earlier pending one", async () => {
-		const backend = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(backend);
-		const id = await seedEmailChangePerson(backend);
-		const first = await requestChange(
-			backend,
-			asBoard,
-			id,
-			"typo@example.com"
-		);
-		const second = await requestChange(
-			backend,
-			asBoard,
-			id,
-			"ada@example.org"
-		);
-
-		expect(
-			await backend.mutation(api.people.confirmEmailChange, {
-				token: first,
-			})
-		).toEqual({ status: "invalid" });
-		expect(
-			await asBoard.query(api.people.pendingEmailChange, { personId: id })
-		).toEqual({ newEmail: "ada@example.org" });
-		expect(
-			await backend.mutation(api.people.confirmEmailChange, {
-				token: second,
-			})
-		).toEqual({ status: "verified" });
-	});
-
-	it("re-entering the stored email revokes the pending change without mailing anyone", async () => {
-		const backend = convexTest(schema, modules);
-		const { asBoard } = await seedBoard(backend);
-		const id = await seedEmailChangePerson(backend);
-		const token = await requestChange(
-			backend,
-			asBoard,
-			id,
-			"typo@example.com"
-		);
-		const jobsBefore = await backend.run((context) =>
-			context.db.system.query("_scheduled_functions").collect()
-		);
-
-		const result = await asBoard.mutation(api.people.update, {
-			id,
-			email: "ada@example.com",
-		});
-
-		expect(result).toBeNull();
-		const jobsAfter = await backend.run((context) =>
-			context.db.system.query("_scheduled_functions").collect()
-		);
-		expect(jobsAfter).toHaveLength(jobsBefore.length);
-		expect(
-			await backend.mutation(api.people.confirmEmailChange, { token })
-		).toEqual({ status: "invalid" });
-		expect(await storedEmail(backend, id)).toBe("ada@example.com");
-	});
-
-	it("refuses a non-board email change: no token, no mail", async () => {
-		const backend = convexTest(schema, modules);
-		const asMember = await seedMember(backend);
-		const id = await seedEmailChangePerson(backend);
-
-		await expect(
-			asMember.mutation(api.people.update, {
-				id,
-				email: "ada@example.org",
-			})
-		).rejects.toThrow("Forbidden");
-
-		const tokens = await backend.run((context) =>
-			context.db.query("confirmTokens").collect()
-		);
-		expect(tokens).toHaveLength(0);
-		const jobs = await backend.run((context) =>
-			context.db.system.query("_scheduled_functions").collect()
-		);
-		expect(jobs).toHaveLength(0);
-		expect(await storedEmail(backend, id)).toBe("ada@example.com");
 	});
 });

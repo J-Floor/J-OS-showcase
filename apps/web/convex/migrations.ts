@@ -93,8 +93,8 @@ export const fixImportYear = internalMutation({
 	},
 });
 
-// `people.email` is the identity key, and every `by_email` lookup now passes
-// its input through `normalizeEmail`. Rows written before that may still carry
+// `people.email` is the person's address, and every `by_email` lookup now
+// passes its input through `normalizeEmail`. Rows written before that may still carry
 // capitals, and no lookup can find them until they are lowercased. Run once on
 // prod right after deploying:
 //   bunx convex run migrations:findEmailCollisions --prod   # resolve by hand first
@@ -501,45 +501,6 @@ export const linkAuthUsers = internalMutation({
 		}
 		return {
 			...counts,
-			isDone: page.isDone,
-			continueCursor: page.continueCursor,
-			dryRun: dryRun === true,
-		};
-	},
-});
-
-/**
- * One-off: delete every `emailChange` confirm token, so the purpose can leave
- * the schema. Run it only just before the deploy that removes the
- * email-change confirm purpose, not before.
- * Paged and dry-run as `backfillPerkEvents` is:
- *
- *   bunx convex run migrations:removeEmailChangeTokens '{"dryRun":true}' --prod
- *   bunx convex run migrations:removeEmailChangeTokens --prod
- *   bunx convex run migrations:removeEmailChangeTokens '{"dryRun":true}' --prod  # removed 0
- */
-export const removeEmailChangeTokens = internalMutation({
-	args: PAGED_MIGRATION_ARGS,
-	handler: async (context, { cursor, dryRun }) => {
-		const page = await context.db.query("confirmTokens").paginate({
-			cursor: cursor ?? null,
-			numItems: MIGRATION_PAGE_SIZE,
-		});
-		let removed = 0;
-		for (const row of page.page) {
-			if (row.purpose !== "emailChange") continue;
-			removed++;
-			if (dryRun !== true) await context.db.delete(row._id);
-		}
-		if (dryRun !== true && !page.isDone) {
-			await context.scheduler.runAfter(
-				0,
-				internal.migrations.removeEmailChangeTokens,
-				{ cursor: page.continueCursor }
-			);
-		}
-		return {
-			removed,
 			isDone: page.isDone,
 			continueCursor: page.continueCursor,
 			dryRun: dryRun === true,

@@ -72,6 +72,19 @@ export async function authUsersPage(
 export type LinkOutcome = "linked" | "unchanged" | "noPerson" | "ambiguous";
 
 const HOLDERS_TO_READ = 2;
+const LOGIN_HOLDERS_TO_READ = 2;
+
+async function unlinkLogin(
+	context: MutationCtx,
+	userId: string
+): Promise<void> {
+	const holders = await context.db
+		.query("people")
+		.withIndex("by_authUserId", (range) => range.eq("authUserId", userId))
+		.take(LOGIN_HOLDERS_TO_READ);
+	for (const holder of holders)
+		await context.db.patch(holder._id, { authUserId: undefined });
+}
 
 /**
  * Link `user` to the person who holds its email. Runs when someone signs in,
@@ -93,12 +106,7 @@ export async function linkLogin(
 	const [person] = holders;
 	if (person.authUserId === user._id) return "unchanged";
 	if (options.dryRun === true) return "linked";
-	const others = await context.db
-		.query("people")
-		.withIndex("by_authUserId", (range) => range.eq("authUserId", user._id))
-		.take(HOLDERS_TO_READ);
-	for (const other of others)
-		await context.db.patch(other._id, { authUserId: undefined });
+	await unlinkLogin(context, user._id);
 	await context.db.patch(person._id, { authUserId: user._id });
 	return "linked";
 }
@@ -148,6 +156,25 @@ async function deleteAll(
 	}
 }
 
+/** Delete login `userId` with its sessions and accounts. Returns how many auth
+ *  rows went. */
+export async function eraseLogin(
+	context: MutationCtx,
+	userId: string
+): Promise<number> {
+	let deleted = 0;
+	for (const model of ["session", "account"] as const)
+		deleted += await deleteAll(context, {
+			model,
+			where: [{ field: "userId", value: userId }],
+		});
+	deleted += await deleteAll(context, {
+		model: "user",
+		where: [{ field: "_id", value: userId }],
+	});
+	return deleted;
+}
+
 /**
  * Delete the sign-in records for `email`: the user, its sessions and accounts,
  * any pending magic link (its `value` carries the address), and the
@@ -160,17 +187,7 @@ export async function eraseAuthRecords(
 	const address = normalizeEmail(email);
 	let deleted = 0;
 	const user = await authUser(context, address);
-	if (user) {
-		for (const model of ["session", "account"] as const)
-			deleted += await deleteAll(context, {
-				model,
-				where: [{ field: "userId", value: user._id }],
-			});
-		deleted += await deleteAll(context, {
-			model: "user",
-			where: [{ field: "_id", value: user._id }],
-		});
-	}
+	if (user) deleted += await eraseLogin(context, user._id);
 	// Live links only: `expiresAt` bounds the read through its index, where
 	// matching on `value` alone would scan the whole table. An expired link
 	// that was never used still holds the address until Better Auth drops it.
@@ -190,4 +207,34 @@ export async function eraseAuthRecords(
 	for (const name of ["sendEmail", "magicLinkAddress"] as const)
 		await rateLimiter.reset(context, name, { key: address });
 	return deleted;
+}
+
+/**
+ * Move login `userId` to `email`. Another login already on that address is
+ * erased first (with its sessions): no person holds the address, since email
+ * is unique among people, so nobody signs in with it. A login that no longer
+ * exists is dropped from the people linked to it instead.
+ */
+export async function renameLogin(
+	context: MutationCtx,
+	userId: string,
+	email: string
+): Promise<void> {
+	if (!(await authUserById(context, userId))) {
+		await unlinkLogin(context, userId);
+		return;
+	}
+	const address = normalizeEmail(email);
+	const holder = await authUser(context, address);
+	if (holder && holder._id !== userId) {
+		await eraseAuthRecords(context, address);
+		await unlinkLogin(context, holder._id);
+	}
+	await context.runMutation(components.betterAuth.adapter.updateOne, {
+		input: {
+			model: "user",
+			where: [{ field: "_id", value: userId }],
+			update: { email: address, updatedAt: Date.now() },
+		},
+	});
 }

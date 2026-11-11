@@ -28,7 +28,6 @@ import { OnboardingRoute } from "./modules/onboarding/OnboardingRoute.tsx";
 import { PrivacyPolicy } from "./modules/privacy/PrivacyPolicy.tsx";
 import { ConfirmApplication } from "./modules/signup/ConfirmApplication.tsx";
 import { SignUp } from "./modules/signup/SignUp.tsx";
-import { EmailChangeConfirm } from "./modules/visitor/EmailChangeConfirm.tsx";
 import { EventInviteConfirm } from "./modules/visitor/EventInviteConfirm.tsx";
 import { VisitorConfirm } from "./modules/visitor/VisitorConfirm.tsx";
 import { VisitorRegister } from "./modules/visitor/VisitorRegister.tsx";
@@ -126,11 +125,6 @@ render(
 				path="/event/confirm"
 				component={EventInviteConfirm}
 				info={{ title: "Confirm invite" }}
-			/>
-			<Route
-				path="/email/confirm"
-				component={EmailChangeConfirm}
-				info={{ title: "Confirm email change" }}
 			/>
 			<Route
 				path="/onboarding"

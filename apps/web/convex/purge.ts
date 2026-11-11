@@ -3,7 +3,7 @@ import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { internalMutation } from "./_generated/server";
-import { eraseAuthRecords } from "./lib/authRecords.ts";
+import { eraseAuthRecords, eraseLogin } from "./lib/authRecords.ts";
 import { abandoned, purgeConfirmTokens } from "./lib/confirmToken.ts";
 import { peopleByEmail } from "./lib/emailAddress.ts";
 import {
@@ -195,8 +195,13 @@ export const purgeEmail = internalMutation({
 		const tally = { deleted: 0, stripped: 0 };
 		const ids = new Set<string>(people.map((person) => person._id));
 		const used = new Set<string>();
-		for (const person of people)
+		let auth = 0;
+		for (const person of people) {
+			// By id, whatever address the login now carries.
+			if (person.authUserId !== undefined)
+				auth += await eraseLogin(context, person.authUserId);
 			await erasePerson(context, { person, budget, tally, used });
+		}
 		const addresses = unwrapLogged(
 			await addressesHeldBy(context, [...used], ids, budget),
 			"Purge"
@@ -209,7 +214,6 @@ export const purgeEmail = internalMutation({
 			await context.db.delete(row._id);
 			tally.deleted++;
 		}
-		let auth = 0;
 		for (const address of addresses)
 			auth += await eraseAuthRecords(context, address);
 		return {

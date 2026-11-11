@@ -11,7 +11,7 @@ import { WifiContent } from "../../shared/wifi/WifiContent.tsx";
 import styles from "./ConfirmScreen.module.scss";
 
 /** The branded card an emailed confirm link lands on. */
-export function ConfirmScreen(props: { children: JSX.Element }): JSX.Element {
+function ConfirmScreen(props: { children: JSX.Element }): JSX.Element {
 	return (
 		<main class={styles.screen}>
 			<div class={styles.card}>
@@ -23,12 +23,12 @@ export function ConfirmScreen(props: { children: JSX.Element }): JSX.Element {
 }
 
 /** What the card says while the token is being checked. */
-export function ConfirmingLine(): JSX.Element {
+function ConfirmingLine(): JSX.Element {
 	return <p class={styles.intro}>Confirming…</p>;
 }
 
 /** One outcome of the confirmation: its headline, then any detail. */
-export function ConfirmOutcome(props: {
+function ConfirmOutcome(props: {
 	title: string;
 	children?: JSX.Element;
 }): JSX.Element {
@@ -41,7 +41,7 @@ export function ConfirmOutcome(props: {
 }
 
 /** An outcome's explanatory line under its headline. */
-export function ConfirmDetail(props: { children: JSX.Element }): JSX.Element {
+function ConfirmDetail(props: { children: JSX.Element }): JSX.Element {
 	return <p class={styles.intro}>{props.children}</p>;
 }
 

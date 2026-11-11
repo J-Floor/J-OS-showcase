@@ -12,20 +12,10 @@ import {
 	query,
 } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { confirmEmailChange as confirmEmailChangeEmail } from "./emails/generated/confirmEmailChange.ts";
 import { emailChanged } from "./emails/generated/emailChanged.ts";
-import { confirmUrl, emailUrls } from "./emails/urls.ts";
+import { emailUrls } from "./emails/urls.ts";
 import { requireRole } from "./lib/authGuard.ts";
-import { authRecordsFor } from "./lib/authRecords.ts";
-import {
-	issueToken,
-	liveTokens,
-	newConfirmToken,
-	redeemRow,
-	revokeTokens,
-	tokenRow,
-} from "./lib/confirmToken.ts";
-import { VERIFY_TTL_MS } from "./lib/constants.ts";
+import { authRecordsFor, renameLogin } from "./lib/authRecords.ts";
 import { personForCurrentUser } from "./lib/currentPerson.ts";
 import { entitled, personStatus, type PersonStatus } from "./lib/derive.ts";
 import { sendEmail } from "./lib/email.ts";
@@ -360,16 +350,15 @@ async function patchVenture(
 }
 
 /**
- * Resolve a requested email change: supersede any change still waiting on its
- * link, and return the new address to confirm, or undefined when there is
- * nothing to change.
+ * Resolve a requested email change: return the new address to apply, or
+ * undefined when there is nothing to change.
  *
- * Email is the identity key (`by_email` + `.unique()` in requireRole and
- * personForCurrentUser). A duplicate would lock two people out at once, and a
- * typo locks the person out: their next sign-in finds nobody. An email that
- * only differs from the stored one by case or spacing is unchanged and left
- * alone, so a legacy malformed one still saves and a case-only duplicate is
- * left for `migrateEmailCase` to report.
+ * Email is unique among people because sign-in mails a link to it. A
+ * duplicate would send two people's links to one inbox, and a typo locks the
+ * person out: their next sign-in goes nowhere. An email that only differs
+ * from the stored one by case or spacing is unchanged and left alone, so a
+ * legacy malformed one still saves and a case-only duplicate is left for
+ * `migrateEmailCase` to report.
  */
 async function resolveEmailChange(
 	context: MutationCtx,
@@ -378,9 +367,6 @@ async function resolveEmailChange(
 ): Promise<Result<string | undefined, PeopleError>> {
 	if (requested === undefined) return ok(undefined);
 	const newEmail = normalizeEmail(requested);
-	// Any email edit supersedes a change still waiting on its link: a new
-	// address replaces it, and re-entering the stored one withdraws it.
-	await revokeTokens(context, person._id, "emailChange");
 	if (newEmail === normalizeEmail(person.email)) return ok(undefined);
 	if (!validEmail(newEmail)) return err({ type: "InvalidEmail" });
 	const clash = await personByEmail(context, newEmail);
@@ -396,18 +382,9 @@ async function resolveEmailChange(
  * Workflow (tier, stage, access window, door) is NOT here: those are machine
  * events and their own mutations.
  *
- * `email` IS here — the sheet has always offered it — but it is guarded. It is
- * the identity key: `requireRole` (`lib/authGuard.ts`) and
- * `personForCurrentUser` (`people.ts`) both look a person up by `by_email` with
- * `.unique()`. Before this task the sheet's email field edited an
- * `applications` row and could not lock anyone out; now a board typo would, and
- * a collision would make `.unique()` throw for BOTH people. Hence the explicit
- * uniqueness check.
- *
- * A changed email is never written here. Whoever controls the new address
- * would own the account, so the change waits for that address to confirm it
- * (`confirmEmailChange`); `update` only mails the confirm link and returns
- * `{ emailChange: "pending" }`. The other fields in the same call apply now.
+ * `email` IS here, but guarded: it must be well formed and no other person may
+ * hold it. An email edit applies at once and moves the person's login with it,
+ * so they sign in with the new address from then on. The old address is told.
  */
 export const update = mutation({
 	args: {
@@ -427,10 +404,7 @@ export const update = mutation({
 		productStage: v.optional(productStage),
 		fundingStage: v.optional(fundingStage),
 	},
-	handler: async (
-		context,
-		args
-	): Promise<{ emailChange: "pending" } | null> => {
+	handler: async (context, args): Promise<void> => {
 		unwrap(await requireRole(context, BOARD_LEVEL));
 		unwrap(checkLength(args.phone, PHONE_MAX));
 		unwrap(checkLength(args.ventureName, VENTURE_NAME_MAX));
@@ -476,152 +450,22 @@ export const update = mutation({
 		);
 		await patchVenture(context, person, venturePatch);
 
-		if (newEmail === undefined) return null;
-		await context.scheduler.runAfter(
-			0,
-			internal.people.sendEmailChangeLink,
-			{
-				personId: id,
-				newEmail,
-				actorId,
-			}
-		);
-		return { emailChange: "pending" };
-	},
-});
-
-/**
- * Mints the email-change confirm token (an action: tokens need real
- * randomness), records its hash, and mails the link to the NEW address. The
- * mail carries nothing about the person: the board may have mistyped the
- * address, so it could reach a stranger.
- */
-export const sendEmailChangeLink = internalAction({
-	args: {
-		personId: v.id("people"),
-		newEmail: v.string(),
-		actorId: v.optional(v.id("people")),
-	},
-	handler: async (context, { personId, newEmail, actorId }) => {
-		const token = newConfirmToken();
-		const isIssued = await context.runMutation(
-			internal.people.issueEmailChangeToken,
-			{ personId, newEmail, token, actorId }
-		);
-		if (!isIssued) return;
-		const { html, text } = confirmEmailChangeEmail({
-			confirmUrl: confirmUrl("emailChange", token),
-			logoUrl: emailUrls().logoUrl,
-		});
-		await sendEmail(context, {
-			to: newEmail,
-			subject: "Confirm your new J floor sign-in address",
-			html,
-			text,
-			priority: "critical",
-			devLog: `[email-change] ${newEmail} ${confirmUrl("emailChange", token)}`,
-		});
-	},
-});
-
-/** Records an email-change token; false when the person is gone. */
-export const issueEmailChangeToken = internalMutation({
-	args: {
-		personId: v.id("people"),
-		newEmail: v.string(),
-		token: v.string(),
-		actorId: v.optional(v.id("people")),
-	},
-	handler: async (context, args): Promise<boolean> => {
-		if (!(await context.db.get(args.personId))) return false;
-		await issueToken(context, {
-			token: args.token,
-			purpose: "emailChange",
-			personId: args.personId,
-			ttlMs: VERIFY_TTL_MS,
-			newEmail: args.newEmail,
-			actorId: args.actorId,
-		});
-		return true;
-	},
-});
-
-/** Board-only: the address a person's email change is waiting on, if any. */
-export const pendingEmailChange = query({
-	args: { personId: v.id("people") },
-	handler: async (
-		context,
-		{ personId }
-	): Promise<{ newEmail: string } | null> => {
-		unwrap(await requireRole(context, BOARD_LEVEL));
-		const rows = await liveTokens(
-			context.db,
-			personId,
-			"emailChange",
-			Date.now()
-		);
-		const row = rows.at(0);
-		return row?.newEmail === undefined ? null : { newEmail: row.newEmail };
-	},
-});
-
-/** Board-only: withdraw a person's pending email change; its link stops working. */
-export const cancelEmailChange = mutation({
-	args: { personId: v.id("people") },
-	handler: async (context, { personId }) => {
-		unwrap(await requireRole(context, BOARD_LEVEL));
-		await revokeTokens(context, personId, "emailChange");
-	},
-});
-
-export type EmailChangeStatus = "verified" | "invalid" | "expired" | "taken";
-
-/**
- * The `/email/confirm` link: moves the person to the address the board
- * entered, now that the address itself has confirmed it. Re-checks the clash
- * (someone may have taken the address since) and tells the OLD address.
- * A repeat click on a link that already went through answers "verified".
- */
-export const confirmEmailChange = mutation({
-	args: { token: v.string() },
-	handler: async (
-		context,
-		{ token }
-	): Promise<{ status: EmailChangeStatus }> => {
-		const redeemed = await redeemRow(
-			context,
-			await tokenRow(context.db, token),
-			"emailChange"
-		);
-		if (redeemed.status === "invalid") return { status: "invalid" };
-		const newEmail = redeemed.row.newEmail;
-		const person = await context.db.get(redeemed.row.personId);
-		if (!person || newEmail === undefined) return { status: "invalid" };
-		if (redeemed.status === "already")
-			return {
-				status: person.email === newEmail ? "verified" : "invalid",
-			};
-		if (redeemed.status === "expired") return { status: "expired" };
-		const clash = await personByEmail(context, newEmail);
-		if (clash && clash._id !== person._id) return { status: "taken" };
-		const oldEmail = person.email;
+		if (newEmail === undefined) return;
 		await logFieldEdit(context, {
 			personId: person._id,
 			field: "email",
-			before: oldEmail,
+			before: person.email,
 			after: newEmail,
-			actorId: redeemed.row.actorId,
+			actorId,
 		});
 		await context.db.patch(person._id, { email: newEmail });
+		if (person.authUserId !== undefined)
+			await renameLogin(context, person.authUserId, newEmail);
 		await context.scheduler.runAfter(
 			0,
 			internal.people.sendEmailChangedNotice,
-			{
-				oldEmail,
-				newEmail,
-			}
+			{ oldEmail: person.email, newEmail }
 		);
-		return { status: "verified" };
 	},
 });
 

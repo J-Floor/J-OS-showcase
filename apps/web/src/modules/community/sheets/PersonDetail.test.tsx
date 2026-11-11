@@ -47,14 +47,8 @@ const {
 	timelineRows,
 	attendedEventsRows,
 	timelineQueryCalls,
-	cancelEmailChangeMock,
-	pendingEmailChange,
 } = vi.hoisted(() => ({
 	completeBoardStepMock: vi.fn(() => Promise.resolve()),
-	cancelEmailChangeMock: vi.fn(() => Promise.resolve()),
-	pendingEmailChange: {
-		current: null as { newEmail: string } | null,
-	},
 	timelineRows: {
 		current: [] as Record<string, unknown>[],
 	},
@@ -65,13 +59,8 @@ const {
 }));
 
 vi.mock("convex-solidjs", () => ({
-	useMutation: (function_: unknown) => ({
-		mutateAsync:
-			getFunctionName(
-				function_ as Parameters<typeof getFunctionName>[0]
-			) === "people:cancelEmailChange"
-				? cancelEmailChangeMock
-				: completeBoardStepMock,
+	useMutation: () => ({
+		mutateAsync: completeBoardStepMock,
 		mutate: vi.fn(),
 		data: () => {},
 		error: () => {},
@@ -82,13 +71,6 @@ vi.mock("convex-solidjs", () => ({
 		const name = getFunctionName(
 			function_ as Parameters<typeof getFunctionName>[0]
 		);
-		if (name === "people:pendingEmailChange") {
-			return {
-				data: () => pendingEmailChange.current,
-				isLoading: () => false,
-				error: () => {},
-			};
-		}
 		if (name === "people:attendedEvents") {
 			return {
 				data: () => attendedEventsRows.current,
@@ -165,8 +147,6 @@ afterEach(() => {
 	timelineRows.current = [];
 	attendedEventsRows.current = [];
 	timelineQueryCalls.count = 0;
-	cancelEmailChangeMock.mockClear();
-	pendingEmailChange.current = null;
 });
 
 test("renders every status fact as its own labelled line", () => {
@@ -505,95 +485,20 @@ test("a flagged venture link is shown as text, not a clickable anchor", () => {
 	).toBeInTheDocument();
 });
 
-test("a pending email change shows the address it waits on and keeps the stored email", () => {
-	pendingEmailChange.current = { newEmail: "new@example.org" };
-	render(() => (
-		<PersonDetail
-			isOpen={isShown}
-			person={person({ status: ACTIVE_MEMBER, email: "old@example.com" })}
-			editing
-		/>
-	));
-	expect(screen.getByRole("status")).toHaveTextContent(
-		"Waiting for new@example.org to confirm"
+test("a saved email shows the new address", () => {
+	const [current, setCurrent] = createSignal(
+		person({ status: ACTIVE_MEMBER, _id: "p1", email: "old@example.com" })
 	);
-	expect(screen.getByDisplayValue("old@example.com")).toBeInTheDocument();
-});
-
-test("no pending email change, no notice", () => {
-	render(() => (
-		<PersonDetail
-			isOpen={isShown}
-			person={person({ status: ACTIVE_MEMBER, email: "old@example.com" })}
-			editing
-		/>
-	));
-	expect(screen.queryByRole("status")).toBeNull();
-});
-
-test("Cancel withdraws the pending email change for this person", () => {
-	pendingEmailChange.current = { newEmail: "new@example.org" };
-	render(() => (
-		<PersonDetail
-			isOpen={isShown}
-			person={person({ status: ACTIVE_MEMBER, _id: "p1" })}
-			editing
-		/>
-	));
-	fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-	expect(cancelEmailChangeMock).toHaveBeenCalledWith({ personId: "p1" });
-});
-
-/** The detail in edit mode inside an open sheet that shows its save status. */
-function renderInSheet(): void {
-	render(() => (
-		<Sheet.Root open onOpenChange={() => {}}>
-			<Sheet.Header>
-				<Sheet.Title>Person</Sheet.Title>
-				<Sheet.HeaderActions>
-					<Sheet.SaveStatus />
-				</Sheet.HeaderActions>
-			</Sheet.Header>
-			<PersonDetail
-				isOpen={isShown}
-				person={person({ status: ACTIVE_MEMBER, _id: "p1" })}
-				editing
-			/>
-		</Sheet.Root>
-	));
-}
-
-function saveStatus(): HTMLElement {
-	return screen.getByRole("status", { name: "Save status" });
-}
-
-test("cancelling an email change reports to the sheet's save status", async () => {
-	pendingEmailChange.current = { newEmail: "new@example.org" };
-	renderInSheet();
-	fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-	expect(saveStatus()).toHaveAttribute("data-state", "pending");
-	await vi.waitFor(() => {
-		expect(saveStatus()).toHaveAttribute("data-state", "saved");
-	});
-});
-
-test("a refused email cancel reads Couldn't save, and Retry sends it again", async () => {
-	pendingEmailChange.current = { newEmail: "new@example.org" };
-	cancelEmailChangeMock.mockImplementationOnce(() =>
-		Promise.reject(
-			new ConvexError({ code: "Forbidden", message: "Not allowed." })
-		)
+	render(() => <PersonDetail isOpen={isShown} person={current()} editing />);
+	commitEmail("old@example.com", "new@example.org");
+	expect(completeBoardStepMock).toHaveBeenCalledWith(
+		expect.objectContaining({ id: "p1", email: "new@example.org" })
 	);
-	renderInSheet();
-	fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-	await vi.waitFor(() => {
-		expect(saveStatus()).toHaveAttribute("data-state", "failed");
-	});
-	fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-	await vi.waitFor(() => {
-		expect(saveStatus()).toHaveAttribute("data-state", "saved");
-	});
-	expect(cancelEmailChangeMock).toHaveBeenCalledTimes(2);
+	setCurrent(
+		person({ status: ACTIVE_MEMBER, _id: "p1", email: "new@example.org" })
+	);
+	expect(screen.getByDisplayValue("new@example.org")).toBeInTheDocument();
+	expect(screen.queryByDisplayValue("old@example.com")).toBeNull();
 });
 
 test("a later successful email commit clears the error", async () => {

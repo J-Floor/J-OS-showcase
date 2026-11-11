@@ -271,8 +271,7 @@ export const reapplyPayload = v.object({
 export const confirmPurpose = v.union(
 	v.literal("application"),
 	v.literal("visitor"),
-	v.literal("eventInvite"),
-	v.literal("emailChange")
+	v.literal("eventInvite")
 );
 
 /** Which agreement a signature is for. */
@@ -680,14 +679,9 @@ export default defineSchema({
 		expiresAt: v.number(),
 		consumedAt: v.optional(v.number()),
 		payload: v.optional(reapplyPayload),
-		/** The address an `emailChange` token moves the person to once confirmed. */
-		newEmail: v.optional(v.string()),
-		/** The board member who requested an `emailChange`; recorded in the audit entry on confirm. */
-		actorId: v.optional(v.id("people")),
 	})
 		.index("by_tokenHash", ["tokenHash"])
 		.index("by_person_purpose", ["personId", "purpose"])
-		.index("by_actorId", ["actorId"])
 		.index("by_expiresAt", ["expiresAt"]),
 
 	itemCategories: defineTable({
