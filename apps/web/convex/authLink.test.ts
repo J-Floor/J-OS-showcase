@@ -8,7 +8,12 @@ import { seedLogin } from "../test-stubs/logins.ts";
 
 import { components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { authUserById, linkLogin, renameLogin } from "./lib/authRecords.ts";
+import {
+	authUserById,
+	linkLogin,
+	renameLogin,
+	signOutEverywhere,
+} from "./lib/authRecords.ts";
 import schema from "./schema.ts";
 
 const modules = import.meta.glob("./**/*.*s");
@@ -213,5 +218,54 @@ describe("renameLogin", () => {
 			authUserById(context, userId)
 		);
 		expect(renamed?.email).toBe("ada.new@example.com");
+	});
+});
+
+async function sessionsOf(backend: Backend, userId: string) {
+	const { page } = (await backend.query(
+		components.betterAuth.adapter.findMany,
+		{
+			model: "session",
+			where: [{ field: "userId", value: userId }],
+			paginationOpts: { cursor: null, numItems: 100 },
+		}
+	)) as { page: unknown[] };
+	return page;
+}
+
+async function seedSessions(backend: Backend, userId: string) {
+	for (const token of ["a", "b"])
+		await backend.mutation(components.betterAuth.adapter.create, {
+			input: {
+				model: "session",
+				data: {
+					token: `${userId}-${token}`,
+					userId,
+					expiresAt: 2,
+					createdAt: 1,
+					updatedAt: 1,
+				},
+			},
+		});
+}
+
+describe("signOutEverywhere", () => {
+	it("deletes every session of the login and no other", async () => {
+		const backend = setup();
+		const userId = await seedLogin(backend, "ada@example.com");
+		const otherId = await seedLogin(backend, "bob@example.com");
+		await seedSessions(backend, userId);
+		await seedSessions(backend, otherId);
+
+		const deleted = await backend.run((context) =>
+			signOutEverywhere(context, userId)
+		);
+
+		expect(deleted).toBe(2);
+		expect(await sessionsOf(backend, userId)).toHaveLength(0);
+		expect(await sessionsOf(backend, otherId)).toHaveLength(2);
+		expect(
+			await backend.run((context) => authUserById(context, userId))
+		).not.toBeNull();
 	});
 });

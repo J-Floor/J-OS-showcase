@@ -156,18 +156,29 @@ async function deleteAll(
 	}
 }
 
+/** End every session of login `userId`: it signs in again on each device.
+ *  Returns how many sessions went. */
+export async function signOutEverywhere(
+	context: MutationCtx,
+	userId: string
+): Promise<number> {
+	return deleteAll(context, {
+		model: "session",
+		where: [{ field: "userId", value: userId }],
+	});
+}
+
 /** Delete login `userId` with its sessions and accounts. Returns how many auth
  *  rows went. */
 export async function eraseLogin(
 	context: MutationCtx,
 	userId: string
 ): Promise<number> {
-	let deleted = 0;
-	for (const model of ["session", "account"] as const)
-		deleted += await deleteAll(context, {
-			model,
-			where: [{ field: "userId", value: userId }],
-		});
+	let deleted = await signOutEverywhere(context, userId);
+	deleted += await deleteAll(context, {
+		model: "account",
+		where: [{ field: "userId", value: userId }],
+	});
 	deleted += await deleteAll(context, {
 		model: "user",
 		where: [{ field: "_id", value: userId }],

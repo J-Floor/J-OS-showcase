@@ -18,8 +18,9 @@ export function Template({ newEmail, logoUrl }: Props) {
 				Your sign-in address changed
 			</Heading>
 			<Text style={styles.text}>
-				Your J floor sign-in address was changed to {newEmail}. From now
-				on, sign in with that address.
+				Your J floor sign-in address was changed to {newEmail}, and you
+				were signed out on every device. Sign in again with that
+				address.
 			</Text>
 			<Text style={styles.text}>
 				If you didn't expect this, tell the J floor board.

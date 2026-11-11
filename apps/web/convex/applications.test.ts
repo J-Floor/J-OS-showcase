@@ -2330,6 +2330,40 @@ async function fieldEdits(backend: TestConvex<typeof schema>, id: string) {
 
 // Pins Task 16's `people.update` — the single board field editor that replaced
 // `applications.update` (venture/notes fields) alongside the profile fields.
+async function seedSessions(
+	backend: TestConvex<typeof schema>,
+	userId: string
+) {
+	for (const token of ["first", "second"])
+		await backend.mutation(components.betterAuth.adapter.create, {
+			input: {
+				model: "session",
+				data: {
+					token: `${userId}-${token}`,
+					userId,
+					expiresAt: Date.now() + 1e9,
+					createdAt: 1,
+					updatedAt: 1,
+				},
+			},
+		});
+}
+
+async function sessionCount(
+	backend: TestConvex<typeof schema>,
+	userId: string
+): Promise<number> {
+	const { page } = (await backend.query(
+		components.betterAuth.adapter.findMany,
+		{
+			model: "session",
+			where: [{ field: "userId", value: userId }],
+			paginationOpts: { cursor: null, numItems: 100 },
+		}
+	)) as { page: unknown[] };
+	return page.length;
+}
+
 describe("people.update", () => {
 	it("logs a top-level field edit with its before and after value", async () => {
 		const backend = convexTest(schema, modules);
@@ -2658,6 +2692,49 @@ describe("people.update", () => {
 		);
 
 		expect(await loginEmail(backend, otherId)).toBe("ada@example.com");
+	});
+
+	it("an email edit signs the person out everywhere", async () => {
+		const backend = convexTest(schema, modules);
+		betterAuthTest.register(backend);
+		registerRateLimiter(backend);
+		const { asBoard } = await seedBoard(backend);
+		const id = await seedProspect(backend);
+		const userId = await seedLogin(backend, "ada@example.com");
+		await backend.run((context) =>
+			context.db.patch(id, { authUserId: userId })
+		);
+		await seedSessions(backend, userId);
+		expect(await sessionCount(backend, userId)).toBe(2);
+
+		await runAndCollectLogs(backend, () =>
+			asBoard.mutation(api.people.update, {
+				id,
+				email: "ada.new@example.com",
+			})
+		);
+
+		expect(await sessionCount(backend, userId)).toBe(0);
+		expect(await loginEmail(backend, userId)).toBe("ada.new@example.com");
+	});
+
+	it("an edit that keeps the email keeps the sessions", async () => {
+		const backend = convexTest(schema, modules);
+		betterAuthTest.register(backend);
+		registerRateLimiter(backend);
+		const { asBoard } = await seedBoard(backend);
+		const id = await seedProspect(backend);
+		const userId = await seedLogin(backend, "ada@example.com");
+		await backend.run((context) =>
+			context.db.patch(id, { authUserId: userId })
+		);
+		await seedSessions(backend, userId);
+
+		await runAndCollectLogs(backend, () =>
+			asBoard.mutation(api.people.update, { id, firstName: "Augusta" })
+		);
+
+		expect(await sessionCount(backend, userId)).toBe(2);
 	});
 
 	it("refuses a non-board email change: nothing changes, no mail", async () => {

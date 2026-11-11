@@ -15,7 +15,11 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { emailChanged } from "./emails/generated/emailChanged.ts";
 import { emailUrls } from "./emails/urls.ts";
 import { requireRole } from "./lib/authGuard.ts";
-import { authRecordsFor, renameLogin } from "./lib/authRecords.ts";
+import {
+	authRecordsFor,
+	renameLogin,
+	signOutEverywhere,
+} from "./lib/authRecords.ts";
 import { personForCurrentUser } from "./lib/currentPerson.ts";
 import { entitled, personStatus, type PersonStatus } from "./lib/derive.ts";
 import { sendEmail } from "./lib/email.ts";
@@ -384,7 +388,8 @@ async function resolveEmailChange(
  *
  * `email` IS here, but guarded: it must be well formed and no other person may
  * hold it. An email edit applies at once and moves the person's login with it,
- * so they sign in with the new address from then on. The old address is told.
+ * so they sign in with the new address from then on. It also signs them out on
+ * every device. The old address is told.
  */
 export const update = mutation({
 	args: {
@@ -459,8 +464,10 @@ export const update = mutation({
 			actorId,
 		});
 		await context.db.patch(person._id, { email: newEmail });
-		if (person.authUserId !== undefined)
+		if (person.authUserId !== undefined) {
 			await renameLogin(context, person.authUserId, newEmail);
+			await signOutEverywhere(context, person.authUserId);
+		}
 		await context.scheduler.runAfter(
 			0,
 			internal.people.sendEmailChangedNotice,
