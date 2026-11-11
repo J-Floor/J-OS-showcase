@@ -16,7 +16,10 @@ const EXPECTED: Record<string, [string, string][]> = {
 		["application-received", "critical"],
 	],
 	"agreements.ts": [["signed-agreement", "critical"]],
-	"people.ts": [["email-changed", "critical"]],
+	"people.ts": [
+		["email-change", "critical"],
+		["email-changed", "critical"],
+	],
 	"auth.ts": [
 		["no-account", "anonymous"],
 		["magic-link", "critical"],

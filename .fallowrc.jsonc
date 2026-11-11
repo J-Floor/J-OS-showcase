@@ -21,9 +21,6 @@
 	"ignoreFindings": ["packages/design-system/scripts/morph-probe.js"],
 	"ignoreDependencies": [
 		"@csstools/stylelint-formatter-github",
-		// fallow does not read the package.json "prettier" field of a
-		// workspace package (only the root one).
-		"@j-os/config-prettier",
 		// fallow's stylelint plugin does not read string entries in
 		// `extends` and `plugins` of stylelint.config.js.
 		"@j-os/config-stylelint",

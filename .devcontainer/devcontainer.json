@@ -33,9 +33,13 @@
 		"vscode": {
 			"extensions": [
 				"dbaeumer.vscode-eslint",
-				"esbenp.prettier-vscode",
+				"oxc.oxc-vscode",
 				"stylelint.vscode-stylelint"
-			]
+			],
+			"settings": {
+				"editor.defaultFormatter": "oxc.oxc-vscode",
+				"editor.formatOnSave": true
+			}
 		}
 	}
 }

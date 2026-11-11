@@ -1,4 +1,9 @@
-import { EditableText, PropertyRow, useSaveTracker } from "@j-os/design-system";
+import {
+	Button,
+	EditableText,
+	PropertyRow,
+	useSaveTracker,
+} from "@j-os/design-system";
 import type { FunctionArgs } from "convex/server";
 import { useMutation } from "convex-solidjs";
 import { type Accessor, Show } from "solid-js";
@@ -10,6 +15,7 @@ import {
 	createActionError,
 	type ActionErrorState,
 } from "../../../shared/createActionError.ts";
+import { useQuery } from "../../../shared/data/useQuery.ts";
 import { createEntityPatch } from "../../../shared/entity/createEntityPatch.ts";
 import { ICONS } from "../../../shared/icons.ts";
 import { InlineError } from "../../../shared/InlineError.tsx";
@@ -28,11 +34,13 @@ import {
 	WhyJoinField,
 } from "../ProfileFields.tsx";
 
+import styles from "./PersonDetail.module.scss";
+
 /** The fields one edit changes: `people.update`'s arguments bar the id. */
 export type PersonPatch = Omit<FunctionArgs<typeof api.people.update>, "id">;
 
-/** The email row. An email edit saves at once; a refused change shows its
- * reason beside the field. */
+/** The email row, which has its own flow: the stored address stays until the
+ * new one confirms, and a refused change shows its reason beside the field. */
 function EmailEditor(props: {
 	person: Doc<"people">;
 	isOpen: Accessor<boolean>;
@@ -42,6 +50,14 @@ function EmailEditor(props: {
 	}
 	const tracker = useSaveTracker();
 	const update = useMutation(api.people.update);
+	const cancelEmailChange = useMutation(api.people.cancelEmailChange);
+	// The stored email stays until the new address confirms
+	// (`people.confirmEmailChange`); until then the change is pending here.
+	const pendingEmail = useQuery(
+		api.people.pendingEmailChange,
+		() => ({ personId: person()._id }),
+		{ keepPreviousData: false }
+	);
 	// The sheet is re-used as the board steps through rows, so a clash error
 	// for one person must not linger on the next, and a refusal that arrives
 	// after stepping on belongs to the person it was made for.
@@ -62,6 +78,20 @@ function EmailEditor(props: {
 			props.isOpen
 		);
 	}
+	function cancelPending(): void {
+		const personId = person()._id;
+		reportSave(
+			tracker?.track(EMAIL_CANCEL_SCOPE),
+			() =>
+				trackResult(
+					call(
+						cancelEmailChange.mutateAsync({ personId }),
+						"Could not cancel the email change."
+					)
+				),
+			props.isOpen
+		);
+	}
 	return (
 		<>
 			<PropertyRow field={personFields.email}>
@@ -74,6 +104,23 @@ function EmailEditor(props: {
 				/>
 			</PropertyRow>
 			<InlineError message={emailError()} />
+			<Show when={pendingEmail.data()?.newEmail} keyed>
+				{(address) => (
+					<div class={styles.pendingEmail} role="status">
+						<p class={styles.fieldNote}>
+							Waiting for {address} to confirm
+						</p>
+						<Button
+							variant="tertiary"
+							onClick={() => {
+								cancelPending();
+							}}
+						>
+							Cancel
+						</Button>
+					</div>
+				)}
+			</Show>
 		</>
 	);
 }
@@ -84,6 +131,9 @@ const HOST_SCOPE = "host";
 
 /** The email's own save, beside the field list's. */
 const EMAIL_SCOPE = "email";
+
+/** Cancelling the pending email change, its own save too. */
+const EMAIL_CANCEL_SCOPE = "email-cancel";
 
 function HostedByRow(props: {
 	person: Doc<"people">;

@@ -1,4 +1,4 @@
-# Prettier does not format Markdown here, so a Markdown-only PR needs only the
+# oxfmt does not format Markdown here, so a Markdown-only PR needs only the
 # secret scan; the workflows gate every other step on this output.
 # The push triggers of checks.yml and deploy.yml apply the same rule as
 # paths-ignore: ["**.md"] and must change with it.

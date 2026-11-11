@@ -488,9 +488,8 @@ function rawTracks(): string {
  *  content track reads, replaced by the width the table sets it to. */
 function tracks(): string {
 	const table = document.querySelector<HTMLElement>("table");
-	return rawTracks().replaceAll(
-		/var\((--jf-col-\d+)\)/g,
-		(_, name: string) => (table ? table.style.getPropertyValue(name) : "")
+	return rawTracks().replaceAll(/var\((--jf-col-\d+)\)/g, (_, name: string) =>
+		table ? table.style.getPropertyValue(name) : ""
 	);
 }
 

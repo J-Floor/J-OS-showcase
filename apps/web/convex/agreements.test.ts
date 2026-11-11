@@ -92,7 +92,8 @@ describe("signAgreement", () => {
 		);
 		const docStep = (
 			person?.onboarding?.steps as
-				Record<string, { completedAt: number } | undefined> | undefined
+				| Record<string, { completedAt: number } | undefined>
+				| undefined
 		)?.document;
 		expect(docStep?.completedAt).toBeTypeOf("number");
 	});

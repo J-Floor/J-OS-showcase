@@ -39,7 +39,7 @@ Convex CLI); the typecheck and build scripts run TS 7 from `typescript7`.
 `convex/tsconfig.json` excludes `*.test.ts`, so test files are covered by the
 first command only.
 
-**`bun run lint` is eslint + stylelint, not prettier.** Run `bun run format` before
+**`bun run lint` is eslint + stylelint, not the formatter.** Run `bun run format` before
 pushing, or CI's format job commits on your branch — which carries a skip marker
 and suppresses checks on the new head.
 

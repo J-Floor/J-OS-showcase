@@ -6,7 +6,6 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, query, type MutationCtx } from "./_generated/server";
 import { requireRole } from "./lib/authGuard.ts";
 import { DOOR_LOG_PAGE_SIZE } from "./lib/constants.ts";
-import { personForCurrentUser } from "./lib/currentPerson.ts";
 import {
 	CONFIRM_POLL_MS,
 	CONFIRM_WINDOW_MS,
@@ -18,6 +17,7 @@ import {
 	type StoredAttempt,
 } from "./lib/doorActuation.ts";
 import type { LockSlot } from "./lib/doorLocks.ts";
+import { personByEmail } from "./lib/emailAddress.ts";
 import { withActorNames } from "./lib/names.ts";
 import { unwrap } from "./lib/result.ts";
 import { BOARD_LEVEL } from "./lib/roles.ts";
@@ -276,7 +276,10 @@ export type DoorAttemptView = StoredAttempt & { durationMs: number };
 export const attempt = query({
 	args: { id: v.id("doorLog") },
 	handler: async (context, { id }): Promise<DoorAttemptView | null> => {
-		const person = await personForCurrentUser(context);
+		const identity = await context.auth.getUserIdentity();
+		const email = identity?.email;
+		if (!email) return null;
+		const person = await personByEmail(context, email);
 		const row = await context.db.get(id);
 		if (
 			!person ||

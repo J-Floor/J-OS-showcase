@@ -59,7 +59,12 @@ export type DoorActionResult =
  *  provider cannot reach the lock. `unknown`: a state the app does not
  *  model. */
 export type DoorPosition =
-	"locked" | "unlocked" | "unlocking" | "locking" | "offline" | "unknown";
+	| "locked"
+	| "unlocked"
+	| "unlocking"
+	| "locking"
+	| "offline"
+	| "unknown";
 
 /** One configured lock's reachability, for the board's door-health tiles. */
 export type LockStatus = {

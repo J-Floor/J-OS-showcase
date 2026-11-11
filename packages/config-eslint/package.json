@@ -5,7 +5,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "format": "prettier --write \"*.{js,ts,tsx}\" --ignore-path ../../.prettierignore"
+    "format": "oxfmt --write -c ../../.oxfmtrc.json \"*.{js,ts,tsx}\""
   },
   "devDependencies": {
     "@eslint-community/eslint-plugin-eslint-comments": "catalog:",

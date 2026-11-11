@@ -18,8 +18,7 @@ export type ViolationCode =
 	| "verified-without-verifiedAt"
 	| "unverified-with-verifiedAt"
 	| "former-without-origin"
-	| "duplicate-email"
-	| "login-email-mismatch";
+	| "duplicate-email";
 
 export type Violation = { code: ViolationCode; detail: string };
 

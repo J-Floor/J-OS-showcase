@@ -41,7 +41,11 @@ export type ReapplyPayload = Infer<typeof reapplyPayload>;
 
 /** Every answer a confirm link can give; each flow narrows it to its own. */
 export type ConfirmStatus =
-	"verified" | "already" | "expired" | "invalid" | "ended";
+	| "verified"
+	| "already"
+	| "expired"
+	| "invalid"
+	| "ended";
 
 function isLive(row: Doc<"confirmTokens">, now: number): boolean {
 	return row.consumedAt === undefined && row.expiresAt > now;
@@ -62,11 +66,17 @@ export async function issueToken(
 		eventId?: Id<"events">;
 		ttlMs: number;
 		payload?: ReapplyPayload;
+		newEmail?: string;
+		actorId?: Id<"people">;
 	}
 ): Promise<Id<"confirmTokens">> {
 	invariant(
 		args.purpose !== "eventInvite" || args.eventId !== undefined,
 		"eventInvite tokens need an eventId"
+	);
+	invariant(
+		args.purpose !== "emailChange" || args.newEmail !== undefined,
+		"emailChange tokens need a newEmail"
 	);
 	const prior = await context.db
 		.query("confirmTokens")
@@ -87,6 +97,8 @@ export async function issueToken(
 		eventId: args.eventId,
 		expiresAt: Date.now() + args.ttlMs,
 		payload: args.payload,
+		newEmail: args.newEmail,
+		actorId: args.actorId,
 	});
 }
 
@@ -149,6 +161,22 @@ export async function liveTokens(
 		)
 		.collect();
 	return rows.filter((row) => isLive(row, now));
+}
+
+/** Delete every unconsumed token for a person and purpose, killing its link. */
+export async function revokeTokens(
+	context: MutationCtx,
+	personId: Id<"people">,
+	purpose: Purpose
+): Promise<void> {
+	const rows = await context.db
+		.query("confirmTokens")
+		.withIndex("by_person_purpose", (range) =>
+			range.eq("personId", personId).eq("purpose", purpose)
+		)
+		.collect();
+	for (const row of rows)
+		if (row.consumedAt === undefined) await context.db.delete(row._id);
 }
 
 /**

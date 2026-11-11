@@ -59,10 +59,6 @@ async function logRows(backend: TestConvex<typeof schema>) {
 	);
 }
 
-/** Runs the scheduled work due in the next `ms`, one `CONFIRM_POLL_MS`
- *  step at a time, the way test-stubs/runAndCollectLogs.ts drains jobs.
- *  Never `vi.runAllTimers()`: each poll schedules the next only once its
- *  mutation commits, so it would fire the timeout first. */
 async function runPolls(backend: TestConvex<typeof schema>, ms: number) {
 	for (let elapsed = 0; elapsed < ms; elapsed += CONFIRM_POLL_MS) {
 		vi.advanceTimersByTime(CONFIRM_POLL_MS);
@@ -656,14 +652,10 @@ describe("unlockDoor", () => {
 		});
 	});
 
-	/** Signs the board member in and lets the clock catch up with the commit
-	 *  that links them to their login, so an unlock lands at `Date.now()`. */
-	async function signIn(backend: TestConvex<typeof schema>) {
-		await backend
-			.withIdentity({ email: BOARD })
-			.query(api.people.getCurrentRole, {});
-		vi.advanceTimersByTime(1);
-	}
+	/** Runs the scheduled work due in the next `ms`, one `CONFIRM_POLL_MS`
+	 *  step at a time, the way test-stubs/runAndCollectLogs.ts drains jobs.
+	 *  Never `vi.runAllTimers()`: each poll schedules the next only once its
+	 *  mutation commits, so it would fire the timeout first. */
 
 	async function unlock(
 		backend: TestConvex<typeof schema>,
@@ -684,7 +676,6 @@ describe("unlockDoor", () => {
 			"unlocked",
 		]);
 		setDoorProviderForTests(provider);
-		await signIn(backend);
 		const requestedAt = Date.now();
 		const outcome = await unlock(backend, "downstairs");
 		const [accepted] = await logRows(backend);
@@ -709,7 +700,6 @@ describe("unlockDoor", () => {
 		const provider = fake();
 		provider.setPosition("downstairs", "locked");
 		setDoorProviderForTests(provider);
-		await signIn(backend);
 		const requestedAt = Date.now();
 		await unlock(backend, "downstairs");
 		await runPolls(backend, CONFIRM_WINDOW_MS);
@@ -737,7 +727,6 @@ describe("unlockDoor", () => {
 		};
 		setDoorProviderForTests(provider);
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-		await signIn(backend);
 		const requestedAt = Date.now();
 		await unlock(backend, "downstairs");
 		await runPolls(backend, 4 * CONFIRM_POLL_MS);
@@ -775,7 +764,6 @@ describe("unlockDoor", () => {
 			"unlocking",
 		]);
 		setDoorProviderForTests(provider);
-		await signIn(backend);
 		const requestedAt = Date.now();
 		await unlock(backend, "downstairs");
 		expect(await firstLogRow(backend)).toMatchObject({

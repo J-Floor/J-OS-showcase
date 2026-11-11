@@ -91,7 +91,8 @@ function enumOptionsOf<Row extends Record<string, unknown>>(
 ): unknown {
 	return (
 		columns.find((column) => column.header === header) as
-			JfColumnDefinition<Record<string, unknown>> | undefined
+			| JfColumnDefinition<Record<string, unknown>>
+			| undefined
 	)?.enumOptions;
 }
 

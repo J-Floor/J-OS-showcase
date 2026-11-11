@@ -3,7 +3,7 @@ import type { QueryCtx } from "../_generated/server";
 
 /**
  * The canonical form of an email address: trimmed and lowercased. `people.email`
- * is the person's address (`by_email` + `.unique()`), so every writer stores this
+ * is the identity key (`by_email` + `.unique()`), so every writer stores this
  * form and every lookup passes its input through it — otherwise `Foo@example.com` and
  * `foo@example.com` are two different people. The rate limiter keys on it too, so
  * casing variants of one inbox share one bucket.
@@ -26,7 +26,7 @@ export function peopleByEmail(context: QueryCtx, email: string) {
 		);
 }
 
-/** The one person whose address is `email`, or null. Throws on duplicates. */
+/** The one person whose identity key is `email`, or null. Throws on duplicates. */
 export async function personByEmail(
 	context: QueryCtx,
 	email: string

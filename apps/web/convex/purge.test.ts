@@ -3,8 +3,6 @@ import rateLimiterTest from "@convex-dev/rate-limiter/test";
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 
-import { loginEmail, seedLogin } from "../test-stubs/logins.ts";
-
 import { components, internal } from "./_generated/api";
 import { issueToken } from "./lib/confirmToken.ts";
 import { BATCH_SIZE } from "./purge.ts";
@@ -451,6 +449,48 @@ describe("purgeEmail", () => {
 		expect(rows.map((row) => row.lastPath)).toEqual(["/community"]);
 	});
 
+	it("keeps an email change the purged person requested but drops their actorId", async () => {
+		const backend = setup();
+		const otherId = await backend.run(async (context) => {
+			const boardId = await context.db.insert("people", {
+				email: "gone@example.com",
+				firstName: "Gone",
+				lastName: "Board",
+				tier: "board",
+				stage: "active",
+				stageSince: Date.now(),
+			});
+			const id = await context.db.insert("people", {
+				email: "stay@example.com",
+				firstName: "Stay",
+				lastName: "Person",
+				tier: "member",
+				stage: "active",
+				stageSince: Date.now(),
+			});
+			await issueToken(context, {
+				token: "change",
+				purpose: "emailChange",
+				personId: id,
+				ttlMs: DAY,
+				newEmail: "new@example.com",
+				actorId: boardId,
+			});
+			return id;
+		});
+
+		await backend.mutation(internal.purge.purgeEmail, {
+			email: "gone@example.com",
+		});
+		const tokens = await backend.run((context) =>
+			context.db.query("confirmTokens").collect()
+		);
+		expect(tokens).toHaveLength(1);
+		expect(tokens[0].personId).toBe(otherId);
+		expect(tokens[0].newEmail).toBe("new@example.com");
+		expect(tokens[0].actorId).toBeUndefined();
+	});
+
 	it("deletes the person's notification history and leaves other people's", async () => {
 		const backend = setup();
 		const createdAt = Date.now();
@@ -631,6 +671,14 @@ async function seedEverywhere(backend: ReturnType<typeof setup>) {
 			personId: goneId,
 			ttlMs: DAY,
 		});
+		await issueToken(context, {
+			token: "stay-change",
+			purpose: "emailChange",
+			personId: stayId,
+			ttlMs: DAY,
+			newEmail: "stay2@example.com",
+			actorId: goneId,
+		});
 		await context.db.insert("pushSubscriptions", {
 			personId: goneId,
 			endpoint: "https://push.example/gone",
@@ -794,31 +842,6 @@ describe("purgeEmail erases the person everywhere", () => {
 	});
 });
 
-describe("purgeEmail erases the linked login", () => {
-	it("erases the login the person is linked to even when its email drifted, and keeps others", async () => {
-		const backend = setup();
-		const drifted = await seedLogin(backend, "drifted@example.com");
-		const other = await seedLogin(backend, "other@example.com");
-		await backend.run((context) =>
-			context.db.insert("people", {
-				email: "gone@example.com",
-				firstName: "G",
-				lastName: "Gone",
-				tier: "member",
-				stage: "active",
-				stageSince: 1,
-				authUserId: drifted,
-			})
-		);
-		const result = await backend.mutation(internal.purge.purgeEmail, {
-			email: "gone@example.com",
-		});
-		expect(result.auth).toBeGreaterThan(0);
-		expect(await loginEmail(backend, drifted)).toBeNull();
-		expect(await loginEmail(backend, other)).toBe("other@example.com");
-	});
-});
-
 describe("exportPerson", () => {
 	it("returns what is held about the person, without sign-in secrets or other people's rows", async () => {
 		const backend = setup();
@@ -867,10 +890,14 @@ describe("exportPerson", () => {
 				{ table: "projects", id: projectId, field: "leaderId" },
 			])
 		);
+		expect(
+			new Set(references.map((row) => row.table)).has("confirmTokens")
+		).toBe(true);
 		// Nothing of the people they are linked to is disclosed.
 		const json = JSON.stringify(out);
 		for (const other of [
 			"stay@example.com",
+			"stay2@example.com",
 			"Stay Person",
 			"legacy@example.com",
 			"Roof",

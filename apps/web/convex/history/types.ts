@@ -47,4 +47,5 @@ export type HistoryKind = HistoryEntry["kind"];
 
 /** Whose history: one person's, or one perk request's. */
 export type HistoryScope =
-	{ personId: Id<"people"> } | { perkRequestId: Id<"perkRequests"> };
+	| { personId: Id<"people"> }
+	| { perkRequestId: Id<"perkRequests"> };

@@ -16,7 +16,11 @@ import { isIosUserAgent, isStandalone } from "./pwaInstall.ts";
  * - `denied` / `default` / `granted`: the browser's notification permission.
  */
 export type PushSupport =
-	"unsupported" | "ios" | "denied" | "default" | "granted";
+	| "unsupported"
+	| "ios"
+	| "denied"
+	| "default"
+	| "granted";
 
 export function pushSupport(): PushSupport {
 	if (typeof navigator === "undefined") return "unsupported";

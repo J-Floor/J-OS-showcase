@@ -19,7 +19,12 @@ type SeedEntry = {
 	ventureName: string;
 	productStage: "building" | "prototype" | "mvp" | "traction" | "other";
 	fundingStage:
-		"bootstrapped" | "angel" | "pre_seed" | "seed" | "series_a" | "other";
+		| "bootstrapped"
+		| "angel"
+		| "pre_seed"
+		| "seed"
+		| "series_a"
+		| "other";
 	links?: { label: string; url: string }[];
 	/** The board's shared score. */
 	score?: number;
@@ -500,7 +505,12 @@ const DAYS_BEFORE_STAGE = {
 };
 
 type HistoryKind =
-	"transition" | "field_edit" | "board_task" | "step" | "door" | "email";
+	| "transition"
+	| "field_edit"
+	| "board_task"
+	| "step"
+	| "door"
+	| "email";
 
 type HistoryRow = {
 	at: number;

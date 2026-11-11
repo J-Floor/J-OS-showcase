@@ -32,11 +32,8 @@ const ATTENDEE_ROSTER_CAP = 500;
  *  zone, so they'd silently disagree. Reject at the mutation boundary
  *  instead. */
 function checkSiteZone(local: string): Result<void, EventsError | InputError> {
-	return zonedTimeZoneName(local).andThen(
-		(zone): Result<void, EventsError> =>
-			zone === SITE_TIMEZONE
-				? ok()
-				: err({ type: "EventTimesNotInSiteZone" })
+	return zonedTimeZoneName(local).andThen((zone): Result<void, EventsError> =>
+		zone === SITE_TIMEZONE ? ok() : err({ type: "EventTimesNotInSiteZone" })
 	);
 }
 

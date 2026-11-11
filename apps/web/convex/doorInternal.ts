@@ -6,10 +6,10 @@ import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { internalMutation, internalQuery } from "./_generated/server";
-import { personForCurrentUser } from "./lib/currentPerson.ts";
 import { doorOpensFor } from "./lib/derive.ts";
 import type { LockSlot } from "./lib/doorLocks.ts";
 import type { DoorPosition } from "./lib/doorProvider.ts";
+import { personByEmail } from "./lib/emailAddress.ts";
 import { displayName } from "./lib/names.ts";
 import { doorAction, doorPosition, lockSlot } from "./schema.ts";
 
@@ -23,7 +23,11 @@ type DoorPerson = { email: string; name: string; personId: Id<"people"> };
 async function currentDoorPerson(
 	context: QueryCtx
 ): Promise<Doc<"people"> | null> {
-	const person = await personForCurrentUser(context);
+	const identity = await context.auth.getUserIdentity();
+	const email = identity?.email;
+	if (!email) return null;
+
+	const person = await personByEmail(context, email);
 	return person && doorOpensFor(person, Date.now()) ? person : null;
 }
 

@@ -243,7 +243,8 @@ export function analyticsProvider(deps: AnalyticsDeps): WebAnalyticsProvider {
 /** The adapter built from this deployment's env, or undefined when either
  *  setting is missing. */
 export function webAnalyticsFromEnvironment():
-	WebAnalyticsProvider | undefined {
+	| WebAnalyticsProvider
+	| undefined {
 	const token = process.env.CLOUDFLARE_ANALYTICS_TOKEN;
 	const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 	return token && accountId

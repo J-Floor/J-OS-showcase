@@ -42,7 +42,8 @@ import { ventureColumns } from "./ventureColumns.tsx";
  * spawning a fresh query that suspends, flickering the whole table.
  */
 export type CurrentPerson =
-	FunctionReturnType<typeof api.people.getCurrentPerson> | undefined;
+	| FunctionReturnType<typeof api.people.getCurrentPerson>
+	| undefined;
 function noCurrentPerson(): CurrentPerson {
 	return;
 }

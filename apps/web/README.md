@@ -33,7 +33,7 @@ in the repo README (`bunx convex login` on first create, then `bun run dev` from
 | `bun run typecheck` | TS 7 `tsc -b --noEmit` (caveat below)  |
 | `bun run test`      | Vitest                                 |
 | `bun run lint`      | ESLint + Stylelint, `--max-warnings 0` |
-| `bun run format`    | Prettier write                         |
+| `bun run format`    | oxfmt write                            |
 
 > `bun run typecheck` does **not** check `convex/` the way `convex deploy` does —
 > run `bun run typecheck:convex` (from `apps/web`) as well. More gotchas in

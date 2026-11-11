@@ -5,7 +5,7 @@
 	"main": "stylelint.config.js",
 	"type": "module",
 	"scripts": {
-		"format": "prettier --write \"*.{js,ts,tsx}\" --ignore-path ../../.prettierignore"
+		"format": "oxfmt --write -c ../../.oxfmtrc.json \"*.{js,ts,tsx}\""
 	},
 	"files": [
 		"stylelint.config.js"

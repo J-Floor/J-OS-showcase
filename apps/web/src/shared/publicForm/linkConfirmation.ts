@@ -6,7 +6,9 @@ import { call } from "../../lib/call.ts";
 /** What a confirm page knows: "loading" until the call answers, "invalid" when
  *  the link or call failed, else the response's own status. */
 export type LinkConfirmationStatus<Response extends { status: string }> =
-	"loading" | "invalid" | Response["status"];
+	| "loading"
+	| "invalid"
+	| Response["status"];
 
 /**
  * Confirms the emailed link's `?token=` with `confirm` on mount. `status` is

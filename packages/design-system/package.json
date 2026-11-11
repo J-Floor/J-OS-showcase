@@ -3,7 +3,6 @@
 	"version": "0.0.1",
 	"private": true,
 	"type": "module",
-	"prettier": "@j-os/config-prettier",
 	"exports": {
 		".": "./src/index.ts",
 		"./icons": "./src/icons.ts",
@@ -21,7 +20,7 @@
 	},
 	"scripts": {
 		"test": "vitest run",
-		"format": "prettier --write \"src/**/*.{ts,tsx,scss}\" --ignore-path ../../.prettierignore",
+		"format": "oxfmt --write -c ../../.oxfmtrc.json \"src/**/*.{ts,tsx,scss}\"",
 		"lint": "bun run lint:logic && bun run lint:style && bun run lint:bundles",
 		"lint:bundles": "bun scripts/check-bundles.ts",
 		"lint:logic": "eslint \"src/**/*.{ts,tsx}\" --cache --max-warnings 0",
@@ -56,7 +55,6 @@
 		"@csstools/stylelint-formatter-github": "^2.0.0",
 		"@fontsource-variable/material-symbols-sharp": "^5.3.9",
 		"@j-os/config-eslint": "workspace:*",
-		"@j-os/config-prettier": "workspace:*",
 		"@j-os/config-stylelint": "workspace:*",
 		"@solidjs/testing-library": "catalog:",
 		"@testing-library/jest-dom": "catalog:",

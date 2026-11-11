@@ -11,7 +11,8 @@ const { taskRows, kanbanTasks, kanbanSelection } = vi.hoisted(() => ({
 	kanbanTasks: [] as unknown[],
 	kanbanSelection: {
 		current: undefined as
-			{ setSelected: (ids: Set<string>) => void } | undefined,
+			| { setSelected: (ids: Set<string>) => void }
+			| undefined,
 	},
 }));
 

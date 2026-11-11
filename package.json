@@ -21,7 +21,7 @@
 		"fallow": "catalog:",
 		"turbo": "^2.11.10",
 		"typescript": "catalog:",
-		"prettier": "catalog:"
+		"oxfmt": "catalog:"
 	},
 	"overrides": {
 		"convex": "catalog:"
@@ -64,7 +64,7 @@
 			"neverthrow": "8.2.0",
 			"happy-dom": "^21.0.4",
 			"jsdom": "^29.1.1",
-			"prettier": "3.9.10",
+			"oxfmt": "0.76.0",
 			"sass": "^1.107.1",
 			"solid-js": "1.9.18",
 			"stylelint": "17.16.0",

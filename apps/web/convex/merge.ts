@@ -11,7 +11,6 @@ import {
 	type QueryCtx,
 } from "./_generated/server";
 import { hasAttendance } from "./lib/attendance.ts";
-import { eraseLogin, renameLogin } from "./lib/authRecords.ts";
 import { keepsBreakGlassKey } from "./lib/derive.ts";
 import { normalizeEmail, peopleByEmail } from "./lib/emailAddress.ts";
 import type { PeopleError } from "./lib/errors/people.ts";
@@ -46,9 +45,6 @@ type Preview = {
 	drop: Doc<"people">;
 	/** The kept row's email after the merge, always in canonical form. */
 	email: string;
-	/** The login the kept row holds after the merge: its own, else the
-	 *  dropped row's. */
-	authUserId: string | undefined;
 	/** False when the provider account the dropped row names would be
 	 *  the kept person's after the merge, so revoking by the dropped
 	 *  row would take the kept person's key. */
@@ -99,17 +95,6 @@ function isSharingProviderAccount(
 	);
 }
 
-/** The kept row with the patch applied; the login it already holds, else the
- *  dropped row's, so a login always has one holder. */
-function mergedRow(
-	keep: Doc<"people">,
-	drop: Doc<"people">,
-	patch: Partial<Doc<"people">>
-): Doc<"people"> {
-	const merged = { ...keep, ...patch };
-	return { ...merged, authUserId: merged.authUserId ?? drop.authUserId };
-}
-
 /** The kept row as it will be after the merge, and what is wrong with it. */
 async function preview(
 	context: QueryCtx,
@@ -123,7 +108,7 @@ async function preview(
 	if (!keep || !drop) return err({ type: "MergePersonNotFound" });
 
 	const now = Date.now();
-	const merged = mergedRow(keep, drop, patch);
+	const merged = { ...keep, ...patch };
 	// Normalized even when the patch leaves the email alone: a kept row stored
 	// with capitals would otherwise stay unreachable by every lookup.
 	const email = normalizeEmail(merged.email);
@@ -149,7 +134,6 @@ async function preview(
 	return ok({
 		drop,
 		email,
-		authUserId: merged.authUserId,
 		revokeDropped: !isSharesAccount,
 		revokeKept:
 			isSharesAccount &&
@@ -158,13 +142,10 @@ async function preview(
 	});
 }
 
-/** The caller's patch without `authUserId`: only {@link mergedRow} sets it. */
 function patchOf(raw: unknown): Result<Partial<Doc<"people">>, PeopleError> {
-	if (raw === null || typeof raw !== "object" || Array.isArray(raw))
-		return err({ type: "MergePatchNotObject" });
-	const patch = { ...raw } as Partial<Doc<"people">>;
-	delete patch.authUserId;
-	return ok(patch);
+	return raw === null || typeof raw !== "object" || Array.isArray(raw)
+		? err({ type: "MergePatchNotObject" })
+		: ok(raw);
 }
 
 /**
@@ -228,18 +209,7 @@ export const apply = internalMutation({
 			"Merge"
 		);
 
-		await context.db.patch(keepId, {
-			...clean,
-			email: result.email,
-			authUserId: result.authUserId,
-		});
-		// A login the kept person does not take goes with the dropped row.
-		const dropLogin = result.drop.authUserId;
-		if (dropLogin !== undefined && dropLogin !== result.authUserId)
-			await eraseLogin(context, dropLogin);
-		// The merge may change the email or adopt the dropped row's login.
-		if (result.authUserId !== undefined)
-			await renameLogin(context, result.authUserId, result.email);
+		await context.db.patch(keepId, { ...clean, email: result.email });
 		// Read after the patch so the kept row is walked as patched.
 		const namings = unwrapLogged(
 			await documentsNaming(context, dropId),

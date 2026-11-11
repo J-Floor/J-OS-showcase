@@ -68,7 +68,7 @@ jobs:
           # A fixed port fails the job when the runner already holds it (EADDRINUSE).
           server-port: 0
 
-      - name: Run Prettier (auto-fix)
+      - name: Run oxfmt (auto-fix)
         if: steps.scope.outputs.docs-only != 'true'
         run: bun run format
 

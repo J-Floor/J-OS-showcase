@@ -255,9 +255,8 @@ $layer-text: 4;
 	animation: jf-vt-fade-in var(--jf-animation-duration-fast)
 		var(--jf-animation-ease-exit)
 		calc(
-			var(--jf-animation-duration-morph) - var(
-					--jf-animation-duration-fast
-				)
+			var(--jf-animation-duration-morph) -
+				var(--jf-animation-duration-fast)
 		)
 		both;
 }
@@ -389,9 +388,9 @@ $box-slots: 8;
    page until the frame has grown to the screen, so the page is only ever
    seen inside the frame; otherwise it goes at once, as the page is already
    there. */
-:root[data-vt]:not([data-vt~="brand-reveal"])::view-transition-old(
-		jf-brand-backdrop
-	) {
+:root[data-vt]:not(
+		[data-vt~="brand-reveal"]
+	)::view-transition-old(jf-brand-backdrop) {
 	opacity: 0;
 	animation: none;
 }
@@ -454,9 +453,7 @@ $box-slots: 8;
 	animation-timing-function: var(--jf-animation-ease-standard);
 }
 
-:root[data-vt~="table-collapse"]::view-transition-old(
-		*.jf-table-row
-	):only-child {
+:root[data-vt~="table-collapse"]::view-transition-old(*.jf-table-row):only-child {
 	animation: jf-vt-out-up var(--jf-animation-duration-default)
 		var(--jf-animation-ease-standard) both;
 }

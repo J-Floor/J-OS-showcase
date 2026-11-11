@@ -13,10 +13,9 @@
 		"lint:logic": "eslint \"src/**/*.{ts,tsx}\" --cache --max-warnings 0",
 		"lint:style": "stylelint \"src/**/*.scss\" --cache --allow-empty-input --max-warnings 0",
 		"lint:style:ci": "bun run lint:style --custom-formatter @csstools/stylelint-formatter-github",
-		"format": "prettier --write \"src/**/*.{ts,tsx,css,scss}\" --ignore-path ../../.prettierignore",
+		"format": "oxfmt --write -c ../../.oxfmtrc.json \"src/**/*.{ts,tsx,css,scss}\"",
 		"optimize:assets": "bun scripts/optimize-assets.mjs"
 	},
-	"prettier": "@j-os/config-prettier",
 	"dependencies": {
 		"@j-os/design-system": "workspace:*",
 		"@solidjs/router": "catalog:",
@@ -25,7 +24,6 @@
 	"devDependencies": {
 		"@csstools/stylelint-formatter-github": "^2.0.0",
 		"@j-os/config-eslint": "workspace:*",
-		"@j-os/config-prettier": "workspace:*",
 		"@j-os/config-stylelint": "workspace:*",
 		"@solidjs/testing-library": "catalog:",
 		"@testing-library/jest-dom": "catalog:",

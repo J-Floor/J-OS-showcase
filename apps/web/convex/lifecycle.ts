@@ -10,8 +10,8 @@ import {
 	type MutationCtx,
 } from "./_generated/server";
 import { requireRole } from "./lib/authGuard.ts";
-import { personForCurrentUser } from "./lib/currentPerson.ts";
 import { isLiveStage } from "./lib/derive.ts";
+import { personByEmail } from "./lib/emailAddress.ts";
 import type { PeopleError } from "./lib/errors/people.ts";
 import {
 	factsFor,
@@ -325,7 +325,10 @@ async function runEffect(
 export async function currentActorId(
 	context: MutationCtx
 ): Promise<Id<"people"> | undefined> {
-	const actor = await personForCurrentUser(context);
+	const identity = await context.auth.getUserIdentity();
+	const email = identity?.email;
+	if (!email) return undefined;
+	const actor = await personByEmail(context, email);
 	return actor?._id;
 }
 

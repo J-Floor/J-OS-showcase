@@ -1,25 +1,19 @@
 import type { Doc } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 
-/** The person linked to the login `subject` (`people.authUserId`), or null. */
-export async function personForLogin(
-	context: QueryCtx,
-	subject: string
-): Promise<Doc<"people"> | null> {
-	return context.db
-		.query("people")
-		.withIndex("by_authUserId", (range) => range.eq("authUserId", subject))
-		.unique();
-}
+import { personByEmail } from "./emailAddress.ts";
 
 /**
- * The `people` row for the signed-in caller: the person linked to the login
- * they signed in with (`people.authUserId`, set at sign-in by
- * `lib/authRecords#linkLogin`). Null when signed out or not linked.
+ * The `people` row for the currently-authenticated caller, resolved by
+ * matching the auth identity's email against `by_email`. Returns `null` for
+ * an unauthenticated caller or one with no linked person row. Shared by
+ * `people.ts`, `onboarding.ts` and `visitors.ts` — used to be a byte-identical
+ * copy in each.
  */
 export async function personForCurrentUser(
 	context: QueryCtx
 ): Promise<Doc<"people"> | null> {
 	const identity = await context.auth.getUserIdentity();
-	return identity ? personForLogin(context, identity.subject) : null;
+	const email = identity?.email;
+	return email ? personByEmail(context, email) : null;
 }

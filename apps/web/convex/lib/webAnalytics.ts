@@ -95,6 +95,7 @@ export function setWebAnalyticsProviderForTests(
 }
 
 export function injectedWebAnalyticsProvider():
-	WebAnalyticsProvider | undefined {
+	| WebAnalyticsProvider
+	| undefined {
 	return injectedProvider;
 }

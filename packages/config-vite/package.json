@@ -5,7 +5,7 @@
   "license": "MIT",
   "main": "baseConfig.js",
   "scripts": {
-    "format": "prettier --write \"*.{js,ts,tsx}\" --ignore-path ../../.prettierignore"
+    "format": "oxfmt --write -c ../../.oxfmtrc.json \"*.{js,ts,tsx}\""
   },
   "exports": {
     ".": "./baseConfig.js"

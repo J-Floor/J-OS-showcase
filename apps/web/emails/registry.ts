@@ -95,6 +95,11 @@ export const TEMPLATES: Entry[] = [
 		fields: ["confirmUrl", "logoUrl", "privacyUrl"],
 	},
 	{
+		name: "confirmEmailChange",
+		file: "templates/confirmEmailChange.tsx",
+		fields: ["confirmUrl", "logoUrl"],
+	},
+	{
 		name: "emailChanged",
 		file: "templates/emailChanged.tsx",
 		fields: ["newEmail", "logoUrl"],
