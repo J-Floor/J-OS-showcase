@@ -117,6 +117,7 @@ export const advance = internalMutation({
 	},
 });
 
+// dry-ignore -- a pluralised notification heading, unrelated to the board roster subtitle that shares its ternary shape
 function digestHeading(count: number): string {
 	return count === 1
 		? "1 new notification"

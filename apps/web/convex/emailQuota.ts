@@ -40,6 +40,7 @@ function windowStart(window: QuotaWindow, now: number): number {
 		: Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1);
 }
 
+// dry-ignore -- same index-and-unique read on a different table; a generic helper would erase the index name type-safety
 async function rowFor(context: MutationCtx, key: string) {
 	return context.db
 		.query("emailQuota")

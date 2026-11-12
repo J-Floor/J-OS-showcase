@@ -283,6 +283,64 @@ export default tseslint.config(
 
 	eslintPluginSonar.configs.recommended,
 	{
+		// sonarjs rules another enabled rule (or strict tsc) already enforces,
+		// and AWS CDK rules this codebase cannot trigger.
+		rules: {
+			// AWS CDK checks; no AWS SDK or CDK code in this repo.
+			"sonarjs/aws-apigateway-public-api": "off",
+			"sonarjs/aws-ec2-rds-dms-public": "off",
+			"sonarjs/aws-ec2-unencrypted-ebs-volume": "off",
+			"sonarjs/aws-efs-unencrypted": "off",
+			"sonarjs/aws-iam-all-privileges": "off",
+			"sonarjs/aws-iam-all-resources-accessible": "off",
+			"sonarjs/aws-iam-privilege-escalation": "off",
+			"sonarjs/aws-iam-public-access": "off",
+			"sonarjs/aws-opensearchservice-domain": "off",
+			"sonarjs/aws-rds-unencrypted-databases": "off",
+			"sonarjs/aws-restricted-ip-admin-access": "off",
+			"sonarjs/aws-s3-bucket-granted-access": "off",
+			"sonarjs/aws-s3-bucket-insecure-http": "off",
+			"sonarjs/aws-s3-bucket-public-access": "off",
+			"sonarjs/aws-s3-bucket-versioning": "off",
+			"sonarjs/aws-sagemaker-unencrypted-notebook": "off",
+			"sonarjs/aws-sns-unencrypted-topics": "off",
+			"sonarjs/aws-sqs-unencrypted-queue": "off",
+			// Same check: @typescript-eslint/no-deprecated.
+			"sonarjs/deprecation": "off",
+			// Same check: unused-imports/no-unused-imports (every lint script runs
+			// with --max-warnings 0).
+			"sonarjs/unused-import": "off",
+			// Same check: @typescript-eslint/no-array-delete.
+			"sonarjs/no-array-delete": "off",
+			// Same check: @typescript-eslint/prefer-regexp-exec.
+			"sonarjs/prefer-regexp-exec": "off",
+			// Same check: core no-empty-character-class.
+			"sonarjs/no-empty-character-class": "off",
+			// Same check: core no-invalid-regexp.
+			"sonarjs/no-invalid-regexp": "off",
+			// Same check: core no-misleading-character-class.
+			"sonarjs/no-misleading-character-class": "off",
+			// Same check: core no-control-regex.
+			"sonarjs/no-control-regex": "off",
+			// Same check: core no-regex-spaces.
+			"sonarjs/no-regex-spaces": "off",
+			// The next six are tsc errors under `strict`, which is on by default
+			// since TypeScript 6 and enforced by the typecheck job.
+			// Same check: strict tsc (strictNullChecks).
+			"sonarjs/null-dereference": "off",
+			// Same check: strict tsc (TS2345).
+			"sonarjs/argument-type": "off",
+			// Same check: strict tsc (`in` operand types).
+			"sonarjs/in-operator-type-error": "off",
+			// Same check: strict tsc (TS2351 / TS7009, not constructable).
+			"sonarjs/new-operator-misuse": "off",
+			// Same check: strict tsc (TS2367, no overlap).
+			"sonarjs/different-types-comparison": "off",
+			// Same check: strict tsc (noImplicitAny, TS7015).
+			"sonarjs/no-associative-arrays": "off",
+		},
+	},
+	{
 		rules: {
 			// Solid props are read-only proxies already; Readonly<> adds noise.
 			"sonarjs/prefer-read-only-props": "off",
