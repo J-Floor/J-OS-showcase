@@ -2,14 +2,14 @@
 	"name": "@j-os/config-stylelint",
 	"version": "0.1.0",
 	"private": true,
-	"main": "stylelint.config.js",
-	"type": "module",
-	"scripts": {
-		"format": "oxfmt --write -c ../../.oxfmtrc.json \"*.{js,ts,tsx}\""
-	},
 	"files": [
 		"stylelint.config.js"
 	],
+	"type": "module",
+	"main": "stylelint.config.js",
+	"scripts": {
+		"format": "oxfmt --write -c ../../.oxfmtrc.json \"*.{js,ts,tsx}\""
+	},
 	"dependencies": {
 		"stylelint-config-recess-order": "catalog:",
 		"stylelint-config-standard-scss": "catalog:",

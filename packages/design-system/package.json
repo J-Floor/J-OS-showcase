@@ -32,9 +32,6 @@
 		"demo": "vite --config demo/vite.config.ts",
 		"build:demo": "vite build --config demo/vite.config.ts"
 	},
-	"peerDependencies": {
-		"solid-js": "catalog:"
-	},
 	"dependencies": {
 		"@ark-ui/solid": "catalog:",
 		"@fontsource-variable/azeret-mono": "^5.3.0",
@@ -70,10 +67,13 @@
 		"stylelint": "catalog:",
 		"subset-font": "^2.9.0",
 		"typescript": "catalog:",
-		"typescript7": "catalog:",
 		"typescript-eslint": "catalog:",
+		"typescript7": "catalog:",
 		"vite": "catalog:",
 		"vite-plugin-solid": "catalog:",
 		"vitest": "catalog:"
+	},
+	"peerDependencies": {
+		"solid-js": "catalog:"
 	}
 }

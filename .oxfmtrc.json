@@ -6,7 +6,7 @@
 	"singleQuote": false,
 	"trailingComma": "es5",
 	"printWidth": 80,
-	"sortPackageJson": false,
+	"sortPackageJson": true,
 	"ignorePatterns": [
 		"**/convex/emails/generated/",
 		"**/convex/agreements/generated/",

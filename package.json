@@ -1,31 +1,6 @@
 {
 	"name": "j-os",
 	"private": true,
-	"type": "module",
-	"packageManager": "bun@1.4.2",
-	"scripts": {
-		"dev": "turbo dev",
-		"build": "turbo build",
-		"lint": "turbo lint",
-		"lint:logic": "turbo lint:logic",
-		"lint:style": "turbo lint:style",
-		"typecheck": "turbo typecheck",
-		"test": "turbo test && bun test scripts",
-		"leaks": "bun scripts/leaks.ts",
-		"fallow": "fallow dead-code && fallow dupes --fail-on-issues",
-		"quality": "bash scripts/quality/run.sh",
-		"format": "turbo format",
-		"demo": "bun run --filter @j-os/design-system demo"
-	},
-	"devDependencies": {
-		"fallow": "catalog:",
-		"turbo": "^2.11.10",
-		"typescript": "catalog:",
-		"oxfmt": "catalog:"
-	},
-	"overrides": {
-		"convex": "catalog:"
-	},
 	"workspaces": {
 		"packages": [
 			"apps/*",
@@ -85,5 +60,30 @@
 			"vite-plugin-solid": "2.11.15",
 			"vitest": "5.1.0"
 		}
-	}
+	},
+	"type": "module",
+	"scripts": {
+		"dev": "turbo dev",
+		"build": "turbo build",
+		"lint": "turbo lint",
+		"lint:logic": "turbo lint:logic",
+		"lint:style": "turbo lint:style",
+		"typecheck": "turbo typecheck",
+		"test": "turbo test && bun test scripts",
+		"leaks": "bun scripts/leaks.ts",
+		"fallow": "fallow dead-code && fallow dupes --fail-on-issues",
+		"quality": "bash scripts/quality/run.sh",
+		"format": "turbo format && oxfmt --write \"**/package.json\"",
+		"demo": "bun run --filter @j-os/design-system demo"
+	},
+	"devDependencies": {
+		"fallow": "catalog:",
+		"oxfmt": "catalog:",
+		"turbo": "^2.11.10",
+		"typescript": "catalog:"
+	},
+	"overrides": {
+		"convex": "catalog:"
+	},
+	"packageManager": "bun@1.4.2"
 }

@@ -1,7 +1,7 @@
 {
 	"name": "@j-os/web",
-	"private": true,
 	"version": "0.0.1",
+	"private": true,
 	"type": "module",
 	"scripts": {
 		"dev": "concurrently -n ui,db -c blue,magenta \"bun run dev:ui\" \"bun run dev:db\"",
@@ -85,8 +85,8 @@
 		"solid-devtools": "^0.34.5",
 		"stylelint": "catalog:",
 		"typescript": "catalog:",
-		"typescript7": "catalog:",
 		"typescript-eslint": "catalog:",
+		"typescript7": "catalog:",
 		"unpdf": "^2.1.0",
 		"vite": "catalog:",
 		"vite-plugin-pwa": "catalog:",

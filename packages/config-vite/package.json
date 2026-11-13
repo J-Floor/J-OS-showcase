@@ -1,19 +1,19 @@
 {
-  "name": "@j-os/config-vite",
-  "version": "0.0.1",
-  "private": true,
-  "license": "MIT",
-  "main": "baseConfig.js",
-  "scripts": {
-    "format": "oxfmt --write -c ../../.oxfmtrc.json \"*.{js,ts,tsx}\""
-  },
-  "exports": {
-    ".": "./baseConfig.js"
-  },
-  "type": "module",
-  "types": "baseConfig.d.ts",
-  "devDependencies": {
-    "vite": "catalog:",
-    "vite-plugin-solid": "catalog:"
-  }
+	"name": "@j-os/config-vite",
+	"version": "0.0.1",
+	"private": true,
+	"license": "MIT",
+	"type": "module",
+	"main": "baseConfig.js",
+	"types": "baseConfig.d.ts",
+	"exports": {
+		".": "./baseConfig.js"
+	},
+	"scripts": {
+		"format": "oxfmt --write -c ../../.oxfmtrc.json \"*.{js,ts,tsx}\""
+	},
+	"devDependencies": {
+		"vite": "catalog:",
+		"vite-plugin-solid": "catalog:"
+	}
 }
