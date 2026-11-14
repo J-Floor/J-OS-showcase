@@ -128,18 +128,6 @@ export const resume = mutation({
 	},
 });
 
-export const setTourSeen = mutation({
-	args: {},
-	handler: async (context) => {
-		const person = unwrap(await requireRole(context, ACCESS_TIERS));
-		const prev = person.onboarding ?? { steps: {} };
-		await context.db.patch(person._id, {
-			onboarding: { ...prev, tourSeen: true },
-		});
-		return null;
-	},
-});
-
 /**
  * Mark the one-time "Getting in" intro as seen, for the signed-in caller only.
  * Idempotent: the first dismissal's time is kept.

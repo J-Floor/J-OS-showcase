@@ -13,8 +13,8 @@
 	   open, so it gets its own tier above the overlay bases and below tooltips.
 	   Its own tier rather than a bigger overlay number: an overlay opened during
 	   a tour raises `--layer-index`, and a tour sharing the overlay base would
-	   be overtaken by the very dialog its step just told you to open. */
-	--jf-z-index-tour-backdrop-base: 1049;
+	   be overtaken by the very dialog its step just told you to open. The tour
+	   stacks its own three layers (scrim, spotlight, step) up from this base. */
 	--jf-z-index-tour-base: 1050;
 	--jf-z-index-tooltip-base: 1100;
 }

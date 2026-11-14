@@ -331,8 +331,7 @@ export default defineSchema({
 		hostedBy: v.optional(v.string()),
 		// Onboarding progress (members/guests between approval and confirmation).
 		// `steps` maps a step id to its completion record; step-specific payload
-		// is added by each step's own spec later. `tourSeen` gates the post-gate
-		// Welcome Tour, which runs after onboarding completes.
+		// is added by each step's own spec later.
 		onboarding: v.optional(
 			v.object({
 				steps: v.record(
@@ -351,6 +350,8 @@ export default defineSchema({
 						})
 					)
 				),
+				// Retired with the Welcome Tour: nothing reads or writes it.
+				// `migrations:unsetTourSeen` clears it, then it is dropped.
 				tourSeen: v.optional(v.boolean()),
 			})
 		),

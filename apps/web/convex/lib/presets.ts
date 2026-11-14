@@ -13,13 +13,13 @@ import { syncSignedVariants } from "./signatures.ts";
 export type Preset = {
 	tier: Exclude<Tier, "former" | "visitor">;
 	stage: "onboarding" | "active" | "verified" | "denied";
-	onboarding: "clear" | "full-seen" | "full-unseen";
+	onboarding: "clear" | "full";
 	access: boolean;
 };
 
 export type PersonName = { firstName: string; lastName: string };
 
-// Settled, full access (onboarding done, tour already seen).
+// Settled, full access (onboarding done).
 export const BOARD_PRESET: Preset = {
 	tier: "board",
 	stage: "active",
@@ -30,7 +30,7 @@ export const BOARD_PRESET: Preset = {
 export const MEMBER_PRESET: Preset = {
 	tier: "member",
 	stage: "active",
-	onboarding: "full-seen",
+	onboarding: "full",
 	access: true,
 };
 
@@ -45,10 +45,7 @@ function fullSteps(now: number) {
 function onboardingFor(preset: Preset, now: number) {
 	return preset.onboarding === "clear"
 		? undefined
-		: {
-				steps: fullSteps(now),
-				tourSeen: preset.onboarding === "full-seen",
-			};
+		: { steps: fullSteps(now) };
 }
 
 function accessWindowFor(preset: Preset, now: number) {

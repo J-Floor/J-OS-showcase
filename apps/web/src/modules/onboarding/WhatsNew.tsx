@@ -12,7 +12,6 @@ import {
 	visibleNotes,
 } from "./changelog.ts";
 import { doorsIntroPending } from "./doorIntroState.ts";
-import { tourWillRun } from "./WelcomeTour.tsx";
 import styles from "./WhatsNew.module.scss";
 
 /** Per-device record of the last version whose notes were acknowledged. Notes
@@ -33,13 +32,12 @@ function writeSeen(version: string): void {
  * "What's new" on a version bump. Shown the first load AFTER a new version ships,
  * carrying the notes newer than what this browser last acknowledged.
  *
- * Deliberately NOT shown to a brand-new user: their first-ever load is the
- * {@link WelcomeTour}'s moment, and a changelog on top of it would be two
- * onboarding surfaces at once. It is suppressed only when the tour will actually
- * run — a member/guest with an `onboarding` record and `tourSeen` still false.
- * Board and admin have no `onboarding` record, so they always see it (they are
- * its audience); a first-timer's version is recorded silently so their first
- * genuine upgrade is what triggers this.
+ * Deliberately NOT shown on a member's or guest's first visit from a browser
+ * (an `onboarding` record and no version acknowledged here yet): every note
+ * would be new to them, so the whole changelog would land on someone who has
+ * just finished onboarding. Their version is recorded silently, so their first
+ * genuine upgrade is what triggers this. Board and admin have no `onboarding`
+ * record, so they always see it: they are its audience.
  *
  * It also waits for the one-time doors intro ({@link doorsIntroPending}): that
  * page is the first thing a person sees, and What's New decides only after it
@@ -67,13 +65,10 @@ export function WhatsNew() {
 		const seen = readSeen();
 		if (seen === APP_VERSION) return;
 
-		// Suppress ONLY when the welcome tour will actually run — a member/guest
-		// still onboarding — so the two onboarding surfaces never stack. Gate on
-		// "the tour will run", NOT on `tourSeen` being truthy: board and admin
-		// have no `onboarding` record at all, so a `!tourSeen` check misread them
-		// as brand-new and hid What's New from its own audience. Record the
-		// version so a first-timer does not get the whole changelog on return.
-		if (tourWillRun(data.person)) {
+		// A member's or guest's first visit from this browser: start from now
+		// rather than replay the whole changelog. Gated on the `onboarding`
+		// record, which board and admin never have, so they still get the notes.
+		if (seen === null && data.person?.onboarding) {
 			writeSeen(APP_VERSION);
 			return;
 		}

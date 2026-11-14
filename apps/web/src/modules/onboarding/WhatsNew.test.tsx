@@ -10,14 +10,14 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 afterEach(cleanup);
 
-// `WhatsNew` reads `onboarding.getState` to tell whether the welcome tour will
-// run (a member/guest still onboarding) from everyone else. Stub the
-// subscription so it renders without a ConvexProvider; the person's `onboarding`
-// record is swapped per test — `undefined` models board/admin, who have none.
+// `WhatsNew` reads `onboarding.getState` to tell a member or guest (who has an
+// `onboarding` record) from board/admin (who have none). Stub the subscription
+// so it renders without a ConvexProvider; the person's `onboarding` record is
+// swapped per test — `undefined` models board/admin.
 const { state } = vi.hoisted(
 	(): {
 		state: {
-			onboarding: { tourSeen: boolean } | undefined;
+			onboarding: { steps: Record<string, never> } | undefined;
 			/** Extra person fields (tier, stage, door, doorsIntroSeenAt …). */
 			extra: Record<string, unknown>;
 			/** Re-runs the component's effects after `extra` changes. */
@@ -25,7 +25,7 @@ const { state } = vi.hoisted(
 		};
 	} => ({
 		state: {
-			onboarding: { tourSeen: true },
+			onboarding: { steps: {} },
 			extra: {},
 			bump: () => {},
 		},
@@ -64,6 +64,9 @@ const everyoneItem = CHANGELOG.flatMap((entry) => entry.items).find(
 if (!everyoneItem) throw new Error("the changelog needs an item for everyone");
 const ALT_LINE = everyoneItem.text;
 const BOARD_LINE = "Edit the Wi-Fi details";
+const SEEN_KEY = "jos:whatsNewSeen";
+/** Older than every changelog entry: this browser has seen a version before. */
+const SEEN_BEFORE = "0.0";
 
 function renderFor(role: Role) {
 	return render(() => (
@@ -75,7 +78,8 @@ function renderFor(role: Role) {
 
 beforeEach(() => {
 	localStorage.clear();
-	state.onboarding = { tourSeen: true };
+	localStorage.setItem(SEEN_KEY, SEEN_BEFORE);
+	state.onboarding = { steps: {} };
 	state.extra = {};
 });
 
@@ -86,9 +90,7 @@ test("isNewer: null seen is always new; compares field by field", () => {
 	expect(isNewer("1.0", "1.1")).toBe(false);
 });
 
-test("shows the changelog to a member who finished the tour and has not seen this version", async () => {
-	state.onboarding = { tourSeen: true };
-	// seen is null (cleared) → everything is new.
+test("shows the changelog to a member who has not seen this version", async () => {
 	renderFor("member");
 	await waitFor(() => {
 		expect(screen.getByText(ALT_LINE)).toBeInTheDocument();
@@ -96,9 +98,9 @@ test("shows the changelog to a member who finished the tour and has not seen thi
 });
 
 test("shows to board/admin, who have no onboarding record — they are its audience", async () => {
-	// The bug this guards: `onboarding?.tourSeen ?? false` misread board/admin
-	// (no onboarding) as brand-new and hid What's New from the very people it is
-	// written for.
+	// Even on a first visit from this browser: the first-visit rule must not
+	// hide What's New from the very people it is written for.
+	localStorage.removeItem(SEEN_KEY);
 	state.onboarding = undefined;
 	renderFor("board");
 	await waitFor(() => {
@@ -106,18 +108,17 @@ test("shows to board/admin, who have no onboarding record — they are its audie
 	});
 });
 
-test("does NOT show while the welcome tour will run (member still onboarding) — records the version", async () => {
-	state.onboarding = { tourSeen: false }; // tour will run for them
+test("does NOT show on a member's first visit from this browser — records the version", async () => {
+	localStorage.removeItem(SEEN_KEY);
 	renderFor("member");
 	await waitFor(() => {
-		expect(localStorage.getItem("jos:whatsNewSeen")).toBe(APP_VERSION);
+		expect(localStorage.getItem(SEEN_KEY)).toBe(APP_VERSION);
 	});
 	expect(screen.queryByText(ALT_LINE)).toBeNull();
 });
 
 test("does NOT show when this version has already been acknowledged", async () => {
-	state.onboarding = { tourSeen: true };
-	localStorage.setItem("jos:whatsNewSeen", APP_VERSION);
+	localStorage.setItem(SEEN_KEY, APP_VERSION);
 	renderFor("member");
 	// Nothing to show; the item never appears.
 	await new Promise((resolve) => setTimeout(resolve, 0));
@@ -131,7 +132,7 @@ test("waits while the doors intro is pending: shows nothing and records nothing"
 	renderFor("member");
 	await new Promise((resolve) => setTimeout(resolve, 0));
 	expect(screen.queryByText(ALT_LINE)).toBeNull();
-	expect(localStorage.getItem("jos:whatsNewSeen")).toBeNull();
+	expect(localStorage.getItem(SEEN_KEY)).toBe(SEEN_BEFORE);
 });
 
 test("shows once the doors intro is dismissed", async () => {

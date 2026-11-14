@@ -25,7 +25,7 @@ vi.mock("./changelog.ts", async (importOriginal) => {
 
 vi.mock("convex-solidjs", () => ({
 	useQuery: () => ({
-		data: () => ({ person: { onboarding: { tourSeen: true } } }),
+		data: () => ({ person: { onboarding: { steps: {} } } }),
 		isLoading: () => false,
 		error: () => {},
 	}),

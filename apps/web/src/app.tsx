@@ -14,7 +14,6 @@ import { Can } from "./lib/ability.tsx";
 import { SignOutButton } from "./modules/auth/SignOutButton.tsx";
 import { CommunityDataProvider } from "./modules/community/data/communityData.tsx";
 import { DoorsIntro } from "./modules/onboarding/DoorsIntro.tsx";
-import { WelcomeTour } from "./modules/onboarding/WelcomeTour.tsx";
 import { WhatsNew } from "./modules/onboarding/WhatsNew.tsx";
 import { LastPathTracker, ModuleRoutes, RoleGate } from "./routing/index.tsx";
 import { usePageTransitions } from "./routing/usePageTransitions.ts";
@@ -126,12 +125,9 @@ function AdminShell(props: ParentProps) {
 			<AppErrorBoundary>
 				<ShellWarmup />
 			</AppErrorBoundary>
-			{/* First thing a person sees; the tour and What's New wait for it. */}
+			{/* First thing a person sees; What's New waits for it. */}
 			<AppErrorBoundary>
 				<DoorsIntro />
-			</AppErrorBoundary>
-			<AppErrorBoundary>
-				<WelcomeTour />
 			</AppErrorBoundary>
 			<AppErrorBoundary>
 				<WhatsNew />

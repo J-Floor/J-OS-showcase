@@ -814,3 +814,73 @@ describe("linkAuthUsers", () => {
 		expect(again).toMatchObject({ linked: 0, unchanged: 1 });
 	});
 });
+
+async function seedOnboarded(backend: Tester) {
+	return backend.run(async (context) => {
+		const base = {
+			firstName: "Tour",
+			lastName: "Person",
+			tier: "member" as const,
+			stage: "active" as const,
+			stageSince: 0,
+		};
+		return {
+			seen: await context.db.insert("people", {
+				...base,
+				email: "seen@example.com",
+				onboarding: {
+					steps: { rules: { completedAt: 1 } },
+					tourSeen: true,
+				},
+			}),
+			unseen: await context.db.insert("people", {
+				...base,
+				email: "unseen@example.com",
+				onboarding: { steps: {}, tourSeen: false },
+			}),
+			board: await context.db.insert("people", {
+				...base,
+				email: "board@example.com",
+				tier: "board",
+			}),
+		};
+	});
+}
+
+describe("unsetTourSeen", () => {
+	it("clears the flag and keeps the rest of the onboarding record", async () => {
+		const backend = createTester();
+		const ids = await seedOnboarded(backend);
+
+		const result = await backend.mutation(
+			internal.migrations.unsetTourSeen,
+			{}
+		);
+
+		expect(result.cleared).toBe(2);
+		const [seen, unseen, board] = await backend.run(async (context) => [
+			await context.db.get(ids.seen),
+			await context.db.get(ids.unseen),
+			await context.db.get(ids.board),
+		]);
+		expect(seen?.onboarding).toEqual({
+			steps: { rules: { completedAt: 1 } },
+		});
+		expect(unseen?.onboarding).toEqual({ steps: {} });
+		expect(board?.onboarding).toBeUndefined();
+	});
+
+	it("only reports on a dry run", async () => {
+		const backend = createTester();
+		const ids = await seedOnboarded(backend);
+
+		const result = await backend.mutation(
+			internal.migrations.unsetTourSeen,
+			{ dryRun: true }
+		);
+
+		expect(result).toMatchObject({ cleared: 2, dryRun: true });
+		const seen = await backend.run((context) => context.db.get(ids.seen));
+		expect(seen?.onboarding?.tourSeen).toBe(true);
+	});
+});

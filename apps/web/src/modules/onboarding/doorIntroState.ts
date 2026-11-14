@@ -13,7 +13,7 @@ export type DoorsIntroPerson = LifecyclePerson &
  * door access is granted — the app will open the doors for them — and they
  * have not dismissed it yet. False while loading or signed out, and for anyone
  * the door is closed to: they cannot unlock, so there is nothing to introduce.
- * The welcome tour and What's New both wait while this is true.
+ * What's New waits while this is true.
  */
 export function doorsIntroPending(
 	person: DoorsIntroPerson | null | undefined,

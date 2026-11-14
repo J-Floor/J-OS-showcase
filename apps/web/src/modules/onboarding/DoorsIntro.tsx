@@ -25,11 +25,11 @@ const DOOR_DESCRIPTIONS: Record<LockSlot, string> = {
  * the app opens them, from the Doors card on the Space page, over the
  * internet. Shown on app open to everyone whose door
  * access is granted and who has not dismissed it (`people.doorsIntroSeenAt`),
- * before the welcome tour and What's New, which both wait for it.
+ * before What's New, which waits for it.
  *
  * Only the two buttons mark it seen. They close it locally at once, and the
  * query then pushes the person with `doorsIntroSeenAt` set, which is what
- * releases the tour and What's New. Escape or a tap outside closes it for this
+ * releases What's New. Escape or a tap outside closes it for this
  * session only, so an accidental dismissal does not lose it for good.
  */
 export function DoorsIntro(): JSX.Element {

@@ -85,8 +85,6 @@ JSON args:
 | `bunx convex run dev:guest`            | Confirmed guest                           |
 | `bunx convex run dev:memberOnboarding` | Member, approved → onboarding wizard runs |
 | `bunx convex run dev:guestOnboarding`  | Guest, approved → onboarding wizard runs  |
-| `bunx convex run dev:memberTour`       | Confirmed member, Welcome Tour auto-fires |
-| `bunx convex run dev:guestTour`        | Confirmed guest, Welcome Tour auto-fires  |
 | `bunx convex run dev:prospect`         | No access                                 |
 
 Each defaults to `DEV_ADMIN_EMAIL`; pass `'{"email":"other@example.com"}'` to

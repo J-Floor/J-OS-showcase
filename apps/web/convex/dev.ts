@@ -54,7 +54,7 @@ export const member = presetMutation(MEMBER_PRESET);
 export const guest = presetMutation({
 	tier: "guest",
 	stage: "active",
-	onboarding: "full-seen",
+	onboarding: "full",
 	access: true,
 });
 
@@ -70,20 +70,6 @@ export const guestOnboarding = presetMutation({
 	stage: "onboarding",
 	onboarding: "clear",
 	access: false,
-});
-
-// Confirmed, but onboarding-complete-yet-unseen so the Welcome Tour auto-fires.
-export const memberTour = presetMutation({
-	tier: "member",
-	stage: "active",
-	onboarding: "full-unseen",
-	access: true,
-});
-export const guestTour = presetMutation({
-	tier: "guest",
-	stage: "active",
-	onboarding: "full-unseen",
-	access: true,
 });
 
 // No access. Renamed from `applicant`: the tier is `prospect` now.

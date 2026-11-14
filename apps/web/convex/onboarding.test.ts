@@ -285,65 +285,6 @@ describe("onboarding.completeStep", () => {
 	});
 });
 
-describe("onboarding.setTourSeen", () => {
-	it("sets the tourSeen flag", async () => {
-		const backend = convexTest(schema, modules);
-		const id = await backend.run(async (context) =>
-			context.db.insert("people", {
-				email: "ada@example.com",
-				firstName: "Ada",
-				lastName: "Lovelace",
-				tier: "member",
-				stage: "onboarding",
-				stageSince: Date.now(),
-			})
-		);
-		await backend
-			.withIdentity({ email: "ada@example.com" })
-			.mutation(api.onboarding.setTourSeen, {});
-		const person = await backend.run(async (context) => context.db.get(id));
-		expect(person?.onboarding?.tourSeen).toBe(true);
-	});
-
-	it("refuses a former member and an expired guest", async () => {
-		const backend = convexTest(schema, modules);
-		const [former, expired] = await backend.run(async (context) => [
-			await context.db.insert("people", {
-				email: "gone@example.com",
-				firstName: "Gone",
-				lastName: "G",
-				tier: "member",
-				stage: "expired",
-				stageSince: Date.now(),
-			}),
-			await context.db.insert("people", {
-				email: "late@example.com",
-				firstName: "Late",
-				lastName: "L",
-				tier: "guest",
-				stage: "onboarding",
-				stageSince: Date.now(),
-				accessUntil: Date.now() - 1000,
-			}),
-		]);
-		for (const email of ["gone@example.com", "late@example.com"]) {
-			await expect(
-				backend
-					.withIdentity({ email })
-					.mutation(api.onboarding.setTourSeen, {})
-			).rejects.toThrow(/AccessExpired/);
-		}
-		const rows = await backend.run(async (context) => [
-			await context.db.get(former),
-			await context.db.get(expired),
-		]);
-		expect(rows.map((row) => row?.onboarding?.tourSeen)).toEqual([
-			undefined,
-			undefined,
-		]);
-	});
-});
-
 describe("getOnboardingHost", () => {
 	it("returns the host name + phone for a guest", async () => {
 		const backend = convexTest(schema, modules);
