@@ -189,8 +189,10 @@
 }
 
 /* The accessible mirror of the plot. Off-screen rather than `display: none`,
-   which would take it out of the accessibility tree along with the pixels. */
-.srTable {
+   which would take it out of the accessibility tree along with the pixels.
+   On a wrapper, not the table: Firefox lays a table's caption out outside the
+   table's own clip, so a hidden table still shows its caption. */
+.srOnly {
 	position: absolute;
 	inline-size: 1px;
 	block-size: 1px;

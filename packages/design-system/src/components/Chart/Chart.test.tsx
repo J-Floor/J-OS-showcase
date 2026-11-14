@@ -1,6 +1,7 @@
 import { render, screen } from "@solidjs/testing-library";
 import { describe, expect, it } from "vitest";
 
+import styles from "./Chart.module.scss";
 import { Chart } from "./Chart.tsx";
 import { maxOf, niceScale, stackRows } from "./scale.ts";
 
@@ -90,6 +91,22 @@ describe("Chart", () => {
 		expect(table).toHaveTextContent("Pears");
 		// Both rows, both series.
 		expect(screen.getAllByRole("row")).toHaveLength(3);
+	});
+
+	it("hides the table through a wrapper, so no engine shows its caption", () => {
+		render(() => (
+			<Chart
+				data={data}
+				xKey="month"
+				series={[{ key: "a" }]}
+				label="Fruit"
+			/>
+		));
+		// Firefox draws a table's caption outside the table's own clip, so the
+		// hiding rules must sit on an ordinary block around it.
+		const table = screen.getByRole("table", { name: "Fruit" });
+		expect(table).not.toHaveClass(styles.srOnly);
+		expect(table.parentElement).toHaveClass(styles.srOnly);
 	});
 
 	it("applies the caller's formatter to the accessible values", () => {

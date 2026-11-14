@@ -190,34 +190,36 @@ export function AccessibleTable(
 		Pick<ChartGeometry, "formatted">
 ): JSX.Element {
 	return (
-		<table class={styles.srTable}>
-			<caption>{props.label}</caption>
-			<thead>
-				<tr>
-					<th scope="col">{props.xKey}</th>
-					<For each={props.series}>
-						{(series) => <th scope="col">{labelOf(series)}</th>}
+		<div class={styles.srOnly}>
+			<table>
+				<caption>{props.label}</caption>
+				<thead>
+					<tr>
+						<th scope="col">{props.xKey}</th>
+						<For each={props.series}>
+							{(series) => <th scope="col">{labelOf(series)}</th>}
+						</For>
+					</tr>
+				</thead>
+				<tbody>
+					<For each={props.data}>
+						{(row) => (
+							<tr>
+								<th scope="row">{String(row[props.xKey])}</th>
+								<For each={props.series}>
+									{(series) => (
+										<td>
+											{props.formatted(
+												numberAt(row, series.key)
+											)}
+										</td>
+									)}
+								</For>
+							</tr>
+						)}
 					</For>
-				</tr>
-			</thead>
-			<tbody>
-				<For each={props.data}>
-					{(row) => (
-						<tr>
-							<th scope="row">{String(row[props.xKey])}</th>
-							<For each={props.series}>
-								{(series) => (
-									<td>
-										{props.formatted(
-											numberAt(row, series.key)
-										)}
-									</td>
-								)}
-							</For>
-						</tr>
-					)}
-				</For>
-			</tbody>
-		</table>
+				</tbody>
+			</table>
+		</div>
 	);
 }
