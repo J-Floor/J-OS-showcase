@@ -509,40 +509,42 @@ export const linkAuthUsers = internalMutation({
 });
 
 /**
- * One-off: clear `onboarding.tourSeen`, retired with the Welcome Tour, so a
- * later deploy can drop the field from the schema. Re-running clears nothing.
+ * One-off: set `onboarding.tourSeen` on every onboarding record. App builds
+ * cached from before the Welcome Tour's removal still run the tour whenever
+ * the flag is missing, and can no longer save it. Setting it stops them; the
+ * current app ignores it. Re-running sets nothing.
  * Paged and dry-run as `backfillPerkEvents` is:
  *
- *   bunx convex run migrations:unsetTourSeen '{"dryRun":true}' --prod
- *   bunx convex run migrations:unsetTourSeen '{"dryRun":true,"cursor":"<continueCursor>"}' --prod  # until isDone
- *   bunx convex run migrations:unsetTourSeen --prod
- *   bunx convex run migrations:unsetTourSeen '{"dryRun":true}' --prod  # cleared 0, every page
+ *   bunx convex run migrations:restoreTourSeen '{"dryRun":true}' --prod
+ *   bunx convex run migrations:restoreTourSeen --prod
+ *   bunx convex run migrations:restoreTourSeen '{"dryRun":true}' --prod  # set 0, every page
  */
-export const unsetTourSeen = internalMutation({
+export const restoreTourSeen = internalMutation({
 	args: PAGED_MIGRATION_ARGS,
 	handler: async (context, { cursor, dryRun }) => {
 		const page = await context.db.query("people").paginate({
 			cursor: cursor ?? null,
 			numItems: MIGRATION_PAGE_SIZE,
 		});
-		let cleared = 0;
+		let set = 0;
 		for (const person of page.page) {
-			if (!person.onboarding) continue;
-			const { tourSeen, ...onboarding } = person.onboarding;
-			if (tourSeen === undefined) continue;
-			cleared++;
+			if (!person.onboarding || person.onboarding.tourSeen === true)
+				continue;
+			set++;
 			if (dryRun !== true)
-				await context.db.patch(person._id, { onboarding });
+				await context.db.patch(person._id, {
+					onboarding: { ...person.onboarding, tourSeen: true },
+				});
 		}
 		if (dryRun !== true && !page.isDone) {
 			await context.scheduler.runAfter(
 				0,
-				internal.migrations.unsetTourSeen,
+				internal.migrations.restoreTourSeen,
 				{ cursor: page.continueCursor }
 			);
 		}
 		return {
-			cleared,
+			set,
 			isDone: page.isDone,
 			continueCursor: page.continueCursor,
 			dryRun: dryRun === true,

@@ -825,13 +825,10 @@ async function seedOnboarded(backend: Tester) {
 			stageSince: 0,
 		};
 		return {
-			seen: await context.db.insert("people", {
+			cleared: await context.db.insert("people", {
 				...base,
-				email: "seen@example.com",
-				onboarding: {
-					steps: { rules: { completedAt: 1 } },
-					tourSeen: true,
-				},
+				email: "cleared@example.com",
+				onboarding: { steps: { rules: { completedAt: 1 } } },
 			}),
 			unseen: await context.db.insert("people", {
 				...base,
@@ -847,26 +844,27 @@ async function seedOnboarded(backend: Tester) {
 	});
 }
 
-describe("unsetTourSeen", () => {
-	it("clears the flag and keeps the rest of the onboarding record", async () => {
+describe("restoreTourSeen", () => {
+	it("sets the flag on every onboarding record and leaves the rest", async () => {
 		const backend = createTester();
 		const ids = await seedOnboarded(backend);
 
 		const result = await backend.mutation(
-			internal.migrations.unsetTourSeen,
+			internal.migrations.restoreTourSeen,
 			{}
 		);
 
-		expect(result.cleared).toBe(2);
-		const [seen, unseen, board] = await backend.run(async (context) => [
-			await context.db.get(ids.seen),
+		expect(result.set).toBe(2);
+		const [cleared, unseen, board] = await backend.run(async (context) => [
+			await context.db.get(ids.cleared),
 			await context.db.get(ids.unseen),
 			await context.db.get(ids.board),
 		]);
-		expect(seen?.onboarding).toEqual({
+		expect(cleared?.onboarding).toEqual({
 			steps: { rules: { completedAt: 1 } },
+			tourSeen: true,
 		});
-		expect(unseen?.onboarding).toEqual({ steps: {} });
+		expect(unseen?.onboarding?.tourSeen).toBe(true);
 		expect(board?.onboarding).toBeUndefined();
 	});
 
@@ -875,12 +873,14 @@ describe("unsetTourSeen", () => {
 		const ids = await seedOnboarded(backend);
 
 		const result = await backend.mutation(
-			internal.migrations.unsetTourSeen,
+			internal.migrations.restoreTourSeen,
 			{ dryRun: true }
 		);
 
-		expect(result).toMatchObject({ cleared: 2, dryRun: true });
-		const seen = await backend.run((context) => context.db.get(ids.seen));
-		expect(seen?.onboarding?.tourSeen).toBe(true);
+		expect(result).toMatchObject({ set: 2, dryRun: true });
+		const cleared = await backend.run((context) =>
+			context.db.get(ids.cleared)
+		);
+		expect(cleared?.onboarding?.tourSeen).toBeUndefined();
 	});
 });

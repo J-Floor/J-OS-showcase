@@ -350,8 +350,10 @@ export default defineSchema({
 						})
 					)
 				),
-				// Retired with the Welcome Tour: nothing reads or writes it.
-				// `migrations:unsetTourSeen` clears it, then it is dropped.
+				// Retired with the Welcome Tour: the current app neither reads nor
+				// writes it. App builds cached from before the removal still run
+				// the tour while it is missing, so it stays set
+				// (`migrations:restoreTourSeen`) until those builds are gone.
 				tourSeen: v.optional(v.boolean()),
 			})
 		),
