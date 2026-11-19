@@ -20,10 +20,9 @@ const PUSH_TIMEOUT_MS = 10_000;
  * deployment (or a convex-test run) without keys never loads the Node package.
  */
 async function webPushSender(): Promise<PushSender> {
-	const module_ = await import("web-push");
-	const webpush = module_.default;
+	const { sendNotification } = await import("web-push");
 	return async (subscription, body, vapid) => {
-		await webpush.sendNotification(
+		await sendNotification(
 			{
 				endpoint: subscription.endpoint,
 				keys: { p256dh: subscription.p256dh, auth: subscription.auth },
