@@ -69,7 +69,6 @@ export type SheetNavProps = {
  * give SheetNav what it needs.
  */
 export function SheetNav(props: SheetNavProps): JSX.Element {
-	// eslint-disable-next-line no-unassigned-vars -- assigned by Solid's `ref={anchorReference}` binding below, which the rule can't see
 	let anchorReference: HTMLDivElement | undefined;
 	const [sheetElement, setSheetElement] = createSignal<HTMLElement>();
 	onMount(() => {

@@ -30,7 +30,6 @@ export function Sidebar() {
 	// transition shows it as a dip. So a mouseleave during a transition is
 	// held, and the rail re-reads the pointer once the transition is over.
 	const [expanded, setExpanded] = createSignal(false);
-	// eslint-disable-next-line no-unassigned-vars -- assigned by Solid's `ref={rail}` binding below, which the rule can't see
 	let rail: HTMLElement | undefined;
 	function onMouseLeave(): void {
 		const running = activeTransition();

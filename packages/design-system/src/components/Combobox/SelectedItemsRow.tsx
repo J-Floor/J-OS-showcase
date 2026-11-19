@@ -133,7 +133,6 @@ function hiddenItemCount(itemCount: number, visibleCount: number): number {
 export function SelectedItemsRow<T>(
 	props: SelectedItemsRowProps<T>
 ): JSX.Element {
-	// eslint-disable-next-line no-unassigned-vars -- assigned by Solid's `ref={containerElement}` binding below, which the rule can't see
 	let containerElement: HTMLDivElement | undefined;
 	let measureElement: HTMLDivElement | undefined;
 
