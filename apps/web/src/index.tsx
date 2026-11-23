@@ -28,6 +28,7 @@ import { OnboardingRoute } from "./modules/onboarding/OnboardingRoute.tsx";
 import { PrivacyPolicy } from "./modules/privacy/PrivacyPolicy.tsx";
 import { ConfirmApplication } from "./modules/signup/ConfirmApplication.tsx";
 import { SignUp } from "./modules/signup/SignUp.tsx";
+import { TvPairRoute } from "./modules/space/entity.ts";
 import { EventInviteConfirm } from "./modules/visitor/EventInviteConfirm.tsx";
 import { VisitorConfirm } from "./modules/visitor/VisitorConfirm.tsx";
 import { VisitorRegister } from "./modules/visitor/VisitorRegister.tsx";
@@ -35,6 +36,7 @@ import { LandingRedirect, PageTitleTracker } from "./routing/index.tsx";
 import { AppErrorBoundary } from "./shared/AppErrorBoundary.tsx";
 import { bindConvexAuth, convex } from "./shared/data/convex.ts";
 import { toaster } from "./shared/toaster.ts";
+import { NoAccess } from "./shell/NoAccess.tsx";
 import { ThemeColorMeta } from "./shell/ThemeColorMeta.tsx";
 import { UpdatingOverlay } from "./shell/UpdatingOverlay.tsx";
 
@@ -139,6 +141,11 @@ render(
 			<Route path="/" component={App}>
 				<Route path="/" component={LandingRedirect} />
 				<ModuleRoutes />
+				<Route
+					path="/tv/pair"
+					component={() => <TvPairRoute noAccess={<NoAccess />} />}
+					info={{ title: "Pair TV" }}
+				/>
 				{/* Unknown URL under the app shell: send the user to their last
 				    visited page (or the default module), same as `/`. */}
 				<Route path="*" component={LandingRedirect} />

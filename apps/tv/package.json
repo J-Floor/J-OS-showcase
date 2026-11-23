@@ -1,0 +1,33 @@
+{
+	"name": "@j-os/tv",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vite",
+		"build": "node node_modules/typescript7/bin/tsc --noEmit && vite build --mode check",
+		"build:release": "node node_modules/typescript7/bin/tsc --noEmit && vite build",
+		"typecheck": "node node_modules/typescript7/bin/tsc --noEmit",
+		"test": "vitest run",
+		"lint": "bun run lint:logic && bun run lint:style",
+		"lint:logic": "eslint \"src/**/*.ts\" --cache --max-warnings 0",
+		"lint:style": "stylelint \"src/**/*.css\" --cache --allow-empty-input --max-warnings 0"
+	},
+	"dependencies": {
+		"@j-os/tv-player": "workspace:*",
+		"qrcode-generator": "1.4.4"
+	},
+	"devDependencies": {
+		"@j-os/config-eslint": "workspace:*",
+		"@j-os/config-stylelint": "workspace:*",
+		"@types/node": "^26.6.6",
+		"eslint": "catalog:",
+		"happy-dom": "catalog:",
+		"stylelint": "catalog:",
+		"typescript": "catalog:",
+		"typescript-eslint": "catalog:",
+		"typescript7": "catalog:",
+		"vite": "catalog:",
+		"vitest": "catalog:"
+	}
+}

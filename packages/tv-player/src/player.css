@@ -1,0 +1,56 @@
+.tvp-stage {
+	position: relative;
+	overflow: hidden;
+	background: #000;
+}
+
+.tvp-layer {
+	position: absolute;
+	inset: 0;
+	background: #000;
+
+	& iframe {
+		inline-size: 100%;
+		block-size: 100%;
+		border: 0;
+	}
+
+	& img {
+		inline-size: 100%;
+		block-size: 100%;
+		object-fit: contain;
+		background: #000;
+	}
+}
+
+.tvp-fade {
+	animation: tvp-fade-in 600ms ease both;
+}
+
+.tvp-slide {
+	animation: tvp-slide-in 600ms ease both;
+}
+
+.tvp-none {
+	animation: none;
+}
+
+@keyframes tvp-fade-in {
+	from {
+		opacity: 0;
+	}
+
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes tvp-slide-in {
+	from {
+		transform: translateX(100%);
+	}
+
+	to {
+		transform: translateX(0);
+	}
+}

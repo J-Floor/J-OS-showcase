@@ -1,0 +1,90 @@
+/* stylelint-disable logical-css/require-logical-properties, logical-css/require-logical-units, declaration-block-no-redundant-longhand-properties -- Chrome 76 (Tizen 6.0) has no inset or vi/vb */
+:root {
+	--tv-bg: black;
+	--tv-fg: white;
+	--tv-font: sans-serif;
+	--tv-gap: 4vh;
+	--tv-title-size: 5vh;
+	--tv-title-weight: 600;
+	--tv-qr-pad: 2vh;
+	--tv-qr-radius: 2vh;
+	--tv-code-size: 8vh;
+	--tv-code-weight: 700;
+	--tv-code-spacing: 2vh;
+	--tv-message-size: 6vh;
+}
+
+html,
+body,
+#app {
+	margin: 0;
+	inline-size: 100vw;
+	block-size: 100vh;
+	overflow: hidden;
+	background: var(--tv-bg);
+	color: var(--tv-fg);
+	font-family: var(--tv-font);
+}
+
+/* Two classes outrank the player stylesheet's .tvp-stage whatever the import order. */
+.tvp-stage.stage {
+	position: absolute;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	left: 0;
+}
+
+.screen {
+	position: absolute;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	background: var(--tv-bg);
+
+	&[hidden] {
+		display: none;
+	}
+}
+
+.title {
+	margin: 0;
+	font-size: var(--tv-title-size);
+	font-weight: var(--tv-title-weight);
+}
+
+.qr {
+	inline-size: 50vh;
+	block-size: 50vh;
+	padding: var(--tv-qr-pad);
+	box-sizing: border-box;
+	background: var(--tv-fg);
+	border-radius: var(--tv-qr-radius);
+
+	& svg {
+		inline-size: 100%;
+		block-size: 100%;
+	}
+}
+
+.check-code {
+	margin: 0;
+	font-size: var(--tv-code-size);
+	font-weight: var(--tv-code-weight);
+	letter-spacing: var(--tv-code-spacing);
+}
+
+.message {
+	margin: 0;
+	font-size: var(--tv-message-size);
+}
+
+/* Flex gap needs Chrome 84; the target is Chrome 76. */
+.screen > * + * {
+	margin-block-start: var(--tv-gap);
+}

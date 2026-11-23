@@ -1,0 +1,21 @@
+/* Nearly the whole viewport; the stage keeps the TV's 16:9 shape inside it. */
+.card {
+	inline-size: 96vi;
+	max-inline-size: 96vi;
+	block-size: 92dvb;
+}
+
+.frame {
+	display: flex;
+	flex-wrap: wrap;
+	flex: 1;
+	align-items: center;
+	justify-content: center;
+	min-block-size: 0;
+}
+
+.stage {
+	aspect-ratio: 16 / 9;
+	inline-size: 100%;
+	max-block-size: 100%;
+}

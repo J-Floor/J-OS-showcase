@@ -7,6 +7,7 @@ import { authClient } from "../../lib/auth.ts";
 import { ottFailed, ottPending } from "../../shared/data/convex.ts";
 import { ICONS } from "../../shared/icons.ts";
 import { LoadingScreen } from "../../shared/LoadingScreen.tsx";
+import { currentReturnPath } from "../../shared/signInReturn.ts";
 
 import styles from "./SignIn.module.scss";
 
@@ -30,7 +31,7 @@ function createMagicLinkRequest(email: () => string) {
 				email: email(),
 				// Absolute: the server would resolve a relative path against its
 				// SITE_URL; this returns the link to the site it was asked from.
-				callbackURL: `${window.location.origin}/`,
+				callbackURL: `${window.location.origin}${currentReturnPath()}`,
 			}),
 			() => SEND_FAILED
 		);
@@ -89,7 +90,10 @@ export function SignIn() {
 			when={!session().isPending && !ottPending()}
 			fallback={<LoadingScreen />}
 		>
-			<Show when={!session().data} fallback={<Navigate href="/" />}>
+			<Show
+				when={!session().data}
+				fallback={<Navigate href={currentReturnPath()} />}
+			>
 				<main class={styles.screen}>
 					<div class={styles.card}>
 						<Logo class={styles.logo} title="J floor" />

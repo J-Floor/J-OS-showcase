@@ -181,3 +181,41 @@ test("a door key acts on the Access tab only", () => {
 	fireEvent.keyDown(document, { key: "d" });
 	expect(screen.queryByText("Sending…")).not.toBeInTheDocument();
 });
+
+test("a board member sees a TV tab and a member does not", () => {
+	const board = renderSpace("board");
+	expect(screen.getByRole("tab", { name: "TV" })).toBeInTheDocument();
+	board.unmount();
+	renderSpace("member");
+	expect(screen.queryByRole("tab", { name: "TV" })).toBeNull();
+});
+
+test("a member who opens ?tab=tv lands on Access, with no TV panel", () => {
+	renderSpace("member", "/?tab=tv");
+	expect(screen.getByRole("tab", { name: "Access" })).toHaveAttribute(
+		"aria-selected",
+		"true"
+	);
+	expect(screen.queryByRole("button", { name: "Add slide" })).toBeNull();
+});
+
+test("the TV panel is mounted only while its tab is open", async () => {
+	renderSpace("board");
+	expect(screen.queryByRole("button", { name: "Add slide" })).toBeNull();
+	fireEvent.click(screen.getByRole("tab", { name: "TV" }));
+	expect(
+		await screen.findByRole("button", { name: "Add slide" })
+	).toBeInTheDocument();
+	fireEvent.click(screen.getByRole("tab", { name: "Access" }));
+	await waitFor(() => {
+		expect(screen.queryByRole("button", { name: "Add slide" })).toBeNull();
+	});
+});
+
+test("the TV tab shows the TV panel and not the diagnostics one", async () => {
+	renderSpace("board", "/?tab=tv");
+	expect(
+		await screen.findByRole("button", { name: "Add slide" })
+	).toBeInTheDocument();
+	expect(doorHealthCalls.count).toBe(0);
+});

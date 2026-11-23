@@ -23,6 +23,9 @@ const EMAIL_LIMIT_WINDOW_MS = HOUR;
 export const PUBLIC_SUBMIT_PER_HOUR = 300;
 const MAGIC_LINKS_PER_HOUR = 300;
 const MAGIC_LINKS_PER_ADDRESS_PER_HOUR = 10;
+const TV_PAIR_STARTS_PER_HOUR = 20;
+const TV_PAIR_POLLS_PER_HOUR = 4000;
+const TV_DEVICE_REQUESTS_PER_HOUR = 600;
 
 export const rateLimiter = new RateLimiter(components.rateLimiter, {
 	sendEmail: {
@@ -43,6 +46,21 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
 	magicLinkAddress: {
 		kind: "fixed window",
 		rate: MAGIC_LINKS_PER_ADDRESS_PER_HOUR,
+		period: HOUR,
+	},
+	tvPairStart: {
+		kind: "fixed window",
+		rate: TV_PAIR_STARTS_PER_HOUR,
+		period: HOUR,
+	},
+	tvPairPoll: {
+		kind: "fixed window",
+		rate: TV_PAIR_POLLS_PER_HOUR,
+		period: HOUR,
+	},
+	tvDevice: {
+		kind: "fixed window",
+		rate: TV_DEVICE_REQUESTS_PER_HOUR,
 		period: HOUR,
 	},
 });

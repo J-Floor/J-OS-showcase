@@ -77,8 +77,10 @@ home_pin
 horizontal_align_right
 host
 how_to_reg
+html
 identity_platform
 iframe
+image
 important_devices
 inbox
 info
@@ -188,6 +190,7 @@ token
 tooltip
 trending_flat
 trending_up
+tv
 undo
 unfold_more
 update

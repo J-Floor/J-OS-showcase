@@ -43,6 +43,14 @@ const PUBLIC_ON_PURPOSE: Record<string, string> = {
 		"the public event page: name and times only, no attendees",
 	"http.ts:route PRESENCE_PATH":
 		"the door presence oracle: proves where a request comes from, not who sent it; doorActions checks who",
+	"http.ts:route TV_PATHS.pairStart":
+		"TV pairing start: the caller is a TV with no identity yet; returns two random secrets, IP rate-limited, capped live rows, grants nothing until a signed-in board member approves",
+	"http.ts:route TV_PATHS.pairPoll":
+		"authorised by the 256-bit poll secret; delivers the device token once after board approval",
+	"http.ts:route TV_PATHS.manifest":
+		"authorised by a hashed device token (one identical 401 for missing, unknown or revoked); read-only, returns the slide list",
+	"http.ts:route TV_PATHS.slide":
+		"authorised by a hashed device token (one identical 401 for missing, unknown or revoked); read-only, returns one enabled slide, HTML under a sandbox CSP",
 	"http.ts:route OCCUPANCY_WEBHOOK_PATH":
 		"the counter webhook: the caller is a device, not a person; it must carry the shared secret, and it carries only anonymous counts",
 };

@@ -1,6 +1,7 @@
 import { httpRouter } from "convex/server";
 
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { httpAction } from "./_generated/server";
 import { authComponent, createAuth } from "./auth.ts";
 import { PRESENCE_PATH, presenceHttpResponse } from "./lib/doorPresence.ts";
@@ -10,6 +11,17 @@ import {
 	readWebhook,
 } from "./lib/occupancy/webhook.ts";
 import { occupancyProvider } from "./lib/occupancyProviderEnv.ts";
+import { rateLimiter } from "./lib/rateLimit.ts";
+import { TV_PATHS } from "./lib/tv/constants.ts";
+import {
+	type DeviceDeps,
+	manifestResponse,
+	type PairDeps,
+	pollPairingResponse,
+	preflightResponse,
+	slideResponse,
+	startPairingResponse,
+} from "./lib/tv/http.ts";
 
 const http = httpRouter();
 
@@ -60,6 +72,112 @@ http.route({
 			});
 		return new Response(null, { status: outcome.status });
 	}),
+});
+
+type HttpContext = Parameters<Parameters<typeof httpAction>[0]>[0];
+
+/** The TV rate limiters, bound to one request's Convex context. */
+function limiter(context: HttpContext) {
+	return (
+		name: "tvPairStart" | "tvPairPoll" | "tvDevice",
+		key: string
+	): Promise<boolean> =>
+		rateLimiter.limit(context, name, { key }).then(({ ok }) => ok);
+}
+
+/** The pairing handlers' dependencies, bound to one request's Convex context. */
+function pairDeps(context: HttpContext): PairDeps {
+	return {
+		limit: limiter(context),
+		start: (hashes, now) =>
+			context.runMutation(internal.tvInternal.startPairing, {
+				...hashes,
+				now,
+			}),
+		claim: (args, now) =>
+			context.runMutation(internal.tvInternal.claimPairing, {
+				...args,
+				now,
+			}),
+		now: Date.now,
+	};
+}
+
+/**
+ * TV pairing. Unauthenticated on purpose: a TV has no identity yet. Start
+ * returns two random secrets (IP rate-limited, live rows capped) and grants
+ * nothing until a signed-in board member approves; poll is authorised by the
+ * 256-bit poll secret and hands the device token over once.
+ */
+http.route({
+	path: TV_PATHS.pairStart,
+	method: "POST",
+	handler: httpAction((context, request) =>
+		startPairingResponse(request, pairDeps(context))
+	),
+});
+http.route({
+	path: TV_PATHS.pairStart,
+	method: "OPTIONS",
+	handler: httpAction(() => Promise.resolve(preflightResponse())),
+});
+http.route({
+	path: TV_PATHS.pairPoll,
+	method: "POST",
+	handler: httpAction((context, request) =>
+		pollPairingResponse(request, pairDeps(context))
+	),
+});
+http.route({
+	path: TV_PATHS.pairPoll,
+	method: "OPTIONS",
+	handler: httpAction(() => Promise.resolve(preflightResponse())),
+});
+
+/** The device handlers' dependencies, bound to one request's Convex context. */
+function deviceDeps(context: HttpContext): DeviceDeps {
+	return {
+		authenticate: (tokenHash) =>
+			context.runMutation(internal.tvInternal.authenticateDevice, {
+				tokenHash,
+				now: Date.now(),
+			}),
+		limit: limiter(context),
+		manifest: () => context.runQuery(internal.tvInternal.manifest, {}),
+		content: (id) =>
+			context.runQuery(internal.tvInternal.slideContent, { id }),
+		getBlob: (fileId) => context.storage.get(fileId as Id<"_storage">),
+	};
+}
+
+/**
+ * TV playback. Authorised by the hashed device token (an unknown, revoked or
+ * missing token gets one identical 401); read-only. CORS is open because auth
+ * is a header and no cookie is read.
+ */
+http.route({
+	path: TV_PATHS.manifest,
+	method: "GET",
+	handler: httpAction((context, request) =>
+		manifestResponse(request, deviceDeps(context))
+	),
+});
+http.route({
+	path: TV_PATHS.manifest,
+	method: "OPTIONS",
+	handler: httpAction(() => Promise.resolve(preflightResponse())),
+});
+http.route({
+	path: TV_PATHS.slide,
+	method: "GET",
+	handler: httpAction((context, request) =>
+		slideResponse(request, deviceDeps(context))
+	),
+});
+http.route({
+	path: TV_PATHS.slide,
+	method: "OPTIONS",
+	handler: httpAction(() => Promise.resolve(preflightResponse())),
 });
 
 export default http;

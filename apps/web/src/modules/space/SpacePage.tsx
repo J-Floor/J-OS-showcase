@@ -1,6 +1,6 @@
 import { SearchInput, Tabs } from "@j-os/design-system";
 import { useSearchParams } from "@solidjs/router";
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, For, Match, Show, Switch } from "solid-js";
 
 import { useCan } from "../../lib/ability.tsx";
 import { HouseRules } from "../../shared/rules/HouseRules.tsx";
@@ -10,12 +10,15 @@ import { CountdownCard } from "./CountdownCard.tsx";
 import { DiagnosticsTab } from "./DiagnosticsTab.tsx";
 import { OccupancyCard } from "./OccupancyCard.tsx";
 import styles from "./SpacePage.module.scss";
+import { TvTab } from "./tv/TvTab.tsx";
+import { TV_TAB } from "./tv/tvTabs.ts";
 import { UnlockCard } from "./UnlockCard.tsx";
 import { WifiCard } from "./WifiCard.tsx";
 
 const INFO_TABS = [{ value: "rules", label: "Rules" }] as const;
 const BOARD_ONLY_TABS = [
 	{ value: "diagnostics", label: "Diagnostics" },
+	TV_TAB,
 ] as const;
 
 type TabEntry = (typeof INFO_TABS | typeof BOARD_ONLY_TABS)[number];
@@ -68,10 +71,25 @@ function createSpaceTabs() {
 	};
 }
 
+/** What a board-only tab shows. */
+function BoardTabContent(props: { value: string }) {
+	return (
+		<Switch>
+			<Match when={props.value === "diagnostics"}>
+				<DiagnosticsTab />
+			</Match>
+			<Match when={props.value === TV_TAB.value}>
+				<TvTab />
+			</Match>
+		</Switch>
+	);
+}
+
 /**
  * The Space page: a tabbed dashboard. Access = door/WiFi utilities plus (for
  * guests) the access countdown; Rules = the house rules as searchable cards;
- * Diagnostics (board only) = lock reachability and the door log. Staff see
+ * Diagnostics (board only) = lock reachability and the door log; TV (board
+ * only) = the lobby TV's slides and connected screens. Staff see
  * the door only: no Rules tab, no WiFi, occupancy or countdown.
  *
  * Board-only triggers are rendered with `<For>` over a 0/1 list, not `<Show>`
@@ -150,7 +168,7 @@ export function SpacePage() {
 						    mounted, which left the door-health card showing
 						    its page-load reading. */}
 						<Show when={params.tab === tab.value}>
-							<DiagnosticsTab />
+							<BoardTabContent value={tab.value} />
 						</Show>
 					</Tabs.Content>
 				)}

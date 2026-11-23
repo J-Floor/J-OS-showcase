@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets"
+	id="https://example.com/jfloor-tv" version="1.0.0" viewmodes="maximized">
+	<tizen:application id="JFloorTv00.JFloorTv" package="JFloorTv00" required_version="6.0"/>
+	<content src="index.html"/>
+	<feature name="http://tizen.org/feature/screen.size.all"/>
+	<icon src="icon.png"/>
+	<name>J Floor TV</name>
+	<tizen:profile name="tv"/>
+	<tizen:privilege name="http://tizen.org/privilege/internet"/>
+	<tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+	<access origin="*" subdomains="true"/>
+	<tizen:setting screen-orientation="landscape" background-support="disable" encryption="disable" hwkey-event="enable"/>
+</widget>

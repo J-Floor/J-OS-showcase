@@ -1,0 +1,28 @@
+{
+	"name": "@j-os/tv-player",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts",
+		"./player.css": "./src/player.css"
+	},
+	"scripts": {
+		"test": "vitest run",
+		"lint": "bun run lint:logic && bun run lint:style",
+		"lint:logic": "eslint \"src/**/*.ts\" --cache --max-warnings 0",
+		"lint:style": "stylelint \"src/**/*.css\" --cache --allow-empty-input --max-warnings 0",
+		"typecheck": "node node_modules/typescript7/bin/tsc --noEmit"
+	},
+	"devDependencies": {
+		"@j-os/config-eslint": "workspace:*",
+		"@j-os/config-stylelint": "workspace:*",
+		"eslint": "catalog:",
+		"happy-dom": "catalog:",
+		"stylelint": "catalog:",
+		"typescript": "catalog:",
+		"typescript-eslint": "catalog:",
+		"typescript7": "catalog:",
+		"vitest": "catalog:"
+	}
+}

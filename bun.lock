@@ -38,6 +38,27 @@
         "vitest": "catalog:",
       },
     },
+    "apps/tv": {
+      "name": "@j-os/tv",
+      "version": "0.0.1",
+      "dependencies": {
+        "@j-os/tv-player": "workspace:*",
+        "qrcode-generator": "1.4.4",
+      },
+      "devDependencies": {
+        "@j-os/config-eslint": "workspace:*",
+        "@j-os/config-stylelint": "workspace:*",
+        "@types/node": "^26.6.6",
+        "eslint": "catalog:",
+        "happy-dom": "catalog:",
+        "stylelint": "catalog:",
+        "typescript": "catalog:",
+        "typescript-eslint": "catalog:",
+        "typescript7": "catalog:",
+        "vite": "catalog:",
+        "vitest": "catalog:",
+      },
+    },
     "apps/web": {
       "name": "@j-os/web",
       "version": "0.0.1",
@@ -48,6 +69,7 @@
         "@convex-dev/rate-limiter": "^0.4.3",
         "@internationalized/date": "^3.12.4",
         "@j-os/design-system": "workspace:*",
+        "@j-os/tv-player": "workspace:*",
         "@pdf-lib/fontkit": "^1.1.1",
         "@signpdf/placeholder-plain": "^4.0.0",
         "@signpdf/signer-p12": "^4.0.0",
@@ -225,6 +247,21 @@
       },
       "peerDependencies": {
         "solid-js": "catalog:",
+      },
+    },
+    "packages/tv-player": {
+      "name": "@j-os/tv-player",
+      "version": "0.0.1",
+      "devDependencies": {
+        "@j-os/config-eslint": "workspace:*",
+        "@j-os/config-stylelint": "workspace:*",
+        "eslint": "catalog:",
+        "happy-dom": "catalog:",
+        "stylelint": "catalog:",
+        "typescript": "catalog:",
+        "typescript-eslint": "catalog:",
+        "typescript7": "catalog:",
+        "vitest": "catalog:",
       },
     },
   },
@@ -797,6 +834,10 @@
     "@j-os/design-system": ["@j-os/design-system@workspace:packages/design-system"],
 
     "@j-os/landing-page": ["@j-os/landing-page@workspace:apps/landing-page"],
+
+    "@j-os/tv": ["@j-os/tv@workspace:apps/tv"],
+
+    "@j-os/tv-player": ["@j-os/tv-player@workspace:packages/tv-player"],
 
     "@j-os/web": ["@j-os/web@workspace:apps/web"],
 
@@ -2644,7 +2685,7 @@
 
     "qified": ["qified@0.10.1", "", { "dependencies": { "hookified": "2.2.0" } }, "sha512-+Owyggi9IxT1ePKGafcI87ubSmxol6smwJ+RAHDQlx9+9cPwFWDiKFFCPuWhr9ignlGpZ9vDQLw67N4dcTVFEA=="],
 
-    "qrcode-generator": ["qrcode-generator@2.0.4", "", {}, "sha512-mZSiP6RnbHl4xL2Ap5HfkjLnmxfKcPWpWe/c+5XxCuetEenqmNFf1FH/ftXPCtFG5/TDobjsjz6sSNL0Sr8Z9g=="],
+    "qrcode-generator": ["qrcode-generator@1.4.4", "", {}, "sha512-HM7yY8O2ilqhmULxGMpcHSF1EhJJ9yBj8gvDEuZ6M+KGJ0YY2hKpnXvRD+hZPLrDVck3ExIGhmPtSdcjC+guuw=="],
 
     "qs": ["qs@6.15.1", "", { "dependencies": { "side-channel": "^1.1.0" } }, "sha512-6YHEFRL9mfgcAvql/XhwTvf5jKcOiiupt2FiJxHkiX1z4j7WL8J/jRHYLluORvc1XxB5rV20KoeK00gVJamspg=="],
 
@@ -3673,6 +3714,8 @@
     "jsx-email/magic-string": ["magic-string@0.30.21", "", { "dependencies": { "@jridgewell/sourcemap-codec": "1.5.5" } }, "sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ=="],
 
     "jsx-email/postcss": ["postcss@8.5.14", "", { "dependencies": { "nanoid": "3.3.12", "picocolors": "1.1.1", "source-map-js": "1.2.1" } }, "sha512-SoSL4+OSEtR99LHFZQiJLkT59C5B1amGO1NzTwj7TT1qCUgUO6hxOvzkOYxD+vMrXBM3XJIKzokoERdqQq/Zmg=="],
+
+    "jsx-email/qrcode-generator": ["qrcode-generator@2.0.4", "", {}, "sha512-mZSiP6RnbHl4xL2Ap5HfkjLnmxfKcPWpWe/c+5XxCuetEenqmNFf1FH/ftXPCtFG5/TDobjsjz6sSNL0Sr8Z9g=="],
 
     "jsx-email/semver": ["semver@7.8.4", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-rUCObTnP32Q08R2uuIrt7r9PlEonuTmtuXYcW6s5kjdlj3xbnwe+21yXptAUYcMAABLkYYTtnmzb3w3EDZfueA=="],
 

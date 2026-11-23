@@ -28,6 +28,7 @@ import { AppErrorBoundary } from "../shared/AppErrorBoundary.tsx";
 import { ottPending } from "../shared/data/convex.ts";
 import { useQuery } from "../shared/data/useQuery.ts";
 import { LoadingScreen } from "../shared/LoadingScreen.tsx";
+import { signInHref } from "../shared/signInReturn.ts";
 import { NoAccess } from "../shell/NoAccess.tsx";
 import { modules } from "../shell/registry.ts";
 import { railLanding } from "../shell/Sidebar/brandLanding.ts";
@@ -152,6 +153,7 @@ export function LastPathTracker() {
  */
 export function RoleGate(props: ParentProps) {
 	const session = authClient.useSession();
+	const location = useLocation();
 	const role = useRole();
 	const onboarding = useQuery(api.onboarding.getState, {});
 
@@ -202,7 +204,17 @@ export function RoleGate(props: ParentProps) {
 			splash={<Splash />}
 			landing={railLanding}
 		>
-			<Show when={session().data} fallback={<Navigate href="/signin" />}>
+			<Show
+				when={session().data}
+				fallback={
+					// A deep link (the TV's pairing QR) survives sign-in.
+					<Navigate
+						href={signInHref(
+							`${location.pathname}${location.search}`
+						)}
+					/>
+				}
+			>
 				<AuthedContent
 					role={role.data}
 					needsOnboarding={() =>

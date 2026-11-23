@@ -1,0 +1,30 @@
+@use "@j-os/design-system/typography" as typo;
+@use "../../shared/publicForm/publicPage" as page;
+
+.screen {
+	@include page.screen(center);
+}
+
+.card {
+	@include page.card(22rem);
+
+	text-align: center;
+}
+
+.form {
+	@include page.form;
+}
+
+.intro {
+	@include page.intro;
+}
+
+.checkCode {
+	@include typo.jf-typo-h1;
+
+	margin: 0;
+}
+
+.done {
+	@include page.centred;
+}

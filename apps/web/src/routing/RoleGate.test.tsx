@@ -54,13 +54,21 @@ afterEach(() => {
 	vi.useRealTimers();
 });
 
-function renderGate() {
+function renderGate(url = "/") {
 	const history = createMemoryHistory();
-	history.set({ value: "/", replace: true });
+	history.set({ value: url, replace: true });
 	render(() => (
 		<MemoryRouter history={history}>
 			<Route
 				path="/"
+				component={() => (
+					<RoleGate>
+						<p>app</p>
+					</RoleGate>
+				)}
+			/>
+			<Route
+				path="/tv/pair"
 				component={() => (
 					<RoleGate>
 						<p>app</p>
@@ -97,6 +105,14 @@ test("sends a signed-out visitor to /signin without showing the app", async () =
 	expect(history.get()).toBe("/signin");
 	expect(screen.getByText("sign in page")).toBeInTheDocument();
 	expect(screen.queryByText("app")).not.toBeInTheDocument();
+});
+
+test("a signed-out visit to the TV pairing link returns there after sign-in", async () => {
+	const history = renderGate("/tv/pair?code=abc");
+	await vi.advanceTimersByTimeAsync(0);
+	expect(history.get()).toBe(
+		`/signin?next=${encodeURIComponent("/tv/pair?code=abc")}`
+	);
 });
 
 test("keeps the splash for a signed-in user whose role has not loaded", async () => {

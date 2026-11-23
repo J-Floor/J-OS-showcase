@@ -761,6 +761,56 @@ export default defineSchema({
 		password: v.string(),
 	}),
 
+	/** Space TV slideshow: one row per slide, shown in `position` order. */
+	tvSlides: defineTable({
+		title: v.string(),
+		kind: v.union(v.literal("image"), v.literal("html")),
+		htmlText: v.optional(v.string()),
+		fileId: v.optional(v.id("_storage")),
+		durationSec: v.number(),
+		position: v.number(),
+		enabled: v.boolean(),
+		updatedAt: v.number(),
+	}).index("by_position", ["position"]),
+
+	/** Slideshow settings. A singleton: at most one row, read via `.first()`. */
+	tvConfig: defineTable({
+		transition: v.union(
+			v.literal("fade"),
+			v.literal("slide"),
+			v.literal("none")
+		),
+		/** Bumped on every slide/config change; the TV polls it. */
+		version: v.number(),
+	}),
+
+	/** Paired TVs. Auth is a bearer token; only its hash is stored. */
+	tvDevices: defineTable({
+		/** SHA-256 hex of the device token. The raw token exists only on the TV. */
+		tokenHash: v.string(),
+		label: v.string(),
+		createdAt: v.number(),
+		revokedAt: v.optional(v.number()),
+		lastSeenAt: v.optional(v.number()),
+	}).index("by_tokenHash", ["tokenHash"]),
+
+	/** Short-lived pairing attempts started by a TV and approved by a member. */
+	tvPairings: defineTable({
+		/** SHA-256 hex of the code in the QR link. */
+		codeHash: v.string(),
+		/** SHA-256 hex of the secret only the TV holds. */
+		pollSecretHash: v.string(),
+		expiresAt: v.number(),
+		label: v.optional(v.string()),
+		/** A board member approved it. A flag, not a person id: TV rows hold no person reference. */
+		approved: v.optional(v.boolean()),
+		/** Set when the device token was handed to the TV; the row is then spent. */
+		deviceId: v.optional(v.id("tvDevices")),
+	})
+		.index("by_codeHash", ["codeHash"])
+		.index("by_pollSecretHash", ["pollSecretHash"])
+		.index("by_expiresAt", ["expiresAt"]),
+
 	/**
 	 * Deals J floor negotiated with partners. `validUntil` is an inclusive
 	 * Zurich date (`lib/perks#isPerkExpired`); absent, the perk never expires.

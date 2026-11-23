@@ -8,6 +8,7 @@ import { type NotifyError, notifyMessages } from "./notify.ts";
 import { type OccupancyError, occupancyMessages } from "./occupancy.ts";
 import { type PeopleError, peopleMessages } from "./people.ts";
 import { type PerksError, perksMessages } from "./perks.ts";
+import { type TvError, tvMessages } from "./tv.ts";
 import { type WifiError, wifiMessages } from "./wifi.ts";
 
 export type AppError =
@@ -21,6 +22,7 @@ export type AppError =
 	| OccupancyError
 	| PeopleError
 	| PerksError
+	| TvError
 	| WifiError;
 
 const MESSAGES: Record<AppError["type"], string> = {
@@ -34,6 +36,7 @@ const MESSAGES: Record<AppError["type"], string> = {
 	...occupancyMessages,
 	...peopleMessages,
 	...perksMessages,
+	...tvMessages,
 	...wifiMessages,
 };
 

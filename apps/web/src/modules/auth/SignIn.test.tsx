@@ -29,7 +29,10 @@ vi.mock("@solidjs/router", () => ({
 
 import { SignIn } from "./SignIn.tsx";
 
-afterEach(cleanup);
+afterEach(() => {
+	cleanup();
+	window.history.replaceState({}, "", "/");
+});
 
 test("a failed link exchange is told in the email field's error slot", () => {
 	const [isFailed] = createSignal(true);
@@ -76,5 +79,26 @@ test("the sign-in link returns to the site it was requested from", async () => {
 	expect(magicLink).toHaveBeenCalledWith({
 		email: "ada@example.com",
 		callbackURL: `${window.location.origin}/`,
+	});
+});
+
+test("a returnable next page is where the sign-in link lands", async () => {
+	failed.read = () => false;
+	magicLink.mockReset();
+	magicLink.mockResolvedValue({ error: null });
+	window.history.replaceState(
+		{},
+		"",
+		`/signin?next=${encodeURIComponent("/tv/pair?code=abc")}`
+	);
+	render(() => <SignIn />);
+	fireEvent.input(screen.getByLabelText("Email"), {
+		target: { value: "ada@example.com" },
+	});
+	fireEvent.submit(screen.getByLabelText("Email").closest("form")!);
+	await screen.findByText("Check your inbox");
+	expect(magicLink).toHaveBeenCalledWith({
+		email: "ada@example.com",
+		callbackURL: `${window.location.origin}/tv/pair?code=abc`,
 	});
 });

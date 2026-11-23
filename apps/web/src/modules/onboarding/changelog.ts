@@ -48,6 +48,16 @@ const PERK_MANAGERS = { action: "manage", subject: "Perks" } as const;
 
 export const CHANGELOG: ChangeEntry[] = [
 	{
+		version: "1.9",
+		title: "Space TV",
+		items: [
+			{
+				text: "Show a slideshow on the space TV: add images or HTML slides in Space → TV, then pair the TV by scanning its QR code.",
+				audience: SPACE_MANAGERS,
+			},
+		],
+	},
+	{
 		version: "1.8",
 		title: "Website traffic",
 		items: [
