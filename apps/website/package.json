@@ -1,0 +1,37 @@
+{
+	"name": "@j-os/website",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vite --host 0.0.0.0 --port 5174 --strictPort",
+		"build": "tsc --noEmit && vite build && vite build --ssr src/entry-server.tsx --outDir dist-ssr && bun scripts/prerender.mjs",
+		"preview": "vite preview --host 0.0.0.0 --port 5174 --strictPort",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run",
+		"lint": "bun run lint:logic && bun run lint:style",
+		"lint:logic": "eslint \"src/**/*.{ts,tsx}\" --cache --max-warnings 0",
+		"lint:style": "stylelint \"src/**/*.scss\" --cache --allow-empty-input --max-warnings 0",
+		"lint:style:ci": "bun run lint:style --custom-formatter @csstools/stylelint-formatter-github",
+		"format": "oxfmt --write -c ../../.oxfmtrc.json \"src/**/*.{ts,tsx,css,scss}\""
+	},
+	"dependencies": {
+		"solid-js": "catalog:"
+	},
+	"devDependencies": {
+		"@csstools/stylelint-formatter-github": "^2.0.0",
+		"@j-os/config-eslint": "workspace:*",
+		"@j-os/config-stylelint": "workspace:*",
+		"@solidjs/testing-library": "catalog:",
+		"@testing-library/jest-dom": "catalog:",
+		"@types/node": "^26.6.6",
+		"eslint": "catalog:",
+		"jsdom": "catalog:",
+		"sass": "catalog:",
+		"stylelint": "catalog:",
+		"typescript": "catalog:",
+		"vite": "catalog:",
+		"vite-plugin-solid": "catalog:",
+		"vitest": "catalog:"
+	}
+}

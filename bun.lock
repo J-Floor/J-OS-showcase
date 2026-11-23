@@ -109,6 +109,29 @@
         "workbox-routing": "^7.4.1",
       },
     },
+    "apps/website": {
+      "name": "@j-os/website",
+      "version": "0.0.1",
+      "dependencies": {
+        "solid-js": "catalog:",
+      },
+      "devDependencies": {
+        "@csstools/stylelint-formatter-github": "^2.0.0",
+        "@j-os/config-eslint": "workspace:*",
+        "@j-os/config-stylelint": "workspace:*",
+        "@solidjs/testing-library": "catalog:",
+        "@testing-library/jest-dom": "catalog:",
+        "@types/node": "^26.6.6",
+        "eslint": "catalog:",
+        "jsdom": "catalog:",
+        "sass": "catalog:",
+        "stylelint": "catalog:",
+        "typescript": "catalog:",
+        "vite": "catalog:",
+        "vite-plugin-solid": "catalog:",
+        "vitest": "catalog:",
+      },
+    },
     "packages/config-eslint": {
       "name": "@j-os/config-eslint",
       "version": "0.0.0",
@@ -776,6 +799,8 @@
     "@j-os/landing-page": ["@j-os/landing-page@workspace:apps/landing-page"],
 
     "@j-os/web": ["@j-os/web@workspace:apps/web"],
+
+    "@j-os/website": ["@j-os/website@workspace:apps/website"],
 
     "@jridgewell/gen-mapping": ["@jridgewell/gen-mapping@0.3.13", "", { "dependencies": { "@jridgewell/sourcemap-codec": "1.5.5", "@jridgewell/trace-mapping": "0.3.31" } }, "sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA=="],
 

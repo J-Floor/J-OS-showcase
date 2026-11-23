@@ -1,14 +1,14 @@
-name: Deploy landing page
+name: Deploy website
 
-# thejfloor.com: the static landing-page SPA, served by Cloudflare Pages
-# (project jfloor-landing). Runs only when the page or what it builds from
+# thejfloor.com: the static website, served by Cloudflare Pages
+# (project jfloor-landing). Runs only when the site or what it builds from
 # changes.
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - "apps/landing-page/**"
+      - "apps/website/**"
       - "packages/design-system/**"
       - "bun.lock"
       - ".github/workflows/deploy-landing.yml"
@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   deploy:
-    name: Landing page to Cloudflare Pages
+    name: Website to Cloudflare Pages
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -40,15 +40,15 @@ jobs:
           # A fixed port fails the job when the runner already holds it (EADDRINUSE).
           server-port: 0
 
-      - name: Build landing page
-        run: bunx --bun turbo build --filter=@j-os/landing-page
+      - name: Build website
+        run: bunx --bun turbo build --filter=@j-os/website
 
       - name: Deploy to Cloudflare Pages
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: >-
-          bunx --bun wrangler pages deploy apps/landing-page/dist
+          bunx --bun wrangler pages deploy apps/website/dist
           --project-name jfloor-landing
           --branch main
           --commit-hash "${{ github.sha }}"

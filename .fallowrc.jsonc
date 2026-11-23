@@ -5,6 +5,7 @@
 		"apps/web/eslint/fixtures/*.{ts,tsx}",
 		"apps/web/vitest.stryker.config.ts",
 		"apps/landing-page/src/entry-server.tsx",
+		"apps/website/src/entry-server.tsx",
 		// The playground loads every *.demo.tsx through import.meta.glob.
 		"packages/design-system/demo/main.tsx",
 		// Run by `bun test scripts` and `bun scripts/...`.
@@ -18,7 +19,11 @@
 	// import.meta.glob(?raw); fallow counts that as a namespace import of
 	// each one, which hides all unused exports and files in apps/web.
 	"ignorePatterns": ["apps/web/src/providerAgnostic.test.ts"],
-	"ignoreFindings": ["packages/design-system/scripts/morph-probe.js"],
+	"ignoreFindings": [
+		"packages/design-system/scripts/morph-probe.js",
+		// The Events section is hidden for now; restore it in Home.tsx.
+		"apps/website/src/Events.tsx"
+	],
 	"ignoreDependencies": [
 		"@csstools/stylelint-formatter-github",
 		// fallow's stylelint plugin does not read string entries in

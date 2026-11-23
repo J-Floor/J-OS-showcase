@@ -172,6 +172,106 @@ export const BINARIES: readonly { path: string; sha256: string }[] = [
     path: "apps/web/src/modules/inventory/print/letterhead.pdf",
     sha256: "9e48b59067f5e89ad1445431a640435ff232ac29439dd4f8da66a1c4428c59b1",
   },
+  {
+    path: "apps/website/public/assets/community/community.webp",
+    sha256: "ede49a23cdf29268b467167d4ee7150a45627b800b29d7115e5081a6e38a0ebf",
+  },
+  {
+    path: "apps/website/public/assets/community/lounge.webp",
+    sha256: "bba2226b75b56c2aaa97c3910280c387e27ca62d8c12b9d0e8f9c03937c1ab4a",
+  },
+  {
+    path: "apps/website/public/assets/community/workspace.webp",
+    sha256: "e9c4925c1863f3c057c492d2743b36f4db61ef72ee892537b8704fda07aee526",
+  },
+  {
+    path: "apps/website/public/assets/fonts/azeret-mono.woff2",
+    sha256: "d090ca8b9080094d42b06c43f2987bfa8b36fd5565611fd59db84db53c5f74bb",
+  },
+  {
+    path: "apps/website/public/assets/fonts/manrope.woff2",
+    sha256: "a30ddcd349703aff7464c34bef3fffdff405ee50c113440d7c8693c02d210972",
+  },
+  {
+    path: "apps/website/public/assets/hero/background.mp4",
+    sha256: "afcdaa1939c33bf4bc5429d059036a438471845e9049159964f503d1ff3a1fc3",
+  },
+  {
+    path: "apps/website/public/assets/hero/poster.webp",
+    sha256: "79a8e668b40d06c0785937a77132bba21255789a747e993047272c9fbd5cb319",
+  },
+  {
+    path: "apps/website/public/assets/logos/arc-investors.webp",
+    sha256: "7c24e8d6d364549dd0a81807c20090c211f1efaa81f09303692893488e151a38",
+  },
+  {
+    path: "apps/website/public/assets/logos/earthling-vc.webp",
+    sha256: "5d297ecd301cf8a0ae68145e2cca9e58cffd75655f8cc17afc95e814eae1cce3",
+  },
+  {
+    path: "apps/website/public/assets/logos/nemu-and-co.webp",
+    sha256: "350b2ef81fd9ca8cab5e3eecf8fc4dcb58a9882cf021a833aede9e5b61ac2e24",
+  },
+  {
+    path: "apps/website/public/assets/logos/project-a.webp",
+    sha256: "923df9c109a2d052db7329d88829b65e9f030b1f170cc3365e608a6d4c32ea7e",
+  },
+  {
+    path: "apps/website/public/assets/logos/swisscom.webp",
+    sha256: "5d5b310a1a8750b6302c5ca2e78a81ddbeaea45bfe0a5ba1d99651398d23dbdd",
+  },
+  {
+    path: "apps/website/public/assets/partners/ai-tinkerers-white.png",
+    sha256: "a35f0a572dc4733ea44d10ec99cda3e530138d7b0e54d339a165273fdd582ed8",
+  },
+  {
+    path: "apps/website/public/assets/partners/ai4science-club-zurich-white.png",
+    sha256: "f8f5282b4fede8a8d8bb5c96da4fa91c1325a0cab603f159adfaa6b609ece646",
+  },
+  {
+    path: "apps/website/public/assets/partners/baby-vc-white.png",
+    sha256: "b25909a4156ad59f790b1578b71081cfe20b6fc3fd4d66b8500b9d63064fbdda",
+  },
+  {
+    path: "apps/website/public/assets/partners/berkeley-skydeck-white.png",
+    sha256: "d41662186ae8b60cc3bd297f4ed1ac7f20a0739f5feaf1094dee3b056823e319",
+  },
+  {
+    path: "apps/website/public/assets/partners/browser-use-white.png",
+    sha256: "0c0a7b77eb759fac3bd8eae9542a2a7c13de00edd8c808a9448e16300fc6db1a",
+  },
+  {
+    path: "apps/website/public/assets/partners/dukers-white.png",
+    sha256: "a8f322e724372f4cf019fcd3d0aa593407c9b6b8c732aca08d1a4fd42bc1fb36",
+  },
+  {
+    path: "apps/website/public/assets/partners/esra-white.png",
+    sha256: "311b75bfdc2eaf209ea7a135f1d91dfa4351c445f84896d3c6d0eac714dd76ef",
+  },
+  {
+    path: "apps/website/public/assets/partners/eth-ai-club-white-white.png",
+    sha256: "edf783617794f720aa7890c7398e51c2f446bb04d199a915cf19ea13bdc61885",
+  },
+  {
+    path: "apps/website/public/assets/partners/eurotube-foundation-white-white.png",
+    sha256: "0562f891edc63c4d35460804c25253c6109973d46eb913e7fb39a60ef96ec6bd",
+  },
+  {
+    path: "apps/website/public/assets/partners/hack-nation-white.png",
+    sha256: "d120cb2438972fdfee0e72cbcc237adc47cbca40373214cab5fa6b2b114c5181",
+  },
+  {
+    path: "apps/website/public/assets/partners/hits-white-white.png",
+    sha256: "d92ceedb99f1a6eb7d05c279138b33cbf453e5f49e149cbea2d9cf21f78a7bb0",
+  },
+  {
+    path: "apps/website/public/assets/partners/lutes-white-white.png",
+    sha256: "8f2481239a14b84150ddd3c571c93cfc5223c7d42b189a8ff6b332e6d57d341e",
+  },
+  {
+    path: "apps/website/public/assets/partners/swisscom-ventures-white.png",
+    sha256: "5018ce2bb2a9ebe0c37a66b2bc538486a8dc8913dc5922a7a77a268907bec4e4",
+  },
 ];
 
 export const IGNORE_PATHS: readonly string[] = ["bun.lock", "**/_generated/**"];

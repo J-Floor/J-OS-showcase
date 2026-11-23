@@ -1,0 +1,54 @@
+.background {
+	isolation: isolate;
+	z-index: 0;
+	position: absolute;
+	inset: 0;
+	overflow: clip;
+	pointer-events: none;
+
+	img,
+	video {
+		position: absolute;
+		inset: 0;
+		display: block;
+		inline-size: 100%;
+		block-size: 100%;
+		object-fit: cover;
+	}
+}
+
+.overlay {
+	position: absolute;
+	inset: 0;
+	background: var(--site-bg);
+	opacity: var(--hero-video-overlay-opacity);
+}
+
+.control {
+	position: absolute;
+	z-index: 3;
+	inset-inline-start: var(--site-gutter);
+	inset-block-end: max(var(--space-md), env(safe-area-inset-bottom));
+	display: grid;
+	place-items: center;
+	inline-size: 2.75rem;
+	block-size: 2.75rem;
+	padding: 0;
+	border: 0;
+	border-radius: var(--pill);
+	background: var(--nav-surface);
+	color: var(--site-text);
+	cursor: pointer;
+
+	svg {
+		inline-size: 1rem;
+		block-size: 1rem;
+	}
+}
+
+@media (prefers-reduced-motion: reduce), print {
+	.background video,
+	.control {
+		display: none;
+	}
+}

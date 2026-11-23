@@ -40,6 +40,7 @@ const DRY_ROOTS = [
 	"apps/web/agreements/",
 	"packages/design-system/src/",
 	"apps/landing-page/src/",
+	"apps/website/src/",
 ];
 
 export function parseCrapEdn(text: string): CrapEntry[] {
