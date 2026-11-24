@@ -6,6 +6,7 @@ import { Home } from "./Home.tsx";
 import { enhanceEntrances } from "./motion.ts";
 import { site } from "./site.ts";
 import styles from "./Website.module.scss";
+import { redirectHomeAfterLoad } from "./windowRedirect.ts";
 function Header(props: { isHome: boolean }) {
 	let header!: HTMLElement;
 	onMount(() => {
@@ -63,6 +64,20 @@ function Contact() {
 		</section>
 	);
 }
+function Window() {
+	onMount(() => {
+		onCleanup(redirectHomeAfterLoad());
+	});
+	return (
+		<section class={styles.innerPage}>
+			<noscript>
+				<a class={styles.primary} href="/">
+					Go to J floor
+				</a>
+			</noscript>
+		</section>
+	);
+}
 function NotFound() {
 	return (
 		<section class={styles.innerPage}>
@@ -114,7 +129,14 @@ export function App(props: { path: string; now: number }) {
 					fallback={
 						<Show
 							when={props.path === "/contact"}
-							fallback={<NotFound />}
+							fallback={
+								<Show
+									when={props.path === "/window"}
+									fallback={<NotFound />}
+								>
+									<Window />
+								</Show>
+							}
 						>
 							<Contact />
 						</Show>

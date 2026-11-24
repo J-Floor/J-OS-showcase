@@ -18,6 +18,11 @@ export function pageMeta(path: string) {
 			description:
 				"A private community of builders, researchers, and founders sharing ambition, ideas, and a physical home in Zurich.",
 		};
+	if (path === "/window")
+		return {
+			title: "J floor — Zurich builders community",
+			description: "Taking you to the J floor homepage.",
+		};
 	return path === "/contact"
 		? {
 				title: "Contact — J floor",
