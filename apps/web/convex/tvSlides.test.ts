@@ -344,6 +344,16 @@ describe("tv slides: uploads", () => {
 		expect(await blobUrl(backend, fileId)).toBeNull();
 	});
 
+	it("discardUpload tolerates a blob that is already gone", async () => {
+		const { backend, asBoard } = await setup();
+		const fileId = await store(backend, "image/png");
+		await backend.run(async (context) => {
+			await context.storage.delete(fileId);
+		});
+		await asBoard.mutation(api.tv.discardUpload, { fileId });
+		expect(await blobUrl(backend, fileId)).toBeNull();
+	});
+
 	it("discardUpload leaves a blob a slide references", async () => {
 		const { backend, asBoard } = await setup();
 		const fileId = await store(backend, "image/png");

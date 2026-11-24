@@ -18,6 +18,11 @@ import { invariant, refuse, unwrap } from "./lib/result.ts";
 import { BOARD_LEVEL, COMMUNITY_TIERS } from "./lib/roles.ts";
 import { SITE_TIMEZONE, utcFromLocal, zonedTimeZoneName } from "./lib/time.ts";
 import { isBlobHeld } from "./lib/tv/blobHeld.ts";
+import {
+	boardUploadUrl,
+	deleteBlob,
+	discardUnheldUpload,
+} from "./lib/tv/boardUpload.ts";
 import { checkImage } from "./lib/tv/checkImage.ts";
 import { checkLength, DESCRIPTION_MAX, NAME_MAX } from "./lib/validate.ts";
 import { currentActorId } from "./lifecycle.ts";
@@ -189,15 +194,6 @@ type TvFieldArgs = {
 	showOnTv?: boolean;
 	tvUntilLocal?: string | null;
 };
-
-/** Deletes a blob unless it has already vanished (a delete of a missing one throws). */
-async function deleteBlob(
-	context: MutationCtx,
-	fileId: Id<"_storage">
-): Promise<void> {
-	if (await context.db.system.get("_storage", fileId))
-		await context.storage.delete(fileId);
-}
 
 /**
  * Validates the new picture (a real image no other event or slide holds),
@@ -381,20 +377,14 @@ export const getEventPublic = query({
 
 export const generateEventPictureUploadUrl = mutation({
 	args: {},
-	handler: async (context): Promise<string> => {
-		unwrap(await requireRole(context, BOARD_LEVEL));
-		return await context.storage.generateUploadUrl();
-	},
+	handler: (context): Promise<string> => boardUploadUrl(context),
 });
 
 /** Drops an upload the form abandoned, unless an event or a TV slide holds it. */
 export const discardEventPictureUpload = mutation({
 	args: { fileId: v.id("_storage") },
-	handler: async (context, { fileId }): Promise<void> => {
-		unwrap(await requireRole(context, BOARD_LEVEL));
-		if (!(await isBlobHeld(context, fileId)))
-			await deleteBlob(context, fileId);
-	},
+	handler: (context, { fileId }): Promise<void> =>
+		discardUnheldUpload(context, fileId),
 });
 
 export const getEventPictureUrl = query({

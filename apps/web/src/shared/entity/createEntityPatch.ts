@@ -12,6 +12,8 @@ import { reportSave } from "../reportSave.ts";
 
 const SAVE_FAILED = "Could not save that change.";
 
+type AttemptCallback = (result: Result<unknown, ClientError>) => void;
+
 /** A field-by-field sheet editor's save: each change is written at once,
  *  reported to the sheet's save status (tracker), and its refusal shows
  *  under the fields for the row it was made for; once the sheet has
@@ -32,17 +34,11 @@ export function createEntityPatch<
 }): ActionErrorState & {
 	/** `onAttempt` hears the Result of every attempt (the first send and
 	 *  each Retry from the save status). */
-	patch: (
-		change: Patch,
-		onAttempt?: (result: Result<unknown, ClientError>) => void
-	) => void;
+	patch: (change: Patch, onAttempt?: AttemptCallback) => void;
 } {
 	const tracker = useSaveTracker();
 	const failure = createActionError(options.key);
-	function patch(
-		change: Patch,
-		onAttempt?: (result: Result<unknown, ClientError>) => void
-	): void {
+	function patch(change: Patch, onAttempt?: AttemptCallback): void {
 		// Taken now: a Retry writes to the row the change was made on.
 		const key = options.key();
 		const scope = scopeOfFields(change);

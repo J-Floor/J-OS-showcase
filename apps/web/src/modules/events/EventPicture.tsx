@@ -5,17 +5,12 @@ import { createSignal, Show, type Accessor, type JSX } from "solid-js";
 
 import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
-import { tvMessages } from "../../../convex/lib/errors/tv.ts";
-import {
-	isTvImageType,
-	TV_IMAGE_ACCEPT,
-	TV_IMAGE_NAMES,
-	TV_LIMITS,
-} from "../../../convex/lib/tv/constants.ts";
+import { TV_IMAGE_ACCEPT } from "../../../convex/lib/tv/constants.ts";
 import { call, type ClientError } from "../../lib/call.ts";
 import { useQuery } from "../../shared/data/useQuery.ts";
 import { InlineError } from "../../shared/InlineError.tsx";
 import { postFile, UPLOAD_FAILED } from "../../shared/postFile.ts";
+import { tvImageProblem } from "../../shared/tvImageProblem.ts";
 
 import type { EventPatch } from "./EventDetails.tsx";
 import styles from "./EventPicture.module.scss";
@@ -71,12 +66,9 @@ function createPictureUpload(patchPicture: PatchPicture) {
 	async function upload(file: File) {
 		if (isBusy()) return;
 		setProblem(null);
-		if (!isTvImageType(file.type)) {
-			setProblem(`Choose a ${TV_IMAGE_NAMES} image.`);
-			return;
-		}
-		if (file.size > TV_LIMITS.imageMaxBytes) {
-			setProblem(tvMessages.TvImageInvalid);
+		const refused = tvImageProblem(file);
+		if (refused) {
+			setProblem(refused);
 			return;
 		}
 		setBusy(true);

@@ -14,10 +14,7 @@ import { SheetSection } from "../../shared/entity/SheetSection.tsx";
 
 import type { EventPatch } from "./EventDetails.tsx";
 import styles from "./EventSheet.module.scss";
-import { eventFields } from "./fields.ts";
-
-/** The last minute of the day a cutoff is chosen on. */
-const END_OF_DAY = "23:59";
+import { END_OF_DAY_TIME, eventFields } from "./fields.ts";
 
 /** The "TV" section: whether the event goes on the TV slideshow, and until
  *  when. Without a chosen date the event leaves the TV by default, a few days
@@ -69,7 +66,7 @@ export function EventTvSection(props: {
 								props.onPatch({
 									tvUntilLocal: composeZoned(
 										iso,
-										END_OF_DAY,
+										END_OF_DAY_TIME,
 										SITE_TIMEZONE
 									).local,
 								});

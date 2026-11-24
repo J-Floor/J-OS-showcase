@@ -6,6 +6,9 @@ import { ICONS } from "../../shared/icons.ts";
 export const START_TIME_LABEL = "Start time (Zurich)";
 export const END_TIME_LABEL = "End time (Zurich)";
 
+/** The last minute of the day, where an event ends or a TV cutoff lands by default. */
+export const END_OF_DAY_TIME = "23:59";
+
 /** An event's fields shown both by its table and its sheet. */
 export const eventFields = defineFields({
 	name: { label: "Name", icon: ICONS.name },

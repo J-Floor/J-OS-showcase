@@ -10,7 +10,8 @@ import {
 import { requireRole } from "./lib/authGuard.ts";
 import { invariant, refuse, unwrap } from "./lib/result.ts";
 import { BOARD_LEVEL } from "./lib/roles.ts";
-import { eventHoldsBlob, isBlobHeld } from "./lib/tv/blobHeld.ts";
+import { eventHoldsBlob } from "./lib/tv/blobHeld.ts";
+import { boardUploadUrl, discardUnheldUpload } from "./lib/tv/boardUpload.ts";
 import { checkImage } from "./lib/tv/checkImage.ts";
 import {
 	TV_DEFAULT_TRANSITION,
@@ -203,10 +204,7 @@ export const getSlide = query({
 /** Board-only: a one-shot URL to upload a slide image to. */
 export const generateUploadUrl = mutation({
 	args: {},
-	handler: async (context): Promise<string> => {
-		unwrap(await requireRole(context, BOARD_LEVEL));
-		return context.storage.generateUploadUrl();
-	},
+	handler: (context): Promise<string> => boardUploadUrl(context),
 });
 
 /**
@@ -215,11 +213,8 @@ export const generateUploadUrl = mutation({
  */
 export const discardUpload = mutation({
 	args: { fileId: v.id("_storage") },
-	handler: async (context, args): Promise<void> => {
-		unwrap(await requireRole(context, BOARD_LEVEL));
-		if (await isBlobHeld(context, args.fileId)) return;
-		await context.storage.delete(args.fileId);
-	},
+	handler: (context, { fileId }): Promise<void> =>
+		discardUnheldUpload(context, fileId),
 });
 
 /** Board-only: add a slide at the end of the show. */

@@ -21,10 +21,9 @@ import { createActionError } from "../../shared/createActionError.ts";
 import { InlineError } from "../../shared/InlineError.tsx";
 
 import styles from "./EventSheet.module.scss";
-import { END_TIME_LABEL, START_TIME_LABEL } from "./fields.ts";
+import { END_OF_DAY_TIME, END_TIME_LABEL, START_TIME_LABEL } from "./fields.ts";
 
 const DEFAULT_START_TIME = "00:01";
-const DEFAULT_END_TIME = "23:59";
 const MISSING_FIELDS_REASON = "Add a name and both dates first";
 
 /**
@@ -54,7 +53,7 @@ export function createEventCreateForm(options: { onCreated: () => void }) {
 	const [startsAt, setStartsAt] = createSignal<string | null>(null);
 	const [endsAt, setEndsAt] = createSignal<string | null>(null);
 	const [startTime, setStartTime] = createSignal(DEFAULT_START_TIME);
-	const [endTime, setEndTime] = createSignal(DEFAULT_END_TIME);
+	const [endTime, setEndTime] = createSignal(END_OF_DAY_TIME);
 	const { error, trackResult, clear } = createActionError();
 
 	function composedRange() {
@@ -105,7 +104,7 @@ export function createEventCreateForm(options: { onCreated: () => void }) {
 			setStartsAt(null);
 			setEndsAt(null);
 			setStartTime(DEFAULT_START_TIME);
-			setEndTime(DEFAULT_END_TIME);
+			setEndTime(END_OF_DAY_TIME);
 			clear();
 		},
 		canSubmit(): boolean {
@@ -178,7 +177,7 @@ export function EventCreateForm(props: {
 					label={END_TIME_LABEL}
 					value={props.form.endTime()}
 					onValueChange={(value) => {
-						props.form.setEndTime(value ?? DEFAULT_END_TIME);
+						props.form.setEndTime(value ?? END_OF_DAY_TIME);
 					}}
 				/>
 			</div>

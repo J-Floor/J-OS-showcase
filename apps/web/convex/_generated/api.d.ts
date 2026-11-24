@@ -132,6 +132,7 @@ import type * as lib_safeUrl from "../lib/safeUrl.js";
 import type * as lib_signatures from "../lib/signatures.js";
 import type * as lib_time from "../lib/time.js";
 import type * as lib_tv_blobHeld from "../lib/tv/blobHeld.js";
+import type * as lib_tv_boardUpload from "../lib/tv/boardUpload.js";
 import type * as lib_tv_checkImage from "../lib/tv/checkImage.js";
 import type * as lib_tv_constants from "../lib/tv/constants.js";
 import type * as lib_tv_eventCutoff from "../lib/tv/eventCutoff.js";
@@ -336,6 +337,7 @@ declare const fullApi: ApiFromModules<{
   "lib/signatures": typeof lib_signatures;
   "lib/time": typeof lib_time;
   "lib/tv/blobHeld": typeof lib_tv_blobHeld;
+  "lib/tv/boardUpload": typeof lib_tv_boardUpload;
   "lib/tv/checkImage": typeof lib_tv_checkImage;
   "lib/tv/constants": typeof lib_tv_constants;
   "lib/tv/eventCutoff": typeof lib_tv_eventCutoff;

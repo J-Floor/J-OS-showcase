@@ -5,6 +5,7 @@ import {
 	TV_LIMITS,
 } from "../../../../convex/lib/tv/constants.ts";
 import { htmlBytes } from "../../../../convex/lib/tv/htmlBytes.ts";
+import { tvImageProblem } from "../../../shared/tvImageProblem.ts";
 
 /** What a chosen or dropped file turns into, or why it cannot be a slide. */
 export type SlideFile =
@@ -32,12 +33,11 @@ export async function readSlideFile(file: File): Promise<SlideFile> {
 			? { kind: "error", message: tvMessages.TvHtmlTooLarge }
 			: { kind: "html", htmlText };
 	}
-	if (!isTvImageType(file.type) || file.size > TV_LIMITS.imageMaxBytes)
-		return {
-			kind: "error",
-			message: isTvImageType(file.type)
-				? tvMessages.TvImageInvalid
-				: UNSUPPORTED,
-		};
-	return { kind: "image", file };
+	// The unsupported-type wording differs on purpose (HTML is also accepted).
+	if (!isTvImageType(file.type))
+		return { kind: "error", message: UNSUPPORTED };
+	const problem = tvImageProblem(file);
+	return problem
+		? { kind: "error", message: problem }
+		: { kind: "image", file };
 }
