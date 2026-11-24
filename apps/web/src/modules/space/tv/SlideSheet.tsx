@@ -10,7 +10,10 @@ import { createMemo, Show, type JSX } from "solid-js";
 
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
-import { TV_LIMITS } from "../../../../convex/lib/tv/constants.ts";
+import {
+	TV_IMAGE_ACCEPT,
+	TV_LIMITS,
+} from "../../../../convex/lib/tv/constants.ts";
 import { htmlBytes } from "../../../../convex/lib/tv/htmlBytes.ts";
 import { NAME_MAX } from "../../../../convex/lib/validate.ts";
 import { useQuery } from "../../../shared/data/useQuery.ts";
@@ -21,7 +24,7 @@ import type { SheetOpenProps } from "../../../shared/types.ts";
 import { createSlideForm, type SlideMode } from "./createSlideForm.ts";
 import styles from "./SlideSheet.module.scss";
 
-const FILE_ACCEPT = "image/png,image/jpeg,image/webp,image/gif,.html,text/html";
+const FILE_ACCEPT = `${TV_IMAGE_ACCEPT},.html,text/html`;
 
 type SlideSheetProps = SheetOpenProps & {
 	/** The slide shown, `undefined` for the create form. A slide id, not the

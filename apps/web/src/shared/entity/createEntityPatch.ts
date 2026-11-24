@@ -1,7 +1,8 @@
 import { useSaveTracker } from "@j-os/design-system";
+import type { Result } from "neverthrow";
 import type { Accessor } from "solid-js";
 
-import { call } from "../../lib/call.ts";
+import { call, type ClientError } from "../../lib/call.ts";
 import {
 	type ActionErrorState,
 	createActionError,
@@ -28,20 +29,35 @@ export function createEntityPatch<
 	 *  reads "Could not save that change." */
 	write: (key: Key, change: Patch) => Promise<unknown>;
 	isOpen: Accessor<boolean>;
-}): ActionErrorState & { patch: (change: Patch) => void } {
+}): ActionErrorState & {
+	/** `onAttempt` hears the Result of every attempt (the first send and
+	 *  each Retry from the save status). */
+	patch: (
+		change: Patch,
+		onAttempt?: (result: Result<unknown, ClientError>) => void
+	) => void;
+} {
 	const tracker = useSaveTracker();
 	const failure = createActionError(options.key);
-	function patch(change: Patch): void {
+	function patch(
+		change: Patch,
+		onAttempt?: (result: Result<unknown, ClientError>) => void
+	): void {
 		// Taken now: a Retry writes to the row the change was made on.
 		const key = options.key();
 		const scope = scopeOfFields(change);
 		reportSave(
 			tracker?.track(scope),
-			() =>
-				failure.trackResult(
+			() => {
+				const result = failure.trackResult(
 					call(options.write(key, change), SAVE_FAILED),
 					scope
-				),
+				);
+				void result.then((settled) => {
+					onAttempt?.(settled);
+				});
+				return result;
+			},
 			options.isOpen
 		);
 	}

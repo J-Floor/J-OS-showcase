@@ -1,4 +1,5 @@
 import { ConvexError } from "convex/values";
+import type { Result } from "neverthrow";
 import { createRoot, createSignal } from "solid-js";
 import { afterEach, expect, test, vi } from "vitest";
 
@@ -20,6 +21,8 @@ vi.mock("@j-os/design-system", () => ({
 
 const toasts = vi.hoisted(() => ({ create: vi.fn() }));
 vi.mock("../toaster.ts", () => ({ toaster: toasts }));
+
+import type { ClientError } from "../../lib/call.ts";
 
 import { createEntityPatch } from "./createEntityPatch.ts";
 
@@ -112,5 +115,16 @@ test("a failure once the sheet has closed toasts", async () => {
 	expect(toasts.create).toHaveBeenCalledWith(
 		expect.objectContaining({ title: "Not allowed." })
 	);
+	entity.dispose();
+});
+
+test("onAttempt hears the Result of the save", async () => {
+	const entity = setup(() => refused());
+	const heard = vi.fn<(result: Result<unknown, ClientError>) => void>();
+	entity.patch({ name: "A" }, heard);
+	await flush();
+	expect(heard).toHaveBeenCalledTimes(1);
+	expect(heard.mock.calls[0][0].isErr()).toBe(true);
+	expect(heard.mock.calls[0][0]._unsafeUnwrapErr().code).toBe("Forbidden");
 	entity.dispose();
 });

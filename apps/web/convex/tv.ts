@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- one cohesive board-only TV admin module (slides, config, devices) */
 import { v } from "convex/values";
 
 import type { Doc, Id } from "./_generated/dataModel";
@@ -11,8 +10,9 @@ import {
 import { requireRole } from "./lib/authGuard.ts";
 import { invariant, refuse, unwrap } from "./lib/result.ts";
 import { BOARD_LEVEL } from "./lib/roles.ts";
+import { eventHoldsBlob, isBlobHeld } from "./lib/tv/blobHeld.ts";
+import { checkImage } from "./lib/tv/checkImage.ts";
 import {
-	isTvImageType,
 	TV_DEFAULT_TRANSITION,
 	TV_INITIAL_VERSION,
 	TV_LIMITS,
@@ -110,31 +110,20 @@ async function bumpVersion(context: MutationCtx): Promise<void> {
 }
 
 /**
- * Validates only. A throw rolls the whole mutation back, so deleting a
- * rejected blob here would be undone; the client calls `discardUpload`.
+ * Refuse a blob another slide or an event already holds (deleting one would
+ * break both).
  */
-async function checkImage(
-	context: MutationCtx,
-	fileId: Id<"_storage">
-): Promise<void> {
-	const meta = await context.db.system.get("_storage", fileId);
-	const isValid =
-		meta !== null &&
-		isTvImageType(meta.contentType) &&
-		meta.size <= TV_LIMITS.imageMaxBytes;
-	if (!isValid) refuse({ type: "TvImageInvalid" });
-}
-
-/** Refuse a blob another slide already shows (deleting one would break both). */
-function refuseHeldFile(
+async function refuseHeldFile(
+	context: QueryCtx,
 	slides: Doc<"tvSlides">[],
 	fileId: Id<"_storage">,
 	exceptId?: Id<"tvSlides">
-): void {
+): Promise<void> {
 	if (
 		slides.some(
 			(slide) => slide.fileId === fileId && slide._id !== exceptId
-		)
+		) ||
+		(await eventHoldsBlob(context, fileId))
 	)
 		refuse({ type: "TvImageInvalid" });
 }
@@ -222,14 +211,13 @@ export const generateUploadUrl = mutation({
 
 /**
  * Board-only: delete an uploaded blob a slide was refused for. A no-op when
- * a slide holds it.
+ * a slide or an event holds it.
  */
 export const discardUpload = mutation({
 	args: { fileId: v.id("_storage") },
 	handler: async (context, args): Promise<void> => {
 		unwrap(await requireRole(context, BOARD_LEVEL));
-		const slides = await slidesInOrder(context.db);
-		if (slides.some((slide) => slide.fileId === args.fileId)) return;
+		if (await isBlobHeld(context, args.fileId)) return;
 		await context.storage.delete(args.fileId);
 	},
 });
@@ -260,7 +248,8 @@ export const createSlide = mutation({
 		}
 		if (existing.length >= TV_LIMITS.maxSlides)
 			refuse({ type: "TvTooManySlides" });
-		if (args.fileId !== undefined) refuseHeldFile(existing, args.fileId);
+		if (args.fileId !== undefined)
+			await refuseHeldFile(context, existing, args.fileId);
 		const last = existing.at(-1);
 		const id = await context.db.insert("tvSlides", {
 			title,
@@ -304,7 +293,7 @@ async function applyContent(
 	}
 	if (args.fileId === undefined || args.fileId === slide.fileId) return {};
 	await checkImage(context, args.fileId);
-	refuseHeldFile(slides, args.fileId, slide._id);
+	await refuseHeldFile(context, slides, args.fileId, slide._id);
 	if (slide.fileId) await context.storage.delete(slide.fileId);
 	return { fileId: args.fileId, updatedAt: Date.now() };
 }

@@ -788,3 +788,339 @@ describe("updateEvent on a vanished event", () => {
 		).rejects.toThrow(/EventNotFound/);
 	});
 });
+
+describe("event TV fields", () => {
+	it("stores description, showOnTv and a cutoff from a zoned local", async () => {
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
+		const eventId = await asBoard.mutation(
+			api.events.createEvent,
+			eventInput
+		);
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId,
+			description: "Demos and drinks.",
+			showOnTv: true,
+			tvUntilLocal: "2026-10-03T12:00:00+02:00[Europe/Zurich]",
+		});
+		const row = await backend.run((context) => context.db.get(eventId));
+		expect(row?.description).toBe("Demos and drinks.");
+		expect(row?.showOnTv).toBe(true);
+		// 12:00 Zurich (CEST, UTC+2) is 10:00 UTC
+		expect(row?.tvUntil).toBe(Date.UTC(2026, 9, 3, 10));
+	});
+	it("resets the cutoff with null", async () => {
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
+		const eventId = await asBoard.mutation(
+			api.events.createEvent,
+			eventInput
+		);
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId,
+			tvUntilLocal: "2026-10-03T12:00:00+02:00[Europe/Zurich]",
+		});
+		const before = await backend.run((context) => context.db.get(eventId));
+		expect(before?.tvUntil).toBeDefined();
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId,
+			tvUntilLocal: null,
+		});
+		const row = await backend.run((context) => context.db.get(eventId));
+		expect(row?.tvUntil).toBeUndefined();
+	});
+	it("refuses a cutoff in another zone", async () => {
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
+		const eventId = await asBoard.mutation(
+			api.events.createEvent,
+			eventInput
+		);
+		await expect(
+			asBoard.mutation(api.events.updateEvent, {
+				eventId,
+				tvUntilLocal: "2026-10-03T12:00:00-07:00[America/Los_Angeles]",
+			})
+		).rejects.toThrow(/EventTimesNotInSiteZone/);
+	});
+	it("refuses a non-board caller", async () => {
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
+		const eventId = await asBoard.mutation(
+			api.events.createEvent,
+			eventInput
+		);
+		const asMember = await seedMember(backend);
+		await expect(
+			asMember.mutation(api.events.updateEvent, {
+				eventId,
+				showOnTv: true,
+			})
+		).rejects.toThrow("Forbidden");
+	});
+	it("clears the description with an empty or blank string", async () => {
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
+		const eventId = await asBoard.mutation(
+			api.events.createEvent,
+			eventInput
+		);
+		for (const blank of ["", "   "]) {
+			await asBoard.mutation(api.events.updateEvent, {
+				eventId,
+				description: "Demos and drinks.",
+			});
+			await asBoard.mutation(api.events.updateEvent, {
+				eventId,
+				description: blank,
+			});
+			const row = await backend.run((context) => context.db.get(eventId));
+			expect(row?.description).toBeUndefined();
+		}
+	});
+});
+
+async function storeBlob(backend: ReturnType<typeof convexTest>, type: string) {
+	return backend.run((context) =>
+		context.storage.store(new Blob(["x"], { type }))
+	);
+}
+
+describe("event picture", () => {
+	it("attaches a valid image and deletes the old blob on replace", async () => {
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
+		const eventId = await asBoard.mutation(
+			api.events.createEvent,
+			eventInput
+		);
+		const first = await storeBlob(backend, "image/png");
+		const second = await storeBlob(backend, "image/png");
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId,
+			pictureId: first,
+		});
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId,
+			pictureId: second,
+		});
+		const gone = await backend.run((context) =>
+			context.storage.getUrl(first)
+		);
+		expect(gone).toBeNull();
+		const url = await asBoard.query(api.events.getEventPictureUrl, {
+			eventId,
+		});
+		expect(url).not.toBeNull();
+	});
+	it("refuses a non-image blob and keeps the old picture", async () => {
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
+		const eventId = await asBoard.mutation(
+			api.events.createEvent,
+			eventInput
+		);
+		const good = await storeBlob(backend, "image/png");
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId,
+			pictureId: good,
+		});
+		const bad = await storeBlob(backend, "text/plain");
+		await expect(
+			asBoard.mutation(api.events.updateEvent, {
+				eventId,
+				pictureId: bad,
+			})
+		).rejects.toThrow("TvImageInvalid");
+		expect(
+			await backend.run((context) => context.storage.getUrl(good))
+		).not.toBeNull();
+		const row = await backend.run((context) => context.db.get(eventId));
+		expect(row?.pictureId).toBe(good);
+	});
+	it("refuses a picture another event or a slide already holds", async () => {
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
+		const first = await asBoard.mutation(
+			api.events.createEvent,
+			eventInput
+		);
+		const second = await asBoard.mutation(
+			api.events.createEvent,
+			eventInput
+		);
+		const shared = await storeBlob(backend, "image/png");
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId: first,
+			pictureId: shared,
+		});
+		await expect(
+			asBoard.mutation(api.events.updateEvent, {
+				eventId: second,
+				pictureId: shared,
+			})
+		).rejects.toThrow("TvImageInvalid");
+		const onSlide = await storeBlob(backend, "image/png");
+		await asBoard.mutation(api.tv.createSlide, {
+			title: "S",
+			kind: "image",
+			fileId: onSlide,
+		});
+		await expect(
+			asBoard.mutation(api.events.updateEvent, {
+				eventId: second,
+				pictureId: onSlide,
+			})
+		).rejects.toThrow("TvImageInvalid");
+		// re-sending its own picture is a no-op, not a refusal
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId: first,
+			pictureId: shared,
+		});
+		expect(
+			await backend.run((context) => context.storage.getUrl(shared))
+		).not.toBeNull();
+	});
+	it("does not wedge when the old blob has already vanished", async () => {
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
+		const eventId = await asBoard.mutation(
+			api.events.createEvent,
+			eventInput
+		);
+		const old = await storeBlob(backend, "image/png");
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId,
+			pictureId: old,
+		});
+		await backend.run((context) => context.storage.delete(old));
+		const next = await storeBlob(backend, "image/png");
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId,
+			pictureId: next,
+		});
+		await asBoard.mutation(api.events.deleteEvent, { eventId });
+		expect(
+			await backend.run((context) => context.db.get(eventId))
+		).toBeNull();
+		expect(
+			await backend.run((context) => context.storage.getUrl(next))
+		).toBeNull();
+	});
+	it("removes the picture with null and on delete", async () => {
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
+		const eventId = await asBoard.mutation(
+			api.events.createEvent,
+			eventInput
+		);
+		const file = await storeBlob(backend, "image/png");
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId,
+			pictureId: file,
+		});
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId,
+			pictureId: null,
+		});
+		expect(
+			await backend.run((context) => context.storage.getUrl(file))
+		).toBeNull();
+		const second = await storeBlob(backend, "image/png");
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId,
+			pictureId: second,
+		});
+		await asBoard.mutation(api.events.deleteEvent, { eventId });
+		expect(
+			await backend.run((context) => context.storage.getUrl(second))
+		).toBeNull();
+	});
+	it("discards an unattached upload but keeps an attached one", async () => {
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
+		const eventId = await asBoard.mutation(
+			api.events.createEvent,
+			eventInput
+		);
+		const held = await storeBlob(backend, "image/png");
+		const loose = await storeBlob(backend, "image/png");
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId,
+			pictureId: held,
+		});
+		await asBoard.mutation(api.events.discardEventPictureUpload, {
+			fileId: held,
+		});
+		await asBoard.mutation(api.events.discardEventPictureUpload, {
+			fileId: loose,
+		});
+		expect(
+			await backend.run((context) => context.storage.getUrl(held))
+		).not.toBeNull();
+		expect(
+			await backend.run((context) => context.storage.getUrl(loose))
+		).toBeNull();
+	});
+	it("discarding a blob that is already gone does not throw", async () => {
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
+		const loose = await storeBlob(backend, "image/png");
+		await asBoard.mutation(api.events.discardEventPictureUpload, {
+			fileId: loose,
+		});
+		await asBoard.mutation(api.events.discardEventPictureUpload, {
+			fileId: loose,
+		});
+		expect(
+			await backend.run((context) => context.storage.getUrl(loose))
+		).toBeNull();
+	});
+	it("a member can read the picture URL but cannot write or discard", async () => {
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
+		const asMember = await seedMember(backend);
+		const eventId = await asBoard.mutation(
+			api.events.createEvent,
+			eventInput
+		);
+		const picture = await storeBlob(backend, "image/png");
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId,
+			pictureId: picture,
+		});
+		expect(
+			await asMember.query(api.events.getEventPictureUrl, { eventId })
+		).not.toBeNull();
+		await expect(
+			asMember.mutation(api.events.updateEvent, {
+				eventId,
+				pictureId: null,
+			})
+		).rejects.toThrow();
+		await expect(
+			asMember.mutation(api.events.generateEventPictureUploadUrl, {})
+		).rejects.toThrow();
+		await expect(
+			asMember.mutation(api.events.discardEventPictureUpload, {
+				fileId: picture,
+			})
+		).rejects.toThrow();
+	});
+	it("discard leaves a blob a TV slide holds", async () => {
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
+		const file = await storeBlob(backend, "image/png");
+		await asBoard.mutation(api.tv.createSlide, {
+			title: "S",
+			kind: "image",
+			fileId: file,
+		});
+		await asBoard.mutation(api.events.discardEventPictureUpload, {
+			fileId: file,
+		});
+		expect(
+			await backend.run((context) => context.storage.getUrl(file))
+		).not.toBeNull();
+	});
+});

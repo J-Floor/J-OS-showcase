@@ -659,7 +659,12 @@ export default defineSchema({
 				endingSoon: v.optional(v.id("_scheduled_functions")),
 			})
 		),
-	}),
+		description: v.optional(v.string()),
+		pictureId: v.optional(v.id("_storage")),
+		showOnTv: v.optional(v.boolean()),
+		/** Epoch cutoff for the TV; absent means `lib/tv/eventCutoff.tvCutoff`'s default. */
+		tvUntil: v.optional(v.number()),
+	}).index("by_picture", ["pictureId"]),
 	eventAttendance: defineTable({
 		personId: v.id("people"),
 		eventId: v.id("events"),

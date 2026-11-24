@@ -32,15 +32,33 @@ const attendees = [
 ];
 
 let attendeesData: typeof attendees | undefined = attendees;
+/** Queries the server would refuse the viewer: like convex-solidjs, `data()`
+ *  throws the refusal, so a sheet that reads one crashes. */
+let refusedQueries: string[] = [];
 
-vi.mock("convex-solidjs", () => ({
-	useQuery: () => ({
-		data: () => attendeesData,
-		error: () => {},
-		isLoading: () => false,
-	}),
-	useMutation: () => ({ mutateAsync }),
-}));
+vi.mock("convex-solidjs", async () => {
+	const { getFunctionName } = await import("convex/server");
+	return {
+		useQuery: (
+			reference: Parameters<typeof getFunctionName>[0],
+			_args: unknown,
+			options?: () => { enabled?: boolean }
+		) => ({
+			data: () => {
+				const isEnabled = options?.().enabled !== false;
+				if (
+					isEnabled &&
+					refusedQueries.includes(getFunctionName(reference))
+				)
+					throw new Error("Not allowed");
+				return isEnabled ? attendeesData : undefined;
+			},
+			error: () => {},
+			isLoading: () => false,
+		}),
+		useMutation: () => ({ mutateAsync }),
+	};
+});
 
 import type { Doc } from "../../../convex/_generated/dataModel";
 import { utcFromLocal } from "../../../convex/lib/time.ts";
@@ -74,6 +92,7 @@ const event = {
 } as never;
 
 afterEach(() => {
+	refusedQueries = [];
 	attendeesData = attendees;
 	mutateAsync.mockClear();
 });
@@ -144,6 +163,18 @@ test("detail (member): name only — no QR, attendees, delete or edit", () => {
 	expect(screen.queryByRole("button", { name: /Unlock to edit/ })).toBeNull();
 });
 
+test("detail (member): shows the picture row, never the board-only TV section or queries", () => {
+	refusedQueries = ["events:listEventAttendees"];
+	renderSheet("member", { event });
+	expect(screen.getByText("Picture")).toBeInTheDocument();
+	expect(screen.queryByRole("button", { name: "TV" })).toBeNull();
+});
+
+test("detail (board): shows the TV section", () => {
+	renderSheet("board", { event });
+	expect(screen.getByRole("button", { name: "TV" })).toBeInTheDocument();
+});
+
 test("Copy link writes the visitor URL to the clipboard", async () => {
 	const writeText = vi.fn(() => Promise.resolve());
 	Object.defineProperty(navigator, "clipboard", {
@@ -183,7 +214,9 @@ test("Delete waits for confirmation, then calls deleteEvent", async () => {
 test("edit toggle reveals the name field; committing it calls updateEvent", async () => {
 	renderSheet("board", { event });
 	fireEvent.click(screen.getByRole("button", { name: /Unlock to edit/ }));
-	const field = await waitFor(() => screen.getByRole("textbox"));
+	const field = await waitFor(() =>
+		screen.getByRole("textbox", { name: "Name" })
+	);
 	// EditableText commits on blur when the value changed.
 	fireEvent.input(field, { target: { value: "Renamed Night" } });
 	fireEvent.blur(field);
@@ -395,7 +428,7 @@ test("create: an inverted interval (start after end) disables Create with a dist
 test("edit: the start time picker seeds from startsAtLocal (Zurich wall clock, not the host TZ) and recomposes it on change", async () => {
 	renderSheet("board", { event });
 	fireEvent.click(screen.getByRole("button", { name: /Unlock to edit/ }));
-	await waitFor(() => screen.getByRole("textbox"));
+	await waitFor(() => screen.getByRole("textbox", { name: "Name" }));
 
 	const startsValue = propertyRowValue("Starts");
 	const hour = startsValue.querySelector<HTMLElement>('[data-type="hour"]');
@@ -493,7 +526,9 @@ test("a refused rename shows the reason under the details", async () => {
 	mutateAsync.mockRejectedValueOnce(REFUSED);
 	renderSheet("board", { event });
 	fireEvent.click(screen.getByRole("button", { name: /Unlock to edit/ }));
-	const field = await waitFor(() => screen.getByRole("textbox"));
+	const field = await waitFor(() =>
+		screen.getByRole("textbox", { name: "Name" })
+	);
 	fireEvent.input(field, { target: { value: "Renamed Night" } });
 	fireEvent.blur(field);
 	expect(await screen.findByText("You can't do that.")).toBeInTheDocument();
@@ -566,7 +601,9 @@ test("edit: a rename says Saving… then Changes saved", async () => {
 	);
 	renderSheet("board", { event });
 	fireEvent.click(screen.getByRole("button", { name: /Unlock to edit/ }));
-	const field = await waitFor(() => screen.getByRole("textbox"));
+	const field = await waitFor(() =>
+		screen.getByRole("textbox", { name: "Name" })
+	);
 	fireEvent.input(field, { target: { value: "Renamed Night" } });
 	fireEvent.blur(field);
 	const status = screen.getByRole("status", { name: "Save status" });
@@ -780,4 +817,133 @@ test("the Create button names its key in a chip while peeking", () => {
 	expect(create.querySelector("kbd")).toBeNull();
 	fireEvent.click(screen.getByRole("button", { name: /shortcut/i }));
 	expect(create.querySelector("kbd")).not.toBeNull();
+});
+
+// The picture's real save path: EventPicture -> patchPicture -> reportSave ->
+// the sheet's save status and the Details error area. Mutations are routed by
+// their args (generated `api` references are not `===`-stable).
+const PICTURE_REFUSED = new ConvexError({
+	code: "TvImageInvalid",
+	message: "That is not an image.",
+});
+
+afterEach(() => {
+	mutateAsync.mockImplementation(() => Promise.resolve("event2"));
+	vi.unstubAllGlobals();
+});
+
+/** A promise settled from outside, for holding a request open. */
+function deferred<T>() {
+	const settle: { resolve?: (value: T) => void } = {};
+	const promise = new Promise<T>((done) => {
+		settle.resolve = done;
+	});
+	return {
+		promise,
+		resolve(value: T) {
+			settle.resolve?.(value);
+		},
+	};
+}
+
+function routePictureCalls(
+	save: (args: Record<string, unknown>) => Promise<string>
+) {
+	mutateAsync.mockImplementation((args) => {
+		const call = args as Record<string, unknown>;
+		if (Object.keys(call).length === 0)
+			return Promise.resolve("https://upload.example.com/u");
+		if ("fileId" in call) return Promise.resolve("discarded");
+		return save(call);
+	});
+}
+
+async function pickPicture() {
+	renderSheet("board", { event });
+	fireEvent.click(screen.getByRole("button", { name: /Unlock to edit/ }));
+	const input = await screen.findByLabelText("Event picture file");
+	fireEvent.change(input, {
+		target: {
+			files: [new File(["x"], "poster.png", { type: "image/png" })],
+		},
+	});
+}
+
+function discards() {
+	return mutateAsync.mock.calls.filter(
+		([args]) => typeof args === "object" && args && "fileId" in args
+	);
+}
+
+function pictureSaves() {
+	return mutateAsync.mock.calls.filter(
+		([args]) => typeof args === "object" && args && "pictureId" in args
+	);
+}
+
+function stubUpload() {
+	vi.stubGlobal(
+		"fetch",
+		vi.fn(() =>
+			Promise.resolve(
+				new Response(JSON.stringify({ storageId: "stor1" }), {
+					status: 200,
+				})
+			)
+		)
+	);
+}
+
+test("a refused picture shows its reason once, discards the upload once and reports a failed save", async () => {
+	stubUpload();
+	routePictureCalls(() => Promise.reject(PICTURE_REFUSED));
+	await pickPicture();
+	expect(
+		await screen.findByText("That is not an image.")
+	).toBeInTheDocument();
+	await waitFor(() => {
+		expect(discards()).toHaveLength(1);
+	});
+	expect(discards()[0][0]).toEqual({ fileId: "stor1" });
+	expect(screen.getAllByText("That is not an image.")).toHaveLength(1);
+	expect(
+		await screen.findByRole("button", { name: "Retry" })
+	).toBeInTheDocument();
+	vi.unstubAllGlobals();
+});
+
+test("a transient failure keeps the upload and Retry sends the same picture", async () => {
+	stubUpload();
+	let attempt = 0;
+	routePictureCalls(() => {
+		attempt += 1;
+		return attempt === 1
+			? Promise.reject(new Error("network"))
+			: Promise.resolve("event1");
+	});
+	await pickPicture();
+	const retry = await screen.findByRole("button", { name: "Retry" });
+	expect(discards()).toHaveLength(0);
+	fireEvent.click(retry);
+	await waitFor(() => {
+		expect(pictureSaves()).toHaveLength(2);
+	});
+	expect(pictureSaves().map(([args]) => args)).toEqual([
+		{ eventId: "event1", pictureId: "stor1" },
+		{ eventId: "event1", pictureId: "stor1" },
+	]);
+	expect(await screen.findByText("Changes saved")).toBeInTheDocument();
+	expect(discards()).toHaveLength(0);
+	vi.unstubAllGlobals();
+});
+
+test("a picture save reports to the save status like the other fields", async () => {
+	stubUpload();
+	const gate = deferred<string>();
+	routePictureCalls(() => gate.promise);
+	await pickPicture();
+	expect(await screen.findByText("Saving…")).toBeInTheDocument();
+	gate.resolve("event1");
+	expect(await screen.findByText("Changes saved")).toBeInTheDocument();
+	vi.unstubAllGlobals();
 });

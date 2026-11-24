@@ -28,6 +28,9 @@ const TV_IMAGE_LABELS: Record<(typeof TV_IMAGE_TYPES)[number], string> = {
 	"image/gif": "GIF",
 };
 
+/** The `accept` value of a file input that takes a TV image. */
+export const TV_IMAGE_ACCEPT = TV_IMAGE_TYPES.join(",");
+
 /** "PNG, JPEG, WebP or GIF", for messages. */
 export const TV_IMAGE_NAMES = `${TV_IMAGE_TYPES.slice(0, -1)
 	.map((type) => TV_IMAGE_LABELS[type])

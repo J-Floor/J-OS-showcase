@@ -1,0 +1,32 @@
+@use "@j-os/design-system/typography" as typo;
+
+.picture {
+	display: flex;
+	flex-direction: column;
+	gap: var(--jf-spacing-near);
+	align-items: flex-start;
+}
+
+.image {
+	display: block;
+	max-inline-size: 100%;
+	max-block-size: 12rem;
+	border-radius: var(--jf-radius-container);
+	object-fit: contain;
+}
+
+.actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--jf-spacing-near);
+}
+
+.fileInput {
+	display: none;
+}
+
+.hint {
+	@include typo.jf-typo-body-small;
+
+	color: var(--jf-fg-muted);
+}

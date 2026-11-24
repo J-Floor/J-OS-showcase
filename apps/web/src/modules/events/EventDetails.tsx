@@ -21,7 +21,7 @@ import {
 	zonedDate,
 	zonedTime,
 } from "../../../convex/lib/time.ts";
-import { NAME_MAX } from "../../../convex/lib/validate.ts";
+import { DESCRIPTION_MAX, NAME_MAX } from "../../../convex/lib/validate.ts";
 import { PersonListItem } from "../../shared/components/PersonListItem.tsx";
 import { createEntityPatch } from "../../shared/entity/createEntityPatch.ts";
 import { EntityQrBlock } from "../../shared/entity/EntityQr.tsx";
@@ -33,7 +33,9 @@ import { InlineError } from "../../shared/InlineError.tsx";
 import { personEntity } from "../community/entity.ts";
 
 import { eventsEntity } from "./entity.ts";
+import { EventPicture } from "./EventPicture.tsx";
 import styles from "./EventSheet.module.scss";
+import { EventTvSection } from "./EventTvSection.tsx";
 import { END_TIME_LABEL, START_TIME_LABEL, eventFields } from "./fields.ts";
 
 /** One row of an event's attendee list. */
@@ -140,6 +142,35 @@ function EventBoundaryRow(props: {
 	);
 }
 
+/** An event's description: the copy shown with it, editable while the sheet is. */
+function EventDescriptionRow(props: {
+	event: Accessor<Doc<"events">>;
+	isEditing: Accessor<boolean>;
+	onPatch: (patch: EventPatch) => void;
+}) {
+	return (
+		<PropertyRow
+			label={eventFields.description.label}
+			icon={eventFields.description.icon}
+		>
+			<Show
+				when={props.isEditing()}
+				fallback={<span>{props.event().description ?? ""}</span>}
+			>
+				<EditableText
+					label={eventFields.description.label}
+					multiline
+					value={props.event().description ?? ""}
+					maxLength={DESCRIPTION_MAX}
+					onCommit={(value) => {
+						props.onPatch({ description: value });
+					}}
+				/>
+			</Show>
+		</PropertyRow>
+	);
+}
+
 /** The "Details" section: name and start/end, editable while `isEditing`.
  *  Each change saves at once and reports to the sheet's save status. */
 export function EventDetailsItem(props: {
@@ -147,45 +178,69 @@ export function EventDetailsItem(props: {
 	isEditing: Accessor<boolean>;
 	/** The sheet is open: a change failing once it closed toasts. */
 	isOpen: Accessor<boolean>;
+	/** Board only: the TV section is theirs to see and change. */
+	canManage: boolean;
 }) {
 	const updateEvent = useMutation(api.events.updateEvent);
-	const { patch, error } = createEntityPatch<EventPatch, Id<"events">>({
+	function write(eventId: Id<"events">, change: EventPatch) {
+		return updateEvent.mutateAsync({ eventId, ...change });
+	}
+	const entityPatch = createEntityPatch<EventPatch, Id<"events">>({
 		key: () => props.event()._id,
-		write: (eventId, change) =>
-			updateEvent.mutateAsync({ eventId, ...change }),
+		write,
 		isOpen: () => props.isOpen(),
 	});
+	const { patch, error } = entityPatch;
 	return (
-		<SheetSection value="details" title="Details">
-			<PropertyRow icon={ICONS.name} label="Name">
-				<Show
-					when={props.isEditing()}
-					fallback={<span>{props.event().name}</span>}
-				>
-					<EditableText
-						label="Name"
-						value={props.event().name}
-						maxLength={NAME_MAX}
-						onCommit={(value) => {
-							patch({ name: value });
-						}}
-					/>
-				</Show>
-			</PropertyRow>
-			<EventBoundaryRow
-				boundary="start"
-				event={props.event}
-				isEditing={props.isEditing}
-				onPatch={patch}
-			/>
-			<EventBoundaryRow
-				boundary="end"
-				event={props.event}
-				isEditing={props.isEditing}
-				onPatch={patch}
-			/>
-			<InlineError message={error()} />
-		</SheetSection>
+		<>
+			<SheetSection value="details" title="Details">
+				<PropertyRow icon={ICONS.name} label="Name">
+					<Show
+						when={props.isEditing()}
+						fallback={<span>{props.event().name}</span>}
+					>
+						<EditableText
+							label="Name"
+							value={props.event().name}
+							maxLength={NAME_MAX}
+							onCommit={(value) => {
+								patch({ name: value });
+							}}
+						/>
+					</Show>
+				</PropertyRow>
+				<EventBoundaryRow
+					boundary="start"
+					event={props.event}
+					isEditing={props.isEditing}
+					onPatch={patch}
+				/>
+				<EventBoundaryRow
+					boundary="end"
+					event={props.event}
+					isEditing={props.isEditing}
+					onPatch={patch}
+				/>
+				<EventDescriptionRow
+					event={props.event}
+					isEditing={props.isEditing}
+					onPatch={patch}
+				/>
+				<EventPicture
+					event={props.event}
+					isEditing={props.isEditing}
+					onPatch={patch}
+				/>
+				<InlineError message={error()} />
+			</SheetSection>
+			<Show when={props.canManage}>
+				<EventTvSection
+					event={props.event}
+					isEditing={props.isEditing}
+					onPatch={patch}
+				/>
+			</Show>
+		</>
 	);
 }
 

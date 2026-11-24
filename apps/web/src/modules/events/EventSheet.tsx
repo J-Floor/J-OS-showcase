@@ -118,6 +118,7 @@ function EventDetailAccordion(props: {
 				event={props.event}
 				isEditing={props.isEditing}
 				isOpen={props.isOpen}
+				canManage={props.canManage}
 			/>
 			<Show when={props.canManage}>
 				<EventAdminItems

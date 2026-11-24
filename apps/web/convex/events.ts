@@ -3,7 +3,12 @@ import { err, ok, type Result } from "neverthrow";
 
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { internalMutation, mutation, query } from "./_generated/server";
+import {
+	internalMutation,
+	mutation,
+	query,
+	type MutationCtx,
+} from "./_generated/server";
 import { eventLive } from "./lib/attendance.ts";
 import { requireRole } from "./lib/authGuard.ts";
 import type { EventsError } from "./lib/errors/events.ts";
@@ -12,7 +17,9 @@ import { displayName } from "./lib/names.ts";
 import { invariant, refuse, unwrap } from "./lib/result.ts";
 import { BOARD_LEVEL, COMMUNITY_TIERS } from "./lib/roles.ts";
 import { SITE_TIMEZONE, utcFromLocal, zonedTimeZoneName } from "./lib/time.ts";
-import { checkLength, NAME_MAX } from "./lib/validate.ts";
+import { isBlobHeld } from "./lib/tv/blobHeld.ts";
+import { checkImage } from "./lib/tv/checkImage.ts";
+import { checkLength, DESCRIPTION_MAX, NAME_MAX } from "./lib/validate.ts";
 import { currentActorId } from "./lifecycle.ts";
 import {
 	cancelEventReminders,
@@ -92,6 +99,7 @@ export const deleteEvent = mutation({
 		unwrap(await requireRole(context, BOARD_LEVEL));
 		const event = await context.db.get(eventId);
 		if (event) await cancelEventReminders(context, event);
+		if (event?.pictureId) await deleteBlob(context, event.pictureId);
 		// Delete the event doc first: it vanishes from listEvents/getEventPublic
 		// immediately, which also shuts the confirm-orphan window (a pending
 		// confirm checks the event still exists — see
@@ -175,16 +183,84 @@ function timeFieldsPatch(
 	};
 }
 
+type TvFieldArgs = {
+	description?: string;
+	pictureId?: Id<"_storage"> | null;
+	showOnTv?: boolean;
+	tvUntilLocal?: string | null;
+};
+
+/** Deletes a blob unless it has already vanished (a delete of a missing one throws). */
+async function deleteBlob(
+	context: MutationCtx,
+	fileId: Id<"_storage">
+): Promise<void> {
+	if (await context.db.system.get("_storage", fileId))
+		await context.storage.delete(fileId);
+}
+
+/**
+ * Validates the new picture (a real image no other event or slide holds),
+ * then drops the old blob. Returns the new id.
+ */
+async function swapPicture(
+	context: MutationCtx,
+	existing: Doc<"events">,
+	pictureId: Id<"_storage"> | null
+): Promise<Id<"_storage"> | undefined> {
+	if (pictureId !== null && pictureId !== existing.pictureId) {
+		await checkImage(context, pictureId);
+		if (await isBlobHeld(context, pictureId))
+			refuse({ type: "TvImageInvalid" });
+	}
+	if (existing.pictureId && existing.pictureId !== pictureId)
+		await deleteBlob(context, existing.pictureId);
+	return pictureId ?? undefined;
+}
+
+/**
+ * Patch for the description, picture and TV fields. Every check runs before
+ * the old blob is deleted, so a refused image leaves the old one in place.
+ */
+async function tvFieldsPatch(
+	context: MutationCtx,
+	existing: Doc<"events">,
+	args: TvFieldArgs
+): Promise<Partial<Doc<"events">>> {
+	const patch: Partial<Doc<"events">> = {};
+	if (args.description !== undefined)
+		patch.description = args.description.trim() || undefined;
+	if (args.showOnTv !== undefined) patch.showOnTv = args.showOnTv;
+	if (args.tvUntilLocal === null) patch.tvUntil = undefined;
+	else if (args.tvUntilLocal !== undefined) {
+		unwrap(checkSiteZone(args.tvUntilLocal));
+		patch.tvUntil = utcFromLocal(args.tvUntilLocal);
+	}
+	if (args.pictureId !== undefined)
+		patch.pictureId = await swapPicture(context, existing, args.pictureId);
+	return patch;
+}
+
 export const updateEvent = mutation({
 	args: {
 		eventId: v.id("events"),
 		name: v.optional(v.string()),
 		startsAtLocal: v.optional(v.string()),
 		endsAtLocal: v.optional(v.string()),
+		description: v.optional(v.string()),
+		// null removes the picture
+		pictureId: v.optional(v.union(v.id("_storage"), v.null())),
+		showOnTv: v.optional(v.boolean()),
+		// Zoned IXDTF; null resets the cutoff to the default
+		tvUntilLocal: v.optional(v.union(v.string(), v.null())),
 	},
-	handler: async (context, { eventId, ...fields }): Promise<void> => {
+	handler: async (
+		context,
+		{ eventId, description, pictureId, showOnTv, tvUntilLocal, ...fields }
+	): Promise<void> => {
 		unwrap(await requireRole(context, BOARD_LEVEL));
 		unwrap(checkLength(fields.name, NAME_MAX));
+		unwrap(checkLength(description, DESCRIPTION_MAX));
 		const existing = await context.db.get(eventId);
 		if (!existing) return refuse({ type: "EventNotFound" });
 		// Each sheet field commits on its own, so merge the supplied field(s)
@@ -198,9 +274,16 @@ export const updateEvent = mutation({
 		// Ends (and its cached epoch) exactly as they were, and vice versa.
 		const { startsAt, endsAt } = mergedEventTimes(existing, fields);
 		if (startsAt > endsAt) refuse({ type: "EventStartAfterEnd" });
+		const extra = await tvFieldsPatch(context, existing, {
+			description,
+			pictureId,
+			showOnTv,
+			tvUntilLocal,
+		});
 		await context.db.patch(eventId, {
 			name,
 			...timeFieldsPatch(fields, { startsAt, endsAt }),
+			...extra,
 		});
 		// Only a time change moves the reminders; the name is read when they fire.
 		if (
@@ -293,5 +376,34 @@ export const getEventPublic = query({
 			// treats an event as closed the instant Date.now() passes endsAt.
 			ended: !eventLive(event, Date.now()),
 		};
+	},
+});
+
+export const generateEventPictureUploadUrl = mutation({
+	args: {},
+	handler: async (context): Promise<string> => {
+		unwrap(await requireRole(context, BOARD_LEVEL));
+		return await context.storage.generateUploadUrl();
+	},
+});
+
+/** Drops an upload the form abandoned, unless an event or a TV slide holds it. */
+export const discardEventPictureUpload = mutation({
+	args: { fileId: v.id("_storage") },
+	handler: async (context, { fileId }): Promise<void> => {
+		unwrap(await requireRole(context, BOARD_LEVEL));
+		if (!(await isBlobHeld(context, fileId)))
+			await deleteBlob(context, fileId);
+	},
+});
+
+export const getEventPictureUrl = query({
+	args: { eventId: v.id("events") },
+	handler: async (context, { eventId }): Promise<string | null> => {
+		unwrap(await requireRole(context, COMMUNITY_TIERS));
+		const event = await context.db.get(eventId);
+		return event?.pictureId
+			? await context.storage.getUrl(event.pictureId)
+			: null;
 	},
 });

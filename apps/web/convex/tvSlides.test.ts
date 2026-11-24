@@ -320,6 +320,19 @@ function imageArgs(fileId: Id<"_storage">, title = "Img") {
 	return { title, kind: "image" as const, fileId };
 }
 
+async function holdAsEventPicture(asBoard: Board, fileId: Id<"_storage">) {
+	const eventId = await asBoard.mutation(api.events.createEvent, {
+		name: "Demo night",
+		startsAtLocal: "2026-10-01T18:00:00+02:00[Europe/Zurich]",
+		endsAtLocal: "2026-10-01T22:00:00+02:00[Europe/Zurich]",
+	});
+	await asBoard.mutation(api.events.updateEvent, {
+		eventId,
+		pictureId: fileId,
+	});
+	return eventId;
+}
+
 describe("tv slides: uploads", () => {
 	it("discardUpload deletes an unreferenced blob", async () => {
 		const { backend, asBoard } = await setup();
@@ -335,6 +348,14 @@ describe("tv slides: uploads", () => {
 		const { backend, asBoard } = await setup();
 		const fileId = await store(backend, "image/png");
 		await asBoard.mutation(api.tv.createSlide, imageArgs(fileId));
+		await asBoard.mutation(api.tv.discardUpload, { fileId });
+		expect(await blobUrl(backend, fileId)).not.toBeNull();
+	});
+
+	it("discardUpload leaves a blob an event picture holds", async () => {
+		const { backend, asBoard } = await setup();
+		const fileId = await store(backend, "image/png");
+		await holdAsEventPicture(asBoard, fileId);
 		await asBoard.mutation(api.tv.discardUpload, { fileId });
 		expect(await blobUrl(backend, fileId)).not.toBeNull();
 	});
@@ -380,6 +401,31 @@ describe("tv slides: uploads", () => {
 			id: slideB,
 			fileId: fileB,
 		});
+	});
+
+	it("createSlide and updateSlide refuse a file an event holds", async () => {
+		const { backend, asBoard } = await setup();
+		const eventFile = await store(backend, "image/png");
+		const eventId = await holdAsEventPicture(asBoard, eventFile);
+		await expect(
+			asBoard.mutation(api.tv.createSlide, imageArgs(eventFile))
+		).rejects.toThrow("TvImageInvalid");
+		const own = await store(backend, "image/png");
+		const slide = await asBoard.mutation(
+			api.tv.createSlide,
+			imageArgs(own)
+		);
+		await expect(
+			asBoard.mutation(api.tv.updateSlide, {
+				id: slide,
+				fileId: eventFile,
+			})
+		).rejects.toThrow("TvImageInvalid");
+		expect(await blobUrl(backend, eventFile)).not.toBeNull();
+		expect(await blobUrl(backend, own)).not.toBeNull();
+		expect(
+			await asBoard.query(api.events.getEventPictureUrl, { eventId })
+		).not.toBeNull();
 	});
 
 	it("updateSlide refuses htmlText on an image slide and fileId on an html slide", async () => {

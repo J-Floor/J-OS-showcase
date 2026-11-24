@@ -1,5 +1,5 @@
 import { useMutation } from "convex-solidjs";
-import { err, errAsync, ok, ResultAsync, type Result } from "neverthrow";
+import { err, ResultAsync, type Result } from "neverthrow";
 import {
 	createEffect,
 	createMemo,
@@ -15,6 +15,7 @@ import { TV_LIMITS } from "../../../../convex/lib/tv/constants.ts";
 import { htmlBytes } from "../../../../convex/lib/tv/htmlBytes.ts";
 import { call, type ClientError } from "../../../lib/call.ts";
 import { createActionError } from "../../../shared/createActionError.ts";
+import { postFile, UPLOAD_FAILED } from "../../../shared/postFile.ts";
 
 import { durationProblem } from "./durationProblem.ts";
 import { readSlideFile } from "./readSlideFile.ts";
@@ -23,47 +24,8 @@ import type { SlideDetail } from "./slideTypes.ts";
 export type SlideMode = "image" | "html";
 
 const SAVE_FAILED = "Could not save the slide. Try again.";
-const UPLOAD_FAILED = "Could not upload the image. Try again.";
-const UPLOAD_ERROR: ClientError = { code: "Unknown", message: UPLOAD_FAILED };
 
 type SaveResult = Result<unknown, ClientError>;
-
-function isStorageReply(body: unknown): body is { storageId: string } {
-	return (
-		typeof body === "object" &&
-		body !== null &&
-		"storageId" in body &&
-		typeof body.storageId === "string"
-	);
-}
-
-/** POSTs the file to a one-shot upload URL and returns the blob's id. */
-function postFile(
-	url: string,
-	file: File
-): ResultAsync<Id<"_storage">, ClientError> {
-	return ResultAsync.fromPromise(
-		fetch(url, {
-			method: "POST",
-			headers: { "Content-Type": file.type },
-			body: file,
-		}),
-		() => UPLOAD_ERROR
-	)
-		.andThen((response) =>
-			response.ok
-				? ResultAsync.fromPromise(
-						response.json() as Promise<unknown>,
-						() => UPLOAD_ERROR
-					)
-				: errAsync(UPLOAD_ERROR)
-		)
-		.andThen((body) =>
-			isStorageReply(body)
-				? ok(body.storageId as Id<"_storage">)
-				: err(UPLOAD_ERROR)
-		);
-}
 
 type FormOptions = {
 	open: Accessor<boolean>;
