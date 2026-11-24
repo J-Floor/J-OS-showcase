@@ -4,6 +4,7 @@ import { TV_CORS_HEADERS } from "./constants.ts";
 import {
 	type DeviceDeps,
 	manifestResponse,
+	packResponse,
 	slideResponse,
 	TV_SLIDE_CSP,
 } from "./http.ts";
@@ -12,6 +13,7 @@ import { hashTvSecret } from "./tokens.ts";
 const MANIFEST = {
 	version: 3,
 	transition: "fade" as const,
+	packVersion: null,
 	slides: [],
 };
 
@@ -21,6 +23,7 @@ function makeDeps(overrides: Partial<DeviceDeps> = {}): DeviceDeps {
 		limit: vi.fn(() => Promise.resolve(true)),
 		manifest: vi.fn(() => Promise.resolve(MANIFEST)),
 		content: vi.fn(() => Promise.resolve(null)),
+		pack: vi.fn(() => Promise.resolve(null)),
 		getBlob: vi.fn(() => Promise.resolve(null)),
 		...overrides,
 	};
@@ -195,5 +198,97 @@ describe("slideResponse", () => {
 		);
 		expect(response.status).toBe(429);
 		expect(deps.content).not.toHaveBeenCalled();
+	});
+});
+
+describe("packResponse", () => {
+	it("answers 401 without a token, exactly like the manifest", async () => {
+		const deps = makeDeps();
+		const pack = await snapshot(
+			await packResponse(request("/tv/pack"), deps)
+		);
+		const manifest = await snapshot(
+			await manifestResponse(request("/tv/manifest"), deps)
+		);
+		expect(pack).toEqual(manifest);
+		expect(deps.pack).not.toHaveBeenCalled();
+	});
+
+	it("answers 404 before the first pack is built", async () => {
+		const response = await packResponse(
+			request("/tv/pack", "Bearer abc"),
+			makeDeps()
+		);
+		expect(response.status).toBe(404);
+	});
+
+	it("streams the zip, private and not sniffable", async () => {
+		const zip = new Blob([new Uint8Array([80, 75, 3, 4])], {
+			type: "application/zip",
+		});
+		const deps = makeDeps({
+			pack: vi.fn(() => Promise.resolve({ fileId: "f1", version: 6 })),
+			getBlob: vi.fn(() => Promise.resolve(zip)),
+		});
+		const response = await packResponse(
+			request("/tv/pack", "Bearer abc"),
+			deps
+		);
+		expect(response.status).toBe(200);
+		expect(response.headers.get("Content-Type")).toBe("application/zip");
+		expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+		expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+		expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
+		expect(new Uint8Array(await response.arrayBuffer())).toEqual(
+			new Uint8Array([80, 75, 3, 4])
+		);
+		expect(deps.getBlob).toHaveBeenCalledWith("f1");
+	});
+
+	it("names the version of the file it serves and exposes the header to scripts", async () => {
+		const zip = new Blob(["z"]);
+		for (const version of [6, 7]) {
+			const response = await packResponse(
+				request("/tv/pack", "Bearer abc"),
+				makeDeps({
+					pack: vi.fn(() =>
+						Promise.resolve({ fileId: "f1", version })
+					),
+					getBlob: vi.fn(() => Promise.resolve(zip)),
+				})
+			);
+			expect(response.headers.get("X-Tv-Pack-Version")).toBe(
+				String(version)
+			);
+			expect(response.headers.get("Access-Control-Expose-Headers")).toBe(
+				"X-Tv-Pack-Version"
+			);
+		}
+	});
+
+	it("answers a bare 404 when the file is gone from storage", async () => {
+		const response = await packResponse(
+			request("/tv/pack", "Bearer abc"),
+			makeDeps({
+				pack: vi.fn(() =>
+					Promise.resolve({ fileId: "f1", version: 6 })
+				),
+				getBlob: vi.fn(() => Promise.resolve(null)),
+			})
+		);
+		expect(response.status).toBe(404);
+		expect(await response.text()).toBe("");
+		expect(response.headers.get("X-Tv-Pack-Version")).toBeNull();
+		expect(response.headers.get("Content-Type")).toBeNull();
+	});
+
+	it("is rate limited like every device route", async () => {
+		const deps = makeDeps({ limit: vi.fn(() => Promise.resolve(false)) });
+		const response = await packResponse(
+			request("/tv/pack", "Bearer abc"),
+			deps
+		);
+		expect(response.status).toBe(429);
+		expect(deps.pack).not.toHaveBeenCalled();
 	});
 });

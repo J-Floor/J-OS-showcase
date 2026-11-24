@@ -143,7 +143,101 @@ describe("manifest", () => {
 	it("falls back to defaults with no config row", async () => {
 		const backend = convexTest(schema, modules);
 		const result = await backend.query(internal.tvInternal.manifest, {});
-		expect(result).toEqual({ version: 0, transition: "fade", slides: [] });
+		expect(result).toEqual({
+			version: 0,
+			transition: "fade",
+			packVersion: null,
+			slides: [],
+		});
+	});
+});
+
+describe("pack announcement", () => {
+	it("reports the built pack's version and file", async () => {
+		const backend = convexTest(schema, modules);
+		const fileId = await backend.run((context) =>
+			context.storage.store(new Blob(["z"]))
+		);
+		await backend.run((context) =>
+			context.db.insert("tvConfig", {
+				transition: "fade",
+				version: 9,
+				packVersion: 8,
+				packFileId: fileId,
+			})
+		);
+		const announced = await backend.query(internal.tvInternal.manifest, {});
+		expect(announced.packVersion).toBe(8);
+		expect(await backend.query(internal.tvInternal.packFile, {})).toEqual({
+			fileId,
+			version: 8,
+		});
+	});
+
+	it("follows the stored packVersion", async () => {
+		const backend = convexTest(schema, modules);
+		const fileId = await backend.run((context) =>
+			context.storage.store(new Blob(["z"]))
+		);
+		const configId = await backend.run((context) =>
+			context.db.insert("tvConfig", {
+				transition: "fade",
+				version: 9,
+				packVersion: 8,
+				packFileId: fileId,
+			})
+		);
+		await backend.run((context) =>
+			context.db.patch(configId, { packVersion: 11 })
+		);
+		const pack = await backend.query(internal.tvInternal.packFile, {});
+		const announced = await backend.query(internal.tvInternal.manifest, {});
+		expect(pack?.version).toBe(11);
+		expect(announced.packVersion).toBe(11);
+	});
+
+	it("treats a dangling packFileId as no pack", async () => {
+		const backend = convexTest(schema, modules);
+		const fileId = await backend.run((context) =>
+			context.storage.store(new Blob(["z"]))
+		);
+		await backend.run((context) =>
+			context.db.insert("tvConfig", {
+				transition: "fade",
+				version: 9,
+				packVersion: 8,
+				packFileId: fileId,
+			})
+		);
+		await backend.run((context) => context.storage.delete(fileId));
+		expect(
+			await backend.query(internal.tvInternal.packFile, {})
+		).toBeNull();
+		const announced = await backend.query(internal.tvInternal.manifest, {});
+		expect(announced.packVersion).toBeNull();
+	});
+
+	it("does not advertise a version whose pack file is absent", async () => {
+		const backend = convexTest(schema, modules);
+		await backend.run((context) =>
+			context.db.insert("tvConfig", {
+				transition: "fade",
+				version: 9,
+				packVersion: 8,
+			})
+		);
+		const announced = await backend.query(internal.tvInternal.manifest, {});
+		expect(announced.packVersion).toBeNull();
+		expect(
+			await backend.query(internal.tvInternal.packFile, {})
+		).toBeNull();
+	});
+
+	it("answers null with no config row at all", async () => {
+		const backend = convexTest(schema, modules);
+		expect(
+			await backend.query(internal.tvInternal.packFile, {})
+		).toBeNull();
 	});
 });
 

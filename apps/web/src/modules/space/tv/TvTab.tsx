@@ -10,6 +10,7 @@ import {
 import type { Transition } from "@j-os/tv-player";
 import { useMutation } from "convex-solidjs";
 import {
+	type Accessor,
 	createComputed,
 	createEffect,
 	createSignal,
@@ -21,8 +22,10 @@ import {
 import { createStore, reconcile } from "solid-js/store";
 
 import { api } from "../../../../convex/_generated/api";
-import type { Id } from "../../../../convex/_generated/dataModel";
-import { TV_LIMITS } from "../../../../convex/lib/tv/constants.ts";
+import {
+	TV_LIMITS,
+	TV_MIGRATING_MESSAGE,
+} from "../../../../convex/lib/tv/constants.ts";
 import { call } from "../../../lib/call.ts";
 import { useConfirm } from "../../../shared/confirm.tsx";
 import { createActionError } from "../../../shared/createActionError.ts";
@@ -31,8 +34,10 @@ import { createEntitySelection } from "../../../shared/entity/createEntitySelect
 import { ICONS } from "../../../shared/icons.ts";
 import { InlineError } from "../../../shared/InlineError.tsx";
 
+import { ConfigXmlEditor } from "./ConfigXmlEditor.tsx";
 import { DevicesCard } from "./DevicesCard.tsx";
 import { durationProblem } from "./durationProblem.ts";
+import { PackActions } from "./PackActions.tsx";
 import { SlideSheet } from "./SlideSheet.tsx";
 import type { Slide } from "./slideTypes.ts";
 import { TvPreview } from "./TvPreview.tsx";
@@ -54,19 +59,16 @@ function isTransition(value: string | undefined): value is TransitionValue {
 
 /** The actions of the slide list, each reporting its failure beside the list. */
 function createSlideActions() {
-	const updateSlide = useMutation(api.tv.updateSlide);
-	const moveSlide = useMutation(api.tv.moveSlide);
-	const deleteSlide = useMutation(api.tv.deleteSlide);
+	const updateSlide = useMutation(api.tvContent.updateConfigSlide);
+	const moveSlide = useMutation(api.tvContent.moveConfigSlide);
+	const deleteSlide = useMutation(api.tvContent.removeConfigSlide);
 	const setTransition = useMutation(api.tv.setTransition);
 	const confirm = useConfirm();
 	const { error, trackResult } = createActionError();
 
 	return {
 		error,
-		setEnabled: async (
-			id: Id<"tvSlides">,
-			isEnabled: boolean
-		): Promise<void> => {
+		setEnabled: async (id: string, isEnabled: boolean): Promise<void> => {
 			await trackResult(
 				call(
 					updateSlide.mutateAsync({ id, enabled: isEnabled }),
@@ -75,7 +77,7 @@ function createSlideActions() {
 			);
 		},
 		setDuration: async (
-			id: Id<"tvSlides">,
+			id: string,
 			durationSec: number
 		): Promise<boolean> => {
 			const result = await trackResult(
@@ -83,10 +85,7 @@ function createSlideActions() {
 			);
 			return result.isOk();
 		},
-		move: async (
-			id: Id<"tvSlides">,
-			direction: "up" | "down"
-		): Promise<void> => {
+		move: async (id: string, direction: "up" | "down"): Promise<void> => {
 			await trackResult(
 				call(moveSlide.mutateAsync({ id, direction }), FAILED)
 			);
@@ -187,57 +186,69 @@ function SlideRow(props: {
 		<li class={styles.row}>
 			<span class={styles.title}>{props.slide.title}</span>
 			<Badge>{props.slide.kind === "html" ? "HTML" : "Image"}</Badge>
-			<DurationField
-				seconds={props.slide.durationSec}
-				title={props.slide.title}
-				onCommit={(seconds) =>
-					props.actions.setDuration(props.slide._id, seconds)
+			<Show when={props.slide.isMissing}>
+				<Badge>File missing</Badge>
+			</Show>
+			<Show
+				when={!props.slide.fromEvent}
+				fallback={
+					<span class={styles.eventNote}>
+						{`From event ${props.slide.eventName ?? "(deleted)"}`}
+					</span>
 				}
-			/>
-			<Switch
-				label="Shown"
-				checked={props.slide.enabled}
-				onCheckedChange={(details) => {
-					void props.actions.setEnabled(
-						props.slide._id,
-						details.checked
-					);
-				}}
-			/>
-			<IconButton
-				tooltipLabel={`Move ${props.slide.title} up`}
-				disabled={props.isFirst}
-				disabledReason="Already first"
-				onClick={() => {
-					void props.actions.move(props.slide._id, "up");
-				}}
 			>
-				{ICONS.up}
-			</IconButton>
-			<IconButton
-				tooltipLabel={`Move ${props.slide.title} down`}
-				disabled={props.isLast}
-				disabledReason="Already last"
-				onClick={() => {
-					void props.actions.move(props.slide._id, "down");
-				}}
-			>
-				{ICONS.down}
-			</IconButton>
-			<IconButton
-				tooltipLabel={`Edit ${props.slide.title}`}
-				onClick={() => {
-					props.onEdit(props.slide);
-				}}
-			>
-				{ICONS.edit}
-			</IconButton>
-			<IconButton
-				tooltipLabel={`Delete ${props.slide.title}`}
-				onClick={() => props.actions.remove(props.slide)}
-			>
-				{ICONS.delete}
-			</IconButton>
+				<DurationField
+					seconds={props.slide.durationSec}
+					title={props.slide.title}
+					onCommit={(seconds) =>
+						props.actions.setDuration(props.slide._id, seconds)
+					}
+				/>
+				<Switch
+					label="Shown"
+					checked={props.slide.enabled}
+					onCheckedChange={(details) => {
+						void props.actions.setEnabled(
+							props.slide._id,
+							details.checked
+						);
+					}}
+				/>
+				<IconButton
+					tooltipLabel={`Move ${props.slide.title} up`}
+					disabled={props.isFirst}
+					disabledReason="Already first"
+					onClick={() => {
+						void props.actions.move(props.slide._id, "up");
+					}}
+				>
+					{ICONS.up}
+				</IconButton>
+				<IconButton
+					tooltipLabel={`Move ${props.slide.title} down`}
+					disabled={props.isLast}
+					disabledReason="Already last"
+					onClick={() => {
+						void props.actions.move(props.slide._id, "down");
+					}}
+				>
+					{ICONS.down}
+				</IconButton>
+				<IconButton
+					tooltipLabel={`Edit ${props.slide.title}`}
+					onClick={() => {
+						props.onEdit(props.slide);
+					}}
+				>
+					{ICONS.edit}
+				</IconButton>
+				<IconButton
+					tooltipLabel={`Delete ${props.slide.title}`}
+					onClick={() => props.actions.remove(props.slide)}
+				>
+					{ICONS.delete}
+				</IconButton>
+			</Show>
 		</li>
 	);
 }
@@ -246,6 +257,9 @@ function SlideRow(props: {
 function TvToolbar(props: {
 	transition: TransitionValue;
 	canPreview: boolean;
+	canEdit: boolean;
+	/** The legacy list is not moved yet: there is nothing to preview either. */
+	isMigrating: boolean;
 	onTransition: (transition: TransitionValue) => void;
 	onPreview: () => void;
 	onAdd: () => void;
@@ -271,14 +285,35 @@ function TvToolbar(props: {
 			<Button
 				variant="secondary"
 				disabled={!props.canPreview}
-				disabledReason="Show at least one slide to preview"
+				disabledReason={
+					props.isMigrating
+						? TV_MIGRATING_MESSAGE
+						: "Show at least one slide to preview"
+				}
 				onClick={props.onPreview}
 			>
 				Preview
 			</Button>
-			<Button onClick={props.onAdd}>Add slide</Button>
+			<Button
+				disabled={!props.canEdit}
+				disabledReason={TV_MIGRATING_MESSAGE}
+				onClick={props.onAdd}
+			>
+				Add slide
+			</Button>
 		</div>
 	);
+}
+
+/** A store reconciled by id: a refetch hands over new row objects, and a
+ *  `<For>` over them would rebuild every row (and drop a half-typed
+ *  duration). Here each row keeps its identity and updates in place. */
+function createSlideRows(source: Accessor<Slide[] | undefined>): Slide[] {
+	const [rows, setRows] = createStore<Slide[]>([]);
+	createComputed(() => {
+		setRows(reconcile(source() ?? [], { key: "_id" }));
+	});
+	return rows;
 }
 
 /**
@@ -287,30 +322,28 @@ function TvToolbar(props: {
  * connected TVs. Mounted by the Space page only while its tab is open.
  */
 export function TvTab(): JSX.Element {
-	const slides = useQuery(api.tv.listSlides, {});
+	const slides = useQuery(api.tvContent.listConfigSlides, {});
 	const config = useQuery(api.tv.getConfig, {});
+	const pack = useQuery(api.tvContent.getPackState, {});
 	const actions = createSlideActions();
 	const [previewing, setPreviewing] = createSignal(false);
 	const selection = createEntitySelection<Slide>({
-		rows: slides.data,
+		// An event's slide is the event's to change: a link to one is a dead link.
+		rows: () => slides.data()?.filter((slide) => !slide.fromEvent),
 		param: "slide",
 	});
-	// A store reconciled by id: a refetch hands over new row objects, and a
-	// `<For>` over them would rebuild every row (and drop a half-typed
-	// duration). Here each row keeps its identity and updates in place.
-	const [rows, setRows] = createStore<Slide[]>([]);
-	createComputed(() => {
-		setRows(reconcile(slides.data() ?? [], { key: "_id" }));
-	});
-	function hasEnabled(): boolean {
-		return rows.some((row) => row.enabled);
+	const rows = createSlideRows(slides.data);
+	function isMigrating(): boolean {
+		return pack.data()?.isAwaitingMigration === true;
 	}
 
 	return (
 		<div class={styles.tab}>
 			<TvToolbar
+				canEdit={!isMigrating()}
+				isMigrating={isMigrating()}
 				transition={config.data()?.transition ?? "fade"}
-				canPreview={hasEnabled()}
+				canPreview={rows.some((row) => row.enabled)}
 				onTransition={(transition) => {
 					void actions.setTransition(transition);
 				}}
@@ -322,10 +355,17 @@ export function TvTab(): JSX.Element {
 				}}
 			/>
 			<InlineError message={actions.error()} />
+			<PackActions state={pack.data} />
+			<Show when={isMigrating()}>
+				<EmptyState
+					title="Moving the TV list"
+					description={TV_MIGRATING_MESSAGE}
+				/>
+			</Show>
 			<Show
 				when={rows.length > 0}
 				fallback={
-					<Show when={slides.data() !== undefined}>
+					<Show when={slides.data() !== undefined && !isMigrating()}>
 						<EmptyState
 							title="No slides yet"
 							description="Add an image or HTML slide to show on the TV."
@@ -347,6 +387,7 @@ export function TvTab(): JSX.Element {
 					</For>
 				</ul>
 			</Show>
+			<ConfigXmlEditor state={pack.data} />
 			<DevicesCard />
 			<SlideSheet
 				open={selection.open()}

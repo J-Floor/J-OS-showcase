@@ -51,6 +51,8 @@ const PUBLIC_ON_PURPOSE: Record<string, string> = {
 		"authorised by a hashed device token (one identical 401 for missing, unknown or revoked); read-only, returns the slide list",
 	"http.ts:route TV_PATHS.slide":
 		"authorised by a hashed device token (one identical 401 for missing, unknown or revoked); read-only, returns one enabled slide, HTML under a sandbox CSP",
+	"http.ts:route TV_PATHS.pack":
+		"authorised by a hashed device token (one identical 401 for missing, unknown or revoked); read-only, returns the built pack zip, rate limited with the other device routes",
 	"http.ts:route OCCUPANCY_WEBHOOK_PATH":
 		"the counter webhook: the caller is a device, not a person; it must carry the shared secret, and it carries only anonymous counts",
 };

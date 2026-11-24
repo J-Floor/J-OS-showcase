@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-deprecated -- two tests build a legacy slide on purpose, to pin how a slide and an event picture share a blob */
 import { parseAbsolute } from "@internationalized/date";
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";

@@ -776,7 +776,9 @@ export default defineSchema({
 		position: v.number(),
 		enabled: v.boolean(),
 		updatedAt: v.number(),
-	}).index("by_position", ["position"]),
+	})
+		.index("by_position", ["position"])
+		.index("by_fileId", ["fileId"]),
 
 	/** Slideshow settings. A singleton: at most one row, read via `.first()`. */
 	tvConfig: defineTable({
@@ -787,7 +789,24 @@ export default defineSchema({
 		),
 		/** Bumped on every slide/config change; the TV polls it. */
 		version: v.number(),
+		/** The show as canonical config.xml (`lib/tv/configXml.ts`). Absent until the first save or `migrateTvSlidesToConfig`. */
+		xml: v.optional(v.string()),
+		/** The zip of `xml` plus every `tvAssets` file, built by `tvPack.buildPack` for `packVersion`. */
+		packFileId: v.optional(v.id("_storage")),
+		packVersion: v.optional(v.number()),
 	}),
+
+	/** The files of the TV pack (`slides/...`, `assets/...`), one blob each. */
+	tvAssets: defineTable({
+		path: v.string(),
+		fileId: v.id("_storage"),
+		size: v.number(),
+		contentType: v.string(),
+		/** Set on files an event slide owns (PR C). Manual edits and pack imports leave these rows alone. */
+		sourceEventId: v.optional(v.id("events")),
+	})
+		.index("by_path", ["path"])
+		.index("by_fileId", ["fileId"]),
 
 	/** Paired TVs. Auth is a bearer token; only its hash is stored. */
 	tvDevices: defineTable({

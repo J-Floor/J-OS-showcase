@@ -4,9 +4,13 @@
 	background: #000;
 }
 
+/* stylelint-disable logical-css/require-logical-properties, declaration-block-no-redundant-longhand-properties -- Chrome 76 (Tizen 6.0) has no inset or inset-block/-inline (87) */
 .tvp-layer {
 	position: absolute;
-	inset: 0;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	left: 0;
 	background: #000;
 
 	& iframe {
@@ -22,6 +26,7 @@
 		background: #000;
 	}
 }
+/* stylelint-enable logical-css/require-logical-properties, declaration-block-no-redundant-longhand-properties */
 
 .tvp-fade {
 	animation: tvp-fade-in 600ms ease both;

@@ -19,7 +19,8 @@ function stopAll(): void {
 	sync?.stop();
 	player?.destroy();
 	pairing = sync = player = undefined;
-	app.replaceChildren();
+	// Not replaceChildren: it needs Chrome 86, the Tizen 6 TV runs 76.
+	app.textContent = "";
 }
 
 function startPairing(): void {

@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 
+import type { DatabaseReader } from "./_generated/server";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { TV_LIMITS, TV_PATHS } from "./lib/tv/constants.ts";
 import {
@@ -108,15 +109,33 @@ export const authenticateDevice = internalMutation({
 	},
 });
 
+/**
+ * The built pack's blob id and the `packVersion` that matches that file, or
+ * null before the first build or when the blob is gone (one `_storage` point
+ * read), so a version is never advertised without a zip behind it.
+ */
+async function builtPack(database: DatabaseReader) {
+	const config = await database.query("tvConfig").first();
+	if (config?.packFileId === undefined || config.packVersion === undefined)
+		return null;
+	const stored = await database.system.get("_storage", config.packFileId);
+	return stored === null
+		? null
+		: { fileId: config.packFileId, version: config.packVersion };
+}
+
 /** What a TV plays: enabled slides in order, plus the config version. */
 export const manifest = internalQuery({
 	args: {},
 	handler: async (context) => {
 		const { transition, version } = await readTvConfig(context.db);
+		// Advertise a version only while its zip exists, so a TV keeps playing the last pack.
+		const built = await builtPack(context.db);
 		const rows = await slidesInOrder(context.db);
 		return {
 			version,
 			transition,
+			packVersion: built === null ? null : built.version,
 			slides: rows
 				.filter((row) => row.enabled)
 				.map((row) => ({
@@ -146,4 +165,10 @@ export const slideContent = internalQuery({
 			? null
 			: { kind: "image" as const, fileId: row.fileId };
 	},
+});
+
+/** The built pack's blob and version, or null while there is none. */
+export const packFile = internalQuery({
+	args: {},
+	handler: (context) => builtPack(context.db),
 });

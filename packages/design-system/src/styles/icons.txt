@@ -59,6 +59,7 @@ expand_less
 expand_more
 factory
 featured_seasonal_and_gifts
+files
 filter
 filter_list
 finance
@@ -67,6 +68,7 @@ flag
 flip
 forum
 function
+gif
 group
 handshake
 hardware

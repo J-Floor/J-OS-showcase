@@ -1,3 +1,5 @@
+@use "@j-os/design-system/typography" as typo;
+
 /* Nearly the whole viewport; the stage keeps the TV's 16:9 shape inside it. */
 .card {
 	inline-size: 96vi;
@@ -6,6 +8,7 @@
 }
 
 .frame {
+	position: relative;
 	display: flex;
 	flex-wrap: wrap;
 	flex: 1;
@@ -18,4 +21,15 @@
 	aspect-ratio: 16 / 9;
 	inline-size: 100%;
 	max-block-size: 100%;
+}
+
+.loading {
+	@include typo.jf-typo-body-medium;
+
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	margin: 0;
+	color: var(--jf-fg-muted);
 }

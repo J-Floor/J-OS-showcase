@@ -37,6 +37,7 @@ vi.mock("@j-os/tv-player", () => ({
 		previewMock.createPlayer(...args);
 		return previewMock.player;
 	},
+	rewriteAssetRefs: (html: string) => html,
 }));
 
 vi.mock("@j-os/tv-player/player.css", () => ({}));
@@ -44,23 +45,32 @@ vi.mock("@j-os/tv-player/player.css", () => ({}));
 const SLIDES = [
 	{
 		id: "a",
-		title: "Welcome",
 		kind: "html",
 		durationSec: 15,
-		html: "<script>document.title = 'x'</script><p>hi</p>",
-		imageUrl: undefined,
+		url: "https://files.example.com/a",
 	},
 ];
 
 beforeEach(() => {
+	vi.stubGlobal(
+		"fetch",
+		vi.fn(() =>
+			Promise.resolve(
+				new Response("<script>document.title = 'x'</script><p>hi</p>")
+			)
+		)
+	);
 	previewMock.createPlayer.mockClear();
 	previewMock.player.setSlides.mockClear();
 	previewMock.player.setTransition.mockClear();
 	previewMock.player.destroy.mockClear();
-	previewMock.set({ transition: "slide", slides: SLIDES });
+	previewMock.set({ transition: "slide", slides: SLIDES, assets: [] });
 });
 
-afterEach(cleanup);
+afterEach(() => {
+	cleanup();
+	vi.unstubAllGlobals();
+});
 
 function renderPreview() {
 	const [open, setOpen] = createSignal(true);
@@ -68,7 +78,7 @@ function renderPreview() {
 	return { setOpen };
 }
 
-test("the player draws into a stage inside the dialog, with the slides and transition", () => {
+test("the player draws into a stage inside the dialog, then gets the slides and transition", async () => {
 	renderPreview();
 	expect(previewMock.createPlayer).toHaveBeenCalledTimes(1);
 	const [stage, options] = previewMock.createPlayer.mock.calls[0] as [
@@ -76,7 +86,18 @@ test("the player draws into a stage inside the dialog, with the slides and trans
 		{ slides: unknown; transition: string },
 	];
 	expect(screen.getByRole("dialog")).toContainElement(stage);
-	expect(options).toEqual({ slides: SLIDES, transition: "slide" });
+	expect(options).toEqual({ slides: [], transition: "fade" });
+	await waitFor(() => {
+		expect(previewMock.player.setSlides).toHaveBeenCalledWith([
+			{
+				id: "a",
+				kind: "html",
+				durationSec: 15,
+				html: "<script>document.title = 'x'</script><p>hi</p>",
+			},
+		]);
+	});
+	expect(previewMock.player.setTransition).toHaveBeenCalledWith("slide");
 	// The slide's HTML is handed to the player as a string; it never reaches
 	// the page's own DOM.
 	expect(document.body.innerHTML).not.toContain("<script>document.title");
@@ -94,9 +115,64 @@ test("closing the preview destroys the player", async () => {
 
 test("a change made elsewhere reaches the open player", async () => {
 	renderPreview();
-	previewMock.set({ transition: "none", slides: [] });
+	previewMock.set({ transition: "none", slides: [], assets: [] });
 	await waitFor(() => {
 		expect(previewMock.player.setSlides).toHaveBeenCalledWith([]);
 	});
 	expect(previewMock.player.setTransition).toHaveBeenCalledWith("none");
+});
+
+test("says it is loading until the slides have gone to the player", async () => {
+	let release: ((response: Response) => void) | undefined;
+	vi.stubGlobal(
+		"fetch",
+		vi.fn(
+			() =>
+				new Promise<Response>((resolve) => {
+					release = resolve;
+				})
+		)
+	);
+	renderPreview();
+	expect(screen.getByText("Loading the preview...")).toBeInTheDocument();
+	await waitFor(() => {
+		expect(release).toBeDefined();
+	});
+	release?.(new Response("<p>hi</p>"));
+	await waitFor(() => {
+		expect(previewMock.player.setSlides).toHaveBeenCalled();
+	});
+	expect(screen.queryByText("Loading the preview...")).toBeNull();
+});
+
+test("a slide whose file answers with an error is skipped and the others still show", async () => {
+	previewMock.set({
+		transition: "fade",
+		slides: [
+			{
+				id: "gone",
+				kind: "html",
+				durationSec: 15,
+				url: "https://files.example.com/gone",
+			},
+			...SLIDES,
+		],
+		assets: [],
+	});
+	vi.stubGlobal(
+		"fetch",
+		vi.fn((url: string) =>
+			Promise.resolve(
+				url.endsWith("/gone")
+					? new Response("nope", { status: 404 })
+					: new Response("<p>hi</p>")
+			)
+		)
+	);
+	renderPreview();
+	await waitFor(() => {
+		expect(previewMock.player.setSlides).toHaveBeenCalledWith([
+			{ id: "a", kind: "html", durationSec: 15, html: "<p>hi</p>" },
+		]);
+	});
 });

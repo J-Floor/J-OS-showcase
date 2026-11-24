@@ -14,7 +14,7 @@ export const TV_LIMITS = {
 	touchIntervalMs: 300_000,
 } as const;
 
-const TV_IMAGE_TYPES = [
+export const TV_IMAGE_TYPES = [
 	"image/png",
 	"image/jpeg",
 	"image/webp",
@@ -53,6 +53,7 @@ export const TV_PATHS = {
 	pairPoll: "/tv/pair/poll",
 	manifest: "/tv/manifest",
 	slide: "/tv/slide",
+	pack: "/tv/pack",
 } as const;
 
 /** Bearer auth, no cookies: any origin may call (the TV app runs from a file origin). */
@@ -62,3 +63,33 @@ export const TV_CORS_HEADERS = {
 	"Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 	"Access-Control-Max-Age": "86400",
 } as const;
+
+/** The config.xml pack (see `lib/tv/configXml.ts`, `lib/tv/packZip.ts`). */
+export const TV_PACK_LIMITS = {
+	/** The uploaded zip, and the sum of the files it unpacks to: 40 MiB. */
+	packMaxBytes: 41_943_040,
+	/** Files in a pack, config.xml included. */
+	maxFiles: 200,
+	/** UTF-8 bytes of config.xml. */
+	configMaxBytes: 65_536,
+	/** Wait this long after a config change before zipping, so a burst of edits builds once. */
+	buildDelayMs: 5_000,
+} as const;
+
+/** Zip content types a browser sends for a `.zip` upload (the second is Windows'). */
+export const TV_PACK_ZIP_TYPES: ReadonlySet<string> = new Set([
+	"application/zip",
+	"application/x-zip-compressed",
+]);
+
+const BYTES_PER_MIB = 1_048_576;
+
+/** The pack maximum in MiB, for messages ("40"). */
+export const TV_PACK_MAX_MB = TV_PACK_LIMITS.packMaxBytes / BYTES_PER_MIB;
+
+/** Shown while the legacy `tvSlides` rows wait for `migrateTvSlidesToConfig`. */
+export const TV_MIGRATING_MESSAGE =
+	"The TV list is being moved to the new system and cannot be edited yet. Try again in a few minutes.";
+
+/** An import whose uploaded blob is missing (or vanished mid-import). */
+export const TV_UPLOAD_GONE = "The upload is gone. Try again.";

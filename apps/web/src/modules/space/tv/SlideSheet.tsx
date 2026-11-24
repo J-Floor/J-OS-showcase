@@ -1,15 +1,15 @@
 import {
 	Button,
+	EmptyState,
 	Input,
 	NumberInput,
 	Segment,
 	Sheet,
 	TextArea,
 } from "@j-os/design-system";
-import { createMemo, Show, type JSX } from "solid-js";
+import { createMemo, Show, type Accessor, type JSX } from "solid-js";
 
 import { api } from "../../../../convex/_generated/api";
-import type { Id } from "../../../../convex/_generated/dataModel";
 import {
 	TV_IMAGE_ACCEPT,
 	TV_LIMITS,
@@ -23,7 +23,9 @@ import type { SheetOpenProps } from "../../../shared/types.ts";
 
 import { createSlideForm, type SlideMode } from "./createSlideForm.ts";
 import styles from "./SlideSheet.module.scss";
+import type { SlideDetail } from "./slideTypes.ts";
 
+const GONE = "This slide is no longer there";
 const FILE_ACCEPT = `${TV_IMAGE_ACCEPT},.html,text/html`;
 
 type SlideSheetProps = SheetOpenProps & {
@@ -148,20 +150,55 @@ function SlideFields(props: { form: SlideForm }): JSX.Element {
 	);
 }
 
+/** What the sheet is waiting for, or has learned is not coming. */
+function createLoading(
+	props: SlideSheetProps,
+	slide: Accessor<unknown>,
+	record: Accessor<SlideDetail | null | undefined>,
+	form: SlideForm
+) {
+	// The backend answers `null` for an id it does not have: a deleted slide,
+	// a stale link, a slide another board member removed while this was open.
+	function isGone(): boolean {
+		return props.slideId !== undefined && record() === null;
+	}
+	// Loading until the list row AND this slide's own record are here: the
+	// record in hand may still be the previous slide's. A gone slide is not
+	// loading: nothing more will arrive.
+	function isRowLoading(): boolean {
+		return (
+			props.slideId !== undefined && slide() === undefined && !isGone()
+		);
+	}
+	function isLoading(): boolean {
+		return props.slideId === undefined || isGone()
+			? false
+			: slide() === undefined || record()?._id !== props.slideId;
+	}
+	function disabledReason(): string {
+		if (form.isSaving()) return "Saving the slide";
+		if (form.isReadOnly()) return "This slide comes from an event";
+		return isGone() ? GONE : "Loading the slide";
+	}
+	return { isGone, isRowLoading, isLoading, disabledReason };
+}
+
 /**
  * One sheet to add a slide or edit one. The draft is local and saved with a
- * button; an existing slide keeps its type (image or HTML). Slide HTML is
- * only ever typed into a text field here; it is shown through the sandboxed
- * player, never inserted into the page.
+ * button; an existing slide keeps its type (image or HTML). Both kinds are
+ * saved as files of the TV pack. Slide HTML is only ever typed into a text
+ * field here (its file is read into the field as text) and is shown through
+ * the sandboxed player, never inserted into the page. A slide that comes from
+ * an event is not editable here.
  */
 export function SlideSheet(props: SlideSheetProps): JSX.Element {
-	const slides = useQuery(api.tv.listSlides, {});
+	const slides = useQuery(api.tvContent.listConfigSlides, {});
 	const slide = createMemo(() =>
 		slides.data()?.find((row) => row._id === props.slideId)
 	);
 	const detail = useQuery(
-		api.tv.getSlide,
-		() => ({ id: props.slideId as Id<"tvSlides"> }),
+		api.tvContent.getConfigSlide,
+		() => ({ id: props.slideId ?? "" }),
 		() => ({
 			enabled: props.slideId !== undefined,
 			keepPreviousData: false,
@@ -170,7 +207,7 @@ export function SlideSheet(props: SlideSheetProps): JSX.Element {
 	const form = createSlideForm({
 		open: () => props.open,
 		slideId: () => props.slideId,
-		detail: () => detail.data(),
+		detail: () => detail.data() ?? undefined,
 		onSaved: () => {
 			props.onOpenChange(false);
 		},
@@ -179,17 +216,12 @@ export function SlideSheet(props: SlideSheetProps): JSX.Element {
 		if (form.isSaving()) return "Saving...";
 		return form.isEditing() ? "Save" : "Add slide";
 	}
-	// Loading until the list row AND this slide's own record are here: the
-	// record in hand may still be the previous slide's.
-	function isRowLoading(): boolean {
-		return props.slideId !== undefined && slide() === undefined;
-	}
-	function isLoading(): boolean {
-		return (
-			props.slideId !== undefined &&
-			(slide() === undefined || detail.data()?._id !== props.slideId)
-		);
-	}
+	const { isGone, isRowLoading, isLoading, disabledReason } = createLoading(
+		props,
+		slide,
+		detail.data,
+		form
+	);
 
 	return (
 		<Sheet.Root
@@ -198,21 +230,32 @@ export function SlideSheet(props: SlideSheetProps): JSX.Element {
 			onOpenChange={props.onOpenChange}
 		>
 			<EntitySheetHeader
-				title={slide()?.title ?? "New slide"}
+				title={slide()?.title ?? (isGone() ? "Slide" : "New slide")}
 				loading={isRowLoading()}
 			/>
 			<Sheet.Body loading={isLoading()}>
-				<SlideFields form={form} />
+				<Show
+					when={!isGone()}
+					fallback={
+						<EmptyState
+							title={GONE}
+							description="It was removed or renamed. Close this and pick it from the list."
+						/>
+					}
+				>
+					<SlideFields form={form} />
+				</Show>
 			</Sheet.Body>
 			<SheetFooter error={form.error()}>
 				<Button
 					onClick={() => form.save()}
-					disabled={isLoading() || form.isSaving()}
-					disabledReason={
-						form.isSaving()
-							? "Saving the slide"
-							: "Loading the slide"
+					disabled={
+						isLoading() ||
+						isGone() ||
+						form.isSaving() ||
+						form.isReadOnly()
 					}
+					disabledReason={disabledReason()}
 				>
 					{buttonLabel()}
 				</Button>

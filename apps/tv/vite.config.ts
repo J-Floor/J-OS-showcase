@@ -11,8 +11,14 @@ function tizenPackaging(): Plugin {
 			order: "post",
 			handler: (html) =>
 				html
-					.replace(/<script type="module" crossorigin/g, "<script defer")
-					.replace(/<link rel="stylesheet" crossorigin/g, '<link rel="stylesheet"'),
+					.replace(
+						/<script type="module" crossorigin/g,
+						"<script defer"
+					)
+					.replace(
+						/<link rel="stylesheet" crossorigin/g,
+						'<link rel="stylesheet"'
+					),
 		},
 		generateBundle() {
 			this.emitFile({
@@ -33,7 +39,8 @@ export default defineConfig(({ command, mode }) => {
 	if (command === "build" && mode !== "check") {
 		const env = loadEnv(mode, process.cwd(), "VITE_");
 		for (const name of REQUIRED) {
-			if (!env[name]) throw new Error(`${name} must be set to build the TV app`);
+			if (!env[name])
+				throw new Error(`${name} must be set to build the TV app`);
 		}
 	}
 	return {
@@ -46,6 +53,7 @@ export default defineConfig(({ command, mode }) => {
 		},
 		test: {
 			environment: "happy-dom",
+			setupFiles: ["src/chrome76.setup.ts"],
 			globals: true,
 			env: {
 				VITE_TV_API_URL: "https://api.example.com",

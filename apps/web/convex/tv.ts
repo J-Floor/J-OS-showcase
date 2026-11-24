@@ -8,16 +8,13 @@ import {
 	type QueryCtx,
 } from "./_generated/server";
 import { requireRole } from "./lib/authGuard.ts";
-import { invariant, refuse, unwrap } from "./lib/result.ts";
+import { refuse, unwrap } from "./lib/result.ts";
 import { BOARD_LEVEL } from "./lib/roles.ts";
-import { eventHoldsBlob } from "./lib/tv/blobHeld.ts";
+import { isBlobHeld } from "./lib/tv/blobHeld.ts";
 import { boardUploadUrl, discardUnheldUpload } from "./lib/tv/boardUpload.ts";
 import { checkImage } from "./lib/tv/checkImage.ts";
-import {
-	TV_DEFAULT_TRANSITION,
-	TV_INITIAL_VERSION,
-	TV_LIMITS,
-} from "./lib/tv/constants.ts";
+import { editConfig, ensureConfig } from "./lib/tv/configStore.ts";
+import { TV_LIMITS } from "./lib/tv/constants.ts";
 import { htmlBytes } from "./lib/tv/htmlBytes.ts";
 import {
 	liveDevices,
@@ -25,6 +22,7 @@ import {
 	readTvConfig,
 	slidesInOrder,
 } from "./lib/tv/queries.ts";
+import { checkDuration, cleanTitle } from "./lib/tv/slideChecks.ts";
 import { hashTvSecret } from "./lib/tv/tokens.ts";
 import { NAME_MAX, checkLength } from "./lib/validate.ts";
 
@@ -91,17 +89,14 @@ const transitionValue = v.union(
 	v.literal("none")
 );
 
-/** The singleton config row, inserted on first use. */
-async function ensureConfig(context: MutationCtx): Promise<Doc<"tvConfig">> {
-	const existing = await context.db.query("tvConfig").first();
-	if (existing) return existing;
-	const id = await context.db.insert("tvConfig", {
-		transition: TV_DEFAULT_TRANSITION,
-		version: TV_INITIAL_VERSION,
-	});
-	const created = await context.db.get(id);
-	invariant(created, "tvConfig row missing right after insert");
-	return created;
+/**
+ * Once a config.xml is saved the pack is the source of truth, and a legacy
+ * tvSlides edit would change nothing the TV shows (and bump the version
+ * without a pack build). Refuse it; the board edits through `tvContent`.
+ */
+async function refuseOnceConfigSaved(context: QueryCtx): Promise<void> {
+	const config = await context.db.query("tvConfig").first();
+	if (config?.xml !== undefined) refuse({ type: "TvLegacyEditsClosed" });
 }
 
 /** Every slide/config change calls this so the TV's poll sees it. */
@@ -111,31 +106,14 @@ async function bumpVersion(context: MutationCtx): Promise<void> {
 }
 
 /**
- * Refuse a blob another slide or an event already holds (deleting one would
- * break both).
+ * Refuse a blob another slide, a pack file or an event already holds
+ * (deleting one would break both).
  */
 async function refuseHeldFile(
 	context: QueryCtx,
-	slides: Doc<"tvSlides">[],
-	fileId: Id<"_storage">,
-	exceptId?: Id<"tvSlides">
+	fileId: Id<"_storage">
 ): Promise<void> {
-	if (
-		slides.some(
-			(slide) => slide.fileId === fileId && slide._id !== exceptId
-		) ||
-		(await eventHoldsBlob(context, fileId))
-	)
-		refuse({ type: "TvImageInvalid" });
-}
-
-function checkDuration(seconds: number): void {
-	if (
-		!Number.isInteger(seconds) ||
-		seconds < TV_LIMITS.durationMin ||
-		seconds > TV_LIMITS.durationMax
-	)
-		refuse({ type: "TvSlideInvalid" });
+	if (await isBlobHeld(context, fileId)) refuse({ type: "TvImageInvalid" });
 }
 
 /** `others` are the slides this body sits beside (not the one being edited). */
@@ -148,13 +126,6 @@ function checkHtml(htmlText: string, others: Doc<"tvSlides">[]): void {
 	);
 	if (bytes > TV_LIMITS.htmlMax || total > TV_LIMITS.htmlTotalMax)
 		refuse({ type: "TvHtmlTooLarge" });
-}
-
-function cleanTitle(title: string): string {
-	unwrap(checkLength(title, NAME_MAX));
-	const clean = title.trim();
-	if (clean === "") refuse({ type: "TvSlideInvalid" });
-	return clean;
 }
 
 async function slideOrRefuse(
@@ -181,7 +152,15 @@ function summary(slide: Doc<"tvSlides">) {
 	};
 }
 
-/** Board-only: every slide in show order, without the HTML bodies. */
+// --- legacy tvSlides API (listSlides, getSlide, createSlide, updateSlide,
+// deleteSlide, moveSlide, previewSlides): no UI caller since the config pack;
+// removed with tvSlides in the cleanup PR. Behaviour is unchanged. ---
+
+/**
+ * Board-only: every slide in show order, without the HTML bodies.
+ *
+ * @deprecated legacy tvSlides API: no UI caller since the config pack; removed with tvSlides in the cleanup PR
+ */
 export const listSlides = query({
 	args: {},
 	handler: async (context) => {
@@ -191,7 +170,11 @@ export const listSlides = query({
 	},
 });
 
-/** Board-only: one slide, with its HTML body. */
+/**
+ * Board-only: one slide, with its HTML body.
+ *
+ * @deprecated legacy tvSlides API: no UI caller since the config pack; removed with tvSlides in the cleanup PR
+ */
 export const getSlide = query({
 	args: { id: v.id("tvSlides") },
 	handler: async (context, args) => {
@@ -217,7 +200,11 @@ export const discardUpload = mutation({
 		discardUnheldUpload(context, fileId),
 });
 
-/** Board-only: add a slide at the end of the show. */
+/**
+ * Board-only: add a slide at the end of the show.
+ *
+ * @deprecated legacy tvSlides API: no UI caller since the config pack; removed with tvSlides in the cleanup PR
+ */
 export const createSlide = mutation({
 	args: {
 		title: v.string(),
@@ -228,6 +215,7 @@ export const createSlide = mutation({
 	},
 	handler: async (context, args): Promise<Id<"tvSlides">> => {
 		unwrap(await requireRole(context, BOARD_LEVEL));
+		await refuseOnceConfigSaved(context);
 		const title = cleanTitle(args.title);
 		const durationSec = args.durationSec ?? TV_LIMITS.durationDefault;
 		checkDuration(durationSec);
@@ -244,7 +232,7 @@ export const createSlide = mutation({
 		if (existing.length >= TV_LIMITS.maxSlides)
 			refuse({ type: "TvTooManySlides" });
 		if (args.fileId !== undefined)
-			await refuseHeldFile(context, existing, args.fileId);
+			await refuseHeldFile(context, args.fileId);
 		const last = existing.at(-1);
 		const id = await context.db.insert("tvSlides", {
 			title,
@@ -288,12 +276,16 @@ async function applyContent(
 	}
 	if (args.fileId === undefined || args.fileId === slide.fileId) return {};
 	await checkImage(context, args.fileId);
-	await refuseHeldFile(context, slides, args.fileId, slide._id);
+	await refuseHeldFile(context, args.fileId);
 	if (slide.fileId) await context.storage.delete(slide.fileId);
 	return { fileId: args.fileId, updatedAt: Date.now() };
 }
 
-/** Board-only: edit a slide. A replaced image's old blob is deleted. */
+/**
+ * Board-only: edit a slide. A replaced image's old blob is deleted.
+ *
+ * @deprecated legacy tvSlides API: no UI caller since the config pack; removed with tvSlides in the cleanup PR
+ */
 export const updateSlide = mutation({
 	args: {
 		id: v.id("tvSlides"),
@@ -305,6 +297,7 @@ export const updateSlide = mutation({
 	},
 	handler: async (context, args): Promise<void> => {
 		unwrap(await requireRole(context, BOARD_LEVEL));
+		await refuseOnceConfigSaved(context);
 		const slide = await slideOrRefuse(context, args.id);
 		const slides = await slidesInOrder(context.db);
 		const patch = await applyContent(context, { slide, slides }, args);
@@ -319,11 +312,16 @@ export const updateSlide = mutation({
 	},
 });
 
-/** Board-only: remove a slide and its image blob. */
+/**
+ * Board-only: remove a slide and its image blob.
+ *
+ * @deprecated legacy tvSlides API: no UI caller since the config pack; removed with tvSlides in the cleanup PR
+ */
 export const deleteSlide = mutation({
 	args: { id: v.id("tvSlides") },
 	handler: async (context, args): Promise<void> => {
 		unwrap(await requireRole(context, BOARD_LEVEL));
+		await refuseOnceConfigSaved(context);
 		const slide = await slideOrRefuse(context, args.id);
 		if (slide.fileId) await context.storage.delete(slide.fileId);
 		await context.db.delete(slide._id);
@@ -331,7 +329,11 @@ export const deleteSlide = mutation({
 	},
 });
 
-/** Board-only: swap a slide with its neighbour; a no-op at the ends. */
+/**
+ * Board-only: swap a slide with its neighbour; a no-op at the ends.
+ *
+ * @deprecated legacy tvSlides API: no UI caller since the config pack; removed with tvSlides in the cleanup PR
+ */
 export const moveSlide = mutation({
 	args: {
 		id: v.id("tvSlides"),
@@ -339,6 +341,7 @@ export const moveSlide = mutation({
 	},
 	handler: async (context, args): Promise<void> => {
 		unwrap(await requireRole(context, BOARD_LEVEL));
+		await refuseOnceConfigSaved(context);
 		const slide = await slideOrRefuse(context, args.id);
 		const neighbour =
 			args.direction === "up"
@@ -367,7 +370,8 @@ export const getConfig = query({
 	args: {},
 	handler: async (context) => {
 		unwrap(await requireRole(context, BOARD_LEVEL));
-		return readTvConfig(context.db);
+		const { transition, version } = await readTvConfig(context.db);
+		return { transition, version };
 	},
 });
 
@@ -377,6 +381,13 @@ export const setTransition = mutation({
 	handler: async (context, args): Promise<void> => {
 		unwrap(await requireRole(context, BOARD_LEVEL));
 		const config = await ensureConfig(context);
+		if (config.xml !== undefined) {
+			await editConfig(context, (current) => ({
+				...current,
+				transition: args.transition,
+			}));
+			return;
+		}
 		await context.db.patch(config._id, {
 			transition: args.transition,
 			version: config.version + 1,
@@ -423,7 +434,11 @@ export const revokeDevice = mutation({
 	},
 });
 
-/** Board-only: what the TV would show now (enabled slides, in order). */
+/**
+ * Board-only: what the TV would show now (enabled slides, in order).
+ *
+ * @deprecated legacy tvSlides API: no UI caller since the config pack; removed with tvSlides in the cleanup PR
+ */
 export const previewSlides = query({
 	args: {},
 	handler: async (context) => {

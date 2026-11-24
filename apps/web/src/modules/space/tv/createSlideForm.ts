@@ -1,5 +1,5 @@
 import { useMutation } from "convex-solidjs";
-import { err, ResultAsync, type Result } from "neverthrow";
+import { err, errAsync, ResultAsync, type Result } from "neverthrow";
 import {
 	createEffect,
 	createMemo,
@@ -11,6 +11,7 @@ import {
 
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
+import { tvMessages } from "../../../../convex/lib/errors/tv.ts";
 import { TV_LIMITS } from "../../../../convex/lib/tv/constants.ts";
 import { htmlBytes } from "../../../../convex/lib/tv/htmlBytes.ts";
 import { call, type ClientError } from "../../../lib/call.ts";
@@ -24,6 +25,29 @@ import type { SlideDetail } from "./slideTypes.ts";
 export type SlideMode = "image" | "html";
 
 const SAVE_FAILED = "Could not save the slide. Try again.";
+const HTML_LOAD_FAILED = "Could not load the slide's HTML. Try again.";
+
+const LOAD_ERROR: ClientError = {
+	code: "Unknown",
+	message: HTML_LOAD_FAILED,
+};
+
+/** The slide's HTML file, read as text. */
+function loadHtml(url: string): ResultAsync<string, ClientError> {
+	return ResultAsync.fromPromise(fetch(url), () => LOAD_ERROR).andThen(
+		(response) =>
+			response.ok
+				? ResultAsync.fromPromise(response.text(), () => LOAD_ERROR)
+				: errAsync(LOAD_ERROR)
+	);
+}
+
+/** The server looked at the save and said no; an "Unknown" failure (network,
+ *  an answer that never came) leaves the upload alone, as the save may have
+ *  gone through. */
+function isRefusal(error: ClientError): boolean {
+	return error.code !== "Unknown";
+}
 
 type SaveResult = Result<unknown, ClientError>;
 
@@ -31,7 +55,8 @@ type FormOptions = {
 	open: Accessor<boolean>;
 	/** The slide being edited, `undefined` for a new one. */
 	slideId: Accessor<string | undefined>;
-	/** The open slide's full record, once it has arrived. */
+	/** The open slide's full record, once it has arrived (`undefined` while
+	 *  loading, and for an id the config does not have). */
 	detail: Accessor<SlideDetail | undefined>;
 	/** Runs after a slide was saved. */
 	onSaved: () => void;
@@ -66,6 +91,35 @@ function fillOnOpen(
 	);
 }
 
+/** Reads an HTML slide's file into the draft. Nothing is filled if another
+ *  slide opened meanwhile, or the user already typed or picked a file. */
+function fillFromFile(
+	forId: string,
+	url: string,
+	options: FormOptions,
+	draft: {
+		htmlText: Accessor<string>;
+		setHtmlText: (text: string) => void;
+		setLoadedHtml: (text: string) => void;
+		setPickError: (message: string | null) => void;
+	}
+): void {
+	void loadHtml(url).match(
+		(text) => {
+			untrack(() => {
+				if (options.slideId() !== forId || draft.htmlText() !== "")
+					return;
+				draft.setLoadedHtml(text);
+				draft.setHtmlText(text);
+			});
+		},
+		(failure) => {
+			if (untrack(options.slideId) === forId)
+				draft.setPickError(failure.message);
+		}
+	);
+}
+
 /** The draft's fields. It is filled when the sheet opens (blank, or from the
  *  slide once its record is here) and never re-filled by a later refetch of
  *  the same slide, which would wipe what is being typed. */
@@ -76,6 +130,9 @@ function createSlideDraft(options: FormOptions) {
 		String(TV_LIMITS.durationDefault)
 	);
 	const [htmlText, setHtmlText] = createSignal("");
+	// The text the slide's file held when it was loaded: what "changed" is
+	// measured against, so a title-only edit uploads nothing.
+	const [loadedHtml, setLoadedHtml] = createSignal<string>();
 	const [file, setFile] = createSignal<File>();
 	const [pickError, setPickError] = createSignal<string | null>(null);
 
@@ -84,14 +141,21 @@ function createSlideDraft(options: FormOptions) {
 		setTitle("");
 		setDuration(String(TV_LIMITS.durationDefault));
 		setHtmlText("");
+		setLoadedHtml(undefined);
 		setFile(undefined);
 	}
 	function fill(detail: SlideDetail): void {
+		blank();
 		setMode(detail.kind);
 		setTitle(detail.title);
 		setDuration(String(detail.durationSec));
-		setHtmlText(detail.htmlText ?? "");
-		setFile(undefined);
+		if (detail.kind !== "html" || detail.url === null) return;
+		fillFromFile(detail._id, detail.url, options, {
+			htmlText,
+			setHtmlText,
+			setLoadedHtml,
+			setPickError,
+		});
 	}
 
 	fillOnOpen(options, { blank, fill, setPickError });
@@ -142,6 +206,7 @@ function createSlideDraft(options: FormOptions) {
 		setDuration,
 		htmlText,
 		setHtmlText,
+		htmlChanged: (): boolean => htmlText() !== (loadedHtml() ?? ""),
 		file,
 		pickError,
 		setPickError,
@@ -155,29 +220,32 @@ type Track = <T>(
 	action: PromiseLike<Result<T, ClientError>>
 ) => Promise<Result<T, ClientError>>;
 
-/** Uploads an image, then saves a slide that points at it. A refusal of the
- *  save deletes the upload, so a refusal leaves no orphaned blob. */
-function createImageSave(trackResult: Track) {
+/** Uploads a file, then saves a slide that points at it. A save the server
+ *  refuses deletes the upload, so a refusal leaves no orphaned blob. A save
+ *  that merely failed to get through keeps it, and nothing references it
+ *  then: each Save uploads the file again, so a retry does not reuse it and
+ *  the first upload stays behind as an unreferenced blob. */
+function createFileSave(trackResult: Track) {
 	const generateUploadUrl = useMutation(api.tv.generateUploadUrl);
 	const discardUpload = useMutation(api.tv.discardUpload);
 
-	function upload(image: File): ResultAsync<Id<"_storage">, ClientError> {
+	function upload(file: File): ResultAsync<Id<"_storage">, ClientError> {
 		return call(generateUploadUrl.mutateAsync({}), UPLOAD_FAILED).andThen(
-			(url) => postFile(url, image)
+			(url) => postFile(url, file)
 		);
 	}
 
-	return async function saveWithImage(
-		image: File,
+	return async function saveWithFile(
+		file: File,
 		save: (fileId: Id<"_storage">) => ResultAsync<unknown, ClientError>
 	): Promise<SaveResult> {
-		const uploaded = await trackResult(upload(image));
+		const uploaded = await trackResult(upload(file));
 		if (uploaded.isErr()) return uploaded;
 		const fileId = uploaded.value;
 		const saved = await trackResult(save(fileId));
 		// Nobody to tell if the cleanup fails: the save's own refusal is what
 		// the sheet shows.
-		if (saved.isErr())
+		if (saved.isErr() && isRefusal(saved.error))
 			await call(
 				discardUpload.mutateAsync({ fileId }),
 				SAVE_FAILED
@@ -189,68 +257,69 @@ function createImageSave(trackResult: Track) {
 	};
 }
 
+/** The HTML text as the file the pack holds. */
+function htmlFile(text: string): File {
+	return new File([text], "slide.html", { type: "text/html" });
+}
+
+/** The file an edit uploads: a changed HTML text, or a newly chosen image.
+ *  Nothing when only the title or duration changed. */
+function changedFile(draft: SlideDraft): File | undefined {
+	if (draft.mode() === "image") return draft.file();
+	return draft.htmlChanged() ? htmlFile(draft.htmlText()) : undefined;
+}
+
 /** The writes of a draft: a new slide, or an edit of an existing one. */
 function createSlideWrites(draft: SlideDraft, trackResult: Track) {
-	const createSlide = useMutation(api.tv.createSlide);
-	const updateSlide = useMutation(api.tv.updateSlide);
-	const saveWithImage = createImageSave(trackResult);
+	const addSlide = useMutation(api.tvContent.addConfigSlide);
+	const updateSlide = useMutation(api.tvContent.updateConfigSlide);
+	const saveWithFile = createFileSave(trackResult);
 
 	function saveNew(): Promise<SaveResult> {
-		const image = draft.file();
-		const base = {
-			title: draft.title(),
-			durationSec: Number(draft.duration()),
-		};
-		if (draft.mode() === "html")
-			return trackResult(
-				call(
-					createSlide.mutateAsync({
-						...base,
-						kind: "html",
-						htmlText: draft.htmlText(),
-					}),
-					SAVE_FAILED
-				)
-			);
-		if (image === undefined) {
+		const file =
+			draft.mode() === "html" ? htmlFile(draft.htmlText()) : draft.file();
+		if (file === undefined) {
 			draft.setPickError("Choose an image first.");
 			return Promise.resolve(err({ code: "Unknown", message: "" }));
 		}
-		return saveWithImage(image, (fileId) =>
+		const title = draft.title();
+		const durationSec = Number(draft.duration());
+		const kind = draft.mode();
+		return saveWithFile(file, (fileId) =>
 			call(
-				createSlide.mutateAsync({ ...base, kind: "image", fileId }),
+				addSlide.mutateAsync({ title, kind, fileId, durationSec }),
 				SAVE_FAILED
 			)
 		);
 	}
 
-	function saveExisting(id: Id<"tvSlides">): Promise<SaveResult> {
+	function saveExisting(id: string): Promise<SaveResult> {
 		const base = {
 			id,
 			title: draft.title(),
 			durationSec: Number(draft.duration()),
 		};
-		const image = draft.file();
-		if (draft.mode() === "html")
-			return trackResult(
-				call(
-					updateSlide.mutateAsync({
-						...base,
-						htmlText: draft.htmlText(),
-					}),
-					SAVE_FAILED
-				)
-			);
-		if (image === undefined)
-			return trackResult(
-				call(updateSlide.mutateAsync(base), SAVE_FAILED)
-			);
-		return saveWithImage(image, (fileId) =>
-			call(updateSlide.mutateAsync({ ...base, fileId }), SAVE_FAILED)
-		);
+		const file = changedFile(draft);
+		return file === undefined
+			? trackResult(call(updateSlide.mutateAsync(base), SAVE_FAILED))
+			: saveWithFile(file, (fileId) =>
+					call(
+						updateSlide.mutateAsync({ ...base, fileId }),
+						SAVE_FAILED
+					)
+				);
 	}
 
 	return { saveNew, saveExisting };
+}
+
+/** An edit waits for its own record (until then the draft is not it), and an
+ *  event's slide is never saved from here. */
+function canSave(options: FormOptions): boolean {
+	const id = options.slideId();
+	if (id === undefined) return true;
+	const detail = options.detail();
+	return detail?._id === id && !detail.fromEvent;
 }
 
 /** Saves a draft and closes the sheet when it went through. */
@@ -273,8 +342,7 @@ function createSlideSave(options: FormOptions, draft: SlideDraft) {
 	async function save(): Promise<void> {
 		if (isSaving()) return;
 		const id = options.slideId();
-		// An edit waits for its own record: until then the draft is not it.
-		if (id !== undefined && options.detail()?._id !== id) return;
+		if (!canSave(options)) return;
 		draft.setPickError(null);
 		clear();
 		if (draft.durationError() !== null || draft.isHtmlTooLong()) return;
@@ -282,7 +350,7 @@ function createSlideSave(options: FormOptions, draft: SlideDraft) {
 		setSaving(true);
 		const result = await (id === undefined
 			? writes.saveNew()
-			: writes.saveExisting(id as Id<"tvSlides">));
+			: writes.saveExisting(id));
 		if (started !== generation) return;
 		setSaving(false);
 		if (result.isOk()) options.onSaved();
@@ -295,11 +363,20 @@ function createSlideSave(options: FormOptions, draft: SlideDraft) {
 export function createSlideForm(options: FormOptions) {
 	const draft = createSlideDraft(options);
 	const saving = createSlideSave(options, draft);
+	function isEventSlide(): boolean {
+		const detail = options.detail();
+		return detail?._id === options.slideId() && detail?.fromEvent === true;
+	}
 	return {
 		...draft,
 		isEditing: (): boolean => options.slideId() !== undefined,
+		/** An event's slide: the event owns it, the sheet cannot save it. */
+		isReadOnly: isEventSlide,
 		save: saving.save,
 		isSaving: saving.isSaving,
-		error: (): string | null => draft.pickError() ?? saving.error(),
+		error: (): string | null =>
+			(isEventSlide() ? tvMessages.TvEventSlideLocked : null) ??
+			draft.pickError() ??
+			saving.error(),
 	};
 }

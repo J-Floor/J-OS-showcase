@@ -15,6 +15,14 @@ export async function deleteBlob(
 		await context.storage.delete(fileId);
 }
 
+/** Deletes a blob unless a slide, a pack file, the live pack, a legacy slide or an event holds it. */
+export async function deleteIfUnheld(
+	context: MutationCtx,
+	fileId: Id<"_storage">
+): Promise<void> {
+	if (!(await isBlobHeld(context, fileId))) await deleteBlob(context, fileId);
+}
+
 /** Board-only: a one-shot URL to upload a picture to. */
 export async function boardUploadUrl(context: MutationCtx): Promise<string> {
 	unwrap(await requireRole(context, BOARD_LEVEL));
@@ -27,6 +35,5 @@ export async function discardUnheldUpload(
 	fileId: Id<"_storage">
 ): Promise<void> {
 	unwrap(await requireRole(context, BOARD_LEVEL));
-	if (await isBlobHeld(context, fileId)) return;
-	await deleteBlob(context, fileId);
+	await deleteIfUnheld(context, fileId);
 }

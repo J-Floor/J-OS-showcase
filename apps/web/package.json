@@ -48,6 +48,8 @@
 		"better-auth": "1.7.25",
 		"convex": "catalog:",
 		"convex-solidjs": "catalog:",
+		"fast-xml-parser": "5",
+		"fflate": "0.8.3",
 		"neverthrow": "catalog:",
 		"node-forge": "^1.4.3",
 		"pdf-lib": "^1.17.1",

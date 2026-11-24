@@ -33,6 +33,7 @@ export async function readTvConfig(database: Database) {
 	return {
 		transition: config?.transition ?? TV_DEFAULT_TRANSITION,
 		version: config?.version ?? TV_INITIAL_VERSION,
+		packVersion: config?.packVersion ?? null,
 	};
 }
 

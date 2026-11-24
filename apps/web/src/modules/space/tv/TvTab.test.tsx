@@ -38,46 +38,58 @@ vi.mock("convex-solidjs", async () => {
 	convexMock.set.mockImplementation((name, value) => {
 		signalFor(name)[1](() => value);
 	});
+	function runner(reference: Parameters<typeof getFunctionName>[0]) {
+		return {
+			mutateAsync: (args: unknown) =>
+				convexMock.mutate(getFunctionName(reference), args),
+		};
+	}
 	return {
 		useQuery: (reference: Parameters<typeof getFunctionName>[0]) => ({
 			data: signalFor(getFunctionName(reference))[0],
 			error: () => {},
 			isLoading: () => false,
 		}),
-		useMutation: (reference: Parameters<typeof getFunctionName>[0]) => ({
-			mutateAsync: (args: unknown) =>
-				convexMock.mutate(getFunctionName(reference), args),
-		}),
+		useMutation: runner,
+		useAction: runner,
 	};
 });
 
 const SLIDES = [
 	{
-		_id: "slide-a",
+		_id: "welcome",
 		title: "Welcome",
 		kind: "html",
 		durationSec: 15,
-		position: 0,
 		enabled: true,
-		hasFile: false,
-		htmlLength: 20,
+		fromEvent: false,
+		eventName: undefined,
+		isMissing: false,
 	},
 	{
-		_id: "slide-b",
+		_id: "poster",
 		title: "Poster",
 		kind: "image",
 		durationSec: 30,
-		position: 1,
 		enabled: false,
-		hasFile: true,
+		fromEvent: false,
+		eventName: undefined,
+		isMissing: false,
 	},
 ];
 
 beforeEach(() => {
 	convexMock.mutate.mockClear();
-	convexMock.set("tv:listSlides", SLIDES);
+	convexMock.set("tvContent:listConfigSlides", SLIDES);
 	convexMock.set("tv:getConfig", { transition: "fade", version: 1 });
 	convexMock.set("tv:listDevices", []);
+	convexMock.set("tvContent:getPackState", {
+		xml: "<tv/>",
+		version: 1,
+		packVersion: 1,
+		packUrl: null,
+		isAwaitingMigration: false,
+	});
 });
 
 afterEach(cleanup);
@@ -117,10 +129,13 @@ test("toggling a slide's switch updates that slide's enabled flag", async () => 
 	expect(posterSwitch).not.toBeChecked();
 	fireEvent.click(posterSwitch);
 	await waitFor(() => {
-		expect(convexMock.mutate).toHaveBeenCalledWith("tv:updateSlide", {
-			id: "slide-b",
-			enabled: true,
-		});
+		expect(convexMock.mutate).toHaveBeenCalledWith(
+			"tvContent:updateConfigSlide",
+			{
+				id: "poster",
+				enabled: true,
+			}
+		);
 	});
 });
 
@@ -134,17 +149,23 @@ test("up and down move the slide, and the ends cannot move outward", async () =>
 	).toBeDisabled();
 	fireEvent.click(screen.getByRole("button", { name: "Move Poster up" }));
 	await waitFor(() => {
-		expect(convexMock.mutate).toHaveBeenCalledWith("tv:moveSlide", {
-			id: "slide-b",
-			direction: "up",
-		});
+		expect(convexMock.mutate).toHaveBeenCalledWith(
+			"tvContent:moveConfigSlide",
+			{
+				id: "poster",
+				direction: "up",
+			}
+		);
 	});
 	fireEvent.click(screen.getByRole("button", { name: "Move Welcome down" }));
 	await waitFor(() => {
-		expect(convexMock.mutate).toHaveBeenCalledWith("tv:moveSlide", {
-			id: "slide-a",
-			direction: "down",
-		});
+		expect(convexMock.mutate).toHaveBeenCalledWith(
+			"tvContent:moveConfigSlide",
+			{
+				id: "welcome",
+				direction: "down",
+			}
+		);
 	});
 });
 
@@ -154,14 +175,17 @@ test("delete asks first and removes the slide only once confirmed", async () => 
 	// Asked, not yet done.
 	const confirm = await screen.findByRole("button", { name: "Delete" });
 	expect(convexMock.mutate).not.toHaveBeenCalledWith(
-		"tv:deleteSlide",
+		"tvContent:removeConfigSlide",
 		expect.anything()
 	);
 	fireEvent.click(confirm);
 	await waitFor(() => {
-		expect(convexMock.mutate).toHaveBeenCalledWith("tv:deleteSlide", {
-			id: "slide-a",
-		});
+		expect(convexMock.mutate).toHaveBeenCalledWith(
+			"tvContent:removeConfigSlide",
+			{
+				id: "welcome",
+			}
+		);
 	});
 });
 
@@ -173,7 +197,7 @@ test("cancelling the delete question keeps the slide", async () => {
 		expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
 	});
 	expect(convexMock.mutate).not.toHaveBeenCalledWith(
-		"tv:deleteSlide",
+		"tvContent:removeConfigSlide",
 		expect.anything()
 	);
 });
@@ -190,7 +214,7 @@ test("choosing a transition saves it", async () => {
 });
 
 test("with no slides it says so and Preview is disabled", () => {
-	convexMock.set("tv:listSlides", []);
+	convexMock.set("tvContent:listConfigSlides", []);
 	renderTab();
 	expect(screen.getByText("No slides yet")).toBeInTheDocument();
 	expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
@@ -203,7 +227,7 @@ test("Preview is enabled while at least one slide is shown", () => {
 
 test("Preview stays disabled when every slide is switched off", () => {
 	convexMock.set(
-		"tv:listSlides",
+		"tvContent:listConfigSlides",
 		SLIDES.map((slide) => ({ ...slide, enabled: false }))
 	);
 	renderTab();
@@ -216,22 +240,19 @@ function durationField(title: string): HTMLElement {
 	});
 }
 
-/** The number input's machine answers on a later tick, so each step waits. */
-function settle(): Promise<void> {
-	return new Promise((resolve) => {
-		setTimeout(resolve, 20);
-	});
-}
-
 async function typeDuration(
 	title: string,
 	value: string
 ): Promise<HTMLElement> {
 	const input = durationField(title);
-	input.focus();
-	await settle();
+	await waitFor(() => {
+		input.focus();
+		expect(input).toHaveFocus();
+	});
 	fireEvent.input(input, { target: { value } });
-	await settle();
+	await waitFor(() => {
+		expect(input).toHaveValue(value);
+	});
 	return input;
 }
 
@@ -240,17 +261,20 @@ test("a valid duration is saved when the field is left, and the field keeps it u
 	const input = await typeDuration("Welcome", "40");
 	input.blur();
 	await waitFor(() => {
-		expect(convexMock.mutate).toHaveBeenCalledWith("tv:updateSlide", {
-			id: "slide-a",
-			durationSec: 40,
-		});
+		expect(convexMock.mutate).toHaveBeenCalledWith(
+			"tvContent:updateConfigSlide",
+			{
+				id: "welcome",
+				durationSec: 40,
+			}
+		);
 	});
 	// The list has not refetched: the old 15 must not flick back.
 	expect(durationField("Welcome")).toHaveValue("40");
 	convexMock.set(
-		"tv:listSlides",
+		"tvContent:listConfigSlides",
 		SLIDES.map((slide) =>
-			slide._id === "slide-a" ? { ...slide, durationSec: 40 } : slide
+			slide._id === "welcome" ? { ...slide, durationSec: 40 } : slide
 		)
 	);
 	await waitFor(() => {
@@ -263,10 +287,13 @@ test("Enter saves a valid duration", async () => {
 	const input = await typeDuration("Welcome", "60");
 	fireEvent.keyDown(input, { key: "Enter" });
 	await waitFor(() => {
-		expect(convexMock.mutate).toHaveBeenCalledWith("tv:updateSlide", {
-			id: "slide-a",
-			durationSec: 60,
-		});
+		expect(convexMock.mutate).toHaveBeenCalledWith(
+			"tvContent:updateConfigSlide",
+			{
+				id: "welcome",
+				durationSec: 60,
+			}
+		);
 	});
 });
 
@@ -281,12 +308,83 @@ test.each([
 		renderTab();
 		const input = await typeDuration("Welcome", value);
 		input.blur();
-		await settle();
-		expect(screen.getByText(new RegExp(message))).toBeInTheDocument();
+		expect(
+			await screen.findByText(new RegExp(message))
+		).toBeInTheDocument();
 		expect(convexMock.mutate).not.toHaveBeenCalledWith(
-			"tv:updateSlide",
+			"tvContent:updateConfigSlide",
 			expect.anything()
 		);
 		expect(input).toHaveValue(value);
 	}
 );
+
+test("an event slide is marked and offers no edit, move or delete", () => {
+	convexMock.set("tvContent:listConfigSlides", [
+		...SLIDES,
+		{
+			_id: "event-abc",
+			title: "event-abc",
+			kind: "html",
+			durationSec: 20,
+			enabled: true,
+			fromEvent: true,
+			eventName: "Demo night",
+			isMissing: false,
+		},
+	]);
+	renderTab();
+	expect(screen.getByText("From event Demo night")).toBeInTheDocument();
+	expect(
+		screen.queryByRole("button", { name: "Delete event-abc" })
+	).toBeNull();
+	expect(screen.queryByRole("button", { name: "Edit event-abc" })).toBeNull();
+	expect(
+		screen.queryByRole("button", { name: "Move event-abc up" })
+	).toBeNull();
+	// Nor the switch or the duration: only the two own slides have them.
+	expect(screen.getAllByRole("switch")).toHaveLength(SLIDES.length);
+	expect(
+		screen.queryByRole("spinbutton", {
+			name: "Seconds on screen for event-abc",
+		})
+	).toBeNull();
+});
+
+test("a slide whose file is missing says so", () => {
+	convexMock.set("tvContent:listConfigSlides", [
+		{ ...SLIDES[0], isMissing: true },
+	]);
+	renderTab();
+	expect(screen.getByText("File missing")).toBeInTheDocument();
+});
+
+test("mounts the pack actions and the config.xml editor", () => {
+	renderTab();
+	expect(
+		screen.getByRole("button", { name: "Upload pack (.zip)" })
+	).toBeInTheDocument();
+	expect(
+		screen.getByRole("textbox", { name: "config.xml" })
+	).toBeInTheDocument();
+});
+
+test("while the legacy slides are being moved it says so and nothing can be edited", () => {
+	convexMock.set("tvContent:listConfigSlides", []);
+	convexMock.set("tvContent:getPackState", {
+		xml: "<tv/>",
+		version: 0,
+		packVersion: null,
+		packUrl: null,
+		isAwaitingMigration: true,
+	});
+	renderTab();
+	expect(screen.getByText("Moving the TV list")).toBeInTheDocument();
+	expect(screen.queryByText("No slides yet")).not.toBeInTheDocument();
+	expect(screen.getByRole("button", { name: "Add slide" })).toBeDisabled();
+	expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
+	expect(
+		screen.getByRole("button", { name: "Upload pack (.zip)" })
+	).toBeDisabled();
+	expect(screen.getByRole("textbox", { name: "config.xml" })).toBeDisabled();
+});

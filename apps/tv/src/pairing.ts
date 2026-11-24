@@ -24,10 +24,16 @@ function element(tag: string, className: string, text?: string): HTMLElement {
 	return node;
 }
 
+/** Not `replaceChildren`: it needs Chrome 86, the Tizen 6 TV runs 76. */
+function show(root: HTMLElement, screen: HTMLElement): void {
+	root.textContent = "";
+	root.append(screen);
+}
+
 function showMessage(root: HTMLElement, text: string): void {
 	const screen = element("div", "screen");
 	screen.append(element("p", "message", text));
-	root.replaceChildren(screen);
+	show(root, screen);
 }
 
 /** Only the one-time code reaches the screen: the QR carries it, the check code is its first characters. */
@@ -42,7 +48,7 @@ function showCode(root: HTMLElement, code: string): void {
 		qr,
 		element("p", "check-code", checkCode)
 	);
-	root.replaceChildren(screen);
+	show(root, screen);
 }
 
 type State = {

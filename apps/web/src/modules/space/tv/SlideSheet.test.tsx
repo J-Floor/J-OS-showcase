@@ -61,17 +61,37 @@ const HTML_SLIDE = {
 	title: "Welcome",
 	kind: "html",
 	durationSec: 20,
-	position: 0,
 	enabled: true,
-	hasFile: false,
-	htmlLength: 12,
+	fromEvent: false,
+	eventName: undefined,
+	isMissing: false,
 };
+
+const HTML_URL = "https://files.example.com/slide-a.html";
+
+/** Serves slide HTML files by URL; any other fetch is a one-shot upload. */
+function serveFiles(files: Record<string, string>) {
+	fetchMock.mockImplementation((url: string) =>
+		Promise.resolve(
+			url in files
+				? { ok: true, text: () => Promise.resolve(files[url]) }
+				: {
+						ok: true,
+						json: () => Promise.resolve({ storageId: "storage-1" }),
+					}
+		)
+	);
+}
+
+function serveHtml(text: string) {
+	serveFiles({ [HTML_URL]: text });
+}
 
 /** Answers the mutations a save makes; `createSlide` can be made to refuse. */
 function answerMutations(refuseCreate?: keyof typeof tvMessages) {
 	convexMock.mutate.mockImplementation((name) => {
 		if (name === "tv:generateUploadUrl") return Promise.resolve(UPLOAD_URL);
-		if (name === "tv:createSlide" && refuseCreate !== undefined)
+		if (name === "tvContent:addConfigSlide" && refuseCreate !== undefined)
 			return Promise.reject(
 				new ConvexError({
 					code: refuseCreate,
@@ -91,8 +111,8 @@ beforeEach(() => {
 		json: () => Promise.resolve({ storageId: "storage-1" }),
 	});
 	vi.stubGlobal("fetch", fetchMock);
-	convexMock.set("tv:listSlides", [HTML_SLIDE]);
-	convexMock.set("tv:getSlide", undefined);
+	convexMock.set("tvContent:listConfigSlides", [HTML_SLIDE]);
+	convexMock.set("tvContent:getConfigSlide", undefined);
 });
 
 afterEach(() => {
@@ -141,13 +161,15 @@ test("an open slide is looked up live: a renamed slide shows its new title", asy
 	expect(
 		await screen.findByRole("heading", { name: "Welcome" })
 	).toBeInTheDocument();
-	convexMock.set("tv:listSlides", [{ ...HTML_SLIDE, title: "Welcome back" }]);
+	convexMock.set("tvContent:listConfigSlides", [
+		{ ...HTML_SLIDE, title: "Welcome back" },
+	]);
 	expect(
 		await screen.findByRole("heading", { name: "Welcome back" })
 	).toBeInTheDocument();
 });
 
-test("html mode saves the pasted text", async () => {
+test("html mode uploads the pasted text as an HTML file, then adds the slide", async () => {
 	const { onOpenChange } = renderSheet();
 	fireEvent.click(screen.getByRole("radio", { name: "HTML" }));
 	await screen.findByRole("textbox", { name: "HTML" });
@@ -155,22 +177,29 @@ test("html mode saves the pasted text", async () => {
 	typeInto("HTML", "<h1>Hi</h1>");
 	fireEvent.click(screen.getByRole("button", { name: "Add slide" }));
 	await waitFor(() => {
-		expect(call("tv:createSlide")).toEqual([
+		expect(call("tvContent:addConfigSlide")).toEqual([
 			[
-				"tv:createSlide",
+				"tvContent:addConfigSlide",
 				{
 					title: "Hello",
 					kind: "html",
-					htmlText: "<h1>Hi</h1>",
+					fileId: "storage-1",
 					durationSec: TV_LIMITS.durationDefault,
 				},
 			],
 		]);
 	});
+	const [url, init] = fetchMock.mock.calls[0] as [
+		string,
+		{ body: File; headers: Record<string, string> },
+	];
+	expect(url).toBe(UPLOAD_URL);
+	expect(init.headers).toEqual({ "Content-Type": "text/html" });
+	expect(init.body.name).toBe("slide.html");
+	expect(await init.body.text()).toBe("<h1>Hi</h1>");
 	await waitFor(() => {
 		expect(onOpenChange).toHaveBeenCalledWith(false);
 	});
-	expect(fetchMock).not.toHaveBeenCalled();
 });
 
 test("choosing an .html file switches to HTML and fills the text", async () => {
@@ -191,14 +220,14 @@ test("an image is uploaded to the one-shot URL, then the slide points at it", as
 	typeInto("Title", "Poster");
 	fireEvent.click(screen.getByRole("button", { name: "Add slide" }));
 	await waitFor(() => {
-		expect(call("tv:createSlide")).toHaveLength(1);
+		expect(call("tvContent:addConfigSlide")).toHaveLength(1);
 	});
 	expect(fetchMock).toHaveBeenCalledWith(UPLOAD_URL, {
 		method: "POST",
 		headers: { "Content-Type": "image/png" },
 		body: image,
 	});
-	expect(call("tv:createSlide")[0]?.[1]).toEqual({
+	expect(call("tvContent:addConfigSlide")[0]?.[1]).toEqual({
 		title: "Poster",
 		kind: "image",
 		fileId: "storage-1",
@@ -222,7 +251,7 @@ test("a refused slide shows the server's message and discards the upload", async
 	expect(onOpenChange).not.toHaveBeenCalled();
 });
 
-test("a refused html slide maps its message and uploads nothing to discard", async () => {
+test("a refused html slide shows its message and discards the new upload", async () => {
 	answerMutations("TvSlideInvalid");
 	renderSheet();
 	fireEvent.click(screen.getByRole("radio", { name: "HTML" }));
@@ -233,7 +262,9 @@ test("a refused html slide maps its message and uploads nothing to discard", asy
 	expect(await screen.findByRole("alert")).toHaveTextContent(
 		tvMessages.TvSlideInvalid
 	);
-	expect(call("tv:discardUpload")).toHaveLength(0);
+	expect(call("tv:discardUpload")).toEqual([
+		["tv:discardUpload", { fileId: "storage-1" }],
+	]);
 });
 
 test("an oversize image is refused before anything is uploaded", async () => {
@@ -262,8 +293,12 @@ test("an SVG is refused", async () => {
 	expect(call("tv:generateUploadUrl")).toHaveLength(0);
 });
 
-test("editing an html slide fills the draft from its record and saves the text", async () => {
-	convexMock.set("tv:getSlide", { ...HTML_SLIDE, htmlText: "<p>old</p>" });
+test("editing an html slide loads its file into the draft and saves a changed text as a new file", async () => {
+	serveHtml("<p>old</p>");
+	convexMock.set("tvContent:getConfigSlide", {
+		...HTML_SLIDE,
+		url: HTML_URL,
+	});
 	const { onOpenChange } = renderSheet("slide-a");
 	await waitFor(() => {
 		expect(field("HTML")).toHaveValue("<p>old</p>");
@@ -272,33 +307,116 @@ test("editing an html slide fills the draft from its record and saves the text",
 	typeInto("HTML", "<p>new</p>");
 	fireEvent.click(screen.getByRole("button", { name: "Save" }));
 	await waitFor(() => {
-		expect(call("tv:updateSlide")).toEqual([
+		expect(call("tvContent:updateConfigSlide")).toEqual([
 			[
-				"tv:updateSlide",
+				"tvContent:updateConfigSlide",
 				{
 					id: "slide-a",
 					title: "Welcome",
 					durationSec: 20,
-					htmlText: "<p>new</p>",
+					fileId: "storage-1",
 				},
 			],
 		]);
 	});
+	const upload = fetchMock.mock.calls.find(([url]) => url === UPLOAD_URL) as
+		| [string, { body: File }]
+		| undefined;
+	expect(await upload?.[1].body.text()).toBe("<p>new</p>");
 	await waitFor(() => {
 		expect(onOpenChange).toHaveBeenCalledWith(false);
 	});
 });
 
+test("editing only the title of an html slide uploads nothing", async () => {
+	serveHtml("<p>old</p>");
+	convexMock.set("tvContent:getConfigSlide", {
+		...HTML_SLIDE,
+		url: HTML_URL,
+	});
+	renderSheet("slide-a");
+	await waitFor(() => {
+		expect(field("HTML")).toHaveValue("<p>old</p>");
+	});
+	typeInto("Title", "Hello");
+	fireEvent.click(screen.getByRole("button", { name: "Save" }));
+	await waitFor(() => {
+		expect(call("tvContent:updateConfigSlide")).toEqual([
+			[
+				"tvContent:updateConfigSlide",
+				{ id: "slide-a", title: "Hello", durationSec: 20 },
+			],
+		]);
+	});
+	expect(call("tv:generateUploadUrl")).toHaveLength(0);
+});
+
+test("an html file that cannot be loaded is explained and saving the title does not blank the file", async () => {
+	fetchMock.mockRejectedValue(new Error("offline"));
+	convexMock.set("tvContent:getConfigSlide", {
+		...HTML_SLIDE,
+		url: HTML_URL,
+	});
+	renderSheet("slide-a");
+	expect(await screen.findByRole("alert")).toHaveTextContent(
+		"Could not load the slide's HTML. Try again."
+	);
+	typeInto("Title", "Hello");
+	fireEvent.click(screen.getByRole("button", { name: "Save" }));
+	await waitFor(() => {
+		expect(call("tvContent:updateConfigSlide")).toEqual([
+			[
+				"tvContent:updateConfigSlide",
+				{ id: "slide-a", title: "Hello", durationSec: 20 },
+			],
+		]);
+	});
+	expect(call("tv:generateUploadUrl")).toHaveLength(0);
+});
+
+test("an event slide cannot be edited in the sheet", async () => {
+	const eventSlide = {
+		...HTML_SLIDE,
+		fromEvent: true,
+		eventName: "Party",
+		url: HTML_URL,
+	};
+	serveHtml("<p>event</p>");
+	convexMock.set("tvContent:listConfigSlides", [eventSlide]);
+	convexMock.set("tvContent:getConfigSlide", eventSlide);
+	renderSheet("slide-a");
+	expect(await screen.findByRole("alert")).toHaveTextContent(
+		tvMessages.TvEventSlideLocked
+	);
+	expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+	expect(call("tvContent:updateConfigSlide")).toHaveLength(0);
+});
+
+test("before the migration the server's refusal is shown", async () => {
+	answerMutations("TvConfigNotMigrated");
+	renderSheet();
+	await chooseImage(new File(["png"], "poster.png", { type: "image/png" }));
+	typeInto("Title", "Poster");
+	fireEvent.click(screen.getByRole("button", { name: "Add slide" }));
+	expect(await screen.findByRole("alert")).toHaveTextContent(
+		tvMessages.TvConfigNotMigrated
+	);
+});
+
 test("a refetch of the open slide does not wipe what is being typed", async () => {
-	convexMock.set("tv:getSlide", { ...HTML_SLIDE, htmlText: "<p>old</p>" });
+	serveHtml("<p>old</p>");
+	convexMock.set("tvContent:getConfigSlide", {
+		...HTML_SLIDE,
+		url: HTML_URL,
+	});
 	renderSheet("slide-a");
 	await waitFor(() => {
 		expect(field("HTML")).toHaveValue("<p>old</p>");
 	});
 	typeInto("HTML", "<p>typing</p>");
-	convexMock.set("tv:getSlide", {
+	convexMock.set("tvContent:getConfigSlide", {
 		...HTML_SLIDE,
-		htmlText: "<p>old</p>",
+		url: HTML_URL,
 		durationSec: 25,
 	});
 	await Promise.resolve();
@@ -310,16 +428,17 @@ const SLIDE_B = {
 	_id: "slide-b",
 	title: "Other",
 	durationSec: 45,
-	position: 1,
 };
 const IMAGE_SLIDE = {
 	_id: "slide-i",
 	title: "Poster",
 	kind: "image",
 	durationSec: 30,
-	position: 2,
 	enabled: true,
-	hasFile: true,
+	fromEvent: false,
+	eventName: undefined,
+	isMissing: false,
+	url: "https://files.example.com/slide-i.png",
 };
 
 /** The component's own tick: the sheet's inputs answer a tick later. */
@@ -339,13 +458,13 @@ test("an image picked first, then the HTML type: the HTML is what is saved", asy
 	typeInto("HTML", "<p>kept</p>");
 	fireEvent.click(screen.getByRole("button", { name: "Add slide" }));
 	await waitFor(() => {
-		expect(call("tv:createSlide")).toEqual([
+		expect(call("tvContent:addConfigSlide")).toEqual([
 			[
-				"tv:createSlide",
+				"tvContent:addConfigSlide",
 				{
 					title: "Hello",
 					kind: "html",
-					htmlText: "<p>kept</p>",
+					fileId: "storage-1",
 					durationSec: TV_LIMITS.durationDefault,
 				},
 			],
@@ -354,8 +473,11 @@ test("an image picked first, then the HTML type: the HTML is what is saved", asy
 	await waitFor(() => {
 		expect(onOpenChange).toHaveBeenCalledWith(false);
 	});
-	expect(call("tv:generateUploadUrl")).toHaveLength(0);
-	expect(fetchMock).not.toHaveBeenCalled();
+	// Only the HTML went up, not the image picked first.
+	expect(fetchMock).toHaveBeenCalledTimes(1);
+	const [, init] = fetchMock.mock.calls[0] as [string, { body: File }];
+	expect(init.body.name).toBe("slide.html");
+	expect(await init.body.text()).toBe("<p>kept</p>");
 });
 
 test("an .html file chosen after an image replaces it: an HTML slide is saved", async () => {
@@ -369,13 +491,15 @@ test("an .html file chosen after an image replaces it: an HTML slide is saved", 
 	typeInto("Title", "Page");
 	fireEvent.click(screen.getByRole("button", { name: "Add slide" }));
 	await waitFor(() => {
-		expect(call("tv:createSlide")).toHaveLength(1);
+		expect(call("tvContent:addConfigSlide")).toHaveLength(1);
 	});
-	expect(call("tv:createSlide")[0]?.[1]).toMatchObject({
+	expect(call("tvContent:addConfigSlide")[0]?.[1]).toMatchObject({
 		kind: "html",
-		htmlText: "<b>page</b>",
+		fileId: "storage-1",
 	});
-	expect(call("tv:generateUploadUrl")).toHaveLength(0);
+	const [, init] = fetchMock.mock.calls[0] as [string, { body: File }];
+	expect(init.body.name).toBe("slide.html");
+	expect(await init.body.text()).toBe("<b>page</b>");
 });
 
 test("pasted HTML, then an image: an image slide is saved and the HTML is gone", async () => {
@@ -387,9 +511,9 @@ test("pasted HTML, then an image: an image slide is saved and the HTML is gone",
 	typeInto("Title", "Poster");
 	fireEvent.click(screen.getByRole("button", { name: "Add slide" }));
 	await waitFor(() => {
-		expect(call("tv:createSlide")).toHaveLength(1);
+		expect(call("tvContent:addConfigSlide")).toHaveLength(1);
 	});
-	expect(call("tv:createSlide")[0]?.[1]).toEqual({
+	expect(call("tvContent:addConfigSlide")[0]?.[1]).toEqual({
 		title: "Poster",
 		kind: "image",
 		fileId: "storage-1",
@@ -402,8 +526,15 @@ test("pasted HTML, then an image: an image slide is saved and the HTML is gone",
 });
 
 test("opening another slide does not keep the last one's draft or let it be saved", async () => {
-	convexMock.set("tv:listSlides", [HTML_SLIDE, SLIDE_B]);
-	convexMock.set("tv:getSlide", { ...HTML_SLIDE, htmlText: "<p>A</p>" });
+	convexMock.set("tvContent:listConfigSlides", [HTML_SLIDE, SLIDE_B]);
+	serveFiles({
+		[HTML_URL]: "<p>A</p>",
+		"https://files.example.com/slide-b.html": "<p>B</p>",
+	});
+	convexMock.set("tvContent:getConfigSlide", {
+		...HTML_SLIDE,
+		url: HTML_URL,
+	});
 	const [slideId, setSlideId] = createSignal<string | undefined>("slide-a");
 	render(() => (
 		<SlideSheet open onOpenChange={vi.fn()} slideId={slideId()} />
@@ -412,13 +543,17 @@ test("opening another slide does not keep the last one's draft or let it be save
 		expect(field("HTML")).toHaveValue("<p>A</p>");
 	});
 	setSlideId("slide-b");
-	await settle();
 	// B's record has not arrived: A's detail is still the one in hand.
-	expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+	await waitFor(() => {
+		expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+	});
 	fireEvent.click(screen.getByRole("button", { name: "Save" }));
 	await settle();
-	expect(call("tv:updateSlide")).toHaveLength(0);
-	convexMock.set("tv:getSlide", { ...SLIDE_B, htmlText: "<p>B</p>" });
+	expect(call("tvContent:updateConfigSlide")).toHaveLength(0);
+	convexMock.set("tvContent:getConfigSlide", {
+		...SLIDE_B,
+		url: "https://files.example.com/slide-b.html",
+	});
 	await waitFor(() => {
 		expect(field("HTML")).toHaveValue("<p>B</p>");
 	});
@@ -426,14 +561,13 @@ test("opening another slide does not keep the last one's draft or let it be save
 	expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
 	fireEvent.click(screen.getByRole("button", { name: "Save" }));
 	await waitFor(() => {
-		expect(call("tv:updateSlide")).toEqual([
+		expect(call("tvContent:updateConfigSlide")).toEqual([
 			[
-				"tv:updateSlide",
+				"tvContent:updateConfigSlide",
 				{
 					id: "slide-b",
 					title: "Other",
 					durationSec: 45,
-					htmlText: "<p>B</p>",
 				},
 			],
 		]);
@@ -444,12 +578,16 @@ test("opening another slide does not keep the last one's draft or let it be save
 function holdCreate() {
 	let release: ((value: null) => void) | undefined;
 	convexMock.mutate.mockImplementation((name) => {
-		if (name !== "tv:createSlide") return Promise.resolve(null);
+		if (name !== "tvContent:addConfigSlide") return Promise.resolve(null);
 		return new Promise<null>((resolve) => {
 			release = resolve;
 		});
 	});
-	function finish(): void {
+	// The save is reached after the file's upload, a few ticks in.
+	async function finish(): Promise<void> {
+		await waitFor(() => {
+			expect(release).toBeDefined();
+		});
 		release?.(null);
 	}
 	return finish;
@@ -469,7 +607,7 @@ test("while saving the button says so and cannot be pressed again", async () => 
 	await startHtmlSave();
 	const saving = await screen.findByRole("button", { name: "Saving..." });
 	expect(saving).toBeDisabled();
-	finish();
+	await finish();
 	await waitFor(() => {
 		expect(screen.getByRole("button", { name: "Add slide" })).toBeEnabled();
 	});
@@ -492,9 +630,11 @@ test("a slow save does not close a sheet that was closed meanwhile", async () =>
 	await settle();
 	setOpen(true);
 	await settle();
-	finish();
+	await finish();
+	// A negative: nothing to wait for, so a pause lets a wrong close show up
+	// (it can only make this pass too early, never fail).
 	await settle();
-	expect(call("tv:createSlide")).toHaveLength(1);
+	expect(call("tvContent:addConfigSlide")).toHaveLength(1);
 	expect(onOpenChange).not.toHaveBeenCalled();
 });
 
@@ -515,7 +655,7 @@ test("a duration out of range is explained and nothing is saved", async () => {
 	).toBeInTheDocument();
 	fireEvent.click(screen.getByRole("button", { name: "Add slide" }));
 	await settle();
-	expect(call("tv:createSlide")).toHaveLength(0);
+	expect(call("tvContent:addConfigSlide")).toHaveLength(0);
 	expect(call("tv:generateUploadUrl")).toHaveLength(0);
 });
 
@@ -530,13 +670,13 @@ test("pasted HTML over the limit shows the count and cannot be saved", async () 
 	).toBeInTheDocument();
 	fireEvent.click(screen.getByRole("button", { name: "Add slide" }));
 	await settle();
-	expect(call("tv:createSlide")).toHaveLength(0);
+	expect(call("tvContent:addConfigSlide")).toHaveLength(0);
 });
 
-test("an upload is discarded when the save fails for a reason that is not the server's", async () => {
+test("an upload is not discarded when the save merely fails to get through (the save may have gone through)", async () => {
 	convexMock.mutate.mockImplementation((name) => {
 		if (name === "tv:generateUploadUrl") return Promise.resolve(UPLOAD_URL);
-		if (name === "tv:createSlide")
+		if (name === "tvContent:addConfigSlide")
 			return Promise.reject(new Error("network down"));
 		return Promise.resolve(null);
 	});
@@ -545,18 +685,17 @@ test("an upload is discarded when the save fails for a reason that is not the se
 	typeInto("Title", "Poster");
 	fireEvent.click(screen.getByRole("button", { name: "Add slide" }));
 	expect(await screen.findByRole("alert")).toBeInTheDocument();
-	expect(call("tv:discardUpload")).toEqual([
-		["tv:discardUpload", { fileId: "storage-1" }],
-	]);
+	await settle();
+	expect(call("tv:discardUpload")).toHaveLength(0);
 	expect(onOpenChange).not.toHaveBeenCalled();
 });
 
 test("replacing an image on an existing slide: a refused save discards the new upload", async () => {
-	convexMock.set("tv:listSlides", [IMAGE_SLIDE]);
-	convexMock.set("tv:getSlide", IMAGE_SLIDE);
+	convexMock.set("tvContent:listConfigSlides", [IMAGE_SLIDE]);
+	convexMock.set("tvContent:getConfigSlide", IMAGE_SLIDE);
 	convexMock.mutate.mockImplementation((name) => {
 		if (name === "tv:generateUploadUrl") return Promise.resolve(UPLOAD_URL);
-		if (name === "tv:updateSlide")
+		if (name === "tvContent:updateConfigSlide")
 			return Promise.reject(
 				new ConvexError({
 					code: "TvImageInvalid",
@@ -574,7 +713,7 @@ test("replacing an image on an existing slide: a refused save discards the new u
 	expect(await screen.findByRole("alert")).toHaveTextContent(
 		tvMessages.TvImageInvalid
 	);
-	expect(call("tv:updateSlide")[0]?.[1]).toEqual({
+	expect(call("tvContent:updateConfigSlide")[0]?.[1]).toEqual({
 		id: "slide-i",
 		title: "Poster",
 		durationSec: 30,
@@ -583,4 +722,30 @@ test("replacing an image on an existing slide: a refused save discards the new u
 	expect(call("tv:discardUpload")).toEqual([
 		["tv:discardUpload", { fileId: "storage-1" }],
 	]);
+});
+
+const GONE = "This slide is no longer there";
+
+test("a slide id the backend does not know (list still loading, record null) shows a gone state and cannot be saved", async () => {
+	convexMock.set("tvContent:listConfigSlides", undefined);
+	convexMock.set("tvContent:getConfigSlide", null);
+	renderSheet("deleted-slide");
+	expect(await screen.findByText(GONE)).toBeInTheDocument();
+	expect(screen.queryByRole("textbox", { name: "Title" })).toBeNull();
+	expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+});
+
+test("a slide that disappears while open gives way to the gone state", async () => {
+	convexMock.set("tvContent:getConfigSlide", { ...HTML_SLIDE, url: null });
+	serveHtml("<p>A</p>");
+	renderSheet("slide-a");
+	await waitFor(() => {
+		expect(field("Title")).toHaveValue("Welcome");
+	});
+	convexMock.set("tvContent:listConfigSlides", []);
+	convexMock.set("tvContent:getConfigSlide", null);
+	expect(await screen.findByText(GONE)).toBeInTheDocument();
+	expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+	fireEvent.click(screen.getByRole("button", { name: "Save" }));
+	expect(call("tvContent:updateConfigSlide")).toHaveLength(0);
 });

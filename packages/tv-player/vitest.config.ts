@@ -1,5 +1,9 @@
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-  test: { environment: "happy-dom", globals: true },
+	test: {
+		environment: "happy-dom",
+		globals: true,
+		setupFiles: ["src/chrome76.setup.ts"],
+	},
 });

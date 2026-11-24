@@ -67,4 +67,20 @@ describe("createPlayer updates", () => {
 		).not.toBeNull();
 		expect(state.stage.querySelector(".tvp-fade")).toBeNull();
 	});
+	it("swaps the content of the current slide in place when its html changes (no replaceChildren: Chrome 76 lacks it)", () => {
+		// The setup file (chrome76.setup.ts) removed it, as on the TV.
+		expect(
+			(Element.prototype as { replaceChildren?: unknown }).replaceChildren
+		).toBeUndefined();
+		state.player = createPlayer(state.stage, {
+			slides: [slideA, slideB],
+			transition: "none",
+		});
+		const layer = state.stage.querySelector(".tvp-layer");
+		state.player.setSlides([{ ...slideA, html: "<p>new</p>" }, slideB]);
+		const frames = state.stage.querySelectorAll("iframe");
+		expect(frames).toHaveLength(1);
+		expect(frames[0]?.srcdoc).toBe("<p>new</p>");
+		expect(state.stage.querySelector(".tvp-layer")).toBe(layer);
+	});
 });

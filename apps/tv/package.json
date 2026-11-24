@@ -15,6 +15,7 @@
 	},
 	"dependencies": {
 		"@j-os/tv-player": "workspace:*",
+		"fflate": "0.8.3",
 		"qrcode-generator": "1.4.4"
 	},
 	"devDependencies": {

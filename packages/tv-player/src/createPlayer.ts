@@ -53,7 +53,11 @@ function buildContent(slide: PlayerSlide): HTMLElement {
 }
 
 function sameContent(left: PlayerSlide, right: PlayerSlide): boolean {
-	return left.kind === right.kind && left.html === right.html && left.imageUrl === right.imageUrl;
+	return (
+		left.kind === right.kind &&
+		left.html === right.html &&
+		left.imageUrl === right.imageUrl
+	);
 }
 
 function applyTransitionClass(state: State, element: HTMLElement): void {
@@ -71,7 +75,8 @@ function buildLayer(state: State, slide: PlayerSlide): HTMLElement {
 }
 
 function clearAdvance(state: State): void {
-	if (state.isAdvancing) state.timers.clearTimeout(state.advanceHandle as never);
+	if (state.isAdvancing)
+		state.timers.clearTimeout(state.advanceHandle as never);
 	state.isAdvancing = false;
 }
 
@@ -120,9 +125,15 @@ function clearStage(state: State): void {
 }
 
 /** The first slide at or after `from` in the old list that the new list still has, else the first. */
-function nearestFollowing(state: State, old: readonly PlayerSlide[], from: number): number {
+function nearestFollowing(
+	state: State,
+	old: readonly PlayerSlide[],
+	from: number
+): number {
 	for (const slide of old.slice(from)) {
-		const found = state.slides.findIndex((candidate) => candidate.id === slide.id);
+		const found = state.slides.findIndex(
+			(candidate) => candidate.id === slide.id
+		);
 		if (found !== -1) return found;
 	}
 	return 0;
@@ -147,12 +158,19 @@ function replaceSlides(state: State, next: readonly PlayerSlide[]): void {
 	}
 	state.current = kept;
 	const slide = state.slides[kept];
-	if (slide && !sameContent(oldCurrent, slide)) state.layer?.replaceChildren(buildContent(slide));
+	if (slide && state.layer && !sameContent(oldCurrent, slide)) {
+		// Not replaceChildren: it needs Chrome 86, the Tizen 6 TV runs 76.
+		state.layer.textContent = "";
+		state.layer.append(buildContent(slide));
+	}
 	if (state.slides.length < 2) clearAdvance(state);
 	else if (!state.isAdvancing) scheduleAdvance(state);
 }
 
-export function createPlayer(stage: HTMLElement, options: PlayerOptions): Player {
+export function createPlayer(
+	stage: HTMLElement,
+	options: PlayerOptions
+): Player {
 	const state: State = {
 		stage,
 		timers: options.timers ?? window,

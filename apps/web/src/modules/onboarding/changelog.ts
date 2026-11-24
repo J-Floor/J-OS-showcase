@@ -48,6 +48,16 @@ const PERK_MANAGERS = { action: "manage", subject: "Perks" } as const;
 
 export const CHANGELOG: ChangeEntry[] = [
 	{
+		version: "1.10",
+		title: "TV packs",
+		items: [
+			{
+				text: "Upload a TV pack in Space → TV: a zip with config.xml, its slides and their files. You can also edit config.xml there or download the current pack.",
+				audience: SPACE_MANAGERS,
+			},
+		],
+	},
+	{
 		version: "1.9",
 		title: "Space TV",
 		items: [

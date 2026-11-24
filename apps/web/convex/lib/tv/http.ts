@@ -115,6 +115,8 @@ export function preflightResponse(): Response {
 type TvManifest = {
 	version: number;
 	transition: "fade" | "slide" | "none";
+	/** The built pack's version, only while its zip exists; null sends the TV back to the legacy slide list. */
+	packVersion: number | null;
 	slides: {
 		id: string;
 		kind: "image" | "html";
@@ -133,6 +135,7 @@ export type DeviceDeps = {
 	authenticate: (tokenHash: string) => Promise<boolean>;
 	limit: (name: "tvDevice", key: string) => Promise<boolean>;
 	manifest: () => Promise<TvManifest>;
+	pack: () => Promise<{ fileId: string; version: number } | null>;
 	content: (id: string) => Promise<SlideContent | null>;
 	getBlob: (fileId: string) => Promise<Blob | null>;
 };
@@ -208,6 +211,37 @@ export async function slideResponse(
 			"Content-Type": blob.type,
 			"X-Content-Type-Options": "nosniff",
 			"Cache-Control": "private, no-store",
+		}),
+	});
+}
+
+/**
+ * The whole pack as one zip; 404 until the first build. Read-only, device
+ * token only. A pack is at most 40 MiB (`TV_PACK_LIMITS.packMaxBytes`), under
+ * Convex's 100 MiB HTTP response limit. Rate limit: a TV polls the manifest
+ * every 60 s (60 requests an hour) and downloads the pack only when
+ * `packVersion` changes, so one download plus the old slide fetches stay far
+ * below the 600 requests an hour `tvDevice` allows, and a retry loop on a
+ * failed download is capped by the same limiter.
+ */
+export async function packResponse(
+	request: Request,
+	deps: DeviceDeps
+): Promise<Response> {
+	const gate = await deviceGate(request, deps);
+	if ("response" in gate) return gate.response;
+	const pack = await deps.pack();
+	const blob = pack === null ? null : await deps.getBlob(pack.fileId);
+	if (pack === null || blob === null) return noContent(HTTP_NOT_FOUND);
+	return new Response(blob, {
+		status: HTTP_OK,
+		headers: tvHeaders({
+			"Content-Type": "application/zip",
+			"X-Content-Type-Options": "nosniff",
+			"Cache-Control": "private, no-store",
+			"X-Tv-Pack-Version": String(pack.version),
+			// Browsers hide non-safelisted response headers from scripts otherwise.
+			"Access-Control-Expose-Headers": "X-Tv-Pack-Version",
 		}),
 	});
 }

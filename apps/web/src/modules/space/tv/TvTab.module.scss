@@ -43,3 +43,9 @@
 	flex: 1;
 	min-inline-size: 8rem;
 }
+
+.eventNote {
+	@include typo.jf-typo-body-small;
+
+	color: var(--jf-fg-muted);
+}

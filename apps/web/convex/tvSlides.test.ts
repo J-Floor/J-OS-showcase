@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-deprecated -- these tests exercise the legacy tvSlides mutations on purpose, until the cleanup PR removes them */
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 

@@ -1,0 +1,29 @@
+@use "@j-os/design-system/typography" as typo;
+
+.pack {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--jf-spacing-near);
+	align-items: center;
+}
+
+.fileInput {
+	display: none;
+}
+
+.problems {
+	@include typo.jf-typo-body-medium;
+
+	flex-basis: 100%;
+	padding-inline-start: var(--jf-spacing-far);
+	margin: 0;
+	color: var(--jf-error-fg);
+}
+
+.note {
+	@include typo.jf-typo-body-medium;
+
+	flex-basis: 100%;
+	margin: 0;
+	color: var(--jf-fg-muted);
+}
