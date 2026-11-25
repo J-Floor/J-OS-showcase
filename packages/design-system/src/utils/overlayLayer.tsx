@@ -62,10 +62,15 @@ export type OverlayOpenProps = {
 	onOpenChange: (isOpen: boolean) => void;
 };
 
-type OverlayRootProps = Omit<
-	ArkDialog.RootProps,
-	"open" | "defaultOpen" | "restoreFocus" | "onOpenChange"
-> &
+/** Ark's root props an overlay's root sets itself, or takes as its own. */
+export type OverlayOwnedProps =
+	| "open"
+	| "defaultOpen"
+	| "restoreFocus"
+	| "onOpenChange"
+	| "onRequestDismiss";
+
+type OverlayRootProps = Omit<ArkDialog.RootProps, OverlayOwnedProps> &
 	MorphOverlayProps &
 	Pick<OverlayOpenProps, "open"> &
 	Partial<Pick<OverlayOpenProps, "onOpenChange">> & {
@@ -190,6 +195,33 @@ function createStackPlace(
 	return above;
 }
 
+/**
+ * Whether `content` belongs to an overlay that was already closing when this
+ * one was shown: a sheet handing over to the next, not one this is nested in.
+ */
+function createClosingAtShow(
+	isShown: Accessor<boolean>
+): (content: HTMLElement | undefined) => boolean {
+	let closing: readonly StackEntry[] = [];
+	createComputed(
+		on(isShown, (isShownNow) => {
+			// Once hidden, Ark's own close is already queued: a dismiss
+			// request after it finds the machine closed.
+			closing = isShownNow
+				? untrack(() =>
+						shownStack().filter((entry) => !entry.isAsked())
+					)
+				: [];
+		})
+	);
+	onCleanup(() => {
+		closing = [];
+	});
+	return (content) =>
+		content !== undefined &&
+		closing.some((entry) => entry.content() === content);
+}
+
 /** Counts the shows, so a body can be built afresh for each. */
 function createShowCount(isShown: Accessor<boolean>): Accessor<number> {
 	const showing = createMemo(
@@ -241,6 +273,7 @@ export function OverlayRoot(props: OverlayRootProps): JSX.Element {
 		isAsked: () => local.open,
 		content: () => contentElement,
 	};
+	const wasClosingAtShow = createClosingAtShow(isShown);
 	const layer: OverlayLayer = {
 		isShown,
 		above: createStackPlace(isShown, entry),
@@ -279,6 +312,12 @@ export function OverlayRoot(props: OverlayRootProps): JSX.Element {
 			open={isShown()}
 			onOpenChange={(details) => {
 				local.onOpenChange?.(details.open);
+			}}
+			// Ark closes every layer above one that goes away. One that was
+			// already closing takes nothing with it.
+			onRequestDismiss={(event) => {
+				if (wasClosingAtShow(event.detail.targetLayer))
+					event.preventDefault();
 			}}
 			// Never `null`: Ark reads it as a target that is not there and
 			// focuses nothing (a target inside a body not built yet, say).

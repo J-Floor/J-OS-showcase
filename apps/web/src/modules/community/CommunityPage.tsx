@@ -30,9 +30,8 @@ import type { PersonSelection } from "./tabs/TabProps.ts";
  */
 function useRosterTabs() {
 	const [params, setParams] = useSearchParams();
-	// Free here: the same three queries are already subscribed for the whole
-	// session up in the shell (see CommunityDataProvider), so reading them at
-	// page level opens nothing new.
+	// The tabs below read the same three queries, so they share these
+	// subscriptions (one per roster, kept by the query keeper's linger).
 	const rosters = useRosters();
 	const readyRosters = useReadyRosters();
 
@@ -49,10 +48,10 @@ function useRosterTabs() {
 		return rosterOf(id, rosters());
 	}
 
-	/** The tab a `?person=` link resolves to, when the URL names no tab. The
-	 *  rosters are warm session-wide, so on an in-app palette jump this is
-	 *  known on the very first render. The page mounts that tab directly
-	 *  instead of building Applications and then switching. */
+	/** The tab a `?person=` link resolves to, when the URL names no tab. Each
+	 *  roster reader delivers its data a microtask after it mounts, even when
+	 *  the subscription is warm; until then {@link awaitingLinkedTab} holds a
+	 *  skeleton, so the page mounts the right tab directly. */
 	function linkedTab(): CommunityTabKey | undefined {
 		const person = params.person;
 		return typeof person === "string"
@@ -181,19 +180,20 @@ function CommunityConsole() {
 	// Follow the person to the tab that holds them. Written straight to the URL
 	// with `replace`, not through the tabs' own setter — that setter means "the
 	// user picked a tab" and closes the sheet. Compared against the URL, not
-	// `activeTab()`: `activeTab()` already resolves to the person's tab on first
-	// render via `linkedTab()`, and skipping the write would leave `?tab=` unset,
-	// so closing the sheet would fall back to Applications. Driven by the URL's
-	// `?person=`, not by `selection.requestedId()`: the selection's local id lands
+	// `activeTab()`: `activeTab()` already resolves to the person's tab via
+	// `linkedTab()` once the rosters answer, and skipping the write would leave
+	// `?tab=` unset, so closing the sheet would fall back to Applications. Driven
+	// by the URL's `?person=`, not by `selection.requestedId()`: the selection's local id lands
 	// before the router commits `?person=`, and a tab write merged against that
 	// stale URL drops the person, leaving the sheet open with nothing to close.
 	//
-	// Created BEFORE the selection, so it runs first. On a palette jump the page
-	// mounts (it is code-split) after the router has settled, and the
-	// selection's first effects put a paramless list entry behind the sheet
-	// straight away. Writing `?tab=` first starts a navigation, the selection
-	// waits for it to settle, and that entry keeps the person's tab: Back
-	// closes the sheet onto their roster, not onto Applications.
+	// Created BEFORE the selection, so it runs first, and the selection is not
+	// active until the rosters say which tab that is. On a palette jump the page
+	// mounts (it is code-split) after the router has settled, and an active
+	// selection puts a paramless list entry behind the sheet straight away.
+	// Writing `?tab=` first starts a navigation, the selection waits for it to
+	// settle, and that entry keeps the person's tab: Back closes the sheet onto
+	// their roster, not onto Applications.
 	createEffect(() => {
 		const home = linkedTab();
 		if (home !== undefined && params.tab !== home)
@@ -206,6 +206,8 @@ function CommunityConsole() {
 	const selection = createEntitySelection<Identified<"people">>({
 		rows: people,
 		param: "person",
+		// No panel, so no sheet, is mounted while this is false.
+		active: () => !awaitingLinkedTab(),
 	});
 
 	return (

@@ -11,7 +11,7 @@ import {
 import { lazyPeek } from "../../shared/entity/lazyPeek.tsx";
 import { pushedOpenState } from "../../shared/entity/pushedOpen.ts";
 
-import { EntitySource } from "./EntitySource.tsx";
+import { EntitySource, type Emit } from "./EntitySource.tsx";
 
 const navigate = vi.fn();
 const setParams = vi.fn();
@@ -64,7 +64,7 @@ const descriptor: EntityDescriptor<Row> = {
 	ability: { action: "view", subject: "Inventory" },
 };
 
-function renderSource(role: Role, emit: (items: CommandPaletteItem[]) => void) {
+function renderSource(role: Role, emit: Emit) {
 	render(() => (
 		<AbilityProvider role={role}>
 			<EntitySource descriptor={descriptor} emit={emit} />

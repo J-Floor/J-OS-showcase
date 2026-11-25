@@ -14,7 +14,8 @@ import { useRowPrefetch } from "../../shared/entity/useRowPrefetch.ts";
 import type { EntityRow } from "../../shared/types.ts";
 import { descriptorModule, prefetchModule } from "../prefetchModule.ts";
 
-export type Emit = (items: CommandPaletteItem[]) => void;
+/** Hands over a source's items, `undefined` while its rows load. */
+export type Emit = (items: CommandPaletteItem[] | undefined) => void;
 
 /**
  * Emits the descriptor's live rows as palette items. Split out from
@@ -41,7 +42,7 @@ function EntitySourceRows<Row extends EntityRow>(props: {
 	createEffect(() => {
 		const desc = props.descriptor;
 		props.emit(
-			(rows() ?? []).map((row) => ({
+			rows()?.map((row) => ({
 				value: peekValue(desc, slugOf(desc, row)),
 				label: desc.label(row),
 				group: desc.group,

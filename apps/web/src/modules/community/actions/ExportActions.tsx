@@ -11,11 +11,7 @@ import {
 import { useConfirm } from "../../../shared/confirm.tsx";
 import { downloadBlob } from "../../../shared/downloadBlob.ts";
 import { ICONS } from "../../../shared/icons.ts";
-import {
-	useApplications,
-	useGuests,
-	useMembers,
-} from "../data/communityData.tsx";
+import { useReadyRosters } from "../rosterOf.ts";
 
 import styles from "./ExportActions.module.scss";
 import { buildFullExport, buildLightExport } from "./exportShape.ts";
@@ -49,6 +45,7 @@ function useDoneFlag(ms = 1500) {
  * the page.
  */
 function useExportHotkeys(actions: {
+	can: () => boolean;
 	download: () => void;
 	copy: () => Promise<void>;
 }): [ActionDescriptor<PageTarget>, ActionDescriptor<PageTarget>] {
@@ -58,7 +55,7 @@ function useExportHotkeys(actions: {
 			label: "Download JSON",
 			icon: ICONS.download,
 			hotkey: "D",
-			can: () => true,
+			can: actions.can,
 			run: () => {
 				actions.download();
 			},
@@ -68,7 +65,7 @@ function useExportHotkeys(actions: {
 			label: "Copy JSON",
 			icon: ICONS.copy,
 			hotkey: "C",
-			can: () => true,
+			can: actions.can,
 			run: async () => {
 				await actions.copy();
 				return { refused: false };
@@ -85,39 +82,40 @@ function useExportHotkeys(actions: {
  * saves the light export (readable fields only) and copy puts the same on the
  * clipboard; each button briefly swaps its icon to a check on success. A third,
  * dev-only button downloads the full raw rows (including UI status and internal
- * fields) behind a size warning dialog.
+ * fields) behind a size warning dialog. The buttons and keys wait until all
+ * three rosters have answered, so an export is never partial.
  */
 export function ExportActions(): JSX.Element {
-	const applications = useApplications();
-	const members = useMembers();
-	const guests = useGuests();
+	const rosters = useReadyRosters();
 
 	const [downloaded, flashDownloaded] = useDoneFlag();
 	const [copied, flashCopied] = useDoneFlag();
 	const [fullDownloaded, flashFullDownloaded] = useDoneFlag();
 	const confirm = useConfirm();
 
-	function rosters() {
-		return {
-			applications: applications.data() ?? [],
-			members: members.data() ?? [],
-			guests: guests.data() ?? [],
-		};
+	function isReady() {
+		return rosters() !== undefined;
 	}
 
 	function download() {
-		downloadFile(buildLightExport(rosters()), "jfloor-export.json");
+		const ready = rosters();
+		if (ready === undefined) return;
+		downloadFile(buildLightExport(ready), "jfloor-export.json");
 		flashDownloaded();
 	}
 
 	async function copy() {
-		await navigator.clipboard.writeText(buildLightExport(rosters()));
+		const ready = rosters();
+		if (ready === undefined) return;
+		await navigator.clipboard.writeText(buildLightExport(ready));
 		flashCopied();
 	}
 
 	async function downloadFull() {
+		const ready = rosters();
+		if (ready === undefined) return;
 		// Built before the prompt so the size shown is the file written.
-		const json = buildFullExport(rosters());
+		const json = buildFullExport(ready);
 		const kb = Math.max(
 			1,
 			Math.round(new Blob([json]).size / BYTES_PER_KILOBYTE)
@@ -136,7 +134,11 @@ export function ExportActions(): JSX.Element {
 		flashFullDownloaded();
 	}
 
-	const [downloadKey, copyKey] = useExportHotkeys({ download, copy });
+	const [downloadKey, copyKey] = useExportHotkeys({
+		can: isReady,
+		download,
+		copy,
+	});
 	// Under a covering sheet the keys are quiet, so the chips hide with them,
 	// as on `RowActionButton`.
 	const isCovered = useOverlayCovered();
@@ -147,6 +149,7 @@ export function ExportActions(): JSX.Element {
 				tooltipLabel={downloadKey.label}
 				idleIcon={downloadKey.icon}
 				shortcut={isCovered() ? undefined : downloadKey.hotkey}
+				isLoading={!isReady()}
 				success={downloaded()}
 				onClick={() => void runAction(downloadKey, PAGE_TARGET)}
 			/>
@@ -154,12 +157,14 @@ export function ExportActions(): JSX.Element {
 				tooltipLabel={copyKey.label}
 				idleIcon={copyKey.icon}
 				shortcut={isCovered() ? undefined : copyKey.hotkey}
+				isLoading={!isReady()}
 				success={copied()}
 				onClick={() => void runAction(copyKey, PAGE_TARGET)}
 			/>
 			<SwapIconButton
 				tooltipLabel="Download full JSON (dev)"
 				idleIcon="code_blocks"
+				isLoading={!isReady()}
 				success={fullDownloaded()}
 				onClick={() => void downloadFull()}
 			/>

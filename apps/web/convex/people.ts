@@ -710,10 +710,11 @@ export type PersonRow = Doc<"people"> & {
  * Read only the people in the given tiers, via the `by_tier_and_formerOf`
  * index, instead of `collect()`-ing the entire table and filtering in memory.
  *
- * The roster lists below are LIVE subscriptions (kept warm at the shell), so they
- * re-run when a row they read changes. Rosters read by tier, former people by
- * `formerOf`, and never touch rows outside their tab, so a write to another
- * tab's row does not re-run them.
+ * The roster lists below are LIVE subscriptions (held while a board page or
+ * search reads them, and for a while after), so they re-run when a row they
+ * read changes. Rosters read by tier, former people by `formerOf`, and never
+ * touch rows outside their tab, so a write to another tab's row does not re-run
+ * them.
  */
 export async function peopleByTiers(
 	context: QueryCtx,

@@ -74,6 +74,7 @@ export function GlobalSearch(): JSX.Element {
 	const navigate = useNavigate();
 	const [open, setOpen] = createSignal(false);
 	const [entities, setEntities] = createSignal<CommandPaletteItem[]>([]);
+	const [loading, setLoading] = createSignal(false);
 
 	// Order matters: it is the order a blank palette lists them in, and the
 	// tie-break when several things score the same.
@@ -124,7 +125,10 @@ export function GlobalSearch(): JSX.Element {
 				{ICONS.search}
 			</IconButton>
 			<Show when={open()}>
-				<SearchSources onEntities={setEntities} />
+				<SearchSources
+					onEntities={setEntities}
+					onLoading={setLoading}
+				/>
 			</Show>
 			<CommandPalette
 				open={open()}
@@ -136,7 +140,11 @@ export function GlobalSearch(): JSX.Element {
 				recentsKey="jos:search:recents"
 			>
 				<CommandPalette.Empty>
-					Nothing matches that.
+					{/* A `Show`, so the text follows `loading` in place: the
+					    palette reads this part's children once. */}
+					<Show when={loading()} fallback="Nothing matches that.">
+						Loading…
+					</Show>
 				</CommandPalette.Empty>
 			</CommandPalette>
 		</>

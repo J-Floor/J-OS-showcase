@@ -16,9 +16,9 @@ import type { MetricTone } from "../../../shared/insights/MetricTile.tsx";
  * — so each one is a function of its inputs that a test can pin. The tab itself
  * only arranges them.
  *
- * No new Convex queries: `CommunityDataProvider` already holds applications,
- * members, guests and the board-level list for the whole session, so the dashboard costs one
- * pass over data that is on the client anyway. The one thing it cannot derive —
+ * No new Convex queries: the dashboard reads the applications, members,
+ * guests and board-level queries the other tabs share, so it costs one pass
+ * over data that is on the client anyway. The one thing it cannot derive —
  * whether the locks are actually reachable — comes from an action instead.
  */
 

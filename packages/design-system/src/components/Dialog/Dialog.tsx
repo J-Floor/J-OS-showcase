@@ -20,6 +20,7 @@ import {
 	OverlayRoot,
 	OverlayTitle,
 	type OverlayOpenProps,
+	type OverlayOwnedProps,
 } from "../../utils/overlayLayer.tsx";
 import {
 	getPartStyles,
@@ -50,10 +51,7 @@ export type DialogContentProps = ArkDialog.ContentProps &
 		flush?: boolean;
 	};
 
-export type DialogRootProps = Omit<
-	ArkDialog.RootProps,
-	"open" | "defaultOpen" | "restoreFocus" | "onOpenChange"
-> &
+export type DialogRootProps = Omit<ArkDialog.RootProps, OverlayOwnedProps> &
 	MorphOverlayProps &
 	Pick<OverlayOpenProps, "open"> &
 	Partial<Pick<OverlayOpenProps, "onOpenChange">>;

@@ -12,7 +12,6 @@ import type { ParentProps } from "solid-js";
 import styles from "./app.module.scss";
 import { Can } from "./lib/ability.tsx";
 import { SignOutButton } from "./modules/auth/SignOutButton.tsx";
-import { CommunityDataProvider } from "./modules/community/data/communityData.tsx";
 import { DoorsIntro } from "./modules/onboarding/DoorsIntro.tsx";
 import { WhatsNew } from "./modules/onboarding/WhatsNew.tsx";
 import { LastPathTracker, ModuleRoutes, RoleGate } from "./routing/index.tsx";
@@ -35,7 +34,7 @@ import { GlobalSearch } from "./shell/search/GlobalSearch.tsx";
 import { ShellWarmup } from "./shell/ShellWarmup.tsx";
 import { Sidebar } from "./shell/Sidebar/Sidebar.tsx";
 
-/** Header + scroll region. Split out so the community-data provider can wrap
+/** Header + scroll region. Split out so the board-level provider can wrap
  *  the whole thing without duplicating this markup in both branches.
  *
  *  The app's one ConfirmProvider lives here, around the topbar AND the routed
@@ -135,23 +134,20 @@ function AdminShell(props: ParentProps) {
 			<AppErrorBoundary>
 				<Sidebar />
 			</AppErrorBoundary>
-			{/* Board: keep the three rosters subscribed at the (persistent)
+			{/* Board: keep the board-level list subscribed at the (persistent)
 			    shell level so navigating away and back doesn't re-suspend the
-			    tables. The provider wraps the WHOLE shell, not just the routed
-			    content, because global search sits in the header and searches
-			    the same rosters — scoped any tighter, it would open a second
-			    set of subscriptions for the same three queries. Non-board sees
-			    the same layout without the board subscriptions. */}
+			    pages that read it. The rosters are not held here: each reader
+			    (the community page, global search, the person peek) subscribes
+			    on demand and they share one subscription per roster. Non-board
+			    sees the same layout without the board-level list. */}
 			<Can
 				I="view"
 				the="Applications"
 				fallback={<ShellBody>{props.children}</ShellBody>}
 			>
-				<CommunityDataProvider>
-					<BoardLevelProvider>
-						<ShellBody>{props.children}</ShellBody>
-					</BoardLevelProvider>
-				</CommunityDataProvider>
+				<BoardLevelProvider>
+					<ShellBody>{props.children}</ShellBody>
+				</BoardLevelProvider>
 			</Can>
 		</div>
 	);

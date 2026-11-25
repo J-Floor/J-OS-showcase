@@ -30,8 +30,9 @@ export function rosterOf(
 		: undefined;
 }
 
-/** The three rosters, each `undefined` until it has answered. Free to call:
- *  the queries are the warm, session-wide ones (see CommunityDataProvider). */
+/** The three rosters, each `undefined` until it has answered. Readers
+ *  share one Convex subscription per roster, kept by the query keeper's
+ *  linger after the last. */
 export function useRosters() {
 	const applications = useApplications();
 	const members = useMembers();

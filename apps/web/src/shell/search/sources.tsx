@@ -1,13 +1,14 @@
 import type { CommandPaletteItem } from "@j-os/design-system";
 import { createEffect, createSignal, For, type JSX } from "solid-js";
 
-import { useCan } from "../../lib/ability.tsx";
+import { useAbility, useCan } from "../../lib/ability.tsx";
 import { ROSTER_TABS } from "../../modules/community/communityTabs.ts";
 import { communityModule } from "../../modules/community/index.ts";
 import { inventoryModule } from "../../modules/inventory/index.ts";
 import { INVENTORY_TABS } from "../../modules/inventory/inventoryTabs.ts";
+import { canView } from "../../shared/entity/entityDescriptor.ts";
 import { entityDescriptors } from "../entity/entityDescriptors.ts";
-import { EntitySource, type Emit } from "../entity/EntitySource.tsx";
+import { EntitySource } from "../entity/EntitySource.tsx";
 import { prefetchModule } from "../prefetchModule.ts";
 import { modules } from "../registry.ts";
 
@@ -84,25 +85,41 @@ export function tabItems(
  * Mounts one gated `EntitySource` per registered descriptor and combines
  * their emitted items into a single flat list handed to `props.onEntities`.
  * Each source is independently ability-gated inside `EntitySource` itself —
- * a role that cannot view an entity never subscribes to its rows — so nothing
- * extra needs gating here.
+ * a role that cannot view an entity never subscribes to its rows. Only the
+ * sources the role can view count as loading: the others never answer.
  *
  * Items are kept in a record keyed by descriptor, seeded with every key up
  * front so the flattened order always matches `entityDescriptors` (an
  * object's already-present keys keep their position on update; only a brand
- * new key would be appended at the end).
+ * new key would be appended at the end). `undefined` is a source that has not
+ * answered.
  */
-export function SearchSources(props: { onEntities: Emit }): JSX.Element {
-	const initialItemsByKey = Object.fromEntries(
-		entityDescriptors.map((descriptor) => [
-			descriptor.key,
-			[] as CommandPaletteItem[],
-		])
-	);
+export function SearchSources(props: {
+	onEntities: (items: CommandPaletteItem[]) => void;
+	onLoading: (isLoading: boolean) => void;
+}): JSX.Element {
+	const ability = useAbility();
+	const initialItemsByKey: Record<string, CommandPaletteItem[] | undefined> =
+		Object.fromEntries(
+			entityDescriptors.map((descriptor) => [descriptor.key, undefined])
+		);
 	const [itemsByKey, setItemsByKey] = createSignal(initialItemsByKey);
 
 	createEffect(() => {
-		props.onEntities(Object.values(itemsByKey()).flat());
+		props.onEntities(
+			Object.values(itemsByKey()).flatMap((items) => items ?? [])
+		);
+	});
+
+	createEffect(() => {
+		const answered = itemsByKey();
+		props.onLoading(
+			entityDescriptors.some(
+				(descriptor) =>
+					canView(ability(), descriptor) &&
+					answered[descriptor.key] === undefined
+			)
+		);
 	});
 
 	return (

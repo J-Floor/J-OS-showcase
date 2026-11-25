@@ -7,7 +7,13 @@ import {
 	waitFor,
 	within,
 } from "@solidjs/testing-library";
-import { type JSX, createEffect, createRoot, createSignal } from "solid-js";
+import {
+	type JSX,
+	Show,
+	createEffect,
+	createRoot,
+	createSignal,
+} from "solid-js";
 import {
 	afterEach,
 	describe,
@@ -20,6 +26,7 @@ import {
 
 import {
 	fakeViewTransitions,
+	installViewTransitions,
 	mockLayoutBoxes,
 	namedIds,
 	restoreViewTransitions,
@@ -1338,4 +1345,67 @@ test("useOverlayCovered: a sheet's parts are covered by an overlay asked open ab
 	// Closing counts at once: it is on its way out.
 	setDialogOpen(false);
 	expect(isSheetCovered?.()).toBe(false);
+});
+
+/** Two sheets, `below` shown first; `mountAbove` mounts the other already
+ *  open. */
+async function renderSheetPair() {
+	const [isBelowOpen, setBelowOpen] = createSignal(false);
+	const [isAboveMounted, setAboveMounted] = createSignal(false);
+	const onAboveChange = vi.fn();
+	render(() => (
+		<>
+			<Sheet.Root open={isBelowOpen()} onOpenChange={setBelowOpen}>
+				<Sheet.Body>below body</Sheet.Body>
+			</Sheet.Root>
+			<Show when={isAboveMounted()}>
+				<Sheet.Root open onOpenChange={onAboveChange}>
+					<Sheet.Body>above body</Sheet.Body>
+				</Sheet.Root>
+			</Show>
+		</>
+	));
+	setBelowOpen(true);
+	await screen.findByText("below body");
+	const below = screen
+		.getByText("below body")
+		.closest<HTMLElement>("[role=dialog]");
+	async function mountAbove() {
+		setAboveMounted(true);
+		await screen.findByText("above body");
+		await new Promise((resolve) => setTimeout(resolve, 50));
+	}
+	return { setBelowOpen, mountAbove, onAboveChange, below };
+}
+
+describe("a sheet over one that goes away", () => {
+	it("stays open when the one below was already closing", async () => {
+		const pair = await renderSheetPair();
+		const gate = Promise.withResolvers<undefined>();
+		// The close waits in its morph, so the sheet below is still shown.
+		installViewTransitions((update: () => Promise<void> | void) => {
+			const done = gate.promise.then(update);
+			return { finished: done, updateCallbackDone: done };
+		});
+		onTestFinished(restoreViewTransitions);
+		mockLayoutBoxes();
+		pair.setBelowOpen(false);
+		await pair.mountAbove();
+		expect(pair.below).toHaveAttribute("data-state", "open");
+		gate.resolve(undefined);
+		await transitionSettled();
+		await waitFor(() => {
+			expect(pair.below).not.toHaveAttribute("data-state", "open");
+		});
+		expect(pair.onAboveChange).not.toHaveBeenCalled();
+	});
+
+	it("closes with the one below when that one was open under it", async () => {
+		const pair = await renderSheetPair();
+		await pair.mountAbove();
+		pair.setBelowOpen(false);
+		await waitFor(() => {
+			expect(pair.onAboveChange).toHaveBeenCalledWith(false);
+		});
+	});
 });

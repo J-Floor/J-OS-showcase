@@ -26,10 +26,10 @@ export const personEntity: EntityDescriptor<PersonRow> = {
 	param: "person",
 	group: "People",
 	icon: ICONS.person,
-	// Called inside a component: reads the same warm, session-level roster
-	// subscriptions the board console already keeps open (CommunityDataProvider),
-	// so searching for a person costs no extra query — the same union, in the
-	// same order, that the board console renders.
+	// Called inside a component: subscribes to the three rosters (one Convex
+	// subscription each, shared with the board console and kept by the query
+	// keeper's linger after the last reader leaves) and returns the same
+	// union, in the same order, that the board console renders.
 	useRows: (): Accessor<PersonRow[] | undefined> => {
 		const rosters = useReadyRosters();
 		// Undefined until all three have answered: a partial union would make

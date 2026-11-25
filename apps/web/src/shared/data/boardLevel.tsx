@@ -15,7 +15,7 @@ const BoardLevelContext = createContext<ReturnType<typeof boardLevelQuery>>();
 /**
  * Subscribes to the board + admin list once, high in the shell, so a page that
  * mounts on navigation reads it warm instead of re-subscribing and flashing
- * "Loading…" (same reason as `CommunityDataProvider`).
+ * "Loading…".
  */
 export function BoardLevelProvider(props: {
 	children: JSX.Element;

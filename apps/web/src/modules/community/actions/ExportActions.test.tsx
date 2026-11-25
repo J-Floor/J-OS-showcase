@@ -45,11 +45,24 @@ const guestRows = [
 	row({ _id: "g1", email: "g@example.com", tier: "guest", stage: "active" }),
 ];
 
-vi.mock("../data/communityData.tsx", () => ({
-	useApplications: () => ({ data: () => appRows }),
-	useMembers: () => ({ data: () => memberRows }),
-	useGuests: () => ({ data: () => guestRows }),
+/** The setter for "has the guests roster answered yet". Its signal is made
+ *  in the mock factory, on the solid-js instance the component uses. */
+const shared = vi.hoisted(() => ({
+	setGuestsLoaded: vi.fn() as (isLoaded: boolean) => void,
 }));
+
+vi.mock("../data/communityData.tsx", async () => {
+	const { createSignal: createLoaded } = await import("solid-js");
+	const [areGuestsLoaded, setGuestsLoaded] = createLoaded(true);
+	shared.setGuestsLoaded = setGuestsLoaded;
+	return {
+		useApplications: () => ({ data: () => appRows }),
+		useMembers: () => ({ data: () => memberRows }),
+		useGuests: () => ({
+			data: () => (areGuestsLoaded() ? guestRows : undefined),
+		}),
+	};
+});
 
 let blobs: Blob[] = [];
 let clickSpy: ReturnType<typeof vi.spyOn>;
@@ -57,6 +70,7 @@ let downloadNames: string[] = [];
 const writeText = vi.fn();
 
 beforeEach(() => {
+	shared.setGuestsLoaded(true);
 	blobs = [];
 	downloadNames = [];
 	writeText.mockReset().mockResolvedValue(undefined);
@@ -168,6 +182,38 @@ describe("ExportActions", () => {
 		await waitFor(() => {
 			expect(writeText).toHaveBeenCalledOnce();
 		});
+	});
+
+	it("exports nothing, by key or button, until every roster has answered", async () => {
+		shared.setGuestsLoaded(false);
+		render(() => (
+			<ConfirmProvider>
+				<ExportActions />
+			</ConfirmProvider>
+		));
+		const buttons = screen.getAllByRole("button");
+		expect(buttons).toHaveLength(3);
+		fireEvent.keyDown(document, { key: "d" });
+		fireEvent.keyDown(document, { key: "c" });
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(downloadNames).toEqual([]);
+		expect(writeText).not.toHaveBeenCalled();
+		for (const button of buttons) {
+			expect(button).toBeDisabled();
+			expect(button).not.toHaveAttribute("data-success");
+		}
+
+		shared.setGuestsLoaded(true);
+		for (const button of screen.getAllByRole("button")) {
+			expect(button).toBeEnabled();
+		}
+		fireEvent.keyDown(document, { key: "d" });
+		fireEvent.keyDown(document, { key: "c" });
+		await waitFor(() => {
+			expect(writeText).toHaveBeenCalledOnce();
+		});
+		expect(downloadNames).toEqual(["jfloor-export.json"]);
+		expect(await blobs[0].text()).toContain("g@example.com");
 	});
 
 	it("hides the D and C chips while peeking under a covering sheet: their keys are quiet", async () => {

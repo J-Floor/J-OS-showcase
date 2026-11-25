@@ -209,10 +209,10 @@ function InsightCharts(props: { metrics: InsightMetrics }): JSX.Element {
  * about all of them", so questions like how many guest windows close next month
  * or who is carrying the hosting were only answerable by exporting a CSV.
  *
- * It subscribes to nothing new. `CommunityDataProvider` already holds the three
- * rosters plus the board-level list for the whole session, so the tab is one derivation pass
- * over data that is on the client either way — which is also why it stays
- * correct as the board edits rows in the other tabs.
+ * It shares the three rosters' and the board-level list's subscriptions with
+ * the other readers, so the tab is one derivation pass over data that is on
+ * the client either way — which is also why it stays correct as the board
+ * edits rows in the other tabs.
  */
 export function InsightsTab(): JSX.Element {
 	const metrics = useInsightMetrics();

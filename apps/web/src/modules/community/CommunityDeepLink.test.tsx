@@ -119,14 +119,23 @@ vi.mock("./data/communityData.tsx", async () => {
 	shared.setLoaded = setLoaded;
 	// The tabs read `isLoading` as well as `data`, so a roster mock that
 	// answers only `data` crashes the tab rather than failing the assertion.
+	// Each reader gets its data a microtask after it mounts, even when the
+	// roster is loaded, as `convex-solidjs` delivers it.
 	function roster(data: () => unknown[]) {
-		return () => ({
-			data: () => (loaded() ? data() : undefined),
-			isLoading: () => !loaded(),
-			error: () => {},
-			isStale: () => false,
-			refetch: () => {},
-		});
+		return () => {
+			const [hasAnswered, setAnswered] = createSignal(false);
+			queueMicrotask(() => setAnswered(true));
+			function isReady() {
+				return hasAnswered() && loaded();
+			}
+			return {
+				data: () => (isReady() ? data() : undefined),
+				isLoading: () => !isReady(),
+				error: () => {},
+				isStale: () => false,
+				refetch: () => {},
+			};
+		};
 	}
 	return {
 		useMembers: roster(() => rows),
@@ -195,9 +204,9 @@ test("a ?person= link opens that person's sheet, on the tab they live in", async
 		expect(screen.getByText("alan@example.com")).toBeInTheDocument();
 	});
 	// And it got there by actually switching tabs, not by opening a sheet over
-	// the wrong table. `activeTab()` resolves this straight from the rosters on
-	// the very first render (so Members, not Applications, is what mounts), but
-	// the deep-link effect still pins `?tab=members` into the URL a tick later
+	// the wrong table. `activeTab()` resolves this from the rosters before any
+	// panel mounts (so Members, not Applications, is what mounts), and the
+	// deep-link effect pins `?tab=members` into the URL a tick later
 	// — otherwise closing the sheet clears `?person=` and, with no `?tab=` of
 	// its own, the board would fall back to Applications under it.
 	await waitFor(() => {
