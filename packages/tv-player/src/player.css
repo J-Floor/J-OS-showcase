@@ -13,10 +13,15 @@
 	left: 0;
 	background: #000;
 
+	/* An HTML slide is laid out at 3840x2160 and scaled to the stage by the player. */
 	& iframe {
-		inline-size: 100%;
-		block-size: 100%;
+		position: absolute;
+		top: 0;
+		left: 0;
+		inline-size: 3840px;
+		block-size: 2160px;
 		border: 0;
+		transform-origin: 0 0;
 	}
 
 	& img {
@@ -27,6 +32,10 @@
 	}
 }
 /* stylelint-enable logical-css/require-logical-properties, declaration-block-no-redundant-longhand-properties */
+
+.tvp-pending {
+	visibility: hidden;
+}
 
 .tvp-fade {
 	animation: tvp-fade-in 600ms ease both;

@@ -29,6 +29,12 @@ export function visibleIds() {
 	].map((element) => element.dataset.slideId);
 }
 export function settle() {
+	// A pending slide has not loaded: happy-dom fires no load event, so say it did.
+	for (const content of state.stage.querySelectorAll(".tvp-pending > *"))
+		content.dispatchEvent(new Event("load"));
+	// A pending slide has not loaded: happy-dom fires no load event, so say it did.
+	for (const content of state.stage.querySelectorAll(".tvp-pending > *"))
+		content.dispatchEvent(new Event("load"));
 	vi.advanceTimersByTime(600) /* eslint-disable-line @typescript-eslint/no-magic-numbers -- past the transition */;
 }
 export function setup() {

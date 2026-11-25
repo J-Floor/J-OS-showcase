@@ -24,6 +24,12 @@ export type PlayerOptions = {
 };
 
 const TRANSITION_MS = 600;
+/** How long an incoming slide may take to load before it is shown anyway. */
+const LOAD_TIMEOUT_MS = 3000;
+/** HTML slides are laid out at this size (the J floor slide size) and scaled to the stage. */
+const DESIGN_WIDTH = 3840;
+const DESIGN_HEIGHT = 2160;
+const HALF = 2;
 const MS_PER_SECOND = 1000;
 const TRANSITION_CLASSES = ["tvp-fade", "tvp-slide", "tvp-none"] as const;
 
@@ -37,7 +43,28 @@ type State = {
 	advanceHandle: unknown;
 	isAdvancing: boolean;
 	leaving: Map<HTMLElement, unknown>;
+	/** Layers built but not yet shown (still loading), each with its way to stop waiting. */
+	pending: Map<HTMLElement, () => void>;
+	observer: ResizeObserver | undefined;
 };
+
+/** Scales an HTML slide's fixed-size frame to the stage, centred. */
+function fit(stage: HTMLElement, frame: HTMLElement): void {
+	const width = stage.clientWidth;
+	const height = stage.clientHeight;
+	if (width === 0 || height === 0) return;
+	const scale = Math.min(width / DESIGN_WIDTH, height / DESIGN_HEIGHT);
+	const left = (width - DESIGN_WIDTH * scale) / HALF;
+	const top = (height - DESIGN_HEIGHT * scale) / HALF;
+	frame.style.transform = `translate(${left}px, ${top}px) scale(${scale})`;
+}
+
+function fitAll(stage: HTMLElement): void {
+	for (const frame of stage.querySelectorAll<HTMLElement>(
+		".tvp-layer iframe"
+	))
+		fit(stage, frame);
+}
 
 function buildContent(slide: PlayerSlide): HTMLElement {
 	if (slide.kind === "image") {
@@ -65,13 +92,39 @@ function applyTransitionClass(state: State, element: HTMLElement): void {
 	element.classList.add(`tvp-${state.transition}`);
 }
 
-function buildLayer(state: State, slide: PlayerSlide): HTMLElement {
+function buildLayer(slide: PlayerSlide): HTMLElement {
 	const element = document.createElement("div");
-	element.className = "tvp-layer";
+	element.className = "tvp-layer tvp-pending";
 	element.dataset.slideId = slide.id;
-	applyTransitionClass(state, element);
 	element.append(buildContent(slide));
 	return element;
+}
+
+/** Calls `done` once the layer's content has loaded (or failed, or took too long). */
+function whenLoaded(
+	state: State,
+	layer: HTMLElement,
+	done: () => void
+): () => void {
+	const content = layer.firstElementChild;
+	let isDone = false;
+	function finish(): void {
+		if (isDone) return;
+		isDone = true;
+		state.timers.clearTimeout(handle as never);
+		content?.removeEventListener("load", finish);
+		content?.removeEventListener("error", finish);
+		done();
+	}
+	content?.addEventListener("load", finish);
+	content?.addEventListener("error", finish);
+	const handle = state.timers.setTimeout(finish, LOAD_TIMEOUT_MS);
+	return () => {
+		isDone = true;
+		state.timers.clearTimeout(handle as never);
+		content?.removeEventListener("load", finish);
+		content?.removeEventListener("error", finish);
+	};
 }
 
 function clearAdvance(state: State): void {
@@ -101,25 +154,64 @@ function retire(state: State, element: HTMLElement): void {
 	);
 }
 
+/** Starts the transition of a loaded layer and lets every other shown layer leave. */
+function reveal(state: State, incoming: HTMLElement): void {
+	state.pending.delete(incoming);
+	incoming.classList.remove("tvp-pending");
+	applyTransitionClass(state, incoming);
+	for (const layer of state.stage.querySelectorAll<HTMLElement>(".tvp-layer"))
+		if (
+			layer !== incoming &&
+			!state.leaving.has(layer) &&
+			!state.pending.has(layer)
+		)
+			retire(state, layer);
+}
+
+function dropPending(state: State): void {
+	for (const [layer, cancel] of state.pending) {
+		cancel();
+		layer.remove();
+	}
+	state.pending.clear();
+}
+
 function show(state: State, index: number): void {
 	state.current = index;
 	const slide = state.slides[index];
 	if (!slide) return;
-	const incoming = buildLayer(state, slide);
+	clearAdvance(state);
+	dropPending(state);
+	const incoming = buildLayer(slide);
 	state.stage.append(incoming);
-	if (state.layer) retire(state, state.layer);
+	const frame = incoming.querySelector<HTMLElement>("iframe");
+	if (frame) fit(state.stage, frame);
 	state.layer = incoming;
 	scheduleAdvance(state);
+	const isFirst = !state.stage.querySelector(".tvp-layer:not(.tvp-pending)");
+	if (isFirst) {
+		reveal(state, incoming);
+		return;
+	}
+	// The incoming slide loads out of sight and fades in once it is drawn.
+	state.pending.set(
+		incoming,
+		whenLoaded(state, incoming, () => {
+			reveal(state, incoming);
+		})
+	);
 }
 
 function clearStage(state: State): void {
 	clearAdvance(state);
+	dropPending(state);
 	for (const [element, handle] of state.leaving) {
 		state.timers.clearTimeout(handle as never);
 		element.remove();
 	}
 	state.leaving.clear();
-	state.layer?.remove();
+	for (const layer of state.stage.querySelectorAll(".tvp-layer"))
+		layer.remove();
 	state.layer = undefined;
 	state.current = -1;
 }
@@ -162,6 +254,8 @@ function replaceSlides(state: State, next: readonly PlayerSlide[]): void {
 		// Not replaceChildren: it needs Chrome 86, the Tizen 6 TV runs 76.
 		state.layer.textContent = "";
 		state.layer.append(buildContent(slide));
+		const frame = state.layer.querySelector<HTMLElement>("iframe");
+		if (frame) fit(state.stage, frame);
 	}
 	if (state.slides.length < 2) clearAdvance(state);
 	else if (!state.isAdvancing) scheduleAdvance(state);
@@ -181,7 +275,15 @@ export function createPlayer(
 		advanceHandle: undefined,
 		isAdvancing: false,
 		leaving: new Map(),
+		pending: new Map(),
+		observer: undefined,
 	};
+	if (typeof ResizeObserver !== "undefined") {
+		state.observer = new ResizeObserver(() => {
+			fitAll(stage);
+		});
+		state.observer.observe(stage);
+	}
 	replaceSlides(state, options.slides);
 	return {
 		setSlides: (slides) => {
@@ -192,6 +294,7 @@ export function createPlayer(
 			if (state.layer) applyTransitionClass(state, state.layer);
 		},
 		destroy: () => {
+			state.observer?.disconnect();
 			clearStage(state);
 		},
 	};

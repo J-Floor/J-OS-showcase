@@ -84,3 +84,39 @@ describe("createPlayer updates", () => {
 		expect(state.stage.querySelector(".tvp-layer")).toBe(layer);
 	});
 });
+
+describe("createPlayer loading and scaling", () => {
+	it("keeps the old slide until the next one has loaded, then swaps", () => {
+		state.player = createPlayer(state.stage, {
+			slides: [slideA, slideB],
+			transition: "fade",
+		});
+		vi.advanceTimersByTime(5000);
+		const incoming = state.stage.querySelector<HTMLElement>(
+			'[data-slide-id="b"]'
+		);
+		expect(incoming?.classList.contains("tvp-pending")).toBe(true);
+		expect(
+			state.stage
+				.querySelector('[data-slide-id="a"]')
+				?.classList.contains("tvp-pending")
+		).toBe(false);
+		incoming?.firstElementChild?.dispatchEvent(new Event("load"));
+		expect(incoming?.classList.contains("tvp-pending")).toBe(false);
+		expect(incoming?.classList.contains("tvp-fade")).toBe(true);
+		settle();
+		expect(visibleIds()).toEqual(["b"]);
+	});
+	it("shows a slide that never finishes loading after a wait", () => {
+		state.player = createPlayer(state.stage, {
+			slides: [slideA, slideB],
+			transition: "none",
+		});
+		vi.advanceTimersByTime(5000 + 3000);
+		expect(
+			state.stage
+				.querySelector('[data-slide-id="b"]')
+				?.classList.contains("tvp-pending")
+		).toBe(false);
+	});
+});
