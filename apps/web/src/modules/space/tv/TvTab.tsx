@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- one cohesive tab: slide actions, row, sortable list and toolbar share the same row store */
 import {
 	Badge,
 	Button,
@@ -8,6 +9,14 @@ import {
 	Switch,
 } from "@j-os/design-system";
 import type { Transition } from "@j-os/tv-player";
+import {
+	closestCenter,
+	createSortable,
+	DragDropProvider,
+	DragDropSensors,
+	SortableProvider,
+	type DragEvent,
+} from "@thisbeyond/solid-dnd";
 import { useMutation } from "convex-solidjs";
 import {
 	type Accessor,
@@ -38,6 +47,7 @@ import { ConfigXmlEditor } from "./ConfigXmlEditor.tsx";
 import { DevicesCard } from "./DevicesCard.tsx";
 import { durationProblem } from "./durationProblem.ts";
 import { PackActions } from "./PackActions.tsx";
+import { resolveReorder } from "./slideOrder.ts";
 import { SlideSheet } from "./SlideSheet.tsx";
 import type { Slide } from "./slideTypes.ts";
 import { TvPreview } from "./TvPreview.tsx";
@@ -61,6 +71,7 @@ function isTransition(value: string | undefined): value is TransitionValue {
 function createSlideActions() {
 	const updateSlide = useMutation(api.tvContent.updateConfigSlide);
 	const moveSlide = useMutation(api.tvContent.moveConfigSlide);
+	const reorderSlides = useMutation(api.tvContent.reorderConfigSlides);
 	const deleteSlide = useMutation(api.tvContent.removeConfigSlide);
 	const setTransition = useMutation(api.tv.setTransition);
 	const confirm = useConfirm();
@@ -89,6 +100,12 @@ function createSlideActions() {
 			await trackResult(
 				call(moveSlide.mutateAsync({ id, direction }), FAILED)
 			);
+		},
+		reorder: async (ids: string[]): Promise<boolean> => {
+			const result = await trackResult(
+				call(reorderSlides.mutateAsync({ ids }), FAILED)
+			);
+			return result.isOk();
 		},
 		setTransition: async (transition: TransitionValue): Promise<void> => {
 			await trackResult(
@@ -173,9 +190,25 @@ function DurationField(props: {
 	);
 }
 
-/** One slide's row. It reads its slide live by id, so a refetch updates it
- *  in place and keeps what is being typed. */
-function SlideRow(props: {
+/** The grip a row is dragged by. Only the grip starts a drag, so the
+ *  duration field, the switch and the buttons in the row stay usable. */
+function DragHandle(props: {
+	title: string;
+	activators: Record<string, (event: never) => void>;
+}): JSX.Element {
+	return (
+		// The activators sit on a wrapper: IconButton's tooltip puts its own
+		// pointer handlers on the button and would replace them there.
+		<span class={styles.grip} {...props.activators}>
+			<IconButton tooltipLabel={`Drag ${props.title} to reorder`}>
+				{ICONS.reorder}
+			</IconButton>
+		</span>
+	);
+}
+
+/** Move up and down for every slide; edit and delete only for the board's own. */
+function RowButtons(props: {
 	slide: Slide;
 	isFirst: boolean;
 	isLast: boolean;
@@ -183,57 +216,28 @@ function SlideRow(props: {
 	onEdit: (slide: Slide) => void;
 }): JSX.Element {
 	return (
-		<li class={styles.row}>
-			<span class={styles.title}>{props.slide.title}</span>
-			<Badge>{props.slide.kind === "html" ? "HTML" : "Image"}</Badge>
-			<Show when={props.slide.isMissing}>
-				<Badge>File missing</Badge>
-			</Show>
-			<Show
-				when={!props.slide.fromEvent}
-				fallback={
-					<span class={styles.eventNote}>
-						{`From event ${props.slide.eventName ?? "(deleted)"}`}
-					</span>
-				}
+		<>
+			<IconButton
+				tooltipLabel={`Move ${props.slide.title} up`}
+				disabled={props.isFirst}
+				disabledReason="Already first"
+				onClick={() => {
+					void props.actions.move(props.slide._id, "up");
+				}}
 			>
-				<DurationField
-					seconds={props.slide.durationSec}
-					title={props.slide.title}
-					onCommit={(seconds) =>
-						props.actions.setDuration(props.slide._id, seconds)
-					}
-				/>
-				<Switch
-					label="Shown"
-					checked={props.slide.enabled}
-					onCheckedChange={(details) => {
-						void props.actions.setEnabled(
-							props.slide._id,
-							details.checked
-						);
-					}}
-				/>
-				<IconButton
-					tooltipLabel={`Move ${props.slide.title} up`}
-					disabled={props.isFirst}
-					disabledReason="Already first"
-					onClick={() => {
-						void props.actions.move(props.slide._id, "up");
-					}}
-				>
-					{ICONS.up}
-				</IconButton>
-				<IconButton
-					tooltipLabel={`Move ${props.slide.title} down`}
-					disabled={props.isLast}
-					disabledReason="Already last"
-					onClick={() => {
-						void props.actions.move(props.slide._id, "down");
-					}}
-				>
-					{ICONS.down}
-				</IconButton>
+				{ICONS.up}
+			</IconButton>
+			<IconButton
+				tooltipLabel={`Move ${props.slide.title} down`}
+				disabled={props.isLast}
+				disabledReason="Already last"
+				onClick={() => {
+					void props.actions.move(props.slide._id, "down");
+				}}
+			>
+				{ICONS.down}
+			</IconButton>
+			<Show when={!props.slide.fromEvent}>
 				<IconButton
 					tooltipLabel={`Edit ${props.slide.title}`}
 					onClick={() => {
@@ -249,7 +253,132 @@ function SlideRow(props: {
 					{ICONS.delete}
 				</IconButton>
 			</Show>
+		</>
+	);
+}
+
+/** One slide's row. It reads its slide live by id, so a refetch updates it
+ *  in place and keeps what is being typed. An event's slide is the event's:
+ *  only its delay and its place in the order are the board's to change. */
+function SlideRow(props: {
+	slide: Slide;
+	isFirst: boolean;
+	isLast: boolean;
+	actions: SlideActions;
+	onEdit: (slide: Slide) => void;
+}): JSX.Element {
+	// eslint-disable-next-line solid/reactivity -- solid-dnd takes a stable id at creation time; rows are keyed by _id
+	const sortable = createSortable(props.slide._id);
+	// A row at rest carries no transform, so it does not clip a tooltip or the
+	// Select popup; the offset exists only while the list is being sorted.
+	function isMoved(): boolean {
+		return sortable.transform.x !== 0 || sortable.transform.y !== 0;
+	}
+	return (
+		<li
+			ref={sortable.ref}
+			class={styles.row}
+			classList={{ [styles.dragging]: sortable.isActiveDraggable }}
+			style={{
+				"--drag-x": isMoved()
+					? `${String(sortable.transform.x)}px`
+					: undefined,
+				"--drag-y": isMoved()
+					? `${String(sortable.transform.y)}px`
+					: undefined,
+			}}
+		>
+			<DragHandle
+				title={props.slide.title}
+				activators={sortable.dragActivators}
+			/>
+			<span class={styles.title}>{props.slide.title}</span>
+			<Badge>{props.slide.kind === "html" ? "HTML" : "Image"}</Badge>
+			<Show when={props.slide.isMissing}>
+				<Badge>File missing</Badge>
+			</Show>
+			<Show when={props.slide.fromEvent}>
+				<Badge>Auto-generated</Badge>
+				<span class={styles.eventNote}>
+					{`From event ${props.slide.eventName ?? "(deleted)"}`}
+				</span>
+			</Show>
+			<DurationField
+				seconds={props.slide.durationSec}
+				title={props.slide.title}
+				onCommit={(seconds) =>
+					props.actions.setDuration(props.slide._id, seconds)
+				}
+			/>
+			<Show when={!props.slide.fromEvent}>
+				<Switch
+					label="Shown"
+					checked={props.slide.enabled}
+					onCheckedChange={(details) => {
+						void props.actions.setEnabled(
+							props.slide._id,
+							details.checked
+						);
+					}}
+				/>
+			</Show>
+			<RowButtons
+				slide={props.slide}
+				isFirst={props.isFirst}
+				isLast={props.isLast}
+				actions={props.actions}
+				onEdit={props.onEdit}
+			/>
 		</li>
+	);
+}
+
+/** The slides as a list sorted by dragging a row's grip. A drop shows the new
+ *  order at once and saves it; if the server refuses, the rows go back. */
+function SortableSlideList(props: {
+	rows: Slide[];
+	showOrder: (ids: string[]) => void;
+	reset: () => void;
+	actions: SlideActions;
+	onEdit: (slide: Slide) => void;
+}): JSX.Element {
+	function onDragEnd({ draggable, droppable }: DragEvent): void {
+		if (!droppable) return;
+		const current = props.rows.map((row) => row._id);
+		const next = resolveReorder(
+			current,
+			String(draggable.id),
+			String(droppable.id)
+		);
+		if (next === current) return;
+		props.showOrder(next);
+		void props.actions.reorder(next).then((isSaved) => {
+			if (!isSaved) props.reset();
+		});
+	}
+	return (
+		<DragDropProvider
+			onDragEnd={onDragEnd}
+			collisionDetector={closestCenter}
+		>
+			<DragDropSensors>
+				<SortableProvider ids={props.rows.map((row) => row._id)}>
+					<ul class={styles.list}>
+						<For each={props.rows}>
+							{(row, index) => (
+								<SlideRow
+									slide={row}
+									isFirst={index() === 0}
+									isLast={index() === props.rows.length - 1}
+									actions={props.actions}
+									onEdit={props.onEdit}
+								/>
+							)}
+						</For>
+					</ul>
+				</SortableProvider>
+			</DragDropSensors>
+		</DragDropProvider>
 	);
 }
 
@@ -308,12 +437,29 @@ function TvToolbar(props: {
 /** A store reconciled by id: a refetch hands over new row objects, and a
  *  `<For>` over them would rebuild every row (and drop a half-typed
  *  duration). Here each row keeps its identity and updates in place. */
-function createSlideRows(source: Accessor<Slide[] | undefined>): Slide[] {
+function createSlideRows(source: Accessor<Slide[] | undefined>): {
+	rows: Slide[];
+	/** Shows `ids` as the order at once (a drop), until the next refetch. */
+	showOrder: (ids: string[]) => void;
+	/** Goes back to the server's order (a drop it refused). */
+	reset: () => void;
+} {
 	const [rows, setRows] = createStore<Slide[]>([]);
 	createComputed(() => {
 		setRows(reconcile(source() ?? [], { key: "_id" }));
 	});
-	return rows;
+	return {
+		rows,
+		showOrder: (ids) => {
+			const byId = new Map(rows.map((row) => [row._id, row]));
+			const ordered = ids.flatMap((id) => byId.get(id) ?? []);
+			// Same ids, same objects: reconcile moves the rows, `<For>` keeps them.
+			setRows(reconcile(ordered, { key: "_id" }));
+		},
+		reset: () => {
+			setRows(reconcile(source() ?? [], { key: "_id" }));
+		},
+	};
 }
 
 /**
@@ -332,7 +478,7 @@ export function TvTab(): JSX.Element {
 		rows: () => slides.data()?.filter((slide) => !slide.fromEvent),
 		param: "slide",
 	});
-	const rows = createSlideRows(slides.data);
+	const { rows, showOrder, reset } = createSlideRows(slides.data);
 	function isMigrating(): boolean {
 		return pack.data()?.isAwaitingMigration === true;
 	}
@@ -373,19 +519,13 @@ export function TvTab(): JSX.Element {
 					</Show>
 				}
 			>
-				<ul class={styles.list}>
-					<For each={rows}>
-						{(row, index) => (
-							<SlideRow
-								slide={row}
-								isFirst={index() === 0}
-								isLast={index() === rows.length - 1}
-								actions={actions}
-								onEdit={selection.openRow}
-							/>
-						)}
-					</For>
-				</ul>
+				<SortableSlideList
+					rows={rows}
+					showOrder={showOrder}
+					reset={reset}
+					actions={actions}
+					onEdit={selection.openRow}
+				/>
 			</Show>
 			<ConfigXmlEditor state={pack.data} />
 			<DevicesCard />

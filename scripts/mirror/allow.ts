@@ -66,7 +66,7 @@ export const ALLOWED_MAC_PREFIXES: readonly string[] = [
 export const BINARIES: readonly { path: string; sha256: string }[] = [
   {
     path: "packages/design-system/src/styles/material-symbols-sharp-subset.woff2",
-    sha256: "1bf03fd2eabb29317ea9f38488cc8ec62a4d898db76badcb5c990707c685599b",
+    sha256: "1b88c339cf96c61435e0e31bfae76b03aee6471889c0919322a138db0e150257",
   },
   {
     path: "apps/tv/public/icon.png",

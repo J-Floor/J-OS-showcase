@@ -1,26 +1,38 @@
 @use "@j-os/design-system/typography" as typo;
 
-/* Nearly the whole viewport; the stage keeps the TV's 16:9 shape inside it. */
-.card {
+/* Nearly the whole viewport; the stage keeps the TV's 16:9 shape inside it.
+   The shared dialog's card is already a column flex container when open, so
+   the header keeps its height and the body below takes the rest. The doubled
+   class beats the dialog's own single-class width and height caps. */
+.card.card {
 	inline-size: 96vi;
 	max-inline-size: 96vi;
 	block-size: 92dvb;
+
+	/* The dialog has no hook for its body's class, and the card's children are
+	   exactly the header and the body, so the body is the last one. Without
+	   this it sizes to its content, the frame below collapses to no height and
+	   the stage has nothing to fit against. */
+	> :last-child {
+		flex: 1 1 0;
+		min-block-size: 0;
+	}
 }
 
+/* Fills the body and measures itself (`container-type: size`), so the stage
+   below can pick the largest 16:9 box that fits. */
 .frame {
 	position: relative;
-	display: flex;
-	flex-wrap: wrap;
-	flex: 1;
-	align-items: center;
-	justify-content: center;
+	display: grid;
+	flex: 1 1 0;
+	place-items: center;
 	min-block-size: 0;
+	container-type: size;
 }
 
 .stage {
 	aspect-ratio: 16 / 9;
-	inline-size: 100%;
-	max-block-size: 100%;
+	inline-size: min(100cqi, 100cqb * 16 / 9);
 }
 
 .loading {

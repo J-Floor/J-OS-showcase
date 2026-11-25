@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import {
+	parseConfigXml,
 	serializeConfig,
 	type TvConfig,
 	type TvConfigSlide,
@@ -960,6 +961,94 @@ describe("a pack file whose blob vanished", () => {
 	});
 });
 
+function slideIds(backend: Backend) {
+	return backend.run(async (context) => {
+		const row = await context.db.query("tvConfig").first();
+		const parsed = parseConfigXml(row?.xml ?? "");
+		return parsed.isOk()
+			? parsed.value.slides.map((slide) => slide.id)
+			: [];
+	});
+}
+
+describe("event slide delay and order", () => {
+	it("lets the board set an event slide's delay", async () => {
+		const { backend, asBoard } = await setup();
+		await seedConfig(backend, EVENT_CONFIG);
+		await asBoard.mutation(api.tvContent.updateConfigSlide, {
+			id: "event-abc",
+			durationSec: 45,
+		});
+		expect(await savedXml(backend)).toContain(
+			'src="slides/event-abc.html" duration="45"'
+		);
+	});
+
+	it("still refuses to retitle an event slide, even with a delay", async () => {
+		const { backend, asBoard } = await setup();
+		await seedConfig(backend, EVENT_CONFIG);
+		const before = await savedXml(backend);
+		await expect(
+			asBoard.mutation(api.tvContent.updateConfigSlide, {
+				id: "event-abc",
+				title: "x",
+				durationSec: 45,
+			})
+		).rejects.toThrow(/comes from an event/);
+		expect(await savedXml(backend)).toBe(before);
+	});
+
+	it("reorders every slide and bumps the version", async () => {
+		const { backend, asBoard } = await setup();
+		await seedConfig(backend, EVENT_CONFIG, 3);
+		await asBoard.mutation(api.tvContent.reorderConfigSlides, {
+			ids: ["event-abc", "a"],
+		});
+		expect(await slideIds(backend)).toEqual(["event-abc", "a"]);
+		expect(await configVersion(backend)).toBe(4);
+	});
+
+	it("is a no-op when the order is unchanged: no version bump", async () => {
+		const { backend, asBoard } = await setup();
+		await seedConfig(backend, EVENT_CONFIG, 3);
+		await asBoard.mutation(api.tvContent.reorderConfigSlides, {
+			ids: ["a", "event-abc"],
+		});
+		expect(await configVersion(backend)).toBe(3);
+		expect(await buildJobs(backend)).toBe(0);
+	});
+
+	it("refuses a wrong id set and leaves the config alone", async () => {
+		const { backend, asBoard } = await setup();
+		await seedConfig(backend, EVENT_CONFIG, 3);
+		for (const ids of [
+			["a"],
+			["a", "a"],
+			["a", "x"],
+			["a", "event-abc", "x"],
+		])
+			await expect(
+				asBoard.mutation(api.tvContent.reorderConfigSlides, { ids })
+			).rejects.toThrow(/changed meanwhile/);
+		expect(await slideIds(backend)).toEqual(["a", "event-abc"]);
+		expect(await configVersion(backend)).toBe(3);
+	});
+
+	it("refuses a member and a signed-out caller", async () => {
+		const { backend, asMember } = await setup();
+		await seedConfig(backend, EVENT_CONFIG, 3);
+		const args = { ids: ["event-abc", "a"] };
+		await expect(
+			asMember.mutation(api.tvContent.reorderConfigSlides, args)
+		).rejects.toThrow(/Forbidden/);
+		await expect(
+			backend.mutation(api.tvContent.reorderConfigSlides, args)
+		).rejects.toThrow(/NotAuthenticated/);
+		expect(await slideIds(backend)).toEqual(["a", "event-abc"]);
+		expect(await configVersion(backend)).toBe(3);
+	});
+});
+
 describe("move", () => {
 	it("is a true no-op at the ends: no version bump, no build", async () => {
 		const { backend, asBoard } = await setup();
@@ -976,16 +1065,15 @@ describe("move", () => {
 		expect(await buildJobs(backend)).toBe(0);
 	});
 
-	it("refuses an event slide", async () => {
+	it("moves an event slide like any other", async () => {
 		const { backend, asBoard } = await setup();
-		await seedConfig(backend, EVENT_CONFIG);
-		await expect(
-			asBoard.mutation(api.tvContent.moveConfigSlide, {
-				id: "event-abc",
-				direction: "up",
-			})
-		).rejects.toThrow(/comes from an event/);
-		expect(await buildJobs(backend)).toBe(0);
+		await seedConfig(backend, EVENT_CONFIG, 3);
+		await asBoard.mutation(api.tvContent.moveConfigSlide, {
+			id: "event-abc",
+			direction: "up",
+		});
+		expect(await slideIds(backend)).toEqual(["event-abc", "a"]);
+		expect(await configVersion(backend)).toBe(4);
 	});
 });
 
@@ -1050,7 +1138,7 @@ describe("saveConfigXml refusals", () => {
 					SLIDE_A,
 					{
 						...EVENT_CONFIG.slides[1],
-						duration: 99,
+						title: "Hijacked",
 					},
 				],
 			}),

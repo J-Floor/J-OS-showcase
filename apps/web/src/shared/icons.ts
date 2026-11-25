@@ -7,6 +7,7 @@ import { ICONS as UI_ICONS } from "@j-os/design-system/icons";
 export const ICONS = {
 	...UI_ICONS,
 	navMore: "more_horiz",
+	reorder: "drag_indicator",
 	unlock: "lock_open_right",
 	lock: "lock",
 	door: "door_front",

@@ -51,6 +51,20 @@ const EVENT_MANAGERS = { action: "manage", subject: "Events" } as const;
 
 export const CHANGELOG: ChangeEntry[] = [
 	{
+		version: "1.14",
+		title: "TV slide order and cleanup",
+		items: [
+			{
+				text: "Drag slides into any order in Space → TV, and give an event's slide its own delay. Slides the app makes for events are marked Auto-generated.",
+				audience: SPACE_MANAGERS,
+			},
+			{
+				text: "Remove a revoked TV from the TV list once you no longer need it listed.",
+				audience: SPACE_MANAGERS,
+			},
+		],
+	},
+	{
 		version: "1.13",
 		title: "TV screen schedule",
 		items: [

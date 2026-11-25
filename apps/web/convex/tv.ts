@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- the TV's pairing, device and legacy slide API share one module and its helpers; the legacy part leaves with the tvSlides cleanup */
 import { v } from "convex/values";
 
 import type { Doc, Id } from "./_generated/dataModel";
@@ -424,15 +425,35 @@ export const listDevices = query({
 	},
 });
 
+/** The board's TV `id`, whether live or revoked; refuses a missing one. */
+async function boardDevice(
+	context: MutationCtx,
+	id: Id<"tvDevices">
+): Promise<Doc<"tvDevices">> {
+	unwrap(await requireRole(context, BOARD_LEVEL));
+	const device = await context.db.get(id);
+	if (!device) refuse({ type: "TvDeviceNotFound" });
+	return device;
+}
+
 /** Board-only: cut a TV off. Its token stops working; the row stays listed. */
 export const revokeDevice = mutation({
 	args: { id: v.id("tvDevices") },
 	handler: async (context, args): Promise<void> => {
-		unwrap(await requireRole(context, BOARD_LEVEL));
-		const device = await context.db.get(args.id);
-		if (!device) refuse({ type: "TvDeviceNotFound" });
+		const device = await boardDevice(context, args.id);
 		if (device.revokedAt === undefined)
 			await context.db.patch(device._id, { revokedAt: Date.now() });
+	},
+});
+
+/** Board-only: remove a revoked TV's entry for good. A live TV must be revoked first. */
+export const deleteDevice = mutation({
+	args: { id: v.id("tvDevices") },
+	handler: async (context, args): Promise<void> => {
+		const device = await boardDevice(context, args.id);
+		if (device.revokedAt === undefined)
+			refuse({ type: "TvDeviceNotRevoked" });
+		await context.db.delete(device._id);
 	},
 });
 

@@ -35,6 +35,23 @@
 	padding: var(--jf-spacing-near);
 	background: var(--jf-surface-bg-raised);
 	border-radius: var(--jf-radius-container);
+	transform: translate(var(--drag-x), var(--drag-y));
+}
+
+.dragging {
+	position: relative;
+	z-index: 1;
+	box-shadow: var(--jf-shadow-surface-elevation);
+}
+
+.grip {
+	display: inline-block;
+	cursor: grab;
+	touch-action: none;
+
+	.dragging & {
+		cursor: grabbing;
+	}
 }
 
 .title {

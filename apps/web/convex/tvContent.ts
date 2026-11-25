@@ -14,6 +14,7 @@ import {
 	moveSlide,
 	nextSlideId,
 	removeSlide,
+	reorderSlides,
 	setSlideFields,
 } from "./lib/tv/configEdits.ts";
 import {
@@ -256,7 +257,7 @@ export const addConfigSlide = mutation({
 	},
 });
 
-/** Board-only: edit a manual slide; a new file replaces the old one (whose blob is deleted). */
+/** Board-only: edit a manual slide; a new file replaces the old one (whose blob is deleted). An event's slide takes only a new `durationSec`. */
 export const updateConfigSlide = mutation({
 	args: {
 		id: v.string(),
@@ -296,7 +297,7 @@ export const updateConfigSlide = mutation({
 	},
 });
 
-/** Board-only: swap a manual slide with its neighbour; a no-op at the ends. */
+/** Board-only: swap a slide, an event's included, with its neighbour; a no-op at the ends. */
 export const moveConfigSlide = mutation({
 	args: {
 		id: v.string(),
@@ -306,6 +307,18 @@ export const moveConfigSlide = mutation({
 		unwrap(await requireRole(context, BOARD_LEVEL));
 		await editConfig(context, (current) =>
 			unwrap(moveSlide(current, args.id, args.direction))
+		);
+		return null;
+	},
+});
+
+/** Board-only: put every slide in the order of `ids` (the current ids, each once); event slides included. */
+export const reorderConfigSlides = mutation({
+	args: { ids: v.array(v.string()) },
+	handler: async (context, args): Promise<null> => {
+		unwrap(await requireRole(context, BOARD_LEVEL));
+		await editConfig(context, (current) =>
+			unwrap(reorderSlides(current, args.ids))
 		);
 		return null;
 	},

@@ -132,7 +132,10 @@ test("a revoked TV says so and has no revoke button", () => {
 	renderCard();
 	const row = rowOf("Old TV");
 	expect(within(row).getByText("Revoked")).toBeInTheDocument();
-	expect(within(row).queryByRole("button")).toBeNull();
+	// Only Remove is left: no schedule, no revoke.
+	const buttons = within(row).getAllByRole("button");
+	expect(buttons).toHaveLength(1);
+	expect(buttons[0]).toHaveAccessibleName("Remove Old TV");
 	expect(screen.queryByRole("button", { name: "Revoke Old TV" })).toBeNull();
 });
 
@@ -169,4 +172,40 @@ test("the schedule button opens the sheet for that TV; a revoked TV has none", a
 		screen.getByRole("button", { name: "Schedule for Lobby TV" })
 	);
 	expect(await screen.findAllByRole("radiogroup")).toHaveLength(7);
+});
+
+test("a revoked TV has a Remove button; a live one does not", () => {
+	renderCard();
+	expect(
+		within(rowOf("Old TV")).getByRole("button", { name: "Remove Old TV" })
+	).toBeInTheDocument();
+	expect(
+		screen.queryByRole("button", { name: "Remove Lobby TV" })
+	).toBeNull();
+	expect(
+		screen.queryByRole("button", { name: "Remove Spare TV" })
+	).toBeNull();
+});
+
+test("removing asks first and deletes only once confirmed", async () => {
+	renderCard();
+	fireEvent.click(screen.getByRole("button", { name: "Remove Old TV" }));
+	const confirm = await screen.findByRole("button", { name: "Remove" });
+	expect(convexMock.mutate).not.toHaveBeenCalled();
+	fireEvent.click(confirm);
+	await waitFor(() => {
+		expect(convexMock.mutate).toHaveBeenCalledWith("tv:deleteDevice", {
+			id: "device-gone",
+		});
+	});
+});
+
+test("declining the removal deletes nothing", async () => {
+	renderCard();
+	fireEvent.click(screen.getByRole("button", { name: "Remove Old TV" }));
+	fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+	await waitFor(() => {
+		expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+	});
+	expect(convexMock.mutate).not.toHaveBeenCalled();
 });

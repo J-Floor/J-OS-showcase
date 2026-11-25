@@ -8,6 +8,8 @@ import {
 	nextSlideId,
 	removeEventSlides,
 	removeSlide,
+	reorderSlides,
+	sameEventSlide,
 	setSlideFields,
 	upsertEventSlide,
 	withEventSlides,
@@ -56,15 +58,58 @@ describe("manual edits", () => {
 		});
 	});
 
-	it("never touches an event slide", () => {
+	it("never removes or rewrites an event slide's content", () => {
 		for (const edit of [
 			setSlideFields(CONFIG, "event-abc", { enabled: false }),
-			moveSlide(CONFIG, "event-abc", "up"),
+			setSlideFields(CONFIG, "event-abc", { title: "x" }),
+			setSlideFields(CONFIG, "event-abc", { src: "x" }),
+			setSlideFields(CONFIG, "event-abc", { duration: 30, title: "x" }),
 			removeSlide(CONFIG, "event-abc"),
 		])
 			expect(edit.isErr() && edit.error).toEqual({
 				type: "TvEventSlideLocked",
 			});
+	});
+
+	it("lets the board set an event slide's duration and move it", () => {
+		const timed = setSlideFields(CONFIG, "event-abc", { duration: 30 });
+		expect(timed.isOk() && timed.value.slides[1]).toEqual({
+			...EVENT,
+			duration: 30,
+		});
+		const up = moveSlide(CONFIG, "event-abc", "up");
+		expect(up.isOk() && ids(up.value)).toEqual(["event-abc", "a", "b"]);
+		const down = moveSlide(CONFIG, "event-abc", "down");
+		expect(down.isOk() && ids(down.value)).toEqual(["a", "b", "event-abc"]);
+	});
+
+	it("reorders by id and refuses a wrong id set", () => {
+		const config: TvConfig = {
+			transition: "fade",
+			slides: [manual("a"), manual("b"), manual("c")],
+		};
+		const reordered = reorderSlides(config, ["c", "a", "b"]);
+		expect(reordered.isOk() && ids(reordered.value)).toEqual([
+			"c",
+			"a",
+			"b",
+		]);
+		for (const wrong of [
+			["a", "b"],
+			["a", "b", "c", "d"],
+			["a", "a", "b"],
+			["a", "b", "x"],
+		]) {
+			const edit = reorderSlides(config, wrong);
+			expect(edit.isErr() && edit.error).toEqual({
+				type: "TvConfigStale",
+			});
+		}
+	});
+
+	it("returns the same config when the order does not change", () => {
+		const same = reorderSlides(CONFIG, ["a", "event-abc", "b"]);
+		expect(same.isOk() && same.value).toBe(CONFIG);
 	});
 
 	it("refuses an unknown id", () => {
@@ -147,8 +192,8 @@ describe("manual edits", () => {
 
 describe("event slides (PR C's writer)", () => {
 	it("replaces an event's slide in place, or appends it", () => {
-		const replaced = upsertEventSlide(CONFIG, { ...EVENT, duration: 25 });
-		expect(replaced.isOk() && replaced.value.slides[1]?.duration).toBe(25);
+		const replaced = upsertEventSlide(CONFIG, { ...EVENT, title: "New" });
+		expect(replaced.isOk() && replaced.value.slides[1]?.title).toBe("New");
 		const added = upsertEventSlide(CONFIG, {
 			...EVENT,
 			id: "event-def",
@@ -161,6 +206,38 @@ describe("event slides (PR C's writer)", () => {
 			"b",
 			"event-def",
 		]);
+	});
+
+	it("keeps the board's delay and the position when the event slide is rewritten", () => {
+		const timed: TvConfig = {
+			...CONFIG,
+			slides: [manual("a"), { ...EVENT, duration: 45 }, manual("b")],
+		};
+		const resynced = upsertEventSlide(timed, {
+			...EVENT,
+			title: "New title",
+			duration: 20,
+		});
+		expect(resynced.isOk() && resynced.value.slides[1]).toEqual({
+			...EVENT,
+			title: "New title",
+			duration: 45,
+		});
+		expect(resynced.isOk() && ids(resynced.value)).toEqual([
+			"a",
+			"event-abc",
+			"b",
+		]);
+	});
+
+	it("appends a first-time event slide with the delay it carries", () => {
+		const added = upsertEventSlide(CONFIG, {
+			...EVENT,
+			id: "event-def",
+			event: "def",
+			duration: 20,
+		});
+		expect(added.isOk() && added.value.slides[3]?.duration).toBe(20);
 	});
 
 	it("refuses a new event slide whose id a manual slide holds", () => {
@@ -197,12 +274,12 @@ describe("event slides (PR C's writer)", () => {
 			slides: [manual("abc"), stale, EVENT],
 		};
 		expect(ids(removeEventSlides(config, "abc"))).toEqual(["abc", "stale"]);
-		const upserted = upsertEventSlide(config, { ...EVENT, duration: 40 });
+		const upserted = upsertEventSlide(config, { ...EVENT, title: "T" });
 		expect(upserted.isOk() && upserted.value.slides.slice(0, 2)).toEqual([
 			manual("abc"),
 			stale,
 		]);
-		expect(upserted.isOk() && upserted.value.slides[2]?.duration).toBe(40);
+		expect(upserted.isOk() && upserted.value.slides[2]?.title).toBe("T");
 	});
 });
 
@@ -213,6 +290,33 @@ describe("checks for a board save", () => {
 			slides: [EVENT, manual("a")],
 		};
 		expect(eventSlideProblems(CONFIG, next)).toEqual([]);
+	});
+
+	it("accepts a save that changes only an event slide's duration", () => {
+		const next: TvConfig = {
+			...CONFIG,
+			slides: CONFIG.slides.map((slide) =>
+				slide === EVENT
+					? { ...EVENT, duration: EVENT.duration + 25 }
+					: slide
+			),
+		};
+		expect(eventSlideProblems(CONFIG, next)).toEqual([]);
+		for (const owned of [
+			{ title: "Other" },
+			{ src: "slides/other.html" },
+			{ enabled: !EVENT.enabled },
+		]) {
+			const changed: TvConfig = {
+				...CONFIG,
+				slides: CONFIG.slides.map((slide) =>
+					slide === EVENT
+						? { ...EVENT, duration: 99, ...owned }
+						: slide
+				),
+			};
+			expect(eventSlideProblems(CONFIG, changed)).toHaveLength(2);
+		}
 	});
 
 	it("refuses a save that changes, drops or invents an event slide", () => {
@@ -270,6 +374,49 @@ describe("withEventSlides (pack import)", () => {
 		});
 	});
 
+	it("keeps an event slide's current delay and position", () => {
+		const first = { ...EVENT, id: "event-one", event: "one", duration: 45 };
+		const middle = {
+			...EVENT,
+			id: "event-two",
+			event: "two",
+			duration: 33,
+		};
+		const timed: TvConfig = {
+			transition: "fade",
+			slides: [first, manual("a"), manual("b"), middle, manual("c")],
+		};
+		const merged = withEventSlides(
+			{
+				transition: "none",
+				slides: [manual("x"), manual("y"), manual("z"), manual("w")],
+			},
+			timed
+		);
+		expect(merged.isOk() && ids(merged.value)).toEqual([
+			"event-one",
+			"x",
+			"y",
+			"event-two",
+			"z",
+			"w",
+		]);
+		expect(merged.isOk() && merged.value.slides[0]).toEqual(first);
+		expect(merged.isOk() && merged.value.slides[3]).toEqual(middle);
+	});
+
+	it("clamps an event slide's old position to a shorter import", () => {
+		const last = { ...EVENT, duration: 45 };
+		const merged = withEventSlides(
+			{ transition: "none", slides: [manual("x")] },
+			{
+				transition: "fade",
+				slides: [manual("a"), manual("b"), manual("c"), last],
+			}
+		);
+		expect(merged.isOk() && ids(merged.value)).toEqual(["x", "event-abc"]);
+	});
+
 	it("refuses an import that carries event slides or reuses their ids", () => {
 		const carrying = withEventSlides(
 			{ transition: "fade", slides: [EVENT] },
@@ -281,5 +428,13 @@ describe("withEventSlides (pack import)", () => {
 			CONFIG
 		);
 		expect(clashing.isErr() && clashing.error[0]).toContain("event-abc");
+	});
+});
+
+describe("sameEventSlide", () => {
+	it("ignores the board's delay but sees any other change", () => {
+		expect(sameEventSlide({ ...EVENT, duration: 45 }, EVENT)).toBe(true);
+		expect(sameEventSlide({ ...EVENT, title: "x" }, EVENT)).toBe(false);
+		expect(sameEventSlide({ ...EVENT, enabled: false }, EVENT)).toBe(false);
 	});
 });

@@ -1,4 +1,7 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { cleanup, render, screen, waitFor } from "@solidjs/testing-library";
 import { createSignal } from "solid-js";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -175,4 +178,39 @@ test("a slide whose file answers with an error is skipped and the others still s
 			{ id: "a", kind: "html", durationSec: 15, html: "<p>hi</p>" },
 		]);
 	});
+});
+
+test("the stage sits in a measured frame inside the sized card", () => {
+	renderPreview();
+	const [stage] = previewMock.createPlayer.mock.calls[0] as [HTMLElement];
+	expect(stage.className).toMatch(/stage/);
+	expect(stage.parentElement?.className).toMatch(/frame/);
+	expect(screen.getByRole("dialog").className).toMatch(/card/);
+});
+
+// Limits: a DOM without layout (happy-dom) computes no CSS cascade, sizes or
+// container queries, and the player is a spy, so no test here can observe the
+// stage's real size. The real defect (the dialog body sizing to its content,
+// so the measured frame collapsed to zero height and the player's fit never
+// ran) was checked in headless Chromium against the compiled CSS. This test
+// pins the declarations that fix it, so dropping one fails loudly.
+test("the stylesheet makes the dialog body fill the card and the stage fit the measured frame", () => {
+	const css = readFileSync(
+		resolve(process.cwd(), "src/modules/space/tv/TvPreview.module.scss"),
+		"utf8"
+	);
+	function rule(selector: string): string {
+		return new RegExp(`${selector}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? "";
+	}
+	// The body is the card's last child; it must grow into the card's height.
+	expect(css).toMatch(
+		/> :last-child\s*\{[^}]*flex:\s*1 1 0;[^}]*min-block-size:\s*0;/
+	);
+	// The frame is measured, and the stage is sized from that measure.
+	expect(rule("\\.frame")).toMatch(/container-type:\s*size/);
+	expect(rule("\\.stage")).toMatch(
+		/inline-size:\s*min\(100cqi, 100cqb \* 16 \/ 9\)/
+	);
+	// Beats the dialog's own single-class width cap.
+	expect(css).toMatch(/\.card\.card\s*\{/);
 });

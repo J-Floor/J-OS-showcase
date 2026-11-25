@@ -7,11 +7,19 @@
 	align-items: flex-start;
 }
 
+.preview {
+	inline-size: 100%;
+	aspect-ratio: 16 / 9;
+	max-block-size: 20rem;
+	overflow: hidden;
+	background-color: var(--jf-surface-bg-sunken);
+	border-radius: var(--jf-radius-container);
+}
+
 .image {
 	display: block;
-	max-inline-size: 100%;
-	max-block-size: 12rem;
-	border-radius: var(--jf-radius-container);
+	inline-size: 100%;
+	block-size: 100%;
 	object-fit: contain;
 }
 

@@ -55,6 +55,32 @@ vi.mock("convex-solidjs", async () => {
 	};
 });
 
+// The real provider, with its drop handler kept so a test can fire a drop
+// (happy-dom has no layout for a pointer drag to measure).
+const dnd = vi.hoisted(() => ({
+	onDragEnd: undefined as
+		| ((event: {
+				draggable: { id: string };
+				droppable: { id: string } | null;
+		  }) => void)
+		| undefined,
+}));
+
+vi.mock("@thisbeyond/solid-dnd", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("@thisbeyond/solid-dnd")>();
+	return {
+		...actual,
+		DragDropProvider: (
+			props: Parameters<typeof actual.DragDropProvider>[0]
+		) => {
+			// eslint-disable-next-line solid/reactivity -- a test double keeping the handler to call it
+			dnd.onDragEnd = props.onDragEnd as typeof dnd.onDragEnd;
+			return actual.DragDropProvider(props);
+		},
+	};
+});
+
 const SLIDES = [
 	{
 		_id: "welcome",
@@ -319,36 +345,106 @@ test.each([
 	}
 );
 
-test("an event slide is marked and offers no edit, move or delete", () => {
-	convexMock.set("tvContent:listConfigSlides", [
-		...SLIDES,
-		{
-			_id: "event-abc",
-			title: "event-abc",
-			kind: "html",
-			durationSec: 20,
-			enabled: true,
-			fromEvent: true,
-			eventName: "Demo night",
-			isMissing: false,
-		},
-	]);
+const EVENT_SLIDE = {
+	_id: "event-abc",
+	title: "event-abc",
+	kind: "html",
+	durationSec: 20,
+	enabled: true,
+	fromEvent: true,
+	eventName: "Demo night",
+	isMissing: false,
+};
+
+function withEventSlide(): void {
+	convexMock.set("tvContent:listConfigSlides", [...SLIDES, EVENT_SLIDE]);
+}
+
+test("an event slide is labelled auto-generated, has a delay and moves, but cannot be edited, deleted or switched", () => {
+	withEventSlide();
 	renderTab();
 	expect(screen.getByText("From event Demo night")).toBeInTheDocument();
+	expect(screen.getAllByText("Auto-generated")).toHaveLength(1);
 	expect(
 		screen.queryByRole("button", { name: "Delete event-abc" })
 	).toBeNull();
 	expect(screen.queryByRole("button", { name: "Edit event-abc" })).toBeNull();
 	expect(
-		screen.queryByRole("button", { name: "Move event-abc up" })
-	).toBeNull();
-	// Nor the switch or the duration: only the two own slides have them.
-	expect(screen.getAllByRole("switch")).toHaveLength(SLIDES.length);
+		screen.getByRole("button", { name: "Move event-abc up" })
+	).toBeEnabled();
 	expect(
-		screen.queryByRole("spinbutton", {
-			name: "Seconds on screen for event-abc",
-		})
-	).toBeNull();
+		screen.getByRole("button", { name: "Move event-abc down" })
+	).toBeDisabled();
+	expect(durationField("event-abc")).toHaveValue("20");
+	// The switch is the own slides' only.
+	expect(screen.getAllByRole("switch")).toHaveLength(SLIDES.length);
+});
+
+test("a manual slide is not labelled auto-generated", () => {
+	renderTab();
+	expect(screen.queryByText("Auto-generated")).toBeNull();
+});
+
+test("an event slide's delay is saved alone, with nothing else the server would refuse", async () => {
+	withEventSlide();
+	renderTab();
+	const input = await typeDuration("event-abc", "45");
+	input.blur();
+	await waitFor(() => {
+		expect(convexMock.mutate).toHaveBeenCalledWith(
+			"tvContent:updateConfigSlide",
+			{ id: "event-abc", durationSec: 45 }
+		);
+	});
+});
+
+test("the up button moves an event slide", async () => {
+	withEventSlide();
+	renderTab();
+	fireEvent.click(screen.getByRole("button", { name: "Move event-abc up" }));
+	await waitFor(() => {
+		expect(convexMock.mutate).toHaveBeenCalledWith(
+			"tvContent:moveConfigSlide",
+			{ id: "event-abc", direction: "up" }
+		);
+	});
+});
+
+test("every row has a drag handle that leaves the row's own controls alone", () => {
+	withEventSlide();
+	renderTab();
+	for (const title of ["Welcome", "Poster", "event-abc"]) {
+		expect(
+			screen.getByRole("button", { name: `Drag ${title} to reorder` })
+		).toBeInTheDocument();
+	}
+});
+
+test("pressing in a row's duration field or switch does not start a drag", () => {
+	renderTab();
+	const row = screen.getAllByRole("listitem")[0];
+	for (const target of [
+		durationField("Welcome"),
+		within(row).getByRole("switch"),
+	]) {
+		fireEvent.pointerDown(target, { button: 0, clientX: 5, clientY: 5 });
+		fireEvent.pointerMove(document, { clientX: 60, clientY: 60 });
+		// A drag in progress marks the row; none started.
+		expect(row.className).not.toMatch(/dragging/);
+		fireEvent.pointerUp(document);
+	}
+});
+
+test("pressing the grip and moving starts a drag of that row", () => {
+	renderTab();
+	const row = screen.getAllByRole("listitem")[0];
+	const grip = screen.getByRole("button", {
+		name: "Drag Welcome to reorder",
+	});
+	fireEvent.pointerDown(grip, { button: 0, clientX: 5, clientY: 5 });
+	fireEvent.pointerMove(document, { clientX: 60, clientY: 60 });
+	expect(row.className).toMatch(/dragging/);
+	fireEvent.pointerUp(document);
 });
 
 test("a slide whose file is missing says so", () => {
@@ -387,4 +483,58 @@ test("while the legacy slides are being moved it says so and nothing can be edit
 		screen.getByRole("button", { name: "Upload pack (.zip)" })
 	).toBeDisabled();
 	expect(screen.getByRole("textbox", { name: "config.xml" })).toBeDisabled();
+});
+
+function rowTitles(): string[] {
+	return screen
+		.getAllByRole("listitem")
+		.flatMap((row) =>
+			within(row).queryAllByText(/^(Welcome|Poster|event-abc)$/)
+		)
+		.map((node) => node.textContent);
+}
+
+test("dropping a row on another reorders at once and saves the new order", async () => {
+	withEventSlide();
+	renderTab();
+	dnd.onDragEnd?.({
+		draggable: { id: "event-abc" },
+		droppable: { id: "welcome" },
+	});
+	await waitFor(() => {
+		expect(rowTitles()).toEqual(["event-abc", "Welcome", "Poster"]);
+	});
+	expect(convexMock.mutate).toHaveBeenCalledWith(
+		"tvContent:reorderConfigSlides",
+		{ ids: ["event-abc", "welcome", "poster"] }
+	);
+});
+
+test("a drop on nothing or on itself saves nothing", () => {
+	renderTab();
+	expect(dnd.onDragEnd).toBeDefined();
+	dnd.onDragEnd?.({ draggable: { id: "welcome" }, droppable: null });
+	dnd.onDragEnd?.({
+		draggable: { id: "welcome" },
+		droppable: { id: "welcome" },
+	});
+	expect(convexMock.mutate).not.toHaveBeenCalledWith(
+		"tvContent:reorderConfigSlides",
+		expect.anything()
+	);
+});
+
+test("a refused reorder puts the rows back in the server's order", async () => {
+	convexMock.mutate.mockRejectedValueOnce(new Error("refused"));
+	renderTab();
+	dnd.onDragEnd?.({
+		draggable: { id: "poster" },
+		droppable: { id: "welcome" },
+	});
+	await waitFor(() => {
+		expect(rowTitles()).toEqual(["Welcome", "Poster"]);
+	});
+	expect(
+		await screen.findByText("Could not update the TV. Try again.")
+	).toBeInTheDocument();
 });

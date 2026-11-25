@@ -12,7 +12,11 @@ import {
 } from "./lib/tv/configXml.ts";
 import { TV_LIMITS } from "./lib/tv/constants.ts";
 import { qrSvg } from "./lib/tv/eventSlide.ts";
-import { eventSlideEntry, eventSlidePaths } from "./lib/tv/eventSlideFiles.ts";
+import {
+	eventSlideEntry,
+	eventSlidePaths,
+	TV_EVENT_SLIDE_SECONDS,
+} from "./lib/tv/eventSlideFiles.ts";
 import { discardStored } from "./lib/tv/eventSlideSource.ts";
 import schema from "./schema.ts";
 
@@ -986,5 +990,79 @@ describe("reconcileEventSlides", () => {
 		expect(after.version).toBe(before.version);
 		expect(after.slides).toEqual(before.slides);
 		expect(after.owned).toEqual(before.owned);
+	});
+});
+
+/** What the board's edit leaves in the stored config: its slides, rewritten. */
+async function editStoredSlides(
+	backend: Backend,
+	edit: (slides: TvConfigSlide[]) => TvConfigSlide[]
+): Promise<void> {
+	await backend.run(async (context) => {
+		const row = await context.db.query("tvConfig").first();
+		const parsed = parseConfigXml(row?.xml ?? "");
+		if (!row || parsed.isErr()) throw new Error("no config");
+		await context.db.patch(row._id, {
+			xml: serializeConfig({
+				...parsed.value,
+				slides: edit(parsed.value.slides),
+			}),
+		});
+	});
+}
+
+describe("a board-set delay and position", () => {
+	it("survive a re-render after the event changed", async () => {
+		vi.useFakeTimers({ toFake: ["setTimeout"] });
+		const backend = makeBackend();
+		await seedConfig(backend, [
+			MANUAL,
+			{ ...MANUAL, id: "b", src: "slides/b.png" },
+		]);
+		const eventId = await seedEvent(backend);
+		await render(backend, eventId);
+		const first = await readState(backend, eventId);
+		const slide = first.slides.find((other) => other.event === eventId);
+		expect(slide?.duration).toBe(TV_EVENT_SLIDE_SECONDS);
+		// The board moves the event slide to the front and gives it 45 seconds.
+		await editStoredSlides(backend, (slides) =>
+			slides
+				.map((other) =>
+					other.event === eventId ? { ...other, duration: 45 } : other
+				)
+				.sort((left) => (left.event === eventId ? -1 : 1))
+		);
+		await backend.run((context) =>
+			context.db.patch(eventId, { name: "Renamed night" })
+		);
+		await render(backend, eventId);
+		const after = await readState(backend, eventId);
+		expect(after.slides.map((other) => other.id)).toEqual([
+			slide?.id,
+			"a",
+			"b",
+		]);
+		expect(after.slides[0]?.duration).toBe(45);
+		expect(await pageText(backend, eventId)).toContain("Renamed night");
+	});
+
+	it("do not make an unchanged slide look stale", async () => {
+		vi.useFakeTimers({ toFake: ["setTimeout"] });
+		const backend = makeBackend();
+		await seedConfig(backend);
+		const eventId = await seedEvent(backend);
+		await render(backend, eventId);
+		await editStoredSlides(backend, (slides) =>
+			slides.map((other) => ({
+				...other,
+				duration: other.event === eventId ? 45 : other.duration,
+			}))
+		);
+		const before = await readState(backend, eventId);
+		await backend.mutation(internal.tvEvents.syncEventSlide, { eventId });
+		await render(backend, eventId);
+		const after = await readState(backend, eventId);
+		expect(after.version).toBe(before.version);
+		expect(after.slides).toEqual(before.slides);
 	});
 });

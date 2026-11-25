@@ -18,6 +18,7 @@ import styles from "./DevicesCard.module.scss";
 import { ScheduleSheet } from "./ScheduleSheet.tsx";
 
 const REVOKE_FAILED = "Could not revoke the TV. Try again.";
+const REMOVE_FAILED = "Could not remove the TV. Try again.";
 
 function lastSeenText(lastSeenAt: number | undefined): string {
 	return lastSeenAt === undefined
@@ -31,6 +32,7 @@ function DeviceRow(props: {
 	device: Device;
 	onSchedule: () => void;
 	onRevoke: () => void;
+	onRemove: () => void;
 }): JSX.Element {
 	return (
 		<li class={styles.row}>
@@ -45,7 +47,17 @@ function DeviceRow(props: {
 			</span>
 			<Show
 				when={props.device.revokedAt === undefined}
-				fallback={<Badge status="neutral">Revoked</Badge>}
+				fallback={
+					<>
+						<Badge status="neutral">Revoked</Badge>
+						<IconButton
+							tooltipLabel={`Remove ${props.device.label}`}
+							onClick={props.onRemove}
+						>
+							{ICONS.delete}
+						</IconButton>
+					</>
+				}
 			>
 				<IconButton
 					tooltipLabel={`Schedule for ${props.device.label}`}
@@ -64,24 +76,12 @@ function DeviceRow(props: {
 	);
 }
 
-/**
- * The TVs the board connected, live ones and recently revoked ones. There is
- * no way to add one here: a TV is connected only from its own screen (it
- * shows a QR code that a member scans), so this card only explains that and
- * lets the board cut a TV off.
- */
-export function DevicesCard(): JSX.Element {
-	const devices = useQuery(api.tv.listDevices, {});
+/** Revoke and remove, each behind a confirm; failures land in `error`. */
+function useDeviceActions() {
 	const revokeDevice = useMutation(api.tv.revokeDevice);
+	const deleteDevice = useMutation(api.tv.deleteDevice);
 	const confirm = useConfirm();
 	const { error, trackResult } = createActionError();
-	// The id, not the row: the sheet reads the live row, and the id is kept
-	// after closing so the sheet can finish its exit.
-	const [scheduleId, setScheduleId] = createSignal<Id<"tvDevices">>();
-	const [isScheduleOpen, setIsScheduleOpen] = createSignal(false);
-	const scheduled = createMemo(() =>
-		devices.data()?.find((device) => device._id === scheduleId())
-	);
 
 	async function revoke(id: Id<"tvDevices">, label: string): Promise<void> {
 		const isConfirmed = await confirm({
@@ -95,6 +95,40 @@ export function DevicesCard(): JSX.Element {
 			call(revokeDevice.mutateAsync({ id }), REVOKE_FAILED)
 		);
 	}
+
+	async function remove(id: Id<"tvDevices">, label: string): Promise<void> {
+		const isConfirmed = await confirm({
+			title: `Remove ${label}?`,
+			message:
+				"This TV is already cut off. Its entry is deleted for good.",
+			confirmLabel: "Remove",
+			tone: "danger",
+		});
+		if (!isConfirmed) return;
+		await trackResult(
+			call(deleteDevice.mutateAsync({ id }), REMOVE_FAILED)
+		);
+	}
+
+	return { error, revoke, remove };
+}
+
+/**
+ * The TVs the board connected, live ones and recently revoked ones. There is
+ * no way to add one here: a TV is connected only from its own screen (it
+ * shows a QR code that a member scans), so this card only explains that and
+ * lets the board cut a TV off and remove a cut-off one from the list.
+ */
+export function DevicesCard(): JSX.Element {
+	const devices = useQuery(api.tv.listDevices, {});
+	const { error, revoke, remove } = useDeviceActions();
+	// The id, not the row: the sheet reads the live row, and the id is kept
+	// after closing so the sheet can finish its exit.
+	const [scheduleId, setScheduleId] = createSignal<Id<"tvDevices">>();
+	const [isScheduleOpen, setIsScheduleOpen] = createSignal(false);
+	const scheduled = createMemo(() =>
+		devices.data()?.find((device) => device._id === scheduleId())
+	);
 
 	return (
 		<SpaceCard.Root loading={devices.data() === undefined}>
@@ -123,6 +157,12 @@ export function DevicesCard(): JSX.Element {
 										}}
 										onRevoke={() => {
 											void revoke(
+												device._id,
+												device.label
+											);
+										}}
+										onRemove={() => {
+											void remove(
 												device._id,
 												device.label
 											);

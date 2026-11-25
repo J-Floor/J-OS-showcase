@@ -226,3 +226,30 @@ test("Remove picture patches pictureId to null", () => {
 	fireEvent.click(screen.getByRole("button", { name: "Remove picture" }));
 	expect(onPatch).toHaveBeenCalledWith({ pictureId: null }, undefined);
 });
+
+test("a picture renders inside the preview container with Replace and Remove", () => {
+	convexMock.url = "https://files.example.com/pic.png";
+	renderPicture(true);
+	const image = screen.getByRole("img", { name: "Open House" });
+	const replace = screen.getByRole("button", { name: "Replace picture" });
+	// The image sits in its own wrapper, apart from the buttons beside it.
+	expect(image.parentElement).not.toContainElement(replace);
+	expect(replace).toBeInTheDocument();
+	expect(
+		screen.getByRole("button", { name: "Remove picture" })
+	).toBeInTheDocument();
+});
+
+test("no picture shows the hint and no image", () => {
+	convexMock.url = null;
+	renderPicture(false);
+	expect(screen.getByText("No picture")).toBeInTheDocument();
+	expect(screen.queryByRole("img")).toBeNull();
+});
+
+test("while the URL loads there is neither an image nor the hint", () => {
+	convexMock.url = undefined;
+	renderPicture(false);
+	expect(screen.queryByRole("img")).toBeNull();
+	expect(screen.queryByText("No picture")).toBeNull();
+});

@@ -123,17 +123,19 @@ export function EventPicture(props: {
 			<div class={styles.picture}>
 				<Show when={url.data()}>
 					{(source) => (
-						<img
-							class={styles.image}
-							src={source()}
-							alt={props.event().name}
-						/>
+						<div class={styles.preview}>
+							<img
+								class={styles.image}
+								src={source()}
+								alt={props.event().name}
+							/>
+						</div>
 					)}
 				</Show>
 				<Show
 					when={props.isEditing()}
 					fallback={
-						<Show when={!url.data()}>
+						<Show when={url.data() === null}>
 							<span class={styles.hint}>No picture</span>
 						</Show>
 					}
