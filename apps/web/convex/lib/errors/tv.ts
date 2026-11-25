@@ -19,6 +19,7 @@ export type TvError =
 	| { type: "TvImageInvalid" }
 	| { type: "TvHtmlTooLarge" }
 	| { type: "TvDeviceNotFound" }
+	| { type: "TvScheduleInvalid" }
 	| { type: "TvTooManyDevices" }
 	| { type: "TvPairingInvalid" }
 	| { type: "TvPairingExpired" }
@@ -38,6 +39,7 @@ export const tvMessages: Record<TvError["type"], string> = {
 	TvImageInvalid: `Use a ${TV_IMAGE_NAMES} image up to ${String(IMAGE_MB)} MB.`,
 	TvHtmlTooLarge: `A slide's HTML can be at most ${String(TV_LIMITS.htmlMax / BYTES_PER_KB)} KB, and ${String(TV_LIMITS.htmlTotalMax / BYTES_PER_MB)} MB across all slides.`,
 	TvDeviceNotFound: "That TV is not paired.",
+	TvScheduleInvalid: "That schedule is not valid.",
 	TvTooManyDevices: "Revoke a TV before pairing another.",
 	TvPairingInvalid: "This pairing link is not valid.",
 	TvPairingExpired:

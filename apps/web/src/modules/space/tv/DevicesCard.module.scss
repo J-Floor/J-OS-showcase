@@ -37,6 +37,13 @@
 	flex: 1;
 }
 
+.custom {
+	@include typo.jf-typo-body-small;
+
+	display: block;
+	color: var(--jf-fg-muted);
+}
+
 .seen {
 	@include typo.jf-typo-body-small;
 

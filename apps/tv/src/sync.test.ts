@@ -25,6 +25,17 @@ const api = vi.hoisted(() => ({
 				signal?: AbortSignal
 			) => Promise<PackDownload | "unauthorized" | "missing">
 		>(),
+	fetchSchedule:
+		vi.fn<
+			(
+				token: string,
+				signal?: AbortSignal
+			) => Promise<
+				| { xml: string; version: number | undefined }
+				| "unauthorized"
+				| "missing"
+			>
+		>(),
 }));
 vi.mock("./api.ts", () => api);
 
@@ -258,6 +269,188 @@ describe("runSync", () => {
 		expect(onUnauthorized).toHaveBeenCalledTimes(1);
 		await vi.advanceTimersByTimeAsync(120_000);
 		expect(api.fetchManifest).toHaveBeenCalledTimes(1);
+		sync.stop();
+	});
+
+	it("fetches the schedule once when the manifest advertises a new version", async () => {
+		api.fetchManifest.mockResolvedValue({
+			...manifest(1, [slide("htm1", "html")]),
+			scheduleVersion: 2,
+		});
+		api.fetchSchedule.mockResolvedValue({
+			xml: '<schedule><day name="mon" off="all"/></schedule>',
+			version: 2,
+		});
+		const onSchedule = vi.fn();
+		const sync = runSync({
+			token: "tok",
+			root,
+			player,
+			onUnauthorized: vi.fn(),
+			onSchedule,
+		});
+		await vi.advanceTimersByTimeAsync(0);
+		await vi.advanceTimersByTimeAsync(60_000);
+		expect(api.fetchSchedule).toHaveBeenCalledTimes(1);
+		expect(onSchedule).toHaveBeenCalledTimes(1);
+		expect(player.setSlides).toHaveBeenCalledTimes(1);
+		sync.stop();
+	});
+
+	it("keeps playing slides when the schedule fetch fails", async () => {
+		api.fetchManifest.mockResolvedValue({
+			...manifest(1, [slide("htm1", "html")]),
+			scheduleVersion: 2,
+		});
+		api.fetchSchedule.mockRejectedValue(new Error("down"));
+		const { sync, onUnauthorized } = start();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(onUnauthorized).not.toHaveBeenCalled();
+		expect(player.setSlides).toHaveBeenCalledTimes(1);
+		sync.stop();
+	});
+
+	it("clears the stored schedule with the token on unauthorized", async () => {
+		storage.setToken("tok");
+		storage.setSchedule('<schedule><day name="mon" off="all"/></schedule>');
+		api.fetchManifest.mockResolvedValue("unauthorized");
+		const { sync } = start();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(storage.getSchedule()).toBeNull();
+		const onSchedule = vi.fn();
+		const next = runSync({
+			token: "tok",
+			root,
+			player,
+			onUnauthorized: vi.fn(),
+			onSchedule,
+		});
+		expect(onSchedule).not.toHaveBeenCalled();
+		next.stop();
+		sync.stop();
+	});
+
+	it("calls onTick after each successful manifest, not after a 401", async () => {
+		api.fetchManifest.mockResolvedValue(
+			manifest(1, [slide("htm1", "html")])
+		);
+		const onTick = vi.fn();
+		const sync = runSync({
+			token: "tok",
+			root,
+			player,
+			onUnauthorized: vi.fn(),
+			onTick,
+		});
+		await vi.advanceTimersByTimeAsync(0);
+		expect(onTick).toHaveBeenCalledTimes(1);
+		await vi.advanceTimersByTimeAsync(60_000);
+		expect(onTick).toHaveBeenCalledTimes(2);
+		sync.stop();
+		api.fetchManifest.mockResolvedValue("unauthorized");
+		const denied = vi.fn();
+		const second = runSync({
+			token: "tok",
+			root,
+			player,
+			onUnauthorized: vi.fn(),
+			onTick: denied,
+		});
+		await vi.advanceTimersByTimeAsync(0);
+		expect(denied).not.toHaveBeenCalled();
+		second.stop();
+	});
+
+	it("treats an unauthorized schedule like an unauthorized manifest", async () => {
+		storage.setToken("tok");
+		api.fetchManifest.mockResolvedValue({
+			...manifest(1, [slide("htm1", "html")]),
+			scheduleVersion: 2,
+		});
+		api.fetchSchedule.mockResolvedValue("unauthorized");
+		const { sync, onUnauthorized } = start();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(onUnauthorized).toHaveBeenCalledTimes(1);
+		expect(storage.getToken()).toBeNull();
+		await vi.advanceTimersByTimeAsync(120_000);
+		expect(api.fetchManifest).toHaveBeenCalledTimes(1);
+		sync.stop();
+	});
+
+	it("expires on a schedule 401 after an earlier successful schedule", async () => {
+		storage.setToken("tok");
+		api.fetchManifest
+			.mockResolvedValueOnce({
+				...manifest(1, [slide("htm1", "html")]),
+				scheduleVersion: 1,
+			})
+			.mockResolvedValue({
+				...manifest(1, [slide("htm1", "html")]),
+				scheduleVersion: 2,
+			});
+		api.fetchSchedule
+			.mockResolvedValueOnce({
+				xml: '<schedule><day name="mon" off="all"/></schedule>',
+				version: 1,
+			})
+			.mockResolvedValue("unauthorized");
+		const { sync, onUnauthorized } = start();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(onUnauthorized).not.toHaveBeenCalled();
+		await vi.advanceTimersByTimeAsync(60_000);
+		expect(onUnauthorized).toHaveBeenCalledTimes(1);
+		expect(storage.getToken()).toBeNull();
+		await vi.advanceTimersByTimeAsync(120_000);
+		expect(api.fetchManifest).toHaveBeenCalledTimes(2);
+		sync.stop();
+	});
+
+	it("keeps slides playing and the timer armed when onSchedule throws", async () => {
+		storage.clearSchedule();
+		api.fetchManifest.mockResolvedValue({
+			...manifest(1, [slide("htm1", "html")]),
+			scheduleVersion: 2,
+		});
+		api.fetchSchedule.mockResolvedValue({
+			xml: '<schedule><day name="mon" off="all"/></schedule>',
+			version: 2,
+		});
+		const onSchedule = vi.fn(() => {
+			throw new Error("controller broke");
+		});
+		const onUnauthorized = vi.fn();
+		const sync = runSync({
+			token: "tok",
+			root,
+			player,
+			onUnauthorized,
+			onSchedule,
+		});
+		await vi.advanceTimersByTimeAsync(0);
+		expect(onSchedule).toHaveBeenCalledTimes(1);
+		expect(player.setSlides).toHaveBeenCalledTimes(1);
+		await vi.advanceTimersByTimeAsync(60_000);
+		expect(api.fetchManifest).toHaveBeenCalledTimes(2);
+		expect(api.fetchSchedule).toHaveBeenCalledTimes(1);
+		expect(onUnauthorized).not.toHaveBeenCalled();
+		sync.stop();
+	});
+
+	it("applies a new manifest while the schedule fetch is still pending", async () => {
+		api.fetchManifest.mockResolvedValue({
+			...manifest(1, [slide("htm1", "html")]),
+			scheduleVersion: 2,
+		});
+		api.fetchSchedule.mockImplementation(
+			() =>
+				new Promise<never>(() => {
+					// Never settles: a hung schedule request.
+				})
+		);
+		const { sync } = start();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(api.fetchSchedule).toHaveBeenCalledTimes(1);
+		expect(player.setSlides).toHaveBeenCalledTimes(1);
 		sync.stop();
 	});
 

@@ -88,3 +88,12 @@ body,
 .screen > * + * {
 	margin-block-start: var(--tv-gap);
 }
+
+/* The power schedule's "off": black out everything but keep the page running. */
+.screen-off {
+	background: #000;
+
+	& > * {
+		visibility: hidden;
+	}
+}

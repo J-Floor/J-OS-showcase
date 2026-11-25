@@ -22,6 +22,7 @@ import {
 	readTvConfig,
 	slidesInOrder,
 } from "./lib/tv/queries.ts";
+import { scheduleDayValidator, validateSchedule } from "./lib/tv/schedule.ts";
 import { checkDuration, cleanTitle } from "./lib/tv/slideChecks.ts";
 import { hashTvSecret } from "./lib/tv/tokens.ts";
 import { NAME_MAX, checkLength } from "./lib/validate.ts";
@@ -418,6 +419,7 @@ export const listDevices = query({
 			createdAt: device.createdAt,
 			lastSeenAt: device.lastSeenAt,
 			revokedAt: device.revokedAt,
+			schedule: device.schedule,
 		}));
 	},
 });
@@ -431,6 +433,23 @@ export const revokeDevice = mutation({
 		if (!device) refuse({ type: "TvDeviceNotFound" });
 		if (device.revokedAt === undefined)
 			await context.db.patch(device._id, { revokedAt: Date.now() });
+	},
+});
+
+/** Board-only: set a TV's weekly power schedule; an empty list clears it (always on). */
+export const setDeviceSchedule = mutation({
+	args: { id: v.id("tvDevices"), days: v.array(scheduleDayValidator) },
+	handler: async (context, args): Promise<void> => {
+		unwrap(await requireRole(context, BOARD_LEVEL));
+		const device = await context.db.get(args.id);
+		if (!device || device.revokedAt !== undefined)
+			refuse({ type: "TvDeviceNotFound" });
+		const checked = validateSchedule(args.days);
+		if (checked.isErr()) refuse({ type: "TvScheduleInvalid" });
+		await context.db.patch(device._id, {
+			schedule: checked.value.length === 0 ? undefined : checked.value,
+			scheduleVersion: (device.scheduleVersion ?? 0) + 1,
+		});
 	},
 });
 

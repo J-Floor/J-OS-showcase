@@ -5,6 +5,8 @@ export type Manifest = {
 	transition: "fade" | "slide" | "none";
 	/** The built pack's version; null before one exists, absent on an older backend. */
 	packVersion?: number | null;
+	/** The device's power schedule version; null when it has none, absent on an older backend. */
+	scheduleVersion?: number | null;
 	slides: {
 		id: string;
 		kind: "image" | "html";
@@ -164,6 +166,41 @@ export async function fetchSlide(
 const PACK_PATH = "/tv/pack";
 const PACK_VERSION_HEADER = "X-Tv-Pack-Version";
 
+/** A versioned download: bearer fetch, 401 and 404 mapped, the version read from the response header. */
+async function fetchVersioned<Body>(
+	options: {
+		path: string;
+		label: string;
+		versionHeader: string;
+		timeoutMs: number;
+	},
+	token: string,
+	stop: AbortSignal | undefined,
+	read: (response: Response) => Promise<Body>
+): Promise<
+	{ body: Body; version: number | undefined } | "unauthorized" | "missing"
+> {
+	return withTimeout(options.timeoutMs, stop, async (signal) => {
+		const response = await fetch(url(options.path), {
+			headers: bearer(token),
+			signal,
+		});
+		if (response.status === HTTP_UNAUTHORIZED) return "unauthorized";
+		if (response.status === HTTP_NOT_FOUND) return "missing";
+		if (!response.ok)
+			throw new Error(`${options.label} failed: ${response.status}`);
+		const header = response.headers.get(options.versionHeader);
+		const version =
+			header === null || header.trim() === ""
+				? Number.NaN
+				: Number(header);
+		return {
+			body: await read(response),
+			version: Number.isInteger(version) ? version : undefined,
+		};
+	});
+}
+
 /**
  * The whole pack; `missing` until the server has built one. The version comes
  * from the response header, not the manifest: a rebuild can land between the
@@ -174,22 +211,44 @@ export async function fetchPack(
 	token: string,
 	stop?: AbortSignal
 ): Promise<PackDownload | "unauthorized" | "missing"> {
-	return withTimeout(PACK_TIMEOUT_MS, stop, async (signal) => {
-		const response = await fetch(url(PACK_PATH), {
-			headers: bearer(token),
-			signal,
-		});
-		if (response.status === HTTP_UNAUTHORIZED) return "unauthorized";
-		if (response.status === HTTP_NOT_FOUND) return "missing";
-		if (!response.ok) throw new Error(`pack failed: ${response.status}`);
-		const header = response.headers.get(PACK_VERSION_HEADER);
-		const version =
-			header === null || header.trim() === ""
-				? Number.NaN
-				: Number(header);
-		return {
-			zip: new Uint8Array(await response.arrayBuffer()),
-			version: Number.isInteger(version) ? version : undefined,
-		};
-	});
+	const result = await fetchVersioned(
+		{
+			path: PACK_PATH,
+			label: "pack",
+			versionHeader: PACK_VERSION_HEADER,
+			timeoutMs: PACK_TIMEOUT_MS,
+		},
+		token,
+		stop,
+		async (response) => new Uint8Array(await response.arrayBuffer())
+	);
+	return typeof result === "string"
+		? result
+		: { zip: result.body, version: result.version };
+}
+
+const SCHEDULE_PATH = "/tv/schedule";
+const SCHEDULE_VERSION_HEADER = "X-Tv-Schedule-Version";
+
+/** The device's power schedule as XML; `missing` when none is set. The version comes from the response header, as for the pack. */
+export async function fetchSchedule(
+	token: string,
+	stop?: AbortSignal
+): Promise<
+	{ xml: string; version: number | undefined } | "unauthorized" | "missing"
+> {
+	const result = await fetchVersioned(
+		{
+			path: SCHEDULE_PATH,
+			label: "schedule",
+			versionHeader: SCHEDULE_VERSION_HEADER,
+			timeoutMs: REQUEST_TIMEOUT_MS,
+		},
+		token,
+		stop,
+		(response) => response.text()
+	);
+	return typeof result === "string"
+		? result
+		: { xml: result.body, version: result.version };
 }

@@ -1,21 +1,23 @@
 import type { Player, PlayerSlide } from "@j-os/tv-player";
 
 import { fetchManifest, fetchPack, fetchSlide, type Manifest } from "./api.ts";
+import { createBackoff, type Backoff } from "./backoff.ts";
 import { loadPack, type ImageCache, type LoadedPack } from "./pack.ts";
+import type { Schedule } from "./schedule.ts";
+import { createScheduleSync } from "./scheduleSync.ts";
 import { storage } from "./storage.ts";
 
 const MANIFEST_MS = 60_000;
-/** A pack that failed to load is not fetched again for this long, then double, up to the cap (a 40 MiB download a minute would be 2.4 GB an hour). */
-const RETRY_FIRST_MINUTES = 5;
-const RETRY_MAX_MINUTES = 60;
-const RETRY_FIRST_MS = RETRY_FIRST_MINUTES * MANIFEST_MS;
-const RETRY_MAX_MS = RETRY_MAX_MINUTES * MANIFEST_MS;
 
 export type SyncOptions = {
 	token: string;
 	root: HTMLElement;
 	player: Pick<Player, "setSlides" | "setTransition">;
 	onUnauthorized: () => void;
+	/** The device's power schedule: the stored one at start, then each change; undefined when it has none. */
+	onSchedule?: (schedule: Schedule | undefined) => void;
+	/** Called after each manifest the server answered (not after a 401), so the caller can re-check what depends on the wall clock. */
+	onTick?: () => void;
 };
 
 export type Sync = { stop: () => void };
@@ -73,10 +75,8 @@ type State = {
 	packUrls: string[];
 	/** What those URLs were made from, so the next pack reuses the ones whose image did not change. */
 	packImages: ImageCache | undefined;
-	/** The pack version that last failed to load, how many times in a row, and when it may be fetched again. */
-	failedPack:
-		| { version: number; attempts: number; retryAt: number }
-		| undefined;
+	/** The pack version that last failed to load and when it may be fetched again (a 40 MiB download a minute would be 2.4 GB an hour). */
+	failedPack: Backoff;
 	/** Aborts a pack download in flight when the sync stops. */
 	abort: AbortController;
 };
@@ -148,26 +148,6 @@ function revokeEntries(state: State): void {
 	for (const entry of allEntries(state)) revoke(entry);
 }
 
-/** True while `version` failed to load and its backoff has not run out. A different version is never held back. */
-function isBackedOff(state: State, version: number): boolean {
-	const failed = state.failedPack;
-	if (failed?.version !== version) return false;
-	const remaining = failed.retryAt - Date.now();
-	// A wait longer than the maximum means the clock went back since it was set.
-	return remaining > 0 && remaining <= RETRY_MAX_MS;
-}
-
-function recordFailure(state: State, version: number): void {
-	const previous =
-		state.failedPack?.version === version ? state.failedPack.attempts : 0;
-	const delay = Math.min(RETRY_FIRST_MS * 2 ** previous, RETRY_MAX_MS);
-	state.failedPack = {
-		version,
-		attempts: previous + 1,
-		retryAt: Date.now() + delay,
-	};
-}
-
 /**
  * Plays the pack the server advertises as `advertised`; false when the token
  * was refused. A pack not built yet (404) changes nothing and is asked for
@@ -208,17 +188,40 @@ async function applyPack(
 		// The legacy manifest version no longer describes what plays: a later
 		// legacy answer with the same number must still be applied.
 		state.version = undefined;
-		state.failedPack = undefined;
+		state.failedPack.clear();
 		return true;
 	} catch {
+		// A stop (its abort throws here) is not a pack failure.
+		if (state.isStopped) return true;
 		if (built !== undefined) {
 			// Only what this load made: a reused URL still belongs to the pack on screen.
 			const shown = new Set(state.packUrls);
 			revokeAll(built.objectUrls.filter((url) => !shown.has(url)));
 		}
-		recordFailure(state, version);
+		state.failedPack.recordFailure(version);
 		return true;
 	}
+}
+
+/** Plays what the manifest advertises: the pack when it has a version, else the slide list. False when the token was refused. */
+async function applyContent(
+	options: SyncOptions,
+	state: State,
+	idle: HTMLElement,
+	manifest: Manifest
+): Promise<boolean> {
+	// `packVersion: null` (the server has no pack, e.g. after it was
+	// removed) switches the TV back to the slide list, and revokes the
+	// pack's images. The server's own comment says null "keeps a TV on
+	// what it plays"; this is the chosen behaviour: a TV must follow what
+	// the board sees, and the legacy list is always current.
+	const packVersion = manifest.packVersion;
+	return typeof packVersion === "number"
+		? packVersion === state.packVersion ||
+				state.failedPack.isBackedOff(packVersion) ||
+				(await applyPack(options, state, idle, packVersion))
+		: manifest.version === state.version ||
+				(await applyManifest(options, state, idle, manifest));
 }
 
 /**
@@ -227,6 +230,9 @@ async function applyPack(
 export function runSync(options: SyncOptions): Sync {
 	const idle = buildIdleScreen();
 	options.root.append(idle);
+	const schedule = createScheduleSync({
+		onSchedule: (value) => options.onSchedule?.(value),
+	});
 	const state: State = {
 		isStopped: false,
 		timer: undefined,
@@ -236,13 +242,19 @@ export function runSync(options: SyncOptions): Sync {
 		packVersion: undefined,
 		packUrls: [],
 		packImages: undefined,
-		failedPack: undefined,
+		failedPack: createBackoff({}),
 		abort: new AbortController(),
 	};
+
+	/** A function, so the check after an await is not narrowed by the one before it. */
+	function isStopped(): boolean {
+		return state.isStopped;
+	}
 
 	function expire(): void {
 		state.isStopped = true;
 		storage.clearToken();
+		storage.clearSchedule();
 		options.onUnauthorized();
 	}
 
@@ -257,23 +269,24 @@ export function runSync(options: SyncOptions): Sync {
 				expire();
 				return;
 			}
-			// `packVersion: null` (the server has no pack, e.g. after it was
-			// removed) switches the TV back to the slide list, and revokes the
-			// pack's images. The server's own comment says null "keeps a TV on
-			// what it plays"; this is the chosen behaviour: a TV must follow what
-			// the board sees, and the legacy list is always current.
-			const packVersion = manifest.packVersion;
-			const isApplied =
-				typeof packVersion === "number"
-					? packVersion === state.packVersion ||
-						isBackedOff(state, packVersion) ||
-						(await applyPack(options, state, idle, packVersion))
-					: manifest.version === state.version ||
-						(await applyManifest(options, state, idle, manifest));
-			if (!isApplied) {
+			// Concurrent, so a slow schedule fetch never delays the slides. Each
+			// step's throw is its own: it must not skip the other or the re-arm.
+			const [isContentOk, isScheduleOk] = await Promise.all([
+				applyContent(options, state, idle, manifest).catch(() => true),
+				schedule
+					.onManifest(
+						manifest.scheduleVersion,
+						options.token,
+						state.abort.signal
+					)
+					.catch(() => true),
+			]);
+			if (isStopped()) return;
+			if (!isContentOk || !isScheduleOk) {
 				expire();
 				return;
 			}
+			options.onTick?.();
 		} catch {
 			// Offline or rate limited: the last good slides keep playing.
 		}

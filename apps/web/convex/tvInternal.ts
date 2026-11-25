@@ -167,6 +167,28 @@ export const slideContent = internalQuery({
 	},
 });
 
+/** The schedule a TV downloads (its version and days; the XML is built per response), found by its token hash; null for an unknown or revoked device or one with no schedule. */
+export const deviceSchedule = internalQuery({
+	args: { tokenHash: v.string() },
+	handler: async (context, args) => {
+		const device = await context.db
+			.query("tvDevices")
+			.withIndex("by_tokenHash", (range) =>
+				range.eq("tokenHash", args.tokenHash)
+			)
+			.first();
+		if (
+			!device ||
+			device.revokedAt !== undefined ||
+			device.schedule === undefined ||
+			device.schedule.length === 0
+		)
+			return null;
+		const version = device.scheduleVersion ?? 0;
+		return { version, days: device.schedule };
+	},
+});
+
 /** The built pack's blob and version, or null while there is none. */
 export const packFile = internalQuery({
 	args: {},

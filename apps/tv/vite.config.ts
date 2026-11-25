@@ -30,6 +30,9 @@ function tizenPackaging(): Plugin {
 	};
 }
 
+// Tests pin the zone before any Date is used, so the DST test runs in a DST zone whatever the host TZ (workers inherit it).
+if (process.env.VITEST) process.env.TZ = "Europe/Berlin";
+
 export default defineConfig(({ command, mode }) => {
 	if (command === "build" && mode === "check") {
 		// CI compile check (`bun run build`): placeholders only, never a release package.

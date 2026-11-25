@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 import { PERK_CATEGORIES, PERK_REQUEST_STATUSES } from "./lib/perks.ts";
 import { ACCESS_TIERS } from "./lib/roles.ts";
+import { scheduleDayValidator } from "./lib/tv/schedule.ts";
 import {
 	webAnalyticsFailureValidator,
 	webAnalyticsRangeValidator,
@@ -840,6 +841,10 @@ export default defineSchema({
 		createdAt: v.number(),
 		revokedAt: v.optional(v.number()),
 		lastSeenAt: v.optional(v.number()),
+		/** The weekly power schedule; absent means always on. */
+		schedule: v.optional(v.array(scheduleDayValidator)),
+		/** Bumped on every schedule save, so a TV refetches only on change. */
+		scheduleVersion: v.optional(v.number()),
 	}).index("by_tokenHash", ["tokenHash"]),
 
 	/** Short-lived pairing attempts started by a TV and approved by a member. */

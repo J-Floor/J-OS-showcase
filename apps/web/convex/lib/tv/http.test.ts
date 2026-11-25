@@ -5,6 +5,7 @@ import {
 	type DeviceDeps,
 	manifestResponse,
 	packResponse,
+	scheduleResponse,
 	slideResponse,
 	TV_SLIDE_CSP,
 } from "./http.ts";
@@ -24,6 +25,7 @@ function makeDeps(overrides: Partial<DeviceDeps> = {}): DeviceDeps {
 		manifest: vi.fn(() => Promise.resolve(MANIFEST)),
 		content: vi.fn(() => Promise.resolve(null)),
 		pack: vi.fn(() => Promise.resolve(null)),
+		schedule: vi.fn(() => Promise.resolve(null)),
 		getBlob: vi.fn(() => Promise.resolve(null)),
 		...overrides,
 	};
@@ -93,7 +95,10 @@ describe("manifestResponse", () => {
 			makeDeps()
 		);
 		expect(response.status).toBe(200);
-		expect(await response.json()).toEqual(MANIFEST);
+		expect(await response.json()).toEqual({
+			...MANIFEST,
+			scheduleVersion: null,
+		});
 		expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
 			TV_CORS_HEADERS["Access-Control-Allow-Origin"]
 		);
@@ -290,5 +295,86 @@ describe("packResponse", () => {
 		);
 		expect(response.status).toBe(429);
 		expect(deps.pack).not.toHaveBeenCalled();
+	});
+});
+
+describe("manifest scheduleVersion", () => {
+	const auth = "Bearer abc";
+
+	it("is null without a schedule", async () => {
+		const response = await manifestResponse(
+			request("/tv/manifest", auth),
+			makeDeps()
+		);
+		expect(await response.json()).toEqual({
+			...MANIFEST,
+			scheduleVersion: null,
+		});
+	});
+
+	it("carries the schedule's version", async () => {
+		const deps = makeDeps({
+			schedule: () => Promise.resolve({ version: 7, days: [] }),
+		});
+		const response = await manifestResponse(
+			request("/tv/manifest", auth),
+			deps
+		);
+		expect(await response.json()).toEqual({
+			...MANIFEST,
+			scheduleVersion: 7,
+		});
+	});
+});
+
+describe("scheduleResponse", () => {
+	const auth = "Bearer abc";
+	const xml = '<schedule version="7"><day name="mon" off="all"/></schedule>';
+
+	it("is 401 without a token", async () => {
+		const deps = makeDeps();
+		const response = await scheduleResponse(request("/tv/schedule"), deps);
+		expect(response.status).toBe(401);
+		expect(deps.schedule).not.toHaveBeenCalled();
+	});
+
+	it("is 404 when the device has no schedule", async () => {
+		const response = await scheduleResponse(
+			request("/tv/schedule", auth),
+			makeDeps()
+		);
+		expect(response.status).toBe(404);
+	});
+
+	it("serves the XML with its version", async () => {
+		const schedule = vi.fn(() =>
+			Promise.resolve({
+				version: 7,
+				days: [{ day: "mon" as const, closed: true }],
+			})
+		);
+		const deps = makeDeps({ schedule });
+		const response = await scheduleResponse(
+			request("/tv/schedule", auth),
+			deps
+		);
+		expect(response.status).toBe(200);
+		expect(response.headers.get("Content-Type")).toBe(
+			"application/xml; charset=utf-8"
+		);
+		expect(response.headers.get("X-Tv-Schedule-Version")).toBe("7");
+		expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+		expect(await response.text()).toBe(xml);
+		expect(schedule).toHaveBeenCalledWith(await hashTvSecret("abc"));
+	});
+
+	it("is 429 when the device is over its limit", async () => {
+		const deps = makeDeps({ limit: () => Promise.resolve(false) });
+		const response = await scheduleResponse(
+			request("/tv/schedule", auth),
+			deps
+		);
+		expect(response.status).toBe(429);
+		expect(deps.schedule).not.toHaveBeenCalled();
 	});
 });

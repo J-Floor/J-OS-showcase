@@ -51,6 +51,16 @@ const EVENT_MANAGERS = { action: "manage", subject: "Events" } as const;
 
 export const CHANGELOG: ChangeEntry[] = [
 	{
+		version: "1.13",
+		title: "TV screen schedule",
+		items: [
+			{
+				text: "Set when each TV turns its screen on and off. In Space → TV, pick Schedule for a TV and choose, for each weekday, always on, set hours, or closed.",
+				audience: SPACE_MANAGERS,
+			},
+		],
+	},
+	{
 		version: "1.12",
 		title: "Event sign-up links",
 		items: [

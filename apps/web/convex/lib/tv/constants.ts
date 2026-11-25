@@ -54,6 +54,7 @@ export const TV_PATHS = {
 	manifest: "/tv/manifest",
 	slide: "/tv/slide",
 	pack: "/tv/pack",
+	schedule: "/tv/schedule",
 } as const;
 
 /** Bearer auth, no cookies: any origin may call (the TV app runs from a file origin). */

@@ -1,6 +1,7 @@
 import { Badge, EmptyState, IconButton } from "@j-os/design-system";
+import type { FunctionReturnType } from "convex/server";
 import { useMutation } from "convex-solidjs";
-import { For, Show, type JSX } from "solid-js";
+import { createMemo, createSignal, For, Show, type JSX } from "solid-js";
 
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -14,6 +15,7 @@ import { formatAgo } from "../../../shared/time.ts";
 import { SpaceCard } from "../SpaceCard.tsx";
 
 import styles from "./DevicesCard.module.scss";
+import { ScheduleSheet } from "./ScheduleSheet.tsx";
 
 const REVOKE_FAILED = "Could not revoke the TV. Try again.";
 
@@ -21,6 +23,45 @@ function lastSeenText(lastSeenAt: number | undefined): string {
 	return lastSeenAt === undefined
 		? "Not seen yet"
 		: `Last seen ${formatAgo(lastSeenAt)}`;
+}
+
+type Device = FunctionReturnType<typeof api.tv.listDevices>[number];
+
+function DeviceRow(props: {
+	device: Device;
+	onSchedule: () => void;
+	onRevoke: () => void;
+}): JSX.Element {
+	return (
+		<li class={styles.row}>
+			<span class={styles.label}>
+				{props.device.label}
+				<Show when={props.device.schedule}>
+					<span class={styles.custom}>Custom hours</span>
+				</Show>
+			</span>
+			<span class={styles.seen}>
+				{lastSeenText(props.device.lastSeenAt)}
+			</span>
+			<Show
+				when={props.device.revokedAt === undefined}
+				fallback={<Badge status="neutral">Revoked</Badge>}
+			>
+				<IconButton
+					tooltipLabel={`Schedule for ${props.device.label}`}
+					onClick={props.onSchedule}
+				>
+					{ICONS.time}
+				</IconButton>
+				<IconButton
+					tooltipLabel={`Revoke ${props.device.label}`}
+					onClick={props.onRevoke}
+				>
+					{ICONS.delete}
+				</IconButton>
+			</Show>
+		</li>
+	);
 }
 
 /**
@@ -34,6 +75,13 @@ export function DevicesCard(): JSX.Element {
 	const revokeDevice = useMutation(api.tv.revokeDevice);
 	const confirm = useConfirm();
 	const { error, trackResult } = createActionError();
+	// The id, not the row: the sheet reads the live row, and the id is kept
+	// after closing so the sheet can finish its exit.
+	const [scheduleId, setScheduleId] = createSignal<Id<"tvDevices">>();
+	const [isScheduleOpen, setIsScheduleOpen] = createSignal(false);
+	const scheduled = createMemo(() =>
+		devices.data()?.find((device) => device._id === scheduleId())
+	);
 
 	async function revoke(id: Id<"tvDevices">, label: string): Promise<void> {
 		const isConfirmed = await confirm({
@@ -67,42 +115,34 @@ export function DevicesCard(): JSX.Element {
 						<ul class={styles.list}>
 							<For each={devices.data()}>
 								{(device) => (
-									<li class={styles.row}>
-										<span class={styles.label}>
-											{device.label}
-										</span>
-										<span class={styles.seen}>
-											{lastSeenText(device.lastSeenAt)}
-										</span>
-										<Show
-											when={
-												device.revokedAt === undefined
-											}
-											fallback={
-												<Badge status="neutral">
-													Revoked
-												</Badge>
-											}
-										>
-											<IconButton
-												tooltipLabel={`Revoke ${device.label}`}
-												onClick={() =>
-													revoke(
-														device._id,
-														device.label
-													)
-												}
-											>
-												{ICONS.delete}
-											</IconButton>
-										</Show>
-									</li>
+									<DeviceRow
+										device={device}
+										onSchedule={() => {
+											setScheduleId(device._id);
+											setIsScheduleOpen(true);
+										}}
+										onRevoke={() => {
+											void revoke(
+												device._id,
+												device.label
+											);
+										}}
+									/>
 								)}
 							</For>
 						</ul>
 					</Show>
 					<InlineError message={error()} />
 				</div>
+				<Show when={scheduled()}>
+					{(device) => (
+						<ScheduleSheet
+							open={isScheduleOpen()}
+							onOpenChange={setIsScheduleOpen}
+							device={device()}
+						/>
+					)}
+				</Show>
 			</SpaceCard.Body>
 		</SpaceCard.Root>
 	);

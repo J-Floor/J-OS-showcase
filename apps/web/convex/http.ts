@@ -17,6 +17,7 @@ import {
 	type DeviceDeps,
 	manifestResponse,
 	packResponse,
+	scheduleResponse,
 	type PairDeps,
 	pollPairingResponse,
 	preflightResponse,
@@ -146,6 +147,8 @@ function deviceDeps(context: HttpContext): DeviceDeps {
 		limit: limiter(context),
 		manifest: () => context.runQuery(internal.tvInternal.manifest, {}),
 		pack: () => context.runQuery(internal.tvInternal.packFile, {}),
+		schedule: (tokenHash) =>
+			context.runQuery(internal.tvInternal.deviceSchedule, { tokenHash }),
 		content: (id) =>
 			context.runQuery(internal.tvInternal.slideContent, { id }),
 		getBlob: (fileId) => context.storage.get(fileId as Id<"_storage">),
@@ -190,6 +193,18 @@ http.route({
 });
 http.route({
 	path: TV_PATHS.pack,
+	method: "OPTIONS",
+	handler: httpAction(() => Promise.resolve(preflightResponse())),
+});
+http.route({
+	path: TV_PATHS.schedule,
+	method: "GET",
+	handler: httpAction((context, request) =>
+		scheduleResponse(request, deviceDeps(context))
+	),
+});
+http.route({
+	path: TV_PATHS.schedule,
 	method: "OPTIONS",
 	handler: httpAction(() => Promise.resolve(preflightResponse())),
 });

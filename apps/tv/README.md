@@ -35,6 +35,13 @@ Check the values in `config.xml` against the actual TV before packaging: the Tiz
 6. Edit `config.xml` there (change a duration): the TV follows within about a minute.
 7. Check one HTML slide that uses a font and an image from `assets/`: both must show on the TV (Chrome 76 sandboxed frame). That a `data:` URI loads in the sandboxed `srcdoc` frame while a `blob:` URL does not was observed only in headless Chromium 152; it is NOT verified on Chrome 76 or a real TV. If it fails there, HTML slides show without their fonts and images.
 8. Memory, worst case (NOT measured; do this before relying on large packs): upload a pack at the server's limits (a zip near 40 MiB, several 8 MiB assets, HTML slides that each use them), watch the TV through a swap to a second such pack and leave it playing for an hour. It must not crash, reload or freeze.
+9. Power schedule: with the TV paired, open Space, TV, Schedule on its device and set the screen to turn off a few minutes from now and back on a few minutes later (times use the TV's clock). Confirm the screen goes black at the first time and the slides return at the second. Then turn the TV's network off, reboot the app and confirm it still follows the saved schedule.
+
+## Power schedule: what "off" means
+
+Not verified on a real TV. "Off" is a black cover over the app: the TV stays powered, the backlight is not turned down, and the app keeps running so it can bring the slides back on time. On a consumer TV that is not a power-off; the panel may still glow dark grey and the TV keeps using power. A real panel power-off needs a spike on the TV (Tizen power or B2B APIs, backlight, HDMI-CEC) and is not implemented. A TV in standby cannot run the app, so it would not wake on schedule.
+
+Hours run within one day: the on time must be before the off time, so a screen cannot stay on past midnight (set the next day to start early or use always on). The schedule is re-checked against the TV's clock every manifest poll, so a clock that is corrected later takes effect within a minute.
 
 ## Memory on the TV
 

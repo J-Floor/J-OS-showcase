@@ -1,4 +1,5 @@
 import { TV_CORS_HEADERS, TV_LIMITS } from "./constants.ts";
+import { scheduleToXml, type ScheduleDay } from "./schedule.ts";
 import { bearerToken, hashTvSecret, newTvSecret } from "./tokens.ts";
 
 const HTTP_OK = 200;
@@ -136,6 +137,9 @@ export type DeviceDeps = {
 	limit: (name: "tvDevice", key: string) => Promise<boolean>;
 	manifest: () => Promise<TvManifest>;
 	pack: () => Promise<{ fileId: string; version: number } | null>;
+	schedule: (
+		tokenHash: string
+	) => Promise<{ version: number; days: ScheduleDay[] } | null>;
 	content: (id: string) => Promise<SlideContent | null>;
 	getBlob: (fileId: string) => Promise<Blob | null>;
 };
@@ -171,9 +175,15 @@ export async function manifestResponse(
 	deps: DeviceDeps
 ): Promise<Response> {
 	const gate = await deviceGate(request, deps);
-	return "response" in gate
-		? gate.response
-		: json(await deps.manifest(), HTTP_OK);
+	if ("response" in gate) return gate.response;
+	const schedule = await deps.schedule(gate.tokenHash);
+	return json(
+		{
+			...(await deps.manifest()),
+			scheduleVersion: schedule?.version ?? null,
+		},
+		HTTP_OK
+	);
 }
 
 function noContent(status: number): Response {
@@ -242,6 +252,27 @@ export async function packResponse(
 			"X-Tv-Pack-Version": String(pack.version),
 			// Browsers hide non-safelisted response headers from scripts otherwise.
 			"Access-Control-Expose-Headers": "X-Tv-Pack-Version",
+		}),
+	});
+}
+
+/** One device's power schedule as XML; 404 when it has none. Counts against the same `tvDevice` limiter as every device route. */
+export async function scheduleResponse(
+	request: Request,
+	deps: DeviceDeps
+): Promise<Response> {
+	const gate = await deviceGate(request, deps);
+	if ("response" in gate) return gate.response;
+	const schedule = await deps.schedule(gate.tokenHash);
+	if (schedule === null) return noContent(HTTP_NOT_FOUND);
+	return new Response(scheduleToXml(schedule.version, schedule.days), {
+		status: HTTP_OK,
+		headers: tvHeaders({
+			"Content-Type": "application/xml; charset=utf-8",
+			"X-Content-Type-Options": "nosniff",
+			"Cache-Control": "private, no-store",
+			"X-Tv-Schedule-Version": String(schedule.version),
+			"Access-Control-Expose-Headers": "X-Tv-Schedule-Version",
 		}),
 	});
 }

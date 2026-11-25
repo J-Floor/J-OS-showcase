@@ -60,6 +60,7 @@ beforeEach(() => {
 			createdAt: 1,
 			lastSeenAt: Date.now() - 2 * HOUR_MS,
 			revokedAt: undefined,
+			schedule: [{ day: "sat", closed: true }],
 		},
 		{
 			_id: "device-never",
@@ -149,4 +150,23 @@ test("there is no way to pair here: only the explanation mentions it", () => {
 		screen.queryByRole("button", { name: /pair|connect|add/i })
 	).toBeNull();
 	expect(screen.queryByRole("textbox")).toBeNull();
+});
+
+test("a TV with a schedule says it has custom hours", () => {
+	renderCard();
+	expect(
+		within(rowOf("Lobby TV")).getByText("Custom hours")
+	).toBeInTheDocument();
+	expect(within(rowOf("Spare TV")).queryByText("Custom hours")).toBeNull();
+});
+
+test("the schedule button opens the sheet for that TV; a revoked TV has none", async () => {
+	renderCard();
+	expect(
+		screen.queryByRole("button", { name: "Schedule for Old TV" })
+	).toBeNull();
+	fireEvent.click(
+		screen.getByRole("button", { name: "Schedule for Lobby TV" })
+	);
+	expect(await screen.findAllByRole("radiogroup")).toHaveLength(7);
 });

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	fetchManifest,
 	fetchPack,
+	fetchSchedule,
 	fetchSlide,
 	pollPairing,
 	startPairing,
@@ -183,6 +184,43 @@ describe("api", () => {
 		expect(await fetchPack("t")).toBe("missing");
 		fetchMock.mockResolvedValueOnce(new Response(null, { status: 429 }));
 		await expect(fetchPack("t")).rejects.toThrow();
+	});
+});
+
+describe("fetchSchedule", () => {
+	it("returns the XML and the version header with the Bearer header", async () => {
+		fetchMock.mockResolvedValue(
+			new Response("<s/>", {
+				status: 200,
+				headers: { "X-Tv-Schedule-Version": "4" },
+			})
+		);
+		expect(await fetchSchedule("tok-1")).toEqual({
+			xml: "<s/>",
+			version: 4,
+		});
+		const [url, init] = fetchMock.mock.calls[0] ?? [];
+		expect(url).toBe(`${BASE}/tv/schedule`);
+		expect(new Headers(init?.headers).get("Authorization")).toBe(
+			"Bearer tok-1"
+		);
+	});
+
+	it("reports no version when the header is missing", async () => {
+		fetchMock.mockResolvedValue(new Response("<s/>", { status: 200 }));
+		expect(await fetchSchedule("t")).toEqual({
+			xml: "<s/>",
+			version: undefined,
+		});
+	});
+
+	it("maps 404 and 401, and throws on 500", async () => {
+		fetchMock.mockResolvedValueOnce(new Response(null, { status: 404 }));
+		expect(await fetchSchedule("t")).toBe("missing");
+		fetchMock.mockResolvedValueOnce(new Response(null, { status: 401 }));
+		expect(await fetchSchedule("t")).toBe("unauthorized");
+		fetchMock.mockResolvedValueOnce(new Response(null, { status: 500 }));
+		await expect(fetchSchedule("t")).rejects.toThrow();
 	});
 });
 
