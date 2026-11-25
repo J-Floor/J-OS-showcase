@@ -105,17 +105,6 @@ function isEventOnTv(
 	return event.showOnTv === true && now < tvCutoff(event);
 }
 
-/** `<SITE_URL origin>/visitor?event=<id>`; undefined when SITE_URL is unset or not a URL (that deployment's slide has no QR). */
-export function eventSignUpUrl(eventId: string): string | undefined {
-	const site = process.env.SITE_URL;
-	if (!site) return undefined;
-	try {
-		return `${new URL(site).origin}/visitor?event=${eventId}`;
-	} catch {
-		return undefined;
-	}
-}
-
 function ownedRows(database: Database, eventId: Id<"events">) {
 	return database
 		.query("tvAssets")
@@ -159,7 +148,7 @@ function build(
 			startsAtLocal: event.startsAtLocal,
 			endsAtLocal: event.endsAtLocal,
 			paths,
-			signUpUrl: eventSignUpUrl(event._id),
+			signUpUrl: event.link,
 		},
 		now
 	);

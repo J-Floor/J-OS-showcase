@@ -85,8 +85,7 @@ export function EntityQrActions(props: EntityQrLink): JSX.Element {
 
 /**
  * Sheet block: rendered QR + Copy link Button + Download button. No ability
- * gate inside — callers gate it. Ported from the events "QR & link"
- * accordion body.
+ * gate inside — callers gate it.
  */
 export function EntityQrBlock(props: EntityQrLink): JSX.Element {
 	const { copied, copy } = createCopyFeedback(() => props.url);

@@ -661,6 +661,8 @@ export default defineSchema({
 		),
 		description: v.optional(v.string()),
 		pictureId: v.optional(v.id("_storage")),
+		// Where people sign up (a registration page); the TV slide's QR encodes it. Board only.
+		link: v.optional(v.string()),
 		showOnTv: v.optional(v.boolean()),
 		/** Epoch cutoff for the TV; absent means `lib/tv/eventCutoff.tvCutoff`'s default. */
 		tvUntil: v.optional(v.number()),

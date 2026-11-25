@@ -44,7 +44,7 @@ export type EntityDescriptor<Row extends EntityRow> = {
 	 *  guessable-stale tab into shared links (see community note in Task 8). */
 	tab?: string;
 	tabParam?: string; // defaults to "tab" when `tab` is set
-	/** Entities with a shareable QR (items, events). */
+	/** Entities with a shareable QR (items). */
 	qr?: (row: Row) => EntityQrLink;
 	/** Warms the sheet's extra queries for one row on hover, focus or palette
 	 *  highlight. `canPerform` gates queries the sheet only runs for some viewers. Arg

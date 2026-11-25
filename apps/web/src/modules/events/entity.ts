@@ -11,7 +11,6 @@ import { ICONS } from "../../shared/icons.ts";
 import { formatDateIn } from "../../shared/time.ts";
 
 import { eventAttendeesQuery } from "./queries.ts";
-import { visitorUrl } from "./visitorUrl.ts";
 
 /** `useRows` factory for the events descriptor — wraps `listEvents`. Must be
  *  called inside a component (never at module scope). */
@@ -21,7 +20,7 @@ function useRows(): Accessor<Doc<"events">[] | undefined> {
 	return events.data;
 }
 
-/** Events entity descriptor: member-visible list, board/admin visitor QR
+/** Events entity descriptor: member-visible list, board/admin attendees
  *  (gated by callers with `manage`/`Events`). */
 export const eventsEntity: EntityDescriptor<Doc<"events">> = {
 	key: "event",
@@ -40,8 +39,4 @@ export const eventsEntity: EntityDescriptor<Doc<"events">> = {
 		if (canPerform("manage", "Events"))
 			prefetchSpec(eventAttendeesQuery, row._id);
 	},
-	qr: (row) => ({
-		url: visitorUrl(row._id),
-		fileName: `${row.name}-visitor-qr.png`,
-	}),
 };

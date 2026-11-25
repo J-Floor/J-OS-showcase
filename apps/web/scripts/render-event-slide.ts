@@ -85,7 +85,7 @@ put(
 			paths,
 			signUpUrl: values["no-qr"]
 				? undefined
-				: `https://app.example.com/visitor?event=${SAMPLE_EVENT}`,
+				: `https://example.com/events/${SAMPLE_EVENT}`,
 		},
 		now
 	)

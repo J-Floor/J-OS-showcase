@@ -124,12 +124,11 @@ function renderSheet(role: Role, props: Record<string, unknown>) {
 	));
 }
 
-test("detail (board): shows name, visitor QR download, attendees and delete", () => {
+test("detail (board): shows name, attendees and delete, with no visitor QR or link", () => {
 	renderSheet("board", { event });
 	expect(screen.getAllByText("Open House").length).toBeGreaterThan(0);
-	expect(
-		screen.getByRole("button", { name: /Download QR/ })
-	).toBeInTheDocument();
+	expect(screen.queryByRole("button", { name: /Download QR/ })).toBeNull();
+	expect(screen.queryByRole("button", { name: /Copy link/ })).toBeNull();
 	expect(screen.getByText("Ada Lovelace")).toBeInTheDocument();
 	expect(
 		screen.getByRole("button", { name: /Delete event/ })
@@ -175,19 +174,31 @@ test("detail (board): shows the TV section", () => {
 	expect(screen.getByRole("button", { name: "TV" })).toBeInTheDocument();
 });
 
-test("Copy link writes the visitor URL to the clipboard", async () => {
-	const writeText = vi.fn(() => Promise.resolve());
-	Object.defineProperty(navigator, "clipboard", {
-		value: { writeText },
-		configurable: true,
-	});
+test("detail (board): the link row is editable and saves a link", async () => {
 	renderSheet("board", { event });
-	fireEvent.click(screen.getByRole("button", { name: /Copy link/ }));
+	fireEvent.click(screen.getByRole("button", { name: /Unlock to edit/ }));
+	const field = await waitFor(() =>
+		screen.getByRole("textbox", { name: "Link" })
+	);
+	fireEvent.input(field, { target: { value: "https://example.com/e" } });
+	fireEvent.blur(field);
 	await waitFor(() => {
-		expect(writeText).toHaveBeenCalledWith(
-			`${window.location.origin}/visitor?event=event1`
-		);
+		expect(mutateAsync).toHaveBeenCalledWith({
+			eventId: "event1",
+			link: "https://example.com/e",
+		});
 	});
+});
+
+test("detail (member): no link row", () => {
+	renderSheet("member", {
+		event: {
+			...(event as Record<string, unknown>),
+			link: "https://example.com/e",
+		},
+	});
+	expect(screen.queryByText("Link")).toBeNull();
+	expect(screen.queryByText("https://example.com/e")).toBeNull();
 });
 
 test("Delete waits for confirmation, then calls deleteEvent", async () => {
@@ -537,9 +548,7 @@ test("a refused rename shows the reason under the details", async () => {
 test("morph: the event's date columns pair with the sheet's date rows", () => {
 	// The phase column is hidden (the table groups by it).
 	const row = tableRowKeys(
-		eventColumns({ canManage: true }).filter(
-			(column) => column.id !== "phase"
-		),
+		eventColumns().filter((column) => column.id !== "phase"),
 		event as Doc<"events">
 	);
 	expect(row.title).toBe("name");

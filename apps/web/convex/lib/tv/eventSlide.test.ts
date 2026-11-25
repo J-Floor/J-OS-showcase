@@ -35,14 +35,14 @@ const CONTENT: EventSlideContent = {
 	startsAtLocal: STARTS_LOCAL,
 	endsAtLocal: ENDS_LOCAL,
 	paths: PATHS,
-	signUpUrl: `https://app.example.com/visitor?event=${EVENT}`,
+	signUpUrl: `https://example.com/demo-night`,
 };
 
 describe("eventPhase", () => {
 	it("is soon before the start, live from the start through the end, past after", () => {
 		expect(eventPhase(STARTS_AT, ENDS_AT, BEFORE)).toBe("soon");
 		expect(eventPhase(STARTS_AT, ENDS_AT, STARTS_AT)).toBe("live");
-		// The visitor page still takes sign-ups at exactly endsAt (`eventLive`).
+		// A live event is still on at exactly endsAt (`eventLive`).
 		expect(eventPhase(STARTS_AT, ENDS_AT, ENDS_AT)).toBe("live");
 		expect(eventPhase(STARTS_AT, ENDS_AT, AFTER)).toBe("past");
 	});
@@ -74,7 +74,7 @@ describe("eventSlideHtml states", () => {
 		);
 	});
 
-	it("after the end: Past event, and no QR the visitor page would refuse", async () => {
+	it("after the end: Past event, and no QR", async () => {
 		const page = eventSlideHtml(CONTENT, AFTER);
 		expect(page).toContain("Past event at J floor");
 		expect(page).not.toContain('class="qr"');
@@ -215,7 +215,7 @@ describe("eventSlideHtml", () => {
 	});
 
 	it("encodes the URL it is given", () => {
-		const other = "https://app.example.com/visitor?event=other";
+		const other = "https://example.com/other";
 		expect(qrSvg(other)).not.toBe(qrSvg(CONTENT.signUpUrl ?? ""));
 		expect(
 			eventSlideHtml({ ...CONTENT, signUpUrl: other }, BEFORE)

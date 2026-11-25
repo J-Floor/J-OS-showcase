@@ -51,6 +51,16 @@ const EVENT_MANAGERS = { action: "manage", subject: "Events" } as const;
 
 export const CHANGELOG: ChangeEntry[] = [
 	{
+		version: "1.12",
+		title: "Event sign-up links",
+		items: [
+			{
+				text: "Add a Link to an event, such as its registration page. The QR code on the event's TV slide opens it, and an event without a link has no QR.",
+				audience: EVENT_MANAGERS,
+			},
+		],
+	},
+	{
 		version: "1.11",
 		title: "Events on the TV",
 		items: [

@@ -1,5 +1,5 @@
 import { convexTest } from "convex-test";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -11,6 +11,7 @@ import {
 	type TvConfigSlide,
 } from "./lib/tv/configXml.ts";
 import { TV_LIMITS } from "./lib/tv/constants.ts";
+import { qrSvg } from "./lib/tv/eventSlide.ts";
 import { eventSlideEntry, eventSlidePaths } from "./lib/tv/eventSlideFiles.ts";
 import { discardStored } from "./lib/tv/eventSlideSource.ts";
 import schema from "./schema.ts";
@@ -53,14 +54,9 @@ const MANUAL: TvConfigSlide = {
 	title: "A",
 };
 
-beforeEach(() => {
-	vi.stubEnv("SITE_URL", "https://app.example.com/");
-});
-
 afterEach(() => {
 	betweenPlanAndCommit.run = undefined;
 	vi.useRealTimers();
-	vi.unstubAllEnvs();
 });
 
 async function seedConfig(
@@ -102,6 +98,7 @@ async function seedEvent(
 		return context.db.insert("events", {
 			name: "Demo night",
 			description: "Ten teams show what they built.",
+			link: "https://example.com/demo-night",
 			startsAt,
 			endsAt,
 			startsAtLocal: zonedLocalFromEpoch(startsAt, SITE_TIMEZONE),
@@ -840,6 +837,28 @@ describe("transitions", () => {
 		await render(backend, eventId);
 		const page = await pageText(backend, eventId);
 		expect(page).toContain("Past event at J floor");
+		expect(page).not.toContain('class="qr"');
+	});
+});
+
+describe("the slide's QR", () => {
+	it("encodes the event's link", async () => {
+		const backend = makeBackend();
+		await seedConfig(backend);
+		const eventId = await seedEvent(backend);
+		await render(backend, eventId);
+		const page = await pageText(backend, eventId);
+		expect(page).toContain(
+			`<div class="qr">${qrSvg("https://example.com/demo-night")}</div>`
+		);
+	});
+
+	it("has no QR for an event without a link", async () => {
+		const backend = makeBackend();
+		await seedConfig(backend);
+		const eventId = await seedEvent(backend, { link: undefined });
+		await render(backend, eventId);
+		const page = await pageText(backend, eventId);
 		expect(page).not.toContain('class="qr"');
 	});
 });

@@ -9,6 +9,8 @@ export const REFERRAL_MAX = 320;
 export const VENTURE_NAME_MAX = 300;
 export const TEXT_MAX = 5000;
 export const DESCRIPTION_MAX = 1000;
+/** Longest event link stored, measured after normalising (percent-encoding included); keeps the TV slide QR encodable. */
+export const EVENT_LINK_MAX = 500;
 export const PHONE_MAX = 50;
 export const SSID_MAX = 64;
 export const WIFI_PASSWORD_MAX = 128;

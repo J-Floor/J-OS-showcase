@@ -398,26 +398,9 @@ test("a member sees no row action in the table", () => {
 	expect(screen.queryByRole("button", { name: "Download QR" })).toBeNull();
 });
 
-test("a board member sees the row actions in the table", () => {
+test("a board member sees no visitor QR or copy-link action in the table", () => {
 	renderAs("board");
-	expect(
-		screen.getByRole("button", { name: "Copy link" })
-	).toBeInTheDocument();
-	expect(
-		screen.getByRole("button", { name: "Download QR" })
-	).toBeInTheDocument();
-});
-
-test("a mounted page loses the row actions when the role drops from board to member", async () => {
-	const [role, setRole] = createSignal<Role>("board");
-	// eslint-disable-next-line solid/reactivity -- renderAs reads the accessor inside the provider's JSX
-	renderAs(role);
-	expect(
-		screen.getByRole("button", { name: "Copy link" })
-	).toBeInTheDocument();
-	setRole("member");
-	await waitFor(() => {
-		expect(screen.queryByRole("button", { name: "Copy link" })).toBeNull();
-	});
 	expect(screen.getByText("Open House")).toBeInTheDocument();
+	expect(screen.queryByRole("button", { name: "Copy link" })).toBeNull();
+	expect(screen.queryByRole("button", { name: "Download QR" })).toBeNull();
 });

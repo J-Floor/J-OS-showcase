@@ -1,5 +1,4 @@
 import {
-	Accordion,
 	DatePicker,
 	EditableText,
 	EmptyState,
@@ -21,10 +20,13 @@ import {
 	zonedDate,
 	zonedTime,
 } from "../../../convex/lib/time.ts";
-import { DESCRIPTION_MAX, NAME_MAX } from "../../../convex/lib/validate.ts";
+import {
+	DESCRIPTION_MAX,
+	EVENT_LINK_MAX,
+	NAME_MAX,
+} from "../../../convex/lib/validate.ts";
 import { PersonListItem } from "../../shared/components/PersonListItem.tsx";
 import { createEntityPatch } from "../../shared/entity/createEntityPatch.ts";
-import { EntityQrBlock } from "../../shared/entity/EntityQr.tsx";
 import { warmPeek } from "../../shared/entity/lazyPeek.tsx";
 import { useOpenPeek } from "../../shared/entity/openEntity.ts";
 import { SheetSection } from "../../shared/entity/SheetSection.tsx";
@@ -32,7 +34,6 @@ import { ICONS } from "../../shared/icons.ts";
 import { InlineError } from "../../shared/InlineError.tsx";
 import { personEntity } from "../community/entity.ts";
 
-import { eventsEntity } from "./entity.ts";
 import { EventPicture } from "./EventPicture.tsx";
 import styles from "./EventSheet.module.scss";
 import { EventTvSection } from "./EventTvSection.tsx";
@@ -171,6 +172,34 @@ function EventDescriptionRow(props: {
 	);
 }
 
+/** Where people register (a Luma-style page); the TV slide's QR opens it. Board only: the row is absent for everyone else. */
+function EventLinkRow(props: {
+	event: Accessor<Doc<"events">>;
+	isEditing: Accessor<boolean>;
+	onPatch: (patch: EventPatch) => void;
+}) {
+	return (
+		<PropertyRow
+			label={eventFields.link.label}
+			icon={eventFields.link.icon}
+		>
+			<Show
+				when={props.isEditing()}
+				fallback={<span>{props.event().link ?? ""}</span>}
+			>
+				<EditableText
+					label={eventFields.link.label}
+					value={props.event().link ?? ""}
+					maxLength={EVENT_LINK_MAX}
+					onCommit={(value) => {
+						props.onPatch({ link: value });
+					}}
+				/>
+			</Show>
+		</PropertyRow>
+	);
+}
+
 /** The "Details" section: name and start/end, editable while `isEditing`.
  *  Each change saves at once and reports to the sheet's save status. */
 export function EventDetailsItem(props: {
@@ -226,6 +255,13 @@ export function EventDetailsItem(props: {
 					isEditing={props.isEditing}
 					onPatch={patch}
 				/>
+				<Show when={props.canManage}>
+					<EventLinkRow
+						event={props.event}
+						isEditing={props.isEditing}
+						onPatch={patch}
+					/>
+				</Show>
 				<EventPicture
 					event={props.event}
 					isEditing={props.isEditing}
@@ -271,20 +307,13 @@ function AttendeeList(props: { attendees: Accessor<Attendee[]> }) {
 	);
 }
 
-/** The board-only sections: the visitor QR and link, and who registered. */
+/** The board-only sections: who registered. */
 export function EventAdminItems(props: {
 	event: Accessor<Doc<"events">>;
 	attendees: Accessor<Attendee[] | undefined>;
 }) {
 	return (
 		<>
-			<Accordion.Item value="visitor">
-				<Accordion.ItemTitle>QR &amp; link</Accordion.ItemTitle>
-				<Accordion.ItemContent>
-					<EntityQrBlock {...eventsEntity.qr!(props.event())} />
-				</Accordion.ItemContent>
-			</Accordion.Item>
-
 			<Query.Root data={props.attendees()}>
 				<SheetSection
 					value="attendees"

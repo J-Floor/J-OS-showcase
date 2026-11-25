@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-import { actionsColumnSize } from "@j-os/design-system";
 import { expect, test } from "vitest";
 
 import type { Doc } from "../../../convex/_generated/dataModel";
@@ -13,7 +12,7 @@ const ENDS = Date.UTC(2026, 9, 9, 2);
 const event = { startsAt: STARTS, endsAt: ENDS } as Doc<"events">;
 
 function column(key: string) {
-	return eventColumns({ canManage: true }).find(
+	return eventColumns().find(
 		(candidate) =>
 			(candidate.id ??
 				(candidate as { accessorKey?: string }).accessorKey) === key
@@ -32,17 +31,8 @@ test("the name shares the leftover width, and the dates fit what they show", () 
 	expect(ends(event)).toBe(formatDateIn(ENDS, SITE_TIMEZONE));
 });
 
-test("the actions column is a display column with a fixed width", () => {
-	const actions = column("actions");
-	expect(actions?.size).toBe(actionsColumnSize(2));
-	expect(actions).not.toHaveProperty("dataType");
-	expect(actions).not.toHaveProperty("enableSorting");
-	expect(actions).not.toHaveProperty("enableColumnFilter");
-});
-
-test("whoever cannot manage events gets no actions column", () => {
-	const ids = eventColumns({ canManage: false }).map(
-		(candidate) => candidate.id
-	);
+test("there is no actions column", () => {
+	const ids = eventColumns().map((candidate) => candidate.id);
 	expect(ids).not.toContain("actions");
+	expect(column("actions")).toBeUndefined();
 });

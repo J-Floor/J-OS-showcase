@@ -15,6 +15,7 @@ export const eventFields = defineFields({
 	startsAt: { label: "Starts", icon: ICONS.start },
 	endsAt: { label: "Ends", icon: ICONS.end },
 	description: { label: "Description", icon: ICONS.description },
+	link: { label: "Link", icon: ICONS.link },
 	picture: { label: "Picture", icon: ICONS.placeholder },
 	showOnTv: { label: "Show on TV", icon: ICONS.space },
 	tvUntil: { label: "Show until", icon: ICONS.date },

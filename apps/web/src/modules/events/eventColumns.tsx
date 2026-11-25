@@ -2,13 +2,9 @@ import { fieldColumn, type JfColumnDefinition } from "@j-os/design-system";
 
 import type { Doc } from "../../../convex/_generated/dataModel";
 import { SITE_TIMEZONE } from "../../../convex/lib/time.ts";
-import { actionsColumn } from "../../shared/actions/actionsColumn.ts";
 import { formatDateIn } from "../../shared/time.ts";
 
-import { EventRowActions } from "./EventRowActions.tsx";
 import { eventFields } from "./fields.ts";
-
-const EVENT_ACTION_COUNT = 2;
 
 /** The three accordion buckets, in display order. Compared against the cached
  *  UTC epochs (`startsAt`/`endsAt`), which are zone-independent instants — so
@@ -34,14 +30,10 @@ function eventPhase(event: Doc<"events">, now: number): EventPhase {
 export const EVENTS_DEFAULT_SORT = [{ id: "startsAt", desc: true }];
 
 /**
- * Events table columns: name, start/end dates, and a trailing actions column
- * (copy link / download QR) mirroring the community roster's actions column —
- * `disableRowClick` so those buttons don't also open the sheet. The actions
- * column is present only for whoever can manage events.
+ * Events table columns: the hidden phase grouping column, name, and the
+ * start/end dates.
  */
-export function eventColumns(options: {
-	canManage: boolean;
-}): JfColumnDefinition<Doc<"events">>[] {
+export function eventColumns(): JfColumnDefinition<Doc<"events">>[] {
 	// `now` is captured per build, and the columns rebuild only when what they
 	// read changes. An event silently crossing future→current→past won't
 	// re-bucket until then — fine for a board tool that refetches often, and
@@ -79,10 +71,6 @@ export function eventColumns(options: {
 			cell: (info) =>
 				formatDateIn(info.row.original.endsAt, SITE_TIMEZONE),
 			measureText: (row) => formatDateIn(row.endsAt, SITE_TIMEZONE),
-		}),
-		...actionsColumn<Doc<"events">>({
-			count: options.canManage ? EVENT_ACTION_COUNT : 0,
-			cell: (info) => <EventRowActions row={info.row.original} />,
 		}),
 	];
 }

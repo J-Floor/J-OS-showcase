@@ -16,6 +16,7 @@ import type { InputError } from "./lib/errors/input.ts";
 import { displayName } from "./lib/names.ts";
 import { invariant, refuse, unwrap } from "./lib/result.ts";
 import { BOARD_LEVEL, COMMUNITY_TIERS, isBoardLevel } from "./lib/roles.ts";
+import { normalizeHttpUrl } from "./lib/safeUrl.ts";
 import { SITE_TIMEZONE, utcFromLocal, zonedTimeZoneName } from "./lib/time.ts";
 import { isBlobHeld } from "./lib/tv/blobHeld.ts";
 import {
@@ -29,7 +30,12 @@ import {
 	syncDeletedEventTv,
 	touchesTv,
 } from "./lib/tv/eventSync.ts";
-import { checkLength, DESCRIPTION_MAX, NAME_MAX } from "./lib/validate.ts";
+import {
+	checkLength,
+	DESCRIPTION_MAX,
+	EVENT_LINK_MAX,
+	NAME_MAX,
+} from "./lib/validate.ts";
 import { currentActorId } from "./lifecycle.ts";
 import {
 	cancelEventReminders,
@@ -90,13 +96,14 @@ export const createEvent = mutation({
 	},
 });
 
-/** What the Events page needs of an event: the scheduler job ids stay on the server (they are optional fields, so the stripped row is still an event). */
+/** What the Events page needs of an event: the scheduler job ids stay on the server (they are optional fields, so the stripped row is still an event), and non-board viewers do not get the TV status fields or the link. */
 function listing(event: Doc<"events">, canSeeTv: boolean): Doc<"events"> {
 	const visible = { ...event };
 	delete visible.tvSyncJobId;
 	delete visible.tvTransitionJobIds;
-	// Where the TV slide stands is for the board that runs the TV.
+	// The TV status fields and the link are for the board that runs the TV.
 	if (!canSeeTv) {
+		delete visible.link;
 		delete visible.tvStatus;
 		delete visible.tvStatusDetail;
 	}
@@ -214,8 +221,24 @@ function timeFieldsPatch(
 	};
 }
 
+/** Raw input beyond this is refused before normalising (percent-encoding can grow a link about sixfold). */
+const RAW_LINK_MAX = 4000;
+
+/** The link as stored: http(s) only, scheme defaulted, capped after normalising; blank clears it. */
+function eventLinkPatch(link: string): Result<string | undefined, InputError> {
+	if (link.trim() === "") return ok(undefined);
+	// Cheap guard before normalising: absurd input is never worth the work.
+	if (link.length > RAW_LINK_MAX) return err({ type: "LinkTooLong" });
+	const normalized = normalizeHttpUrl(link);
+	if (normalized === null) return err({ type: "LinkNotHttp" });
+	// The cap is on the stored (percent-encoded) value, which the QR must fit.
+	if (normalized.length > EVENT_LINK_MAX) return err({ type: "LinkTooLong" });
+	return ok(normalized);
+}
+
 type TvFieldArgs = {
 	description?: string;
+	link?: string | null;
 	pictureId?: Id<"_storage"> | null;
 	showOnTv?: boolean;
 	tvUntilLocal?: string | null;
@@ -252,6 +275,9 @@ async function tvFieldsPatch(
 	const patch: Partial<Doc<"events">> = {};
 	if (args.description !== undefined)
 		patch.description = args.description.trim() || undefined;
+	if (args.link === null) patch.link = undefined;
+	else if (args.link !== undefined)
+		patch.link = unwrap(eventLinkPatch(args.link));
 	if (args.showOnTv !== undefined) patch.showOnTv = args.showOnTv;
 	if (args.tvUntilLocal === null) patch.tvUntil = undefined;
 	else if (args.tvUntilLocal !== undefined) {
@@ -270,6 +296,8 @@ export const updateEvent = mutation({
 		startsAtLocal: v.optional(v.string()),
 		endsAtLocal: v.optional(v.string()),
 		description: v.optional(v.string()),
+		// An http(s) registration page; null (or blank) removes it
+		link: v.optional(v.union(v.string(), v.null())),
 		// null removes the picture
 		pictureId: v.optional(v.union(v.id("_storage"), v.null())),
 		showOnTv: v.optional(v.boolean()),
@@ -278,7 +306,15 @@ export const updateEvent = mutation({
 	},
 	handler: async (
 		context,
-		{ eventId, description, pictureId, showOnTv, tvUntilLocal, ...fields }
+		{
+			eventId,
+			description,
+			link,
+			pictureId,
+			showOnTv,
+			tvUntilLocal,
+			...fields
+		}
 	): Promise<void> => {
 		unwrap(await requireRole(context, BOARD_LEVEL));
 		unwrap(checkLength(fields.name, NAME_MAX));
@@ -298,6 +334,7 @@ export const updateEvent = mutation({
 		if (startsAt > endsAt) refuse({ type: "EventStartAfterEnd" });
 		const extra = await tvFieldsPatch(context, existing, {
 			description,
+			link,
 			pictureId,
 			showOnTv,
 			tvUntilLocal,

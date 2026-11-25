@@ -11,6 +11,7 @@ import {
 	zonedLocalFromEpoch,
 	zonedTime,
 } from "./lib/time.ts";
+import { EVENT_LINK_MAX } from "./lib/validate.ts";
 import schema from "./schema.ts";
 
 const modules = import.meta.glob("./**/*.*s");
@@ -878,6 +879,114 @@ describe("event TV fields", () => {
 			const row = await backend.run((context) => context.db.get(eventId));
 			expect(row?.description).toBeUndefined();
 		}
+	});
+});
+
+async function seedEvent() {
+	const backend = convexTest(schema, modules);
+	const { asBoard } = await seedBoard(backend);
+	const eventId = await asBoard.mutation(api.events.createEvent, eventInput);
+	return { backend, asBoard, eventId };
+}
+
+describe("event link", () => {
+	it("stores the link normalised and clears it with null", async () => {
+		const { backend, asBoard, eventId } = await seedEvent();
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId,
+			link: "  example.com/demo-night ",
+		});
+		let row = await backend.run((context) => context.db.get(eventId));
+		expect(row?.link).toBe("https://example.com/demo-night");
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId,
+			link: null,
+		});
+		row = await backend.run((context) => context.db.get(eventId));
+		expect(row?.link).toBeUndefined();
+	});
+	it("clears the link with a blank string", async () => {
+		const { backend, asBoard, eventId } = await seedEvent();
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId,
+			link: "https://example.com/e",
+		});
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId,
+			link: "   ",
+		});
+		const row = await backend.run((context) => context.db.get(eventId));
+		expect(row?.link).toBeUndefined();
+	});
+	it("refuses a non-http link and an over-long one", async () => {
+		const { asBoard, eventId } = await seedEvent();
+		await expect(
+			asBoard.mutation(api.events.updateEvent, {
+				eventId,
+				link: "javascript:alert(1)",
+			})
+		).rejects.toThrow(/LinkNotHttp/);
+		await expect(
+			asBoard.mutation(api.events.updateEvent, {
+				eventId,
+				link: `https://example.com/${"a".repeat(EVENT_LINK_MAX + 1)}`,
+			})
+		).rejects.toThrow(/LinkTooLong/);
+	});
+	it("refuses a non-ASCII link that normalises beyond the cap", async () => {
+		const { backend, asBoard, eventId } = await seedEvent();
+		await expect(
+			asBoard.mutation(api.events.updateEvent, {
+				eventId,
+				link: `example.com/?q=${"é".repeat(900)}x`,
+			})
+		).rejects.toThrow(/LinkTooLong/);
+		const row = await backend.run((context) => context.db.get(eventId));
+		expect(row?.link).toBeUndefined();
+	});
+	it("stores a link just under the cap", async () => {
+		const { backend, asBoard, eventId } = await seedEvent();
+		const prefix = "https://example.com/";
+		const link = prefix + "a".repeat(EVENT_LINK_MAX - prefix.length);
+		await asBoard.mutation(api.events.updateEvent, { eventId, link });
+		const row = await backend.run((context) => context.db.get(eventId));
+		expect(row?.link).toBe(link);
+	});
+	it("refuses a non-board caller", async () => {
+		const { backend, eventId } = await seedEvent();
+		const asMember = await seedMember(backend);
+		await expect(
+			asMember.mutation(api.events.updateEvent, {
+				eventId,
+				link: "https://example.com/e",
+			})
+		).rejects.toThrow("Forbidden");
+	});
+	it("lists the link for the board only", async () => {
+		const { backend, asBoard, eventId } = await seedEvent();
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId,
+			link: "https://example.com/e",
+		});
+		const asMember = await seedMember(backend);
+		const [forBoard] = await asBoard.query(api.events.listEvents, {});
+		const [forMember] = await asMember.query(api.events.listEvents, {});
+		expect(forBoard.link).toBe("https://example.com/e");
+		expect(forMember.link).toBeUndefined();
+	});
+	it("re-syncs the slide of an event on the TV when only the link changes", async () => {
+		vi.useFakeTimers({ toFake: ["setTimeout"] });
+		const { backend, asBoard, eventId } = await seedEvent();
+		await backend.run((context) =>
+			context.db.patch(eventId, { showOnTv: true })
+		);
+		expect(await pendingSyncs(backend)).toEqual([]);
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId,
+			link: "https://example.com/e",
+		});
+		const jobs = await pendingSyncs(backend);
+		expect(jobs.map((job): unknown => job.args)).toEqual([[{ eventId }]]);
 	});
 });
 

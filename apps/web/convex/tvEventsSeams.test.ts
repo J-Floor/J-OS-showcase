@@ -40,13 +40,11 @@ const MANUAL: TvConfigSlide = {
 };
 
 beforeEach(() => {
-	vi.stubEnv("SITE_URL", "https://app.example.com/");
 	vi.useFakeTimers({ toFake: ["setTimeout"] });
 });
 
 afterEach(() => {
 	vi.useRealTimers();
-	vi.unstubAllEnvs();
 });
 
 async function seedBoard(backend: Backend) {

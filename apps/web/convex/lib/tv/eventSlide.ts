@@ -29,7 +29,7 @@ export type EventSlideContent = {
 	startsAtLocal: string;
 	endsAtLocal: string;
 	paths: EventSlidePaths;
-	/** The public sign-up page; absent (no SITE_URL) leaves the QR out. */
+	/** The event's registration page (its `link`); absent leaves the QR out. */
 	signUpUrl?: string;
 };
 
@@ -46,7 +46,7 @@ const KICKERS: Record<EventPhase, string> = {
 	past: "Past event at J floor",
 };
 
-/** The visitor page takes sign-ups up to and including `endsAt` (`eventLive`): the past state starts this long after it. */
+/** The event is on up to and including `endsAt` (`eventLive`): the past state starts this long after it. */
 export const PAST_AFTER_MS = 1;
 
 /** The first moment of the past state. */
@@ -54,7 +54,7 @@ export function pastFrom(endsAt: number): number {
 	return endsAt + PAST_AFTER_MS;
 }
 
-/** Soon before the start; live up to and including the end (the visitor page still signs people up then, `eventLive`); past after. */
+/** Soon before the start; live up to and including the end (`eventLive`); past after. */
 export function eventPhase(
 	startsAt: number,
 	endsAt: number,
@@ -152,7 +152,7 @@ function signUp(url: string | undefined): string {
 /**
  * The event's slide page in its state at `now`. Pure: same content and
  * state, same bytes (the render skips an unchanged page). A past event has
- * no QR: the visitor page refuses sign-ups once it has ended.
+ * no QR: signing up for it is over.
  */
 export function eventSlideHtml(
 	content: EventSlideContent,

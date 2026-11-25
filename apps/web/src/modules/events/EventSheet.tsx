@@ -50,7 +50,7 @@ function EventFieldsPlaceholder() {
 	);
 }
 
-const ALL_SECTIONS = ["details", "visitor", "attendees"];
+const ALL_SECTIONS = ["details", "attendees"];
 
 /** What the sheet is open for: an existing event, a row still loading, or
  *  (neither) a new event. */
@@ -95,7 +95,7 @@ function EventSheetHeader(
 	);
 }
 
-/** An existing event's accordion: its details for anyone, the QR and
+/** An existing event's accordion: its details for anyone, the
  *  attendees for the board. */
 function EventDetailAccordion(props: {
 	event: Accessor<Doc<"events">>;
@@ -190,15 +190,15 @@ function resetOnOpen(
  * One sheet for creating and viewing/editing an event, styled like the
  * community person sheet: an accordion of `PropertyRow`s, a padlock
  * `EditToggle` in the header (fields autosave — no Save button), and the
- * board-only visitor QR + attendee list.
+ * board-only attendee list.
  *
  * Create mode (`event === undefined && !loading`) is reached only from the
  * page's `create`-gated button. Loading mode (`loading`, `event` still
  * undefined) shows the `Sheet.Title`/`Sheet.Body` skeleton
  * ({@link EventFieldsPlaceholder}) instead — the sheet is open for a real
  * row whose data hasn't arrived yet, and must not be mistaken for create.
- * Detail mode shows name + dates to any member; the visitor
- * QR/copy/download, the attendee list, editing and delete are all
+ * Detail mode shows name + dates to any member; the
+ * attendee list, editing and delete are all
  * `manage`/`Events` (board/admin) only.
  */
 export function EventSheet(props: EventSheetProps) {
