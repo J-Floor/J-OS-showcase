@@ -3,6 +3,7 @@ import { join, relative, sep } from "node:path";
 
 const SUPERPOWERS_DIR = "docs/superpowers";
 const EXCLUDED_PATHS: readonly string[] = [
+  ".agents",
   ".claude",
   ".codex",
   ".github/dependabot.yml",

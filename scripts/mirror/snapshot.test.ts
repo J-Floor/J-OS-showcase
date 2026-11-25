@@ -36,6 +36,7 @@ const REMOVED: Record<string, string> = {
   "packages/x/Docs/SuperPowers/c.md": "case variant\n",
   "docs/DEPLOYMENT.md": "runbook\n",
   "AGENTS.md": "agents\n",
+  ".agents/skills/x/SKILL.md": "skill\n",
   ".claude/settings.json": "{}\n",
   ".claude/skills/x/SKILL.md": "skill\n",
   ".codex/config.toml": "x\n",
@@ -62,6 +63,7 @@ describe("snapshot", () => {
   test("removes every docs/superpowers directory, any case, and the excluded paths, sorted", async () => {
     const { removed } = await snapshot({ repoDir, ref: "HEAD", outDir });
     expect(removed).toEqual([
+      ".agents",
       ".claude",
       ".codex",
       ".github/dependabot.yml",
@@ -94,7 +96,7 @@ describe("snapshot", () => {
   test("accepts an existing empty outDir", async () => {
     mkdirSync(outDir);
     const { removed } = await snapshot({ repoDir, ref: "HEAD", outDir });
-    expect(removed).toHaveLength(11);
+    expect(removed).toHaveLength(12);
   });
 
   test("a tree without the excluded paths still snapshots", async () => {
@@ -113,6 +115,7 @@ describe("snapshot", () => {
     expect(isExcludedPath("AGENTS.md")).toBe(true);
     expect(isExcludedPath("apps/web/AGENTS.md")).toBe(false);
     expect(isExcludedPath(".claudex/a")).toBe(false);
+    expect(isExcludedPath(".agents/skills/x/SKILL.md")).toBe(true);
     expect(isExcludedPath(".github/dependabot.yml")).toBe(true);
   });
 
