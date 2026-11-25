@@ -664,7 +664,26 @@ export default defineSchema({
 		showOnTv: v.optional(v.boolean()),
 		/** Epoch cutoff for the TV; absent means `lib/tv/eventCutoff.tvCutoff`'s default. */
 		tvUntil: v.optional(v.number()),
-	}).index("by_picture", ["pictureId"]),
+		/** The syncs `lib/tv/eventTransitions` scheduled at the event's start, end and TV cutoff, so the next sync or a delete can replace them. */
+		tvTransitionJobIds: v.optional(
+			v.object({
+				starts: v.optional(v.id("_scheduled_functions")),
+				ends: v.optional(v.id("_scheduled_functions")),
+				cutoff: v.optional(v.id("_scheduled_functions")),
+			})
+		),
+		/** The pending `tvEvents.syncEventSlide` job, so the next edit replaces it (`lib/tv/eventSync`). */
+		tvSyncJobId: v.optional(v.id("_scheduled_functions")),
+		/** Where the event's TV slide stands after the last sync (`lib/tv/eventTvStatus`); absent when the event is off the TV. */
+		tvStatus: v.optional(
+			v.union(v.literal("shown"), v.literal("full"), v.literal("waiting"))
+		),
+		/** Short plain reason for `tvStatus`: why a full event is left off, or "noPicture" for a shown one whose picture did not fit. */
+		tvStatusDetail: v.optional(v.string()),
+	})
+		.index("by_picture", ["pictureId"])
+		.index("by_showOnTv", ["showOnTv", "startsAt"])
+		.index("by_tvStatus", ["tvStatus"]),
 	eventAttendance: defineTable({
 		personId: v.id("people"),
 		eventId: v.id("events"),
@@ -794,6 +813,8 @@ export default defineSchema({
 		/** The zip of `xml` plus every `tvAssets` file, built by `tvPack.buildPack` for `packVersion`. */
 		packFileId: v.optional(v.id("_storage")),
 		packVersion: v.optional(v.number()),
+		/** The pending `tvEvents.retryFullEvents` job a manual write scheduled, so a burst of writes schedules one (`lib/tv/eventRetry`). */
+		eventRetryJobId: v.optional(v.id("_scheduled_functions")),
 	}),
 
 	/** The files of the TV pack (`slides/...`, `assets/...`), one blob each. */
@@ -806,7 +827,8 @@ export default defineSchema({
 		sourceEventId: v.optional(v.id("events")),
 	})
 		.index("by_path", ["path"])
-		.index("by_fileId", ["fileId"]),
+		.index("by_fileId", ["fileId"])
+		.index("by_sourceEvent", ["sourceEventId"]),
 
 	/** Paired TVs. Auth is a bearer token; only its hash is stored. */
 	tvDevices: defineTable({

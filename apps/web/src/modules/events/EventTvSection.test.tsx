@@ -143,3 +143,38 @@ test("moving the event's end with no cutoff set does not write the default", asy
 	await new Promise((resolve) => setTimeout(resolve, 50));
 	expect(onPatch).not.toHaveBeenCalled();
 });
+
+test.each([
+	[{ showOnTv: true, tvStatus: "shown" as const }, "On the TV"],
+	[
+		{
+			showOnTv: true,
+			tvStatus: "shown" as const,
+			tvStatusDetail: "noPicture",
+		},
+		"On the TV without its picture (the pack is nearly full)",
+	],
+	[
+		{
+			showOnTv: true,
+			tvStatus: "full" as const,
+			tvStatusDetail: "the pack is full",
+		},
+		"Not on the TV: the pack is full. Remove a slide in Space > TV.",
+	],
+	[
+		{ showOnTv: true, tvStatus: "waiting" as const },
+		"Waiting for the TV list to be moved",
+	],
+])("says where the TV slide stands: %j", (fields, text) => {
+	renderSection(fields, false);
+	expect(screen.getByText(text)).toBeInTheDocument();
+});
+
+test("says nothing about the TV slide before a sync, or for an event that is not on the TV", () => {
+	renderSection({ showOnTv: true }, false);
+	expect(screen.queryByText("TV status")).toBeNull();
+	cleanup();
+	renderSection({ showOnTv: false, tvStatus: "full" }, false);
+	expect(screen.queryByText("TV status")).toBeNull();
+});

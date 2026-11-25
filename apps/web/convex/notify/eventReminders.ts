@@ -12,7 +12,7 @@ const FIFTEEN_MINUTES = 900_000;
 /** `cancel` throws on a job that already ran, so only cancel a pending one. A
  *  job scheduled earlier in THIS transaction is invisible here — the handler's
  *  re-read guard covers that case. */
-async function cancelIfPending(
+export async function cancelIfPending(
 	context: MutationCtx,
 	id: Id<"_scheduled_functions"> | undefined
 ): Promise<void> {

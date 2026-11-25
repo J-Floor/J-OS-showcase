@@ -83,7 +83,7 @@ describe("crons", () => {
 		// Each test above looks a job up by name, so a stray registration
 		// (e.g. the retired door-key sweep) would pass every one
 		// without this.
-		expect(Object.keys(crons.crons)).toHaveLength(12);
+		expect(Object.keys(crons.crons)).toHaveLength(13);
 	});
 
 	it("purges access logs older than 12 months nightly", () => {
@@ -137,5 +137,18 @@ describe("crons", () => {
 		expect(job).toBeDefined();
 		expect(job.schedule).toEqual({ type: "hourly", minuteUTC: 0 });
 		expect(job.name).toBe(getFunctionName(internal.occupancy.resetDay));
+	});
+
+	it("reconciles the event slides on the TV at 03:00 UTC", () => {
+		const job = crons.crons["reconcile event slides on the TV"];
+		expect(job).toBeDefined();
+		expect(job.schedule).toEqual({
+			type: "daily",
+			hourUTC: 3,
+			minuteUTC: 0,
+		});
+		expect(job.name).toBe(
+			getFunctionName(internal.tvEvents.reconcileEventSlides)
+		);
 	});
 });

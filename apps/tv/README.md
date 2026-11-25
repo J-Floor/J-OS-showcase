@@ -44,6 +44,7 @@ Not measured on a real TV. What the code holds, from reading it:
 - Entries are inflated one at a time. An asset is turned into a data: URI once per load and reused by every slide that uses it, but each HTML slide's final string still contains its own copy (base64 is 4/3 of the file). Peak while building: the zip, the config, one inflated asset (up to 8 MiB), its base64 pieces and the cached data: URIs of every asset used so far.
 - Resident, per pack: every HTML slide string (with its data: URIs) plus every image slide's bytes as a blob.
 - A pack whose HTML slides together exceed 96 MiB of characters is refused as broken (last good pack stays, backoff as below). The limit is a guess from reading the code, not a measurement: the true safe size on the TV is still unknown.
+- Event slides (made by the app, `slides/event-<id>.html`) each carry their own fonts (about 68 KB as base64) and their own picture copy (up to 8 MiB, about 11 MB as base64). Each is referenced by one slide only, so together they stay within 4/3 of the pack size.
 - An image slide whose path and bytes are unchanged keeps its blob: URL across a pack swap (no redraw); a changed one gets a new URL.
 - During a swap the old pack (strings and blobs) stays until the new one is built, so the peak is roughly both packs resident plus the build transient above. The 64 MiB inflate cap bounds one load, not the resident total.
 - Every request has a timeout (30 seconds; 5 minutes for the pack) so a stalled connection cannot freeze syncing; a timeout counts as a network error.

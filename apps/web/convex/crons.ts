@@ -8,10 +8,12 @@ const crons = cronJobs();
 // UTC-only, so the hours below start at `hourUTC: 1`, which is the winter
 // (CET, UTC+1) mapping — 02:00 Zurich — and drifts to 03:00 (CEST, UTC+2) in
 // summer; DST shifts it by an hour either way. The jobs are staggered 15 min
-// apart (01:15, 01:30, 01:45, then the lifecycle check at 02:00) and carry no
-// dependency on each other — see each note. (01:00 UTC was
-// the nightly door-key sweep, retired when the app became the way to open the
-// doors.)
+// apart (01:15, 01:30, 01:45, then the lifecycle check at 02:00, the purges
+// through 02:45, and the TV event reconcile in its own 03:00 slot) and carry no
+// dependency on each other; see each note. The hourly occupancy job runs at
+// minute 0 too, so it shares that minute with the 02:00 and 03:00 jobs. (01:00
+// UTC was the nightly door-key sweep, retired when the app became the way to
+// open the doors.)
 
 // Backstop for guest windows that closed while the scheduler was down, or that
 // were set before scheduled expiry existed. The per-guest job scheduled at
@@ -85,6 +87,18 @@ crons.daily(
 	"send the daily notification digest",
 	{ hourUTC: 8, minuteUTC: 15 },
 	internal.notify.digest.send,
+	{}
+);
+
+// Events leave the TV after their cutoff (the end of a chosen day, or 5 days
+// after the event): 03:00 UTC is 04:00 Zurich in winter and 05:00 in summer,
+// so a cutoff on one evening leaves before the next morning. Also re-syncs
+// every event the TV knows of, which repairs a missed sync. Independent of
+// the jobs above.
+crons.daily(
+	"reconcile event slides on the TV",
+	{ hourUTC: 3, minuteUTC: 0 },
+	internal.tvEvents.reconcileEventSlides,
 	{}
 );
 

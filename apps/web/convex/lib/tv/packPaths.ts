@@ -75,6 +75,13 @@ export function isPackPath(path: string): boolean {
 	return isSlidePath(path) || isAssetPath(path);
 }
 
+/** Where events keep their slide and its files: an upload may not write there (a manual file would overwrite an event's). */
+export function isEventPackPath(path: string): boolean {
+	return (
+		path.startsWith("slides/event-") || path.startsWith("assets/events/")
+	);
+}
+
 export function extensionOf(path: string): string {
 	return path.slice(path.lastIndexOf(".") + 1);
 }

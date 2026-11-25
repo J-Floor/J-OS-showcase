@@ -17,6 +17,8 @@ export type SlideFile = {
 	fileId: Id<"_storage">;
 	size: number;
 	contentType: string;
+	/** The event that owns the file (an event slide's page, font or picture). */
+	sourceEventId?: Id<"events">;
 };
 
 type Asset = Doc<"tvAssets">;

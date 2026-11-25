@@ -887,12 +887,10 @@ describe("importPack", () => {
 		});
 	});
 
-	it("refuses a file at an event slide's path and discards every stored file", async () => {
+	it("drops a file at an event slide's path: the event's row and blob stay, nothing manual lands there", async () => {
 		const backend = newBackend();
 		const { asBoard } = await boardAndMember(backend);
-		await seedWithEvent(backend);
-		const before = await readConfigRow(backend);
-		const blobsBefore = await countBlobs(backend);
+		const { eventFile } = await seedWithEvent(backend);
 		const upload = await uploadZip(
 			backend,
 			zipSync({
@@ -901,32 +899,77 @@ describe("importPack", () => {
 				"slides/event-abc.html": strToU8("<p>mine</p>"),
 			})
 		);
-		const result = await asBoard.action(api.tvPack.importPack, {
-			storageId: upload,
-		});
-		expect(result).toEqual({
-			ok: false,
-			problems: ["slides/event-abc.html belongs to an event slide."],
-		});
-		expect(await readConfigRow(backend)).toEqual(before);
-		expect(await countBlobs(backend)).toBe(blobsBefore);
-		expect(await scheduledBuilds(backend)).toEqual([]);
+		expect(
+			await asBoard.action(api.tvPack.importPack, { storageId: upload })
+		).toEqual({ ok: true });
+		const rows = await backend.run((context) =>
+			context.db.query("tvAssets").collect()
+		);
+		const atEventPath = rows.filter(
+			(row) => row.path === "slides/event-abc.html"
+		);
+		expect(atEventPath).toHaveLength(1);
+		expect(atEventPath[0].fileId).toBe(eventFile);
+		expect(atEventPath[0].sourceEventId).toBeDefined();
 	});
 
-	it("refuses a config that holds event slides", async () => {
+	it("refuses a manual slide that points at an event's page, whose file the upload cannot carry", async () => {
 		const backend = newBackend();
 		const { asBoard } = await boardAndMember(backend);
-		const xml =
-			'<tv version="1" transition="fade"><slide id="e" type="image" src="slides/x.png" source="event" event="abc"/></tv>';
+		await seedWithEvent(backend);
+		const before = await readConfigRow(backend);
 		const upload = await uploadZip(
 			backend,
-			zipSync({ "config.xml": strToU8(xml), "slides/x.png": PNG })
+			zipSync({
+				"config.xml": strToU8(
+					'<tv version="1"><slide id="mine" type="html" src="slides/event-abc.html"/></tv>'
+				),
+				"slides/event-abc.html": strToU8("<p>mine</p>"),
+			})
 		);
 		const result = await asBoard.action(api.tvPack.importPack, {
 			storageId: upload,
 		});
 		expect(result.ok).toBe(false);
-		expect(await countBlobs(backend)).toBe(0);
+		expect(await readConfigRow(backend)).toEqual(before);
+	});
+
+	it("replacePack still refuses a file at an event slide's path", async () => {
+		const backend = newBackend();
+		const { asBoard } = await boardAndMember(backend);
+		const { manualFile } = await seedWithEvent(backend);
+		const outcome = await asBoard.mutation(
+			internal.tvPackInternal.replacePack,
+			{
+				xml: PACK_XML,
+				assets: [
+					seedPackRow("slides/x.png", manualFile),
+					seedPackRow("slides/event-abc.html", manualFile),
+				],
+			}
+		);
+		expect(outcome).toEqual({
+			ok: false,
+			problems: ["slides/event-abc.html belongs to an event slide."],
+		});
+	});
+
+	it("accepts a config that holds event slides by dropping them: the current event slide stays", async () => {
+		const backend = newBackend();
+		const { asBoard } = await boardAndMember(backend);
+		await seedWithEvent(backend);
+		const xml =
+			'<tv version="1" transition="fade"><slide id="x" type="image" src="slides/x.png"/><slide id="event-zzz" type="image" src="slides/x.png" source="event" event="zzz"/></tv>';
+		const upload = await uploadZip(
+			backend,
+			zipSync({ "config.xml": strToU8(xml), "slides/x.png": PNG })
+		);
+		expect(
+			await asBoard.action(api.tvPack.importPack, { storageId: upload })
+		).toEqual({ ok: true });
+		const row = await readConfigRow(backend);
+		expect(row?.xml).toContain('id="event-abc"');
+		expect(row?.xml).not.toContain("event-zzz");
 	});
 
 	it("refuses a member and a signed-out caller", async () => {

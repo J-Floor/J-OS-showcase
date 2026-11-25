@@ -15,7 +15,7 @@ import type { EventsError } from "./lib/errors/events.ts";
 import type { InputError } from "./lib/errors/input.ts";
 import { displayName } from "./lib/names.ts";
 import { invariant, refuse, unwrap } from "./lib/result.ts";
-import { BOARD_LEVEL, COMMUNITY_TIERS } from "./lib/roles.ts";
+import { BOARD_LEVEL, COMMUNITY_TIERS, isBoardLevel } from "./lib/roles.ts";
 import { SITE_TIMEZONE, utcFromLocal, zonedTimeZoneName } from "./lib/time.ts";
 import { isBlobHeld } from "./lib/tv/blobHeld.ts";
 import {
@@ -24,6 +24,11 @@ import {
 	discardUnheldUpload,
 } from "./lib/tv/boardUpload.ts";
 import { checkImage } from "./lib/tv/checkImage.ts";
+import {
+	scheduleEventTvSync,
+	syncDeletedEventTv,
+	touchesTv,
+} from "./lib/tv/eventSync.ts";
 import { checkLength, DESCRIPTION_MAX, NAME_MAX } from "./lib/validate.ts";
 import { currentActorId } from "./lifecycle.ts";
 import {
@@ -85,16 +90,34 @@ export const createEvent = mutation({
 	},
 });
 
+/** What the Events page needs of an event: the scheduler job ids stay on the server (they are optional fields, so the stripped row is still an event). */
+function listing(event: Doc<"events">, canSeeTv: boolean): Doc<"events"> {
+	const visible = { ...event };
+	delete visible.tvSyncJobId;
+	delete visible.tvTransitionJobIds;
+	// Where the TV slide stands is for the board that runs the TV.
+	if (!canSeeTv) {
+		delete visible.tvStatus;
+		delete visible.tvStatusDetail;
+	}
+	return visible;
+}
+
 export const listEvents = query({
 	args: {},
 	handler: async (context): Promise<Doc<"events">[]> => {
 		// Any entitled member with space access may see the event list (the
 		// Events page grants `view` to guests+). Only board/admin can create —
 		// see `createEvent` and the `<Can I="create">`-gated form on the page.
-		unwrap(await requireRole(context, COMMUNITY_TIERS));
+		const person = unwrap(await requireRole(context, COMMUNITY_TIERS));
+		const canSeeTv = isBoardLevel(person.tier);
 		const rows = await context.db.query("events").collect();
-		// eslint-disable-next-line id-length -- conventional comparator parameter names
-		return rows.sort((a, b) => b.createdAt - a.createdAt);
+		return (
+			rows
+				.map((row) => listing(row, canSeeTv))
+				// eslint-disable-next-line id-length -- conventional comparator parameter names
+				.sort((a, b) => b.createdAt - a.createdAt)
+		);
 	},
 });
 
@@ -103,7 +126,10 @@ export const deleteEvent = mutation({
 	handler: async (context, { eventId }): Promise<void> => {
 		unwrap(await requireRole(context, BOARD_LEVEL));
 		const event = await context.db.get(eventId);
-		if (event) await cancelEventReminders(context, event);
+		if (event) {
+			await cancelEventReminders(context, event);
+			await syncDeletedEventTv(context, event);
+		}
 		if (event?.pictureId) await deleteBlob(context, event.pictureId);
 		// Delete the event doc first: it vanishes from listEvents/getEventPublic
 		// immediately, which also shuts the confirm-orphan window (a pending
@@ -281,14 +307,18 @@ export const updateEvent = mutation({
 			...timeFieldsPatch(fields, { startsAt, endsAt }),
 			...extra,
 		});
+		const updated = await context.db.get(eventId);
+		invariant(updated, "event vanished during its own update");
+		// Every field here can change the TV slide; an event never on the TV has none.
+		if (touchesTv(existing, updated))
+			await scheduleEventTvSync(context, updated);
 		// Only a time change moves the reminders; the name is read when they fire.
 		if (
 			fields.startsAtLocal === undefined &&
 			fields.endsAtLocal === undefined
 		)
 			return;
-		const updated = await context.db.get(eventId);
-		if (updated) await scheduleEventReminders(context, updated);
+		await scheduleEventReminders(context, updated);
 	},
 });
 

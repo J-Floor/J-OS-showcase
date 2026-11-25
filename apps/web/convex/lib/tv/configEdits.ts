@@ -157,6 +157,14 @@ function eventKey(slide: TvConfigSlide): string {
 	]);
 }
 
+/** Both are the same event slide entry: every field equal (its place in the config does not count). */
+export function sameEventSlide(
+	left: TvConfigSlide,
+	right: TvConfigSlide
+): boolean {
+	return eventKey(left) === eventKey(right) && left.source === right.source;
+}
+
 /** A board save (the XML editor) keeps every event slide exactly as it was (its place may change) and adds none. */
 export function eventSlideProblems(
 	saved: TvConfig,
@@ -214,8 +222,8 @@ export function missingSources(
 	}));
 }
 
-/** Said of an imported config.xml that carries event slides. */
-export const PACK_EVENT_SLIDES_MESSAGE =
+/** Said of an imported config that still carries event slides (`readPackZip` drops them first). */
+const PACK_EVENT_SLIDES_MESSAGE =
 	"config.xml in a pack cannot hold event slides.";
 
 /** A pack import: the imported slides, then the event slides already on the TV. An import never carries its own. */

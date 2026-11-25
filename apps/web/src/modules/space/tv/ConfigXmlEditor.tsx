@@ -17,6 +17,11 @@ import styles from "./ConfigXmlEditor.module.scss";
 import type { PackState } from "./slideTypes.ts";
 
 const SAVE_FAILED = "Could not save config.xml. Try again.";
+// This message can appear without anyone else editing: an event on the TV
+// rewrites the config (its slide, a rename, a state change at its start, end
+// or cutoff, the daily reconcile) and every such write bumps the version, so
+// a draft open at that moment is outdated. Kept as is on purpose: the draft
+// text is never lost, and "Load the latest" re-bases it.
 const CHANGED_MEANWHILE =
 	"The TV config changed since you started editing. Your text is kept below. Load the latest config.xml to continue from it.";
 const LOADING = "Loading config.xml";

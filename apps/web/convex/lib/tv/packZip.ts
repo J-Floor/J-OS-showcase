@@ -10,15 +10,12 @@ import { err, fromThrowable, ok, type Result } from "neverthrow";
 
 import { invariant } from "../result.ts";
 
-import {
-	isEventSlide,
-	missingFromPack,
-	PACK_EVENT_SLIDES_MESSAGE,
-} from "./configEdits.ts";
+import { isEventSlide, missingFromPack } from "./configEdits.ts";
 import { describeProblem, parseConfigXml, type TvConfig } from "./configXml.ts";
 import { TV_PACK_LIMITS, TV_PACK_MAX_MB } from "./constants.ts";
 import {
 	extensionOf,
+	isEventPackPath,
 	isPackPath,
 	packContentType,
 	packFileMaxBytes,
@@ -295,15 +292,27 @@ function contentsOf(
 		.andThen((config) => checkSlides(config, files));
 }
 
+/**
+ * A downloaded pack carries the event slides (`source="event"` entries,
+ * `slides/event-*` and `assets/events/**`). They are dropped here, before the
+ * rest is checked: the events on the TV now are kept by the import, and an
+ * upload can never write an event's path. A manual slide that points at a
+ * dropped path then fails "is not in the pack".
+ */
 function checkSlides(
 	config: TvConfig,
 	files: PackFile[]
 ): Result<PackContents, string[]> {
-	const paths = new Set(files.map((file) => file.path));
-	const problems = missingFromPack(config, paths);
-	if (config.slides.some((slide) => isEventSlide(slide)))
-		problems.push(PACK_EVENT_SLIDES_MESSAGE);
-	return problems.length > 0 ? err(problems) : ok({ config, files });
+	const manual: TvConfig = {
+		...config,
+		slides: config.slides.filter((slide) => !isEventSlide(slide)),
+	};
+	const kept = files.filter((file) => !isEventPackPath(file.path));
+	const paths = new Set(kept.map((file) => file.path));
+	const problems = missingFromPack(manual, paths);
+	return problems.length > 0
+		? err(problems)
+		: ok({ config: manual, files: kept });
 }
 
 /**

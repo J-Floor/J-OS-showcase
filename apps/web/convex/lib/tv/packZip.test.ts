@@ -1,5 +1,6 @@
 import {
 	deflateSync,
+	inflateSync,
 	strToU8,
 	unzipSync,
 	zipSync,
@@ -357,15 +358,45 @@ describe("readPackZip", () => {
 		expect(problems(zip(rest)).join()).toContain("slides/a.png");
 	});
 
-	it("refuses event slides in an imported config", () => {
-		const entries = {
-			...validEntries(),
-			"config.xml": strToU8(
-				'<tv version="1"><slide id="e" type="image" src="slides/a.png" source="event" event="abc"/></tv>'
-			),
-		};
-		expect(problems(zip(entries)).join()).toContain("event slides");
+	it("drops event slide entries and the files at event paths, keeping the rest", () => {
+		const result = readPackZip(
+			zip({
+				...validEntries(),
+				"config.xml": strToU8(
+					'<tv version="1"><slide id="a" type="image" src="slides/a.png"/><slide id="event-abc" type="html" src="slides/event-abc.html" source="event" event="abc"/></tv>'
+				),
+				"slides/event-abc.html": strToU8(HTML),
+				"assets/events/abc/font.woff2": PNG,
+			})
+		);
+		expect(result.isOk()).toBe(true);
+		if (!result.isOk()) return;
+		expect(result.value.config.slides.map((slide) => slide.id)).toEqual([
+			"a",
+		]);
+		expect(result.value.files.map((file) => file.path)).toEqual([
+			"slides/a.png",
+			"slides/b.html",
+			"assets/logo.png",
+		]);
 	});
+
+	it.each(["slides/event-abc.html", "assets/events/abc/picture.png"])(
+		"refuses a manual slide that points at the event path %s",
+		(path) => {
+			const type = path.endsWith(".html") ? "html" : "image";
+			const result = readPackZip(
+				zip({
+					...validEntries(),
+					"config.xml": strToU8(
+						`<tv version="1"><slide id="mine" type="${type}" src="${path}"/></tv>`
+					),
+					[path]: strToU8(HTML),
+				})
+			);
+			expect(result.isErr()).toBe(true);
+		}
+	);
 });
 
 const NOT_A_ZIP = ["That file is not a zip archive."];
@@ -464,13 +495,18 @@ describe("readPackZip on a damaged directory", () => {
 			},
 			{ name: "config.xml", data: strToU8(CONFIG) },
 		]);
+		// Time the full inflate of the same stream in the same run, so the
+		// budget follows how busy the machine is instead of a fixed number.
+		const fullStarted = performance.now();
+		inflateSync(stream);
+		const fullElapsed = performance.now() - fullStarted;
 		const started = performance.now();
 		const result = readPackZip(bytes);
 		const elapsed = performance.now() - started;
 		expect(result.isErr() && result.error).toEqual([
 			"assets/bomb.png is damaged.",
 		]);
-		expect(elapsed).toBeLessThan(250);
+		expect(elapsed).toBeLessThan(fullElapsed / 2);
 	});
 });
 

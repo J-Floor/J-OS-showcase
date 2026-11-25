@@ -10,11 +10,31 @@ import {
 	zonedLocalFromEpoch,
 } from "../../../convex/lib/time.ts";
 import { tvCutoff } from "../../../convex/lib/tv/eventCutoff.ts";
+import { NO_PICTURE_DETAIL } from "../../../convex/lib/tv/eventTvStatus.ts";
 import { SheetSection } from "../../shared/entity/SheetSection.tsx";
 
 import type { EventPatch } from "./EventDetails.tsx";
 import styles from "./EventSheet.module.scss";
 import { END_OF_DAY_TIME, eventFields } from "./fields.ts";
+
+/** What the sync last did with the event's slide, in plain words; undefined when there is nothing to say (off the TV, or not synced yet). */
+function tvStatusText(
+	event: Pick<Doc<"events">, "showOnTv" | "tvStatus" | "tvStatusDetail">
+): string | undefined {
+	if (event.showOnTv !== true) return undefined;
+	switch (event.tvStatus) {
+		case "shown":
+			return event.tvStatusDetail === NO_PICTURE_DETAIL
+				? "On the TV without its picture (the pack is nearly full)"
+				: "On the TV";
+		case "full":
+			return `Not on the TV: ${event.tvStatusDetail ?? "the pack is full"}. Remove a slide in Space > TV.`;
+		case "waiting":
+			return "Waiting for the TV list to be moved";
+		case undefined:
+			return undefined;
+	}
+}
 
 /** The "TV" section: whether the event goes on the TV slideshow, and until
  *  when. Without a chosen date the event leaves the TV by default, a few days
@@ -85,6 +105,16 @@ export function EventTvSection(props: {
 					</div>
 				</Show>
 			</PropertyRow>
+			<Show when={tvStatusText(props.event())}>
+				{(text) => (
+					<PropertyRow
+						label={eventFields.tvStatus.label}
+						icon={eventFields.tvStatus.icon}
+					>
+						<span>{text()}</span>
+					</PropertyRow>
+				)}
+			</Show>
 		</SheetSection>
 	);
 }

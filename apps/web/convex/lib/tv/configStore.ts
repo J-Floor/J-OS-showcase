@@ -10,6 +10,7 @@ import {
 	TV_INITIAL_VERSION,
 	TV_PACK_LIMITS,
 } from "./constants.ts";
+import { scheduleFullEventRetry } from "./eventRetry.ts";
 import { isSlidePath } from "./packPaths.ts";
 
 type Database = QueryCtx["db"];
@@ -118,10 +119,13 @@ async function pruneSlideFiles(
 /**
  * Saves `config` as canonical XML, bumps the version and schedules the pack
  * build (delayed, so a burst of edits builds once). Returns the new version.
+ * A write that is not an event's (`byEvent`) may have freed room, so it also
+ * schedules a retry of the events left off the TV for want of it.
  */
 export async function writeConfig(
 	context: MutationCtx,
-	config: TvConfig
+	config: TvConfig,
+	{ byEvent = false }: { byEvent?: boolean } = {}
 ): Promise<number> {
 	const xml = serializeConfig(config);
 	const parsed = parseConfigXml(xml);
@@ -139,6 +143,7 @@ export async function writeConfig(
 		internal.tvPack.buildPack,
 		{ version }
 	);
+	if (!byEvent) await scheduleFullEventRetry(context);
 	return version;
 }
 

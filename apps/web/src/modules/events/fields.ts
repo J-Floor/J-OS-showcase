@@ -18,4 +18,5 @@ export const eventFields = defineFields({
 	picture: { label: "Picture", icon: ICONS.placeholder },
 	showOnTv: { label: "Show on TV", icon: ICONS.space },
 	tvUntil: { label: "Show until", icon: ICONS.date },
+	tvStatus: { label: "TV status", icon: ICONS.status },
 });

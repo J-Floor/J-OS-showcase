@@ -46,7 +46,20 @@ const PERK_VIEWERS = { action: "view", subject: "Perks" } as const;
 /** Who tracks perk requests: the board. */
 const PERK_MANAGERS = { action: "manage", subject: "Perks" } as const;
 
+/** Who creates and edits events: the board. */
+const EVENT_MANAGERS = { action: "manage", subject: "Events" } as const;
+
 export const CHANGELOG: ChangeEntry[] = [
+	{
+		version: "1.11",
+		title: "Events on the TV",
+		items: [
+			{
+				text: "Put an event on the space TV: switch on Show on TV in the event. The TV gets a slide with its picture, times, description and a QR code to sign up. It says Coming up, then Happening now, then Past event, and goes after the Show until date.",
+				audience: EVENT_MANAGERS,
+			},
+		],
+	},
 	{
 		version: "1.10",
 		title: "TV packs",

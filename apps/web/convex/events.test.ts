@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-deprecated -- two tests build a legacy slide on purpose, to pin how a slide and an event picture share a blob */
 import { parseAbsolute } from "@internationalized/date";
 import { convexTest } from "convex-test";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { api, internal } from "./_generated/api";
 import {
@@ -1123,5 +1123,109 @@ describe("event picture", () => {
 		expect(
 			await backend.run((context) => context.storage.getUrl(file))
 		).not.toBeNull();
+	});
+});
+
+function pendingSyncs(backend: ReturnType<typeof convexTest>) {
+	return backend.run(async (context) => {
+		const jobs = await context.db.system
+			.query("_scheduled_functions")
+			.collect();
+		return jobs.filter(
+			(job) =>
+				job.name === "tvEvents:syncEventSlide" &&
+				job.state.kind === "pending"
+		);
+	});
+}
+
+describe("events on the TV", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("schedules one sync for a burst of edits to an event on the TV", async () => {
+		vi.useFakeTimers({ toFake: ["setTimeout"] });
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
+		const eventId = await asBoard.mutation(
+			api.events.createEvent,
+			eventInput
+		);
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId,
+			showOnTv: true,
+		});
+		const editedAt = Date.now();
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId,
+			name: "Pitch night",
+		});
+		const jobs = await pendingSyncs(backend);
+		expect(jobs.map((job): unknown => job.args)).toEqual([[{ eventId }]]);
+		// The sync waits out the burst: about five seconds after the last edit.
+		expect(jobs[0].scheduledTime).toBeGreaterThanOrEqual(editedAt + 4_000);
+		const row = await backend.run((context) => context.db.get(eventId));
+		expect(row?.tvSyncJobId).toBe(jobs[0]._id);
+	});
+
+	it("schedules no sync for an event that never was on the TV", async () => {
+		vi.useFakeTimers({ toFake: ["setTimeout"] });
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
+		const eventId = await asBoard.mutation(
+			api.events.createEvent,
+			eventInput
+		);
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId,
+			name: "Pitch night",
+		});
+		expect(await pendingSyncs(backend)).toEqual([]);
+	});
+
+	it("schedules the sync that takes the event off when the switch goes off", async () => {
+		vi.useFakeTimers({ toFake: ["setTimeout"] });
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
+		const eventId = await asBoard.mutation(
+			api.events.createEvent,
+			eventInput
+		);
+		// On the TV already, with no sync pending: only the switch going off can schedule one.
+		await backend.run((context) =>
+			context.db.patch(eventId, { showOnTv: true })
+		);
+		expect(await pendingSyncs(backend)).toEqual([]);
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId,
+			showOnTv: false,
+		});
+		const jobs = await pendingSyncs(backend);
+		expect(jobs.map((job): unknown => job.args)).toEqual([[{ eventId }]]);
+	});
+
+	it("deleting an event on the TV cancels its pending and transition syncs and syncs it at once", async () => {
+		vi.useFakeTimers({ toFake: ["setTimeout"] });
+		const backend = convexTest(schema, modules);
+		const { asBoard } = await seedBoard(backend);
+		// Ahead of now, so the sync below schedules its start, end and cutoff jobs.
+		const startsAt = Date.now() + 86_400_000;
+		const eventId = await asBoard.mutation(api.events.createEvent, {
+			name: "Demo night",
+			startsAtLocal: localFromEpoch(startsAt),
+			endsAtLocal: localFromEpoch(startsAt + 3_600_000),
+		});
+		await asBoard.mutation(api.events.updateEvent, {
+			eventId,
+			showOnTv: true,
+		});
+		await backend.mutation(internal.tvEvents.syncEventSlide, { eventId });
+		// The edit's delayed sync plus three transitions.
+		expect(await pendingSyncs(backend)).toHaveLength(4);
+		await asBoard.mutation(api.events.deleteEvent, { eventId });
+		const jobs = await pendingSyncs(backend);
+		expect(jobs.map((job): unknown => job.args)).toEqual([[{ eventId }]]);
+		expect(jobs[0].scheduledTime).toBeLessThanOrEqual(Date.now());
 	});
 });
