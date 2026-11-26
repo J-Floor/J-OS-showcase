@@ -1,8 +1,7 @@
-import betterAuthTest from "@convex-dev/better-auth/test";
-import rateLimiterTest from "@convex-dev/rate-limiter/test";
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 
+import { withAuthComponents } from "../test-stubs/authComponents.ts";
 import { loginEmail, seedLogin } from "../test-stubs/logins.ts";
 
 import { components, internal } from "./_generated/api";
@@ -15,10 +14,7 @@ const DAY = 86_400_000;
 
 /** A test deployment with the auth and rate-limit components erasure reaches. */
 function setup() {
-	const backend = convexTest(schema, modules);
-	betterAuthTest.register(backend);
-	rateLimiterTest.register(backend);
-	return backend;
+	return withAuthComponents(convexTest(schema, modules));
 }
 
 describe("purgeUnverified", () => {

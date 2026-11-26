@@ -1,8 +1,7 @@
-import betterAuthTest from "@convex-dev/better-auth/test";
-import rateLimiterTest from "@convex-dev/rate-limiter/test";
 import { convexTest } from "convex-test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { withAuthComponents } from "../test-stubs/authComponents.ts";
 import { loginEmail, seedLogin } from "../test-stubs/logins.ts";
 
 import { internal } from "./_generated/api";
@@ -965,10 +964,7 @@ describe("merge perks", () => {
 });
 
 function setupWithAuth() {
-	const backend = convexTest(schema, modules);
-	betterAuthTest.register(backend);
-	rateLimiterTest.register(backend);
-	return backend;
+	return withAuthComponents(convexTest(schema, modules));
 }
 
 async function seedPair(backend: T, logins: { keep?: string; drop?: string }) {

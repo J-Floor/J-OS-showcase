@@ -1,9 +1,9 @@
-import betterAuthTest from "@convex-dev/better-auth/test";
 import { register as registerRateLimiter } from "@convex-dev/rate-limiter/test";
 import { ConvexError } from "convex/values";
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
+import { withAuthComponents } from "../test-stubs/authComponents.ts";
 import { loginEmail, seedLogin } from "../test-stubs/logins.ts";
 import { runAndCollectLogs } from "../test-stubs/runAndCollectLogs.ts";
 import { stubRecaptcha } from "../test-stubs/stubRecaptcha.ts";
@@ -2607,9 +2607,7 @@ describe("people.update", () => {
 	});
 
 	it("an email edit renames the person's login", async () => {
-		const backend = convexTest(schema, modules);
-		betterAuthTest.register(backend);
-		registerRateLimiter(backend);
+		const backend = withAuthComponents(convexTest(schema, modules));
 		const { asBoard } = await seedBoard(backend);
 		const id = await seedProspect(backend);
 		const userId = await seedLogin(backend, "ada@example.com");
@@ -2628,9 +2626,7 @@ describe("people.update", () => {
 	});
 
 	it("an email edit removes a stray login on the new address", async () => {
-		const backend = convexTest(schema, modules);
-		betterAuthTest.register(backend);
-		registerRateLimiter(backend);
+		const backend = withAuthComponents(convexTest(schema, modules));
 		const { asBoard } = await seedBoard(backend);
 		const id = await seedProspect(backend);
 		const userId = await seedLogin(backend, "ada@example.com");
@@ -2651,9 +2647,7 @@ describe("people.update", () => {
 	});
 
 	it("an email edit clears a login link whose login no longer exists", async () => {
-		const backend = convexTest(schema, modules);
-		betterAuthTest.register(backend);
-		registerRateLimiter(backend);
+		const backend = withAuthComponents(convexTest(schema, modules));
 		const { asBoard } = await seedBoard(backend);
 		const id = await seedProspect(backend);
 		const goneId = await seedLogin(backend, "ada@example.com");
@@ -2677,9 +2671,7 @@ describe("people.update", () => {
 	});
 
 	it("an unlinked person's email edit touches no login", async () => {
-		const backend = convexTest(schema, modules);
-		betterAuthTest.register(backend);
-		registerRateLimiter(backend);
+		const backend = withAuthComponents(convexTest(schema, modules));
 		const { asBoard } = await seedBoard(backend);
 		const id = await seedProspect(backend);
 		const otherId = await seedLogin(backend, "ada@example.com");
@@ -2695,9 +2687,7 @@ describe("people.update", () => {
 	});
 
 	it("an email edit signs the person out everywhere", async () => {
-		const backend = convexTest(schema, modules);
-		betterAuthTest.register(backend);
-		registerRateLimiter(backend);
+		const backend = withAuthComponents(convexTest(schema, modules));
 		const { asBoard } = await seedBoard(backend);
 		const id = await seedProspect(backend);
 		const userId = await seedLogin(backend, "ada@example.com");
@@ -2719,9 +2709,7 @@ describe("people.update", () => {
 	});
 
 	it("an edit that keeps the email keeps the sessions", async () => {
-		const backend = convexTest(schema, modules);
-		betterAuthTest.register(backend);
-		registerRateLimiter(backend);
+		const backend = withAuthComponents(convexTest(schema, modules));
 		const { asBoard } = await seedBoard(backend);
 		const id = await seedProspect(backend);
 		const userId = await seedLogin(backend, "ada@example.com");

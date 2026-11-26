@@ -1,8 +1,7 @@
-import betterAuthTest from "@convex-dev/better-auth/test";
-import rateLimiterTest from "@convex-dev/rate-limiter/test";
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { withAuthComponents } from "../test-stubs/authComponents.ts";
 import { seedLogin } from "../test-stubs/logins.ts";
 
 import { internal } from "./_generated/api";
@@ -193,8 +192,7 @@ async function boardWithPush() {
 	vi.stubEnv("VAPID_PUBLIC_KEY", "pub");
 	vi.stubEnv("VAPID_PRIVATE_KEY", "priv");
 	vi.stubEnv("VAPID_SUBJECT", "mailto:board@example.com");
-	const backend = convexTest(schema, modules);
-	betterAuthTest.register(backend);
+	const backend = withAuthComponents(convexTest(schema, modules));
 	const personId = await backend.run((context) =>
 		context.db.insert("people", {
 			email: "b@example.org",
@@ -437,10 +435,7 @@ describe("lifecycleAlert email", () => {
 });
 
 function setup() {
-	const backend = convexTest(schema, modules);
-	betterAuthTest.register(backend);
-	rateLimiterTest.register(backend);
-	return backend;
+	return withAuthComponents(convexTest(schema, modules));
 }
 
 async function seedMember(

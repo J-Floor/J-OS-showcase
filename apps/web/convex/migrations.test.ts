@@ -1,8 +1,7 @@
-import betterAuthTest from "@convex-dev/better-auth/test";
-import rateLimiterTest from "@convex-dev/rate-limiter/test";
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 
+import { withAuthComponents } from "../test-stubs/authComponents.ts";
 import { seedLogin } from "../test-stubs/logins.ts";
 import { runAndCollectLogs } from "../test-stubs/runAndCollectLogs.ts";
 
@@ -726,10 +725,7 @@ describe("removeOrphanPerkNotifications", () => {
 });
 
 function setupWithAuth() {
-	const backend = createTester();
-	betterAuthTest.register(backend);
-	rateLimiterTest.register(backend);
-	return backend;
+	return withAuthComponents(createTester());
 }
 
 function scheduledJobs(backend: Tester) {

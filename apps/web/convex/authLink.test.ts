@@ -1,9 +1,8 @@
-import betterAuthTest from "@convex-dev/better-auth/test";
-import rateLimiterTest from "@convex-dev/rate-limiter/test";
 import { createFunctionHandle } from "convex/server";
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 
+import { withAuthComponents } from "../test-stubs/authComponents.ts";
 import { seedLogin } from "../test-stubs/logins.ts";
 
 import { components, internal } from "./_generated/api";
@@ -19,10 +18,7 @@ import schema from "./schema.ts";
 const modules = import.meta.glob("./**/*.*s");
 
 function setup() {
-	const backend = convexTest(schema, modules);
-	betterAuthTest.register(backend);
-	rateLimiterTest.register(backend);
-	return backend;
+	return withAuthComponents(convexTest(schema, modules));
 }
 type Backend = ReturnType<typeof setup>;
 
