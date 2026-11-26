@@ -23,4 +23,11 @@ describe("website CSP", () => {
 		const scriptSource = /script-src ([^;]*)/.exec(HEADERS)?.[1] ?? "";
 		expect(scriptSource).toContain(`'sha256-${hydrationScriptHash()}'`);
 	});
+
+	it("lets the Cloudflare Web Analytics beacon load and report", () => {
+		const scriptSource = /script-src ([^;]*)/.exec(HEADERS)?.[1] ?? "";
+		const connectSource = /connect-src ([^;]*)/.exec(HEADERS)?.[1] ?? "";
+		expect(scriptSource).toContain("https://static.cloudflareinsights.com");
+		expect(connectSource).toContain("https://cloudflareinsights.com");
+	});
 });
