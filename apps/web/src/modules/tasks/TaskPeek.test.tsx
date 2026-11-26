@@ -8,6 +8,9 @@ import { PeekContext } from "../../shared/entity/PeekContext.tsx";
 import { projectEntity, taskEntity } from "./entity.ts";
 import { TaskPeek } from "./TaskPeek.tsx";
 
+// The board-only view badge reads a query these tests do not serve.
+vi.mock("../../shared/views/ViewCount.tsx");
+
 vi.mock("convex-solidjs", () => ({
 	useMutation: () => ({ mutate: vi.fn().mockResolvedValue(undefined) }),
 	useQuery: () => ({ data: () => {} }),

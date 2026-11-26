@@ -25,6 +25,9 @@ afterEach(() => {
 	mutate.mockReset();
 });
 
+// The board-only view badge reads a query these tests do not serve.
+vi.mock("../../../shared/views/ViewCount.tsx");
+
 vi.mock("convex-solidjs", () => ({
 	useMutation: () => ({ mutate }),
 	useQuery: () => ({ data: () => {} }),

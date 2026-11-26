@@ -1,0 +1,11 @@
+@use "@j-os/design-system/typography" as typo;
+
+.count {
+	@include typo.jf-typo-body-small;
+
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--jf-spacing-close);
+	color: var(--jf-fg-muted);
+}

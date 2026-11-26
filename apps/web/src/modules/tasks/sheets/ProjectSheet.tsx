@@ -27,6 +27,7 @@ import { ICONS } from "../../../shared/icons.ts";
 import { InlineError } from "../../../shared/InlineError.tsx";
 import { dateToIso } from "../../../shared/time.ts";
 import type { SheetOpenProps } from "../../../shared/types.ts";
+import { rowViewKey } from "../../../shared/views/viewKey.ts";
 import { isoToMs } from "../data/taskHelpers.ts";
 import type { Person, Project, Task } from "../data/tasksData.tsx";
 import {
@@ -34,6 +35,7 @@ import {
 	useProjects,
 	useTasks,
 } from "../data/tasksData.tsx";
+import { projectEntity } from "../entity.ts";
 import { projectFields } from "../fields.ts";
 import { TaskCard } from "../kanban/TaskCard.tsx";
 
@@ -352,6 +354,7 @@ export function ProjectSheet(props: ProjectSheetProps): JSX.Element {
 				loading={props.loading}
 				nav={props.nav}
 				saveStatus={isEdit() && !props.loading}
+				viewKey={rowViewKey(projectEntity, props.project)}
 			>
 				<Show when={props.project} keyed>
 					{(project) => (

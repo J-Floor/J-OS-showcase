@@ -9,7 +9,7 @@ import {
 export const PRIVACY_META = {
 	org: `${ORG_LEGAL_NAME} · ${ORG_LOCATION}`,
 	governingLaw: "Swiss Federal Act on Data Protection (nDSG)",
-	updated: "October 2026",
+	updated: "November 2026",
 };
 
 export type PrivacyBlock =
@@ -48,6 +48,7 @@ export const PRIVACY_SECTIONS: readonly {
 					"A brief description of what you are building and your current stage",
 					"Door access log: each door unlock or lock from the app, and each access grant or revocation, with your name, email, the door, the time and the outcome",
 					"Wi-Fi: the time you first opened the Wi-Fi details in the app (we do not record Wi-Fi connections or track people with door sensors)",
+					"Anonymous view counts: for each day we count how many members, board members and guests opened each page or item in the app. We do not keep who viewed what after the end of that day.",
 					"Correspondence: communications between you and the Board",
 				],
 			},

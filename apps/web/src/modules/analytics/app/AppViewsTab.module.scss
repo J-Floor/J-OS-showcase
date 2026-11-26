@@ -1,0 +1,19 @@
+@use "../../../shared/insights/layout" as insights;
+
+.page {
+	@include insights.insights-page;
+}
+
+.tiles {
+	@include insights.metric-tiles;
+}
+
+.breakdowns {
+	@include insights.breakdowns;
+}
+
+.updated {
+	@include insights.freshness-note;
+
+	margin: 0;
+}

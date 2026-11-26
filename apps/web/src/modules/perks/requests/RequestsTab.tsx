@@ -25,6 +25,7 @@ import {
 } from "../../../shared/entity/createSheetNav.ts";
 import { PEEK_PARAM } from "../../../shared/entity/peekParam.ts";
 import { ICONS } from "../../../shared/icons.ts";
+import { requestEntity } from "../entity.ts";
 
 import {
 	REQUEST_GROUP_COLUMN,
@@ -33,7 +34,6 @@ import {
 	requestSorting,
 	type RequestGrouping,
 } from "./requestColumns.tsx";
-import { requestEntity } from "./requestEntity.ts";
 import { prefetchRequestSheet } from "./requestQueries.ts";
 import { RequestSheet } from "./RequestSheet.tsx";
 import styles from "./RequestsTab.module.scss";

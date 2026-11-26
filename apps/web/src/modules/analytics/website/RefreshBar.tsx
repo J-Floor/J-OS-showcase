@@ -1,14 +1,11 @@
-import { IconButton, Segment } from "@j-os/design-system";
-import { For, type JSX } from "solid-js";
+import { IconButton } from "@j-os/design-system";
+import type { JSX } from "solid-js";
 
-import {
-	rangeFromValue,
-	type WebAnalyticsRange,
-} from "../../../convex/lib/webAnalytics.ts";
-import { ICONS } from "../../shared/icons.ts";
+import type { WebAnalyticsRange } from "../../../../convex/lib/webAnalytics.ts";
+import { ICONS } from "../../../shared/icons.ts";
+import { RangeSegment } from "../RangeSegment.tsx";
 
-import styles from "./WebsitePage.module.scss";
-import { RANGES } from "./websiteView.ts";
+import styles from "./WebsiteTab.module.scss";
 
 /** Range switch on the left; how old the data is and the refresh button on
  *  the right. */
@@ -22,23 +19,10 @@ export function RefreshBar(props: {
 }): JSX.Element {
 	return (
 		<div class={styles.bar}>
-			<Segment.Root
-				label="Range"
-				orientation="horizontal"
-				value={String(props.range)}
-				onValueChange={(details) => {
-					const next = rangeFromValue(details.value);
-					if (next) props.onRangeChange(next);
-				}}
-			>
-				<For each={RANGES}>
-					{(range) => (
-						<Segment.Item value={String(range.days)}>
-							{range.label}
-						</Segment.Item>
-					)}
-				</For>
-			</Segment.Root>
+			<RangeSegment
+				range={props.range}
+				onRangeChange={props.onRangeChange}
+			/>
 			<div class={styles.freshness}>
 				<span class={styles.refreshed}>{props.refreshedLabel}</span>
 				<IconButton

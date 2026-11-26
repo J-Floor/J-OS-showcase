@@ -29,8 +29,10 @@ import { SheetCreateFooter } from "../../../shared/entity/SheetCreateFooter.tsx"
 import { ICONS } from "../../../shared/icons.ts";
 import { InlineError } from "../../../shared/InlineError.tsx";
 import type { SheetOpenProps } from "../../../shared/types.ts";
+import { rowViewKey } from "../../../shared/views/viewKey.ts";
 import type { Person, Project, Task } from "../data/tasksData.tsx";
 import { useProjects, useTaskActions } from "../data/tasksData.tsx";
+import { taskEntity } from "../entity.ts";
 import { taskFields } from "../fields.ts";
 import { TASK_STATUSES } from "../kanban/onDrop.ts";
 
@@ -327,6 +329,7 @@ export function TaskSheet(props: TaskSheetProps): JSX.Element {
 				loading={props.loading}
 				nav={props.nav}
 				saveStatus={isEdit() && !props.loading}
+				viewKey={rowViewKey(taskEntity, props.task)}
 			>
 				<Show when={props.task} keyed>
 					{(task) => (

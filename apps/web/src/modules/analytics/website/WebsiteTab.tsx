@@ -11,29 +11,28 @@ import {
 	type JSX,
 } from "solid-js";
 
-import { api } from "../../../convex/_generated/api";
+import { api } from "../../../../convex/_generated/api";
 import {
 	refreshOpensAt,
 	type BreakdownKey,
 	type RankedRow,
 	type WebAnalyticsRange,
 	type WebAnalyticsSummary,
-} from "../../../convex/lib/webAnalytics.ts";
-import { call } from "../../lib/call.ts";
-import { useQuery } from "../../shared/data/useQuery.ts";
-import { ICONS } from "../../shared/icons.ts";
-import { ChartCard } from "../../shared/insights/ChartCard.tsx";
-import { MetricTile } from "../../shared/insights/MetricTile.tsx";
+} from "../../../../convex/lib/webAnalytics.ts";
+import { call } from "../../../lib/call.ts";
+import { useQuery } from "../../../shared/data/useQuery.ts";
+import { ICONS } from "../../../shared/icons.ts";
+import { ChartCard } from "../../../shared/insights/ChartCard.tsx";
+import { MetricTile } from "../../../shared/insights/MetricTile.tsx";
+import { rangeFromParameter, refreshedLabel } from "../analyticsView.ts";
+import { BreakdownCard } from "../BreakdownCard.tsx";
 
-import { BreakdownCard } from "./BreakdownCard.tsx";
 import { RefreshBar } from "./RefreshBar.tsx";
-import styles from "./WebsitePage.module.scss";
+import styles from "./WebsiteTab.module.scss";
 import {
 	countryName,
 	failureNotice,
 	isStale,
-	rangeFromParameter,
-	refreshedLabel,
 	sampleNotice,
 	topLabel,
 	viewsPerVisit,
@@ -221,7 +220,7 @@ function Traffic(props: { summary?: WebAnalyticsSummary }): JSX.Element {
  * missing or older than 15 minutes, or when someone presses refresh. The
  * server guards each range to one fetch a minute.
  */
-export function WebsitePage(): JSX.Element {
+export function WebsiteTab(): JSX.Element {
 	const [params, setParams] = useSearchParams();
 	function range(): WebAnalyticsRange {
 		return rangeFromParameter(params.range);

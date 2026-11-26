@@ -28,17 +28,23 @@ test("the insights scroller leaves room at its end", () => {
 	);
 });
 
-test("the insights and website pages use that scroller", () => {
-	expect(
-		source("modules/community/insights/InsightsTab.module.scss")
-	).toMatch(/\.tab \{[^}]*@include insights\.insights-scroller;/);
-	expect(source("modules/website/WebsitePage.module.scss")).toMatch(
-		/@include [\w.]*insights-scroller;/
+const PAGES = [
+	"modules/analytics/website/WebsiteTab.module.scss",
+	"modules/analytics/app/AppViewsTab.module.scss",
+];
+
+test("the insights page mixin is that scroller, bounded so it scrolls itself", () => {
+	expect(source("shared/insights/layout.scss")).toMatch(
+		/@mixin insights-page \{\s*@include insights-scroller;[^}]*block-size: 100%;/
 	);
 });
 
-test("the website page, straight under the block content area, is bounded so it scrolls itself", () => {
-	expect(source("modules/website/WebsitePage.module.scss")).toMatch(
-		/\.page \{[^}]*block-size: 100%;/
-	);
+test("the insights and analytics pages use that scroller", () => {
+	expect(
+		source("modules/community/insights/InsightsTab.module.scss")
+	).toMatch(/\.tab \{[^}]*@include insights\.insights-scroller;/);
+	for (const page of PAGES)
+		expect(source(page)).toMatch(
+			/\.page \{\s*@include insights\.insights-page;/
+		);
 });

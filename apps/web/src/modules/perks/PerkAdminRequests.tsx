@@ -11,11 +11,11 @@ import { useOpenPeek } from "../../shared/entity/openEntity.ts";
 import { SheetSection } from "../../shared/entity/SheetSection.tsx";
 import { formatDateIn } from "../../shared/time.ts";
 
+import { requestEntity } from "./entity.ts";
 import styles from "./PerkAdminRequests.module.scss";
 import { PerkRequestStatusSelect } from "./PerkRequestStatusSelect.tsx";
 import sheetStyles from "./PerkSheet.module.scss";
 import { perkRequestsForPerkQuery } from "./queries.ts";
-import { requestEntity } from "./requests/requestEntity.ts";
 
 /** One request: who asked and when, what they wrote, and its status, which
  *  the board moves from here. Who asked opens the request's own sheet, over

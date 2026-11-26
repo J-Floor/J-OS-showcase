@@ -14,7 +14,12 @@ import { Can } from "./lib/ability.tsx";
 import { SignOutButton } from "./modules/auth/SignOutButton.tsx";
 import { DoorsIntro } from "./modules/onboarding/DoorsIntro.tsx";
 import { WhatsNew } from "./modules/onboarding/WhatsNew.tsx";
-import { LastPathTracker, ModuleRoutes, RoleGate } from "./routing/index.tsx";
+import {
+	LastPathTracker,
+	ModuleRoutes,
+	RoleGate,
+	ViewTracker,
+} from "./routing/index.tsx";
 import { usePageTransitions } from "./routing/usePageTransitions.ts";
 import { AppErrorBoundary } from "./shared/AppErrorBoundary.tsx";
 import { ConfirmProvider } from "./shared/confirm.tsx";
@@ -157,6 +162,7 @@ export function App(props: ParentProps) {
 	return (
 		<RoleGate>
 			<LastPathTracker />
+			<ViewTracker />
 			{/* `ignoreInputs` set once, here, rather than repeated on every
 			    bare-letter `createHotkey`/`createHotkeys` call across the app.
 			    It must be off: the library's own typing guard blocks every

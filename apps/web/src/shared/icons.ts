@@ -10,6 +10,7 @@ export const ICONS = {
 	reorder: "drag_indicator",
 	unlock: "lock_open_right",
 	lock: "lock",
+	views: "visibility",
 	door: "door_front",
 	doorStreet: "apartment",
 	task: "check_circle",
@@ -61,4 +62,5 @@ export const ICONS = {
 	space: "factory",
 	perks: "featured_seasonal_and_gifts",
 	website: "language",
+	analytics: "monitoring",
 } as const;

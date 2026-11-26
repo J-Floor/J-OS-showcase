@@ -1,6 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+import { roleCountsValidator, viewSummaryValidator } from "./lib/appViews.ts";
 import { PERK_CATEGORIES, PERK_REQUEST_STATUSES } from "./lib/perks.ts";
 import { ACCESS_TIERS } from "./lib/roles.ts";
 import { scheduleDayValidator } from "./lib/tv/schedule.ts";
@@ -599,6 +600,28 @@ export default defineSchema({
 		summary: v.optional(webAnalyticsSummaryValidator),
 		lastError: v.optional(webAnalyticsFailureValidator),
 		attemptedAt: v.optional(v.number()),
+	}).index("by_days", ["days"]),
+
+	// Anonymous view counts (convex/appViews.ts). A day's salt and hits are
+	// deleted by the nightly job; only per-day counts per key remain.
+	viewSalts: defineTable({ day: v.string(), salt: v.string() }).index(
+		"by_day",
+		["day"]
+	),
+	viewHits: defineTable({
+		day: v.string(),
+		viewerHash: v.string(),
+		key: v.string(),
+	}).index("by_day_viewer_key", ["day", "viewerHash", "key"]),
+	viewDaily: defineTable({
+		day: v.string(),
+		key: v.string(),
+		...roleCountsValidator.fields,
+	}).index("by_day_key", ["day", "key"]),
+	viewSnapshots: defineTable({
+		days: webAnalyticsRangeValidator,
+		builtAt: v.number(),
+		summary: viewSummaryValidator,
 	}).index("by_days", ["days"]),
 
 	/**

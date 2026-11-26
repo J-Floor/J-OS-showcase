@@ -17,12 +17,14 @@ import { SheetCreateFooter } from "../../../shared/entity/SheetCreateFooter.tsx"
 import { InlineError } from "../../../shared/InlineError.tsx";
 import type { SaveWrite } from "../../../shared/reportSave.ts";
 import type { SheetOpenProps } from "../../../shared/types.ts";
+import { rowViewKey } from "../../../shared/views/viewKey.ts";
 import type { ItemType, ItemTypePatch } from "../data/inventoryData.ts";
 import {
 	useCategories,
 	useItemsByType,
 	useItemTypeActions,
 } from "../data/inventoryData.ts";
+import { itemTypeEntity } from "../entity.ts";
 import { itemTypeFields } from "../fields.ts";
 
 import { createInventoryCommands } from "./inventoryCommands.ts";
@@ -230,6 +232,10 @@ export function ItemTypeSheet(props: ItemTypeSheetProps): JSX.Element {
 				title={props.itemType?.name ?? "New item type"}
 				loading={props.loading}
 				nav={props.nav}
+				viewKey={rowViewKey(
+					itemTypeEntity,
+					props.loading ? undefined : props.itemType
+				)}
 				actions={actions}
 				isOpen={props.open}
 				placeholderFields={[

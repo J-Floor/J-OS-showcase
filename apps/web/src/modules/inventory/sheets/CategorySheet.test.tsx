@@ -35,6 +35,9 @@ afterEach(() => {
 	mockUseItemTypesByCategory.mockClear();
 });
 
+// The board-only view badge reads a query these tests do not serve.
+vi.mock("../../../shared/views/ViewCount.tsx");
+
 vi.mock("../data/inventoryData.ts", () => ({
 	useCategoryActions: () => ({
 		create: mockCreate,

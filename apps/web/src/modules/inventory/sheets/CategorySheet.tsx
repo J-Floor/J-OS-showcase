@@ -10,11 +10,13 @@ import { createEntityDraft } from "../../../shared/entity/entityCommands.ts";
 import { SheetCreateFooter } from "../../../shared/entity/SheetCreateFooter.tsx";
 import { InlineError } from "../../../shared/InlineError.tsx";
 import type { SheetOpenProps } from "../../../shared/types.ts";
+import { rowViewKey } from "../../../shared/views/viewKey.ts";
 import type { Category, CategoryPatch } from "../data/inventoryData.ts";
 import {
 	useCategoryActions,
 	useItemTypesByCategory,
 } from "../data/inventoryData.ts";
+import { categoryEntity } from "../entity.ts";
 import { categoryFields } from "../fields.ts";
 
 import { createInventoryCommands } from "./inventoryCommands.ts";
@@ -170,6 +172,7 @@ export function CategorySheet(props: CategorySheetProps): JSX.Element {
 				title={props.category?.name ?? "New category"}
 				loading={props.loading}
 				nav={props.nav}
+				viewKey={rowViewKey(categoryEntity, props.category)}
 				actions={actions}
 				isOpen={props.open}
 				placeholderFields={[

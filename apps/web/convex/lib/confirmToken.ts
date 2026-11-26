@@ -4,8 +4,8 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import type { confirmPurpose, reapplyPayload } from "../schema.ts";
 
-import { HEX_RADIX } from "./constants.ts";
 import { invariant } from "./result.ts";
+import { randomHex, sha256HexOfText } from "./sha256.ts";
 
 const TOKEN_BYTES = 32;
 
@@ -15,10 +15,7 @@ const TOKEN_BYTES = 32;
  * deterministic-replayed and forbid real randomness.
  */
 export function newConfirmToken(): string {
-	const bytes = crypto.getRandomValues(new Uint8Array(TOKEN_BYTES));
-	return Array.from(bytes, (byte) =>
-		byte.toString(HEX_RADIX).padStart(2, "0")
-	).join("");
+	return randomHex(TOKEN_BYTES);
 }
 
 /**
@@ -27,13 +24,7 @@ export function newConfirmToken(): string {
  * Deterministic, so it is safe inside mutations.
  */
 export async function hashConfirmToken(token: string): Promise<string> {
-	const digest = await crypto.subtle.digest(
-		"SHA-256",
-		new TextEncoder().encode(token)
-	);
-	return Array.from(new Uint8Array(digest), (byte) =>
-		byte.toString(HEX_RADIX).padStart(2, "0")
-	).join("");
+	return sha256HexOfText(token);
 }
 
 export type Purpose = Infer<typeof confirmPurpose>;

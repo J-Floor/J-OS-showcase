@@ -29,6 +29,7 @@ import { SheetCreateFooter } from "../../../shared/entity/SheetCreateFooter.tsx"
 import { InlineError } from "../../../shared/InlineError.tsx";
 import type { SaveWrite } from "../../../shared/reportSave.ts";
 import type { SheetOpenProps } from "../../../shared/types.ts";
+import { rowViewKey } from "../../../shared/views/viewKey.ts";
 import type { Item, ItemPatch } from "../data/inventoryData.ts";
 import {
 	useItemActions,
@@ -379,6 +380,7 @@ export function ItemSheet(props: ItemSheetProps): JSX.Element {
 				title={props.item?.assetTag ?? "New item"}
 				loading={props.loading}
 				nav={props.nav}
+				viewKey={rowViewKey(itemEntity, props.item)}
 				actions={actions}
 				isOpen={props.open}
 				placeholderFields={PLACEHOLDER_FIELDS}

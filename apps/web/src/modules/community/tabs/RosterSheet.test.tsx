@@ -24,6 +24,14 @@ import { RosterSheet, useSheetEditing } from "./RosterSheet.tsx";
 import { renderWithSelection } from "./testSelection.tsx";
 
 // The footer is under test, not the profile: the detail reads Convex.
+// The board-only view badge reads a query these tests do not serve; the
+// stand-in shows which key the sheet counts views under.
+vi.mock("../../../shared/views/ViewCount.tsx", () => ({
+	ViewCount: (props: { viewKey: string }) => (
+		<span data-testid="views" data-key={props.viewKey} />
+	),
+}));
+
 vi.mock("../sheets/PersonDetail.tsx", () => ({
 	PersonDetail: () => <div />,
 }));
@@ -133,4 +141,27 @@ test("the sheet footer shows a refusal for its own person only", async () => {
 		).toBeInTheDocument();
 	});
 	expect(within(panel).queryByRole("alert")).toBeNull();
+});
+
+test("a person's sheet counts views under the person's id", async () => {
+	const shown = {
+		_id: "p1",
+		firstName: "Ada",
+		lastName: "Example",
+	} as unknown as PersonRow;
+	renderWithSelection(() => (
+		<RosterSheet
+			isOpen
+			isLoading={false}
+			selected={shown}
+			isEditing={false}
+			onToggleEditing={() => {}}
+			onClose={() => {}}
+			actions={[]}
+			scope="members"
+		/>
+	));
+	await waitFor(() => {
+		expect(screen.getByTestId("views").dataset.key).toBe("person:p1");
+	});
 });

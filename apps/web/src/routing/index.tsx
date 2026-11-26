@@ -35,6 +35,7 @@ import { railLanding } from "../shell/Sidebar/brandLanding.ts";
 import { Splash } from "../shell/Splash.tsx";
 
 import { useRole } from "./useRole.ts";
+import { viewKeysFor } from "./viewKeys.ts";
 
 type RoleData = ReturnType<ReturnType<typeof useRole>["data"]>;
 
@@ -137,6 +138,28 @@ export function LastPathTracker() {
 		if (MODULE_PATHS.has(path))
 			// Remembering the page is best effort: a failure has nobody to tell.
 			ignoreFailure(setLastPath.mutateAsync({ path }));
+	});
+	return null;
+}
+
+/**
+ * Records an anonymous view of each page and entity that comes on screen
+ * (`appViews.recordView`). Sends only keys the previous location did not
+ * show; the server counts each person once per key per day. Renders nothing.
+ */
+export function ViewTracker() {
+	const location = useLocation();
+	const recordView = useMutation(api.appViews.recordView);
+	let shown = new Set<string>();
+	createEffect(() => {
+		const keys = viewKeysFor(
+			location.pathname,
+			new URLSearchParams(location.search)
+		);
+		for (const key of keys)
+			// Counting is best effort: a failure has nobody to tell.
+			if (!shown.has(key)) ignoreFailure(recordView.mutateAsync({ key }));
+		shown = new Set(keys);
 	});
 	return null;
 }

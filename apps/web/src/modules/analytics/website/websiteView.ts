@@ -1,20 +1,11 @@
-import {
-	rangeFromValue,
-	WEB_ANALYTICS_RANGES,
-	type RankedRow,
-	type WebAnalyticsErrorKind,
-	type WebAnalyticsRange,
-	type WebAnalyticsSummary,
-} from "../../../convex/lib/webAnalytics.ts";
-import type { SnapshotView } from "../../../convex/websiteAnalytics.ts";
-import { formatAgo } from "../../shared/time.ts";
+import type {
+	RankedRow,
+	WebAnalyticsErrorKind,
+	WebAnalyticsSummary,
+} from "../../../../convex/lib/webAnalytics.ts";
+import type { SnapshotView } from "../../../../convex/websiteAnalytics.ts";
+import { formatAgo } from "../../../shared/time.ts";
 
-export const RANGES = WEB_ANALYTICS_RANGES.map((days) => ({
-	days,
-	label: `${String(days)}d`,
-}));
-
-export const DEFAULT_RANGE: WebAnalyticsRange = 30;
 const STALE_AFTER_MS = 900_000;
 
 const REASONS: Record<WebAnalyticsErrorKind, string> = {
@@ -24,23 +15,8 @@ const REASONS: Record<WebAnalyticsErrorKind, string> = {
 	malformed: "unexpected response",
 };
 
-export function rangeFromParameter(
-	raw: string | string[] | undefined
-): WebAnalyticsRange {
-	return rangeFromValue(raw) ?? DEFAULT_RANGE;
-}
-
 export function isStale(fetchedAt: number | undefined, now: number): boolean {
 	return fetchedAt === undefined || now - fetchedAt > STALE_AFTER_MS;
-}
-
-export function refreshedLabel(
-	fetchedAt: number | undefined,
-	now: number
-): string {
-	return fetchedAt === undefined
-		? "Not refreshed yet"
-		: `Refreshed ${formatAgo(fetchedAt, now)}`;
 }
 
 export function failureNotice(
@@ -86,14 +62,4 @@ export function sampleNotice(
 
 export function topLabel(rows: RankedRow[]): string {
 	return rows[0]?.label ?? "—";
-}
-
-export function withShare(
-	rows: RankedRow[],
-	total: number
-): (RankedRow & { share: number })[] {
-	return rows.map((row) => ({
-		...row,
-		share: total === 0 ? 0 : row.count / total,
-	}));
 }

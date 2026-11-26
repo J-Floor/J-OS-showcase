@@ -1,0 +1,10 @@
+@use "../../shared/listShell" as shell;
+
+/* A bounded column: the Website tab scrolls inside its own panel. */
+.page {
+	@include shell.console;
+}
+
+.panel:not([hidden]) {
+	@include shell.panel;
+}

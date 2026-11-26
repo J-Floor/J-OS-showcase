@@ -27,6 +27,14 @@ afterEach(() => {
 	mockUseItems.mockClear();
 });
 
+// The board-only view badge reads a query these tests do not serve; the
+// stand-in shows which key the sheet counts views under.
+vi.mock("../../../shared/views/ViewCount.tsx", () => ({
+	ViewCount: (props: { viewKey: string }) => (
+		<span data-testid="views" data-key={props.viewKey} />
+	),
+}));
+
 vi.mock("convex-solidjs", () => ({
 	useMutation: () => ({ mutate: vi.fn().mockResolvedValue(undefined) }),
 	useQuery: () => ({ data: () => {} }),
@@ -351,6 +359,18 @@ test("morph: the item's columns pair with the sheet values showing the same fiel
 	const title = titleAround(screen.getByRole("heading", { name: "A00001" }));
 	expect(title).not.toBeNull();
 	expect(titleKeyOf(title)).toBe("");
+});
+
+test("an item's sheet counts views under its asset tag; a create form has no badge", () => {
+	setData([chairType], [chair]);
+	render(() => <ItemSheet open onOpenChange={() => {}} item={chair} />);
+	expect(screen.getByTestId("views").dataset.key).toBe("item:A00001");
+	cleanup();
+	render(() => (
+		<ItemSheet open onOpenChange={() => {}} initialAssetTag="A00002" />
+	));
+	expect(screen.getByText("New item")).toBeInTheDocument();
+	expect(screen.queryByTestId("views")).toBeNull();
 });
 
 test("the header shows the item's asset tag in edit mode, not 'Item'", () => {

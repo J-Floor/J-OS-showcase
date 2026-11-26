@@ -8,6 +8,9 @@ import { sheetSkeleton } from "../../../../test-stubs/morphKeys.tsx";
 afterEach(cleanup);
 
 // Mock convex-solidjs so TaskSheet's useTaskActions doesn't need a ConvexProvider.
+// The board-only view badge reads a query these tests do not serve.
+vi.mock("../../../shared/views/ViewCount.tsx");
+
 vi.mock("convex-solidjs", () => ({
 	useMutation: () => ({ mutate: vi.fn().mockResolvedValue(undefined) }),
 	useQuery: () => ({ data: () => {} }),

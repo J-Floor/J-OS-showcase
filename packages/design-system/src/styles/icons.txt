@@ -1,4 +1,5 @@
 add
+analytics
 apartment
 approval
 arrow_back
@@ -114,6 +115,7 @@ menu
 merge
 message
 mode
+monitoring
 more_horiz
 more_vert
 mouse
@@ -198,6 +200,7 @@ undo
 unfold_more
 update
 verified
+visibility
 warning
 weight
 width

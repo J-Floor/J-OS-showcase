@@ -1,3 +1,6 @@
+@use "@j-os/design-system/breakpoints" as bp;
+@use "@j-os/design-system/typography" as typo;
+
 /* The page owns the scrolling, not the shell: panels that sit beside it are
    tables that scroll internally, so the area they share is a fixed-height flex
    item with no scroll range of its own. */
@@ -28,4 +31,32 @@
 	   No breakpoint list to keep in step with a tile count that changes every
 	   time a metric is added. */
 	grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+}
+
+/* A page of insights that sits straight in the shell's block content area,
+   where `flex: 1` bounds nothing. Without a bound it grows to its content
+   and, being a `contain` scroll container with no range, swallows the
+   wheel. */
+@mixin insights-page {
+	@include insights-scroller;
+
+	block-size: 100%;
+}
+
+/* Two breakdown cards side by side, stacked on a phone. */
+@mixin breakdowns {
+	display: grid;
+	gap: var(--jf-spacing-far);
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+
+	@include bp.phone {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+/* The quiet line that says how fresh the numbers are. */
+@mixin freshness-note {
+	@include typo.jf-typo-body-small;
+
+	color: var(--jf-fg-muted);
 }

@@ -1,16 +1,20 @@
 import { ProgressBar } from "@j-os/design-system";
+import { A } from "@solidjs/router";
 import { Index, Show, type JSX } from "solid-js";
 
 import type { RankedRow } from "../../../convex/lib/webAnalytics.ts";
 
+import { withShare } from "./analyticsView.ts";
 import styles from "./BreakdownCard.module.scss";
-import { withShare } from "./websiteView.ts";
+
+/** A ranked row; `href` makes its label a link to what it counts. */
+export type BreakdownRow = RankedRow & { href?: string };
 
 /** One dimension's top rows: label, count and a bar for its share of all
- *  views. A list, not a table: the rows are not entities and open nothing. */
+ *  views. A list, not a table. Rows may link to what they count. */
 export function BreakdownCard(props: {
 	title: string;
-	rows: RankedRow[];
+	rows: BreakdownRow[];
 	total: number;
 }): JSX.Element {
 	return (
@@ -29,7 +33,20 @@ export function BreakdownCard(props: {
 					<Index each={withShare(props.rows, props.total)}>
 						{(row) => (
 							<li class={styles.row}>
-								<span class={styles.label}>{row().label}</span>
+								<Show
+									when={row().href}
+									fallback={
+										<span class={styles.label}>
+											{row().label}
+										</span>
+									}
+								>
+									{(href) => (
+										<A class={styles.label} href={href()}>
+											{row().label}
+										</A>
+									)}
+								</Show>
 								<span class={styles.count}>{row().count}</span>
 								<ProgressBar
 									class={styles.bar}

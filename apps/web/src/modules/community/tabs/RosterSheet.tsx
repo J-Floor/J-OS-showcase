@@ -15,11 +15,14 @@ import { EditToggle } from "../../../shared/components/EditToggle.tsx";
 import type { SheetNavState } from "../../../shared/entity/createSheetNav.ts";
 import { EntitySheetNav } from "../../../shared/entity/EntitySheetNav.tsx";
 import { SheetFooter } from "../../../shared/entity/SheetFooter.tsx";
+import { RowViewCount } from "../../../shared/views/RowViewCount.tsx";
+import { rowViewKey } from "../../../shared/views/viewKey.ts";
 import {
 	rosterActionMessage,
 	setShownPerson,
 } from "../actions/RosterActionError.tsx";
 import type { ShortcutScope } from "../actions/shortcuts.ts";
+import { personEntity } from "../entity.ts";
 import { personFields } from "../fields.ts";
 import { PersonDetail } from "../sheets/PersonDetail.tsx";
 import { PersonDetailPlaceholder } from "../sheets/PersonDetailPlaceholder.tsx";
@@ -82,6 +85,9 @@ export function RosterSheet<Row extends PersonRow>(props: {
 					person={props.selected}
 				/>
 				<Sheet.HeaderActions>
+					<RowViewCount
+						viewKey={rowViewKey(personEntity, props.selected)}
+					/>
 					<Sheet.SaveStatus />
 					<EditToggle
 						editing={props.isEditing}

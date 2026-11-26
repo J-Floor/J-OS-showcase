@@ -56,8 +56,7 @@ vi.mock("../../../shared/data/useQuery.ts", () => ({
 import type { Id } from "../../../../convex/_generated/dataModel";
 import type { PerkRequestRow } from "../../../../convex/perkRequests.ts";
 import { entityPath } from "../../../shared/entity/entityDescriptor.ts";
-
-import { requestEntity } from "./requestEntity.ts";
+import { requestEntity } from "../entity.ts";
 
 afterEach(() => {
 	answers.clear();

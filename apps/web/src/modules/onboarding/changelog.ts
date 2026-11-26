@@ -39,8 +39,8 @@ const SPACE_INFO_VIEWERS = { action: "view", subject: "SpaceInfo" } as const;
 const AGREEMENT_VIEWERS = { action: "view", subject: "Members" } as const;
 /** Who sees the Inventory module: the board. */
 const INVENTORY_VIEWERS = { action: "view", subject: "Inventory" } as const;
-/** Who sees the Website module: the board. */
-const WEBSITE_VIEWERS = { action: "view", subject: "Website" } as const;
+/** Who sees the Analytics module: the board. */
+const ANALYTICS_VIEWERS = { action: "view", subject: "Analytics" } as const;
 /** Who sees the Perks module and may request a perk: every community tier. */
 const PERK_VIEWERS = { action: "view", subject: "Perks" } as const;
 /** Who tracks perk requests: the board. */
@@ -50,6 +50,16 @@ const PERK_MANAGERS = { action: "manage", subject: "Perks" } as const;
 const EVENT_MANAGERS = { action: "manage", subject: "Events" } as const;
 
 export const CHANGELOG: ChangeEntry[] = [
+	{
+		version: "1.15",
+		title: "App analytics",
+		items: [
+			{
+				text: "Analytics: see how many people view each page, event and perk.",
+				audience: ANALYTICS_VIEWERS,
+			},
+		],
+	},
 	{
 		version: "1.14",
 		title: "TV slide order and cleanup",
@@ -120,7 +130,7 @@ export const CHANGELOG: ChangeEntry[] = [
 		items: [
 			{
 				text: "See thejfloor.com traffic in the new Website page: views, visits, pages, referrers, countries and devices.",
-				audience: WEBSITE_VIEWERS,
+				audience: ANALYTICS_VIEWERS,
 			},
 		],
 	},

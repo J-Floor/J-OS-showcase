@@ -10,7 +10,9 @@ import { EntitySheetHeader } from "../../shared/entity/EntitySheetHeader.tsx";
 import { SheetSection } from "../../shared/entity/SheetSection.tsx";
 import { ICONS } from "../../shared/icons.ts";
 import type { SheetOpenProps } from "../../shared/types.ts";
+import { rowViewKey } from "../../shared/views/viewKey.ts";
 
+import { eventsEntity } from "./entity.ts";
 import { createEventSheetActions } from "./eventActions.ts";
 import {
 	EventCreateForm,
@@ -77,6 +79,7 @@ function EventSheetHeader(
 			title={props.event ? props.event.name : "New event"}
 			loading={props.loading}
 			saveStatus={!props.loading && props.event !== undefined}
+			viewKey={rowViewKey(eventsEntity, props.event)}
 		>
 			<Show
 				when={

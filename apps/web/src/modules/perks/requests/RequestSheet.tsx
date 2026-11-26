@@ -9,6 +9,9 @@ import { EntitySheetNav } from "../../../shared/entity/EntitySheetNav.tsx";
 import { SheetFooter } from "../../../shared/entity/SheetFooter.tsx";
 import { SheetSection } from "../../../shared/entity/SheetSection.tsx";
 import type { SheetOpenProps } from "../../../shared/types.ts";
+import { RowViewCount } from "../../../shared/views/RowViewCount.tsx";
+import { rowViewKey } from "../../../shared/views/viewKey.ts";
+import { requestEntity } from "../entity.ts";
 
 import { createRequestActions } from "./requestActions.ts";
 import {
@@ -78,6 +81,9 @@ function RequestSheetHeader(
 				</p>
 			</div>
 			<Sheet.HeaderActions>
+				<RowViewCount
+					viewKey={rowViewKey(requestEntity, props.request)}
+				/>
 				<EntitySheetNav nav={props.nav} />
 				<Sheet.Close />
 			</Sheet.HeaderActions>

@@ -18,7 +18,11 @@
 	// providerAgnostic.test.ts reads every source file through
 	// import.meta.glob(?raw); fallow counts that as a namespace import of
 	// each one, which hides all unused exports and files in apps/web.
-	"ignorePatterns": ["apps/web/src/providerAgnostic.test.ts"],
+	"ignorePatterns": [
+		"apps/web/src/providerAgnostic.test.ts",
+		// vitest picks these up next to the module it mocks; nothing imports them.
+		"**/__mocks__/**"
+	],
 	"ignoreFindings": [
 		"packages/design-system/scripts/morph-probe.js",
 		// The Events section is hidden for now; restore it in Home.tsx.

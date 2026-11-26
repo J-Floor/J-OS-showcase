@@ -1,8 +1,10 @@
 // @vitest-environment happy-dom
 import { IconButton, Sheet } from "@j-os/design-system";
 import { cleanup, render, screen } from "@solidjs/testing-library";
-import type { JSX } from "solid-js";
-import { afterEach, expect, test } from "vitest";
+import { createSignal, type JSX } from "solid-js";
+import { afterEach, expect, test, vi } from "vitest";
+
+import { AbilityProvider } from "../../lib/ability.tsx";
 
 import type { SheetNavState } from "./createSheetNav.ts";
 import { EntitySheetHeader } from "./EntitySheetHeader.tsx";
@@ -59,4 +61,47 @@ test("an existing row's header shows the save status first; a create form's has 
 	unmount();
 	renderHeader();
 	expect(screen.queryByRole("status", { name: "Save status" })).toBeNull();
+});
+
+const todayKeys: string[] = [];
+
+vi.mock("../data/useQuery.ts", () => ({
+	useQuery: (_query: unknown, args: () => { key: string }) => ({
+		data: () => {
+			todayKeys.push(args().key);
+			return { members: 1, board: 0, guests: 0 };
+		},
+		isStale: () => false,
+		isLoading: () => false,
+		error: () => {},
+		refetch: () => {},
+	}),
+}));
+
+test("the board's header shows the view count for its key, and follows prev/next to the next key", () => {
+	const [viewKey, setViewKey] = createSignal<string | undefined>("task:a");
+	render(() => (
+		<AbilityProvider role="board">
+			<Sheet.Root open onOpenChange={() => {}}>
+				<EntitySheetHeader title="Fix the bug" viewKey={viewKey()} />
+			</Sheet.Root>
+		</AbilityProvider>
+	));
+	expect(screen.getByRole("img", { name: /^Views today/ })).toBeTruthy();
+	expect(todayKeys.at(-1)).toBe("task:a");
+	setViewKey("task:b");
+	expect(todayKeys.at(-1)).toBe("task:b");
+	setViewKey(undefined);
+	expect(screen.queryByRole("img", { name: /^Views today/ })).toBeNull();
+});
+
+test("no view key (a create form), no count", () => {
+	render(() => (
+		<AbilityProvider role="board">
+			<Sheet.Root open onOpenChange={() => {}}>
+				<EntitySheetHeader title="New task" />
+			</Sheet.Root>
+		</AbilityProvider>
+	));
+	expect(screen.queryByRole("img", { name: /^Views today/ })).toBeNull();
 });

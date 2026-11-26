@@ -9,11 +9,12 @@ const crons = cronJobs();
 // (CET, UTC+1) mapping — 02:00 Zurich — and drifts to 03:00 (CEST, UTC+2) in
 // summer; DST shifts it by an hour either way. The jobs are staggered 15 min
 // apart (01:15, 01:30, 01:45, then the lifecycle check at 02:00, the purges
-// through 02:45, and the TV event reconcile in its own 03:00 slot) and carry no
-// dependency on each other; see each note. The hourly occupancy job runs at
-// minute 0 too, so it shares that minute with the 02:00 and 03:00 jobs. (01:00
-// UTC was the nightly door-key sweep, retired when the app became the way to
-// open the doors.)
+// through 02:45, the view-count purge and salts together at 02:50, the
+// snapshot rebuild at 02:55, and the TV event reconcile in its own 03:00
+// slot) and carry no dependency on each other; see each note. The hourly
+// occupancy job runs at minute 0 too, so it shares that minute with the 02:00
+// and 03:00 jobs. (01:00 UTC was the nightly door-key sweep, retired when the
+// app became the way to open the doors.)
 
 // Backstop for guest windows that closed while the scheduler was down, or that
 // were set before scheduled expiry existed. The per-guest job scheduled at
@@ -67,6 +68,29 @@ crons.daily(
 	"purge old email quota counters",
 	{ hourUTC: 2, minuteUTC: 45 },
 	internal.emailQuota.purgeOld,
+	{}
+);
+
+// Anonymous view counts (appViews.ts), independent of each other: delete
+// past days' hits and salts (who viewed what) and counts past 12 months, make
+// the next salts, and rebuild the 7/30/90-day snapshots the Analytics page
+// reads.
+crons.daily(
+	"purge view hits and old view counts",
+	{ hourUTC: 2, minuteUTC: 50 },
+	internal.appViews.purgeExpired,
+	{}
+);
+crons.daily(
+	"prepare view salts",
+	{ hourUTC: 2, minuteUTC: 50 },
+	internal.appViews.prepareSalts,
+	{}
+);
+crons.daily(
+	"rebuild view snapshots",
+	{ hourUTC: 2, minuteUTC: 55 },
+	internal.appViews.rebuildSnapshots,
 	{}
 );
 

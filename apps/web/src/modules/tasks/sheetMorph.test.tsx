@@ -25,6 +25,9 @@ const { rows } = vi.hoisted(() => ({
 	},
 }));
 
+// The board-only view badge reads a query these tests do not serve.
+vi.mock("../../shared/views/ViewCount.tsx");
+
 vi.mock("./data/tasksData.tsx", () => ({
 	useProjects: () => ({ data: () => rows.projects }),
 	useTasks: () => ({ data: () => rows.tasks }),

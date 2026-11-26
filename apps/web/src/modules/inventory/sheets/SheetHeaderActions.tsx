@@ -81,6 +81,8 @@ export function InventorySheetHeader<Row extends { _id: string }>(props: {
 	title: string;
 	loading?: boolean;
 	nav?: SheetNavState;
+	/** Views counted under this key; `undefined` on a create form. */
+	viewKey?: string;
 	actions: InventorySheetActions<Row>;
 	isOpen: boolean;
 	placeholderFields: readonly (FieldDefinition & { icon: string })[];
@@ -92,6 +94,7 @@ export function InventorySheetHeader<Row extends { _id: string }>(props: {
 				loading={props.loading}
 				nav={props.nav}
 				saveStatus={props.actions.row() !== undefined && !props.loading}
+				viewKey={props.viewKey}
 			>
 				<SheetHeaderActions
 					actions={props.actions}

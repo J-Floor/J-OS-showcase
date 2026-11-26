@@ -1,5 +1,7 @@
 @use "../../shared/cards" as cards;
+@use "@j-os/design-system/hover";
 @use "@j-os/design-system/typography" as typo;
+@use "@j-os/design-system/utils" as utils;
 
 .card {
 	@include cards.card-panel;
@@ -43,6 +45,20 @@
 	color: var(--jf-fg-strong);
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+/* A row that links to what it counts: underlined on hover, the label's own
+   colour at rest. */
+a.label {
+	@include utils.focus-outline;
+
+	text-decoration: none;
+
+	@media (hover: hover) {
+		@include hover.hover {
+			text-decoration: underline;
+		}
+	}
 }
 
 .count {

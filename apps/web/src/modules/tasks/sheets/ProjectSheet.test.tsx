@@ -12,6 +12,9 @@ afterEach(() => {
 // Mock convex-solidjs so ProjectSheet's useProjectActions doesn't need a
 // ConvexProvider. useMutation ignores its argument here, so the real
 // generated api module (imported by tasksData.tsx) can load unmocked.
+// The board-only view badge reads a query these tests do not serve.
+vi.mock("../../../shared/views/ViewCount.tsx");
+
 vi.mock("convex-solidjs", () => ({
 	useMutation: () => ({ mutate: vi.fn().mockResolvedValue(undefined) }),
 	useQuery: () => ({ data: () => {} }),

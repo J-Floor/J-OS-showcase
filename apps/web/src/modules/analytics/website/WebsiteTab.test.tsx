@@ -16,8 +16,8 @@ import {
 import { createSignal } from "solid-js";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
-import { sampleSummary } from "../../../convex/lib/fakeWebAnalyticsProvider.ts";
-import type { SnapshotView } from "../../../convex/websiteAnalytics.ts";
+import { sampleSummary } from "../../../../convex/lib/fakeWebAnalyticsProvider.ts";
+import type { SnapshotView } from "../../../../convex/websiteAnalytics.ts";
 
 const NOW = Date.UTC(2026, 10, 10, 12);
 const MINUTE = 60_000;
@@ -27,7 +27,7 @@ const state: { refresh: ReturnType<typeof vi.fn> } = { refresh: vi.fn() };
 
 // Signal-backed, like the real hook: the page reads `data()` reactively, so a
 // new snapshot reaches it the way a pushed query result does.
-vi.mock("../../shared/data/useQuery.ts", () => ({
+vi.mock("../../../shared/data/useQuery.ts", () => ({
 	useQuery: () => ({
 		data: view,
 		isStale: () => false,
@@ -41,7 +41,7 @@ vi.mock("convex-solidjs", () => ({
 	useAction: () => ({ mutateAsync: state.refresh }),
 }));
 
-import { WebsitePage } from "./WebsitePage.tsx";
+import { WebsiteTab } from "./WebsiteTab.tsx";
 
 beforeEach(() => {
 	vi.setSystemTime(NOW);
@@ -68,12 +68,12 @@ function rejectLater() {
 	};
 }
 
-function renderPage(path = "/website"): MemoryHistory {
+function renderPage(path = "/analytics?tab=website"): MemoryHistory {
 	const history = createMemoryHistory();
 	history.set({ value: path, scroll: false, replace: true });
 	render(() => (
 		<MemoryRouter history={history}>
-			<Route path="*" component={WebsitePage} />
+			<Route path="*" component={WebsiteTab} />
 		</MemoryRouter>
 	));
 	return history;
@@ -123,7 +123,7 @@ test("hints that a sampled range is an estimate, and only then", async () => {
 			summary: { ...sampleSummary(), sampleInterval: 10 },
 		},
 	});
-	renderPage("/website?range=90");
+	renderPage("/analytics?tab=website&range=90");
 	expect(
 		await screen.findByText(/sampled 1 in 10 page views/)
 	).toBeInTheDocument();
@@ -133,7 +133,7 @@ test("hints that a sampled range is an estimate, and only then", async () => {
 		configured: true,
 		snapshot: { fetchedAt: NOW - 4 * MINUTE, summary: sampleSummary() },
 	});
-	renderPage("/website?range=90");
+	renderPage("/analytics?tab=website&range=90");
 	expect(await screen.findByText("120")).toBeInTheDocument();
 	expect(screen.queryByText(/sampled 1 in/)).not.toBeInTheDocument();
 });
@@ -144,7 +144,7 @@ test("refresh button calls the action for the current range", async () => {
 		configured: true,
 		snapshot: { fetchedAt: NOW - 4 * MINUTE, summary: sampleSummary() },
 	});
-	renderPage("/website?range=7");
+	renderPage("/analytics?tab=website&range=7");
 	fireEvent.click(await screen.findByRole("button", { name: "Refresh" }));
 	expect(state.refresh).toHaveBeenCalledWith({ days: 7 });
 });
@@ -231,7 +231,7 @@ test("does not auto-refresh on the previous range's snapshot", async () => {
 		configured: true,
 		snapshot: { fetchedAt: NOW - 20 * MINUTE, summary: sampleSummary() },
 	});
-	renderPage("/website?range=7");
+	renderPage("/analytics?tab=website&range=7");
 	await screen.findByText("120");
 	expect(state.refresh).not.toHaveBeenCalled();
 	// The 7-day answer arrives stale: now it refreshes, for 7 days.

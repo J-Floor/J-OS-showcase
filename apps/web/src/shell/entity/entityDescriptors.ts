@@ -5,8 +5,7 @@ import {
 	itemEntity,
 	itemTypeEntity,
 } from "../../modules/inventory/entity.ts";
-import { perksEntity } from "../../modules/perks/entity.ts";
-import { requestEntity } from "../../modules/perks/requests/requestEntity.ts";
+import { perksEntity, requestEntity } from "../../modules/perks/entity.ts";
 import { projectEntity, taskEntity } from "../../modules/tasks/entity.ts";
 import type { EntityDescriptor } from "../../shared/entity/entityDescriptor.ts";
 import type { EntityRow } from "../../shared/types.ts";

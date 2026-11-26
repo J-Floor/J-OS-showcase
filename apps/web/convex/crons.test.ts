@@ -79,11 +79,22 @@ describe("crons", () => {
 		expect(job.name).toBe(getFunctionName(internal.notify.digest.send));
 	});
 
+	it.each([
+		["purge view hits and old view counts", 50, "purgeExpired"],
+		["prepare view salts", 50, "prepareSalts"],
+		["rebuild view snapshots", 55, "rebuildSnapshots"],
+	] as const)("registers %s at 02:%i UTC", (name, minuteUTC, jobName) => {
+		const job = crons.crons[name];
+		expect(job).toBeDefined();
+		expect(job.schedule).toEqual({ type: "daily", hourUTC: 2, minuteUTC });
+		expect(job.name).toBe(getFunctionName(internal.appViews[jobName]));
+	});
+
 	it("registers exactly these jobs — the nightly door-key sweep is gone", () => {
 		// Each test above looks a job up by name, so a stray registration
 		// (e.g. the retired door-key sweep) would pass every one
 		// without this.
-		expect(Object.keys(crons.crons)).toHaveLength(13);
+		expect(Object.keys(crons.crons)).toHaveLength(16);
 	});
 
 	it("purges access logs older than 12 months nightly", () => {

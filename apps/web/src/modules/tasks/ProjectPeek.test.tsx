@@ -23,6 +23,9 @@ const { taskRows } = vi.hoisted(() => ({
 	taskRows: { current: undefined as unknown[] | undefined },
 }));
 
+// The board-only view badge reads a query these tests do not serve.
+vi.mock("../../shared/views/ViewCount.tsx");
+
 vi.mock("convex-solidjs", () => ({
 	useMutation: () => ({ mutate: vi.fn().mockResolvedValue(undefined) }),
 	useQuery: () => ({ data: () => {} }),

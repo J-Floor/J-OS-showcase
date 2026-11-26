@@ -43,8 +43,8 @@ export type Subject =
 	| "Notifications"
 	| "Tasks"
 	| "Inventory"
-	// The public site's traffic: the board.
-	| "Website"
+	// How the app and the public site are used: the board.
+	| "Analytics"
 	// Partner deals: the community browses and requests them, the board runs
 	// them and tracks the requests.
 	| "Perks";
@@ -71,7 +71,7 @@ export function defineAbilityFor(role: Role): AppAbility {
 		can("manage", "Tasks");
 		can("view", "Inventory");
 		can("manage", "Inventory");
-		can("view", "Website");
+		can("view", "Analytics");
 		// Board/admin add and edit perks and track their requests; `view` is
 		// granted to the whole community below.
 		can("create", "Perks");

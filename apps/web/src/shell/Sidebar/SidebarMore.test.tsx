@@ -328,7 +328,7 @@ describe("the phone bar's more item", () => {
 			"/inventory",
 			"/perks",
 			"/tasks",
-			"/website",
+			"/analytics",
 		]);
 	});
 

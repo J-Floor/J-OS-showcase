@@ -22,7 +22,9 @@ import { SheetCreateFooter } from "../../shared/entity/SheetCreateFooter.tsx";
 import { SheetFooter } from "../../shared/entity/SheetFooter.tsx";
 import { SheetSection } from "../../shared/entity/SheetSection.tsx";
 import type { SheetOpenProps } from "../../shared/types.ts";
+import { rowViewKey } from "../../shared/views/viewKey.ts";
 
+import { perksEntity } from "./entity.ts";
 import { perkFields } from "./fields.ts";
 import { createPerkSheetActions } from "./perkActions.tsx";
 import { PerkAdminRequests } from "./PerkAdminRequests.tsx";
@@ -77,6 +79,7 @@ function PerkSheetHeader(
 			title={props.perk?.title ?? "New perk"}
 			loading={props.loading}
 			saveStatus={!props.loading && props.perk !== undefined}
+			viewKey={rowViewKey(perksEntity, props.perk)}
 		>
 			<Can I="manage" the="Perks">
 				<Show when={!props.loading && props.perk !== undefined}>
